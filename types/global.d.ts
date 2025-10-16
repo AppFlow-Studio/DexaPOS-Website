@@ -10,4 +10,14 @@ declare global {
     "org_type": string,
     "carrier_id": string
   }
+
+  interface ServerActionError {
+    
+  }
+
+  interface ServerActionResponse {
+    success: boolean,
+    message: string,
+    error?: any
+  }
 }

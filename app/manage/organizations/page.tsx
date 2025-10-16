@@ -38,25 +38,95 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useCarrierOrganizations } from '../hooks/useCarrierOrganizations'
+import { useRouter } from 'next/navigation'
 
-const organizationsData = [
-    {
-        id: 'ORG-001',
-        name: 'ASMobbin',
-        domain: 'mbn.com',
-        sso: 'Test Provider',
-        directorySync: false,
-        users: 1,
-        created: '2024-04-21',
-        status: 'active',
-        sales: 125000,
-        conversions: 12.5,
-        growth: 8.2,
-        transactions: 2450,
-    },
-]
 
 export default function OrganizationsPage() {
+    const router = useRouter()
+        const { data: organizationsData, isLoading, error } = useCarrierOrganizations()
+    if (isLoading) return (
+        <div className="space-y-6 animate-in fade-in-0 duration-300">
+            {/* Header skeleton */}
+            <div className="flex items-center justify-between">
+                <div className="space-y-2">
+                    <div className="h-7 w-48 bg-muted rounded-md animate-pulse" />
+                    <div className="h-4 w-72 bg-muted rounded-md animate-pulse" />
+                </div>
+                <div className="h-9 w-32 bg-muted rounded-md animate-pulse" />
+            </div>
+
+            {/* KPI cards skeleton */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="border rounded-xl p-4 bg-card">
+                        <div className="flex items-center justify-between pb-2">
+                            <div className="h-4 w-24 bg-muted rounded-md animate-pulse" />
+                            <div className="h-4 w-4 bg-muted rounded-sm animate-pulse" />
+                        </div>
+                        <div className="h-7 w-28 bg-muted rounded-md animate-pulse" />
+                        <div className="h-3 w-40 mt-2 bg-muted rounded-md animate-pulse" />
+                    </div>
+                ))}
+            </div>
+
+            {/* Table skeleton */}
+            <div className="border rounded-xl overflow-hidden">
+                <div className="border-b p-4">
+                    <div className="flex items-center justify-between">
+                        <div className="space-y-2">
+                            <div className="h-5 w-40 bg-muted rounded-md animate-pulse" />
+                            <div className="h-4 w-64 bg-muted rounded-md animate-pulse" />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="h-9 w-64 bg-muted rounded-md animate-pulse" />
+                            <div className="h-9 w-20 bg-muted rounded-md animate-pulse" />
+                        </div>
+                    </div>
+                </div>
+                <div className="divide-y">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <div key={i} className="grid grid-cols-12 items-center gap-4 px-4 py-3">
+                            <div className="col-span-3 h-4 bg-muted rounded-md animate-pulse" />
+                            <div className="col-span-2 h-4 bg-muted rounded-md animate-pulse" />
+                            <div className="col-span-2 h-4 bg-muted rounded-md animate-pulse" />
+                            <div className="col-span-1 h-4 bg-muted rounded-md animate-pulse" />
+                            <div className="col-span-1 h-4 bg-muted rounded-md animate-pulse" />
+                            <div className="col-span-1 h-4 bg-muted rounded-md animate-pulse" />
+                            <div className="col-span-1 h-8 w-8 bg-muted rounded-md animate-pulse justify-self-end" />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    )
+
+    if (error) return (
+        <div className="flex flex-col items-center justify-center py-20 gap-4 animate-in fade-in-0 duration-300">
+            <div className="relative">
+                <div className="absolute inset-0 rounded-full bg-destructive/20 blur-2xl animate-pulse" />
+                <div className="h-14 w-14 rounded-full border-4 border-destructive border-t-transparent animate-spin" />
+            </div>
+            <div className="text-center space-y-2">
+                <h3 className="text-lg font-semibold">We hit a snag loading organizations</h3>
+                <p className="text-sm text-muted-foreground">{error.message}</p>
+            </div>
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={() => window.location.reload()}
+                    className="h-9 px-4 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                    Retry
+                </button>
+                <button
+                    onClick={() => history.back()}
+                    className="h-9 px-4 rounded-md border border-border hover:bg-muted transition-colors"
+                >
+                    Go Back
+                </button>
+            </div>
+        </div>
+    )
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -169,12 +239,12 @@ export default function OrganizationsPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {organizationsData.map((org) => (
-                                <TableRow key={org.id}>
+                            {organizationsData?.map((org) => (
+                                <TableRow key={org.id} className='cursor-pointer' onClick={() => router.push(`/manage/organizations/${org.clerk_org_id}`)}>
                                     <TableCell className="font-medium">
                                         <div>
                                             <div className="font-semibold">{org.name}</div>
-                                            <div className="text-sm text-muted-foreground">ID: {org.id}</div>
+                                            <div className="text-sm text-muted-foreground">ID: {org.clerk_org_id}</div>
                                         </div>
                                     </TableCell>
                                     {/* <TableCell>
@@ -199,16 +269,18 @@ export default function OrganizationsPage() {
                                     <TableCell>
                                         <div className="flex items-center gap-1">
                                             <Users className="h-4 w-4 text-muted-foreground" />
-                                            <span>{org.users}</span>
+                                            <span>{org.organizations.members.length}</span>
                                         </div>
                                     </TableCell>
                                     <TableCell className="font-medium">
-                                        ${org.sales.toLocaleString()}
+                                        {/* ${org.sales.toLocaleString()} */}
+                                        $0
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex items-center gap-1">
                                             <Target className="h-4 w-4 text-muted-foreground" />
-                                            <span>{org.conversions}%</span>
+                                            {/* <span>{org.conversions}%</span> */}
+                                            <span>0%</span>
                                         </div>
                                     </TableCell>
                                     <TableCell>
@@ -219,12 +291,13 @@ export default function OrganizationsPage() {
                                                 <ArrowDownRight className="h-3 w-3 text-red-600" />
                                             )}
                                             <span className={org.growth > 0 ? 'text-green-600' : 'text-red-600'}>
-                                                {org.growth > 0 ? '+' : ''}{org.growth}%
+                                                {/* {org.growth > 0 ? '+' : ''}{org.growth}% */}
+                                                <span>0%</span>
                                             </span>
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-sm text-muted-foreground">
-                                        {new Date(org.created).toLocaleDateString('en-US', {
+                                        {new Date(org.created_at).toLocaleDateString('en-US', {
                                             month: 'short',
                                             day: 'numeric',
                                             year: 'numeric'
@@ -270,7 +343,7 @@ export default function OrganizationsPage() {
             </Card>
 
             {/* Performance Summary */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {/* <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-lg">Top Performers</CardTitle>
@@ -365,7 +438,7 @@ export default function OrganizationsPage() {
                         </div>
                     </CardContent>
                 </Card>
-            </div>
+            </div> */}
         </div>
     )
 }
