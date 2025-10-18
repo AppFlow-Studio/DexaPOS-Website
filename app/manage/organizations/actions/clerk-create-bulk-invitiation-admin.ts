@@ -2,14 +2,14 @@
 
 import { createClerkClient, Invitation } from '@clerk/backend'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-export async function createBulkInvitationAdmin(organizationId: string, invitations: { email: string, role: string }[]) {
+export async function createBulkInvitationAdmin(organizationId: string, invitations: { email: string, role: string, level_type: string }[]) {
     try {
         const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
         const invitationsResponse = await clerkClient.invitations.createInvitationBulk(
             invitations.map((invitation) => ({
                 emailAddress: invitation.email,
                 redirectUrl: 'http://localhost:3000/',
-                publicMetadata: { organizationId: organizationId, role: invitation.role, setupRequired: true },
+                publicMetadata: { organizationId: organizationId, role: invitation.role, level_type: invitation.level_type, setupRequired: true },
             }))
         )
         const ParsedInvitationsResponse = JSON.parse(JSON.stringify(invitationsResponse));

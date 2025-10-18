@@ -24,7 +24,13 @@ export const createOrganizationBulkInvite = async (organizationId: string, invit
             invites.map((invite: any) => ({
                 inviterUserId: inviterId,
                 emailAddress: invite.email,
-                role: 'org:' + invite.role,
+                role: 'org:' + invite.level_type,
+                publicMetadata: {
+                    organizationId: organizationId,
+                    role: invite.role,
+                    level_type: invite.level_type,
+                    setupRequired: true
+                },
             }))
         )
         console.log('invitesResponse', invitesResponse)

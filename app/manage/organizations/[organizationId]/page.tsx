@@ -15,10 +15,12 @@ import { useParams } from 'next/navigation';
 import { useState } from 'react'
 import { SendAdminInviteButton } from './componenets/SendAdminInviteButton'
 import { SendOrganizationMembersInviteButton } from './componenets/SendOrganizationMembersInviteButton'
-import { PendingOrgAdminInvitesModel, UsersModel } from '@/types/db-modles'
+import { MerchantsModel, PendingOrgAdminInvitesModel, UsersModel } from '@/types/db-modles'
 import { RevokeAdminInvitePopup } from './componenets/RevokeAdminInvitePopup'
 import { RemoveUserPopup } from './componenets/RemoveUserPopup'
 import { ResendAdminInvitePopup } from './componenets/ResendAdminInvitePopup'
+import { CreateMerchantButton } from './componenets/CreateMerchantButton'
+import { MerchantsTable } from './componenets/MerchantsTable'
 export default function OrganizationInfoPage() {
     const { organizationId } = useParams()
     const { data, isLoading, error, refetch: refetchOrganizationInfo } = useOrganizationInfo(organizationId as string)
@@ -69,6 +71,7 @@ export default function OrganizationInfoPage() {
     const orgDomain = org?.domain || org?.domains?.[0]
     const createdAt = org?.created_at
     const members = org?.members || []
+    const carrierId = org?.carriers?.id
 
     return (
         <div className="space-y-6">
@@ -118,8 +121,8 @@ export default function OrganizationInfoPage() {
                     <Tabs defaultValue="overview" className="w-full">
                         <TabsList className="flex flex-wrap">
                             <TabsTrigger value="overview">Overview</TabsTrigger>
-                            <TabsTrigger value="users">Users</TabsTrigger>
-                            <TabsTrigger value="stores">Stores</TabsTrigger>
+                            <TabsTrigger value="members">Members</TabsTrigger>
+                            <TabsTrigger value="merchants">Merchants</TabsTrigger>
                             <TabsTrigger value="roles">Roles</TabsTrigger>
                             <TabsTrigger value="invites">Invites</TabsTrigger>
                             <TabsTrigger value="audit">Audit Logs</TabsTrigger>
@@ -222,12 +225,12 @@ export default function OrganizationInfoPage() {
                         </TabsContent>
 
                         {/* Users */}
-                        <TabsContent value="users" className="mt-6">
+                        <TabsContent value="members" className="mt-6">
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Members</CardTitle>
                                     <CardDescription>People with access to this organization</CardDescription>
-                                    <SendAdminInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} />
+                                    <SendOrganizationMembersInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} />
 
                                 </CardHeader>
                                 <CardContent>
@@ -312,16 +315,25 @@ export default function OrganizationInfoPage() {
                             </Card>
                         </TabsContent>
 
-                        {/* Other tabs */}
-                        <TabsContent value="stores" className="mt-6">
+                        {/* Merchants */}
+                        <TabsContent value="merchants" className="mt-6">
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>Stores</CardTitle>
-                                    <CardDescription>Assigned POS locations</CardDescription>
+                                    <div className='flex items-center justify-between'>
+                                        <div className='flex flex-col gap-2'>
+                                            <CardTitle>Merchants</CardTitle>
+                                            <CardDescription>Manage and view all merchants associated with this carrier.</CardDescription>
+                                        </div>
+                                        <CreateMerchantButton carrierId={carrierId as string} organizationId={organizationId as string} refetch={refetchOrganizationInfo} />
+                                    </div>
                                 </CardHeader>
-                                <CardContent className="text-sm text-muted-foreground">No stores yet.</CardContent>
+                                <CardContent>
+                                    <MerchantsTable merchants={org?.carriers?.merchants as MerchantsModel[]} />
+                                </CardContent>
                             </Card>
                         </TabsContent>
+
+                        {/* Invites */}
                         <TabsContent value="invites" className="mt-6">
                             <Card>
                                 <CardHeader>
@@ -444,6 +456,8 @@ export default function OrganizationInfoPage() {
                                 </CardContent>
                             </Card>
                         </TabsContent>
+
+                        {/* Audit logs */}
                         <TabsContent value="audit" className="mt-6">
                             <Card>
                                 <CardHeader>
@@ -453,6 +467,8 @@ export default function OrganizationInfoPage() {
                                 <CardContent className="text-sm text-muted-foreground">No events to display.</CardContent>
                             </Card>
                         </TabsContent>
+
+                        {/* Settings */}
                         <TabsContent value="settings" className="mt-6">
                             <Card>
                                 <CardHeader>

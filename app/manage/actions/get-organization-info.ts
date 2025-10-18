@@ -7,7 +7,8 @@ export async function GetOrganizationInfo(organizationId: string) {
     const { data, error } = await supabase.from('organizations').select(
         `*, 
         members(*, users(*)), 
-        pending_org_admin_invites(*, users(*))
+        pending_org_admin_invites(*, users(*)),
+        carriers(id, merchants(*))
         `).eq('id', organizationId).single()
     if (error) {
         console.error('Error getting organization info:', error)

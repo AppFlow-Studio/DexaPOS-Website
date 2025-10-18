@@ -5,5 +5,6 @@ export function useOrganizationInfo(organizationId: string) {
     return useQuery({
         queryKey: ['organizationInfo', organizationId],
         queryFn: () => GetOrganizationInfo(organizationId),
+        enabled: !!organizationId,
     })
 }

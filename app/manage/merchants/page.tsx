@@ -31,6 +31,9 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useMerhcantOrganizations } from '../hooks/useMerchantOrganizations'
+import { MerchantsModel } from '@/types/db-modles'
+import { useRouter } from 'next/navigation'
 
 const merchantsData = [
     {
@@ -91,6 +94,28 @@ const merchantsData = [
 ]
 
 export default function MerchantsPage() {
+    const router = useRouter()
+    const { data: merchantsData, isLoading, isError, refetch: refetchMerchants } = useMerhcantOrganizations()
+    if (isLoading) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[300px]">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-800 mb-4" />
+                <p className="text-lg text-muted-foreground">Loading merchants...</p>
+            </div>
+        )
+    }
+
+    if (isError) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[300px]">
+                <span className="text-destructive text-2xl mb-2">⚠️</span>
+                <p className="text-lg text-destructive mb-4">Failed to load merchants.</p>
+                <Button onClick={async () => await refetchMerchants()} variant="outline">
+                    Retry
+                </Button>
+            </div>
+        )
+    }
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -196,8 +221,8 @@ export default function MerchantsPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {merchantsData.map((merchant) => (
-                                <TableRow key={merchant.id}>
+                            {merchantsData?.map((merchant: MerchantsModel) => (
+                                <TableRow key={merchant.id} className="cursor-pointer" onClick={() => router.push(`/manage/merchants/${merchant.clerk_org_id}`)} >
                                     <TableCell className="font-medium">
                                         <div>
                                             <div className="font-semibold">{merchant.name}</div>
@@ -209,35 +234,38 @@ export default function MerchantsPage() {
                                     </TableCell>
                                     <TableCell>
                                         <Badge
-                                            variant={
-                                                merchant.status === 'active' ? 'default' :
-                                                    merchant.status === 'pending' ? 'secondary' : 'destructive'
-                                            }
+                                        // variant={
+                                        //     merchant.status === 'active' ? 'default' :
+                                        //         merchant.status === 'pending' ? 'secondary' : 'destructive'
+                                        // }
                                         >
-                                            {merchant.status}
+                                            {/* {merchant.status} */}
+                                            N/A
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="font-medium">
-                                        ${merchant.revenue.toLocaleString()}
+                                        $0
                                     </TableCell>
-                                    <TableCell>{merchant.transactions}</TableCell>
+                                    <TableCell>{/*merchant.transactions*/}0</TableCell>
                                     <TableCell>
                                         <div className="flex items-center">
-                                            {merchant.growth > 0 ? (
+                                            {/* {merchant.growth > 0 ? (
                                                 <TrendingUp className="h-3 w-3 text-green-600 mr-1" />
                                             ) : (
                                                 <TrendingDown className="h-3 w-3 text-red-600 mr-1" />
                                             )}
                                             <span className={merchant.growth > 0 ? 'text-green-600' : 'text-red-600'}>
                                                 {merchant.growth > 0 ? '+' : ''}{merchant.growth}%
-                                            </span>
+                                            </span> */}
+                                            0
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-sm text-muted-foreground">
-                                        {merchant.location}
+                                        {/* {merchant.location} */}
+                                        N/A
                                     </TableCell>
                                     <TableCell className="text-sm text-muted-foreground">
-                                        {new Date(merchant.joinedDate).toLocaleDateString()}
+                                        {new Date(merchant.created_at).toLocaleDateString()}
                                     </TableCell>
                                     <TableCell>
                                         <DropdownMenu>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useSession } from '@clerk/nextjs'
-import { redirect } from 'next/navigation'
+import { redirect, usePathname } from 'next/navigation'
 import { useEffect } from 'react'
 import {
     Sidebar,
@@ -44,6 +44,9 @@ import {
     User,
     SquareStack,
     Layers,
+    UserCheck,
+    ShieldCheck,
+    History,
 } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -63,7 +66,7 @@ const data = {
             title: 'Dashboard',
             url: '/manage',
             icon: LayoutDashboard,
-            isActive: true,
+            group: 'Dashboard',
         },
         {
             title: 'Merchants',
@@ -74,6 +77,21 @@ const data = {
             title: 'Organizations',
             url: '/manage/organizations',
             icon: Layers,
+        },
+        {
+            title: 'Users',
+            url: '/manage/users',
+            icon: UserCheck,
+        },
+        {
+            title: 'Roles & Permissions',
+            url: '/manage/roles-permissions',
+            icon: ShieldCheck,
+        },
+        {
+            title: 'Audit Logs',
+            url: '/manage/audit-logs',
+            icon: History,
         }
         // {
         //     title: 'Analytics',
@@ -139,6 +157,7 @@ const data = {
 
 function AppSidebar() {
     const { data: userInfo, isLoading, error } = useUserInfo()
+    const pathname = usePathname()
     console.log(userInfo)
     return (
         <Sidebar variant="inset">
@@ -177,9 +196,10 @@ function AppSidebar() {
                 <SidebarGroup>
                     <SidebarGroupContent>
                         <SidebarMenu>
-                            {data.navMain.map((item) => (
+                            {data.navMain.map((item, index) => (
                                 <SidebarMenuItem key={item.title}>
-                                    <SidebarMenuButton asChild isActive={item.isActive}>
+                                    <SidebarMenuButton asChild isActive={pathname.includes(item.url.split('/')[2]) || pathname === item.url}
+                                    >
                                         <Link href={item.url}>
                                             <item.icon className="h-4 w-4" />
                                             <span>{item.title}</span>

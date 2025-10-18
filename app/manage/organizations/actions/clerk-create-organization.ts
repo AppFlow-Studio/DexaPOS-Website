@@ -38,7 +38,7 @@ export async function ClerkCreateOrganization({
         // Insert Image into Supabase Storage Bucket
         const filepath = CreateOrganizationResponse.id.toString() + '.png';
 
-        if (organizationImage) {
+        if (organizationImage && CreateOrganizationResponse.id) {
             const { data, error } = await supabase.storage.from('Organizations-Logos').upload(filepath, organizationImage)
             if (error) {
                 return {
@@ -50,11 +50,10 @@ export async function ClerkCreateOrganization({
         }
 
         if (CreateOrganizationResponse.id) {
-            const publicUrl = supabase.storage.from('Organizations-Logos').getPublicUrl(filepath)
-            console.log('publicUrl', publicUrl)
+            const { data: publicUrl } = supabase.storage.from('Organizations-Logos').getPublicUrl(filepath)
             // Update the organization image URL in supabase
             const { data, error } = await supabase.from('organizations').update({
-                imageURL: publicUrl,
+                imageURL: publicUrl.publicUrl,
             }).eq('id', CreateOrganizationResponse.id).select().single()
             if (error) {
                 return {

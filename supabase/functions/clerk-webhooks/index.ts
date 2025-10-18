@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
           await clerkClient.organizations.createOrganizationMembership({
             organizationId: event.data.public_metadata?.organizationId,
             userId: event.data.id,
-            role: event.data.public_metadata?.role || 'org:member'
+            role: `org:${event.data.public_metadata?.level_type || 'member'}`
           });
 
           //Update the pending invite status to accepted
@@ -74,7 +74,6 @@ Deno.serve(async (req) => {
             .select()
             .single()
         }
-
         if (error) {
           console.error('Error creating user:', error)
           return new Response(JSON.stringify({ error: error.message }), { status: 500 })
@@ -144,6 +143,24 @@ Deno.serve(async (req) => {
             {
               name: event.data.name,
               clerk_org_id: event.data.id,
+              public_metadata: event.data.public_metadata,
+              created_at: new Date(event.data.created_at).toISOString(),
+              updated_at: new Date(event.data.updated_at).toISOString(),
+            },
+          ])
+          .select()
+          .single()
+      }
+
+      if (event.data.public_metadata.org_type === 'merchant') {
+        const { data, error } = await supabase
+          .from('merchants')
+          .insert([
+            {
+              name: event.data.name,
+              clerk_org_id: event.data.id,
+              carrier_id: event.data.public_metadata.carrierId,
+              public_metadata: event.data.public_metadata,
               created_at: new Date(event.data.created_at).toISOString(),
               updated_at: new Date(event.data.updated_at).toISOString(),
             },

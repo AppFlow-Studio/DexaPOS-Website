@@ -14,21 +14,24 @@ import * as z from 'zod'
 import { toast } from 'sonner'
 import { useUser } from '@clerk/nextjs'
 import { createBulkInvitationAdmin } from '../../actions/clerk-create-bulk-invitiation-admin'
+import { useRolesHQ } from '@/app/manage/hooks/useRolesHQ'
+import { RolesModel } from '@/types/db-modles'
 
 const inviteSchema = z.object({
     invitations: z.array(
         z.object({
             email: z.string().email('Please enter a valid email address'),
-            role: z.enum(['org:admin', 'org:member'], {
-                required_error: 'Please select a role',
-            }),
-        })
+            role: z.string().min(1, 'Please select a role'),
+            level_type: z.string().min(1, 'Please select a level type'),
+        }),
+
     ).min(1, 'At least one invitation is required'),
 })
 
 type InviteFormValues = z.infer<typeof inviteSchema>
 
-export const SendOrganizationMembersInviteButton = ({ organizationId, refetch }: { organizationId: string, refetch: () => void }) => {
+export const SendOrganizationMembersInviteButton = ({ organizationId, refetch }: { organizationId: string, refetch?: () => void }) => {
+    const { data: roles, isLoading: isLoadingRoles } = useRolesHQ()
     const [organizationMembersInviteDialog, setOrganizationMembersInviteDialog] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
 
@@ -36,7 +39,7 @@ export const SendOrganizationMembersInviteButton = ({ organizationId, refetch }:
         resolver: zodResolver(inviteSchema),
         defaultValues: {
             invitations: [
-                { email: '', role: 'org:member' },
+                { email: '', role: '', level_type: 'member' },
             ],
         },
     })
@@ -44,7 +47,7 @@ export const SendOrganizationMembersInviteButton = ({ organizationId, refetch }:
     const { fields, append, remove } = useFieldArray({
         control: form.control,
         name: 'invitations',
-        
+
     })
 
     const onSubmit = async (values: InviteFormValues) => {
@@ -63,7 +66,7 @@ export const SendOrganizationMembersInviteButton = ({ organizationId, refetch }:
             console.log('Sending invitations:', validInvitations)
             if (res?.success) {
                 toast.success(`Successfully sent ${validInvitations.length} invitation${validInvitations.length > 1 ? 's' : ''}`)
-                refetch()
+                refetch?.()
             } else {
                 toast.error(res?.message || 'Failed to send invitations. Please try again.')
             }
@@ -77,7 +80,7 @@ export const SendOrganizationMembersInviteButton = ({ organizationId, refetch }:
     }
 
     const addAnother = () => {
-        append({ email: '', role: 'org:member' })
+        append({ email: '', role: 'org:member', level_type: 'member' })
     }
 
     return (
@@ -88,7 +91,7 @@ export const SendOrganizationMembersInviteButton = ({ organizationId, refetch }:
                     Send Organization Members Invitation
                 </Button>
             </DialogTrigger>
-            <DialogContent className="min-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="min-w-5xl max-h-[90vh] overflow-y-auto">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Left Section - Form */}
                     <div className="lg:col-span-2 space-y-6">
@@ -127,32 +130,38 @@ export const SendOrganizationMembersInviteButton = ({ organizationId, refetch }:
                                                         )}
                                                     />
                                                 </div>
-                                                <div className="w-32">
+                                                <div className="w-fit">
                                                     <FormField
                                                         control={form.control}
                                                         name={`invitations.${index}.role`}
                                                         render={({ field }: { field: any }) => (
                                                             <FormItem>
                                                                 <FormLabel className="text-sm font-medium">Role</FormLabel>
-                                                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                                <Select onValueChange={(value) => {
+                                                                    field.onChange(value);
+                                                                    const selectedRole = roles?.find(role => role.code === value);
+                                                                    if (selectedRole) {
+                                                                        form.setValue(`invitations.${index}.level_type`, selectedRole.level_type);
+                                                                    }
+                                                                }} defaultValue={field.value}>
                                                                     <FormControl>
-                                                                        <SelectTrigger>
+                                                                        <SelectTrigger className='h-fit py-2'>
                                                                             <SelectValue placeholder="Select role" />
                                                                         </SelectTrigger>
                                                                     </FormControl>
                                                                     <SelectContent>
-                                                                        <SelectItem value="org:admin">
-                                                                            <div className="flex items-center gap-2">
-                                                                                <Shield className="h-4 w-4" />
-                                                                                Admin
-                                                                            </div>
-                                                                        </SelectItem>
-                                                                        <SelectItem value="org:member">
-                                                                            <div className="flex items-center gap-2">
-                                                                                <User className="h-4 w-4" />
-                                                                                Member
-                                                                            </div>
-                                                                        </SelectItem>
+                                                                        {
+                                                                            roles?.map((role: RolesModel) => (
+                                                                                <SelectItem key={role.id} value={role.code}>
+                                                                                    <div className="flex flex-col items-center gap-2">
+                                                                                        <div className='flex items-center gap-2'>
+                                                                                            <Shield className="h-4 w-4" />
+                                                                                            {role.name}
+                                                                                        </div>
+                                                                                        {/* <span className='text-xs text-muted-foreground'>{role.description}</span> */}
+                                                                                    </div>
+                                                                                </SelectItem>
+                                                                            ))}
                                                                     </SelectContent>
                                                                 </Select>
                                                                 <FormMessage />
@@ -242,6 +251,6 @@ export const SendOrganizationMembersInviteButton = ({ organizationId, refetch }:
                     </div>
                 </div>
             </DialogContent>
-        </Dialog>
+        </Dialog >
     )
 }
