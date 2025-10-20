@@ -81,7 +81,7 @@ export default function UsersPage() {
     const [activeTab, setActiveTab] = useState('users')
     const { user } = useUser()
     const { data: users, isLoading, error } = useOrganizationUsers(user?.publicMetadata.organizationId as string)
-    const { data: organizationInfo } = useOrganizationInfo(user?.publicMetadata.organizationId as string)
+    const { data: organizationInfo, refetch: refetchOrganizationInfo } = useOrganizationInfo(user?.publicMetadata.organizationId as string)
 
     if (isLoading) return <div>Loading...</div>
     if (error) return <div>Error: {error.message}</div>
@@ -127,7 +127,7 @@ export default function UsersPage() {
                 </div>
                 <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
                     <DialogTrigger asChild>
-                        <SendOrganizationMembersInviteButton organizationId={user?.publicMetadata.organizationId as string} />
+                        <SendOrganizationMembersInviteButton organizationId={user?.publicMetadata.organizationId as string} refetch={() => refetchOrganizationInfo()} role_types='hq' />
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-[425px]">
                         <DialogHeader>
@@ -322,7 +322,7 @@ export default function UsersPage() {
                                 </TableHeader>
                                 <TableBody>
                                     {filteredUsers?.map((user) => (
-                                        <TableRow key={user.id} onClick={() => router.push(`/manage/users/${user.users.id}`)}>
+                                        <TableRow key={user.id} className="cursor-pointer" onClick={() => router.push(`/manage/users/${user.users.id}`)}>
                                             <TableCell>
                                                 <div className="flex items-center space-x-3">
                                                     <Avatar className="h-8 w-8">

@@ -9,6 +9,7 @@ export async function createBulkInvitationAdmin(organizationId: string, invitati
             invitations.map((invitation) => ({
                 emailAddress: invitation.email,
                 redirectUrl: 'http://localhost:3000/',
+                role: invitation.level_type,
                 publicMetadata: { organizationId: organizationId, role: invitation.role, level_type: invitation.level_type, setupRequired: true },
             }))
         )

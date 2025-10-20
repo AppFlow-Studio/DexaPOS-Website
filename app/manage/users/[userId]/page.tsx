@@ -182,13 +182,13 @@ export default function UserInfoPage() {
                                             </div>
                                         </div>
 
-                                        <div className="flex justify-between items-center">
+                                        {/* <div className="flex justify-between items-center">
                                             <span className="text-sm font-medium text-muted-foreground">Authentication</span>
                                             <div className="flex items-center space-x-2">
                                                 <div className="w-4 h-4 bg-blue-500 rounded text-white text-xs flex items-center justify-center font-bold">G</div>
                                                 <span className="text-sm">Google OAuth</span>
                                             </div>
-                                        </div>
+                                        </div> */}
 
                                         <div className="flex justify-between items-center">
                                             <span className="text-sm font-medium text-muted-foreground">OAuth profile picture</span>

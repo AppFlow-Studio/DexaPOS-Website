@@ -14,6 +14,8 @@ import { toast } from 'sonner'
 import { createOrganizationBulkInvite } from '../../actions/clerk-create-organization-bulk-invite'
 import { useUser } from '@clerk/nextjs'
 import { createInvitationAdmin } from '../../actions/clerk-create-invitation-admin'
+import { useRolesHQ } from '@/app/manage/hooks/useRolesHQ'
+import { RolesModel } from '@/types/db-modles'
 
 const inviteSchema = z.object({
     email: z.string().email('Please enter a valid email address'),
@@ -21,26 +23,39 @@ const inviteSchema = z.object({
 
 type InviteFormValues = z.infer<typeof inviteSchema>
 
-export const SendAdminInviteButton = ({ organizationId, refetch }: { organizationId: string, refetch: () => void }) => {
+export const SendAdminInviteButton = ({ organizationId, refetch, role_types }: { organizationId: string, refetch: () => void, role_types?: string }) => {
+    const { data: roles, isLoading: isLoadingRoles, isError: isErrorRoles } = useRolesHQ(role_types)
     const [adminInviteDialog, setAdminInviteDialog] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
     const { user } = useUser()
-
     const form = useForm<InviteFormValues>({
         resolver: zodResolver(inviteSchema),
         defaultValues: { email: '' },
     })
+    if (isErrorRoles || roles instanceof Error) {
+        return (
+            <div className="flex flex-col items-center justify-center space-y-4 py-12">
+                <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center">
+                    <Users className="h-8 w-8 text-muted-foreground" />
+                </div>
+            </div>
+        )
+    }
+    const selectedOrgAdminRole = roles?.find((role: RolesModel) => role.level === 10)
+
+
 
     const onSubmit = async (values: InviteFormValues) => {
         try {
             setIsLoading(true)
+
             const email = values.email.trim()
             if (!email) {
                 toast.error('Please enter an email address')
                 return
             }
             console.log(email)
-            const res = await createInvitationAdmin(organizationId, email)
+            const res = await createInvitationAdmin(organizationId, email, selectedOrgAdminRole?.code, selectedOrgAdminRole?.level_typ)
             if (res?.success) {
                 toast.success('Admin invitation sent')
                 refetch()
@@ -55,6 +70,17 @@ export const SendAdminInviteButton = ({ organizationId, refetch }: { organizatio
             setIsLoading(false)
         }
     }
+
+    if (isLoadingRoles) {
+        return (
+            <div className="flex flex-col items-center justify-center space-y-4 py-12">
+                <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+            </div>
+        )
+    }
+
 
     return (
         <Dialog open={adminInviteDialog} onOpenChange={setAdminInviteDialog}>
@@ -104,7 +130,7 @@ export const SendAdminInviteButton = ({ organizationId, refetch }: { organizatio
                                         <div className="w-32">
                                             <div className="text-xs text-muted-foreground">Role</div>
                                             <div className="flex items-center gap-2 text-sm">
-                                                <User className="h-4 w-4" /> Admin
+                                                <User className="h-4 w-4" /> {selectedOrgAdminRole?.code}
                                             </div>
                                         </div>
                                     </div>

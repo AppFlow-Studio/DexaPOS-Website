@@ -30,8 +30,8 @@ const inviteSchema = z.object({
 
 type InviteFormValues = z.infer<typeof inviteSchema>
 
-export const SendOrganizationMembersInviteButton = ({ organizationId, refetch }: { organizationId: string, refetch?: () => void }) => {
-    const { data: roles, isLoading: isLoadingRoles } = useRolesHQ()
+export const SendOrganizationMembersInviteButton = ({ organizationId, refetch, role_types }: { organizationId: string, refetch?: () => void, role_types?: string }) => {
+    const { data: roles, isLoading: isLoadingRoles } = useRolesHQ(role_types)
     const [organizationMembersInviteDialog, setOrganizationMembersInviteDialog] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
 
@@ -49,6 +49,7 @@ export const SendOrganizationMembersInviteButton = ({ organizationId, refetch }:
         name: 'invitations',
 
     })
+    console.log(roles)
 
     const onSubmit = async (values: InviteFormValues) => {
         try {
@@ -64,7 +65,7 @@ export const SendOrganizationMembersInviteButton = ({ organizationId, refetch }:
             // TODO: Implement actual invitation sending logic
             const res = await createBulkInvitationAdmin(organizationId, validInvitations)
             console.log('Sending invitations:', validInvitations)
-            if (res?.success) {
+            if (res?.success === true) {
                 toast.success(`Successfully sent ${validInvitations.length} invitation${validInvitations.length > 1 ? 's' : ''}`)
                 refetch?.()
             } else {

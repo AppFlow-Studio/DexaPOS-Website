@@ -161,6 +161,7 @@ Deno.serve(async (req) => {
               clerk_org_id: event.data.id,
               carrier_id: event.data.public_metadata.carrierId,
               public_metadata: event.data.public_metadata,
+              type: event.data.public_metadata.merchant_type,
               created_at: new Date(event.data.created_at).toISOString(),
               updated_at: new Date(event.data.updated_at).toISOString(),
             },
@@ -183,6 +184,7 @@ Deno.serve(async (req) => {
         .from('organizations')
         .update({
           name: event.data.name,
+          imageURL: event.data.public_metadata.imageURL,
           updated_at: new Date(event.data.updated_at).toISOString(),
         })
         .eq('id', event.data.id)
@@ -200,6 +202,18 @@ Deno.serve(async (req) => {
           ).eq('clerk_org_id', event.data.id)
           .select()
           .single()
+      }
+
+      if (event.data.public_metadata.org_type === 'merchant') {
+        const { data, error } = await supabase
+          .from('merchants')
+          .update({
+            name: event.data.name,
+            clerk_org_id: event.data.id,
+            public_metadata: event.data.public_metadata,
+            updated_at: new Date(event.data.updated_at).toISOString(),
+          }
+          ).eq('clerk_org_id', event.data.id)
       }
 
       if (error) {

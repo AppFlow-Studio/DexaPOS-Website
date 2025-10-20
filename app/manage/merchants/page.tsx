@@ -31,9 +31,12 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useMerhcantOrganizations } from '../hooks/useMerchantOrganizations'
+import { useMerchantOrganizations } from '../hooks/useMerchantOrganizations'
 import { MerchantsModel } from '@/types/db-modles'
 import { useRouter } from 'next/navigation'
+import { CreateMerchantsButton } from '../organizations/[organizationId]/componenets/CreateMerchantsButtons'
+import { useOrganizationInfo } from '../hooks/useOrganizationInfo'
+import { useUser } from '@clerk/nextjs'
 
 const merchantsData = [
     {
@@ -95,7 +98,8 @@ const merchantsData = [
 
 export default function MerchantsPage() {
     const router = useRouter()
-    const { data: merchantsData, isLoading, isError, refetch: refetchMerchants } = useMerhcantOrganizations()
+    const { user } = useUser()
+    const { data: merchantsData, isLoading, isError, refetch: refetchMerchants } = useMerchantOrganizations()
     if (isLoading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[300px]">
@@ -126,10 +130,7 @@ export default function MerchantsPage() {
                         Manage and monitor your merchant accounts
                     </p>
                 </div>
-                <Button>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Merchant
-                </Button>
+                <CreateMerchantsButton organizationId={user?.publicMetadata?.organizationId as string} refetch={refetchMerchants} />
             </div>
 
             {/* Stats Cards */}
@@ -211,7 +212,7 @@ export default function MerchantsPage() {
                             <TableRow>
                                 <TableHead>Merchant</TableHead>
                                 <TableHead>Type</TableHead>
-                                <TableHead>Status</TableHead>
+                                {/* <TableHead>Status</TableHead> */}
                                 <TableHead>Revenue</TableHead>
                                 <TableHead>Transactions</TableHead>
                                 <TableHead>Growth</TableHead>
@@ -226,23 +227,23 @@ export default function MerchantsPage() {
                                     <TableCell className="font-medium">
                                         <div>
                                             <div className="font-semibold">{merchant.name}</div>
-                                            <div className="text-sm text-muted-foreground">ID: {merchant.id}</div>
+                                            <div className="text-sm text-muted-foreground">ID: {merchant.clerk_org_id}</div>
                                         </div>
                                     </TableCell>
                                     <TableCell>
                                         <Badge variant="outline">{merchant.type}</Badge>
                                     </TableCell>
-                                    <TableCell>
+                                    {/* <TableCell>
                                         <Badge
                                         // variant={
                                         //     merchant.status === 'active' ? 'default' :
                                         //         merchant.status === 'pending' ? 'secondary' : 'destructive'
                                         // }
                                         >
-                                            {/* {merchant.status} */}
+                                            {merchant.status}
                                             N/A
                                         </Badge>
-                                    </TableCell>
+                                    </TableCell> */}
                                     <TableCell className="font-medium">
                                         $0
                                     </TableCell>

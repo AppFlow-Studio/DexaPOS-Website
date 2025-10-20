@@ -34,6 +34,7 @@ export async function ClerkCreateOrganization({
             },
             maxAllowedMemberships: 0, // No limit on the number of members
         })
+
         const supabase = await createServerSupabaseClient()
         // Insert Image into Supabase Storage Bucket
         const filepath = CreateOrganizationResponse.id.toString() + '.png';
@@ -50,18 +51,26 @@ export async function ClerkCreateOrganization({
         }
 
         if (CreateOrganizationResponse.id) {
-            const { data: publicUrl } = supabase.storage.from('Organizations-Logos').getPublicUrl(filepath)
+            const { data } = supabase.storage.from('Organizations-Logos').getPublicUrl(filepath)
             // Update the organization image URL in supabase
-            const { data, error } = await supabase.from('organizations').update({
-                imageURL: publicUrl.publicUrl,
-            }).eq('id', CreateOrganizationResponse.id).select().single()
-            if (error) {
-                return {
-                    success: false,
-                    message: 'Error updating organization image: ' + error.message,
-                    // error: error,
-                }
-            }
+            // const { data, error } = await supabase.from('organizations').update({
+            //     imageURL: publicUrl.publicUrl,
+            // }).eq('id', CreateOrganizationResponse.id).select().single()
+            // if (error) {
+            //     console.error('Error updating organization image:', error)
+            //     return {
+            //         success: false,
+            //         message: 'Error updating organization image: ' + error.message,
+            //         // error: error,
+            //     }
+            // }
+            const UpdateClerkOrganizationResponse = await clerkClient.organizations.updateOrganizationMetadata(
+                CreateOrganizationResponse.id,
+                {
+                    publicMetadata: {
+                        imageURL: data.publicUrl,
+                    },
+                })
         }
 
         return {

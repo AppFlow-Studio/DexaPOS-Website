@@ -42,6 +42,8 @@ import {
 } from 'lucide-react'
 import { useMerchantInfo } from '../../hooks/useMerchantInfo'
 import { MerchantInfoModel } from '@/types/db-modles'
+import { SendOrganizationMembersInviteButton } from '../../organizations/[organizationId]/componenets/SendOrganizationMembersInviteButton'
+import { SendAdminInviteButton } from '../../organizations/[organizationId]/componenets/SendAdminInviteButton'
 export default function MerchantInfoPage() {
     const { merchantId } = useParams()
     const { data: merchantInfo, isLoading, isError } = useMerchantInfo(merchantId as string)
@@ -91,6 +93,10 @@ export default function MerchantInfoPage() {
 
 
     console.log('merchantInfo', merchantInfo)
+    function refetchMerchantInfo() {
+        throw new Error('Function not implemented.')
+    }
+
     return (
         <div className="space-y-6">
             {/* Breadcrumb */}
@@ -154,7 +160,7 @@ export default function MerchantInfoPage() {
                             <TabsTrigger value="overview">Overview</TabsTrigger>
                             <TabsTrigger value="analytics">Analytics</TabsTrigger>
                             <TabsTrigger value="transactions">Transactions</TabsTrigger>
-                            <TabsTrigger value="roles">Roles</TabsTrigger>
+                            {/* <TabsTrigger value="roles">Roles</TabsTrigger> */}
                             <TabsTrigger value="audit">Audit Logs</TabsTrigger>
                             <TabsTrigger value="staff">Staff</TabsTrigger>
                             <TabsTrigger value="customers">Customers</TabsTrigger>
@@ -222,13 +228,22 @@ export default function MerchantInfoPage() {
                             </div>
 
                             {/* Business Information */}
-                            <div className="grid gap-4 md:grid-cols-2 mt-6">
+                            <div className="grid gap-4 md:grid-cols-1 mt-6">
                                 <Card>
                                     <CardHeader>
                                         <CardTitle className="text-lg">Business Information</CardTitle>
                                         <CardDescription>Merchant business details and contact information</CardDescription>
                                     </CardHeader>
                                     <CardContent className="space-y-4">
+                                        <div className="flex items-center gap-3">
+                                            <Store className="h-4 w-4 text-muted-foreground" />
+                                            <div>
+                                                <div className="font-medium">Business Type</div>
+                                                <div className="text-sm text-muted-foreground">
+                                                    {(merchantInfo?.public_metadata as any)?.merchant_type || 'Not specified'}
+                                                </div>
+                                            </div>
+                                        </div>
                                         <div className="flex items-center gap-3">
                                             <MapPin className="h-4 w-4 text-muted-foreground" />
                                             <div>
@@ -260,7 +275,7 @@ export default function MerchantInfoPage() {
                                     </CardContent>
                                 </Card>
 
-                                <Card>
+                                {/* <Card>
                                     <CardHeader>
                                         <CardTitle className="text-lg">Recent Activity</CardTitle>
                                         <CardDescription>Latest transactions and activities</CardDescription>
@@ -288,7 +303,7 @@ export default function MerchantInfoPage() {
                                             ))}
                                         </div>
                                     </CardContent>
-                                </Card>
+                                </Card> */}
                             </div>
                         </TabsContent>
 
@@ -513,9 +528,13 @@ export default function MerchantInfoPage() {
                                             <CardTitle>Staff</CardTitle>
                                             <CardDescription>Manage merchant staff and pending invitations</CardDescription>
                                         </div>
-                                        <Button size="sm">
+                                        {/* <Button size="sm">
                                             <UserPlus className="h-4 w-4 mr-2" /> Invite Staff
-                                        </Button>
+                                        </Button> */}
+                                        {(merchantInfo?.organizations as any).members.length > 0 ?
+                                            <SendOrganizationMembersInviteButton organizationId={merchantInfo?.clerk_org_id as string} refetch={() => refetchMerchantInfo()} role_types='merchant' /> :
+                                            <SendAdminInviteButton organizationId={merchantInfo?.clerk_org_id as string} refetch={() => refetchMerchantInfo()} role_types='merchant' />
+                                        }
                                     </div>
                                 </CardHeader>
                                 <CardContent>
@@ -526,118 +545,49 @@ export default function MerchantInfoPage() {
                                         </TabsList>
 
                                         <TabsContent value="management" className="mt-4">
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>Staff Member</TableHead>
-                                                        <TableHead>Role</TableHead>
-                                                        <TableHead>Status</TableHead>
-                                                        <TableHead>Last Login</TableHead>
-                                                        <TableHead className="w-[70px]">Actions</TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {staff.map((member) => (
-                                                        <TableRow key={member.id}>
-                                                            <TableCell>
-                                                                <div className="flex items-center gap-3">
-                                                                    <Avatar className="h-8 w-8">
-                                                                        <AvatarFallback>{member.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-                                                                    </Avatar>
-                                                                    <div>
-                                                                        <div className="font-medium">{member.name}</div>
-                                                                        <div className="text-sm text-muted-foreground">{member.email}</div>
-                                                                    </div>
-                                                                </div>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                <Badge variant="outline">{member.role}</Badge>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                {member.status === 'active' ? (
-                                                                    <div className="flex items-center gap-2">
-                                                                        <CheckCircle className="h-4 w-4 text-green-600" />
-                                                                        <span className="text-sm">Active</span>
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="flex items-center gap-2">
-                                                                        <XCircle className="h-4 w-4 text-red-600" />
-                                                                        <span className="text-sm">Inactive</span>
-                                                                    </div>
-                                                                )}
-                                                            </TableCell>
-                                                            <TableCell className="text-sm text-muted-foreground">{member.last_login}</TableCell>
-                                                            <TableCell>
-                                                                <DropdownMenu>
-                                                                    <DropdownMenuTrigger asChild>
-                                                                        <Button variant="ghost" className="h-8 w-8 p-0">
-                                                                            <MoreHorizontal className="h-4 w-4" />
-                                                                        </Button>
-                                                                    </DropdownMenuTrigger>
-                                                                    <DropdownMenuContent align="end">
-                                                                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                                        <DropdownMenuItem>
-                                                                            <Eye className="h-4 w-4 mr-2" /> View Profile
-                                                                        </DropdownMenuItem>
-                                                                        <DropdownMenuItem>
-                                                                            <Edit className="h-4 w-4 mr-2" /> Edit Role
-                                                                        </DropdownMenuItem>
-                                                                        <DropdownMenuSeparator />
-                                                                        <DropdownMenuItem className="text-red-600">
-                                                                            <Trash2 className="h-4 w-4 mr-2" /> Remove
-                                                                        </DropdownMenuItem>
-                                                                    </DropdownMenuContent>
-                                                                </DropdownMenu>
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
-                                        </TabsContent>
-
-                                        <TabsContent value="invites" className="mt-4">
-                                            {!(merchantInfo as any)?.pending_org_admin_invites?.length ? (
-                                                <div className="flex flex-col items-center justify-center space-y-2 py-8 text-center">
-                                                    <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                                                        <Users className="h-6 w-6 text-muted-foreground" />
-                                                    </div>
-                                                    <div className="text-sm text-muted-foreground">No pending staff invites.</div>
-                                                </div>
-                                            ) : (
+                                            {(merchantInfo?.organizations as any)?.members && (merchantInfo?.organizations as any).members.length > 0 ? (
                                                 <Table>
                                                     <TableHeader>
                                                         <TableRow>
-                                                            <TableHead>Invitee</TableHead>
+                                                            <TableHead>Staff Member</TableHead>
                                                             <TableHead>Role</TableHead>
                                                             <TableHead>Status</TableHead>
-                                                            <TableHead>Sent</TableHead>
+                                                            <TableHead>Joined</TableHead>
                                                             <TableHead className="w-[70px]">Actions</TableHead>
                                                         </TableRow>
                                                     </TableHeader>
                                                     <TableBody>
-                                                        {(merchantInfo as any).pending_org_admin_invites.map((inv: any) => (
-                                                            <TableRow key={inv.id}>
+                                                        {(merchantInfo?.organizations as any).members.map((member: any) => (
+                                                            <TableRow key={member.id}>
                                                                 <TableCell>
                                                                     <div className="flex items-center gap-3">
-                                                                        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
-                                                                            {(inv.email?.[0] || 'U').toUpperCase()}
-                                                                        </div>
+                                                                        <Avatar className="h-8 w-8">
+                                                                            <AvatarImage src={member?.users?.avatar_url || ''} alt={member?.users?.first_name || 'User'} />
+                                                                            <AvatarFallback>
+                                                                                {(member?.users?.first_name || 'U')[0]}{(member?.users?.last_name || 'N')[0]}
+                                                                            </AvatarFallback>
+                                                                        </Avatar>
                                                                         <div>
-                                                                            <div className="font-medium">{inv.email}</div>
-                                                                            <div className="text-xs text-muted-foreground">Invite ID: {inv.clerk_invite_id}</div>
+                                                                            <div className="font-medium">
+                                                                                {member?.users?.first_name} {member?.users?.last_name}
+                                                                            </div>
+                                                                            <div className="text-sm text-muted-foreground">{member?.users?.email}</div>
                                                                         </div>
                                                                     </div>
                                                                 </TableCell>
                                                                 <TableCell>
-                                                                    <Badge variant="outline">{inv.role || 'member'}</Badge>
-                                                                </TableCell>
-                                                                <TableCell>
-                                                                    <Badge variant={inv.status === 'pending' ? 'secondary' : inv.status === 'accepted' ? 'default' : 'destructive'}>
-                                                                        {inv.status}
+                                                                    <Badge variant="outline">
+                                                                        {member?.users?.public_metadata?.role || 'member'}
                                                                     </Badge>
                                                                 </TableCell>
+                                                                <TableCell>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <CheckCircle className="h-4 w-4 text-green-600" />
+                                                                        <span className="text-sm">Active</span>
+                                                                    </div>
+                                                                </TableCell>
                                                                 <TableCell className="text-sm text-muted-foreground">
-                                                                    {inv.created_at ? new Date(inv.created_at).toLocaleDateString() : '-'}
+                                                                    {member?.created_at ? new Date(member.created_at).toLocaleDateString() : '-'}
                                                                 </TableCell>
                                                                 <TableCell>
                                                                     <DropdownMenu>
@@ -648,10 +598,16 @@ export default function MerchantInfoPage() {
                                                                         </DropdownMenuTrigger>
                                                                         <DropdownMenuContent align="end">
                                                                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                                            <DropdownMenuItem>Copy invite link</DropdownMenuItem>
-                                                                            <DropdownMenuItem>Resend</DropdownMenuItem>
+                                                                            <DropdownMenuItem>
+                                                                                <Eye className="h-4 w-4 mr-2" /> View Profile
+                                                                            </DropdownMenuItem>
+                                                                            <DropdownMenuItem>
+                                                                                <Edit className="h-4 w-4 mr-2" /> Edit Role
+                                                                            </DropdownMenuItem>
                                                                             <DropdownMenuSeparator />
-                                                                            <DropdownMenuItem className="text-red-600">Revoke</DropdownMenuItem>
+                                                                            <DropdownMenuItem className="text-red-600">
+                                                                                <Trash2 className="h-4 w-4 mr-2" /> Remove
+                                                                            </DropdownMenuItem>
                                                                         </DropdownMenuContent>
                                                                     </DropdownMenu>
                                                                 </TableCell>
@@ -659,6 +615,122 @@ export default function MerchantInfoPage() {
                                                         ))}
                                                     </TableBody>
                                                 </Table>
+                                            ) : (
+                                                <div className="flex flex-col items-center justify-center space-y-4">
+                                                    <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center">
+                                                        <Users className="h-8 w-8 text-muted-foreground" />
+                                                    </div>
+                                                    <div className="space-y-2 text-center">
+                                                        <h3 className="text-lg font-semibold">No staff members</h3>
+                                                        <p className="text-sm text-muted-foreground max-w-md">
+                                                            This merchant doesn't have any staff members yet, add an admin to get started.
+                                                        </p>
+                                                        <SendAdminInviteButton organizationId={merchantInfo?.clerk_org_id as string} refetch={() => refetchMerchantInfo()} role_types='merchant' />
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </TabsContent>
+
+                                        <TabsContent value="invites" className="mt-4">
+                                            {(!(merchantInfo?.organizations as any)?.pending_org_admin_invites?.length && !(merchantInfo?.organizations as any)?.pending_org_member_invites?.length) ? (
+                                                <div className="flex flex-col items-center justify-center space-y-2 py-8 text-center">
+                                                    <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                                                        <Users className="h-6 w-6 text-muted-foreground" />
+                                                    </div>
+                                                    <div className="text-sm text-muted-foreground">No pending staff invites.</div>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-6">
+                                                    {(merchantInfo?.organizations as any)?.pending_org_admin_invites?.length > 0 && (
+                                                        <div>
+                                                            <div className="text-sm font-medium mb-3">Admin Invites</div>
+                                                            <div className="divide-y rounded-md border">
+                                                                {(merchantInfo?.organizations as any).pending_org_admin_invites.map((inv: any) => (
+                                                                    <div key={inv.id} className="flex items-center justify-between p-4">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
+                                                                                {(inv.email?.[0] || 'A').toUpperCase()}
+                                                                            </div>
+                                                                            <div>
+                                                                                <div className={`font-medium ${inv.status === 'pending' ? 'text-yellow-500' :
+                                                                                    inv.status === 'revoked' ? 'text-red-500' :
+                                                                                        inv.status === 'accepted' ? 'text-green-500' :
+                                                                                            inv.status === 'expired' ? 'text-red-500' :
+                                                                                                inv.status === 'cancelled' ? 'text-red-500' :
+                                                                                                    inv.status === 'failed' ? 'text-red-500' : 'text-red-500'
+                                                                                    }`}>
+                                                                                    {inv.status === 'pending' ? 'Pending Invitation' :
+                                                                                        inv.status === 'revoked' ? 'Invitation Revoked' :
+                                                                                            inv.status === 'accepted' ? 'Invitation Accepted' :
+                                                                                                inv.status === 'expired' ? 'Invitation Expired' :
+                                                                                                    inv.status === 'cancelled' ? 'Invitation Cancelled' :
+                                                                                                        inv.status === 'failed' ? 'Invitation Failed' : 'Invitation Revoked'
+                                                                                    }
+                                                                                </div>
+                                                                                <div className="text-sm text-muted-foreground">{inv.email}</div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-4">
+                                                                            <div className="text-muted-foreground">{inv.role}</div>
+                                                                            <DropdownMenu>
+                                                                                <DropdownMenuTrigger asChild>
+                                                                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                                                                        <MoreHorizontal className="h-4 w-4" />
+                                                                                    </Button>
+                                                                                </DropdownMenuTrigger>
+                                                                                <DropdownMenuContent align="end">
+                                                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                                                    <DropdownMenuItem>Copy invite link</DropdownMenuItem>
+                                                                                    <DropdownMenuItem>Resend</DropdownMenuItem>
+                                                                                    <DropdownMenuSeparator />
+                                                                                    <DropdownMenuItem className="text-red-600">Revoke</DropdownMenuItem>
+                                                                                </DropdownMenuContent>
+                                                                            </DropdownMenu>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {(merchantInfo?.organizations as any)?.pending_org_member_invites?.length > 0 && (
+                                                        <div>
+                                                            <div className="text-sm font-medium mb-3">Member Invites</div>
+                                                            <div className="divide-y rounded-md border">
+                                                                {(merchantInfo?.organizations as any).pending_org_member_invites.map((inv: any) => (
+                                                                    <div key={inv.id} className="flex items-center justify-between p-4">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
+                                                                                {(inv.email?.[0] || 'M').toUpperCase()}
+                                                                            </div>
+                                                                            <div>
+                                                                                <div className="font-medium">Pending Invitation</div>
+                                                                                <div className="text-sm text-muted-foreground">{inv.email}</div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-4">
+                                                                            <div className="text-muted-foreground">Member</div>
+                                                                            <DropdownMenu>
+                                                                                <DropdownMenuTrigger asChild>
+                                                                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                                                                        <MoreHorizontal className="h-4 w-4" />
+                                                                                    </Button>
+                                                                                </DropdownMenuTrigger>
+                                                                                <DropdownMenuContent align="end">
+                                                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                                                    <DropdownMenuItem>Copy invite link</DropdownMenuItem>
+                                                                                    <DropdownMenuItem>Resend</DropdownMenuItem>
+                                                                                    <DropdownMenuSeparator />
+                                                                                    <DropdownMenuItem className="text-red-600">Revoke</DropdownMenuItem>
+                                                                                </DropdownMenuContent>
+                                                                            </DropdownMenu>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             )}
                                         </TabsContent>
                                     </Tabs>

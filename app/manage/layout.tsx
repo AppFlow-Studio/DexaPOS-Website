@@ -55,105 +55,63 @@ import { AnimatedThemeToggler } from '@/components/ui/animated-theme-toggler'
 import { useUserInfo } from './hooks/useUserInfo.'
 import { Skeleton } from '@/components/ui/skeleton'
 import Image from 'next/image'
-const data = {
-    user: {
-        name: 'DexaPOS Admin',
-        email: 'admin@dexapos.com',
-        avatar: '/avatars/admin.jpg',
+
+const navMain = [
+    {
+        "title": "Operations",
+        "items": [
+            {
+                title: 'Dashboard',
+                url: '/manage',
+                icon: LayoutDashboard,
+                group: 'Dashboard',
+            },
+            {
+                title: 'Merchants',
+                url: '/manage/merchants',
+                icon: Building2,
+            },
+            {
+                title: 'Organizations',
+                url: '/manage/organizations',
+                icon: Layers,
+            }
+        ]
     },
-    navMain: [
-        {
-            title: 'Dashboard',
-            url: '/manage',
-            icon: LayoutDashboard,
-            group: 'Dashboard',
-        },
-        {
-            title: 'Merchants',
-            url: '/manage/merchants',
-            icon: Building2,
-        },
-        {
-            title: 'Organizations',
-            url: '/manage/organizations',
-            icon: Layers,
-        },
-        {
-            title: 'Users',
-            url: '/manage/users',
-            icon: UserCheck,
-        },
-        {
-            title: 'Roles & Permissions',
-            url: '/manage/roles-permissions',
-            icon: ShieldCheck,
-        },
-        {
-            title: 'Audit Logs',
-            url: '/manage/audit-logs',
-            icon: History,
-        }
-        // {
-        //     title: 'Analytics',
-        //     url: '/manage/analytics',
-        //     icon: BarChart3,
-        // },
-        // {
-        //     title: 'Transactions',
-        //     url: '/manage/transactions',
-        //     icon: CreditCard,
-        // },
-        // {
-        //     title: 'Products',
-        //     url: '/manage/products',
-        //     icon: Package,
-        // },
-        // {
-        //     title: 'Team',
-        //     url: '/manage/team',
-        //     icon: Users,
-        // },
-    ],
-    navSecondary: [
-        {
-            title: 'Reports',
-            url: '/manage/reports',
-            icon: FileText,
-        },
-        {
-            title: 'Data Library',
-            url: '/manage/data-library',
-            icon: FileText,
-        },
-        {
-            title: 'Word Assistant',
-            url: '/manage/word-assistant',
-            icon: FileText,
-        },
-        {
-            title: 'More',
-            url: '/manage/more',
-            icon: MoreHorizontal,
-        },
-    ],
-    navFooter: [
-        {
-            title: 'Settings',
-            url: '/manage/settings',
-            icon: Settings,
-        },
-        {
-            title: 'Get Help',
-            url: '/manage/help',
-            icon: HelpCircle,
-        },
-        {
-            title: 'Search',
-            url: '/manage/search',
-            icon: Search,
-        },
-    ],
-}
+
+    {
+        "title": "Internal Management",
+        "items": [
+            {
+                title: 'Users',
+                url: '/manage/users',
+                icon: UserCheck
+            },
+            {
+                title: 'Roles & Permissions',
+                url: '/manage/roles-permissions',
+                icon: ShieldCheck,
+            },
+            {
+                title: 'Audit Logs',
+                url: '/manage/audit-logs',
+                icon: History,
+            }]
+    }
+]
+
+const navFooter = [
+    {
+        title: 'Settings',
+        url: '#',
+        icon: Settings,
+    },
+    {
+        title: 'Get Help',
+        url: '#',
+        icon: HelpCircle,
+    },
+]
 
 function AppSidebar() {
     const { data: userInfo, isLoading, error } = useUserInfo()
@@ -196,15 +154,24 @@ function AppSidebar() {
                 <SidebarGroup>
                     <SidebarGroupContent>
                         <SidebarMenu>
-                            {data.navMain.map((item, index) => (
+                            {navMain.map((item, index) => (
                                 <SidebarMenuItem key={item.title}>
-                                    <SidebarMenuButton asChild isActive={pathname.includes(item.url.split('/')[2]) || pathname === item.url}
-                                    >
-                                        <Link href={item.url}>
-                                            <item.icon className="h-4 w-4" />
-                                            <span>{item.title}</span>
-                                        </Link>
-                                    </SidebarMenuButton>
+                                    <SidebarGroup>
+                                        <SidebarGroupLabel>{item.title}</SidebarGroupLabel>
+                                        <SidebarMenu>
+                                            {item.items.map((item) => (
+                                                <SidebarMenuItem key={item.title}>
+                                                    <SidebarMenuButton asChild isActive={pathname.includes(item.url.split('/')[2]) || pathname === item.url}
+                                                    >
+                                                        <Link href={item.url}>
+                                                            <item.icon className="h-4 w-4" />
+                                                            <span>{item.title}</span>
+                                                        </Link>
+                                                    </SidebarMenuButton>
+                                                </SidebarMenuItem>
+                                            ))}
+                                        </SidebarMenu>
+                                    </SidebarGroup>
                                 </SidebarMenuItem>
                             ))}
                         </SidebarMenu>
@@ -230,7 +197,7 @@ function AppSidebar() {
             </SidebarContent>
             <SidebarFooter>
                 <SidebarMenu>
-                    {data.navFooter.map((item) => (
+                    {navFooter.map((item) => (
                         <SidebarMenuItem key={item.title}>
                             <SidebarMenuButton asChild>
                                 <Link href={item.url}>

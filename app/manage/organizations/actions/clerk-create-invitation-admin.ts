@@ -24,7 +24,7 @@ export async function createInvitationAdmin(organizationId: string, email: strin
                 clerk_invite_id: invitation.id,
                 email: email,
                 status: invitation.status,
-                role: level_type,
+                role: role,
                 created_at: new Date().toISOString(),
             })
             return {

@@ -47,6 +47,7 @@ import {
     Edit,
     Trash2,
 } from 'lucide-react'
+import AuditLogViewer from '@/components/AuditLogViewer'
 
 // Mock data for audit logs
 const mockAuditLogs = [
@@ -521,6 +522,7 @@ export default function AuditLogsPage() {
                             </Table>
                         </CardContent>
                     </Card>
+                    {/* <AuditLogViewer /> */}
                 </TabsContent>
 
                 <TabsContent value="security" className="space-y-4">

@@ -3,19 +3,23 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createClerkClient } from '@clerk/backend'
 import { createInvitationAdmin } from './clerk-create-invitation-admin'
+import { DeleteOrganization } from '../../actions/delete-organization'
 export async function createCarrierMerchantAccountAdmin({
     userId,
     carrierId,
     merchantName,
+    merchantType,
     businessAddress,
     ownerName,
     ownerEmail,
     ownerPhone,
     merchantImage
+
 }: {
     userId: string
     carrierId: string
     merchantName: string
+    merchantType: string
     businessAddress: string
     ownerName: string
     ownerEmail: string
@@ -23,15 +27,17 @@ export async function createCarrierMerchantAccountAdmin({
     merchantImage: File
 }) {
     try {
-        if (!merchantName || !businessAddress || !ownerName || !ownerEmail || !ownerPhone || !merchantImage) {
+        if (!merchantName || !merchantType || !businessAddress || !ownerName || !ownerEmail || !ownerPhone || !merchantImage) {
             throw new Error('Missing required fields')
         }
         const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
+
         const CreateMerchantResponse = await clerkClient.organizations.createOrganization({
             name: merchantName,
             publicMetadata: {
                 // Carrier Organization That handles merchants 
                 org_type: 'merchant',
+                merchant_type: merchantType,
                 status: 'active',
                 business_address: businessAddress,
                 owner_name: ownerName,
@@ -49,6 +55,7 @@ export async function createCarrierMerchantAccountAdmin({
         if (merchantImage && CreateMerchantResponse.id) {
             const { data, error } = await supabase.storage.from('Organizations-Logos').upload(filepath, merchantImage)
             if (error) {
+                const deleteOrganizationResponse = await DeleteOrganization(CreateMerchantResponse.id)
                 return {
                     success: false,
                     message: 'Error uploading organization image: ' + error.message,
@@ -58,26 +65,24 @@ export async function createCarrierMerchantAccountAdmin({
         }
 
         if (CreateMerchantResponse.id && merchantImage) {
-            const { data: publicUrl } = supabase.storage.from('Organizations-Logos').getPublicUrl(filepath)
-            // Update the organization image URL in supabase
-            const { data, error } = await supabase.from('organizations').update({
-                imageURL: publicUrl.publicUrl,
-            }).eq('id', CreateMerchantResponse.id).select().single()
+            const { data } = supabase.storage.from('Organizations-Logos').getPublicUrl(filepath)
+            const UpdateClerkOrganizationResponse = await clerkClient.organizations.updateOrganizationMetadata(
+                CreateMerchantResponse.id,
+                {
+                    publicMetadata: {
+                        imageURL: data.publicUrl,
+                    },
+                })
 
-            console.log('Created Merchant', data)
-            const createInvitationResponse = await createInvitationAdmin(CreateMerchantResponse.id, ownerEmail)
-            if (createInvitationResponse?.success) {
+            const createInvitationResponse = await createInvitationAdmin(CreateMerchantResponse.id, ownerEmail, 'merchant.owner', 'org:manager')
+
+            if (createInvitationResponse?.success === false) {
+                const deleteOrganizationResponse = await DeleteOrganization(CreateMerchantResponse.id)
+
                 return {
                     success: false,
                     message: 'Error Sending Admin invitation: ' + createInvitationResponse.message,
                     // error: createInvitationResponse.error,
-                }
-            }
-            if (error) {
-                return {
-                    success: false,
-                    message: 'Error updating organization image: ' + error.message,
-                    // error: error,
                 }
             }
         }
@@ -92,7 +97,7 @@ export async function createCarrierMerchantAccountAdmin({
         console.error('Error creating merchant account admin:', error)
         return {
             success: false,
-            message: 'Error creating merchant account admin: ' + error?.errors?.[0]?.longMessage || 'Unknown error',
+            message: 'Error creating merchant account admin: ' + (error as any)?.errors?.[0]?.longMessage || 'Unknown error',
         }
     }
 

@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormDescription, FormMessage } from '@/components/ui/form'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { FileUpload } from '@/components/ui/file-upload'
-import { Store, Plus, Loader2, X, ChevronDown } from 'lucide-react'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Store, Plus, Loader2, X, ChevronDown, Utensils, ShoppingBag, ShoppingCart, Wrench, Coffee } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -16,6 +17,9 @@ import { Sheet } from 'react-modal-sheet'
 import { createCarrierMerchantAccountAdmin } from '../../actions/create-carrier-merchant-account-admin'
 
 const merchantSchema = z.object({
+    merchantType: z.enum(["Restaurant", "Retail", "Grocery", "Service", "Cafe"], {
+        required_error: "Please select a merchant type",
+    }),
     merchantName: z
         .string()
         .min(2, "Merchant name must be at least 2 characters")
@@ -46,7 +50,7 @@ const merchantSchema = z.object({
 
 type MerchantFormValues = z.infer<typeof merchantSchema>
 
-export const CreateMerchantButton = ({ carrierId, organizationId, refetch }: { carrierId: string, organizationId: string, refetch: () => void }) => {
+export const AddMerchantButton = ({ carrierId, organizationId, refetch }: { carrierId: string, organizationId: string, refetch: () => void }) => {
     const [merchantDialog, setMerchantDialog] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
     const [showScrollIndicator, setShowScrollIndicator] = useState(false)
@@ -57,6 +61,7 @@ export const CreateMerchantButton = ({ carrierId, organizationId, refetch }: { c
         resolver: zodResolver(merchantSchema),
         mode: "onChange",
         defaultValues: {
+            merchantType: undefined,
             merchantName: "",
             businessAddress: "",
             ownerName: "",
@@ -123,12 +128,11 @@ export const CreateMerchantButton = ({ carrierId, organizationId, refetch }: { c
         if (!user?.id) return
         setIsLoading(true)
         try {
-            // TODO: Implement actual merchant creation logic
             console.log('Creating merchant:', values)
 
-            // Simulate API call
             const res = await createCarrierMerchantAccountAdmin({
                 merchantName: values.merchantName,
+                merchantType: values.merchantType,
                 businessAddress: values.businessAddress,
                 ownerName: values.ownerName,
                 ownerEmail: values.ownerEmail,
@@ -158,7 +162,7 @@ export const CreateMerchantButton = ({ carrierId, organizationId, refetch }: { c
         <>
             <Button size="sm" onClick={() => setMerchantDialog(true)}>
                 <Plus className="h-4 w-4 mr-2" />
-                Create Merchant
+                Add Merchant
             </Button>
 
             <Sheet isOpen={merchantDialog} onClose={() => setMerchantDialog(false)}>
@@ -166,7 +170,7 @@ export const CreateMerchantButton = ({ carrierId, organizationId, refetch }: { c
                     <Sheet.Header>
                         <div className="flex items-center justify-between p-4 border-b">
                             <div>
-                                <h2 className="text-xl font-semibold">Create New Merchant</h2>
+                                <h2 className="text-xl font-semibold">Add New Merchant</h2>
                                 <p className="text-sm text-muted-foreground">
                                     Add a new merchant store to this organization
                                 </p>
@@ -189,6 +193,70 @@ export const CreateMerchantButton = ({ carrierId, organizationId, refetch }: { c
                             >
                                 <Form {...form}>
                                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                                        {/* Merchant Type Selection Card */}
+                                        <Card>
+                                            <CardHeader>
+                                                <CardTitle className="text-lg flex items-center gap-2">
+                                                    <Store className="h-5 w-5" />
+                                                    Business Type
+                                                </CardTitle>
+                                                <CardDescription>
+                                                    Select the type of business for this merchant
+                                                </CardDescription>
+                                            </CardHeader>
+                                            <CardContent>
+                                                <FormField
+                                                    control={form.control}
+                                                    name="merchantType"
+                                                    render={({ field }: { field: any }) => (
+                                                        <FormItem className="space-y-3">
+                                                            <FormLabel>Merchant Type</FormLabel>
+                                                            <FormControl>
+                                                                <RadioGroup
+                                                                    onValueChange={field.onChange}
+                                                                    value={field.value}
+                                                                    className="grid grid-cols-1 gap-3"
+                                                                >
+                                                                    {[
+                                                                        { value: "Restaurant", label: "Restaurant", icon: Utensils, description: "Food service and dining establishments" },
+                                                                        { value: "Retail", label: "Retail", icon: ShoppingBag, description: "General retail and merchandise stores" },
+                                                                        { value: "Grocery", label: "Grocery", icon: ShoppingCart, description: "Food and household item stores" },
+                                                                        { value: "Service", label: "Service", icon: Wrench, description: "Professional and personal services" },
+                                                                        { value: "Cafe", label: "Cafe", icon: Coffee, description: "Coffee shops and casual dining" },
+                                                                    ].map((type) => {
+                                                                        const IconComponent = type.icon
+                                                                        return (
+                                                                            <div key={type.value} className="flex items-center space-x-3">
+                                                                                <RadioGroupItem value={type.value} id={type.value} />
+                                                                                <label
+                                                                                    htmlFor={type.value}
+                                                                                    className="flex items-center space-x-3 cursor-pointer flex-1 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                                                                                >
+                                                                                    <div className="w-8 h-8 bg-green-100 rounded flex items-center justify-center">
+                                                                                        <IconComponent className="h-4 w-4 text-green-600" />
+                                                                                    </div>
+                                                                                    <div className="flex-1">
+                                                                                        <div className="font-medium text-sm">{type.label}</div>
+                                                                                        <div className="text-xs text-muted-foreground">
+                                                                                            {type.description}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </label>
+                                                                            </div>
+                                                                        )
+                                                                    })}
+                                                                </RadioGroup>
+                                                            </FormControl>
+                                                            <FormDescription>
+                                                                Choose the category that best describes this business.
+                                                            </FormDescription>
+                                                            <FormMessage />
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                            </CardContent>
+                                        </Card>
+
                                         <Card>
                                             <CardHeader>
                                                 <CardTitle className="text-lg">Business Information</CardTitle>

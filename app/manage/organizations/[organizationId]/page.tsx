@@ -19,7 +19,7 @@ import { MerchantsModel, PendingOrgAdminInvitesModel, UsersModel } from '@/types
 import { RevokeAdminInvitePopup } from './componenets/RevokeAdminInvitePopup'
 import { RemoveUserPopup } from './componenets/RemoveUserPopup'
 import { ResendAdminInvitePopup } from './componenets/ResendAdminInvitePopup'
-import { CreateMerchantButton } from './componenets/CreateMerchantButton'
+import { AddMerchantButton } from './componenets/AddMerchantButtons'
 import { MerchantsTable } from './componenets/MerchantsTable'
 export default function OrganizationInfoPage() {
     const { organizationId } = useParams()
@@ -230,7 +230,7 @@ export default function OrganizationInfoPage() {
                                 <CardHeader>
                                     <CardTitle>Members</CardTitle>
                                     <CardDescription>People with access to this organization</CardDescription>
-                                    <SendOrganizationMembersInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} />
+                                    {members.length > 1 && <SendOrganizationMembersInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} role_types='carrier' />}
 
                                 </CardHeader>
                                 <CardContent>
@@ -295,7 +295,7 @@ export default function OrganizationInfoPage() {
                                             <div className="space-y-2 text-center">
                                                 <h3 className="text-lg font-semibold">No users in this organization</h3>
                                                 <p className="text-sm text-muted-foreground max-w-md">
-                                                    This organization doesn't have any members yet. Create an admin account and send them an invitation to get started.
+                                                    This organization has no users. Invite an admin to get started.
                                                 </p>
                                             </div>
                                             <div className="flex items-center gap-3">
@@ -307,7 +307,7 @@ export default function OrganizationInfoPage() {
                                                     <UserPlus2 className="h-4 w-4 mr-2" />
                                                     Send Invitation
                                                 </Button> */}
-                                                <SendOrganizationMembersInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} />
+                                                <SendAdminInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} role_types='carrier' />
                                             </div>
                                         </div>
                                     }
@@ -324,7 +324,7 @@ export default function OrganizationInfoPage() {
                                             <CardTitle>Merchants</CardTitle>
                                             <CardDescription>Manage and view all merchants associated with this carrier.</CardDescription>
                                         </div>
-                                        <CreateMerchantButton carrierId={carrierId as string} organizationId={organizationId as string} refetch={refetchOrganizationInfo} />
+                                        <AddMerchantButton carrierId={carrierId as string} organizationId={organizationId as string} refetch={refetchOrganizationInfo} />
                                     </div>
                                 </CardHeader>
                                 <CardContent>
@@ -344,7 +344,10 @@ export default function OrganizationInfoPage() {
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <Input placeholder="Search..." className="w-72" />
-                                            <SendOrganizationMembersInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} />
+                                            {org.members.length > 1 ?
+                                                <SendOrganizationMembersInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} role_types='carrier' /> :
+                                                <SendAdminInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} role_types='carrier' />
+                                            }
                                         </div>
                                     </div>
                                 </CardHeader>

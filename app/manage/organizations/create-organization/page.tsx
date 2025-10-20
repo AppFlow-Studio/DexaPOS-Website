@@ -59,6 +59,7 @@ export default function CreateOrganizationPage() {
             })
             if ((res as any)?.success) {
                 toast.success(res.message)
+                router.back()
             } else {
                 toast.error((res as any)?.message || "Something went wrong")
             }

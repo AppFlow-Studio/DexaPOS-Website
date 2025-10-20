@@ -7,10 +7,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { MoreHorizontal, Store, DollarSign, Target, TrendingUp, TrendingDown, Users, CheckCircle, Clock, XCircle } from 'lucide-react'
 import { MerchantsModel } from '@/types/db-modles'
+import { useRouter } from 'next/navigation'
 
 export const MerchantsTable = ({ merchants }: { merchants: MerchantsModel[] }) => {
-
-
+    const router = useRouter()
     if (!merchants || merchants?.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center space-y-4 py-12">
@@ -43,14 +43,14 @@ export const MerchantsTable = ({ merchants }: { merchants: MerchantsModel[] }) =
             </TableHeader>
             <TableBody>
                 {merchants.map((merchant: any) => (
-                    <TableRow key={merchant.id} className="cursor-pointer">
+                    <TableRow key={merchant.id} className="cursor-pointer" onClick={() => router.push(`/manage/merchants/${merchant.clerk_org_id}`)}>
                         <TableCell className="font-medium">
                             <div className="flex items-center gap-3">
                                 <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
-                                    {merchant.logo_url ? (
+                                    {merchant?.public_metadata?.imageURL ? (
                                         // eslint-disable-next-line @next/next/no-img-element
                                         <img
-                                            src={merchant.logo_url}
+                                            src={merchant.public_metadata.imageURL}
                                             alt={merchant.business_name}
                                             className="h-full w-full object-cover"
                                         />
