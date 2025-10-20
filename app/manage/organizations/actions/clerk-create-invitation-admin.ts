@@ -27,6 +27,12 @@ export async function createInvitationAdmin(organizationId: string, email: strin
                 role: role,
                 created_at: new Date().toISOString(),
             })
+            if (error) {
+                return {
+                    success: false,
+                    message: 'Error creating invitation: ' + error.message,
+                }
+            }
             return {
                 success: true,
                 message: 'Admin invitation sent successfully',

@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { MoreHorizontal, Shield, Settings, UserPlus2, Users } from 'lucide-react'
+import { MoreHorizontal, Shield, Settings, UserPlus2, Users, AlertTriangle, Trash2 } from 'lucide-react'
 import { useParams } from 'next/navigation';
 import { useState } from 'react'
 import { SendAdminInviteButton } from './componenets/SendAdminInviteButton'
@@ -21,6 +21,7 @@ import { RemoveUserPopup } from './componenets/RemoveUserPopup'
 import { ResendAdminInvitePopup } from './componenets/ResendAdminInvitePopup'
 import { AddMerchantButton } from './componenets/AddMerchantButtons'
 import { MerchantsTable } from './componenets/MerchantsTable'
+import { DeleteOrganizationDialog } from './componenets/DeleteOrganizationDialog'
 export default function OrganizationInfoPage() {
     const { organizationId } = useParams()
     const { data, isLoading, error, refetch: refetchOrganizationInfo } = useOrganizationInfo(organizationId as string)
@@ -30,6 +31,7 @@ export default function OrganizationInfoPage() {
     const [openRemoveUserPopup, setOpenRemoveUserPopup] = useState(false)
     const [resendAdminInvitePopup, setResendAdminInvitePopup] = useState<PendingOrgAdminInvitesModel | null>(null)
     const [openResendAdminInvitePopup, setOpenResendAdminInvitePopup] = useState(false)
+    const [openDeleteOrganizationDialog, setOpenDeleteOrganizationDialog] = useState(false)
     console.log('organization info data', data)
     if (isLoading) return (
         <div className="space-y-6 animate-in fade-in-0 duration-300">
@@ -473,13 +475,58 @@ export default function OrganizationInfoPage() {
 
                         {/* Settings */}
                         <TabsContent value="settings" className="mt-6">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Settings</CardTitle>
-                                    <CardDescription>Organization configuration</CardDescription>
-                                </CardHeader>
-                                <CardContent className="text-sm text-muted-foreground">Coming soon.</CardContent>
-                            </Card>
+                            <div className="space-y-6">
+                                {/* General Settings */}
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>General Settings</CardTitle>
+                                        <CardDescription>Organization configuration and preferences</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="text-sm text-muted-foreground">
+                                        <div className="text-center py-12">
+                                            <Settings className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                                            <h3 className="text-lg font-semibold mb-2">General Settings</h3>
+                                            <p className="text-sm text-muted-foreground">
+                                                Organization configuration and settings panel coming soon.
+                                            </p>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+
+                                {/* Danger Zone */}
+                                <Card className="border-destructive">
+                                    <CardHeader>
+                                        <CardTitle className="text-destructive flex items-center gap-2">
+                                            <AlertTriangle className="h-5 w-5" />
+                                            Danger Zone
+                                        </CardTitle>
+                                        <CardDescription>
+                                            Irreversible and destructive actions. Please proceed with caution.
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="space-y-4">
+                                            <div className="flex items-center justify-between p-4 border border-destructive/20 rounded-lg bg-destructive/5">
+                                                <div className="space-y-1">
+                                                    <h4 className="font-medium text-destructive">Delete Organization</h4>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        Permanently delete this organization and all associated data.
+                                                        This action cannot be undone.
+                                                    </p>
+                                                </div>
+                                                <Button
+                                                    variant="destructive"
+                                                    onClick={() => setOpenDeleteOrganizationDialog(true)}
+                                                    className="ml-4"
+                                                >
+                                                    <Trash2 className="h-4 w-4 mr-2" />
+                                                    Delete Organization
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </div>
                         </TabsContent>
                     </Tabs>
                 </CardContent>
@@ -488,6 +535,13 @@ export default function OrganizationInfoPage() {
             <RemoveUserPopup user={removeUserPopup!} open={openRemoveUserPopup} setOpen={setOpenRemoveUserPopup} refetch={refetchOrganizationInfo} />
             <RevokeAdminInvitePopup invitation={revokeAdminInvitePopup!} open={openRevokeAdminInvitePopup} setOpen={setOpenRevokeAdminInvitePopup} refetch={refetchOrganizationInfo} />
             <ResendAdminInvitePopup invitation={resendAdminInvitePopup!} open={openResendAdminInvitePopup} setOpen={setOpenResendAdminInvitePopup} refetch={refetchOrganizationInfo} />
+            <DeleteOrganizationDialog
+                organizationId={organizationId as string}
+                organizationName={orgName}
+                open={openDeleteOrganizationDialog}
+                setOpen={setOpenDeleteOrganizationDialog}
+                onSuccess={() => refetchOrganizationInfo()}
+            />
         </div>
     )
 }

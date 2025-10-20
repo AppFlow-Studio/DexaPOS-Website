@@ -41,12 +41,23 @@ import {
     Building2
 } from 'lucide-react'
 import { useMerchantInfo } from '../../hooks/useMerchantInfo'
-import { MerchantInfoModel } from '@/types/db-modles'
+import { MerchantInfoModel, PendingOrgAdminInvitesModel, UsersModel } from '@/types/db-modles'
 import { SendOrganizationMembersInviteButton } from '../../organizations/[organizationId]/componenets/SendOrganizationMembersInviteButton'
 import { SendAdminInviteButton } from '../../organizations/[organizationId]/componenets/SendAdminInviteButton'
+import { RemoveUserPopup } from '../../organizations/[organizationId]/componenets/RemoveUserPopup'
+import { RevokeAdminInvitePopup } from '../../organizations/[organizationId]/componenets/RevokeAdminInvitePopup'
+import { ResendAdminInvitePopup } from '../../organizations/[organizationId]/componenets/ResendAdminInvitePopup'
+import { DeleteOrganizationDialog } from '../../organizations/[organizationId]/componenets/DeleteOrganizationDialog'
 export default function MerchantInfoPage() {
     const { merchantId } = useParams()
-    const { data: merchantInfo, isLoading, isError } = useMerchantInfo(merchantId as string)
+    const { data: merchantInfo, isLoading, isError, refetch: refetchMerchantInfo } = useMerchantInfo(merchantId as string)
+    const [revokeAdminInvitePopup, setRevokeAdminInvitePopup] = useState<PendingOrgAdminInvitesModel | null>(null)
+    const [openRevokeAdminInvitePopup, setOpenRevokeAdminInvitePopup] = useState(false)
+    const [removeUserPopup, setRemoveUserPopup] = useState<UsersModel | null>(null)
+    const [openRemoveUserPopup, setOpenRemoveUserPopup] = useState(false)
+    const [resendAdminInvitePopup, setResendAdminInvitePopup] = useState<PendingOrgAdminInvitesModel | null>(null)
+    const [openResendAdminInvitePopup, setOpenResendAdminInvitePopup] = useState(false)
+    const [openDeleteOrganizationDialog, setOpenDeleteOrganizationDialog] = useState(false)
     // Mock data - replace with actual API calls
 
 
@@ -93,9 +104,7 @@ export default function MerchantInfoPage() {
 
 
     console.log('merchantInfo', merchantInfo)
-    function refetchMerchantInfo() {
-        throw new Error('Function not implemented.')
-    }
+
 
     return (
         <div className="space-y-6">
@@ -681,9 +690,17 @@ export default function MerchantInfoPage() {
                                                                                 <DropdownMenuContent align="end">
                                                                                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                                                                     <DropdownMenuItem>Copy invite link</DropdownMenuItem>
-                                                                                    <DropdownMenuItem>Resend</DropdownMenuItem>
+                                                                                    <DropdownMenuItem onClick={() => {
+                                                                                        setResendAdminInvitePopup(inv)
+                                                                                        setOpenResendAdminInvitePopup(true)
+                                                                                    }}>Resend</DropdownMenuItem>
                                                                                     <DropdownMenuSeparator />
-                                                                                    <DropdownMenuItem className="text-red-600">Revoke</DropdownMenuItem>
+                                                                                    <DropdownMenuItem className='text-red-600' onClick={() => {
+                                                                                        setRevokeAdminInvitePopup(inv)
+                                                                                        setOpenRevokeAdminInvitePopup(true)
+                                                                                    }}>
+                                                                                        Revoke
+                                                                                    </DropdownMenuItem>
                                                                                 </DropdownMenuContent>
                                                                             </DropdownMenu>
                                                                         </div>
@@ -795,25 +812,72 @@ export default function MerchantInfoPage() {
 
                         {/* Settings */}
                         <TabsContent value="settings" className="mt-6">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Merchant Settings</CardTitle>
-                                    <CardDescription>Configure merchant account and preferences</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-center py-12">
-                                        <Settings className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                                        <h3 className="text-lg font-semibold mb-2">Settings</h3>
-                                        <p className="text-sm text-muted-foreground">
-                                            Merchant configuration and settings panel coming soon.
-                                        </p>
-                                    </div>
-                                </CardContent>
-                            </Card>
+                            <div className="space-y-6">
+                                {/* General Settings */}
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>General Settings</CardTitle>
+                                        <CardDescription>Configure merchant account and preferences</CardDescription>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-center py-12">
+                                            <Settings className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                                            <h3 className="text-lg font-semibold mb-2">General Settings</h3>
+                                            <p className="text-sm text-muted-foreground">
+                                                Merchant configuration and settings panel coming soon.
+                                            </p>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+
+                                {/* Danger Zone */}
+                                <Card className="border-destructive">
+                                    <CardHeader>
+                                        <CardTitle className="text-destructive flex items-center gap-2">
+                                            <AlertTriangle className="h-5 w-5" />
+                                            Danger Zone
+                                        </CardTitle>
+                                        <CardDescription>
+                                            Irreversible and destructive actions. Please proceed with caution.
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="space-y-4">
+                                            <div className="flex items-center justify-between p-4 border border-destructive/20 rounded-lg bg-destructive/5">
+                                                <div className="space-y-1">
+                                                    <h4 className="font-medium text-destructive">Delete Organization</h4>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        Permanently delete this merchant organization and all associated data.
+                                                        This action cannot be undone.
+                                                    </p>
+                                                </div>
+                                                <Button
+                                                    variant="destructive"
+                                                    onClick={() => setOpenDeleteOrganizationDialog(true)}
+                                                    className="ml-4"
+                                                >
+                                                    <Trash2 className="h-4 w-4 mr-2" />
+                                                    Delete Organization
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </div>
                         </TabsContent>
                     </Tabs>
                 </CardContent>
             </Card>
+            <RemoveUserPopup user={removeUserPopup!} open={openRemoveUserPopup} setOpen={setOpenRemoveUserPopup} refetch={refetchMerchantInfo} />
+            <RevokeAdminInvitePopup invitation={revokeAdminInvitePopup!} open={openRevokeAdminInvitePopup} setOpen={setOpenRevokeAdminInvitePopup} refetch={refetchMerchantInfo} />
+            <ResendAdminInvitePopup invitation={resendAdminInvitePopup!} open={openResendAdminInvitePopup} setOpen={setOpenResendAdminInvitePopup} refetch={refetchMerchantInfo} />
+            <DeleteOrganizationDialog
+                organizationId={merchantInfo?.clerk_org_id as string}
+                organizationName={merchantInfo?.name || 'Merchant'}
+                open={openDeleteOrganizationDialog}
+                setOpen={setOpenDeleteOrganizationDialog}
+                onSuccess={() => refetchMerchantInfo()}
+            />
         </div>
     )
 }
