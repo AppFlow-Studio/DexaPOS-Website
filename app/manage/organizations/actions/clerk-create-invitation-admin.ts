@@ -2,7 +2,7 @@
 
 import { createClerkClient } from '@clerk/backend'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-export async function createInvitationAdmin(organizationId: string, email: string, role: string, level_type: string) {
+export async function createInvitationAdmin({organizationId, email, role, level_type, org_type}: {organizationId: string, email: string, role: string, level_type: string, org_type: string}) {
     try {
         const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
         const supabase = createServerSupabaseClient()
@@ -13,7 +13,8 @@ export async function createInvitationAdmin(organizationId: string, email: strin
                 organizationId: organizationId,
                 role: role,
                 level_type: level_type,
-                setupRequired: true
+                setupRequired: true,
+                org_type: org_type,
             }
         })
 

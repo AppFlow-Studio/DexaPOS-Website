@@ -1,7 +1,8 @@
 'use server'
 import { createClerkClient } from '@clerk/backend'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-
+// TODO: Add more info here refer to the Notion 11-17-2025
+// TODO: Save public_metadata to supabase for organizations
 export async function ClerkCreateOrganization({
     organizationName,
     userId,
@@ -31,6 +32,7 @@ export async function ClerkCreateOrganization({
                 // Carrier Organization That handles merchants 
                 org_type: 'carrier',
                 createdBy: userId,
+
             },
             maxAllowedMemberships: 0, // No limit on the number of members
         })

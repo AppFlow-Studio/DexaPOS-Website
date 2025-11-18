@@ -55,7 +55,7 @@ export const SendAdminInviteButton = ({ organizationId, refetch, role_types }: {
                 return
             }
             console.log(email)
-            const res = await createInvitationAdmin(organizationId, email, selectedOrgAdminRole?.code, selectedOrgAdminRole?.level_typ)
+            const res = await createInvitationAdmin({organizationId, email, role: selectedOrgAdminRole?.code, level_type: selectedOrgAdminRole?.level_type, org_type: role_types as string})
             if (res?.success) {
                 toast.success('Admin invitation sent')
                 refetch()

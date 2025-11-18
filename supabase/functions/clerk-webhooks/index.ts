@@ -1,6 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js'
 import { verifyWebhook } from 'npm:@clerk/backend/webhooks'
 import { createClerkClient } from 'npm:@clerk/backend'
+// TODO: Push This To Supabase i added the public_metadata to the organizations table 11-17-2025
 Deno.serve(async (req) => {
   // Verify webhook signature
   const webhookSecret = Deno.env.get('CLERK_WEBHOOK_SECRET')
@@ -131,6 +132,7 @@ Deno.serve(async (req) => {
             name: event.data.name,
             created_at: new Date(event.data.created_at).toISOString(),
             updated_at: new Date(event.data.updated_at).toISOString(),
+            public_metadata: event.data.public_metadata,
           },
         ])
         .select()
@@ -185,6 +187,7 @@ Deno.serve(async (req) => {
         .update({
           name: event.data.name,
           imageURL: event.data.public_metadata.imageURL,
+          public_metadata: event.data.public_metadata,
           updated_at: new Date(event.data.updated_at).toISOString(),
         })
         .eq('id', event.data.id)

@@ -19,14 +19,14 @@ export default clerkMiddleware(async (auth, req) => {
 
 
   // Check if the user is part of a dexapos organization
-  const userHasSpecificOrg = UserSession.orgId === process.env.DEXA_POS_INTERNAL_TEAM_ID;
-
+  const IsUserHQTeam = UserSession.orgId === process.env.DEXA_POS_INTERNAL_TEAM_ID;
+  
   // If the user is part of the specific organization and not on the /manage route, redirect to /manage
-  if (userHasSpecificOrg && req.nextUrl.pathname !== '/manage') {
+  if (IsUserHQTeam && req.nextUrl.pathname !== '/manage') {
     return NextResponse.redirect(new URL('/manage', req.url));
   }
   // If the user is NOT part of the specific organization and not on the /dashboard route, redirect to /dashboard
-  else if (!userHasSpecificOrg && req.nextUrl.pathname !== '/dashboard') {
+  else if (!IsUserHQTeam && req.nextUrl.pathname !== '/dashboard') {
     return NextResponse.redirect(new URL('/dashboard', req.url));
   }
 

@@ -62,7 +62,6 @@ export const SendOrganizationMembersInviteButton = ({ organizationId, refetch, r
                 return
             }
 
-            // TODO: Implement actual invitation sending logic
             const res = await createBulkInvitationAdmin(organizationId, validInvitations)
             console.log('Sending invitations:', validInvitations)
             if (res?.success === true) {

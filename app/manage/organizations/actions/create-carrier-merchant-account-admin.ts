@@ -74,7 +74,7 @@ export async function createCarrierMerchantAccountAdmin({
                     },
                 })
 
-            const createInvitationResponse = await createInvitationAdmin(CreateMerchantResponse.id, ownerEmail, 'merchant.owner', 'org:manager')
+            const createInvitationResponse = await createInvitationAdmin({organizationId: CreateMerchantResponse.id, email: ownerEmail, role: 'merchant.owner', level_type: 'org:manager', org_type: 'merchant'})
 
             if (createInvitationResponse?.success === false) {
                 const deleteOrganizationResponse = await DeleteOrganization(CreateMerchantResponse.id)

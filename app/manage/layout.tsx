@@ -1,6 +1,6 @@
 'use client'
 
-import { useSession } from '@clerk/nextjs'
+import { SignOutButton, useClerk, useSession } from '@clerk/nextjs'
 import { redirect, usePathname } from 'next/navigation'
 import { useEffect } from 'react'
 import {
@@ -47,6 +47,7 @@ import {
     UserCheck,
     ShieldCheck,
     History,
+    LogOut,
 } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -116,6 +117,7 @@ const navFooter = [
 function AppSidebar() {
     const { data: userInfo, isLoading, error } = useUserInfo()
     const pathname = usePathname()
+    const { signOut } = useClerk()
     console.log(userInfo)
     return (
         <Sidebar variant="inset">
@@ -244,7 +246,12 @@ function AppSidebar() {
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem>
-                                Log out
+                                <button onClick={() => signOut({ redirectUrl: '/' })}>
+                                    <div className='flex items-center gap-2'>
+                                        <LogOut className="mr-2 h-4 w-4" />
+                                        Log out
+                                    </div>
+                                </button>
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
