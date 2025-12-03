@@ -252,6 +252,7 @@ Deno.serve(async (req) => {
             id: event.data.id,
             user_id: event.data.public_user_data?.user_id,
             organization_id: event.data.organization?.id,
+            role : event.data.public_user_data.public_metadata?.role,
             created_at: new Date(event.data.created_at).toISOString(),
             updated_at: new Date(event.data.updated_at).toISOString(),
           },

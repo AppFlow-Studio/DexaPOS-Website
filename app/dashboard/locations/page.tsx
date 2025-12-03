@@ -52,13 +52,19 @@ export default function LocationsPage() {
         try {
             // TODO: Implement create/update location API call
             console.log('Location data:', values)
-            toast.success(editingLocation ? 'Location updated successfully' : 'Location created successfully')
+            toast.success(editingLocation ? 'Location Updated' : 'Location Created', {
+                description: editingLocation
+                    ? `"${values.name}" has been updated successfully.`
+                    : `"${values.name}" has been added to your locations.`
+            })
             setIsCreateDialogOpen(false)
             setEditingLocation(null)
             form.reset()
             refetch()
         } catch (error) {
-            toast.error('Failed to save location. Please try again.')
+            toast.error('Save Failed', {
+                description: 'Unable to save the location. Please try again.'
+            })
         }
     }
 
@@ -78,10 +84,14 @@ export default function LocationsPage() {
         try {
             // TODO: Implement delete location API call
             console.log('Delete location:', locationId)
-            toast.success('Location deleted successfully')
+            toast.success('Location Deleted', {
+                description: 'The location has been permanently deleted.'
+            })
             refetch()
         } catch (error) {
-            toast.error('Failed to delete location. Please try again.')
+            toast.error('Delete Failed', {
+                description: 'Unable to delete the location. Please try again.'
+            })
         }
     }
 

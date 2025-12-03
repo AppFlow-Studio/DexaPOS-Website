@@ -39,14 +39,20 @@ export const ResendAdminInvitePopup = ({
             setIsLoading(true)
             const res = await ClerkResendInvitationAdmin(invitation.clerk_invite_id)
             if (res?.success) {
-                toast.success('Admin invite resent successfully')
+                toast.success('Invite Resent', {
+                    description: 'The admin invitation has been successfully resent.'
+                })
                 refetch()
                 setOpen(false)
             } else {
-                toast.error(res?.message || 'Failed to resend admin invite')
+                toast.error('Resend Failed', {
+                    description: res?.message || 'Unable to resend the admin invite.'
+                })
             }
         } catch (error) {
-            toast.error('Failed to resend admin invite')
+            toast.error('Resend Failed', {
+                description: 'Unable to resend the admin invite. Please try again.'
+            })
         } finally {
             setIsLoading(false)
         }

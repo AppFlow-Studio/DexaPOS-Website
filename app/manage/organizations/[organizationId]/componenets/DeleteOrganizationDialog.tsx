@@ -40,7 +40,9 @@ export function DeleteOrganizationDialog({
             const result = await DeleteOrganization(organizationId)
 
             if (result?.success !== false) {
-                toast.success('Organization deleted successfully')
+                toast.success('Organization Deleted', {
+                    description: `"${organizationName}" has been permanently deleted.`
+                })
                 setOpen(false)
                 setConfirmText('')
 
@@ -51,11 +53,15 @@ export function DeleteOrganizationDialog({
                     onSuccess()
                 }
             } else {
-                toast.error(result?.message || 'Failed to delete organization')
+                toast.error('Delete Failed', {
+                    description: result?.message || 'Unable to delete the organization.'
+                })
             }
         } catch (error) {
             console.error('Error deleting organization:', error)
-            toast.error('Failed to delete organization. Please try again.')
+            toast.error('Delete Failed', {
+                description: 'Unable to delete the organization. Please try again.'
+            })
         } finally {
             setIsDeleting(false)
         }

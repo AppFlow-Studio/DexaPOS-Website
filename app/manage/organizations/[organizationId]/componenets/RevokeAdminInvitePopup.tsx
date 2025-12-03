@@ -26,14 +26,20 @@ export const RevokeAdminInvitePopup = ({ open, setOpen, invitation, refetch }: {
             setIsLoading(true)
             const res = await ClerkRevokeInvitation(invitation.clerk_invite_id)
             if (res?.success) {
-                toast.success('Admin invite revoked successfully')
+                toast.success('Invite Revoked', {
+                    description: 'The admin invitation has been successfully revoked.'
+                })
                 setOpen(false)
                 refetch()
             } else {
-                toast.error(res?.message || 'Failed to revoke admin invite')
+                toast.error('Revoke Failed', {
+                    description: res?.message || 'Unable to revoke the admin invite.'
+                })
             }
         } catch (error) {
-            toast.error('Failed to revoke admin invite')
+            toast.error('Revoke Failed', {
+                description: 'Unable to revoke the admin invite. Please try again.'
+            })
         } finally {
 
             setIsLoading(false)

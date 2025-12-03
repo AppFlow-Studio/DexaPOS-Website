@@ -51,21 +51,29 @@ export const SendAdminInviteButton = ({ organizationId, refetch, role_types }: {
 
             const email = values.email.trim()
             if (!email) {
-                toast.error('Please enter an email address')
+                toast.error('Email Required', {
+                    description: 'Please enter an email address to send the invitation.'
+                })
                 return
             }
             console.log(email)
-            const res = await createInvitationAdmin({organizationId, email, role: selectedOrgAdminRole?.code, level_type: selectedOrgAdminRole?.level_type, org_type: role_types as string})
+            const res = await createInvitationAdmin({ organizationId, email, role: selectedOrgAdminRole?.code, level_type: selectedOrgAdminRole?.level_type, org_type: role_types as string })
             if (res?.success) {
-                toast.success('Admin invitation sent')
+                toast.success('Admin Invited', {
+                    description: 'The admin invitation has been sent successfully.'
+                })
                 refetch()
             } else {
-                toast.error(res?.message || 'Failed to send invitations. Please try again.')
+                toast.error('Invitation Failed', {
+                    description: res?.message || 'Unable to send the invitation. Please try again.'
+                })
             }
             setAdminInviteDialog(false)
             form.reset()
         } catch (error) {
-            toast.error('Failed to send invitations. Please try again.')
+            toast.error('Invitation Failed', {
+                description: 'Unable to send the invitation. Please try again.'
+            })
         } finally {
             setIsLoading(false)
         }

@@ -58,13 +58,19 @@ export default function CreateOrganizationPage() {
                 userId: user.id,
             })
             if ((res as any)?.success) {
-                toast.success(res.message)
+                toast.success('Organization Created', {
+                    description: res.message
+                })
                 router.back()
             } else {
-                toast.error((res as any)?.message || "Something went wrong")
+                toast.error('Creation Failed', {
+                    description: (res as any)?.message || 'Unable to create the organization.'
+                })
             }
         } catch (e: any) {
-            toast.error(e?.message || "Something went wrong")
+            toast.error('Creation Failed', {
+                description: e?.message || 'Unable to create the organization.'
+            })
         } finally {
             setSubmitting(false)
             form.reset()

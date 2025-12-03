@@ -143,16 +143,21 @@ export const AddMerchantButton = ({ carrierId, organizationId, refetch }: { carr
             })
 
             if (res?.success) {
-                toast.success(res.message)
+                toast.success('Merchant Created', {
+                    description: res.message
+                })
             } else {
-                toast.error(res?.message || 'Failed to create merchant. Please try again.')
+                toast.error('Creation Failed', {
+                    description: res?.message || 'Unable to create the merchant. Please try again.'
+                })
+                return
             }
-
-            toast.success('Merchant created successfully!')
             setMerchantDialog(false)
             form.reset()
         } catch (error) {
-            toast.error('Failed to create merchant. Please try again.')
+            toast.error('Creation Failed', {
+                description: 'Unable to create the merchant. Please try again.'
+            })
         } finally {
             setIsLoading(false)
         }

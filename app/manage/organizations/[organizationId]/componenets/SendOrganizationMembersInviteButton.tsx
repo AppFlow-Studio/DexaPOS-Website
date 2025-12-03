@@ -58,22 +58,30 @@ export const SendOrganizationMembersInviteButton = ({ organizationId, refetch, r
             const validInvitations = values.invitations.filter(invite => invite.email.trim() !== '')
 
             if (validInvitations.length === 0) {
-                toast.error('Please enter at least one email address')
+                toast.error('Email Required', {
+                    description: 'Please enter at least one email address to send invitations.'
+                })
                 return
             }
 
             const res = await createBulkInvitationAdmin(organizationId, validInvitations)
             console.log('Sending invitations:', validInvitations)
             if (res?.success === true) {
-                toast.success(`Successfully sent ${validInvitations.length} invitation${validInvitations.length > 1 ? 's' : ''}`)
+                toast.success('Invitations Sent', {
+                    description: `Successfully sent ${validInvitations.length} invitation${validInvitations.length > 1 ? 's' : ''}.`
+                })
                 refetch?.()
             } else {
-                toast.error(res?.message || 'Failed to send invitations. Please try again.')
+                toast.error('Invitation Failed', {
+                    description: res?.message || 'Unable to send invitations. Please try again.'
+                })
             }
             setOrganizationMembersInviteDialog(false)
             form.reset()
         } catch (error) {
-            toast.error('Failed to send invitations. Please try again.')
+            toast.error('Invitation Failed', {
+                description: 'Unable to send invitations. Please try again.'
+            })
         } finally {
             setIsLoading(false)
         }

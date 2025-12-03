@@ -155,18 +155,24 @@ export const CreateMerchantsButton = ({
             })
 
             if (res?.success) {
-                toast.success(res.message)
+                toast.success('Merchant Created', {
+                    description: res.message
+                })
                 setMerchantDialog(false)
                 form.reset()
                 setCarrierSearchTerm('')
                 setShowAllCarriers(false)
                 refetch?.()
             } else {
-                toast.error(res?.message || 'Failed to create merchant. Please try again.')
+                toast.error('Creation Failed', {
+                    description: res?.message || 'Unable to create the merchant. Please try again.'
+                })
             }
         } catch (error) {
             console.error('Error creating merchant:', error)
-            toast.error('Failed to create merchant. Please try again.')
+            toast.error('Creation Failed', {
+                description: 'Unable to create the merchant. Please try again.'
+            })
         } finally {
             setIsLoading(false)
         }

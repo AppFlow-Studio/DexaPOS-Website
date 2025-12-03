@@ -51,7 +51,12 @@ export default function RootLayout({
           </header> */}
           <TanstackProvider>
             {children}
-            <Toaster />
+            <Toaster
+              position="top-center"
+              richColors
+              closeButton
+              duration={4000}
+            />
           </TanstackProvider>
         </body>
       </html>

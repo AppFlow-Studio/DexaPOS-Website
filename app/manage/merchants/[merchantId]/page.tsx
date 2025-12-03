@@ -26,7 +26,7 @@ import { CustomersTab } from './components/CustomersTab'
 import { ProductsTab } from './components/ProductsTab'
 import { SettingsTab } from './components/SettingsTab'
 import { BusinessInfoTab } from './components/BusinessInfoTab'
-import { DevicesTab } from './components/DevicesTab'
+ import { DevicesTab } from './components/DevicesTab'
 
 export default function MerchantInfoPage() {
     const { merchantId } = useParams()

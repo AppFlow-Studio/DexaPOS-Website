@@ -1,8 +1,44 @@
 import { cva, type VariantProps } from "class-variance-authority"
+import * as React from "react"
+import { LucideIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-function Empty({ className, ...props }: React.ComponentProps<"div">) {
+interface EmptyProps extends React.ComponentProps<"div"> {
+  icon?: LucideIcon
+  title?: string
+  description?: string
+  action?: React.ReactNode
+}
+
+function Empty({ className, icon: Icon, title, description, action, children, ...props }: EmptyProps) {
+  // If convenience props are provided, use compound structure
+  if (Icon || title || description || action) {
+    return (
+      <div
+        data-slot="empty"
+        className={cn(
+          "flex min-w-0 flex-1 flex-col items-center justify-center gap-6 rounded-lg border-dashed p-6 text-center text-balance md:p-12",
+          className
+        )}
+        {...props}
+      >
+        <EmptyHeader>
+          {Icon && (
+            <EmptyMedia variant="icon">
+              <Icon />
+            </EmptyMedia>
+          )}
+          {title && <EmptyTitle>{title}</EmptyTitle>}
+          {description && <EmptyDescription>{description}</EmptyDescription>}
+        </EmptyHeader>
+        {action && <EmptyContent>{action}</EmptyContent>}
+        {children}
+      </div>
+    )
+  }
+
+  // Otherwise, render as regular div (compound component usage)
   return (
     <div
       data-slot="empty"
@@ -11,7 +47,9 @@ function Empty({ className, ...props }: React.ComponentProps<"div">) {
         className
       )}
       {...props}
-    />
+    >
+      {children}
+    </div>
   )
 }
 

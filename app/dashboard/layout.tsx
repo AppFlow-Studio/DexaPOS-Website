@@ -51,6 +51,9 @@ import {
     Building2,
     ChevronDown,
     Plus,
+    List,
+    Layers,
+    Tag,
 } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -84,15 +87,40 @@ const navMain = [
                 icon: ShoppingCart,
             },
             {
-                title: 'Menu',
-                url: '/dashboard/menu',
-                icon: Utensils,
-            },
-            {
                 title: 'Tables',
                 url: '/dashboard/tables',
                 icon: Coffee,
             },
+        ]
+    },
+    {
+        title: 'Menus & Products',
+        "items": [
+            {
+                title: 'Menus',
+                url: '/dashboard/menu',
+                icon: Utensils,
+            },
+            {
+                title: 'Items',
+                url: '/dashboard/menu/items',
+                icon: List,
+            },
+            {
+                title: 'Categories',
+                url: '/dashboard/menu/categories',
+                icon: Tag,
+            },
+            {
+                title: 'Modifiers',
+                url: '/dashboard/menu/modifiers',
+                icon: Layers,
+            },
+            {
+                title: 'Schedules',
+                url: '/dashboard/menu/schedules',
+                icon: Calendar,
+            }
         ]
     },
     {
@@ -186,7 +214,7 @@ function MerchantSidebar() {
     }
 
     return (
-        <Sidebar variant="inset">
+        <Sidebar variant="inset" >
             <SidebarHeader>
                 <div className="flex items-center gap-2 px-4 py-2">
                     {
@@ -342,7 +370,7 @@ function MerchantSidebar() {
                     </DropdownMenu>
                 </div>
             </SidebarFooter>
-        </Sidebar>
+        </Sidebar >
     )
 }
 
@@ -377,9 +405,9 @@ export default function MerchantDashboardLayout({
     }
 
     return (
-        <SidebarProvider>
+        <SidebarProvider >
             <MerchantSidebar />
-            <main className="flex-1 flex flex-col">
+            <main className="flex-1 flex flex-col ">
                 <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
                     <SidebarTrigger className="-ml-1" />
                     <div className="flex items-center gap-2">
@@ -388,38 +416,38 @@ export default function MerchantDashboardLayout({
                     <div className="ml-auto flex flex-row items-center gap-2">
                         {/* Location Management Dropdown */}
                         {/* <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm" className="gap-2">
-                                    <MapPin className="h-4 w-4" />
-                                    <span className="hidden sm:inline">Locations</span>
-                                    <ChevronDown className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-56">
-                                <DropdownMenuLabel>Location Management</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => router.push('/dashboard/locations')}>
-                                    <Building2 className="mr-2 h-4 w-4" />
-                                    Manage Locations
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => router.push('/dashboard/locations?action=create')}>
-                                    <Plus className="mr-2 h-4 w-4" />
-                                    Add New Location
-                                </DropdownMenuItem>
-                                {locationsList.length > 0 && (
-                                    <>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuLabel>Quick Switch</DropdownMenuLabel>
-                                        {locationsList.slice(0, 5).map((location) => (
-                                            <DropdownMenuItem key={location.id}>
-                                                <MapPin className="mr-2 h-4 w-4" />
-                                                {location.name}
-                                            </DropdownMenuItem>
-                                        ))}
-                                    </>
-                                )}
-                            </DropdownMenuContent>
-                        </DropdownMenu> */}
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm" className="gap-2">
+                                        <MapPin className="h-4 w-4" />
+                                        <span className="hidden sm:inline">Locations</span>
+                                        <ChevronDown className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56">
+                                    <DropdownMenuLabel>Location Management</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => router.push('/dashboard/locations')}>
+                                        <Building2 className="mr-2 h-4 w-4" />
+                                        Manage Locations
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => router.push('/dashboard/locations?action=create')}>
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        Add New Location
+                                    </DropdownMenuItem>
+                                    {locationsList.length > 0 && (
+                                        <>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuLabel>Quick Switch</DropdownMenuLabel>
+                                            {locationsList.slice(0, 5).map((location) => (
+                                                <DropdownMenuItem key={location.id}>
+                                                    <MapPin className="mr-2 h-4 w-4" />
+                                                    {location.name}
+                                                </DropdownMenuItem>
+                                            ))}
+                                        </>
+                                    )}
+                                </DropdownMenuContent>
+                            </DropdownMenu> */}
                         <AnimatedThemeToggler />
                         <Button variant="ghost" size="icon">
                             <Search className="h-4 w-4" />

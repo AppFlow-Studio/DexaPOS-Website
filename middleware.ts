@@ -26,7 +26,7 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.redirect(new URL('/manage', req.url));
   }
   // If the user is NOT part of the specific organization and not on the /dashboard route, redirect to /dashboard
-  else if (!IsUserHQTeam && req.nextUrl.pathname !== '/dashboard') {
+  else if (!IsUserHQTeam && !isMerchantRoutes(req)) {
     return NextResponse.redirect(new URL('/dashboard', req.url));
   }
 
