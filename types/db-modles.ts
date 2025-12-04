@@ -56,7 +56,24 @@ export interface LocationsModel {
     id: string
     merchant_id: string // FK to merchants table
     name: string
-    address: string
+    code: string | null
+    description: string | null
+    phone: string | null
+    email: string | null
+    address_line1: string
+    address_line2: string | null
+    city: string
+    state: string
+    postal_code: string
+    country: string
+    latitude: number | null
+    longitude: number | null
+    timezone: string
+    is_active: boolean
+    is_accepting_orders: boolean
+    business_hours: Record<string, { open: string; close: string; is_closed: boolean }>
+    uses_global_menu: boolean
+    public_metadata: Record<string, unknown>
     created_at: string
     updated_at: string
 }

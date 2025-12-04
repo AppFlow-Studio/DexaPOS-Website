@@ -37,20 +37,16 @@ import {
     Search,
     MoreHorizontal,
     CreditCard,
-    TrendingUp,
     Bell,
     User,
     LogOut,
     Utensils,
     Coffee,
     Receipt,
-    ClipboardList,
-    ChefHat,
     Calendar,
     MapPin,
     Building2,
     ChevronDown,
-    Plus,
     List,
     Layers,
     Tag,
@@ -63,9 +59,11 @@ import { useUserInfo } from '../manage/hooks/useUserInfo.'
 import { Skeleton } from '@/components/ui/skeleton'
 import Image from 'next/image'
 import { useLocations } from './hooks/useLocations'
-import { useState } from 'react'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useRouter } from 'next/navigation'
+import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
+import { useLocationStore, useSelectedLocation, useIsAllLocations } from '@/stores/location-store'
 
 const navMain = [
     {
@@ -184,34 +182,9 @@ const navFooter = [
 ]
 
 function MerchantSidebar() {
-    const { data: userInfo, isLoading, error } = useUserInfo()
+    const { data: userInfo, isLoading } = useUserInfo()
     const pathname = usePathname()
     const { signOut } = useClerk()
-    const router = useRouter()
-    const [selectedLocationId, setSelectedLocationId] = useState<string>(() => {
-        if (typeof window !== 'undefined') {
-            return localStorage.getItem('selectedLocationId') || 'all'
-        }
-        return 'all'
-    })
-
-    // Get clerk org ID from userInfo
-    const clerkOrgId = userInfo?.members?.[0]?.organizations?.id
-    const { data: locations, isLoading: locationsLoading } = useLocations(clerkOrgId || '')
-
-    const locationsList = Array.isArray(locations) ? locations : []
-
-    const handleLocationChange = (value: string) => {
-        if (value === 'manage') {
-            router.push('/dashboard/locations')
-        } else {
-            setSelectedLocationId(value)
-            // Store selected location in localStorage or context for use across the app
-            if (typeof window !== 'undefined') {
-                localStorage.setItem('selectedLocationId', value)
-            }
-        }
-    }
 
     return (
         <Sidebar variant="inset" >
@@ -237,55 +210,12 @@ function MerchantSidebar() {
                         )
                     }
                 </div>
-
-                {/* Location Selector */}
-                <div className="px-4 pb-2">
-                    {isLoading || locationsLoading ? (
-                        <Skeleton className="h-9 w-full" />
-                    ) : (
-                        <Select value={selectedLocationId} onValueChange={handleLocationChange}>
-                            <SelectTrigger className="w-full">
-                                <div className="flex items-center gap-2">
-                                    <MapPin className="h-4 w-4" />
-                                    <SelectValue placeholder="Select location">
-                                        {selectedLocationId === 'all'
-                                            ? 'All Locations'
-                                            : locationsList.find(loc => loc.id === selectedLocationId)?.name || 'Select location'
-                                        }
-                                    </SelectValue>
-                                </div>
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">
-                                    <div className="flex items-center gap-2">
-                                        <Building2 className="h-4 w-4" />
-                                        <span>All Locations</span>
-                                    </div>
-                                </SelectItem>
-                                {locationsList.map((location) => (
-                                    <SelectItem key={location.id} value={location.id}>
-                                        <div className="flex items-center gap-2">
-                                            <MapPin className="h-4 w-4" />
-                                            <span>{location.name}</span>
-                                        </div>
-                                    </SelectItem>
-                                ))}
-                                <SelectItem value="manage" className="text-primary font-medium">
-                                    <div className="flex items-center gap-2">
-                                        <Plus className="h-4 w-4" />
-                                        <span>Manage Locations</span>
-                                    </div>
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                    )}
-                </div>
             </SidebarHeader>
             <SidebarContent>
                 <SidebarGroup>
                     <SidebarGroupContent>
                         <SidebarMenu>
-                            {navMain.map((item, index) => (
+                            {navMain.map((item) => (
                                 <SidebarMenuItem key={item.title}>
                                     <SidebarGroup>
                                         <SidebarGroupLabel>{item.title}</SidebarGroupLabel>
@@ -374,6 +304,104 @@ function MerchantSidebar() {
     )
 }
 
+// Location indicator component for the header - now using Zustand store
+function LocationIndicator() {
+    const { selectedLocationId, locations, setSelectedLocation } = useLocationStore()
+    const selectedLocation = useSelectedLocation()
+    const isAllLocations = useIsAllLocations()
+
+    const handleLocationChange = (locationId: string) => {
+        setSelectedLocation(locationId)
+        const locationName = locationId === 'all'
+            ? 'All Locations'
+            : locations.find(l => l.id === locationId)?.name || 'Unknown'
+        toast.success('Location Changed', {
+            description: `Now viewing ${locationName}`,
+            icon: <MapPin className="h-4 w-4" />,
+        })
+    }
+
+    if (locations.length === 0) return null
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <button className={cn(
+                    "hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-all duration-200",
+                    isAllLocations
+                        ? "bg-muted/50 hover:bg-muted"
+                        : "bg-primary/10 border border-primary/20 hover:bg-primary/20"
+                )}>
+                    {isAllLocations ? (
+                        <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                    ) : (
+                        <MapPin className="h-3.5 w-3.5 text-primary animate-in zoom-in duration-200" />
+                    )}
+                    <span className={cn(
+                        "max-w-[150px] truncate transition-colors duration-200",
+                        isAllLocations ? "text-muted-foreground" : "font-medium"
+                    )}>
+                        {isAllLocations ? 'All Locations' : selectedLocation?.name}
+                    </span>
+                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-64 animate-in fade-in-0 zoom-in-95 duration-200">
+                <DropdownMenuLabel className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    Select Location
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                    onClick={() => handleLocationChange('all')}
+                    className={cn(
+                        "cursor-pointer transition-colors",
+                        selectedLocationId === 'all' && "bg-accent"
+                    )}
+                >
+                    <Building2 className="mr-2 h-4 w-4" />
+                    All Locations
+                    {selectedLocationId === 'all' && (
+                        <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 animate-in fade-in duration-200">
+                            Active
+                        </Badge>
+                    )}
+                </DropdownMenuItem>
+                {locations.length > 0 && (
+                    <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel className="text-xs text-muted-foreground">Switch to</DropdownMenuLabel>
+                        {locations.map((location, index) => (
+                            <DropdownMenuItem
+                                key={location.id}
+                                onClick={() => handleLocationChange(location.id)}
+                                className={cn(
+                                    "cursor-pointer transition-colors animate-in fade-in slide-in-from-left-1 duration-200",
+                                    selectedLocationId === location.id && "bg-accent"
+                                )}
+                                style={{ animationDelay: `${index * 30}ms` }}
+                            >
+                                <MapPin className="mr-2 h-4 w-4" />
+                                <span className="truncate">{location.name}</span>
+                                {!location.is_active && (
+                                    <Badge variant="outline" className="ml-auto text-[10px] px-1.5">
+                                        Inactive
+                                    </Badge>
+                                )}
+                                {selectedLocationId === location.id && (
+                                    <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 animate-in fade-in duration-200">
+                                        Active
+                                    </Badge>
+                                )}
+                            </DropdownMenuItem>
+                        ))}
+                    </>
+                )}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    )
+}
+
 export default function MerchantDashboardLayout({
     children,
 }: {
@@ -383,8 +411,25 @@ export default function MerchantDashboardLayout({
     const { data: userInfo } = useUserInfo()
     const router = useRouter()
     const clerkOrgId = userInfo?.members?.[0]?.organizations?.id
-    const { data: locations } = useLocations(clerkOrgId || '')
-    const locationsList = Array.isArray(locations) ? locations : []
+    const { data: locations, isLoading: locationsLoading } = useLocations(clerkOrgId || '')
+
+    // Zustand store
+    const { setLocations, setLoading, initialize, isInitialized } = useLocationStore()
+
+    // Sync locations from API to Zustand store
+    useEffect(() => {
+        if (locationsLoading) {
+            setLoading(true)
+        } else {
+            setLoading(false)
+            if (locations && Array.isArray(locations)) {
+                setLocations(locations)
+            }
+            if (!isInitialized) {
+                initialize()
+            }
+        }
+    }, [locations, locationsLoading, setLocations, setLoading, initialize, isInitialized])
 
     useEffect(() => {
         if (isLoaded && !isSignedIn) {
@@ -410,44 +455,11 @@ export default function MerchantDashboardLayout({
             <main className="flex-1 flex flex-col ">
                 <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
                     <SidebarTrigger className="-ml-1" />
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                         <h1 className="text-lg font-semibold">Merchant Dashboard</h1>
+                        <LocationIndicator />
                     </div>
                     <div className="ml-auto flex flex-row items-center gap-2">
-                        {/* Location Management Dropdown */}
-                        {/* <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" size="sm" className="gap-2">
-                                        <MapPin className="h-4 w-4" />
-                                        <span className="hidden sm:inline">Locations</span>
-                                        <ChevronDown className="h-4 w-4" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-56">
-                                    <DropdownMenuLabel>Location Management</DropdownMenuLabel>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={() => router.push('/dashboard/locations')}>
-                                        <Building2 className="mr-2 h-4 w-4" />
-                                        Manage Locations
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => router.push('/dashboard/locations?action=create')}>
-                                        <Plus className="mr-2 h-4 w-4" />
-                                        Add New Location
-                                    </DropdownMenuItem>
-                                    {locationsList.length > 0 && (
-                                        <>
-                                            <DropdownMenuSeparator />
-                                            <DropdownMenuLabel>Quick Switch</DropdownMenuLabel>
-                                            {locationsList.slice(0, 5).map((location) => (
-                                                <DropdownMenuItem key={location.id}>
-                                                    <MapPin className="mr-2 h-4 w-4" />
-                                                    {location.name}
-                                                </DropdownMenuItem>
-                                            ))}
-                                        </>
-                                    )}
-                                </DropdownMenuContent>
-                            </DropdownMenu> */}
                         <AnimatedThemeToggler />
                         <Button variant="ghost" size="icon">
                             <Search className="h-4 w-4" />

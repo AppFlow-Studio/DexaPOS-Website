@@ -14,18 +14,14 @@ import {
     BottomSheetFooter,
     BottomSheetTitle,
     BottomSheetDescription,
-    BottomSheetSection,
 } from '@/components/ui/bottom-sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form'
 import { ItemPreviewCard } from './ItemPreviewCard'
 import {
-    Plus,
-    X,
     ChevronDown,
     ChevronRight,
     DollarSign,
@@ -35,11 +31,14 @@ import {
     Settings2,
     AlertCircle,
     Sparkles,
-    GripVertical,
+    MapPin,
+    RotateCcw,
+    Info,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { CreateMenuItem, UpdateMenuItem } from '@/app/dashboard/actions/menu-items'
+import { CreateMenuItem, UpdateMenuItem, ResetMenuItemToGlobal } from '@/app/dashboard/actions/menu-items'
 import { CategoriesModel, ModifierGroupsModel, ModifierGroupItemsModel } from '@/types/db-modles'
+import { useLocationStore, useIsAllLocations } from '@/stores/location-store'
 
 // Form schema
 const itemSchema = z.object({
@@ -56,6 +55,29 @@ const itemSchema = z.object({
 
 type ItemFormValues = z.infer<typeof itemSchema>
 
+interface EditItemWithOverride {
+    id: string
+    name: string
+    description?: string
+    price: number
+    cash_price?: number
+    image?: string
+    image_url?: string
+    availability: boolean
+    allergens?: string[]
+    card_bg_color?: string
+    stock_tracking_mode?: string
+    menu_item_categories?: any[]
+    menu_item_modifier_groups?: any[]
+    // Location override fields
+    effective_price?: number
+    effective_cash_price?: number | null
+    has_price_override?: boolean
+    location_is_available?: boolean
+    global_price?: number
+    global_cash_price?: number | null
+}
+
 interface ItemFormSheetProps {
     open: boolean
     onOpenChange: (open: boolean) => void
@@ -63,7 +85,7 @@ interface ItemFormSheetProps {
     categories?: CategoriesModel[]
     modifierGroups?: (ModifierGroupsModel & { modifier_group_items: ModifierGroupItemsModel[] })[]
     onSuccess?: () => void
-    editItem?: any
+    editItem?: EditItemWithOverride
 }
 
 // Common allergens
@@ -81,6 +103,8 @@ export function ItemFormSheet({
     editItem,
 }: ItemFormSheetProps) {
     const queryClient = useQueryClient()
+    const { selectedLocationId, locations } = useLocationStore()
+    const isAllLocations = useIsAllLocations()
     const [selectedCategories, setSelectedCategories] = React.useState<string[]>([])
     const [selectedModifiers, setSelectedModifiers] = React.useState<string[]>([])
     const [expandedSections, setExpandedSections] = React.useState({
@@ -91,6 +115,18 @@ export function ItemFormSheet({
         advanced: false,
     })
     const [isSubmitting, setIsSubmitting] = React.useState(false)
+    const [isResetting, setIsResetting] = React.useState(false)
+
+    // Get current location name for display
+    const currentLocationName = React.useMemo(() => {
+        if (isAllLocations) return 'All Locations'
+        const location = locations.find(l => l.id === selectedLocationId)
+        return location?.name || 'Unknown Location'
+    }, [isAllLocations, selectedLocationId, locations])
+
+    // Determine if we're editing with a price override
+    const hasExistingOverride = editItem?.has_price_override ?? false
+    const isLocationScoped = !isAllLocations && editItem
 
     const form = useForm<ItemFormValues>({
         resolver: zodResolver(itemSchema),
@@ -110,16 +146,26 @@ export function ItemFormSheet({
     // Reset form when editItem changes
     React.useEffect(() => {
         if (editItem) {
+            // When location-scoped, use effective prices if available
+            const priceToShow = isLocationScoped && editItem.effective_price !== undefined
+                ? editItem.effective_price
+                : editItem.price || 0
+            const cashPriceToShow = isLocationScoped && editItem.effective_cash_price !== undefined
+                ? editItem.effective_cash_price
+                : editItem.cash_price
+
             form.reset({
                 name: editItem.name || '',
                 description: editItem.description || '',
-                price: editItem.price || 0,
-                cash_price: editItem.cash_price || undefined,
+                price: priceToShow,
+                cash_price: cashPriceToShow ?? undefined,
                 image_url: editItem.image || editItem.image_url || '',
-                availability: editItem.availability ?? true,
+                availability: isLocationScoped
+                    ? (editItem.location_is_available ?? editItem.availability ?? true)
+                    : (editItem.availability ?? true),
                 allergens: editItem.allergens || [],
                 card_bg_color: editItem.card_bg_color || '',
-                stock_tracking_mode: editItem.stock_tracking_mode || 'in_stock',
+                stock_tracking_mode: (editItem.stock_tracking_mode as 'in_stock' | 'out_of_stock' | 'quantity') || 'in_stock',
             })
             // Set selected categories from editItem
             if (editItem.menu_item_categories) {
@@ -144,7 +190,7 @@ export function ItemFormSheet({
             setSelectedCategories([])
             setSelectedModifiers([])
         }
-    }, [editItem, form])
+    }, [editItem, form, isLocationScoped])
 
     const watchedValues = form.watch()
 
@@ -177,6 +223,35 @@ export function ItemFormSheet({
         }
     }
 
+    const handleResetToGlobal = async () => {
+        if (!editItem?.id || isAllLocations) return
+
+        setIsResetting(true)
+        try {
+            const result = await ResetMenuItemToGlobal(editItem.id, selectedLocationId)
+
+            if (result.error) {
+                toast.error('Reset Failed', { description: result.error })
+                return
+            }
+
+            toast.success('Reset to Global', {
+                description: 'Item now uses global pricing at this location'
+            })
+
+            queryClient.invalidateQueries({ queryKey: ['menu-items'] })
+            queryClient.invalidateQueries({ queryKey: ['menu-item', editItem.id] })
+            onOpenChange(false)
+            onSuccess?.()
+        } catch (error) {
+            toast.error('Reset Failed', {
+                description: 'Unable to reset item to global pricing.'
+            })
+        } finally {
+            setIsResetting(false)
+        }
+    }
+
     const onSubmit = async (values: ItemFormValues) => {
         if (!clerkOrgId) {
             toast.error('Organization Not Found', {
@@ -190,26 +265,27 @@ export function ItemFormSheet({
             let result
 
             if (editItem) {
-                // Update existing item
+                // Update existing item - pass locationId for location-scoped updates
+                const locationId = isAllLocations ? undefined : selectedLocationId
                 result = await UpdateMenuItem(editItem.id, {
                     name: values.name,
                     description: values.description,
                     price: values.price,
                     cash_price: values.cash_price ?? undefined,
-                    image_url: values.image_url ?? undefined,
+                    image: values.image_url ?? undefined,
                     availability: values.availability,
                     allergens: values.allergens,
                     card_bg_color: values.card_bg_color ?? undefined,
                     stock_tracking_mode: values.stock_tracking_mode,
-                })
+                }, locationId)
             } else {
-                // Create new item
+                // Create new item (always global)
                 result = await CreateMenuItem(clerkOrgId, {
                     name: values.name,
                     description: values.description,
                     price: values.price,
                     cash_price: values.cash_price ?? undefined,
-                    image_url: values.image_url ?? undefined,
+                    image: values.image_url ?? undefined,
                     availability: values.availability,
                     allergens: values.allergens,
                     card_bg_color: values.card_bg_color ?? undefined,
@@ -224,13 +300,19 @@ export function ItemFormSheet({
                 return
             }
 
+            // Different success messages based on scope
+            const scopeMessage = editItem && !isAllLocations
+                ? ` at ${currentLocationName}`
+                : ''
+
             toast.success(editItem ? 'Item Updated' : 'Item Created', {
                 description: editItem
-                    ? `"${values.name}" has been updated successfully.`
+                    ? `"${values.name}" has been updated${scopeMessage}.`
                     : `"${values.name}" has been added to your menu.`
             })
             queryClient.invalidateQueries({ queryKey: ['menu-items'] })
             queryClient.invalidateQueries({ queryKey: ['menu-item', editItem?.id] })
+            queryClient.invalidateQueries({ queryKey: ['menus'] })
             form.reset()
             setSelectedCategories([])
             setSelectedModifiers([])
@@ -262,8 +344,34 @@ export function ItemFormSheet({
                         <Sparkles className="h-5 w-5 text-primary animate-pulse" />
                         {editItem ? 'Edit Menu Item' : 'Create New Menu Item'}
                     </BottomSheetTitle>
-                    <BottomSheetDescription>
-                        Fill in the details below. Preview updates in real-time.
+                    <BottomSheetDescription className="space-y-2">
+                        <span>Fill in the details below. Preview updates in real-time.</span>
+
+                        {/* Location Scope Indicator */}
+                        {editItem && (
+                            <div className="flex items-center gap-2 mt-2">
+                                <Badge
+                                    variant={isAllLocations ? "secondary" : "default"}
+                                    className={cn(
+                                        "gap-1 animate-in fade-in slide-in-from-left-2 duration-300",
+                                        !isAllLocations && "bg-blue-500/10 text-blue-600 border-blue-200"
+                                    )}
+                                >
+                                    <MapPin className="h-3 w-3" />
+                                    {isAllLocations ? 'Editing Global' : `Editing for ${currentLocationName}`}
+                                </Badge>
+
+                                {hasExistingOverride && !isAllLocations && (
+                                    <Badge
+                                        variant="outline"
+                                        className="gap-1 bg-amber-500/10 text-amber-600 border-amber-200 animate-in fade-in slide-in-from-left-4 duration-300"
+                                    >
+                                        <Info className="h-3 w-3" />
+                                        Has location-specific pricing
+                                    </Badge>
+                                )}
+                            </div>
+                        )}
                     </BottomSheetDescription>
                 </BottomSheetHeader>
 
@@ -350,6 +458,11 @@ export function ItemFormSheet({
                                                 <span className="text-sm font-semibold flex items-center gap-2">
                                                     <DollarSign className="h-4 w-4 text-green-500" />
                                                     Pricing
+                                                    {isLocationScoped && (
+                                                        <Badge variant="outline" className="text-xs ml-1">
+                                                            {hasExistingOverride ? 'Location Override' : 'Will create override'}
+                                                        </Badge>
+                                                    )}
                                                 </span>
                                                 {expandedSections.pricing ? (
                                                     <ChevronDown className="h-4 w-4 transition-transform duration-200" />
@@ -359,13 +472,43 @@ export function ItemFormSheet({
                                             </button>
                                         </CollapsibleTrigger>
                                         <CollapsibleContent className="pt-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                                            {/* Global price reference when location scoped */}
+                                            {isLocationScoped && editItem?.global_price !== undefined && (
+                                                <div className="p-3 rounded-lg bg-muted/30 border border-dashed animate-in fade-in duration-300">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="text-sm text-muted-foreground">
+                                                            <span className="font-medium">Global Price:</span>{' '}
+                                                            ${editItem.global_price.toFixed(2)}
+                                                            {editItem.global_cash_price && (
+                                                                <span className="ml-2">(Cash: ${editItem.global_cash_price.toFixed(2)})</span>
+                                                            )}
+                                                        </div>
+                                                        {hasExistingOverride && (
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={handleResetToGlobal}
+                                                                disabled={isResetting}
+                                                                className="h-7 text-xs gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                                            >
+                                                                <RotateCcw className={cn("h-3 w-3", isResetting && "animate-spin")} />
+                                                                Reset to Global
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             <div className="grid grid-cols-2 gap-4">
                                                 <FormField
                                                     control={form.control}
                                                     name="price"
                                                     render={({ field }) => (
                                                         <FormItem>
-                                                            <FormLabel>Card Price *</FormLabel>
+                                                            <FormLabel>
+                                                                {isLocationScoped ? 'Location Card Price *' : 'Card Price *'}
+                                                            </FormLabel>
                                                             <FormControl>
                                                                 <div className="relative">
                                                                     <span className="absolute left-3 top-2.5 text-muted-foreground font-medium">$</span>
@@ -373,7 +516,10 @@ export function ItemFormSheet({
                                                                         type="number"
                                                                         step="0.01"
                                                                         min="0"
-                                                                        className="pl-7"
+                                                                        className={cn(
+                                                                            "pl-7",
+                                                                            isLocationScoped && hasExistingOverride && "border-amber-300 focus:ring-amber-500"
+                                                                        )}
                                                                         placeholder="0.00"
                                                                         {...field}
                                                                         onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
@@ -389,7 +535,9 @@ export function ItemFormSheet({
                                                     name="cash_price"
                                                     render={({ field }) => (
                                                         <FormItem>
-                                                            <FormLabel>Cash Price</FormLabel>
+                                                            <FormLabel>
+                                                                {isLocationScoped ? 'Location Cash Price' : 'Cash Price'}
+                                                            </FormLabel>
                                                             <FormControl>
                                                                 <div className="relative">
                                                                     <span className="absolute left-3 top-2.5 text-muted-foreground font-medium">$</span>
@@ -397,7 +545,10 @@ export function ItemFormSheet({
                                                                         type="number"
                                                                         step="0.01"
                                                                         min="0"
-                                                                        className="pl-7"
+                                                                        className={cn(
+                                                                            "pl-7",
+                                                                            isLocationScoped && hasExistingOverride && "border-amber-300 focus:ring-amber-500"
+                                                                        )}
                                                                         placeholder="Optional"
                                                                         {...field}
                                                                         value={field.value ?? ''}
@@ -411,6 +562,14 @@ export function ItemFormSheet({
                                                     )}
                                                 />
                                             </div>
+
+                                            {/* Location scope notice */}
+                                            {isLocationScoped && !hasExistingOverride && (
+                                                <div className="text-xs text-muted-foreground flex items-center gap-1 p-2 bg-blue-50 rounded-md border border-blue-100">
+                                                    <Info className="h-3 w-3 text-blue-500" />
+                                                    Changing price will create a location-specific override. Global price remains unchanged.
+                                                </div>
+                                            )}
                                         </CollapsibleContent>
                                     </Collapsible>
 
@@ -617,9 +776,13 @@ export function ItemFormSheet({
                                                 render={({ field }) => (
                                                     <FormItem className="flex items-center justify-between rounded-lg border p-4">
                                                         <div className="space-y-0.5">
-                                                            <FormLabel className="text-base">Available for Sale</FormLabel>
+                                                            <FormLabel className="text-base">
+                                                                {isLocationScoped ? 'Available at This Location' : 'Available for Sale'}
+                                                            </FormLabel>
                                                             <FormDescription>
-                                                                Toggle whether this item is available in the POS
+                                                                {isLocationScoped
+                                                                    ? 'Toggle whether this item is available at this location'
+                                                                    : 'Toggle whether this item is available in the POS'}
                                                             </FormDescription>
                                                         </div>
                                                         <FormControl>
@@ -697,6 +860,20 @@ export function ItemFormSheet({
                                     className="shadow-xl"
                                 />
 
+                                {/* Price comparison when location scoped */}
+                                {isLocationScoped && editItem?.global_price !== undefined && watchedValues.price !== editItem.global_price && (
+                                    <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm animate-in fade-in duration-300">
+                                        <div className="flex items-center gap-2 text-amber-700">
+                                            <Info className="h-4 w-4" />
+                                            <span className="font-medium">Price differs from global</span>
+                                        </div>
+                                        <div className="mt-1 text-amber-600">
+                                            Global: ${editItem.global_price.toFixed(2)} →
+                                            Location: ${watchedValues.price.toFixed(2)}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Selected info summary */}
                                 <div className="mt-6 space-y-2 text-sm">
                                     {selectedModifiers.length > 0 && (
@@ -735,11 +912,12 @@ export function ItemFormSheet({
                                 </svg>
                                 {editItem ? 'Saving...' : 'Creating...'}
                             </>
-                        ) : editItem ? 'Save Changes' : 'Create Item'}
+                        ) : editItem ? (
+                            isLocationScoped ? 'Save for Location' : 'Save Changes'
+                        ) : 'Create Item'}
                     </Button>
                 </BottomSheetFooter>
             </BottomSheetContent>
         </BottomSheet>
     )
 }
-
