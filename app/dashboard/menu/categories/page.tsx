@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tag, Plus, Search, Edit3, Trash2, Sparkles, Utensils, ChevronDown, ChevronUp, ExternalLink, X } from 'lucide-react'
 import { useState, useMemo } from 'react'
-import { useCategories } from '../../hooks/useCategories'
+import { useCategories, useCategoriesWithItems } from '../../hooks/useCategories'
 import { useMenus } from '../../hooks/useMenus'
 import { useSchedules } from '../../hooks/useSchedules'
 import { useUserInfo } from '../../../manage/hooks/useUserInfo.'
@@ -13,8 +13,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Empty } from '@/components/ui/empty'
 import { CategoryFormSheet } from '@/components/dashboard/menu/CategoryFormSheet'
-import { DeleteCategory } from '../../actions/categories'
+import { DeleteCategory, RemoveItemFromCategory } from '../../actions/categories'
 import { GetMenuItemsByCategory } from '../../actions/menu-items'
+import { useLocationStore } from '@/stores/location-store'
 import { toast } from 'sonner'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -34,8 +35,11 @@ export default function CategoriesPage() {
     const { data: userInfo } = useUserInfo()
     const clerkOrgId = userInfo?.members?.[0]?.organizations?.id
     const queryClient = useQueryClient()
+    const { selectedLocationId } = useLocationStore()
+    const isAllLocations = selectedLocationId === 'all'
 
     const { data: categories, isLoading, refetch } = useCategories(clerkOrgId || '')
+    const { data: categoriesWithItems, isLoading: loadingCategoriesWithItems } = useCategoriesWithItems(clerkOrgId || '', selectedLocationId)
     const { data: menus } = useMenus(clerkOrgId || '')
     const { data: schedules } = useSchedules(clerkOrgId || '')
 
@@ -106,6 +110,29 @@ export default function CategoriesPage() {
 
     const handleNavigateToItem = (itemId: string) => {
         router.push(`/dashboard/menu/items/${itemId}`)
+    }
+
+    const handleRemoveItemFromCategory = async (categoryId: string, menuItemId: string, e: React.MouseEvent) => {
+        e.stopPropagation()
+        try {
+            const result = await RemoveItemFromCategory(categoryId, menuItemId)
+            if (result.error) {
+                toast.error('Remove Failed', { description: result.error })
+                return
+            }
+            toast.success('Item Removed', { description: 'Item has been removed from the category.' })
+            queryClient.invalidateQueries({ queryKey: ['category-items', categoryId] })
+            queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
+        } catch {
+            toast.error('Remove Failed', { description: 'Unable to remove item. Please try again.' })
+        }
+    }
+
+    // Get items for a specific category from the categoriesWithItems data
+    const getItemsForCategory = (categoryId: string) => {
+        if (!categoriesWithItems?.data) return []
+        const category = categoriesWithItems.data.find(c => c.id === categoryId)
+        return category?.items || []
     }
 
     return (
@@ -336,6 +363,11 @@ export default function CategoriesPage() {
                                                         <h4 className="text-sm font-medium flex items-center gap-2">
                                                             <Utensils className="h-4 w-4" />
                                                             Items in this category
+                                                            {!isAllLocations && (
+                                                                <Badge variant="outline" className="text-xs">
+                                                                    Location Pricing
+                                                                </Badge>
+                                                            )}
                                                         </h4>
                                                         <Button
                                                             variant="ghost"
@@ -350,103 +382,138 @@ export default function CategoriesPage() {
                                                         </Button>
                                                     </div>
 
-                                                    {itemsLoading ? (
+                                                    {(itemsLoading || loadingCategoriesWithItems) ? (
                                                         <div className="space-y-2">
                                                             {[1, 2, 3].map(i => (
                                                                 <Skeleton key={i} className="h-16 w-full" />
                                                             ))}
                                                         </div>
-                                                    ) : items.length === 0 ? (
-                                                        <div className="text-center py-8 text-muted-foreground">
-                                                            <Utensils className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                                                            <p className="text-sm">No items in this category yet</p>
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                className="mt-3"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation()
-                                                                    router.push('/dashboard/menu/items')
-                                                                }}
-                                                            >
-                                                                <Plus className="h-3 w-3 mr-1" />
-                                                                Add Items
-                                                            </Button>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="space-y-2">
-                                                            {items.slice(0, 5).map((item, itemIndex) => (
-                                                                <div
-                                                                    key={item.id}
-                                                                    className={cn(
-                                                                        "flex items-center gap-3 p-3 rounded-lg bg-background border",
-                                                                        "hover:shadow-sm hover:border-primary/30 cursor-pointer transition-all",
-                                                                        "animate-in fade-in slide-in-from-left-2"
-                                                                    )}
-                                                                    style={{ animationDelay: `${itemIndex * 50}ms` }}
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation()
-                                                                        handleNavigateToItem(item.id)
-                                                                    }}
-                                                                >
-                                                                    {/* Item Image */}
-                                                                    <div className="w-12 h-12 rounded-lg overflow-hidden bg-muted/30 shrink-0">
-                                                                        {item.image ? (
-                                                                            <img
-                                                                                src={item.image}
-                                                                                alt={item.name}
-                                                                                className="w-full h-full object-cover"
-                                                                            />
-                                                                        ) : (
-                                                                            <div className="w-full h-full flex items-center justify-center">
-                                                                                <Utensils className="h-5 w-5 text-muted-foreground/50" />
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
+                                                    ) : (() => {
+                                                        // Use category-centric data if available
+                                                        const categoryItems = getItemsForCategory(category.id)
+                                                        const displayItems = categoryItems.length > 0
+                                                            ? categoryItems.map(ci => ({
+                                                                id: ci.menu_item_id,
+                                                                name: ci.menu_item?.name || '',
+                                                                description: ci.menu_item?.description,
+                                                                image: ci.menu_item?.image,
+                                                                price: ci.menu_item?.effective_price || ci.menu_item?.base_price || 0,
+                                                                availability: ci.menu_item?.effective_availability ?? true,
+                                                                price_source: ci.menu_item?.price_source,
+                                                                is_featured: ci.is_featured
+                                                            }))
+                                                            : items
 
-                                                                    {/* Item Details */}
-                                                                    <div className="flex-1 min-w-0">
-                                                                        <h5 className="font-medium text-sm truncate">
-                                                                            {item.name}
-                                                                        </h5>
-                                                                        {item.description && (
-                                                                            <p className="text-xs text-muted-foreground truncate">
-                                                                                {item.description}
-                                                                            </p>
-                                                                        )}
-                                                                    </div>
-
-                                                                    {/* Price & Status */}
-                                                                    <div className="text-right shrink-0">
-                                                                        <span className="font-semibold text-sm text-primary">
-                                                                            ${item.price.toFixed(2)}
-                                                                        </span>
-                                                                        {!item.availability && (
-                                                                            <Badge variant="secondary" className="ml-2 text-xs">
-                                                                                Off
-                                                                            </Badge>
-                                                                        )}
-                                                                    </div>
-
-                                                                    <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                                                        if (displayItems.length === 0) {
+                                                            return (
+                                                                <div className="text-center py-8 text-muted-foreground">
+                                                                    <Utensils className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                                                    <p className="text-sm">No items in this category yet</p>
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        className="mt-3"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation()
+                                                                            router.push('/dashboard/menu/items')
+                                                                        }}
+                                                                    >
+                                                                        <Plus className="h-3 w-3 mr-1" />
+                                                                        Add Items
+                                                                    </Button>
                                                                 </div>
-                                                            ))}
+                                                            )
+                                                        }
 
-                                                            {items.length > 5 && (
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    className="w-full"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation()
-                                                                        router.push(`/dashboard/menu/items?category=${category.id}`)
-                                                                    }}
-                                                                >
-                                                                    View all {items.length} items
-                                                                    <ExternalLink className="h-3 w-3 ml-1" />
-                                                                </Button>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                        return (
+                                                            <div className="space-y-2">
+                                                                {displayItems.slice(0, 5).map((item: typeof displayItems[number], itemIndex: number) => (
+                                                                    <div
+                                                                        key={item.id}
+                                                                        className={cn(
+                                                                            "flex items-center gap-3 p-3 rounded-lg bg-background border",
+                                                                            "hover:shadow-sm hover:border-primary/30 cursor-pointer transition-all",
+                                                                            "animate-in fade-in slide-in-from-left-2"
+                                                                        )}
+                                                                        style={{ animationDelay: `${itemIndex * 50}ms` }}
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation()
+                                                                            handleNavigateToItem(item.id)
+                                                                        }}
+                                                                    >
+                                                                        {/* Item Image */}
+                                                                        <div className="w-12 h-12 rounded-lg overflow-hidden bg-muted/30 shrink-0">
+                                                                            {item.image ? (
+                                                                                <img
+                                                                                    src={item.image}
+                                                                                    alt={item.name}
+                                                                                    className="w-full h-full object-cover"
+                                                                                />
+                                                                            ) : (
+                                                                                <div className="w-full h-full flex items-center justify-center">
+                                                                                    <Utensils className="h-5 w-5 text-muted-foreground/50" />
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {/* Item Details */}
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <h5 className="font-medium text-sm truncate flex items-center gap-1">
+                                                                                {item.name}
+                                                                                {'is_featured' in item && item.is_featured && (
+                                                                                    <Sparkles className="h-3 w-3 text-yellow-500" />
+                                                                                )}
+                                                                            </h5>
+                                                                            {item.description && (
+                                                                                <p className="text-xs text-muted-foreground truncate">
+                                                                                    {item.description}
+                                                                                </p>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {/* Price & Status */}
+                                                                        <div className="text-right shrink-0">
+                                                                            <span className="font-semibold text-sm text-primary">
+                                                                                ${item.price.toFixed(2)}
+                                                                            </span>
+                                                                            {!item.availability && (
+                                                                                <Badge variant="secondary" className="ml-2 text-xs">
+                                                                                    Off
+                                                                                </Badge>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {/* Remove button (only for all locations) */}
+                                                                        {isAllLocations && (
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                                                                onClick={(e) => handleRemoveItemFromCategory(category.id, item.id, e)}
+                                                                            >
+                                                                                <X className="h-4 w-4" />
+                                                                            </Button>
+                                                                        )}
+                                                                        <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                                                                    </div>
+                                                                ))}
+
+                                                                {displayItems.length > 5 && (
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        className="w-full"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation()
+                                                                            router.push(`/dashboard/menu/items?category=${category.id}`)
+                                                                        }}
+                                                                    >
+                                                                        View all {displayItems.length} items
+                                                                        <ExternalLink className="h-3 w-3 ml-1" />
+                                                                    </Button>
+                                                                )}
+                                                            </div>
+                                                        )
+                                                    })()}
                                                 </div>
                                             </div>
                                         )}

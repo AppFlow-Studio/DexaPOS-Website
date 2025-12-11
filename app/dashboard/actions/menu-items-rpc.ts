@@ -1,0 +1,572 @@
+'use server'
+
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { MenuWithCategories, CategoryWithItems } from '@/types/menu'
+import { auth } from '@clerk/nextjs/server'
+
+// ============================================================================
+// GET ITEMS (for Items Library view)
+// ============================================================================
+
+export async function getItemsForLocation(merchantId: string, locationId?: string | null) {
+    const supabase = createServerSupabaseClient()
+    const location_Id = locationId == 'all' ? null : locationId
+    const { data, error } = await supabase.rpc('get_items_for_location', {
+        p_merchant_id: merchantId,
+        p_location_id: location_Id || null
+    })
+
+    if (error) {
+        return { success: false, error: error.message }
+    }
+
+    return { success: true, data: data || [] }
+}
+
+// ============================================================================
+// GET CATEGORIES WITH ITEMS (Category-centric view)
+// ============================================================================
+
+export async function getCategoriesForLocation(merchantId: string, locationId?: string | null) {
+    const supabase = createServerSupabaseClient()
+    const location_Id = locationId == 'all' ? null : locationId
+
+    const { data, error } = await supabase.rpc('get_categories_for_location', {
+        p_merchant_id: merchantId,
+        p_location_id: location_Id || null
+    })
+
+    if (error) {
+        return { success: false, error: error.message }
+    }
+
+    return { success: true, data: (data || []) as CategoryWithItems[] }
+}
+
+// ============================================================================
+// GET MENU WITH CATEGORIES (Primary menu view)
+// ============================================================================
+
+export async function getMenuWithCategories(menuId: string, locationId?: string | null) {
+    const supabase = createServerSupabaseClient()
+    const location_Id = locationId == 'all' ? null : locationId
+
+    const { data, error } = await supabase.rpc('get_menu_with_categories', {
+        p_menu_id: menuId,
+        p_location_id: location_Id || null
+    })
+
+    if (error) {
+        return { success: false, error: error.message }
+    }
+
+    return { success: true, data: data as MenuWithCategories }
+}
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+export interface UpdateItemParams {
+    menuItemId: string
+    categoryId?: string | null     // NEW: Category context
+    menuId?: string | null         // null = Items Library context
+    locationId?: string | null     // null = Merchant Admin (all locations)
+
+    // Fields that can be updated
+    name?: string
+    description?: string
+    price?: number | null
+    cashPrice?: number | null
+    image?: string
+    availability?: boolean
+    allergens?: string[]
+    cardBgColor?: string
+    stockTrackingMode?: string
+    mealTypes?: string[]
+
+    // Location-specific fields
+    priceModifier?: number | null
+    priceModifierType?: 'add' | 'percent' | null
+    currentStock?: number | null
+
+    // Category-specific fields
+    displayOrder?: number | null
+    isFeatured?: boolean | null
+}
+
+export interface UpdateResult {
+    success: boolean
+    error?: string
+    level?: number
+    table?: string
+    action?: string
+    data?: unknown
+}
+
+// ============================================================================
+// UNIFIED UPDATE - Uses the new category-centric database function
+// ============================================================================
+
+export async function upsertModifierOverride(
+    locationId: string,
+    modifierId: string,
+    price: number,
+    isActive: boolean,
+    stockMode: 'quantity' | 'in_stock' | 'out_of_stock',
+    currentStock: number | null
+) {
+    const supabase = createServerSupabaseClient()
+    const { data, error } = await supabase.rpc('upsert_modifier_override', {
+        p_location_id: locationId,
+        p_modifier_item_id: modifierId,
+        p_price_modifier: price,
+        p_is_active: isActive,
+        p_stock_tracking_mode: stockMode,
+        p_current_stock: currentStock
+    })
+
+    if (error) {
+        return { success: false, error: error.message }
+    }
+
+    return { success: true, data: data }
+}
+
+/**
+ * Unified update function that handles all 5 price levels
+ * Uses the new upsert_category_item_override RPC
+ */
+export async function updateItemOverride(params: UpdateItemParams): Promise<UpdateResult> {
+    const { userId } = await auth()
+    if (!userId) {
+        return { success: false, error: 'Unauthorized' }
+    }
+
+    const supabase = createServerSupabaseClient()
+    const locationId = params.locationId === 'all' ? null : params.locationId
+
+    // If updating base item fields (name, description, etc.) - these are always global
+    if (params.name !== undefined || params.description !== undefined ||
+        params.image !== undefined || params.allergens !== undefined ||
+        params.cardBgColor !== undefined || params.mealTypes !== undefined) {
+
+        // Only merchant admin can update base item fields
+        if (!locationId && !params.menuId && !params.categoryId) {
+            // Merchant admin in Items Library - update base item
+            const updateData: Record<string, unknown> = { updated_at: new Date().toISOString() }
+            if (params.name !== undefined) updateData.name = params.name
+            if (params.description !== undefined) updateData.description = params.description
+            if (params.image !== undefined) updateData.image = params.image
+            if (params.allergens !== undefined) updateData.allergens = params.allergens
+            if (params.cardBgColor !== undefined) updateData.card_bg_color = params.cardBgColor
+            if (params.mealTypes !== undefined) updateData.meal_types = params.mealTypes
+            if (params.stockTrackingMode !== undefined) updateData.stock_tracking_mode = params.stockTrackingMode
+
+            const { error } = await supabase
+                .from('menu_items')
+                .update(updateData)
+                .eq('id', params.menuItemId)
+
+            if (error) {
+                return { success: false, error: error.message }
+            }
+        }
+    }
+
+    // If updating price/availability - use the new category-centric function
+    if (params.price !== undefined || params.cashPrice !== undefined ||
+        params.availability !== undefined || params.priceModifier !== undefined ||
+        params.displayOrder !== undefined || params.isFeatured !== undefined ||
+        params.stockTrackingMode !== undefined || params.currentStock !== undefined) {
+
+        const { data, error } = await supabase.rpc('upsert_category_item_override', {
+            p_menu_item_id: params.menuItemId,
+            p_category_id: params.categoryId || null,
+            p_menu_id: params.menuId || null,
+            p_location_id: locationId || null,
+            p_custom_price: params.price,
+            p_custom_cash_price: params.cashPrice,
+            p_is_available: params.availability,
+            p_price_modifier: params.priceModifier,
+            p_price_modifier_type: params.priceModifierType,
+            p_display_order: params.displayOrder,
+            p_is_featured: params.isFeatured,
+            p_stock_tracking_mode: params.stockTrackingMode,
+            p_current_stock: params.currentStock
+        })
+
+        if (error) {
+            return { success: false, error: error.message }
+        }
+
+        return data as UpdateResult
+    }
+
+    return { success: true, level: 1, table: 'menu_items', action: 'updated' }
+}
+
+// ============================================================================
+// CONVENIENCE WRAPPERS
+// ============================================================================
+
+/**
+ * Update item in Items Library (not category/menu context)
+ * - If locationId is null: Updates global base (Level 1)
+ * - If locationId is set: Updates location base (Level 2)
+ */
+export async function updateItemBasePrice(
+    menuItemId: string,
+    price: number | null,
+    cashPrice?: number | null,
+    locationId?: string | null
+) {
+    return updateItemOverride({
+        menuItemId,
+        categoryId: null,  // No category context
+        menuId: null,      // No menu context
+        locationId,
+        price: price,
+        cashPrice: cashPrice
+    })
+}
+
+/**
+ * Update item price within a category
+ * - If locationId is null: Updates category price (Level 3)
+ * - If locationId is set: Updates location+category override (Level 4)
+ */
+export async function updateCategoryItemPrice(
+    menuItemId: string,
+    categoryId: string,
+    price: number | null,
+    cashPrice?: number | null,
+    locationId?: string | null
+) {
+    return updateItemOverride({
+        menuItemId,
+        categoryId,
+        menuId: null,
+        locationId,
+        price: price,
+        cashPrice: cashPrice
+    })
+}
+
+/**
+ * Update item price within a menu (in category context)
+ * - If locationId is null: Updates menu+category price (Level 3/Category)
+ * - If locationId is set: Updates location+menu+category override (Level 5)
+ */
+export async function updateMenuItemPrice(
+    menuItemId: string,
+    menuId: string,
+    categoryId: string,
+    price: number | null,
+    cashPrice?: number | null,
+    locationId?: string | null
+) {
+    return updateItemOverride({
+        menuItemId,
+        categoryId,
+        menuId,
+        locationId,
+        price: price,
+        cashPrice: cashPrice
+    })
+}
+
+/**
+ * Set a location-wide price modifier (e.g., airport +$2 markup)
+ */
+export async function setLocationPriceModifier(
+    menuItemId: string,
+    locationId: string,
+    modifier: number,
+    type: 'add' | 'percent'
+) {
+    return updateItemOverride({
+        menuItemId,
+        categoryId: null,
+        menuId: null,
+        locationId,
+        priceModifier: modifier,
+        priceModifierType: type
+    })
+}
+
+/**
+ * Toggle availability at the appropriate level
+ */
+export async function setItemAvailability(
+    menuItemId: string,
+    isAvailable: boolean,
+    options?: {
+        categoryId?: string | null
+        menuId?: string | null
+        locationId?: string | null
+    }
+) {
+    return updateItemOverride({
+        menuItemId,
+        categoryId: options?.categoryId,
+        menuId: options?.menuId,
+        locationId: options?.locationId,
+        availability: isAvailable
+    })
+}
+
+// ============================================================================
+// CREATE ITEM (Always global - Level 1)
+// ============================================================================
+
+export async function createMenuItem(
+    clerkOrgId: string,
+    item: {
+        name: string
+        description?: string
+        price: number
+        cashPrice?: number
+        image?: string
+        availability?: boolean
+        allergens?: string[]
+        cardBgColor?: string
+        stockTrackingMode?: string
+        mealTypes?: string[]
+    }
+) {
+    const supabase = await createServerSupabaseClient()
+
+    // Get merchant ID from clerk org
+    const { data: merchant } = await supabase
+        .from('merchants')
+        .select('id')
+        .eq('clerk_org_id', clerkOrgId)
+        .single()
+
+    if (!merchant) {
+        return { success: false, error: 'Merchant not found' }
+    }
+
+    const { data, error } = await supabase
+        .from('menu_items')
+        .insert({
+            merchant_id: merchant.id,
+            name: item.name,
+            description: item.description,
+            price: item.price,
+            cash_price: item.cashPrice,
+            image: item.image,
+            availability: item.availability ?? true,
+            allergens: item.allergens ?? [],
+            card_bg_color: item.cardBgColor,
+            stock_tracking_mode: item.stockTrackingMode ?? 'in_stock',
+            meal_types: item.mealTypes ?? []
+        })
+        .select()
+        .single()
+
+    if (error) {
+        return { success: false, error: error.message }
+    }
+
+    return { success: true, data }
+}
+
+// ============================================================================
+// RESET TO LEVEL (Uses new category-centric function)
+// ============================================================================
+
+export async function resetItemToLevel(
+    menuItemId: string,
+    targetLevel: 1 | 2 | 3 | 4 | 5,
+    options?: {
+        categoryId?: string | null
+        menuId?: string | null
+        locationId?: string | null
+    }
+): Promise<UpdateResult> {
+    const supabase = await createServerSupabaseClient()
+
+    const { data, error } = await supabase.rpc('reset_category_item_to_level', {
+        p_menu_item_id: menuItemId,
+        p_category_id: options?.categoryId || null,
+        p_menu_id: options?.menuId || null,
+        p_location_id: options?.locationId === 'all' ? null : options?.locationId || null,
+        p_target_level: targetLevel
+    })
+
+    if (error) {
+        return { success: false, error: error.message }
+    }
+
+    return data as UpdateResult
+}
+
+// ============================================================================
+// GET ITEM WITH ALL 5 PRICE LEVELS
+// ============================================================================
+
+export async function getItemWithPriceLevels(
+    menuItemId: string,
+    options?: {
+        categoryId?: string | null
+        menuId?: string | null
+        locationId?: string | null
+    }
+) {
+    const supabase = await createServerSupabaseClient()
+    const locationId = options?.locationId === 'all' ? null : options?.locationId
+
+    // Get base item with category assignments
+    const { data: item, error: itemError } = await supabase
+        .from('menu_items')
+        .select(`
+            *,
+            category_items(
+                id,
+                category_id,
+                display_order,
+                custom_price,
+                custom_cash_price,
+                is_featured,
+                is_available,
+                category:categories(id, name)
+            ),
+            menu_item_modifier_groups(
+                modifier_group_id,
+                modifier_groups(id, name)
+            )
+        `)
+        .eq('id', menuItemId)
+        .single()
+
+    if (itemError) {
+        return { success: false, error: itemError.message }
+    }
+
+    const result: Record<string, unknown> = {
+        ...item,
+        price_levels: {
+            level_1_base: item.price,
+            level_1_cash: item.cash_price,
+            level_2_location_item: null,
+            level_2_modifier: null,
+            level_2_modifier_type: null,
+            level_3_category: null,
+            level_3_category_cash: null,
+            level_4_location_category: null,
+            level_4_location_category_cash: null,
+            level_5_location_menu: null,
+            level_5_location_menu_cash: null,
+        },
+        effective_price: item.price,
+        effective_cash_price: item.cash_price,
+        current_level: 1,
+        has_location_item_override: false,
+        has_category_override: false,
+        has_location_category_override: false,
+        has_location_menu_override: false,
+    }
+
+    // Get location item override (Level 2)
+    if (locationId) {
+        const { data: lio } = await supabase
+            .from('location_item_overrides')
+            .select('*')
+            .eq('location_id', locationId)
+            .eq('menu_item_id', menuItemId)
+            .single()
+
+        if (lio) {
+            const priceLevels = result.price_levels as Record<string, unknown>
+            priceLevels.level_2_location_item = lio.custom_price
+            priceLevels.level_2_location_item_cash = lio.custom_cash_price
+            priceLevels.level_2_modifier = lio.price_modifier
+            priceLevels.level_2_modifier_type = lio.price_modifier_type
+            result.has_location_item_override = true
+            result.location_item_override = lio
+
+            if (lio.custom_price !== null) {
+                result.effective_price = lio.custom_price
+                result.effective_cash_price = lio.custom_cash_price
+                result.current_level = 2
+            } else if (lio.price_modifier !== null) {
+                if (lio.price_modifier_type === 'add') {
+                    result.effective_price = item.price + lio.price_modifier
+                } else if (lio.price_modifier_type === 'percent') {
+                    result.effective_price = item.price * (1 + lio.price_modifier / 100)
+                }
+                result.current_level = 2
+            }
+        }
+    }
+
+    // Get category override (Level 3)
+    if (options?.categoryId) {
+        const categoryItem = (item.category_items as Array<Record<string, unknown>>)?.find(
+            (ci) => ci.category_id === options.categoryId
+        )
+
+        if (categoryItem?.custom_price) {
+            const priceLevels = result.price_levels as Record<string, unknown>
+            priceLevels.level_3_category = categoryItem.custom_price
+            priceLevels.level_3_category_cash = categoryItem.custom_cash_price
+            result.has_category_override = true
+            result.category_item = categoryItem
+
+            result.effective_price = categoryItem.custom_price
+            result.effective_cash_price = categoryItem.custom_cash_price
+            result.current_level = 3
+        }
+
+        // Get location + category override (Level 4)
+        if (locationId) {
+            const { data: lcio } = await supabase
+                .from('location_category_item_overrides')
+                .select('*')
+                .eq('location_id', locationId)
+                .eq('category_id', options.categoryId)
+                .eq('menu_item_id', menuItemId)
+                .single()
+
+            if (lcio?.custom_price) {
+                const priceLevels = result.price_levels as Record<string, unknown>
+                priceLevels.level_4_location_category = lcio.custom_price
+                priceLevels.level_4_location_category_cash = lcio.custom_cash_price
+                result.has_location_category_override = true
+                result.location_category_override = lcio
+
+                result.effective_price = lcio.custom_price
+                result.effective_cash_price = lcio.custom_cash_price
+                result.current_level = 4
+            }
+        }
+
+        // Get location + menu + category override (Level 5)
+        if (options?.menuId && locationId) {
+            const { data: lmio } = await supabase
+                .from('location_menu_item_overrides')
+                .select('*')
+                .eq('location_id', locationId)
+                .eq('menu_id', options.menuId)
+                .eq('category_id', options.categoryId)
+                .eq('menu_item_id', menuItemId)
+                .single()
+
+            if (lmio?.custom_price) {
+                const priceLevels = result.price_levels as Record<string, unknown>
+                priceLevels.level_5_location_menu = lmio.custom_price
+                priceLevels.level_5_location_menu_cash = lmio.custom_cash_price
+                result.has_location_menu_override = true
+                result.location_menu_override = lmio
+
+                result.effective_price = lmio.custom_price
+                result.effective_cash_price = lmio.custom_cash_price
+                result.current_level = 5
+            }
+        }
+    }
+
+    return { success: true, data: result }
+}

@@ -11,6 +11,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 export async function getMenuWithRelations(menuId: string) {
     const supabase = createServerSupabaseClient()
 
+    // Using category-centric structure - items are now accessed through categories
     const { data, error } = await supabase
         .from('menus')
         .select(`
@@ -18,15 +19,22 @@ export async function getMenuWithRelations(menuId: string) {
             menu_categories(
                 id,
                 display_order,
-                category:categories(*)
-            ),
-            menu_item_menus(
-                id,
-                custom_price,
-                custom_cash_price,
-                is_available,
-                display_order,
-                menu_item:menu_items(*)
+                is_active,
+                custom_title,
+                custom_subtitle,
+                custom_image,
+                category:categories(
+                    *,
+                    category_items(
+                        id,
+                        display_order,
+                        custom_price,
+                        custom_cash_price,
+                        is_available,
+                        is_featured,
+                        menu_item:menu_items(*)
+                    )
+                )
             ),
             menu_schedules(
                 id,
@@ -53,12 +61,17 @@ export async function getMenuWithRelations(menuId: string) {
 export async function getMenusWithStats(merchantId: string, locationId?: string | null) {
     const supabase = createServerSupabaseClient()
 
+    // Count items via categories using category_items
     let query = supabase
         .from('menus')
         .select(`
             *,
-            menu_categories(count),
-            menu_item_menus(count)
+            menu_categories(
+                count,
+                category:categories(
+                    category_items(count)
+                )
+            )
         `)
         .eq('merchant_id', merchantId)
 

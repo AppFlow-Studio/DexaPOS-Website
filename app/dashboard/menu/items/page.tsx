@@ -27,23 +27,61 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useLocationScopedMenuItemsWithCategories, useLocationContext } from '../../hooks/useLocationScoped'
+import { NewEditItemFormSheet, EditItemWithOverrides } from '@/components/dashboard/menu/NewEditItemFormSheet'
+import { LocationItem } from '@/types/merchant_locations'
+import { LocationLibraryItem } from '@/types/menu'
 
-interface MenuItemWithCategories extends MenuItemsModel {
-    menu_item_categories: Array<{
-        id: string
-        category: {
-            id: string
-            name: string
-        } | null
-    }>
-    // Location override fields
-    effective_price?: number
-    effective_cash_price?: number | null
-    has_price_override?: boolean
-    location_is_available?: boolean
-    global_price?: number
-    global_cash_price?: number | null
+// Helper to map LocationItem to EditItemWithOverrides
+function mapLocationItemToEditItem(item: LocationLibraryItem | null): EditItemWithOverrides | undefined {
+    if (!item) return undefined
+    return {
+        id: item.id,
+        name: item.name,
+        description: item.description ?? undefined,
+        price: item.base_price,
+        cash_price: item.base_cash_price,
+        image: item.image ?? undefined,
+        availability: item.effective_availability,
+        allergens: item.allergens ?? undefined,
+        card_bg_color: item.card_bg_color ?? undefined,
+        stock_tracking_mode: item.stock_tracking_mode ?? undefined,
+        category_items: item.categories,
+        effective_price: item.effective_price,
+        effective_cash_price: item.effective_cash_price,
+        menu_item_modifier_groups: item.modifier_groups,
+        price_levels: {
+            level_1_base: item.base_price,
+            level_1_cash: item.base_cash_price,
+            level_2_location_item: item.location_override?.custom_price ?? null,
+            level_2_location_item_cash: item.location_override?.custom_cash_price ?? null,
+            level_2_modifier: item.location_override?.price_modifier ?? null,
+            level_2_modifier_type: null,  // Will be computed from location_override if available
+            level_3_category: null,
+            level_3_category_cash: null,
+            level_4_location_category: null,
+            level_4_location_category_cash: null,
+            level_5_location_menu: null,
+            level_5_location_menu_cash: null,
+        },
+    }
 }
+
+// interface MenuItemWithCategories extends MenuItemsModel {
+//     menu_item_categories: Array<{
+//         id: string
+//         category: {
+//             id: string
+//             name: string
+//         } | null
+//     }>
+//     // Location override fields
+//     effective_price?: number
+//     effective_cash_price?: number | null
+//     has_price_override?: boolean
+//     location_is_available?: boolean
+//     global_price?: number
+//     global_cash_price?: number | null
+// }
 
 export default function MenuItemsPage() {
     const { data: userInfo } = useUserInfo()
@@ -56,14 +94,14 @@ export default function MenuItemsPage() {
     const { isAllLocations, locationName, selectedLocationId } = useLocationContext()
 
     // Use location-scoped hook for items with effective prices
-    const { data: items, isLoading } = useLocationScopedMenuItemsWithCategories()
+    const { data: items, isLoading, isError, refetch } = useLocationScopedMenuItemsWithCategories()
     const { data: categories } = useCategories(clerkOrgId || '')
     const { data: modifierGroups } = useModifierGroups(clerkOrgId)
 
     const [searchTerm, setSearchTerm] = useState('')
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
     const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false)
-    const [editingItem, setEditingItem] = useState<MenuItemWithCategories | null>(null)
+    const [editingItem, setEditingItem] = useState<LocationItem | null>(null)
     const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
     const [showCategoryFilter, setShowCategoryFilter] = useState(false)
 
@@ -77,10 +115,14 @@ export default function MenuItemsPage() {
     }, [searchParams])
 
     const itemsList = useMemo(() => {
-        return Array.isArray(items) ? items as MenuItemWithCategories[] : []
-    }, [items])
-    const categoriesList = Array.isArray(categories) ? categories : []
-    const modifierGroupsList = Array.isArray(modifierGroups) ? modifierGroups : []
+        return Array.isArray(items?.data) ? items.data as LocationItem[] : []
+    }, [items?.data])
+
+    // Error handling - MUST be after all hooks
+    if (items?.error || items?.success === false) {
+        toast.error(items?.error || 'Error fetching menu items')
+        return <Empty description="Error fetching menu items" />
+    }
 
     // Filter items by search term and category
     const filteredItems = useMemo(() => {
@@ -99,13 +141,13 @@ export default function MenuItemsPage() {
             if (selectedCategoryId === 'uncategorized') {
                 // Show items with no categories
                 filtered = filtered.filter(item =>
-                    !item.menu_item_categories?.length ||
-                    item.menu_item_categories.every(mic => !mic.category)
+                    !item.categories?.length ||
+                    item.categories?.every(mic => !mic.id)
                 )
             } else {
                 // Show items in the selected category
                 filtered = filtered.filter(item =>
-                    item.menu_item_categories?.some(mic => mic.category?.id === selectedCategoryId)
+                    item.categories?.some(mic => mic.id === selectedCategoryId)
                 )
             }
         }
@@ -117,9 +159,9 @@ export default function MenuItemsPage() {
     const categoryItemCounts = useMemo(() => {
         const counts: Record<string, number> = {}
         itemsList.forEach(item => {
-            item.menu_item_categories?.forEach(mic => {
-                if (mic.category?.id) {
-                    counts[mic.category.id] = (counts[mic.category.id] || 0) + 1
+            item.categories?.forEach(mic => {
+                if (mic?.id) {
+                    counts[mic.id] = (counts[mic.id] || 0) + 1
                 }
             })
         })
@@ -128,30 +170,34 @@ export default function MenuItemsPage() {
 
     // Items without any category
     const uncategorizedCount = useMemo(() => {
-        return itemsList.filter(item => !item.menu_item_categories?.length || item.menu_item_categories.every(mic => !mic.category)).length
+        return itemsList.filter(item => !item.categories?.length || item.categories.every(mic => !mic.id)).length
     }, [itemsList])
 
-    const availableItems = itemsList.filter(i => i.availability).length
-    const unavailableItems = itemsList.filter(i => !i.availability).length
+    const availableItems = itemsList.filter(i => i.base_availability).length
+    const unavailableItems = itemsList.filter(i => !i.base_availability).length
     const avgPrice = itemsList.length > 0
-        ? (itemsList.reduce((acc, i) => acc + i.price, 0) / itemsList.length).toFixed(2)
+        ? (itemsList.reduce((acc, i) => acc + i.effective_price, 0) / itemsList.length).toFixed(2)
         : '0.00'
 
-    const handleQuickEdit = (item: MenuItemWithCategories) => {
+    const handleQuickEdit = (item: LocationItem) => {
+        setIsCreateSheetOpen(true)
         setEditingItem(item)
     }
 
-    const handleViewDetails = (item: MenuItemWithCategories) => {
+    const handleViewDetails = (item: LocationItem) => {
         router.push(`/dashboard/menu/items/${item.id}`)
     }
 
-    const selectedCategory = categoriesList.find(c => c.id === selectedCategoryId)
 
     // Count items with price overrides
     const itemsWithOverrides = useMemo(() => {
-        return itemsList.filter(i => i.has_price_override).length
+        return itemsList.filter(i => i.has_location_override).length
     }, [itemsList])
 
+    const categoriesList = Array.isArray(categories) ? categories : []
+    const modifierGroupsList = Array.isArray(modifierGroups) ? modifierGroups : []
+    const selectedCategory = categoriesList.find(c => c.id === selectedCategoryId)
+    console.log('editingItem', editingItem)
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex items-center justify-between">
@@ -414,9 +460,9 @@ export default function MenuItemsPage() {
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                             {filteredItems.map((item, index) => {
                                 // Use effective price if available (location-scoped)
-                                const displayPrice = item.effective_price ?? item.price
-                                const displayCashPrice = item.effective_cash_price ?? item.cash_price
-                                const hasOverride = item.has_price_override ?? false
+                                const displayPrice = item.effective_price ?? item.base_price
+                                const displayCashPrice = item.effective_cash_price ?? item.base_cash_price
+                                const hasOverride = item.has_location_override ?? false
 
                                 return (
                                     <div
@@ -431,7 +477,7 @@ export default function MenuItemsPage() {
                                                 price={displayPrice}
                                                 cashPrice={displayCashPrice || undefined}
                                                 image={item.image || undefined}
-                                                availability={item.location_is_available ?? item.availability ?? true}
+                                                availability={item.effective_availability ?? item.base_availability ?? true}
                                                 className={cn(
                                                     "transition-all duration-300",
                                                     "group-hover:shadow-xl group-hover:scale-[1.02] group-hover:border-primary/50",
@@ -451,33 +497,33 @@ export default function MenuItemsPage() {
                                                 </div>
                                             )}
                                             {/* Global price strikethrough if different */}
-                                            {hasOverride && item.global_price !== undefined && item.global_price !== displayPrice && (
+                                            {hasOverride && item.base_price !== undefined && item.base_price !== displayPrice && (
                                                 <div className="absolute top-2 left-2 z-10">
                                                     <span className="text-[10px] text-muted-foreground line-through bg-background/80 px-1 rounded">
-                                                        ${item.global_price.toFixed(2)}
+                                                        ${item.base_price.toFixed(2)}
                                                     </span>
                                                 </div>
                                             )}
                                             {/* Category badges */}
-                                            {item.menu_item_categories && item.menu_item_categories.length > 0 && (
+                                            {item.categories && item.categories.length > 0 && (
                                                 <div className="absolute bottom-2 left-2 right-2 flex flex-wrap gap-1">
-                                                    {item.menu_item_categories.slice(0, 2).map((mic) => (
-                                                        mic.category && (
+                                                    {item.categories.slice(0, 2).map((mic) => (
+                                                        mic.id && (
                                                             <Badge
                                                                 key={mic.id}
                                                                 variant="secondary"
                                                                 className="text-[10px] px-1.5 py-0 bg-background/80 backdrop-blur-sm"
                                                             >
-                                                                {mic.category.name}
+                                                                {mic.name}
                                                             </Badge>
                                                         )
                                                     ))}
-                                                    {item.menu_item_categories.length > 2 && (
+                                                    {item.categories.length > 2 && (
                                                         <Badge
                                                             variant="secondary"
                                                             className="text-[10px] px-1.5 py-0 bg-background/80 backdrop-blur-sm"
                                                         >
-                                                            +{item.menu_item_categories.length - 2}
+                                                            +{item.categories.length - 2}
                                                         </Badge>
                                                     )}
                                                 </div>
@@ -488,7 +534,7 @@ export default function MenuItemsPage() {
                                                     <Button
                                                         size="sm"
                                                         variant="secondary"
-                                                        className="h-8 bg-white/95 hover:bg-white shadow-lg"
+                                                        className="h-8 bg-white/95 hover:bg-white cursor-pointer shadow-lg"
                                                         onClick={(e) => {
                                                             e.stopPropagation()
                                                             handleQuickEdit(item)
@@ -518,8 +564,8 @@ export default function MenuItemsPage() {
                     ) : (
                         <div className="space-y-2">
                             {filteredItems.map((item, index) => {
-                                const displayPrice = item.effective_price ?? item.price
-                                const hasOverride = item.has_price_override ?? false
+                                const displayPrice = item.effective_price ?? item.base_price
+                                const hasOverride = item.has_location_override ?? false
 
                                 return (
                                     <div
@@ -559,25 +605,25 @@ export default function MenuItemsPage() {
                                                             </p>
                                                         )}
                                                         {/* Category tags */}
-                                                        {item.menu_item_categories && item.menu_item_categories.length > 0 && (
+                                                        {item.categories && item.categories.length > 0 && (
                                                             <div className="flex flex-wrap gap-1 mt-1">
-                                                                {item.menu_item_categories.slice(0, 3).map((mic) => (
-                                                                    mic.category && (
+                                                                {item.categories.slice(0, 3).map((mic) => (
+                                                                    mic.id && (
                                                                         <Badge
                                                                             key={mic.id}
                                                                             variant="outline"
                                                                             className="text-[10px] px-1.5 py-0"
                                                                         >
-                                                                            {mic.category.name}
+                                                                            {mic.name}
                                                                         </Badge>
                                                                     )
                                                                 ))}
-                                                                {item.menu_item_categories.length > 3 && (
+                                                                {item.categories.length > 3 && (
                                                                     <Badge
                                                                         variant="outline"
                                                                         className="text-[10px] px-1.5 py-0"
                                                                     >
-                                                                        +{item.menu_item_categories.length - 3}
+                                                                        +{item.categories.length - 3}
                                                                     </Badge>
                                                                 )}
                                                             </div>
@@ -588,9 +634,9 @@ export default function MenuItemsPage() {
                                                             <span className="font-semibold text-primary">
                                                                 ${displayPrice > 0 ? displayPrice.toFixed(2) : '0.00'}
                                                             </span>
-                                                            {hasOverride && item.global_price !== undefined && item.global_price !== displayPrice && (
+                                                            {hasOverride && item.base_price !== undefined && item.base_price !== displayPrice && (
                                                                 <span className="text-[10px] text-muted-foreground line-through">
-                                                                    ${item.global_price.toFixed(2)}
+                                                                    ${item.base_price.toFixed(2)}
                                                                 </span>
                                                             )}
                                                         </div>
@@ -599,7 +645,7 @@ export default function MenuItemsPage() {
                                                                 <MapPin className="h-2.5 w-2.5" />
                                                             </Badge>
                                                         )}
-                                                        {!(item.location_is_available ?? item.availability) && (
+                                                        {!(item.effective_availability ?? item.base_availability) && (
                                                             <Badge variant="secondary" className="text-xs">
                                                                 Off
                                                             </Badge>
@@ -669,7 +715,7 @@ export default function MenuItemsPage() {
             </Card>
 
             {/* Create/Edit Bottom Sheet */}
-            <ItemFormSheet
+            {/* <ItemFormSheet
                 open={isCreateSheetOpen || !!editingItem}
                 onOpenChange={(open) => {
                     if (!open) {
@@ -694,6 +740,21 @@ export default function MenuItemsPage() {
                     setIsCreateSheetOpen(false)
                     setEditingItem(null)
                     queryClient.invalidateQueries({ queryKey: ['menu-items'] })
+                }}
+            /> */}
+            {/* In Items Library page */}
+            <NewEditItemFormSheet
+                open={isCreateSheetOpen}
+                onOpenChange={setIsCreateSheetOpen}
+                clerkOrgId={clerkOrgId}
+                editItem={mapLocationItemToEditItem(editingItem)}
+                // No menuId = Items Library context
+                categories={categories}
+                modifierGroups={modifierGroups}
+                onSuccess={() => {
+                    setIsCreateSheetOpen(false)
+                    setEditingItem(null)
+                    refetch()
                 }}
             />
         </div>

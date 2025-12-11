@@ -25,6 +25,7 @@ import {
     OverrideData
 } from '../actions/location-menu-overrides'
 import { toast } from 'sonner'
+import { getItemsForLocation } from '../actions/menu-items-rpc'
 
 // ============================================================================
 // Hook helpers
@@ -34,6 +35,7 @@ function useClerkOrgId() {
     const { data: userInfo } = useUserInfo()
     return userInfo?.members?.[0]?.organizations?.id || ''
 }
+
 
 function useEffectiveLocationId() {
     const { selectedLocationId } = useLocationStore()
@@ -114,13 +116,15 @@ export function useMenuItemWithLocationContext(itemId: string) {
  * Returns items with effective prices based on location overrides
  */
 export function useLocationScopedMenuItemsWithCategories() {
-    const clerkOrgId = useClerkOrgId()
+    // const clerkOrgId = useClerkOrgId()
+    const { data: userInfo } = useUserInfo()
+    const merchantId = userInfo?.members?.[0]?.organizations?.merchants?.id || ''
     const locationId = useEffectiveLocationId()
-
+    console.log('merchantId', merchantId)
     return useQuery({
-        queryKey: ['menu-items-with-categories', clerkOrgId, locationId, 'scoped'],
-        queryFn: () => GetMenuItemsWithCategories(clerkOrgId, locationId),
-        enabled: !!clerkOrgId,
+        queryKey: ['menu-items-with-categories', merchantId, locationId, 'scoped'],
+        queryFn: () => getItemsForLocation(merchantId, locationId),
+        enabled: !!merchantId,
     })
 }
 

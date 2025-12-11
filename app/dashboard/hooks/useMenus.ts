@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
-import { GetMenus } from "../actions/menus"
+import { getMenuForLocation, GetMenus, GetMenuWithCategories } from "../actions/menus"
+import { useLocationStore } from "./useLocationScoped"
+import { MenuWithCategories } from "@/types/menu"
 
 export function useMenus(clerkOrgId: string, locationId?: string | null) {
     return useQuery({
@@ -9,3 +11,32 @@ export function useMenus(clerkOrgId: string, locationId?: string | null) {
     })
 }
 
+/**
+ * Get menu with categories and nested items (category-centric structure)
+ * This is the PRIMARY hook for menu display
+ */
+export function useMenuWithCategories(menuId: string, locationId?: string | null) {
+    const { selectedLocationId } = useLocationStore()
+    const effectiveLocationId = locationId ?? selectedLocationId
+
+    return useQuery<MenuWithCategories | null>({
+        queryKey: ['menu-with-categories', menuId, effectiveLocationId],
+        queryFn: () => GetMenuWithCategories(menuId, effectiveLocationId),
+        enabled: !!menuId,
+    })
+}
+
+/**
+ * @deprecated Use useMenuWithCategories instead
+ * Legacy hook for backwards compatibility
+ */
+export function useMenuForLocation(menuId: string, locationId?: string | null) {
+    const { selectedLocationId } = useLocationStore()
+    const effectiveLocationId = locationId ?? selectedLocationId
+
+    return useQuery({
+        queryKey: ['menu', menuId, effectiveLocationId],
+        queryFn: () => getMenuForLocation(menuId, effectiveLocationId),
+        enabled: !!menuId,
+    })
+}

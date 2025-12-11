@@ -11,22 +11,20 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 export async function getMenuItemWithRelations(itemId: string) {
     const supabase = createServerSupabaseClient()
 
+    // Using category_items instead of deprecated menu_item_categories and menu_item_menus
     const { data, error } = await supabase
         .from('menu_items')
         .select(`
             *,
-            menu_item_categories(
+            category_items(
                 id,
-                category:categories(*)
-            ),
-            menu_item_menus(
-                id,
-                menu_id,
+                category_id,
+                display_order,
                 custom_price,
                 custom_cash_price,
                 is_available,
-                display_order,
-                menu:menus(*)
+                is_featured,
+                category:categories(*)
             ),
             menu_item_sizes:item_sizes!item_sizes_menu_item_id_fkey(*),
             menu_item_addons:item_addons!item_addons_menu_item_id_fkey(*),
@@ -68,11 +66,12 @@ export async function getMenuItemWithRelations(itemId: string) {
 export async function getMenuItemsForMerchant(merchantId: string) {
     const supabase = createServerSupabaseClient()
 
+    // Using category_items instead of deprecated menu_item_categories
     const { data, error } = await supabase
         .from('menu_items')
         .select(`
             *,
-            menu_item_categories(
+            category_items(
                 category:categories(name)
             )
         `)

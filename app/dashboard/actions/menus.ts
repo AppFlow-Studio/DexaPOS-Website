@@ -3,6 +3,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { MenusModel } from '@/types/db-modles'
 import { SyncMenuToAllLocations } from './location-menus'
+import { MenuWithCategories, MenuForLocation } from '@/types/menu'
 
 // ============================================================================
 // TYPES
@@ -33,23 +34,118 @@ export interface MenuItemWithPricing {
 }
 
 // ============================================================================
-// GET OPERATIONS
+// GET OPERATIONS - CATEGORY CENTRIC
 // ============================================================================
 
 /**
- * Get menus for a merchant, with optional location context
- * 
- * When locationId is provided:
- *   - Returns global menus (location_id IS NULL) that are available at the location
- *   - Includes is_active_at_location status from location_menus table
- *   - Also returns location-specific menus if any
- * 
- * When locationId is null:
- *   - Returns only global menus (location_id IS NULL)
- * 
- * When locationId is undefined:
- *   - Returns all menus for the merchant
+ * Get menu with categories and nested items using the new RPC
+ * This is the PRIMARY way to get menu data for display
  */
+export async function GetMenuWithCategories(
+    menuId: string,
+    locationId?: string | null
+): Promise<MenuWithCategories | null> {
+    if (!menuId) {
+        return null
+    }
+
+    const supabase = createServerSupabaseClient()
+    const location_Id = locationId === 'all' ? null : locationId
+
+    const { data, error } = await supabase.rpc('get_menu_with_categories', {
+        p_menu_id: menuId,
+        p_location_id: location_Id || null
+    })
+
+    if (error) {
+        console.error('Error getting menu with categories:', error)
+        return null
+    }
+
+    return data as MenuWithCategories
+}
+
+/**
+ * @deprecated Use GetMenuWithCategories instead
+ * Legacy function for backwards compatibility
+ */
+export async function getMenuForLocation(menuId: string, locationId?: string) {
+    const supabase = await createServerSupabaseClient()
+    const location_Id = locationId == 'all' ? null : locationId
+
+    // Try new RPC first
+    const { data: newData, error: newError } = await supabase
+        .rpc('get_menu_with_categories', {
+            p_menu_id: menuId,
+            p_location_id: location_Id || null
+        })
+
+    if (!newError && newData) {
+        // Transform to legacy format for backwards compatibility
+        const menu = newData as MenuWithCategories
+        return {
+            ...menu,
+            menu_categories: menu.categories?.map(cat => ({
+                id: cat.id,
+                category: cat.category
+            })) || [],
+            // Flatten items from all categories for legacy format
+            menu_item_menus: menu.categories?.flatMap(cat =>
+                cat.items?.map(item => ({
+                    id: item.id,
+                    custom_price: null,
+                    custom_cash_price: null,
+                    is_available: item.menu_item.effective_availability,
+                    location_menu_override: null,
+                    menu_item: {
+                        id: item.menu_item.id,
+                        name: item.menu_item.name,
+                        description: item.menu_item.description,
+                        image: item.menu_item.image,
+                        meal_types: item.menu_item.meal_types,
+                        allergens: item.menu_item.allergens,
+                        card_bg_color: item.menu_item.card_bg_color,
+                        price: item.menu_item.price_levels.level_1_base,
+                        cash_price: null,
+                        availability: item.menu_item.effective_availability,
+                        location_item_override: null,
+                        effective_price: item.menu_item.effective_price,
+                        effective_cash_price: item.menu_item.effective_cash_price,
+                        effective_availability: item.menu_item.effective_availability,
+                        has_location_item_override: item.menu_item.has_location_item_override,
+                        has_menu_override: item.menu_item.has_category_override,
+                        has_location_menu_override: item.menu_item.has_location_menu_override,
+                        price_source: item.menu_item.price_source,
+                        price_breakdown: item.menu_item.price_levels,
+                        stock_tracking_mode: item.menu_item.stock_tracking_mode,
+                        current_stock: item.menu_item.current_stock,
+                        modifier_groups: item.menu_item.modifier_groups
+                    }
+                })) || []
+            ) || [],
+            menu_schedules: menu.schedules || []
+        } as MenuForLocation
+    }
+
+    // Fallback to old RPC if new one not available
+    const { data, error } = await supabase
+        .rpc('get_menu_for_location', {
+            p_menu_id: menuId,
+            p_location_id: location_Id || null
+        })
+
+    if (error) {
+        console.error('Error getting menu for location:', error)
+        return null
+    }
+
+    return data as MenuForLocation
+}
+
+// ============================================================================
+// GET OPERATIONS - BASIC
+// ============================================================================
+
 export async function GetMenus(clerkOrgId: string, locationId?: string | null) {
     if (!clerkOrgId) {
         return []
@@ -70,11 +166,19 @@ export async function GetMenus(clerkOrgId: string, locationId?: string | null) {
     }
 
     // If viewing "all locations" or no location specified
-    if (locationId === undefined || locationId === 'all') {
+    if (locationId === null || locationId === 'all') {
         // Get all menus for the merchant (both global and location-specific)
         const { data, error } = await supabase
             .from('menus')
-            .select('*')
+            .select(
+                `
+                *,
+                locations(
+                    id,
+                    name
+                )   
+            `
+            )
             .eq('merchant_id', merchant.id)
             .order('display_order', { ascending: true, nullsFirst: false })
             .order('created_at', { ascending: false })
@@ -86,25 +190,7 @@ export async function GetMenus(clerkOrgId: string, locationId?: string | null) {
         return data as MenusModel[]
     }
 
-    // If locationId is null, get only global menus
-    if (locationId === null) {
-        const { data, error } = await supabase
-            .from('menus')
-            .select('*')
-            .eq('merchant_id', merchant.id)
-            .is('location_id', null)
-            .order('display_order', { ascending: true, nullsFirst: false })
-            .order('created_at', { ascending: false })
-
-        if (error) {
-            console.error('Error getting global menus:', error)
-            return []
-        }
-        return data as MenusModel[]
-    }
-
     // Location-specific view - get global menus with location status
-    // First, get the location info
     const { data: location, error: locationError } = await supabase
         .from('locations')
         .select('uses_global_menu')
@@ -141,8 +227,6 @@ export async function GetMenus(clerkOrgId: string, locationId?: string | null) {
     )
 
     // Build result with location status
-    // If uses_global_menu is true and no location_menus record exists,
-    // the menu is considered active by default (auto-inherit)
     const result: MenuWithLocationStatus[] = globalMenus.map(menu => {
         const locationMenu = locationMenuMap.get(menu.id)
 
@@ -151,16 +235,23 @@ export async function GetMenus(clerkOrgId: string, locationId?: string | null) {
             location_menu_id: locationMenu?.id,
             is_active_at_location: locationMenu
                 ? locationMenu.is_active
-                : location?.uses_global_menu ?? true, // Default to global menu setting
+                : location?.uses_global_menu ?? true,
             display_order_at_location: locationMenu?.display_order,
-            is_inherited: true, // All global menus are inherited
+            is_inherited: true,
         }
     })
 
     // Also get any location-specific menus
     const { data: locationSpecificMenus } = await supabase
         .from('menus')
-        .select('*')
+        .select(
+            `*,
+            locations(
+                id,
+                name
+            )
+            `
+        )
         .eq('merchant_id', merchant.id)
         .eq('location_id', locationId)
         .order('display_order', { ascending: true, nullsFirst: false })
@@ -170,7 +261,7 @@ export async function GetMenus(clerkOrgId: string, locationId?: string | null) {
             result.push({
                 ...menu,
                 is_active_at_location: menu.is_active,
-                is_inherited: false, // Location-specific, not inherited
+                is_inherited: false,
             })
         }
     }
@@ -185,7 +276,7 @@ export async function GetMenu(menuId: string) {
 
     const supabase = createServerSupabaseClient()
 
-    // Get menu with categories and items
+    // Get menu with categories (new structure)
     const { data: menu, error: menuError } = await supabase
         .from('menus')
         .select(`
@@ -193,15 +284,9 @@ export async function GetMenu(menuId: string) {
             menu_categories(
                 id,
                 display_order,
+                is_active,
+                custom_title,
                 category:categories(*)
-            ),
-            menu_item_menus(
-                id,
-                custom_price,
-                custom_cash_price,
-                is_available,
-                display_order,
-                menu_item:menu_items(*)
             ),
             menu_schedules(
                 id,
@@ -223,137 +308,14 @@ export async function GetMenu(menuId: string) {
 }
 
 /**
- * Get menu with location-specific item pricing overrides
+ * @deprecated Use GetMenuWithCategories instead
  */
 export async function GetMenuWithLocationContext(
     menuId: string,
     locationId?: string | null
 ) {
-    if (!menuId) {
-        return null
-    }
-
-    const supabase = createServerSupabaseClient()
-
-    // Get menu with categories and items
-    const { data: menu, error: menuError } = await supabase
-        .from('menus')
-        .select(`
-            *,
-            menu_categories(
-                id,
-                display_order,
-                category:categories(*)
-            ),
-            menu_item_menus(
-                id,
-                custom_price,
-                custom_cash_price,
-                is_available,
-                display_order,
-                menu_item:menu_items(*)
-            ),
-            menu_schedules(
-                id,
-                schedule:schedules(
-                    *,
-                    schedule_time_slots(*)
-                )
-            )
-        `)
-        .eq('id', menuId)
-        .single()
-
-    if (menuError || !menu) {
-        console.error('Error getting menu:', menuError)
-        return null
-    }
-
-    // If no location specified, return menu without location context
-    if (!locationId || locationId === 'all') {
-        // Add effective prices equal to base prices
-        const menuItemMenus = (menu.menu_item_menus || []).map((mim: any) => ({
-            ...mim,
-            effective_price: mim.custom_price ?? mim.menu_item?.price,
-            effective_cash_price: mim.custom_cash_price ?? mim.menu_item?.cash_price,
-            has_price_override: false,
-            global_price: mim.menu_item?.price,
-            global_cash_price: mim.menu_item?.cash_price,
-        }))
-
-        return {
-            ...menu,
-            menu_item_menus: menuItemMenus,
-            location_context: null,
-        }
-    }
-
-    // Get location overrides for all items in this menu
-    const itemIds = (menu.menu_item_menus || [])
-        .map((mim: any) => mim.menu_item?.id)
-        .filter(Boolean)
-
-    if (!itemIds.length) {
-        return {
-            ...menu,
-            location_context: { location_id: locationId },
-        }
-    }
-
-    const { data: overrides } = await supabase
-        .from('location_menu_item_overrides')
-        .select('*')
-        .eq('location_id', locationId)
-        .in('menu_item_id', itemIds)
-
-    const overrideMap = new Map(
-        (overrides || []).map(o => [o.menu_item_id, o])
-    )
-
-    // Apply location overrides to menu items
-    const menuItemMenus = (menu.menu_item_menus || []).map((mim: any) => {
-        const menuItem = mim.menu_item
-        if (!menuItem) return mim
-
-        const override = overrideMap.get(menuItem.id)
-        const hasPriceOverride = override && (
-            override.custom_price !== null ||
-            override.custom_cash_price !== null
-        )
-
-        return {
-            ...mim,
-            effective_price: hasPriceOverride && override.custom_price !== null
-                ? override.custom_price
-                : mim.custom_price ?? menuItem.price,
-            effective_cash_price: hasPriceOverride && override.custom_cash_price !== null
-                ? override.custom_cash_price
-                : mim.custom_cash_price ?? menuItem.cash_price,
-            has_price_override: !!hasPriceOverride,
-            location_is_available: override?.is_available ?? menuItem.availability,
-            global_price: menuItem.price,
-            global_cash_price: menuItem.cash_price,
-            location_override: override || null,
-        }
-    })
-
-    // Check if this menu is active at the location
-    const { data: locationMenu } = await supabase
-        .from('location_menus')
-        .select('*')
-        .eq('location_id', locationId)
-        .eq('menu_id', menuId)
-        .single()
-
-    return {
-        ...menu,
-        menu_item_menus: menuItemMenus,
-        location_context: {
-            location_id: locationId,
-            location_menu: locationMenu || null,
-            is_active_at_location: locationMenu?.is_active ?? true,
-        },
-    }
+    // Redirect to new function
+    return GetMenuWithCategories(menuId, locationId)
 }
 
 // ============================================================================
@@ -368,6 +330,7 @@ export async function CreateMenu(
         location_id?: string | null
         is_active?: boolean
         display_order?: number
+        created_by?: string
     }
 ) {
     if (!clerkOrgId) {
@@ -411,6 +374,7 @@ export async function CreateMenu(
             location_id: data.location_id || null,
             is_active: data.is_active ?? true,
             display_order: data.display_order || null,
+            created_by: data.created_by || null,
         })
         .select()
         .single()
@@ -530,7 +494,6 @@ export async function ToggleMenuActive(menuId: string) {
 
 /**
  * Toggle whether a menu is active at a specific location
- * This creates/updates the location_menus record
  */
 export async function ToggleMenuActiveAtLocation(
     menuId: string,

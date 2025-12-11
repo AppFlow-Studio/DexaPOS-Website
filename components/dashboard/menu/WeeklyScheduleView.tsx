@@ -6,11 +6,10 @@ import { SchedulesModel, ScheduleTimeSlotsModel } from '@/types/db-modles'
 import { cn } from '@/lib/utils'
 import { Clock, Calendar } from 'lucide-react'
 import { formatTime, DAYS_OF_WEEK, DAYS_FULL } from './ScheduleCard'
+import { MenuScheduleWrapper, ScheduleTimeSlot } from '@/types/menu'
 
 interface WeeklyScheduleViewProps {
-    schedules: Array<SchedulesModel & {
-        schedule_time_slots: ScheduleTimeSlotsModel[]
-    }>
+    schedules: MenuScheduleWrapper['schedule'][]
     className?: string
 }
 
@@ -68,7 +67,7 @@ export function WeeklyScheduleView({ schedules, className }: WeeklyScheduleViewP
     // Flatten all time slots with schedule info and colors
     const allSlots = useMemo(() => {
         const slots: Array<{
-            slot: ScheduleTimeSlotsModel
+            slot: ScheduleTimeSlot
             scheduleName: string
             color: typeof SCHEDULE_COLORS[0]
             scheduleIndex: number
@@ -77,7 +76,7 @@ export function WeeklyScheduleView({ schedules, className }: WeeklyScheduleViewP
         schedules.forEach((schedule, scheduleIndex) => {
             const color = SCHEDULE_COLORS[scheduleIndex % SCHEDULE_COLORS.length]
             schedule.schedule_time_slots?.forEach(slot => {
-                if (slot.is_active) {
+                if (schedule.is_active) {
                     slots.push({
                         slot,
                         scheduleName: schedule.name,

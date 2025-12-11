@@ -2,15 +2,14 @@
 
 import { useParams, useRouter } from 'next/navigation'
 import React, { useState, useMemo, useEffect } from 'react'
-import { useMenu } from '../../hooks/useMenu'
+import { useMenuWithCategories } from '../../hooks/useMenu'
 import { useUserInfo } from '../../../manage/hooks/useUserInfo.'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Utensils, Tag, Calendar, Settings, Plus, Trash2, Edit3, Clock, Power, Save, Info, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Utensils, Tag, Calendar, Settings, Plus, Trash2, Clock, Power, Save, Info, AlertTriangle, Globe, MapPin, ChevronDown, ChevronRight, Star, DollarSign } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { GetMenuItemsByMenu } from '../../actions/menu-items'
 import { DeleteMenu, UpdateMenu, ToggleMenuActive } from '../../actions/menus'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,9 +17,8 @@ import {
     CreateSchedule,
     AssignScheduleToMenu,
     RemoveScheduleFromMenu,
-    GetSchedulesWithTimeSlots
 } from '../../actions/schedules'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { Empty } from '@/components/ui/empty'
 import { toast } from 'sonner'
 import {
@@ -36,33 +34,197 @@ import { WeeklyScheduleView } from '@/components/dashboard/menu/WeeklyScheduleVi
 import { ScheduleFormSheet } from '@/components/dashboard/menu/ScheduleFormSheet'
 import { SchedulesModel, ScheduleTimeSlotsModel } from '@/types/db-modles'
 import { cn } from '@/lib/utils'
+import { useLocationStore } from '@/stores/location-store'
+import { MenuCategory, MenuCategoryItem } from '@/types/menu'
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from '@/components/ui/collapsible'
+
+// Category Section Component with collapsible items
+function CategorySection({
+    category,
+    isExpanded,
+    onToggle,
+    onItemClick,
+    showLocationPricing
+}: {
+    category: MenuCategory
+    isExpanded: boolean
+    onToggle: () => void
+    onItemClick: (itemId: string) => void
+    showLocationPricing: boolean
+}) {
+    const itemCount = category.items?.length || 0
+
+    return (
+        <Collapsible open={isExpanded} onOpenChange={onToggle}>
+            <Card className="overflow-hidden">
+                <CollapsibleTrigger asChild>
+                    <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                {isExpanded ? (
+                                    <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                                ) : (
+                                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                                )}
+                                <div>
+                                    <CardTitle className="text-lg">
+                                        {category.category?.name || 'Unnamed Category'}
+                                    </CardTitle>
+                                    {category.category?.description && (
+                                        <CardDescription className="mt-1">
+                                            {category.category.description}
+                                        </CardDescription>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {!category.is_active && (
+                                    <Badge variant="secondary">Inactive</Badge>
+                                )}
+                                <Badge variant="outline">
+                                    {itemCount} item{itemCount !== 1 ? 's' : ''}
+                                </Badge>
+                            </div>
+                        </div>
+                    </CardHeader>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                    <CardContent className="pt-0">
+                        {itemCount === 0 ? (
+                            <div className="text-center py-8 text-muted-foreground">
+                                No items in this category
+                            </div>
+                        ) : (
+                            <div className="divide-y">
+                                {category.items?.map((item: MenuCategoryItem) => (
+                                    <CategoryItemRow
+                                        key={item.id}
+                                        item={item}
+                                        onClick={() => onItemClick(item.menu_item_id)}
+                                        showLocationPricing={showLocationPricing}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </CollapsibleContent>
+            </Card>
+        </Collapsible>
+    )
+}
+
+// Individual item row within a category
+function CategoryItemRow({
+    item,
+    onClick,
+    showLocationPricing
+}: {
+    item: MenuCategoryItem
+    onClick: () => void
+    showLocationPricing: boolean
+}) {
+    const menuItem = item.menu_item
+    const priceSource = menuItem?.price_source || 'base'
+
+    const getPriceSourceBadge = () => {
+        switch (priceSource) {
+            case 'location_menu':
+                return <Badge variant="default" className="text-xs">L5: Menu Override</Badge>
+            case 'location_category':
+                return <Badge variant="default" className="text-xs">L4: Location Category</Badge>
+            case 'category':
+                return <Badge variant="secondary" className="text-xs">L3: Category Price</Badge>
+            case 'location_item':
+                return <Badge variant="secondary" className="text-xs">L2: Location Base</Badge>
+            default:
+                return null
+        }
+    }
+
+    return (
+        <div
+            className="flex items-center gap-4 py-4 px-2 hover:bg-muted/50 cursor-pointer transition-colors rounded-lg"
+            onClick={onClick}
+        >
+            {/* Item Image */}
+            <div className="h-16 w-16 rounded-lg bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
+                {menuItem?.image ? (
+                    <img
+                        src={menuItem.image}
+                        alt={menuItem?.name || ''}
+                        className="h-full w-full object-cover"
+                    />
+                ) : (
+                    <Utensils className="h-6 w-6 text-muted-foreground" />
+                )}
+            </div>
+
+            {/* Item Details */}
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                    <h4 className="font-medium truncate">{menuItem?.name}</h4>
+                    {item.is_featured && (
+                        <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                    )}
+                </div>
+                {menuItem?.description && (
+                    <p className="text-sm text-muted-foreground truncate">
+                        {menuItem.description}
+                    </p>
+                )}
+                <div className="flex items-center gap-2 mt-1">
+                    {menuItem?.allergens && menuItem.allergens.length > 0 && (
+                        <Badge variant="outline" className="text-xs">
+                            {menuItem.allergens.length} allergen{menuItem.allergens.length !== 1 ? 's' : ''}
+                        </Badge>
+                    )}
+                    {showLocationPricing && getPriceSourceBadge()}
+                </div>
+            </div>
+
+            {/* Price */}
+            <div className="text-right flex-shrink-0">
+                <div className="flex items-center gap-1">
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-semibold">
+                        {menuItem?.effective_price?.toFixed(2) || '0.00'}
+                    </span>
+                </div>
+                {menuItem?.effective_cash_price && menuItem.effective_cash_price !== menuItem.effective_price && (
+                    <div className="text-sm text-muted-foreground">
+                        Cash: ${menuItem.effective_cash_price.toFixed(2)}
+                    </div>
+                )}
+                {!menuItem?.effective_availability && (
+                    <Badge variant="destructive" className="text-xs mt-1">
+                        Unavailable
+                    </Badge>
+                )}
+            </div>
+        </div>
+    )
+}
 
 export default function MenuDetailPage() {
     const params = useParams()
     const router = useRouter()
     const queryClient = useQueryClient()
     const menuId = params.menuId as string
-    const { data: menu, isLoading, refetch: refetchMenu } = useMenu(menuId)
+    const { data: menu, isLoading, refetch: refetchMenu } = useMenuWithCategories(menuId)
+    const { selectedLocationId } = useLocationStore()
     const { data: userInfo } = useUserInfo()
     const clerkOrgId = userInfo?.members?.[0]?.organizations?.id
 
-    const { data: menuItems, isLoading: itemsLoading } = useQuery({
-        queryKey: ['menu-items-by-menu', menuId],
-        queryFn: () => GetMenuItemsByMenu(menuId),
-        enabled: !!menuId,
-    })
-
-    // Fetch all available schedules for assignment
-    const { data: allSchedules, isLoading: schedulesLoading } = useQuery({
-        queryKey: ['schedules-with-slots', clerkOrgId],
-        queryFn: () => GetSchedulesWithTimeSlots(clerkOrgId || ''),
-        enabled: !!clerkOrgId,
-    })
+    // Track expanded categories
+    const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
 
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
     const [isScheduleSheetOpen, setIsScheduleSheetOpen] = useState(false)
-    const [removingScheduleId, setRemovingScheduleId] = useState<string | null>(null)
 
     // Settings state
     const [isTogglingActive, setIsTogglingActive] = useState(false)
@@ -71,12 +233,15 @@ export default function MenuDetailPage() {
     const [editedDescription, setEditedDescription] = useState('')
     const [hasSettingsChanges, setHasSettingsChanges] = useState(false)
 
-    // Initialize settings when menu loads
+    // Initialize settings and expand all categories when menu loads
     useEffect(() => {
         if (menu) {
             setEditedName(menu.name)
             setEditedDescription(menu.description || '')
             setHasSettingsChanges(false)
+            // Expand all categories by default
+            const allCategoryIds = new Set(menu.categories?.map(c => c.id) || [])
+            setExpandedCategories(allCategoryIds)
         }
     }, [menu])
 
@@ -87,6 +252,27 @@ export default function MenuDetailPage() {
             setHasSettingsChanges(hasChanges)
         }
     }, [editedName, editedDescription, menu])
+
+    const toggleCategory = (categoryId: string) => {
+        setExpandedCategories(prev => {
+            const next = new Set(prev)
+            if (next.has(categoryId)) {
+                next.delete(categoryId)
+            } else {
+                next.add(categoryId)
+            }
+            return next
+        })
+    }
+
+    const expandAllCategories = () => {
+        const allIds = new Set(menu?.categories?.map(c => c.id) || [])
+        setExpandedCategories(allIds)
+    }
+
+    const collapseAllCategories = () => {
+        setExpandedCategories(new Set())
+    }
 
     const handleToggleMenuActive = async () => {
         setIsTogglingActive(true)
@@ -101,7 +287,7 @@ export default function MenuDetailPage() {
                     ? 'This menu is now hidden from customers.'
                     : 'This menu is now visible to customers.'
             })
-            queryClient.invalidateQueries({ queryKey: ['menu', menuId] })
+            queryClient.invalidateQueries({ queryKey: ['menu-with-categories', menuId] })
             refetchMenu()
         } catch {
             toast.error('Update Failed', {
@@ -130,7 +316,7 @@ export default function MenuDetailPage() {
             toast.success('Settings Saved', {
                 description: 'Menu settings have been updated.'
             })
-            queryClient.invalidateQueries({ queryKey: ['menu', menuId] })
+            queryClient.invalidateQueries({ queryKey: ['menu-with-categories', menuId] })
             refetchMenu()
             setHasSettingsChanges(false)
         } catch {
@@ -142,21 +328,43 @@ export default function MenuDetailPage() {
         }
     }
 
-    // Extract menu schedules from the menu data
+    // Extract menu schedules from the menu data and transform to expected format
+    type TransformedSchedule = SchedulesModel & {
+        schedule_time_slots: ScheduleTimeSlotsModel[]
+        time_slots: Array<{ id: string; day_of_week: number; start_time: string; end_time: string }>
+    }
+
     const menuSchedules = useMemo(() => {
         if (!menu) return []
-        const scheduleData = (menu as any).menu_schedules || []
+        const scheduleData = menu.schedules || []
         return scheduleData
-            .map((ms: any) => ms.schedule)
-            .filter(Boolean) as Array<SchedulesModel & { schedule_time_slots: ScheduleTimeSlotsModel[] }>
+            .map((ms) => {
+                const schedule = ms.schedule
+                if (!schedule) return null
+                const timeSlots = schedule.time_slots || []
+                return {
+                    ...schedule,
+                    merchant_id: menu.merchant_id,
+                    created_at: schedule.id,
+                    updated_at: schedule.id,
+                    time_slots: timeSlots,
+                    schedule_time_slots: timeSlots.map((ts) => ({
+                        ...ts,
+                        schedule_id: schedule.id,
+                        is_active: true,
+                        created_at: ts.id,
+                        updated_at: ts.id,
+                    }))
+                } as TransformedSchedule
+            })
+            .filter(Boolean) as TransformedSchedule[]
     }, [menu])
 
-    // Get unassigned schedules (schedules not already assigned to this menu)
-    const unassignedSchedules = useMemo(() => {
-        if (!allSchedules) return []
-        const assignedIds = new Set(menuSchedules.map(s => s.id))
-        return allSchedules.filter(s => !assignedIds.has(s.id))
-    }, [allSchedules, menuSchedules])
+    // Calculate total items across all categories
+    const totalItems = useMemo(() => {
+        if (!menu?.categories) return 0
+        return menu.categories.reduce((sum, cat) => sum + (cat.items?.length || 0), 0)
+    }, [menu?.categories])
 
     const handleDeleteMenu = async () => {
         setIsDeleting(true)
@@ -169,7 +377,7 @@ export default function MenuDetailPage() {
                 return
             }
             toast.success('Menu Deleted', {
-                description: `"${(menu as any).name}" has been permanently deleted.`
+                description: `"${menu?.name}" has been permanently deleted.`
             })
             queryClient.invalidateQueries({ queryKey: ['menus'] })
             router.push('/dashboard/menu')
@@ -196,7 +404,6 @@ export default function MenuDetailPage() {
             return { error: 'Organization not found' }
         }
 
-        // Create the schedule
         const createResult = await CreateSchedule(clerkOrgId, {
             name: data.name,
             description: data.description,
@@ -207,16 +414,13 @@ export default function MenuDetailPage() {
             return { error: createResult.error || 'Failed to create schedule' }
         }
 
-        // Assign the new schedule to this menu
         const assignResult = await AssignScheduleToMenu(menuId, createResult.data.id)
 
         if (assignResult.error) {
             return { error: assignResult.error }
         }
 
-        // Refresh data
-        queryClient.invalidateQueries({ queryKey: ['menu', menuId] })
-        queryClient.invalidateQueries({ queryKey: ['schedules-with-slots'] })
+        queryClient.invalidateQueries({ queryKey: ['menu-with-categories', menuId] })
         refetchMenu()
 
         return { data: createResult.data }
@@ -229,15 +433,13 @@ export default function MenuDetailPage() {
             return { error: result.error }
         }
 
-        // Refresh data
-        queryClient.invalidateQueries({ queryKey: ['menu', menuId] })
+        queryClient.invalidateQueries({ queryKey: ['menu-with-categories', menuId] })
         refetchMenu()
 
         return {}
     }
 
     const handleRemoveSchedule = async (scheduleId: string) => {
-        setRemovingScheduleId(scheduleId)
         try {
             const result = await RemoveScheduleFromMenu(menuId, scheduleId)
 
@@ -250,15 +452,12 @@ export default function MenuDetailPage() {
                 description: 'The schedule has been removed from this menu.'
             })
 
-            // Refresh data
-            queryClient.invalidateQueries({ queryKey: ['menu', menuId] })
+            queryClient.invalidateQueries({ queryKey: ['menu-with-categories', menuId] })
             refetchMenu()
         } catch {
             toast.error('Remove Failed', {
                 description: 'Unable to remove the schedule. Please try again.'
             })
-        } finally {
-            setRemovingScheduleId(null)
         }
     }
 
@@ -289,8 +488,7 @@ export default function MenuDetailPage() {
         )
     }
 
-    const categories = (menu as any).menu_categories || []
-    const items = menuItems || []
+    const categories = menu.categories || []
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -311,31 +509,45 @@ export default function MenuDetailPage() {
                         <span className="mx-2">/</span>
                         <div className="text-foreground">{menu.name}</div>
                     </div>
-                    <h2 className="text-2xl font-bold tracking-tight">{menu.name}</h2>
+                    <div className="flex items-center gap-2">
+                        <h2 className='text-2xl font-bold tracking-tight'>{menu.name}</h2>
+                        <Badge variant={menu.is_location_owned ? "secondary" : "default"}>
+                            {menu.is_location_owned ? (
+                                <div className="flex items-center gap-2">
+                                    <MapPin className="h-4 w-4" />
+                                    <p>Location Menu</p>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2">
+                                    <Globe className="h-4 w-4" />
+                                    <p>Global Menu</p>
+                                </div>
+                            )}
+                        </Badge>
+                    </div>
                     {menu.description && (
                         <p className="text-muted-foreground">{menu.description}</p>
                     )}
                 </div>
+
                 <div className="flex items-center gap-2">
                     <Badge variant={menu.is_active ? "default" : "secondary"}>
                         {menu.is_active ? 'Active' : 'Inactive'}
                     </Badge>
-                    <Button variant="outline" onClick={() => router.push('/dashboard/menu')}>
-                        <Edit3 className="h-4 w-4 mr-2" />
-                        Edit Menu
-                    </Button>
-                    <Button variant="destructive" onClick={() => setIsDeleteDialogOpen(true)}>
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                    </Button>
                 </div>
             </div>
 
             <Tabs defaultValue="overview" className="space-y-4">
                 <TabsList>
                     <TabsTrigger value="overview">Overview</TabsTrigger>
-                    <TabsTrigger value="categories">Categories</TabsTrigger>
-                    <TabsTrigger value="items">Items</TabsTrigger>
+                    <TabsTrigger value="categories" className="flex items-center gap-1.5">
+                        Categories & Items
+                        {categories.length > 0 && (
+                            <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                                {categories.length}
+                            </Badge>
+                        )}
+                    </TabsTrigger>
                     <TabsTrigger value="schedules" className="flex items-center gap-1.5">
                         Schedules
                         {menuSchedules.length > 0 && (
@@ -367,9 +579,9 @@ export default function MenuDetailPage() {
                                 <Utensils className="h-4 w-4 text-muted-foreground" />
                             </CardHeader>
                             <CardContent>
-                                <div className="text-2xl font-bold">{items.length}</div>
+                                <div className="text-2xl font-bold">{totalItems}</div>
                                 <p className="text-xs text-muted-foreground">
-                                    Total items
+                                    Total items across all categories
                                 </p>
                             </CardContent>
                         </Card>
@@ -394,136 +606,67 @@ export default function MenuDetailPage() {
                 </TabsContent>
 
                 <TabsContent value="categories" className="space-y-4">
-                    <Card>
-                        <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <CardTitle>Categories</CardTitle>
-                                    <CardDescription>Manage categories in this menu</CardDescription>
-                                </div>
-                                <Button>
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    Add Category
-                                </Button>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            {categories.length === 0 ? (
-                                <Empty
-                                    icon={Tag}
-                                    title="No categories"
-                                    description="Add categories to organize your menu items"
-                                    action={
-                                        <Button>
-                                            <Plus className="h-4 w-4 mr-2" />
-                                            Add Category
-                                        </Button>
-                                    }
-                                />
-                            ) : (
-                                <div className="space-y-2">
-                                    {categories.map((cat: any) => (
-                                        <Card key={cat.id} className="p-4">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <div className="font-semibold">{cat.category?.name}</div>
-                                                    {cat.category?.description && (
-                                                        <div className="text-sm text-muted-foreground">
-                                                            {cat.category.description}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </Card>
-                                    ))}
-                                </div>
+                    {/* Controls */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={expandAllCategories}
+                            >
+                                Expand All
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={collapseAllCategories}
+                            >
+                                Collapse All
+                            </Button>
+                        </div>
+                        <div className='flex items-center gap-2'>
+                            {selectedLocationId !== 'all' && (
+                                <p className="text-xs text-muted-foreground">
+                                    Viewing location-specific pricing
+                                </p>
                             )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
+                            <Button
+                                disabled={selectedLocationId !== 'all'}
+                                onClick={() => router.push('/dashboard/menu/categories')}
+                            >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Manage Categories
+                            </Button>
+                        </div>
+                    </div>
 
-                <TabsContent value="items" className="space-y-4">
-                    <Card>
-                        <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <CardTitle>Items</CardTitle>
-                                    <CardDescription>Manage items in this menu</CardDescription>
-                                </div>
-                                <Button onClick={() => router.push('/dashboard/menu/items')}>
+                    {/* Category Sections */}
+                    {categories.length === 0 ? (
+                        <Empty
+                            icon={Tag}
+                            title="No categories"
+                            description="Add categories to organize your menu items. Items are displayed within their categories."
+                            action={
+                                <Button onClick={() => router.push('/dashboard/menu/categories')}>
                                     <Plus className="h-4 w-4 mr-2" />
-                                    Add Item
+                                    Add Categories
                                 </Button>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            {itemsLoading ? (
-                                <div className="space-y-2">
-                                    {[1, 2, 3].map((i) => (
-                                        <Skeleton key={i} className="h-16 w-full" />
-                                    ))}
-                                </div>
-                            ) : items.length === 0 ? (
-                                <Empty
-                                    icon={Utensils}
-                                    title="No items"
-                                    description="Add items to this menu"
-                                    action={
-                                        <Button onClick={() => router.push('/dashboard/menu/items')}>
-                                            <Plus className="h-4 w-4 mr-2" />
-                                            Add Item
-                                        </Button>
-                                    }
+                            }
+                        />
+                    ) : (
+                        <div className="space-y-4">
+                            {categories.map((category) => (
+                                <CategorySection
+                                    key={category.id}
+                                    category={category}
+                                    isExpanded={expandedCategories.has(category.id)}
+                                    onToggle={() => toggleCategory(category.id)}
+                                    onItemClick={(itemId) => router.push(`/dashboard/menu/items/${itemId}`)}
+                                    showLocationPricing={selectedLocationId !== 'all'}
                                 />
-                            ) : (
-                                <div className="space-y-2">
-                                    {items.map((item: any) => (
-                                        <Card key={item.id} className="p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={() => router.push(`/dashboard/menu/items/${item.id}`)}>
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                                                        <Utensils className="h-6 w-6 text-primary" />
-                                                    </div>
-                                                    <div>
-                                                        <div className="font-semibold">{item.name}</div>
-                                                        {item.description && (
-                                                            <div className="text-sm text-muted-foreground line-clamp-1">
-                                                                {item.description}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <div className="text-right">
-                                                    {item.custom_price && item.custom_price !== item.price ? (
-                                                        <div className="space-y-0.5">
-                                                            <div className="flex items-center justify-end gap-2">
-                                                                <span className="text-xs text-muted-foreground line-through">
-                                                                    ${item.price?.toFixed(2)}
-                                                                </span>
-                                                                <span className={`font-semibold ${item.custom_price < item.price ? 'text-green-600' : 'text-orange-600'}`}>
-                                                                    ${item.custom_price?.toFixed(2)}
-                                                                </span>
-                                                            </div>
-                                                            <Badge variant="outline" className={`text-xs ${item.custom_price < item.price ? 'border-green-200 bg-green-50 text-green-700' : 'border-orange-200 bg-orange-50 text-orange-700'}`}>
-                                                                {item.custom_price < item.price ? '↓' : '↑'} Custom Price
-                                                            </Badge>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="font-semibold">
-                                                            ${item.price?.toFixed(2) || '0.00'}
-                                                        </div>
-                                                    )}
-                                                    <Badge variant={item.is_available_in_menu ? "default" : "secondary"} className="mt-1">
-                                                        {item.is_available_in_menu ? 'Available' : 'Unavailable'}
-                                                    </Badge>
-                                                </div>
-                                            </div>
-                                        </Card>
-                                    ))}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                            ))}
+                        </div>
+                    )}
                 </TabsContent>
 
                 <TabsContent value="schedules" className="space-y-4">
@@ -545,14 +688,21 @@ export default function MenuDetailPage() {
                                         }
                                     </CardDescription>
                                 </div>
-                                <Button onClick={() => setIsScheduleSheetOpen(true)}>
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    Add Schedule
-                                </Button>
+                                <div className='items-end justify-end flex flex-col gap-2'>
+                                    <Button
+                                        disabled={selectedLocationId !== 'all'}
+                                        onClick={() => setIsScheduleSheetOpen(true)}>
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        Add Schedule
+                                    </Button>
+                                    {selectedLocationId !== 'all' && <p className="text-xs text-muted-foreground mt-3">
+                                        * Addition is only available when viewing all locations.
+                                    </p>}
+                                </div>
                             </div>
                         </CardHeader>
                         <CardContent>
-                            {schedulesLoading ? (
+                            {isLoading ? (
                                 <div className="space-y-3">
                                     {[1, 2].map((i) => (
                                         <Skeleton key={i} className="h-32 w-full" />
@@ -760,7 +910,7 @@ export default function MenuDetailPage() {
                                 </div>
                                 <div className="space-y-1">
                                     <span className="text-muted-foreground">Items</span>
-                                    <p className="font-medium">{items.length} items</p>
+                                    <p className="font-medium">{totalItems} items</p>
                                 </div>
                             </div>
                         </CardContent>
@@ -787,12 +937,16 @@ export default function MenuDetailPage() {
                                 </div>
                                 <Button
                                     variant="destructive"
+                                    disabled={selectedLocationId !== 'all'}
                                     onClick={() => setIsDeleteDialogOpen(true)}
                                 >
                                     <Trash2 className="h-4 w-4 mr-2" />
                                     Delete Menu
                                 </Button>
                             </div>
+                            <p className="text-xs text-muted-foreground mt-3">
+                                * Deletion is only available when viewing all locations.
+                            </p>
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -807,8 +961,8 @@ export default function MenuDetailPage() {
                             Delete Menu
                         </DialogTitle>
                         <DialogDescription>
-                            Are you sure you want to delete "{menu.name}"? This action cannot be undone.
-                            All items and categories will be unlinked from this menu.
+                            Are you sure you want to delete &quot;{menu.name}&quot;? This action cannot be undone.
+                            All category associations will be removed from this menu.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
@@ -847,8 +1001,8 @@ export default function MenuDetailPage() {
             <ScheduleFormSheet
                 open={isScheduleSheetOpen}
                 onOpenChange={setIsScheduleSheetOpen}
-                existingSchedules={unassignedSchedules}
-                isLoadingSchedules={schedulesLoading}
+                existingSchedules={[]}
+                isLoadingSchedules={isLoading}
                 onCreateSchedule={handleCreateSchedule}
                 onAssignSchedule={handleAssignSchedule}
             />

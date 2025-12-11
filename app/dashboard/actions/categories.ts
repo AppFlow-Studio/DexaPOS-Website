@@ -2,11 +2,15 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { CategoriesModel } from '@/types/db-modles'
+import { CategoryWithItems } from '@/types/menu'
 
 // ============================================================================
 // GET OPERATIONS
 // ============================================================================
 
+/**
+ * Get categories for a merchant (basic list without items)
+ */
 export async function GetCategories(clerkOrgId: string, menuId?: string | null) {
     if (!clerkOrgId) {
         return []
@@ -52,6 +56,62 @@ export async function GetCategories(clerkOrgId: string, menuId?: string | null) 
     return data as CategoriesModel[]
 }
 
+/**
+ * Get categories with items for a location using the RPC function
+ * This is the PRIMARY way to get category-centric data
+ */
+export async function GetCategoriesForLocation(
+    merchantId: string,
+    locationId?: string | null
+) {
+    if (!merchantId) {
+        return { success: false, error: 'Merchant ID is required', data: [] }
+    }
+
+    const supabase = createServerSupabaseClient()
+    const location_Id = locationId === 'all' ? null : locationId
+
+    const { data, error } = await supabase.rpc('get_categories_for_location', {
+        p_merchant_id: merchantId,
+        p_location_id: location_Id || null
+    })
+
+    if (error) {
+        console.error('Error getting categories for location:', error)
+        return { success: false, error: error.message, data: [] }
+    }
+
+    return { success: true, data: (data || []) as CategoryWithItems[] }
+}
+
+/**
+ * Get categories for location using clerk org ID
+ */
+export async function GetCategoriesWithItemsForLocation(
+    clerkOrgId: string,
+    locationId?: string | null
+) {
+    if (!clerkOrgId) {
+        return { success: false, error: 'Organization ID is required', data: [] }
+    }
+
+    const supabase = createServerSupabaseClient()
+
+    // Get merchant ID
+    const { data: merchant, error: merchantError } = await supabase
+        .from('merchants')
+        .select('id')
+        .eq('clerk_org_id', clerkOrgId)
+        .single()
+
+    if (merchantError || !merchant) {
+        console.error('Error getting merchant:', merchantError)
+        return { success: false, error: 'Merchant not found', data: [] }
+    }
+
+    return GetCategoriesForLocation(merchant.id, locationId)
+}
+
 export async function GetCategory(categoryId: string) {
     if (!categoryId) {
         return null
@@ -82,6 +142,47 @@ export async function GetCategory(categoryId: string) {
             schedule: any
         }>
     }
+}
+
+/**
+ * Get a category with its items
+ */
+export async function GetCategoryWithItems(
+    categoryId: string,
+    locationId?: string | null
+) {
+    if (!categoryId) {
+        return null
+    }
+
+    const supabase = createServerSupabaseClient()
+
+    // Get category with merchant_id
+    const { data: category, error: catError } = await supabase
+        .from('categories')
+        .select('*, merchant_id')
+        .eq('id', categoryId)
+        .single()
+
+    if (catError || !category) {
+        console.error('Error getting category:', catError)
+        return null
+    }
+
+    // Get all categories for this merchant with items, then filter
+    const { data, error } = await supabase.rpc('get_categories_for_location', {
+        p_merchant_id: category.merchant_id,
+        p_location_id: locationId === 'all' ? null : locationId || null
+    })
+
+    if (error) {
+        console.error('Error getting category with items:', error)
+        return null
+    }
+
+    // Find the specific category
+    const categoryWithItems = (data as CategoryWithItems[])?.find(c => c.id === categoryId)
+    return categoryWithItems || null
 }
 
 // ============================================================================
@@ -175,7 +276,7 @@ export async function UpdateCategory(
     const supabase = createServerSupabaseClient()
 
     // Build update object
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
     if (data.name !== undefined) updateData.name = data.name
     if (data.description !== undefined) updateData.description = data.description
     if (data.menu_id !== undefined) updateData.menu_id = data.menu_id || null
@@ -245,55 +346,279 @@ export async function DeleteCategory(categoryId: string) {
 }
 
 // ============================================================================
-// ASSIGNMENT OPERATIONS
+// CATEGORY-MENU ASSIGNMENT OPERATIONS
 // ============================================================================
 
-export async function AssignCategoryToMenu(categoryId: string, menuId: string, displayOrder?: number) {
+/**
+ * Add a category to a menu using the RPC function
+ */
+export async function AddCategoryToMenu(
+    menuId: string,
+    categoryId: string,
+    displayOrder?: number,
+    customTitle?: string
+) {
     if (!categoryId || !menuId) {
         return { error: 'Category ID and Menu ID are required' }
     }
 
     const supabase = createServerSupabaseClient()
 
-    // Check if assignment already exists
-    const { data: existing } = await supabase
-        .from('menu_categories')
-        .select('id')
-        .eq('category_id', categoryId)
-        .eq('menu_id', menuId)
-        .single()
-
-    if (existing) {
-        // Update display order if provided
-        if (displayOrder !== undefined) {
-            const { error } = await supabase
-                .from('menu_categories')
-                .update({ display_order: displayOrder })
-                .eq('id', existing.id)
-
-            if (error) {
-                return { error: error.message }
-            }
-        }
-        return { success: true, data: existing }
-    }
-
-    // Create new assignment
-    const { data, error } = await supabase
-        .from('menu_categories')
-        .insert({
-            category_id: categoryId,
-            menu_id: menuId,
-            display_order: displayOrder || null,
-        })
-        .select()
-        .single()
+    const { data, error } = await supabase.rpc('add_category_to_menu', {
+        p_menu_id: menuId,
+        p_category_id: categoryId,
+        p_display_order: displayOrder ?? 0,
+        p_custom_title: customTitle || null
+    })
 
     if (error) {
-        console.error('Error assigning category to menu:', error)
+        console.error('Error adding category to menu:', error)
         return { error: error.message }
     }
 
     return { success: true, data }
 }
 
+/**
+ * Remove a category from a menu using the RPC function
+ */
+export async function RemoveCategoryFromMenu(menuId: string, categoryId: string) {
+    if (!categoryId || !menuId) {
+        return { error: 'Category ID and Menu ID are required' }
+    }
+
+    const supabase = createServerSupabaseClient()
+
+    const { data, error } = await supabase.rpc('remove_category_from_menu', {
+        p_menu_id: menuId,
+        p_category_id: categoryId
+    })
+
+    if (error) {
+        console.error('Error removing category from menu:', error)
+        return { error: error.message }
+    }
+
+    return { success: true, data }
+}
+
+/**
+ * @deprecated Use AddCategoryToMenu instead
+ */
+export async function AssignCategoryToMenu(categoryId: string, menuId: string, displayOrder?: number) {
+    return AddCategoryToMenu(menuId, categoryId, displayOrder)
+}
+
+// ============================================================================
+// CATEGORY-ITEM ASSIGNMENT OPERATIONS
+// ============================================================================
+
+/**
+ * Add an item to a category using the RPC function
+ */
+export async function AddItemToCategory(
+    categoryId: string,
+    menuItemId: string,
+    displayOrder?: number,
+    customPrice?: number,
+    isFeatured?: boolean
+) {
+    if (!categoryId || !menuItemId) {
+        return { error: 'Category ID and Menu Item ID are required' }
+    }
+
+    const supabase = createServerSupabaseClient()
+
+    const { data, error } = await supabase.rpc('add_item_to_category', {
+        p_category_id: categoryId,
+        p_menu_item_id: menuItemId,
+        p_display_order: displayOrder ?? 0,
+        p_custom_price: customPrice || null,
+        p_is_featured: isFeatured ?? false
+    })
+
+    if (error) {
+        console.error('Error adding item to category:', error)
+        return { error: error.message }
+    }
+
+    return { success: true, data }
+}
+
+/**
+ * Remove an item from a category using the RPC function
+ */
+export async function RemoveItemFromCategory(categoryId: string, menuItemId: string) {
+    if (!categoryId || !menuItemId) {
+        return { error: 'Category ID and Menu Item ID are required' }
+    }
+
+    const supabase = createServerSupabaseClient()
+
+    const { data, error } = await supabase.rpc('remove_item_from_category', {
+        p_category_id: categoryId,
+        p_menu_item_id: menuItemId
+    })
+
+    if (error) {
+        console.error('Error removing item from category:', error)
+        return { error: error.message }
+    }
+
+    return { success: true, data }
+}
+
+// ============================================================================
+// CATEGORY ITEM PRICE OVERRIDE OPERATIONS
+// ============================================================================
+
+/**
+ * Upsert a category item override (handles L3, L4, L5 based on context)
+ */
+export async function UpsertCategoryItemOverride(
+    menuItemId: string,
+    options: {
+        categoryId?: string | null
+        menuId?: string | null
+        locationId?: string | null
+        customPrice?: number | null
+        customCashPrice?: number | null
+        isAvailable?: boolean | null
+        priceModifier?: number | null
+        priceModifierType?: 'add' | 'percent' | null
+        displayOrder?: number | null
+        isFeatured?: boolean | null
+        stockTrackingMode?: string | null
+        currentStock?: number | null
+    }
+) {
+    if (!menuItemId) {
+        return { error: 'Menu Item ID is required' }
+    }
+
+    const supabase = createServerSupabaseClient()
+
+    const { data, error } = await supabase.rpc('upsert_category_item_override', {
+        p_menu_item_id: menuItemId,
+        p_category_id: options.categoryId || null,
+        p_menu_id: options.menuId || null,
+        p_location_id: options.locationId === 'all' ? null : options.locationId || null,
+        p_custom_price: options.customPrice,
+        p_custom_cash_price: options.customCashPrice,
+        p_is_available: options.isAvailable,
+        p_price_modifier: options.priceModifier,
+        p_price_modifier_type: options.priceModifierType,
+        p_display_order: options.displayOrder,
+        p_is_featured: options.isFeatured,
+        p_stock_tracking_mode: options.stockTrackingMode,
+        p_current_stock: options.currentStock
+    })
+
+    if (error) {
+        console.error('Error upserting category item override:', error)
+        return { error: error.message }
+    }
+
+    return { success: true, data }
+}
+
+/**
+ * Reset an item to a specific price level
+ */
+export async function ResetCategoryItemToLevel(
+    menuItemId: string,
+    targetLevel: 1 | 2 | 3 | 4 | 5,
+    options?: {
+        categoryId?: string | null
+        menuId?: string | null
+        locationId?: string | null
+    }
+) {
+    if (!menuItemId) {
+        return { error: 'Menu Item ID is required' }
+    }
+
+    const supabase = createServerSupabaseClient()
+
+    const { data, error } = await supabase.rpc('reset_category_item_to_level', {
+        p_menu_item_id: menuItemId,
+        p_category_id: options?.categoryId || null,
+        p_menu_id: options?.menuId || null,
+        p_location_id: options?.locationId === 'all' ? null : options?.locationId || null,
+        p_target_level: targetLevel
+    })
+
+    if (error) {
+        console.error('Error resetting category item to level:', error)
+        return { error: error.message }
+    }
+
+    return { success: true, data }
+}
+
+// ============================================================================
+// LOCATION CATEGORY OVERRIDE OPERATIONS
+// ============================================================================
+
+/**
+ * Update location-specific category settings
+ */
+export async function UpdateLocationCategoryOverride(
+    locationId: string,
+    categoryId: string,
+    data: {
+        isActive?: boolean
+        displayOrder?: number
+        customTitle?: string
+    }
+) {
+    if (!locationId || !categoryId) {
+        return { error: 'Location ID and Category ID are required' }
+    }
+
+    const supabase = createServerSupabaseClient()
+
+    const { error } = await supabase
+        .from('location_category_overrides')
+        .upsert({
+            location_id: locationId,
+            category_id: categoryId,
+            is_active: data.isActive,
+            display_order: data.displayOrder,
+            custom_title: data.customTitle,
+            updated_at: new Date().toISOString()
+        }, {
+            onConflict: 'location_id,category_id'
+        })
+
+    if (error) {
+        console.error('Error updating location category override:', error)
+        return { error: error.message }
+    }
+
+    return { success: true }
+}
+
+/**
+ * Remove location-specific category override (revert to global)
+ */
+export async function RemoveLocationCategoryOverride(locationId: string, categoryId: string) {
+    if (!locationId || !categoryId) {
+        return { error: 'Location ID and Category ID are required' }
+    }
+
+    const supabase = createServerSupabaseClient()
+
+    const { error } = await supabase
+        .from('location_category_overrides')
+        .delete()
+        .eq('location_id', locationId)
+        .eq('category_id', categoryId)
+
+    if (error) {
+        console.error('Error removing location category override:', error)
+        return { error: error.message }
+    }
+
+    return { success: true }
+}

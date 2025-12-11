@@ -1,21 +1,17 @@
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import * as React from 'react'
 import { useMenuItem } from '../../../hooks/useMenuItem'
 import { useCategories } from '../../../hooks/useCategories'
 import { useModifierGroups } from '../../../hooks/useModifierGroups'
 import { useUserInfo } from '../../../../manage/hooks/useUserInfo.'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import {
     ArrowLeft,
     Utensils,
-    Package,
-    Settings,
-    DollarSign,
     ChefHat,
     Layers,
     Edit3,
@@ -30,12 +26,19 @@ import {
     Sparkles,
     Link as LinkIcon,
     Unlink,
+    Globe,
+    Building2,
+    Menu as MenuIcon,
+    MapPin,
+    Info,
+    RotateCcw,
+    DollarSign,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Empty } from '@/components/ui/empty'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
-import { ItemFormSheet } from '@/components/dashboard/menu/ItemFormSheet'
+import { NewEditItemFormSheet } from '@/components/dashboard/menu/NewEditItemFormSheet'
 import { ItemPreviewCard } from '@/components/dashboard/menu/ItemPreviewCard'
 import { AssignModifierToItem, RemoveModifierFromItem } from '../../../actions/item-assignments'
 import { DeleteMenuItem } from '../../../actions/menu-items'
@@ -50,6 +53,331 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { useLocationStore, useIsAllLocations } from '@/stores/location-store'
+import { LocationLibraryItem } from '@/types/menu'
+
+// ============================================================================
+// TYPES & HELPERS
+// ============================================================================
+
+type EditingContext = {
+    level: 1 | 2 | 3 | 4 | 5
+    table: string
+    description: string
+    canEditBaseFields: boolean
+    priceLabel: string
+    resetToLevel: 1 | 2 | 3 | null
+    resetLabel: string | null
+}
+
+const LEVEL_INFO = {
+    1: {
+        name: 'Global Base',
+        icon: Globe,
+        color: 'text-emerald-600',
+        bgColor: 'bg-emerald-50',
+        borderColor: 'border-emerald-200',
+        description: 'Base item price that applies everywhere by default.',
+        affects: 'All locations and all menus',
+    },
+    2: {
+        name: 'Location Override',
+        icon: Building2,
+        color: 'text-blue-600',
+        bgColor: 'bg-blue-50',
+        borderColor: 'border-blue-200',
+        description: 'Location-specific base price that overrides the global price.',
+        affects: 'All menus at this location',
+    },
+    3: {
+        name: 'Menu Override',
+        icon: MenuIcon,
+        color: 'text-purple-600',
+        bgColor: 'bg-purple-50',
+        borderColor: 'border-purple-200',
+        description: 'Menu-specific price that applies when this menu is used.',
+        affects: 'This menu at all locations',
+    },
+    4: {
+        name: 'Location + Menu',
+        icon: MapPin,
+        color: 'text-orange-600',
+        bgColor: 'bg-orange-50',
+        borderColor: 'border-orange-200',
+        description: 'Price specific to this menu at this location only.',
+        affects: 'This menu at this location only',
+    },
+    5: {
+        name: 'Location Menu Owner',
+        icon: Sparkles,
+        color: 'text-pink-600',
+        bgColor: 'bg-pink-50',
+        borderColor: 'border-pink-200',
+        description: 'This is your location\'s own menu - you have full control.',
+        affects: 'Your menu at your location',
+    },
+} as const
+
+function getEditingContext(isAllLocations: boolean): EditingContext {
+    // Items Library + All Locations = Level 1 (Global Base)
+    if (isAllLocations) {
+        return {
+            level: 1,
+            table: 'menu_items',
+            description: 'Viewing global item. Changes affect all locations and menus.',
+            canEditBaseFields: true,
+            priceLabel: 'Base Price',
+            resetToLevel: null,
+            resetLabel: null,
+        }
+    }
+
+    // Items Library + Location Selected = Level 2 (Location Item Override)
+    return {
+        level: 2,
+        table: 'location_item_overrides',
+        description: 'Viewing location pricing. This price applies to ALL menus at this location.',
+        canEditBaseFields: false,
+        priceLabel: 'Location Base Price',
+        resetToLevel: 1,
+        resetLabel: 'Reset to Global',
+    }
+}
+
+// ============================================================================
+// CONTEXT INDICATOR COMPONENT
+// ============================================================================
+
+function EditingContextIndicator({ context, locationName }: { context: EditingContext, locationName: string }) {
+    const levelInfo = LEVEL_INFO[context.level]
+    const Icon = levelInfo.icon
+
+    return (
+        <TooltipProvider delayDuration={100}>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <div
+                        className={cn(
+                            "flex items-center gap-2 px-3 py-2 rounded-lg border transition-all cursor-help hover:shadow-sm",
+                            levelInfo.bgColor,
+                            levelInfo.borderColor,
+                            levelInfo.color
+                        )}
+                    >
+                        <Icon className="h-4 w-4" />
+                        <span className="text-sm font-medium">
+                            {levelInfo.name}
+                        </span>
+                        <Info className="h-3.5 w-3.5 opacity-60" />
+                    </div>
+                </TooltipTrigger>
+                <TooltipContent
+                    side="bottom"
+                    align="start"
+                    className="w-80 p-4 bg-background border rounded-lg shadow-xl"
+                    sideOffset={8}
+                >
+                    <div className="space-y-3">
+                        {/* Header */}
+                        <div className="flex items-center gap-3">
+                            <div className={cn(
+                                "h-9 w-9 rounded-lg flex items-center justify-center shrink-0",
+                                levelInfo.bgColor
+                            )}>
+                                <Icon className={cn("h-4 w-4", levelInfo.color)} />
+                            </div>
+                            <div>
+                                <h4 className="font-semibold text-sm text-foreground">{levelInfo.name}</h4>
+                                <p className="text-xs text-muted-foreground">Level {context.level} Pricing</p>
+                            </div>
+                        </div>
+
+                        {/* Description */}
+                        <p className="text-sm text-muted-foreground">
+                            {levelInfo.description}
+                        </p>
+
+                        {/* Affects */}
+                        <div className="rounded-lg bg-muted/50 p-2.5">
+                            <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Currently viewing:</p>
+                            <p className="text-xs font-medium text-foreground">{locationName}</p>
+                        </div>
+
+                        {/* Price Hierarchy - Compact */}
+                        <div className="space-y-1.5">
+                            <p className="text-[11px] font-medium text-muted-foreground">Price Hierarchy:</p>
+                            <div className="flex flex-wrap gap-1">
+                                {[1, 2, 3, 4, 5].map((level) => {
+                                    const info = LEVEL_INFO[level as keyof typeof LEVEL_INFO]
+                                    const LevelIcon = info.icon
+                                    const isCurrentLevel = level === context.level
+
+                                    return (
+                                        <div
+                                            key={level}
+                                            className={cn(
+                                                "flex items-center gap-1 px-2 py-1 rounded text-[10px]",
+                                                isCurrentLevel
+                                                    ? cn(info.bgColor, info.borderColor, "border", info.color, "font-medium")
+                                                    : "bg-muted/30 text-muted-foreground"
+                                            )}
+                                        >
+                                            <LevelIcon className="h-3 w-3" />
+                                            <span>{level}</span>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                </TooltipContent>
+            </Tooltip>
+        </TooltipProvider>
+    )
+}
+
+// ============================================================================
+// PRICE BREAKDOWN COMPONENT
+// ============================================================================
+
+interface PriceBreakdownProps {
+    item: LocationLibraryItem
+    isAllLocations: boolean
+    currentLocationName: string
+}
+
+function PriceBreakdown({ item, isAllLocations, currentLocationName }: PriceBreakdownProps) {
+    const basePrice = item.base_price
+    const baseCashPrice = item.base_cash_price
+
+    // Check for location overrides from menu_item data
+    const hasLocationOverride = item.location_override ? true : false
+    const locationOverride = hasLocationOverride ? item.location_override : null
+
+    // Effective price calculation
+    const effectivePrice = locationOverride?.custom_price ?? basePrice
+    const effectiveCashPrice = locationOverride?.custom_cash_price ?? baseCashPrice
+
+    return (
+        <Card>
+            <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <DollarSign className="h-4 w-4 text-green-500" />
+                    Price Hierarchy
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+                {/* Level 1 - Global Base */}
+                <div className={cn(
+                    "flex items-center justify-between p-3 rounded-lg border",
+                    isAllLocations ? "bg-emerald-50 border-emerald-200" : "bg-muted/30"
+                )}>
+                    <div className="flex items-center gap-2">
+                        <div className={cn(
+                            "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium",
+                            isAllLocations ? "bg-emerald-500 text-white" : "bg-muted"
+                        )}>
+                            1
+                        </div>
+                        <Globe className="h-4 w-4 text-emerald-600" />
+                        <span className="text-sm font-medium">Global Base</span>
+                        {isAllLocations && (
+                            <Badge variant="secondary" className="text-xs">Active</Badge>
+                        )}
+                    </div>
+                    <div className="text-right">
+                        <div className={cn("font-semibold", isAllLocations && "text-emerald-600")}>
+                            ${basePrice?.toFixed(2)}
+                        </div>
+                        {baseCashPrice && (
+                            <div className="text-xs text-muted-foreground">
+                                Cash: ${baseCashPrice.toFixed(2)}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Level 2 - Location Override */}
+                {!isAllLocations && (
+                    <div className={cn(
+                        "flex items-center justify-between p-3 rounded-lg border",
+                        hasLocationOverride ? "bg-blue-50 border-blue-200" : "bg-muted/30 border-dashed"
+                    )}>
+                        <div className="flex items-center gap-2">
+                            <div className={cn(
+                                "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium",
+                                hasLocationOverride ? "bg-blue-500 text-white" : "bg-muted"
+                            )}>
+                                2
+                            </div>
+                            <Building2 className="h-4 w-4 text-blue-600" />
+                            <div>
+                                <span className="text-sm font-medium">Location Override</span>
+                                <p className="text-xs text-muted-foreground">{currentLocationName}</p>
+                            </div>
+                            {hasLocationOverride && (
+                                <Badge variant="outline" className="text-xs bg-blue-50 text-blue-600 border-blue-200">
+                                    Override Active
+                                </Badge>
+                            )}
+                        </div>
+                        <div className="text-right">
+                            {hasLocationOverride ? (
+                                <>
+                                    <div className="font-semibold text-blue-600">
+                                        ${locationOverride?.custom_price?.toFixed(2)}
+                                    </div>
+                                    {locationOverride?.custom_cash_price && (
+                                        <div className="text-xs text-muted-foreground">
+                                            Cash: ${locationOverride?.custom_cash_price.toFixed(2)}
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <span className="text-sm text-muted-foreground">No override</span>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Effective Price */}
+                <div className="pt-3 border-t">
+                    <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Effective Price</span>
+                        <div className="text-right">
+                            <span className="text-xl font-bold text-green-600">
+                                ${effectivePrice?.toFixed(2)}
+                            </span>
+                            {effectiveCashPrice && (
+                                <div className="text-xs text-muted-foreground">
+                                    Cash: ${effectiveCashPrice.toFixed(2)}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    {!isAllLocations && hasLocationOverride && basePrice !== effectivePrice && (
+                        <div className="mt-2 flex items-center gap-1 text-xs text-blue-600">
+                            <Info className="h-3 w-3" />
+                            <span>
+                                {effectivePrice < basePrice ? 'Discounted' : 'Increased'} by ${Math.abs(effectivePrice - basePrice).toFixed(2)} at this location
+                            </span>
+                        </div>
+                    )}
+                </div>
+            </CardContent>
+        </Card>
+    )
+}
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
 
 export default function MenuItemDetailPage() {
     const params = useParams()
@@ -64,12 +392,27 @@ export default function MenuItemDetailPage() {
     const { data: allCategories } = useCategories(clerkOrgId || '')
     const { data: allModifierGroups } = useModifierGroups(clerkOrgId)
 
-    const [expandedModifiers, setExpandedModifiers] = useState<Record<string, boolean>>({})
-    const [isEditSheetOpen, setIsEditSheetOpen] = useState(false)
-    const [linkingModifier, setLinkingModifier] = useState(false)
-    const [unlinkingModifier, setUnlinkingModifier] = useState<any>(null)
-    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-    const [isDeleting, setIsDeleting] = useState(false)
+    // Location context
+    const { selectedLocationId, locations } = useLocationStore()
+    const isAllLocations = useIsAllLocations()
+
+    const currentLocationName = React.useMemo(() => {
+        if (isAllLocations) return 'All Locations'
+        const location = locations.find(l => l.id === selectedLocationId)
+        return location?.name || 'Unknown Location'
+    }, [isAllLocations, selectedLocationId, locations])
+
+    const editingContext = React.useMemo(() =>
+        getEditingContext(isAllLocations),
+        [isAllLocations]
+    )
+
+    const [expandedModifiers, setExpandedModifiers] = React.useState<Record<string, boolean>>({})
+    const [isEditSheetOpen, setIsEditSheetOpen] = React.useState(false)
+    const [linkingModifier, setLinkingModifier] = React.useState(false)
+    const [unlinkingModifier, setUnlinkingModifier] = React.useState<any>(null)
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false)
+    const [isDeleting, setIsDeleting] = React.useState(false)
 
     const toggleModifierExpand = (modifierId: string) => {
         setExpandedModifiers(prev => ({ ...prev, [modifierId]: !prev[modifierId] }))
@@ -108,17 +451,17 @@ export default function MenuItemDetailPage() {
         )
     }
 
-    const menuItem = item as any
-    const categories = menuItem.menu_item_categories || []
-    const modifierGroups = menuItem.menu_item_modifier_groups || []
-    const recipes = menuItem.menu_item_recipes || []
-    const menus = menuItem.menu_item_menus || []
+    const menuItem = item as LocationLibraryItem
+    const categories = menuItem.categories || []
+    const modifierGroups = menuItem.modifier_groups || []
+    const recipes = menuItem?.recipes || []
+    const menus = menuItem?.menus || []
 
     const allCategoriesList = Array.isArray(allCategories) ? allCategories : []
     const allModifierGroupsList = Array.isArray(allModifierGroups) ? allModifierGroups : []
 
     // Find unlinked modifier groups (ones not already assigned to this item)
-    const linkedModifierIds = modifierGroups.map((mg: any) => mg.modifier_group?.id)
+    const linkedModifierIds = modifierGroups.map((mg) => mg?.id)
     const unlinkedModifierGroups = allModifierGroupsList.filter(
         mg => !linkedModifierIds.includes(mg.id)
     )
@@ -127,9 +470,7 @@ export default function MenuItemDetailPage() {
         try {
             const result = await AssignModifierToItem(itemId, modifierGroupId)
             if (result.error) {
-                toast.error('Link Failed', {
-                    description: result.error
-                })
+                toast.error('Link Failed', { description: result.error })
                 return
             }
             toast.success('Modifier Linked', {
@@ -150,9 +491,7 @@ export default function MenuItemDetailPage() {
         try {
             const result = await RemoveModifierFromItem(itemId, unlinkingModifier.modifier_group?.id)
             if (result.error) {
-                toast.error('Unlink Failed', {
-                    description: result.error
-                })
+                toast.error('Unlink Failed', { description: result.error })
                 return
             }
             toast.success('Modifier Unlinked', {
@@ -173,9 +512,7 @@ export default function MenuItemDetailPage() {
         try {
             const result = await DeleteMenuItem(itemId)
             if (result.error) {
-                toast.error('Delete Failed', {
-                    description: result.error
-                })
+                toast.error('Delete Failed', { description: result.error })
                 return
             }
             toast.success('Item Deleted', {
@@ -193,8 +530,41 @@ export default function MenuItemDetailPage() {
         }
     }
 
+    const levelInfo = LEVEL_INFO[editingContext.level]
+    const LevelIcon = levelInfo.icon
+
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
+            {/* Context Banner */}
+            <div className={cn(
+                "rounded-lg border p-4 flex items-center justify-between gap-4",
+                levelInfo.bgColor,
+                levelInfo.borderColor
+            )}>
+                <div className="flex items-center gap-3">
+                    <div className={cn(
+                        "h-10 w-10 rounded-lg flex items-center justify-center",
+                        "bg-white/80 backdrop-blur"
+                    )}>
+                        <LevelIcon className={cn("h-5 w-5", levelInfo.color)} />
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h3 className={cn("font-semibold", levelInfo.color)}>
+                                {isAllLocations ? 'Global View' : `Location: ${currentLocationName}`}
+                            </h3>
+                            <Badge variant="outline" className={cn("text-xs", levelInfo.borderColor, levelInfo.color)}>
+                                Level {editingContext.level}
+                            </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                            {editingContext.description}
+                        </p>
+                    </div>
+                </div>
+                <EditingContextIndicator context={editingContext} locationName={currentLocationName} />
+            </div>
+
             {/* Breadcrumb & Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -217,8 +587,8 @@ export default function MenuItemDetailPage() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Badge variant={menuItem.availability ? "default" : "secondary"} className="h-7">
-                        {menuItem.availability ? (
+                    <Badge variant={menuItem.effective_availability ? "default" : "secondary"} className="h-7">
+                        {menuItem.effective_availability ? (
                             <><CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Available</>
                         ) : (
                             <><XCircle className="h-3.5 w-3.5 mr-1" /> Unavailable</>
@@ -226,15 +596,17 @@ export default function MenuItemDetailPage() {
                     </Badge>
                     <Button onClick={() => setIsEditSheetOpen(true)}>
                         <Edit3 className="h-4 w-4 mr-2" />
-                        Edit Item
+                        {isAllLocations ? 'Edit Item' : 'Edit Item'}
                     </Button>
-                    <Button
-                        variant="destructive"
-                        onClick={() => setIsDeleteDialogOpen(true)}
-                    >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                    </Button>
+                    {isAllLocations && (
+                        <Button
+                            variant="destructive"
+                            onClick={() => setIsDeleteDialogOpen(true)}
+                        >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -248,7 +620,19 @@ export default function MenuItemDetailPage() {
                             <CardTitle className="flex items-center gap-2">
                                 <Sparkles className="h-5 w-5 text-primary" />
                                 Item Details
+                                {!editingContext.canEditBaseFields && (
+                                    <Badge variant="outline" className="ml-2 text-xs">
+                                        <Globe className="h-3 w-3 mr-1" />
+                                        View Only
+                                    </Badge>
+                                )}
                             </CardTitle>
+                            {!editingContext.canEditBaseFields && (
+                                <CardDescription className="text-amber-600 flex items-center gap-1">
+                                    <Info className="h-3 w-3" />
+                                    Switch to "All Locations" to edit item details
+                                </CardDescription>
+                            )}
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <div className="grid gap-6 md:grid-cols-2">
@@ -283,19 +667,6 @@ export default function MenuItemDetailPage() {
                                             <div className="text-sm">{menuItem.description}</div>
                                         </div>
                                     )}
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <div className="text-sm font-medium text-muted-foreground mb-1">Card Price</div>
-                                            <div className="text-2xl font-bold text-primary">${menuItem.price?.toFixed(2)}</div>
-                                        </div>
-                                        {menuItem.cash_price && (
-                                            <div>
-                                                <div className="text-sm font-medium text-muted-foreground mb-1">Cash Price</div>
-                                                <div className="text-2xl font-bold text-green-600">${menuItem.cash_price.toFixed(2)}</div>
-                                            </div>
-                                        )}
-                                    </div>
 
                                     {menuItem.meal_types && menuItem.meal_types.length > 0 && (
                                         <div>
@@ -340,9 +711,9 @@ export default function MenuItemDetailPage() {
                                     <p className="text-sm text-muted-foreground">No categories assigned</p>
                                 ) : (
                                     <div className="flex flex-wrap gap-2">
-                                        {categories.map((cat: any) => (
+                                        {categories.map((cat) => (
                                             <Badge key={cat.id} variant="outline" className="px-3 py-1">
-                                                {cat.category?.name}
+                                                {cat?.name}
                                             </Badge>
                                         ))}
                                     </div>
@@ -357,12 +728,9 @@ export default function MenuItemDetailPage() {
                                         Appears in {menus.length} Menu(s)
                                     </div>
                                     <div className="flex flex-wrap gap-2">
-                                        {menus.map((m: any) => (
+                                        {menus.map((m) => (
                                             <Badge key={m.id} variant="secondary">
-                                                {m.menu?.name}
-                                                {m.custom_price && (
-                                                    <span className="ml-1 text-green-600">${m.custom_price}</span>
-                                                )}
+                                                {m?.name}
                                             </Badge>
                                         ))}
                                     </div>
@@ -384,15 +752,17 @@ export default function MenuItemDetailPage() {
                                         Customization options available for this item
                                     </CardDescription>
                                 </div>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setLinkingModifier(true)}
-                                    disabled={unlinkedModifierGroups.length === 0}
-                                >
-                                    <Plus className="h-4 w-4 mr-1" />
-                                    Link Modifier
-                                </Button>
+                                {isAllLocations && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setLinkingModifier(true)}
+                                        disabled={unlinkedModifierGroups.length === 0}
+                                    >
+                                        <Plus className="h-4 w-4 mr-1" />
+                                        Link Modifier
+                                    </Button>
+                                )}
                             </div>
                         </CardHeader>
                         <CardContent>
@@ -402,23 +772,23 @@ export default function MenuItemDetailPage() {
                                     title="No modifier groups"
                                     description="Link modifier groups to let customers customize this item"
                                     action={
-                                        unlinkedModifierGroups.length > 0 ? (
+                                        isAllLocations && unlinkedModifierGroups.length > 0 ? (
                                             <Button variant="outline" onClick={() => setLinkingModifier(true)}>
                                                 <Plus className="h-4 w-4 mr-2" />
                                                 Link Modifier Group
                                             </Button>
-                                        ) : (
+                                        ) : isAllLocations ? (
                                             <Button variant="outline" onClick={() => router.push('/dashboard/menu/modifiers')}>
                                                 <Plus className="h-4 w-4 mr-2" />
                                                 Create Modifier Group
                                             </Button>
-                                        )
+                                        ) : null
                                     }
                                 />
                             ) : (
                                 <div className="space-y-3">
-                                    {modifierGroups.map((mg: any, index: number) => {
-                                        const group = mg.modifier_group
+                                    {modifierGroups.map((mg, index: number) => {
+                                        const group = mg
                                         if (!group) return null
 
                                         return (
@@ -453,9 +823,8 @@ export default function MenuItemDetailPage() {
                                                                                 {group.description}
                                                                             </div>
                                                                         )}
-                                                                        {/* Preview of options */}
                                                                         <div className="flex flex-wrap gap-1 mt-2">
-                                                                            {group.modifier_group_items?.slice(0, 4).map((opt: any) => (
+                                                                            {group.items?.slice(0, 4).map((opt) => (
                                                                                 <Badge key={opt.id} variant="outline" className="text-xs">
                                                                                     {opt.name}
                                                                                     {opt.price_modifier > 0 && (
@@ -463,9 +832,9 @@ export default function MenuItemDetailPage() {
                                                                                     )}
                                                                                 </Badge>
                                                                             ))}
-                                                                            {(group.modifier_group_items?.length || 0) > 4 && (
+                                                                            {(group.items?.length || 0) > 4 && (
                                                                                 <Badge variant="outline" className="text-xs">
-                                                                                    +{group.modifier_group_items.length - 4} more
+                                                                                    +{group.items.length - 4} more
                                                                                 </Badge>
                                                                             )}
                                                                         </div>
@@ -473,7 +842,7 @@ export default function MenuItemDetailPage() {
                                                                 </div>
                                                                 <div className="flex items-center gap-3 shrink-0">
                                                                     <div className="text-right text-sm text-muted-foreground">
-                                                                        {group.modifier_group_items?.length || 0} options
+                                                                        {group.items?.length || 0} options
                                                                     </div>
                                                                     <ChevronDown className={cn(
                                                                         "h-5 w-5 text-muted-foreground transition-transform duration-200",
@@ -486,14 +855,13 @@ export default function MenuItemDetailPage() {
 
                                                     <CollapsibleContent>
                                                         <div className="px-4 pb-4 pt-0 border-t">
-                                                            {/* Options Grid */}
                                                             <div className="mt-4 space-y-2">
                                                                 <h4 className="text-sm font-medium text-muted-foreground">
-                                                                    Options ({group.modifier_group_items?.length || 0})
+                                                                    Options ({group.items?.length || 0})
                                                                 </h4>
-                                                                {group.modifier_group_items && group.modifier_group_items.length > 0 ? (
+                                                                {group.items && group.items.length > 0 ? (
                                                                     <div className="grid gap-2 md:grid-cols-2">
-                                                                        {group.modifier_group_items.map((opt: any) => (
+                                                                        {group.items.map((opt) => (
                                                                             <div
                                                                                 key={opt.id}
                                                                                 className={cn(
@@ -531,7 +899,6 @@ export default function MenuItemDetailPage() {
                                                                 )}
                                                             </div>
 
-                                                            {/* Selection Rules */}
                                                             <div className="mt-4 p-3 rounded-lg bg-muted/30">
                                                                 <h4 className="text-sm font-medium mb-2">Selection Rules</h4>
                                                                 <div className="grid grid-cols-2 gap-4 text-sm">
@@ -546,29 +913,30 @@ export default function MenuItemDetailPage() {
                                                                 </div>
                                                             </div>
 
-                                                            {/* Actions */}
-                                                            <div className="mt-4 flex items-center gap-2">
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    onClick={() => router.push('/dashboard/menu/modifiers')}
-                                                                >
-                                                                    <Edit3 className="h-4 w-4 mr-1" />
-                                                                    Edit Group
-                                                                </Button>
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation()
-                                                                        setUnlinkingModifier(mg)
-                                                                    }}
-                                                                    className="text-destructive hover:text-destructive"
-                                                                >
-                                                                    <Unlink className="h-4 w-4 mr-1" />
-                                                                    Unlink
-                                                                </Button>
-                                                            </div>
+                                                            {isAllLocations && (
+                                                                <div className="mt-4 flex items-center gap-2">
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        onClick={() => router.push('/dashboard/menu/modifiers')}
+                                                                    >
+                                                                        <Edit3 className="h-4 w-4 mr-1" />
+                                                                        Edit Group
+                                                                    </Button>
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation()
+                                                                            setUnlinkingModifier(mg)
+                                                                        }}
+                                                                        className="text-destructive hover:text-destructive"
+                                                                    >
+                                                                        <Unlink className="h-4 w-4 mr-1" />
+                                                                        Unlink
+                                                                    </Button>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </CollapsibleContent>
                                                 </Card>
@@ -600,7 +968,7 @@ export default function MenuItemDetailPage() {
                                 />
                             ) : (
                                 <div className="space-y-2">
-                                    {recipes.map((recipe: any) => (
+                                    {recipes?.map((recipe) => (
                                         <div key={recipe.id} className="p-3 rounded-lg border bg-card">
                                             <div className="font-semibold">{recipe.recipe?.name}</div>
                                             {recipe.recipe?.description && (
@@ -623,6 +991,13 @@ export default function MenuItemDetailPage() {
 
                 {/* Right Column - Preview & Quick Info */}
                 <div className="space-y-6">
+                    {/* Price Breakdown */}
+                    <PriceBreakdown
+                        item={menuItem}
+                        isAllLocations={isAllLocations}
+                        currentLocationName={currentLocationName}
+                    />
+
                     {/* POS Preview */}
                     <Card className="sticky top-6">
                         <CardHeader>
@@ -632,11 +1007,11 @@ export default function MenuItemDetailPage() {
                             <ItemPreviewCard
                                 name={menuItem.name}
                                 description={menuItem.description || undefined}
-                                price={menuItem.price || 0}
-                                cashPrice={menuItem.cash_price || undefined}
+                                price={menuItem.effective_price || 0}
+                                cashPrice={menuItem.effective_cash_price || undefined}
                                 image={menuItem.image || undefined}
-                                categories={categories.map((c: any) => c.category?.name).filter(Boolean)}
-                                availability={menuItem.availability ?? true}
+                                categories={categories.map((c) => c.name).filter(Boolean)}
+                                availability={menuItem.effective_availability ?? menuItem.base_availability ?? true}
                             />
                         </CardContent>
                     </Card>
@@ -696,13 +1071,26 @@ export default function MenuItemDetailPage() {
             </div>
 
             {/* Edit Item Sheet */}
-            <ItemFormSheet
+            <NewEditItemFormSheet
                 open={isEditSheetOpen}
                 onOpenChange={setIsEditSheetOpen}
                 clerkOrgId={clerkOrgId}
                 categories={allCategoriesList}
                 modifierGroups={allModifierGroupsList}
-                editItem={menuItem}
+                editItem={{
+                    id: menuItem.id,
+                    name: menuItem.name,
+                    description: menuItem.description ?? undefined,
+                    price: menuItem.effective_price,
+                    cash_price: menuItem.effective_cash_price,
+                    image: menuItem.image ?? undefined,
+                    availability: menuItem.base_availability,
+                    allergens: menuItem.allergens ?? [],
+                    card_bg_color: menuItem.card_bg_color ?? undefined,
+                    stock_tracking_mode: menuItem.stock_tracking_mode,
+                    category_items: menuItem.categories,
+                    menu_item_modifier_groups: menuItem.modifier_groups,
+                }}
                 onSuccess={() => {
                     setIsEditSheetOpen(false)
                     refetch()
@@ -743,7 +1131,7 @@ export default function MenuItemDetailPage() {
                                                 )}
                                             </div>
                                             <div className="text-sm text-muted-foreground">
-                                                {group.modifier_group_items?.length || 0} options
+                                                {group?.modifier_group_items?.length || 0} options
                                             </div>
                                         </div>
                                         <LinkIcon className="h-4 w-4 text-muted-foreground" />

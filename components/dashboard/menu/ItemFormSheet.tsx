@@ -67,7 +67,13 @@ interface EditItemWithOverride {
     allergens?: string[]
     card_bg_color?: string
     stock_tracking_mode?: string
+    /** @deprecated Use category_items instead */
     menu_item_categories?: any[]
+    // Support multiple formats: full category_items from DB, or simple { id, name } from RPC
+    category_items?: Array<
+        | { category_id: string; custom_price?: number | null; category?: { id: string; name: string } }
+        | { id: string; name: string }
+    >
     menu_item_modifier_groups?: any[]
     // Location override fields
     effective_price?: number
@@ -167,9 +173,10 @@ export function ItemFormSheet({
                 card_bg_color: editItem.card_bg_color || '',
                 stock_tracking_mode: (editItem.stock_tracking_mode as 'in_stock' | 'out_of_stock' | 'quantity') || 'in_stock',
             })
-            // Set selected categories from editItem
-            if (editItem.menu_item_categories) {
-                setSelectedCategories(editItem.menu_item_categories.map((c: any) => c.category_id || c.category?.id).filter(Boolean))
+            // Set selected categories from editItem (support both old and new naming)
+            const categoryData = editItem.category_items || editItem.menu_item_categories
+            if (categoryData) {
+                setSelectedCategories(categoryData.map((c: any) => c.category_id || c.category?.id).filter(Boolean))
             }
             // Set selected modifiers from editItem
             if (editItem.menu_item_modifier_groups) {

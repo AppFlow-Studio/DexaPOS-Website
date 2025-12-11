@@ -3,7 +3,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { MenuItemsModel } from '@/types/db-modles'
 import { UpsertLocationMenuItemOverride, GetLocationMenuItemOverride, OverrideData } from './location-menu-overrides'
-
+import { LocationLibraryItem } from '@/types/menu'
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -84,58 +84,31 @@ export async function GetMenuItems(clerkOrgId: string, locationId?: string | nul
     })
 }
 
-export async function GetMenuItem(itemId: string) {
-    if (!itemId) {
-        return null
+
+export async function GetMenuItem(
+    itemId: string,
+    locationId?: string | null // Optional: Add context if known
+) {
+    if (!itemId) return null;
+
+    const Location_Id = locationId == 'all' ? null : locationId
+    const supabase = createServerSupabaseClient();
+
+    const { data, error } = await supabase.rpc('get_menu_item_details', {
+        p_item_id: itemId,
+        p_location_id: Location_Id || null
+    });
+    console.log('data', data)
+
+    if (error) {
+        console.error('Error getting menu item:', error);
+        return null;
     }
 
-    const supabase = createServerSupabaseClient()
+    if (!data) return null;
 
-    // Get menu item with all relations
-    const { data: item, error } = await supabase
-        .from('menu_items')
-        .select(`
-            *,
-            menu_item_categories(
-                id,
-                category:categories(*)
-            ),
-            menu_item_menus(
-                id,
-                menu_id,
-                custom_price,
-                custom_cash_price,
-                is_available,
-                display_order,
-                menu:menus(*)
-            ),
-            menu_item_modifier_groups(
-                id,
-                display_order,
-                modifier_group:modifier_groups(
-                    *,
-                    modifier_group_items(*)
-                )
-            ),
-            menu_item_discounts(
-                id,
-                discount:discounts(*)
-            ),
-            menu_item_recipes(
-                id,
-                quantity_multiplier,
-                recipe:recipes(*)
-            )
-        `)
-        .eq('id', itemId)
-        .single()
-
-    if (error || !item) {
-        console.error('Error getting menu item:', error)
-        return null
-    }
-
-    return item
+    // Use explicit casting to ensure type safety with your updated interfaces
+    return data as LocationLibraryItem;
 }
 
 /**
@@ -151,23 +124,20 @@ export async function GetMenuItemWithLocationContext(
 
     const supabase = createServerSupabaseClient()
 
-    // Get menu item with all relations
+    // Get menu item with all relations (using new category_items table)
     const { data: item, error } = await supabase
         .from('menu_items')
         .select(`
             *,
-            menu_item_categories(
+            category_items(
                 id,
-                category:categories(*)
-            ),
-            menu_item_menus(
-                id,
-                menu_id,
+                category_id,
+                display_order,
                 custom_price,
                 custom_cash_price,
                 is_available,
-                display_order,
-                menu:menus(*)
+                is_featured,
+                category:categories(*)
             ),
             menu_item_modifier_groups(
                 id,
@@ -228,6 +198,10 @@ export async function GetMenuItemWithLocationContext(
     }
 }
 
+/**
+ * @deprecated Use GetMenuWithCategories from menus.ts instead.
+ * Items are now accessed through categories within a menu.
+ */
 export async function GetMenuItemsByMenu(menuId: string, locationId?: string | null) {
     if (!menuId) {
         return []
@@ -235,45 +209,84 @@ export async function GetMenuItemsByMenu(menuId: string, locationId?: string | n
 
     const supabase = createServerSupabaseClient()
 
-    // Get items through menu_item_menus junction table
+    // Get items through category_items via menu_categories junction
+    // This replaces the deprecated menu_item_menus table
     const { data, error } = await supabase
-        .from('menu_item_menus')
+        .from('menu_categories')
         .select(`
             id,
-            custom_price,
-            custom_cash_price,
-            is_available,
+            category_id,
             display_order,
-            menu_item:menu_items(*)
+            category:categories(
+                id,
+                name,
+                category_items(
+                    id,
+                    menu_item_id,
+                    display_order,
+                    custom_price,
+                    custom_cash_price,
+                    is_available,
+                    is_featured,
+                    menu_item:menu_items(*)
+                )
+            )
         `)
         .eq('menu_id', menuId)
         .order('display_order', { ascending: true, nullsFirst: false })
-        .order('created_at', { ascending: false })
 
     if (error) {
         console.error('Error getting menu items by menu:', error)
         return []
     }
 
-    // Transform to return items with menu-specific pricing
-    const items = data.map((item: any) => ({
-        ...item.menu_item,
-        menu_item_menu_id: item.id,
-        custom_price: item.custom_price,
-        custom_cash_price: item.custom_cash_price,
-        is_available_in_menu: item.is_available,
-        display_order_in_menu: item.display_order,
-    }))
+    // Flatten items from all categories
+    const items: Array<MenuItemsModel & {
+        category_item_id: string
+        category_id: string
+        custom_price?: number | null
+        custom_cash_price?: number | null
+        is_available_in_menu: boolean
+        display_order_in_menu?: number
+        is_featured?: boolean
+    }> = []
+
+    for (const menuCategory of (data || [])) {
+        const category = menuCategory.category as unknown as {
+            id: string
+            name: string
+            category_items: Array<{
+                id: string
+                menu_item_id: string
+                display_order: number
+                custom_price: number | null
+                custom_cash_price: number | null
+                is_available: boolean
+                is_featured: boolean
+                menu_item: MenuItemsModel
+            }>
+        } | null
+
+        if (!category?.category_items) continue
+
+        for (const categoryItem of category.category_items) {
+            if (!categoryItem.menu_item) continue
+            items.push({
+                ...categoryItem.menu_item,
+                category_item_id: categoryItem.id,
+                category_id: category.id,
+                custom_price: categoryItem.custom_price,
+                custom_cash_price: categoryItem.custom_cash_price,
+                is_available_in_menu: categoryItem.is_available,
+                display_order_in_menu: categoryItem.display_order,
+                is_featured: categoryItem.is_featured,
+            })
+        }
+    }
 
     // If no location specified, return as is
     if (!locationId || locationId === 'all') {
-        return items as (MenuItemsModel & {
-            menu_item_menu_id: string
-            custom_price?: number
-            custom_cash_price?: number
-            is_available_in_menu: boolean
-            display_order_in_menu?: number
-        })[]
+        return items
     }
 
     // Get location overrides for these items
@@ -602,8 +615,11 @@ export async function GetMenuItemsWithCategories(clerkOrgId: string, locationId?
         .from('menu_items')
         .select(`
             *,
-            menu_item_categories(
+            category_items(
                 id,
+                category_id,
+                custom_price,
+                is_featured,
                 category:categories(
                     id,
                     name
@@ -621,8 +637,11 @@ export async function GetMenuItemsWithCategories(clerkOrgId: string, locationId?
     // If no location specified, return global items
     if (!locationId || locationId === 'all') {
         return data as (MenuItemsModel & {
-            menu_item_categories: Array<{
+            category_items: Array<{
                 id: string
+                category_id: string
+                custom_price: number | null
+                is_featured: boolean
                 category: {
                     id: string
                     name: string
@@ -674,21 +693,49 @@ export async function GetMenuItemsByCategory(categoryId: string) {
 
     const supabase = createServerSupabaseClient()
 
+    // Use new category_items table
     const { data, error } = await supabase
-        .from('menu_item_categories')
+        .from('category_items')
         .select(`
             id,
+            display_order,
+            custom_price,
+            custom_cash_price,
+            is_available,
+            is_featured,
             menu_item:menu_items(*)
         `)
         .eq('category_id', categoryId)
+        .order('display_order', { ascending: true })
 
     if (error) {
         console.error('Error getting menu items by category:', error)
         return []
     }
 
-    // Transform to return just the items
+    // Transform to return items with category context
     return data
-        .map((item: any) => item.menu_item)
-        .filter(Boolean) as MenuItemsModel[]
+        .map((item) => {
+            const menuItem = item.menu_item as unknown as MenuItemsModel | null
+            if (!menuItem) return null
+            return {
+                ...menuItem,
+                category_item_id: item.id,
+                category_custom_price: item.custom_price,
+                category_custom_cash_price: item.custom_cash_price,
+                category_is_available: item.is_available,
+                is_featured: item.is_featured,
+                display_order: item.display_order,
+            }
+        })
+        .filter((item): item is MenuItemsModel & {
+            category_item_id: string
+            category_custom_price: number | null
+            category_custom_cash_price: number | null
+            category_is_available: boolean
+            is_featured: boolean
+            display_order: number
+        } => item !== null)
 }
+
+

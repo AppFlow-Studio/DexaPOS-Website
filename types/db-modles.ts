@@ -224,6 +224,7 @@ export interface MenusModel {
     display_order: number | null
     created_at: string
     updated_at: string
+    locations?: LocationsModel | null
 }
 
 export interface CategoriesModel {
@@ -244,7 +245,12 @@ export interface MenuCategoriesModel {
     menu_id: string // FK to menus table
     category_id: string // FK to categories table
     display_order: number | null
+    is_active: boolean
+    custom_title: string | null
+    custom_subtitle: string | null
+    custom_image: string | null
     created_at: string
+    updated_at: string
 }
 
 // Menu Items Tables
@@ -265,11 +271,98 @@ export interface MenuItemsModel {
     updated_at: string
 }
 
+/** @deprecated Renamed to CategoryItemsModel - use that instead */
 export interface MenuItemCategoriesModel {
     id: string
     menu_item_id: string // FK to menu_items table
     category_id: string // FK to categories table
     created_at: string
+}
+
+// Category Items (PRIMARY item organization - renamed from menu_item_categories)
+export interface CategoryItemsModel {
+    id: string
+    category_id: string // FK to categories table
+    menu_item_id: string // FK to menu_items table
+    display_order: number
+    is_featured: boolean
+    custom_price: number | null // Category-level price override (L3)
+    custom_cash_price: number | null
+    is_available: boolean
+    created_at: string
+    updated_at: string
+}
+
+// Location Category Overrides
+export interface LocationCategoryOverridesModel {
+    id: string
+    location_id: string // FK to locations table
+    category_id: string // FK to categories table
+    is_active: boolean
+    display_order: number | null
+    custom_title: string | null
+    custom_subtitle: string | null
+    custom_image: string | null
+    created_at: string
+    updated_at: string
+}
+
+// Location Category Item Overrides (L4: Location + Category)
+export interface LocationCategoryItemOverridesModel {
+    id: string
+    location_id: string // FK to locations table
+    category_id: string // FK to categories table
+    menu_item_id: string // FK to menu_items table
+    custom_price: number | null
+    custom_cash_price: number | null
+    is_available: boolean | null
+    display_order: number | null
+    is_featured: boolean | null
+    created_at: string
+    updated_at: string
+}
+
+// Location Menu Category Overrides
+export interface LocationMenuCategoryOverridesModel {
+    id: string
+    location_id: string // FK to locations table
+    menu_id: string // FK to menus table
+    category_id: string // FK to categories table
+    is_active: boolean | null
+    display_order: number | null
+    custom_title: string | null
+    created_at: string
+    updated_at: string
+}
+
+// Location Item Overrides (L2: Location base price)
+export interface LocationItemOverridesModel {
+    id: string
+    location_id: string // FK to locations table
+    menu_item_id: string // FK to menu_items table
+    custom_price: number | null
+    custom_cash_price: number | null
+    price_modifier: number | null
+    price_modifier_type: 'add' | 'percent' | null
+    is_available: boolean
+    stock_tracking_mode: 'in_stock' | 'out_of_stock' | 'quantity' | 'use_default' | null
+    current_stock: number | null
+    created_at: string
+    updated_at: string
+}
+
+// Location Menu Item Overrides (L5: Location + Menu + Category)
+export interface LocationMenuItemOverridesModel {
+    id: string
+    location_id: string // FK to locations table
+    menu_id: string // FK to menus table
+    category_id: string | null // FK to categories table (added for category-centric)
+    menu_item_id: string // FK to menu_items table
+    custom_price: number | null
+    custom_cash_price: number | null
+    is_available: boolean
+    created_at: string
+    updated_at: string
 }
 
 export interface MenuItemMenusModel {

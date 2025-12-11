@@ -3,31 +3,20 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Utensils, Plus, Search, Grid3x3, List, Filter, MoreVertical, Edit, Trash2, Eye } from 'lucide-react'
+import { Utensils, Plus, Search, Grid3x3, List } from 'lucide-react'
 import { useState } from 'react'
 import { useMenus } from '../hooks/useMenus'
 import { useUserInfo } from '../../manage/hooks/useUserInfo.'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { toast } from 'sonner'
-import { Empty } from '@/components/ui/empty'
-import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { CreateMenu, ToggleMenuActive, DeleteMenu } from '../actions/menus'
-import { MenusModel } from '@/types/db-modles'
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+import { MenuListView, MenuWithLocation } from '@/components/dashboard/menu/MenuListView'
+import { useLocationStore } from '@/stores/location-store'
 
 const menuSchema = z.object({
     name: z.string().min(2, "Menu name must be at least 2 characters").max(100, "Menu name must be less than 100 characters"),
@@ -40,25 +29,25 @@ type MenuFormValues = z.infer<typeof menuSchema>
 export default function MenuPage() {
     const { data: userInfo } = useUserInfo()
     const clerkOrgId = userInfo?.members?.[0]?.organizations?.id
-    const router = useRouter()
     const queryClient = useQueryClient()
 
-    // Get selected location from localStorage
-    const [selectedLocationId] = useState<string | null>(() => {
-        if (typeof window !== 'undefined') {
-            const stored = localStorage.getItem('selectedLocationId')
-            return stored === 'all' ? null : stored
-        }
-        return null
-    })
+    // Get selected location from localStorage - null means get all menus
+    // const [selectedLocationId] = useState<string | null>(() => {
+    //     if (typeof window !== 'undefined') {
+    //         const stored = localStorage.getItem('selectedLocationId')
+    //         return stored === 'all' ? null : stored
+    //     }
+    //     return null
+    // })
+    const { selectedLocationId } = useLocationStore()
 
     const { data: menus, isLoading, refetch } = useMenus(clerkOrgId || '', selectedLocationId)
     const [searchTerm, setSearchTerm] = useState('')
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
     const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-    const [editingMenu, setEditingMenu] = useState<MenusModel | null>(null)
 
-    const menusList = Array.isArray(menus) ? menus : []
+    // Cast menus to include location info
+    const menusList = (Array.isArray(menus) ? menus : []) as MenuWithLocation[]
     const filteredMenus = menusList.filter(menu =>
         menu.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         menu.description?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -66,6 +55,8 @@ export default function MenuPage() {
 
     const activeMenus = menusList.filter(m => m.is_active).length
     const inactiveMenus = menusList.filter(m => !m.is_active).length
+    const globalMenus = menusList.filter(m => !m.location_id).length
+    const locationMenus = menusList.filter(m => m.location_id).length
 
     const form = useForm<MenuFormValues>({
         resolver: zodResolver(menuSchema),
@@ -83,6 +74,7 @@ export default function MenuPage() {
                 description: values.description,
                 location_id: selectedLocationId,
                 is_active: values.is_active,
+                created_by: userInfo?.first_name + ' ' + userInfo?.last_name,
             })
 
             if (result.error) {
@@ -153,7 +145,6 @@ export default function MenuPage() {
 
     const handleDialogClose = () => {
         setIsCreateDialogOpen(false)
-        setEditingMenu(null)
         form.reset()
     }
 
@@ -169,7 +160,6 @@ export default function MenuPage() {
                 <Dialog open={isCreateDialogOpen} onOpenChange={(open) => {
                     setIsCreateDialogOpen(open)
                     if (!open) {
-                        setEditingMenu(null)
                         form.reset()
                     }
                 }}>
@@ -229,7 +219,7 @@ export default function MenuPage() {
             </div>
 
             {/* Stats Overview */}
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-4">
                 <Card className="transition-all hover:shadow-md">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Menus</CardTitle>
@@ -244,7 +234,7 @@ export default function MenuPage() {
                 </Card>
                 <Card className="transition-all hover:shadow-md">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active Menus</CardTitle>
+                        <CardTitle className="text-sm font-medium">Active</CardTitle>
                         <Utensils className="h-4 w-4 text-green-500" />
                     </CardHeader>
                     <CardContent>
@@ -256,13 +246,25 @@ export default function MenuPage() {
                 </Card>
                 <Card className="transition-all hover:shadow-md">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Inactive Menus</CardTitle>
-                        <Utensils className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-sm font-medium">Global</CardTitle>
+                        <Utensils className="h-4 w-4 text-emerald-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{inactiveMenus}</div>
+                        <div className="text-2xl font-bold text-emerald-600">{globalMenus}</div>
                         <p className="text-xs text-muted-foreground">
-                            Currently inactive
+                            Merchant-wide menus
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card className="transition-all hover:shadow-md">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Location-Specific</CardTitle>
+                        <Utensils className="h-4 w-4 text-blue-500" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-blue-600">{locationMenus}</div>
+                        <p className="text-xs text-muted-foreground">
+                            Location menus
                         </p>
                     </CardContent>
                 </Card>
@@ -308,179 +310,22 @@ export default function MenuPage() {
                     </div>
                 </CardHeader>
                 <CardContent>
-                    {isLoading ? (
-                        <div className={viewMode === 'grid' ? 'grid gap-4 md:grid-cols-2 lg:grid-cols-3' : 'space-y-3'}>
-                            {[1, 2, 3, 4, 5, 6].map((i) => (
-                                <Skeleton key={i} className={viewMode === 'grid' ? 'h-48' : 'h-16'} />
-                            ))}
-                        </div>
-                    ) : filteredMenus.length === 0 ? (
-                        <Empty
-                            icon={Utensils}
-                            title={menusList.length === 0 ? "No menus yet" : "No menus found"}
-                            description={
-                                menusList.length === 0
-                                    ? "Get started by creating your first menu"
-                                    : "Try adjusting your search terms"
-                            }
-                            action={
-                                menusList.length === 0 ? (
-                                    <Button onClick={() => setIsCreateDialogOpen(true)}>
-                                        <Plus className="h-4 w-4 mr-2" />
-                                        Create Menu
-                                    </Button>
-                                ) : null
-                            }
-                        />
-                    ) : viewMode === 'grid' ? (
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                            {filteredMenus.map((menu, index) => (
-                                <Card
-                                    key={menu.id}
-                                    className="group transition-all hover:shadow-lg hover:scale-[1.02] cursor-pointer animate-in fade-in slide-in-from-bottom-4"
-                                    style={{ animationDelay: `${index * 50}ms` }}
-                                    onClick={() => router.push(`/dashboard/menu/${menu.id}`)}
-                                >
-                                    <CardHeader>
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex-1">
-                                                <CardTitle className="group-hover:text-primary transition-colors">
-                                                    {menu.name}
-                                                </CardTitle>
-                                                {menu.description && (
-                                                    <CardDescription className="mt-1 line-clamp-2">
-                                                        {menu.description}
-                                                    </CardDescription>
-                                                )}
-                                            </div>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                        <MoreVertical className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                    <DropdownMenuSeparator />
-                                                    <DropdownMenuItem onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        router.push(`/dashboard/menu/${menu.id}`)
-                                                    }}>
-                                                        <Eye className="mr-2 h-4 w-4" />
-                                                        View Details
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        handleToggleActive(menu.id)
-                                                    }}>
-                                                        {menu.is_active ? 'Deactivate' : 'Activate'}
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuSeparator />
-                                                    <DropdownMenuItem
-                                                        onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            handleDelete(menu.id)
-                                                        }}
-                                                        className="text-destructive"
-                                                    >
-                                                        <Trash2 className="mr-2 h-4 w-4" />
-                                                        Delete
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </div>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="flex items-center justify-between">
-                                            <Badge variant={menu.is_active ? "default" : "secondary"}>
-                                                {menu.is_active ? 'Active' : 'Inactive'}
-                                            </Badge>
-                                            <span className="text-sm text-muted-foreground">
-                                                {new Date(menu.created_at).toLocaleDateString()}
-                                            </span>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="space-y-2">
-                            {filteredMenus.map((menu, index) => (
-                                <Card
-                                    key={menu.id}
-                                    className="group transition-all hover:shadow-md cursor-pointer animate-in fade-in slide-in-from-left-4"
-                                    style={{ animationDelay: `${index * 50}ms` }}
-                                    onClick={() => router.push(`/dashboard/menu/${menu.id}`)}
-                                >
-                                    <CardContent className="p-4">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-4 flex-1">
-                                                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                                                    <Utensils className="h-6 w-6 text-primary" />
-                                                </div>
-                                                <div className="flex-1">
-                                                    <div className="font-semibold group-hover:text-primary transition-colors">
-                                                        {menu.name}
-                                                    </div>
-                                                    {menu.description && (
-                                                        <div className="text-sm text-muted-foreground line-clamp-1">
-                                                            {menu.description}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-4">
-                                                <Badge variant={menu.is_active ? "default" : "secondary"}>
-                                                    {menu.is_active ? 'Active' : 'Inactive'}
-                                                </Badge>
-                                                <span className="text-sm text-muted-foreground">
-                                                    {new Date(menu.created_at).toLocaleDateString()}
-                                                </span>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                            <MoreVertical className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                        <DropdownMenuSeparator />
-                                                        <DropdownMenuItem onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            router.push(`/dashboard/menu/${menu.id}`)
-                                                        }}>
-                                                            <Eye className="mr-2 h-4 w-4" />
-                                                            View Details
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            handleToggleActive(menu.id)
-                                                        }}>
-                                                            {menu.is_active ? 'Deactivate' : 'Activate'}
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuSeparator />
-                                                        <DropdownMenuItem
-                                                            onClick={(e) => {
-                                                                e.stopPropagation()
-                                                                handleDelete(menu.id)
-                                                            }}
-                                                            className="text-destructive"
-                                                        >
-                                                            <Trash2 className="mr-2 h-4 w-4" />
-                                                            Delete
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-                    )}
+                    <MenuListView
+                        menus={filteredMenus}
+                        isLoading={isLoading}
+                        viewMode={viewMode}
+                        onToggleActive={handleToggleActive}
+                        onDelete={handleDelete}
+                        onCreateNew={() => setIsCreateDialogOpen(true)}
+                        emptyStateTitle={menusList.length === 0 ? "No menus yet" : "No menus found"}
+                        emptyStateDescription={
+                            menusList.length === 0
+                                ? "Get started by creating your first menu"
+                                : "Try adjusting your search terms"
+                        }
+                    />
                 </CardContent>
             </Card>
         </div>
     )
 }
-

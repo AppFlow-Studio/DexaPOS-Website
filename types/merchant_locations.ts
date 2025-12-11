@@ -862,3 +862,66 @@ export const DEFAULT_BUSINESS_HOURS: BusinessHours = {
   saturday: { open: '10:00', close: '22:00', is_closed: false },
   sunday: { open: '10:00', close: '20:00', is_closed: false },
 };
+
+// 1. Enums/Unions for fixed values
+export type PriceModifierType = 'absolute' | 'percentage'; // Adjust based on your specific DB enum
+
+// 2. Sub-interfaces for nested objects
+export interface ItemCategory {
+  id: string; // UUID
+  name: string;
+}
+
+export interface LocationOverrideDetails {
+  id: string; // UUID
+  custom_price: number | null;
+  custom_cash_price: number | null;
+  price_modifier: number | null;
+  price_modifier_type: PriceModifierType | null;
+  is_available: boolean;
+  stock_tracking_mode: StockTrackingMode;
+  current_stock: number | null;
+  low_stock_threshold: number | null;
+}
+
+// 3. Main Return Type
+export interface LocationItem {
+  // Identity & Meta
+  id: string; // UUID
+  name: string;
+  description: string | null;
+  image: string | null;
+  card_bg_color: string | null;
+  
+  // Arrays (Postgres Arrays return as string[] in JSON)
+  meal_types: string[] | null; 
+  allergens: string[] | null;
+
+  // Stock Logic
+  stock_tracking_mode: StockTrackingMode;
+
+  // Base Level (Level 1)
+  base_price: number;
+  base_cash_price: number | null;
+  base_availability: boolean;
+
+  // Override Level (Level 2) - Nullable if no override exists
+  location_override: LocationOverrideDetails | null;
+
+  // Effective Values (What the UI should display)
+  effective_price: number;
+  effective_cash_price: number | null;
+  effective_availability: boolean;
+
+  // UI Flags & Metadata
+  has_location_override: boolean;
+  price_source: 'base' | 'location_override';
+  
+  // Relations
+  categories: ItemCategory[];
+  menu_count: number;
+
+  // Timestamps
+  created_at: string; // ISO 8601 String
+  updated_at: string; // ISO 8601 String
+}
