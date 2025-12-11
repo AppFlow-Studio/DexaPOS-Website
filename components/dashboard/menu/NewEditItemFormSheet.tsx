@@ -56,6 +56,7 @@ import { CategoriesModel, ModifierGroupsModel, ModifierGroupItemsModel } from '@
 import { useLocationStore, useIsAllLocations } from '@/stores/location-store'
 import ModifierItemRow, { ExtendedModifierItem } from './ModifierItemRow'
 import { LocationLibraryItem, ModifierGroup, ModifierItem } from '@/types/menu'
+import { LevelIndicator, EditingContextBanner, getEditingLevel, type PricingLevel } from './LevelIndicator'
 
 // ============================================================================
 // TYPES
@@ -798,6 +799,8 @@ export function NewEditItemFormSheet({
                     availability: values.availability,
                 }
 
+                console.log('updateParams NEW EDIT ITEM FORM SHEET', updateParams)
+
                 // Only include base fields if we can edit them (Level 1)
                 if (editingContext.canEditBaseFields) {
                     updateParams.name = values.name
@@ -1047,6 +1050,17 @@ export function NewEditItemFormSheet({
                     <div className="flex flex-col lg:flex-row h-full">
                         {/* Form Section */}
                         <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-4">
+                            {/* Editing Context Banner - Shows which level user is editing */}
+                            {editItem && editingContext.level > 1 && (
+                                <EditingContextBanner
+                                    level={editingContext.level as PricingLevel}
+                                    locationName={!isAllLocations ? 'Current Location' : undefined}
+                                    categoryName={categoryId ? categories.find(c => c.id === categoryId)?.name : undefined}
+                                    menuName={menuId ? 'Current Menu' : undefined}
+                                    className="mb-4"
+                                />
+                            )}
+
                             <Form {...form}>
                                 <form id="item-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
 
@@ -1252,48 +1266,97 @@ export function NewEditItemFormSheet({
                                         </CollapsibleContent>
                                     </Collapsible>
 
-                                    {/* Categories Section */}
-                                    <Collapsible open={expandedSections.categories} onOpenChange={() => toggleSection('categories')}>
+                                    {/* Categories Section - More Prominent for New Items */}
+                                    <Collapsible
+                                        open={expandedSections.categories}
+                                        onOpenChange={() => toggleSection('categories')}
+                                        defaultOpen={!editItem} // Open by default for new items
+                                    >
                                         <CollapsibleTrigger asChild>
                                             <button
                                                 type="button"
-                                                className="flex items-center justify-between w-full p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                                                className={cn(
+                                                    "flex items-center justify-between w-full p-3 rounded-lg transition-colors",
+                                                    !editItem && selectedCategories.length === 0
+                                                        ? "bg-amber-50 border border-amber-200 hover:bg-amber-100" // Highlight when no category selected for new items
+                                                        : "bg-muted/50 hover:bg-muted"
+                                                )}
                                             >
                                                 <span className="text-sm font-semibold flex items-center gap-2">
-                                                    <Tag className="h-4 w-4 text-blue-500" />
+                                                    <Tag className={cn(
+                                                        "h-4 w-4",
+                                                        !editItem && selectedCategories.length === 0 ? "text-amber-600" : "text-blue-500"
+                                                    )} />
                                                     Categories
-                                                    {selectedCategories.length > 0 && (
+                                                    {selectedCategories.length > 0 ? (
                                                         <Badge variant="secondary" className="ml-2">{selectedCategories.length}</Badge>
+                                                    ) : !editItem && (
+                                                        <Badge variant="outline" className="ml-2 text-amber-600 border-amber-300">Select at least one</Badge>
                                                     )}
                                                 </span>
                                                 {expandedSections.categories ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                                             </button>
                                         </CollapsibleTrigger>
                                         <CollapsibleContent className="pt-4 space-y-3">
+                                            {/* Suggestion for new items */}
+                                            {!editItem && selectedCategories.length === 0 && categories.length > 0 && (
+                                                <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
+                                                    <Info className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                                                    <div className="space-y-1">
+                                                        <p className="text-amber-800 font-medium">Select a category for your item</p>
+                                                        <p className="text-amber-700 text-xs">
+                                                            Categories help organize your menu. Items without a category will be placed in "Uncategorized".
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             {categories.length === 0 ? (
-                                                <div className="text-center py-4 text-muted-foreground text-sm">
-                                                    No categories available. Create categories first.
+                                                <div className="text-center py-6 text-muted-foreground text-sm border border-dashed rounded-lg">
+                                                    <Tag className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                                    <p>No categories available</p>
+                                                    <p className="text-xs mt-1">Create categories first to organize your menu items.</p>
                                                 </div>
                                             ) : (
-                                                <div className="flex flex-wrap gap-2">
-                                                    {categories.map((category) => (
-                                                        <button
-                                                            key={category.id}
-                                                            type="button"
-                                                            onClick={() => toggleCategory(category.id)}
-                                                            disabled={!editingContext.canEditBaseFields && !!editItem}
-                                                            className={cn(
-                                                                "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
-                                                                "border hover:scale-105 active:scale-95",
-                                                                "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
-                                                                selectedCategories.includes(category.id)
-                                                                    ? "bg-primary text-primary-foreground border-primary shadow-md"
-                                                                    : "bg-background border-border hover:border-primary/50"
-                                                            )}
-                                                        >
-                                                            {category.name}
-                                                        </button>
-                                                    ))}
+                                                <div className="space-y-3">
+                                                    {/* Category grid */}
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {categories.map((category) => (
+                                                            <button
+                                                                key={category.id}
+                                                                type="button"
+                                                                onClick={() => toggleCategory(category.id)}
+                                                                disabled={!editingContext.canEditBaseFields && !!editItem}
+                                                                className={cn(
+                                                                    "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
+                                                                    "border hover:scale-105 active:scale-95",
+                                                                    "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
+                                                                    selectedCategories.includes(category.id)
+                                                                        ? "bg-primary text-primary-foreground border-primary shadow-md"
+                                                                        : "bg-background border-border hover:border-primary/50"
+                                                                )}
+                                                            >
+                                                                {category.name}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+
+                                                    {/* Skip option for new items */}
+                                                    {!editItem && (
+                                                        <div className="pt-2 border-t">
+                                                            <button
+                                                                type="button"
+                                                                className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                                                                onClick={() => {
+                                                                    // Clear all categories - item will go to "Uncategorized"
+                                                                    setSelectedCategories([])
+                                                                }}
+                                                            >
+                                                                <X className="h-3 w-3" />
+                                                                Skip - Add to "Uncategorized"
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
                                         </CollapsibleContent>
@@ -1321,7 +1384,6 @@ export function NewEditItemFormSheet({
                                                 // Get enriched selected groups from editItem (has location-specific overrides)
                                                 // These contain the actual modifier items with their current prices/availability
                                                 const itemModifierGroups = editItem?.menu_item_modifier_groups || []
-                                                console.log('itemModifierGroups NEW EDIT ITEM FORM SHEET', itemModifierGroups)
                                                 // Build selected groups with enriched data from editItem
                                                 const selectedGroups = itemModifierGroups
                                                     .map((assignment: { modifier_group_id?: string; modifier_groups?: { id: string; name: string }; id?: string; name?: string; description?: string | null; is_required?: boolean; min_selections?: number; max_selections?: number | null; is_active?: boolean; items?: ModifierItem[] }) => {
@@ -1336,7 +1398,6 @@ export function NewEditItemFormSheet({
 
                                                         // Merge: use editItem data for modifier_group_items (has overrides),
                                                         // fallback to base group for other properties
-                                                        console.log('groupData NEW EDIT ITEM FORM SHEET', groupData.items)
                                                         return {
                                                             id: groupId,
                                                             name: groupData.name || baseGroup?.name || 'Unknown Group',
@@ -1351,7 +1412,6 @@ export function NewEditItemFormSheet({
                                                     })
                                                     .filter(Boolean)
 
-                                                console.log('selectedGroups NEW EDIT ITEM FORM SHEET', selectedGroups)
 
                                                 // Get IDs of selected groups
                                                 const selectedGroupIds = selectedGroups.map((g: any) => g.id)
@@ -1573,7 +1633,7 @@ export function NewEditItemFormSheet({
                                                             <FormDescription>
                                                                 {editingContext.level === 1 && 'Master switch - affects all locations and menus'}
                                                                 {editingContext.level === 2 && 'Toggle availability at this location'}
-                                                                {editingContext.level >= 3 && 'Toggle availability on this menu'}
+                                                                {editingContext.level >= 3 && 'Toggle availability on this category'}
                                                             </FormDescription>
                                                         </div>
                                                         <FormControl>

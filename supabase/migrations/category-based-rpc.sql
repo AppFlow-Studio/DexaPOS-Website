@@ -217,7 +217,8 @@ BEGIN
                         'description', c.description,
                         'image', COALESCE(mc.custom_image, c.image),
                         'has_location_override', (lco.id IS NOT NULL),
-                        'has_menu_category_override', (lmco.id IS NOT NULL)
+                        'has_menu_category_override', (lmco.id IS NOT NULL),
+                        'location_id', c.location_id
                     ),
                     
                     -- Items in this category on this menu

@@ -31,9 +31,14 @@ import { NewEditItemFormSheet, EditItemWithOverrides } from '@/components/dashbo
 import { LocationItem } from '@/types/merchant_locations'
 import { LocationLibraryItem } from '@/types/menu'
 
-// Helper to map LocationItem to EditItemWithOverrides
-function mapLocationItemToEditItem(item: LocationLibraryItem | null): EditItemWithOverrides | undefined {
+// Helper to map LocationItem or LocationLibraryItem to EditItemWithOverrides
+function mapLocationItemToEditItem(item: LocationItem | LocationLibraryItem | null): EditItemWithOverrides | undefined {
     if (!item) return undefined
+
+    // Handle both LocationItem and LocationLibraryItem types
+    const locationItem = item as LocationItem
+    const libraryItem = item as LocationLibraryItem
+
     return {
         id: item.id,
         name: item.name,
@@ -48,14 +53,15 @@ function mapLocationItemToEditItem(item: LocationLibraryItem | null): EditItemWi
         category_items: item.categories,
         effective_price: item.effective_price,
         effective_cash_price: item.effective_cash_price,
-        menu_item_modifier_groups: item.modifier_groups,
+        // Handle modifier_groups from either type
+        menu_item_modifier_groups: 'modifier_groups' in item ? libraryItem.modifier_groups : [],
         price_levels: {
             level_1_base: item.base_price,
             level_1_cash: item.base_cash_price,
-            level_2_location_item: item.location_override?.custom_price ?? null,
-            level_2_location_item_cash: item.location_override?.custom_cash_price ?? null,
-            level_2_modifier: item.location_override?.price_modifier ?? null,
-            level_2_modifier_type: null,  // Will be computed from location_override if available
+            level_2_location_item: locationItem.location_override?.custom_price ?? null,
+            level_2_location_item_cash: locationItem.location_override?.custom_cash_price ?? null,
+            level_2_modifier: locationItem.location_override?.price_modifier ?? null,
+            level_2_modifier_type: null,
             level_3_category: null,
             level_3_category_cash: null,
             level_4_location_category: null,
@@ -95,6 +101,7 @@ export default function MenuItemsPage() {
 
     // Use location-scoped hook for items with effective prices
     const { data: items, isLoading, isError, refetch } = useLocationScopedMenuItemsWithCategories()
+
     const { data: categories } = useCategories(clerkOrgId || '')
     const { data: modifierGroups } = useModifierGroups(clerkOrgId)
 
@@ -117,12 +124,6 @@ export default function MenuItemsPage() {
     const itemsList = useMemo(() => {
         return Array.isArray(items?.data) ? items.data as LocationItem[] : []
     }, [items?.data])
-
-    // Error handling - MUST be after all hooks
-    if (items?.error || items?.success === false) {
-        toast.error(items?.error || 'Error fetching menu items')
-        return <Empty description="Error fetching menu items" />
-    }
 
     // Filter items by search term and category
     const filteredItems = useMemo(() => {
@@ -197,7 +198,35 @@ export default function MenuItemsPage() {
     const categoriesList = Array.isArray(categories) ? categories : []
     const modifierGroupsList = Array.isArray(modifierGroups) ? modifierGroups : []
     const selectedCategory = categoriesList.find(c => c.id === selectedCategoryId)
-    console.log('editingItem', editingItem)
+
+    // Check for error state
+    const hasError = items?.error || items?.success === false
+    const errorMessage = items?.error || 'Error fetching menu items'
+
+    // Show error state
+    if (hasError && !isLoading) {
+        return (
+            <div className="space-y-6 animate-in fade-in duration-500">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h2 className="text-2xl font-bold tracking-tight">Menu Items</h2>
+                        <p className="text-muted-foreground">Manage your menu items</p>
+                    </div>
+                </div>
+                <Empty
+                    icon={Utensils}
+                    title="Error loading items"
+                    description={errorMessage}
+                    action={
+                        <Button onClick={() => refetch()} variant="outline">
+                            Try Again
+                        </Button>
+                    }
+                />
+            </div>
+        )
+    }
+
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex items-center justify-between">

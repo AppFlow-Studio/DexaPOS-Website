@@ -7,7 +7,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useLocationStore, useIsAllLocations } from '@/stores/location-store'
+import { useLocationStore, useIsAllLocations, useSelectedLocation } from '@/stores/location-store'
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
 import { GetMenus, GetMenuWithLocationContext } from '../actions/menus'
 import {
@@ -119,11 +119,13 @@ export function useLocationScopedMenuItemsWithCategories() {
     // const clerkOrgId = useClerkOrgId()
     const { data: userInfo } = useUserInfo()
     const merchantId = userInfo?.members?.[0]?.organizations?.merchants?.id || ''
-    const locationId = useEffectiveLocationId()
-    console.log('merchantId', merchantId)
+    const locationId = useSelectedLocation()
+    console.log('locationId', locationId)
+    const effectiveLocationId = locationId?.id || null
+    console.log('merchantId', merchantId, 'effectiveLocationId', effectiveLocationId)
     return useQuery({
-        queryKey: ['menu-items-with-categories', merchantId, locationId, 'scoped'],
-        queryFn: () => getItemsForLocation(merchantId, locationId),
+        queryKey: ['menu-items-with-categories', merchantId, 'scoped'],
+        queryFn: () => getItemsForLocation(merchantId, effectiveLocationId),
         enabled: !!merchantId,
     })
 }

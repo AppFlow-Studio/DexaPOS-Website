@@ -131,6 +131,8 @@ CREATE TABLE IF NOT EXISTS category_schedules (
     category_id UUID NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
     schedule_id UUID NOT NULL REFERENCES schedules(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    menu_id UUID NOT NULL REFERENCES menus(id) ON DELETE CASCADE,
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
     UNIQUE(category_id, schedule_id)
 );
 

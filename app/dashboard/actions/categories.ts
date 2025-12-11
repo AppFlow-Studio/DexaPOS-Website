@@ -191,6 +191,7 @@ export async function GetCategoryWithItems(
 
 export async function CreateCategory(
     clerkOrgId: string,
+    locationId: string | null,
     data: {
         name: string
         description?: string
@@ -238,7 +239,7 @@ export async function CreateCategory(
             merchant_id: merchant.id,
             name: data.name,
             description: data.description || null,
-            menu_id: data.menu_id || null,
+            location_id: locationId,
             display_order: data.display_order || null,
             image: data.image || null,
             is_active: data.is_active ?? true,
@@ -355,6 +356,7 @@ export async function DeleteCategory(categoryId: string) {
 export async function AddCategoryToMenu(
     menuId: string,
     categoryId: string,
+    merchantId: string,
     displayOrder?: number,
     customTitle?: string
 ) {
@@ -364,12 +366,19 @@ export async function AddCategoryToMenu(
 
     const supabase = createServerSupabaseClient()
 
-    const { data, error } = await supabase.rpc('add_category_to_menu', {
-        p_menu_id: menuId,
-        p_category_id: categoryId,
-        p_display_order: displayOrder ?? 0,
-        p_custom_title: customTitle || null
+    const { data, error } = await supabase.from('menu_categories').insert({
+        menu_id: menuId,
+        category_id: categoryId,
+        merchant_id: merchantId,
+        display_order: displayOrder ?? 0,
+        custom_title: customTitle || null
     })
+    // const { data, error } = await supabase.rpc('add_category_to_menu', {
+    //     p_menu_id: menuId,
+    //     p_category_id: categoryId,
+    //     p_display_order: displayOrder ?? 0,
+    //     p_custom_title: customTitle || null
+    // })
 
     if (error) {
         console.error('Error adding category to menu:', error)
@@ -617,6 +626,135 @@ export async function RemoveLocationCategoryOverride(locationId: string, categor
 
     if (error) {
         console.error('Error removing location category override:', error)
+        return { error: error.message }
+    }
+
+    return { success: true }
+}
+
+// ============================================================================
+// LOCATION + MENU + CATEGORY OVERRIDE OPERATIONS
+// ============================================================================
+
+/**
+ * Update location-specific category settings for a specific menu
+ * This is used when a location wants to customize a global menu's category
+ */
+export async function UpdateLocationMenuCategoryOverride(
+    locationId: string,
+    menuId: string,
+    categoryId: string,
+    data: {
+        isActive?: boolean
+        displayOrder?: number
+        customTitle?: string
+    }
+) {
+    if (!locationId || !menuId || !categoryId) {
+        return { error: 'Location ID, Menu ID, and Category ID are required' }
+    }
+
+    const supabase = createServerSupabaseClient()
+
+    const { error } = await supabase
+        .from('location_menu_category_overrides')
+        .upsert({
+            location_id: locationId,
+            menu_id: menuId,
+            category_id: categoryId,
+            is_active: data.isActive,
+            display_order: data.displayOrder,
+            custom_title: data.customTitle,
+            updated_at: new Date().toISOString()
+        }, {
+            onConflict: 'location_id,menu_id,category_id'
+        })
+
+    if (error) {
+        console.error('Error updating location menu category override:', error)
+        return { error: error.message }
+    }
+
+    return { success: true }
+}
+
+/**
+ * Toggle category visibility in a menu (handles both global and location-specific)
+ */
+export async function ToggleCategoryInMenu(
+    menuId: string,
+    categoryId: string,
+    isActive: boolean,
+    locationId?: string | null
+) {
+    if (!menuId || !categoryId) {
+        return { error: 'Menu ID and Category ID are required' }
+    }
+
+    const supabase = createServerSupabaseClient()
+    const location_Id = locationId === 'all' ? null : locationId
+
+    // If no location context, update the menu_categories table directly
+    if (!location_Id) {
+        const { error } = await supabase
+            .from('menu_categories')
+            .update({
+                is_active: isActive,
+                updated_at: new Date().toISOString()
+            })
+            .eq('menu_id', menuId)
+            .eq('category_id', categoryId)
+
+        if (error) {
+            console.error('Error toggling category in menu:', error)
+            return { error: error.message }
+        }
+    } else {
+        // Location-specific override
+        const { error } = await supabase
+            .from('location_menu_category_overrides')
+            .upsert({
+                location_id: location_Id,
+                menu_id: menuId,
+                category_id: categoryId,
+                is_active: isActive,
+                updated_at: new Date().toISOString()
+            }, {
+                onConflict: 'location_id,menu_id,category_id'
+            })
+
+        if (error) {
+            console.error('Error toggling location category override:', error)
+            return { error: error.message }
+        }
+    }
+
+    return { success: true }
+}
+
+/**
+ * Remove location-specific menu category override (revert to global)
+ */
+export async function RemoveLocationMenuCategoryOverride(
+    locationId: string,
+    menuId: string,
+    categoryId: string
+) {
+    if (!locationId || !menuId || !categoryId) {
+        return { error: 'Location ID, Menu ID, and Category ID are required' }
+    }
+
+    const supabase = createServerSupabaseClient()
+
+    const { error } = await supabase
+        .from('location_menu_category_overrides')
+        .delete()
+        .eq('location_id', locationId)
+        .eq('menu_id', menuId)
+        .eq('category_id', categoryId)
+
+    if (error) {
+        console.error('Error removing location menu category override:', error)
         return { error: error.message }
     }
 

@@ -3,17 +3,18 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Tag, Plus, Search, Edit3, Trash2, Sparkles, Utensils, ChevronDown, ChevronUp, ExternalLink, X } from 'lucide-react'
+import { Tag, Plus, Search, Edit3, Trash2, Sparkles, Utensils, ChevronDown, ChevronUp, ExternalLink, X, Globe, MapPin, Settings2, Eye, EyeOff, RotateCcw, Info, DollarSign } from 'lucide-react'
 import { useState, useMemo } from 'react'
 import { useCategories, useCategoriesWithItems } from '../../hooks/useCategories'
 import { useMenus } from '../../hooks/useMenus'
 import { useSchedules } from '../../hooks/useSchedules'
+import { useLocations } from '../../hooks/useLocations'
 import { useUserInfo } from '../../../manage/hooks/useUserInfo.'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Empty } from '@/components/ui/empty'
 import { CategoryFormSheet } from '@/components/dashboard/menu/CategoryFormSheet'
-import { DeleteCategory, RemoveItemFromCategory } from '../../actions/categories'
+import { DeleteCategory, RemoveItemFromCategory, UpdateLocationCategoryOverride, RemoveLocationCategoryOverride } from '../../actions/categories'
 import { GetMenuItemsByCategory } from '../../actions/menu-items'
 import { useLocationStore } from '@/stores/location-store'
 import { toast } from 'sonner'
@@ -28,7 +29,13 @@ import {
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { CategoriesModel, MenuItemsModel } from '@/types/db-modles'
+import { CategoryWithItems, CategoryMenuItem } from '@/types/menu'
 import { useRouter } from 'next/navigation'
+import { LevelIndicator, getEditingLevel, EditingContextBanner } from '@/components/dashboard/menu/LevelIndicator'
+import { Switch } from '@/components/ui/switch'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { NewEditItemFormSheet, EditItemWithOverrides } from '@/components/dashboard/menu/NewEditItemFormSheet'
+import { AddItemToCategoryWizard } from '@/components/dashboard/menu/categories/AddItemToCategoryWizard'
 
 export default function CategoriesPage() {
     const router = useRouter()
@@ -36,38 +43,168 @@ export default function CategoriesPage() {
     const clerkOrgId = userInfo?.members?.[0]?.organizations?.id
     const queryClient = useQueryClient()
     const { selectedLocationId } = useLocationStore()
-    const isAllLocations = selectedLocationId === 'all'
+    const isAllLocations = selectedLocationId === 'all' || !selectedLocationId
 
-    const { data: categories, isLoading, refetch } = useCategories(clerkOrgId || '')
-    const { data: categoriesWithItems, isLoading: loadingCategoriesWithItems } = useCategoriesWithItems(clerkOrgId || '', selectedLocationId)
+    // Primary data source: RPC with full category + items data
+    const { data: categoriesWithItems, isLoading: loadingCategoriesWithItems, refetch } = useCategoriesWithItems(clerkOrgId || '', selectedLocationId)
     const { data: menus } = useMenus(clerkOrgId || '')
-    const { data: schedules } = useSchedules(clerkOrgId || '')
+    const { data: locations } = useLocations(clerkOrgId || '')
+
+    const currentLocation = locations?.find(l => l.id === selectedLocationId)
 
     const [searchTerm, setSearchTerm] = useState('')
     const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false)
-    const [editingCategory, setEditingCategory] = useState<CategoriesModel | null>(null)
-    const [deletingCategory, setDeletingCategory] = useState<CategoriesModel | null>(null)
+    const [editingCategory, setEditingCategory] = useState<CategoryWithItems | null>(null)
+    const [deletingCategory, setDeletingCategory] = useState<CategoryWithItems | null>(null)
     const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null)
+    const [togglingCategories, setTogglingCategories] = useState<Set<string>>(new Set())
 
-    const categoriesList = Array.isArray(categories) ? categories : []
+    // Item editing state
+    const [editingItem, setEditingItem] = useState<EditItemWithOverrides | null>(null)
+    const [isItemSheetOpen, setIsItemSheetOpen] = useState(false)
+    const [editingCategoryContext, setEditingCategoryContext] = useState<{ id: string, name: string } | null>(null)
+
+    // Add item wizard state
+    const [isAddItemWizardOpen, setIsAddItemWizardOpen] = useState(false)
+    const [addItemCategoryContext, setAddItemCategoryContext] = useState<{ id: string, name: string, existingItemIds: string[] } | null>(null)
+
+    // Use RPC data as primary source
+    const categoriesList: CategoryWithItems[] = categoriesWithItems?.data || []
     const menusList = Array.isArray(menus) ? menus : []
-    const schedulesList = Array.isArray(schedules) ? schedules : []
+    const isLoading = loadingCategoriesWithItems
 
     const filteredCategories = categoriesList.filter(category =>
         category.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         category.description?.toLowerCase().includes(searchTerm.toLowerCase())
     )
 
-    const merchantGlobalCategories = categoriesList.filter(c => !c.menu_id).length
-    const menuSpecificCategories = categoriesList.filter(c => c.menu_id).length
-    const activeCategories = categoriesList.filter(c => c.is_active).length
+    // Stats from RPC data
+    const totalItems = categoriesList.reduce((acc, c) => acc + (c.item_count || 0), 0)
+    const activeCategories = categoriesList.filter(c =>
+        isAllLocations ? c.is_active : c.effective_is_active
+    ).length
+    const categoriesWithOverrides = categoriesList.filter(c => c.location_override !== null).length
 
-    // Fetch items for expanded category
-    const { data: categoryItems, isLoading: itemsLoading } = useQuery({
-        queryKey: ['category-items', expandedCategoryId],
-        queryFn: () => GetMenuItemsByCategory(expandedCategoryId || ''),
-        enabled: !!expandedCategoryId,
+    // Get current editing level
+    const editingLevel = getEditingLevel({
+        isAllLocations,
+        menuId: null,
+        categoryId: null,
+        isMenuLocationOwned: false,
     })
+
+    // Helper to get items for a category from RPC data
+    const getItemsForCategory = (categoryId: string): CategoryMenuItem[] => {
+        const category = categoriesList.find(c => c.id === categoryId)
+        return category?.items || []
+    }
+
+    // Map CategoryMenuItem to EditItemWithOverrides for the edit sheet
+    const mapCategoryItemToEditItem = (item: CategoryMenuItem, categoryId: string, categoryName: string): EditItemWithOverrides => ({
+        id: item.menu_item_id,
+        name: item.menu_item.name,
+        description: item.menu_item.description ?? undefined,
+        price: item.menu_item.base_price,
+        cash_price: item.menu_item.base_cash_price,
+        image: item.menu_item.image ?? undefined,
+        availability: item.menu_item.effective_availability,
+        allergens: item.menu_item.allergens ?? undefined,
+        card_bg_color: item.menu_item.card_bg_color ?? undefined,
+        category_items: [{ id: categoryId, name: categoryName }],
+        price_levels: {
+            level_1_base: item.menu_item.base_price,
+            level_1_cash: item.menu_item.base_cash_price,
+            level_2_location_item: item.menu_item.location_item_override?.custom_price ?? null,
+            level_2_location_item_cash: item.menu_item.location_item_override?.custom_cash_price ?? null,
+            level_2_modifier: item.menu_item.location_item_override?.price_modifier ?? null,
+            level_2_modifier_type: null,
+            level_3_category: item.category_price,
+            level_3_category_cash: item.category_cash_price,
+            level_4_location_category: item.menu_item.location_category_override?.custom_price ?? null,
+            level_4_location_category_cash: item.menu_item.location_category_override?.custom_cash_price ?? null,
+            level_5_location_menu: null,
+            level_5_location_menu_cash: null,
+        },
+        effective_price: item.menu_item.effective_price,
+        effective_cash_price: item.menu_item.effective_cash_price,
+        has_location_item_override: !!item.menu_item.location_item_override,
+        has_category_override: item.category_price !== null,
+        has_location_category_override: !!item.menu_item.location_category_override,
+    })
+
+    // Handle toggling category visibility at location level
+    const handleToggleCategoryAtLocation = async (categoryId: string, isActive: boolean) => {
+        if (isAllLocations || !selectedLocationId) return
+
+        setTogglingCategories(prev => new Set(prev).add(categoryId))
+
+        try {
+            const result = await UpdateLocationCategoryOverride(
+                selectedLocationId,
+                categoryId,
+                { isActive }
+            )
+
+            if (result.error) {
+                toast.error('Update Failed', { description: result.error })
+                return
+            }
+
+            toast.success(isActive ? 'Category Enabled' : 'Category Disabled', {
+                description: isActive
+                    ? 'This category is now visible at this location.'
+                    : 'This category is now hidden at this location.'
+            })
+
+            queryClient.invalidateQueries({ queryKey: ['categories'] })
+            queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
+            refetch()
+        } catch {
+            toast.error('Update Failed', {
+                description: 'Unable to update category. Please try again.'
+            })
+        } finally {
+            setTogglingCategories(prev => {
+                const next = new Set(prev)
+                next.delete(categoryId)
+                return next
+            })
+        }
+    }
+
+    // Handle resetting category to global settings
+    const handleResetCategoryToGlobal = async (categoryId: string) => {
+        if (isAllLocations || !selectedLocationId) return
+
+        setTogglingCategories(prev => new Set(prev).add(categoryId))
+
+        try {
+            const result = await RemoveLocationCategoryOverride(selectedLocationId, categoryId)
+
+            if (result.error) {
+                toast.error('Reset Failed', { description: result.error })
+                return
+            }
+
+            toast.success('Reset Complete', {
+                description: 'Category settings have been reset to global defaults.'
+            })
+
+            queryClient.invalidateQueries({ queryKey: ['categories'] })
+            queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
+            refetch()
+        } catch {
+            toast.error('Reset Failed', {
+                description: 'Unable to reset category. Please try again.'
+            })
+        } finally {
+            setTogglingCategories(prev => {
+                const next = new Set(prev)
+                next.delete(categoryId)
+                return next
+            })
+        }
+    }
 
     const handleDelete = async () => {
         if (!deletingCategory) return
@@ -94,7 +231,7 @@ export default function CategoriesPage() {
         }
     }
 
-    const handleCategoryClick = (category: CategoriesModel) => {
+    const handleCategoryClick = (category: CategoryWithItems) => {
         // Toggle expansion
         if (expandedCategoryId === category.id) {
             setExpandedCategoryId(null)
@@ -103,7 +240,7 @@ export default function CategoriesPage() {
         }
     }
 
-    const handleEditCategory = (category: CategoriesModel, e: React.MouseEvent) => {
+    const handleEditCategory = (category: CategoryWithItems, e: React.MouseEvent) => {
         e.stopPropagation()
         setEditingCategory(category)
     }
@@ -121,34 +258,87 @@ export default function CategoriesPage() {
                 return
             }
             toast.success('Item Removed', { description: 'Item has been removed from the category.' })
-            queryClient.invalidateQueries({ queryKey: ['category-items', categoryId] })
             queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
+            refetch()
         } catch {
             toast.error('Remove Failed', { description: 'Unable to remove item. Please try again.' })
         }
     }
 
-    // Get items for a specific category from the categoriesWithItems data
-    const getItemsForCategory = (categoryId: string) => {
-        if (!categoriesWithItems?.data) return []
-        const category = categoriesWithItems.data.find(c => c.id === categoryId)
-        return category?.items || []
+    // Handle editing an item within a category context
+    const handleEditItem = (item: CategoryMenuItem, category: CategoryWithItems, e: React.MouseEvent) => {
+        e.stopPropagation()
+        setEditingCategoryContext({ id: category.id, name: category.name })
+        setEditingItem(mapCategoryItemToEditItem(item, category.id, category.name))
+        setIsItemSheetOpen(true)
     }
 
+    console.log('categoriesList', categoriesList)
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Categories</h2>
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-2xl font-bold tracking-tight">Categories</h2>
+                        {/* Location scope indicator */}
+                        <Badge
+                            variant={isAllLocations ? "secondary" : "default"}
+                            className={cn(
+                                "gap-1.5 animate-in fade-in slide-in-from-left-2 duration-300",
+                                !isAllLocations && "bg-blue-500/10 text-blue-600 border-blue-200"
+                            )}
+                        >
+                            {isAllLocations ? (
+                                <Globe className="h-3 w-3" />
+                            ) : (
+                                <MapPin className="h-3 w-3" />
+                            )}
+                            {isAllLocations ? 'All Locations' : currentLocation?.name || 'Location'}
+                        </Badge>
+                    </div>
                     <p className="text-muted-foreground">
-                        Manage categories for your menus
+                        {isAllLocations
+                            ? 'Manage global categories for your menus'
+                            : `Customize categories for ${currentLocation?.name || 'this location'}`
+                        }
                     </p>
                 </div>
-                <Button onClick={() => setIsCreateSheetOpen(true)} className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Create Category
-                </Button>
+                <div className="flex items-center gap-2">
+                    {!isAllLocations && (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                        <Info className="h-4 w-4" />
+                                        <span>Viewing location overrides</span>
+                                    </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>You can enable/disable global categories for this location.</p>
+                                    <p>Create new location-specific categories below.</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )}
+                    <Button onClick={() => setIsCreateSheetOpen(true)} className="gap-2">
+                        {isAllLocations ? (
+                            <Globe className="h-4 w-4" />
+                        ) : (
+                            <MapPin className="h-4 w-4" />
+                        )}
+                        Create {isAllLocations ? 'Global' : 'Location'} Category
+                    </Button>
+                </div>
             </div>
+
+            {/* Context Banner - only show when viewing a specific location */}
+            {!isAllLocations && (
+                <EditingContextBanner
+                    level={2}
+                    locationName={currentLocation?.name}
+                    className="animate-in fade-in slide-in-from-top-2 duration-300"
+                />
+            )}
 
             {/* Stats Overview */}
             <div className="grid gap-4 md:grid-cols-4">
@@ -166,37 +356,51 @@ export default function CategoriesPage() {
                 </Card>
                 <Card className="transition-all hover:shadow-md">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Global</CardTitle>
-                        <Sparkles className="h-4 w-4 text-blue-500" />
+                        <CardTitle className="text-sm font-medium">Total Items</CardTitle>
+                        <Utensils className="h-4 w-4 text-blue-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-blue-600">{merchantGlobalCategories}</div>
+                        <div className="text-2xl font-bold text-blue-600">{totalItems}</div>
                         <p className="text-xs text-muted-foreground">
-                            Reusable across menus
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card className="transition-all hover:shadow-md">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Menu Specific</CardTitle>
-                        <Tag className="h-4 w-4 text-purple-500" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-purple-600">{menuSpecificCategories}</div>
-                        <p className="text-xs text-muted-foreground">
-                            Menu-specific categories
+                            Items across categories
                         </p>
                     </CardContent>
                 </Card>
                 <Card className="transition-all hover:shadow-md">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Active</CardTitle>
-                        <Tag className="h-4 w-4 text-green-500" />
+                        <Eye className="h-4 w-4 text-green-500" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold text-green-600">{activeCategories}</div>
                         <p className="text-xs text-muted-foreground">
-                            Currently active
+                            {isAllLocations ? 'Globally active' : 'Active at location'}
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card className="transition-all hover:shadow-md">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">
+                            {isAllLocations ? 'In Menus' : 'With Overrides'}
+                        </CardTitle>
+                        {isAllLocations ? (
+                            <Sparkles className="h-4 w-4 text-purple-500" />
+                        ) : (
+                            <Settings2 className="h-4 w-4 text-amber-500" />
+                        )}
+                    </CardHeader>
+                    <CardContent>
+                        <div className={cn(
+                            "text-2xl font-bold",
+                            isAllLocations ? "text-purple-600" : "text-amber-600"
+                        )}>
+                            {isAllLocations
+                                ? categoriesList.reduce((acc, c) => acc + (c.menu_count || 0), 0)
+                                : categoriesWithOverrides
+                            }
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            {isAllLocations ? 'Used in menus' : 'Location-specific settings'}
                         </p>
                     </CardContent>
                 </Card>
@@ -250,7 +454,6 @@ export default function CategoriesPage() {
                         <div className="space-y-3">
                             {filteredCategories.map((category, index) => {
                                 const isExpanded = expandedCategoryId === category.id
-                                const items = isExpanded ? (categoryItems || []) : []
 
                                 return (
                                     <Card
@@ -273,10 +476,10 @@ export default function CategoriesPage() {
                                         >
                                             <div className="flex items-start gap-4">
                                                 {/* Icon/Image */}
-                                                {category.image_url ? (
+                                                {category.image ? (
                                                     <div className="h-16 w-16 rounded-lg overflow-hidden bg-muted shrink-0">
                                                         <img
-                                                            src={category.image_url}
+                                                            src={category.image}
                                                             alt={category.name}
                                                             className="w-full h-full object-cover"
                                                         />
@@ -308,25 +511,86 @@ export default function CategoriesPage() {
                                                             )}
                                                         </div>
                                                         <div className="flex items-center gap-2 shrink-0">
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-8 w-8"
-                                                                onClick={(e) => handleEditCategory(category, e)}
-                                                            >
-                                                                <Edit3 className="h-4 w-4" />
-                                                            </Button>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-8 w-8 text-destructive hover:text-destructive"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation()
-                                                                    setDeletingCategory(category)
-                                                                }}
-                                                            >
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
+                                                            {/* Location visibility toggle */}
+                                                            {!isAllLocations && (
+                                                                <TooltipProvider>
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <div
+                                                                                className="flex items-center gap-2"
+                                                                                onClick={(e) => e.stopPropagation()}
+                                                                            >
+                                                                                <Switch
+                                                                                    checked={category.effective_is_active}
+                                                                                    onCheckedChange={(checked) => handleToggleCategoryAtLocation(category.id, checked)}
+                                                                                    disabled={togglingCategories.has(category.id)}
+                                                                                />
+                                                                                {category.effective_is_active ? (
+                                                                                    <Eye className="h-4 w-4 text-green-500" />
+                                                                                ) : (
+                                                                                    <EyeOff className="h-4 w-4 text-muted-foreground" />
+                                                                                )}
+                                                                            </div>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent>
+                                                                            <p>{category.effective_is_active ? 'Hide' : 'Show'} at this location</p>
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
+                                                                </TooltipProvider>
+                                                            )}
+
+                                                            {/* Edit button - only for global view */}
+                                                            {isAllLocations && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-8 w-8"
+                                                                    onClick={(e) => handleEditCategory(category, e)}
+                                                                >
+                                                                    <Edit3 className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
+
+                                                            {/* Delete button - only for global view */}
+                                                            {isAllLocations && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-8 w-8 text-destructive hover:text-destructive"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation()
+                                                                        setDeletingCategory(category)
+                                                                    }}
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
+
+                                                            {/* Reset to global button - only for location view when there's an override */}
+                                                            {!isAllLocations && category.location_override && (
+                                                                <TooltipProvider>
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className="h-8 w-8"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation()
+                                                                                    handleResetCategoryToGlobal(category.id)
+                                                                                }}
+                                                                                disabled={togglingCategories.has(category.id)}
+                                                                            >
+                                                                                <RotateCcw className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent>
+                                                                            <p>Reset to global settings</p>
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
+                                                                </TooltipProvider>
+                                                            )}
+
                                                             <div className={cn(
                                                                 "p-1 rounded-full transition-colors",
                                                                 isExpanded ? "bg-primary text-primary-foreground" : "bg-muted"
@@ -340,16 +604,51 @@ export default function CategoriesPage() {
                                                         </div>
                                                     </div>
 
-                                                    <div className="flex items-center gap-2 mt-3">
-                                                        <Badge variant={category.is_active ? "default" : "secondary"} className="text-xs">
-                                                            {category.is_active ? 'Active' : 'Inactive'}
+                                                    <div className="flex items-center gap-2 mt-3 flex-wrap">
+                                                        {/* Active status - use effective value when viewing location */}
+                                                        <Badge
+                                                            variant={(isAllLocations ? category.is_active : category.effective_is_active) ? "default" : "secondary"}
+                                                            className="text-xs"
+                                                        >
+                                                            {(isAllLocations ? category.is_active : category.effective_is_active) ? 'Active' : 'Inactive'}
                                                         </Badge>
+
+                                                        {/* Item count from RPC */}
                                                         <Badge variant="outline" className="text-xs">
-                                                            {category.menu_id
-                                                                ? menusList.find(m => m.id === category.menu_id)?.name || 'Menu Specific'
-                                                                : 'Global'
-                                                            }
+                                                            {category.item_count || 0} item{(category.item_count || 0) !== 1 ? 's' : ''}
                                                         </Badge>
+
+                                                        {/* Menu count */}
+                                                        {(category.menu_count || 0) > 0 && (
+                                                            <Badge variant="outline" className="text-xs text-purple-600 border-purple-200">
+                                                                In {category.menu_count} menu{category.menu_count !== 1 ? 's' : ''}
+                                                            </Badge>
+                                                        )}
+
+                                                        {/* Location override indicator */}
+                                                        {!isAllLocations && category.location_override && (
+                                                            <Badge variant="outline" className="text-xs bg-amber-50 text-amber-600 border-amber-200">
+                                                                <Settings2 className="h-3 w-3 mr-1" />
+                                                                Customized
+                                                            </Badge>
+                                                        )}
+                                                        {
+                                                            category.location_id === null && (
+                                                                <Badge variant="outline" className="text-xs bg-green-50 text-green-600 border-green-200">
+                                                                    <Globe className="h-3 w-3 mr-1" />
+                                                                    Global
+                                                                </Badge>
+                                                            )
+                                                        }
+                                                        {
+                                                            category.location_id !== null && (
+                                                                <Badge variant="outline" className="text-xs bg-purple-50 text-purple-600 border-purple-200">
+                                                                    <MapPin className="h-3 w-3 mr-1" />
+                                                                    {category.location_name}
+                                                                </Badge>
+                                                            )
+                                                        }
+
                                                     </div>
                                                 </div>
                                             </div>
@@ -369,84 +668,150 @@ export default function CategoriesPage() {
                                                                 </Badge>
                                                             )}
                                                         </h4>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation()
-                                                                router.push(`/dashboard/menu/items?category=${category.id}`)
-                                                            }}
-                                                        >
-                                                            View All
-                                                            <ExternalLink className="h-3 w-3 ml-1" />
-                                                        </Button>
+                                                        <div className="flex items-center gap-2">
+                                                            {/* Add Item Button - Only when scoping allows */}
+                                                            {(() => {
+                                                                // Global categories: can only add when viewing all locations
+                                                                // Location categories: can only add when viewing that location
+                                                                const canAddItems = isAllLocations
+                                                                    ? category.is_global
+                                                                    : category.location_id === selectedLocationId
+
+                                                                if (canAddItems) {
+                                                                    return (
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="sm"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                setAddItemCategoryContext({
+                                                                                    id: category.id,
+                                                                                    name: category.name,
+                                                                                    existingItemIds: (category.items || []).map(item => item.menu_item_id)
+                                                                                })
+                                                                                setIsAddItemWizardOpen(true)
+                                                                            }}
+                                                                            className="gap-1"
+                                                                        >
+                                                                            <Plus className="h-3 w-3" />
+                                                                            Add Item
+                                                                        </Button>
+                                                                    )
+                                                                }
+
+                                                                // Show disabled state with explanation
+                                                                return (
+                                                                    <TooltipProvider>
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger asChild>
+                                                                                <Button
+                                                                                    variant="outline"
+                                                                                    size="sm"
+                                                                                    disabled
+                                                                                    className="gap-1 opacity-50"
+                                                                                >
+                                                                                    <Plus className="h-3 w-3" />
+                                                                                    Add Item
+                                                                                </Button>
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent>
+                                                                                <p>
+                                                                                    {isAllLocations && !category.is_global
+                                                                                        ? 'This is a location-specific category. Switch to that location to add items.'
+                                                                                        : 'Switch to "All Locations" to add items to this global category.'}
+                                                                                </p>
+                                                                            </TooltipContent>
+                                                                        </Tooltip>
+                                                                    </TooltipProvider>
+                                                                )
+                                                            })()}
+
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    router.push(`/dashboard/menu/items?category=${category.id}`)
+                                                                }}
+                                                            >
+                                                                View All
+                                                                <ExternalLink className="h-3 w-3 ml-1" />
+                                                            </Button>
+                                                        </div>
                                                     </div>
 
-                                                    {(itemsLoading || loadingCategoriesWithItems) ? (
+                                                    {isLoading ? (
                                                         <div className="space-y-2">
                                                             {[1, 2, 3].map(i => (
                                                                 <Skeleton key={i} className="h-16 w-full" />
                                                             ))}
                                                         </div>
                                                     ) : (() => {
-                                                        // Use category-centric data if available
-                                                        const categoryItems = getItemsForCategory(category.id)
-                                                        const displayItems = categoryItems.length > 0
-                                                            ? categoryItems.map(ci => ({
-                                                                id: ci.menu_item_id,
-                                                                name: ci.menu_item?.name || '',
-                                                                description: ci.menu_item?.description,
-                                                                image: ci.menu_item?.image,
-                                                                price: ci.menu_item?.effective_price || ci.menu_item?.base_price || 0,
-                                                                availability: ci.menu_item?.effective_availability ?? true,
-                                                                price_source: ci.menu_item?.price_source,
-                                                                is_featured: ci.is_featured
-                                                            }))
-                                                            : items
+                                                        // Use items directly from the category (RPC data)
+                                                        const categoryItems = category.items || []
 
-                                                        if (displayItems.length === 0) {
+                                                        if (categoryItems.length === 0) {
+                                                            // Scoping check for empty state add button
+                                                            const canAddItems = isAllLocations
+                                                                ? category.is_global
+                                                                : category.location_id === selectedLocationId
+
                                                             return (
                                                                 <div className="text-center py-8 text-muted-foreground">
                                                                     <Utensils className="h-8 w-8 mx-auto mb-2 opacity-50" />
                                                                     <p className="text-sm">No items in this category yet</p>
-                                                                    <Button
-                                                                        variant="outline"
-                                                                        size="sm"
-                                                                        className="mt-3"
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation()
-                                                                            router.push('/dashboard/menu/items')
-                                                                        }}
-                                                                    >
-                                                                        <Plus className="h-3 w-3 mr-1" />
-                                                                        Add Items
-                                                                    </Button>
+                                                                    {canAddItems ? (
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="sm"
+                                                                            className="mt-3"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                setAddItemCategoryContext({
+                                                                                    id: category.id,
+                                                                                    name: category.name,
+                                                                                    existingItemIds: []
+                                                                                })
+                                                                                setIsAddItemWizardOpen(true)
+                                                                            }}
+                                                                        >
+                                                                            <Plus className="h-3 w-3 mr-1" />
+                                                                            Add Items
+                                                                        </Button>
+                                                                    ) : (
+                                                                        <p className="text-xs mt-2 text-muted-foreground/70">
+                                                                            {isAllLocations && !category.is_global
+                                                                                ? 'Switch to the location to add items'
+                                                                                : 'Switch to "All Locations" to add items'}
+                                                                        </p>
+                                                                    )}
                                                                 </div>
                                                             )
                                                         }
 
                                                         return (
                                                             <div className="space-y-2">
-                                                                {displayItems.slice(0, 5).map((item: typeof displayItems[number], itemIndex: number) => (
+                                                                {categoryItems.slice(0, 5).map((item: CategoryMenuItem, itemIndex: number) => (
                                                                     <div
                                                                         key={item.id}
                                                                         className={cn(
                                                                             "flex items-center gap-3 p-3 rounded-lg bg-background border",
                                                                             "hover:shadow-sm hover:border-primary/30 cursor-pointer transition-all",
-                                                                            "animate-in fade-in slide-in-from-left-2"
+                                                                            "animate-in fade-in slide-in-from-left-2",
+                                                                            !item.menu_item.effective_availability && "opacity-60"
                                                                         )}
                                                                         style={{ animationDelay: `${itemIndex * 50}ms` }}
                                                                         onClick={(e) => {
                                                                             e.stopPropagation()
-                                                                            handleNavigateToItem(item.id)
+                                                                            handleNavigateToItem(item.menu_item_id)
                                                                         }}
                                                                     >
                                                                         {/* Item Image */}
                                                                         <div className="w-12 h-12 rounded-lg overflow-hidden bg-muted/30 shrink-0">
-                                                                            {item.image ? (
+                                                                            {item.menu_item.image ? (
                                                                                 <img
-                                                                                    src={item.image}
-                                                                                    alt={item.name}
+                                                                                    src={item.menu_item.image}
+                                                                                    alt={item.menu_item.name}
                                                                                     className="w-full h-full object-cover"
                                                                                 />
                                                                             ) : (
@@ -459,46 +824,88 @@ export default function CategoriesPage() {
                                                                         {/* Item Details */}
                                                                         <div className="flex-1 min-w-0">
                                                                             <h5 className="font-medium text-sm truncate flex items-center gap-1">
-                                                                                {item.name}
-                                                                                {'is_featured' in item && item.is_featured && (
+                                                                                {item.menu_item.name}
+                                                                                {item.is_featured && (
                                                                                     <Sparkles className="h-3 w-3 text-yellow-500" />
                                                                                 )}
                                                                             </h5>
-                                                                            {item.description && (
+                                                                            {item.menu_item.description && (
                                                                                 <p className="text-xs text-muted-foreground truncate">
-                                                                                    {item.description}
+                                                                                    {item.menu_item.description}
                                                                                 </p>
                                                                             )}
                                                                         </div>
 
-                                                                        {/* Price & Status */}
-                                                                        <div className="text-right shrink-0">
-                                                                            <span className="font-semibold text-sm text-primary">
-                                                                                ${item.price.toFixed(2)}
-                                                                            </span>
-                                                                            {!item.availability && (
-                                                                                <Badge variant="secondary" className="ml-2 text-xs">
+                                                                        {/* Price with source indicator */}
+                                                                        <div className="text-right shrink-0 flex items-center gap-2">
+                                                                            <div className="flex flex-col items-end">
+                                                                                <span className="font-semibold text-sm text-primary">
+                                                                                    ${item.menu_item.effective_price.toFixed(2)}
+                                                                                </span>
+                                                                                {item.menu_item.price_source !== 'base' && (
+                                                                                    <Badge variant="outline" className={cn(
+                                                                                        "text-[10px] px-1.5 py-0",
+                                                                                        item.menu_item.price_source === 'category' && "text-green-600 border-green-200",
+                                                                                        item.menu_item.price_source === 'location_item' && "text-blue-600 border-blue-200",
+                                                                                        item.menu_item.price_source === 'location_category' && "text-purple-600 border-purple-200"
+                                                                                    )}>
+                                                                                        {item.menu_item.price_source === 'category' && 'Cat'}
+                                                                                        {item.menu_item.price_source === 'location_item' && 'Loc'}
+                                                                                        {item.menu_item.price_source === 'location_category' && 'L+C'}
+                                                                                    </Badge>
+                                                                                )}
+                                                                            </div>
+                                                                            {!item.menu_item.effective_availability && (
+                                                                                <Badge variant="secondary" className="text-xs">
                                                                                     Off
                                                                                 </Badge>
                                                                             )}
                                                                         </div>
 
+                                                                        {/* Edit button - opens form in category context */}
+                                                                        <TooltipProvider>
+                                                                            <Tooltip>
+                                                                                <TooltipTrigger asChild>
+                                                                                    <Button
+                                                                                        variant="ghost"
+                                                                                        size="icon"
+                                                                                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                                                                        onClick={(e) => handleEditItem(item, category, e)}
+                                                                                    >
+                                                                                        <DollarSign className="h-4 w-4" />
+                                                                                    </Button>
+                                                                                </TooltipTrigger>
+                                                                                <TooltipContent>
+                                                                                    <p>Edit {isAllLocations ? 'category' : 'location'} pricing</p>
+                                                                                </TooltipContent>
+                                                                            </Tooltip>
+                                                                        </TooltipProvider>
+
                                                                         {/* Remove button (only for all locations) */}
                                                                         {isAllLocations && (
-                                                                            <Button
-                                                                                variant="ghost"
-                                                                                size="icon"
-                                                                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                                                                onClick={(e) => handleRemoveItemFromCategory(category.id, item.id, e)}
-                                                                            >
-                                                                                <X className="h-4 w-4" />
-                                                                            </Button>
+                                                                            <TooltipProvider>
+                                                                                <Tooltip>
+                                                                                    <TooltipTrigger asChild>
+                                                                                        <Button
+                                                                                            variant="ghost"
+                                                                                            size="icon"
+                                                                                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                                                                            onClick={(e) => handleRemoveItemFromCategory(category.id, item.menu_item_id, e)}
+                                                                                        >
+                                                                                            <X className="h-4 w-4" />
+                                                                                        </Button>
+                                                                                    </TooltipTrigger>
+                                                                                    <TooltipContent>
+                                                                                        <p>Remove from category</p>
+                                                                                    </TooltipContent>
+                                                                                </Tooltip>
+                                                                            </TooltipProvider>
                                                                         )}
                                                                         <ExternalLink className="h-4 w-4 text-muted-foreground" />
                                                                     </div>
                                                                 ))}
 
-                                                                {displayItems.length > 5 && (
+                                                                {categoryItems.length > 5 && (
                                                                     <Button
                                                                         variant="ghost"
                                                                         className="w-full"
@@ -507,7 +914,7 @@ export default function CategoriesPage() {
                                                                             router.push(`/dashboard/menu/items?category=${category.id}`)
                                                                         }}
                                                                     >
-                                                                        View all {displayItems.length} items
+                                                                        View all {categoryItems.length} items
                                                                         <ExternalLink className="h-3 w-3 ml-1" />
                                                                     </Button>
                                                                 )}
@@ -525,7 +932,7 @@ export default function CategoriesPage() {
                 </CardContent>
             </Card>
 
-            {/* Create/Edit Bottom Sheet */}
+            {/* Create/Edit Category Bottom Sheet */}
             <CategoryFormSheet
                 open={isCreateSheetOpen || !!editingCategory}
                 onOpenChange={(open) => {
@@ -536,11 +943,80 @@ export default function CategoriesPage() {
                 }}
                 clerkOrgId={clerkOrgId}
                 menus={menusList}
-                schedules={schedulesList}
-                editCategory={editingCategory}
+                schedules={[]}
+                editCategory={editingCategory ? {
+                    id: editingCategory.id,
+                    name: editingCategory.name,
+                    description: editingCategory.description,
+                    image_url: editingCategory.image,
+                    display_order: editingCategory.display_order,
+                    is_active: editingCategory.is_active,
+                    merchant_id: '',
+                    menu_id: null,
+                    created_at: editingCategory.created_at,
+                    updated_at: editingCategory.updated_at,
+                } : null}
                 onSuccess={() => {
                     setIsCreateSheetOpen(false)
                     setEditingCategory(null)
+                    queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
+                    refetch()
+                }}
+            />
+
+            {/* Edit Item in Category Context */}
+            <NewEditItemFormSheet
+                open={isItemSheetOpen}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setIsItemSheetOpen(false)
+                        setEditingItem(null)
+                        setEditingCategoryContext(null)
+                    }
+                }}
+                clerkOrgId={clerkOrgId || ''}
+                editItem={editingItem || undefined}
+                categoryId={editingCategoryContext?.id}
+                categoryName={editingCategoryContext?.name}
+                categories={categoriesList.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                    description: c.description,
+                    is_active: c.is_active,
+                    display_order: c.display_order,
+                    merchant_id: '',
+                    menu_id: null,
+                    image: c.image,
+                    created_at: c.created_at,
+                    updated_at: c.updated_at,
+                }))}
+                modifierGroups={[]}
+                onSuccess={() => {
+                    setIsItemSheetOpen(false)
+                    setEditingItem(null)
+                    setEditingCategoryContext(null)
+                    queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
+                    refetch()
+                }}
+            />
+
+            {/* Add Item to Category Wizard */}
+            <AddItemToCategoryWizard
+                open={isAddItemWizardOpen}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setIsAddItemWizardOpen(false)
+                        setAddItemCategoryContext(null)
+                    }
+                }}
+                categoryId={addItemCategoryContext?.id || ''}
+                categoryName={addItemCategoryContext?.name || ''}
+                clerkOrgId={clerkOrgId || ''}
+                existingItemIds={addItemCategoryContext?.existingItemIds || []}
+                onSuccess={() => {
+                    setIsAddItemWizardOpen(false)
+                    setAddItemCategoryContext(null)
+                    queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
                     refetch()
                 }}
             />

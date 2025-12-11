@@ -311,3 +311,108 @@ export async function RemoveModifierFromItem(menuItemId: string, modifierGroupId
 
     return { success: true }
 }
+
+// ============================================================================
+// CREATE ITEM IN CATEGORY (Combined operation)
+// ============================================================================
+
+/**
+ * Creates a new menu item and immediately assigns it to a category.
+ * This enforces the hierarchical structure where items must belong to categories.
+ */
+export async function CreateItemInCategory(
+    clerkOrgId: string,
+    categoryId: string,
+    item: {
+        name: string
+        description?: string
+        price: number
+        cashPrice?: number
+        image?: string
+        availability?: boolean
+        allergens?: string[]
+        cardBgColor?: string
+        stockTrackingMode?: string
+        mealTypes?: string[]
+    },
+    options?: {
+        displayOrder?: number
+        customPrice?: number
+        isFeatured?: boolean
+    }
+) {
+    if (!clerkOrgId) {
+        return { error: 'Organization ID is required' }
+    }
+
+    if (!categoryId) {
+        return { error: 'Category ID is required' }
+    }
+
+    const supabase = createServerSupabaseClient()
+
+    // Get merchant ID from clerk org
+    const { data: merchant, error: merchantError } = await supabase
+        .from('merchants')
+        .select('id')
+        .eq('clerk_org_id', clerkOrgId)
+        .single()
+
+    if (merchantError || !merchant) {
+        console.error('Error getting merchant:', merchantError)
+        return { error: 'Merchant not found' }
+    }
+
+    // Step 1: Create the menu item
+    const { data: createdItem, error: createError } = await supabase
+        .from('menu_items')
+        .insert({
+            merchant_id: merchant.id,
+            name: item.name,
+            description: item.description,
+            price: item.price,
+            cash_price: item.cashPrice,
+            image: item.image,
+            availability: item.availability ?? true,
+            allergens: item.allergens ?? [],
+            card_bg_color: item.cardBgColor,
+            stock_tracking_mode: item.stockTrackingMode ?? 'in_stock',
+            meal_types: item.mealTypes ?? []
+        })
+        .select()
+        .single()
+
+    if (createError || !createdItem) {
+        console.error('Error creating menu item:', createError)
+        return { error: createError?.message || 'Failed to create item' }
+    }
+
+    // Step 2: Add the item to the category using direct insert/upsert
+    const { data: assignmentData, error: assignmentError } = await supabase
+        .from('category_items')
+        .upsert({
+            category_id: categoryId,
+            menu_item_id: createdItem.id,
+            merchant_id: merchant.id,
+            display_order: options?.displayOrder ?? 0,
+            custom_price: options?.customPrice || null,
+            is_featured: options?.isFeatured ?? false,
+            is_available: true,
+            updated_at: new Date().toISOString()
+        }, {
+            onConflict: 'category_id,menu_item_id'
+        })
+        .select()
+        .single()
+
+    if (assignmentError) {
+        // Item was created but assignment failed - log but don't fail completely
+        console.error('Error assigning item to category:', assignmentError)
+        return {
+            data: createdItem,
+            warning: 'Item created but failed to assign to category: ' + assignmentError.message
+        }
+    }
+
+    return { success: true, data: createdItem }
+}

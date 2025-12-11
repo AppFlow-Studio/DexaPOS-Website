@@ -26,13 +26,13 @@ export async function getMenuWithRelations(menuId: string) {
                 category:categories(
                     *,
                     category_items(
-                        id,
+                id,
                         display_order,
-                        custom_price,
-                        custom_cash_price,
-                        is_available,
+                custom_price,
+                custom_cash_price,
+                is_available,
                         is_featured,
-                        menu_item:menu_items(*)
+                menu_item:menu_items(*)
                     )
                 )
             ),

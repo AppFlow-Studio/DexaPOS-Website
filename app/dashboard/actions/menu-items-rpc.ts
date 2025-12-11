@@ -10,10 +10,9 @@ import { auth } from '@clerk/nextjs/server'
 
 export async function getItemsForLocation(merchantId: string, locationId?: string | null) {
     const supabase = createServerSupabaseClient()
-    const location_Id = locationId == 'all' ? null : locationId
-    const { data, error } = await supabase.rpc('get_items_for_location', {
+    const { data, error } = await supabase.rpc('get_categories_for_location', {
         p_merchant_id: merchantId,
-        p_location_id: location_Id || null
+        p_location_id: locationId || null
     })
 
     if (error) {
@@ -569,4 +568,268 @@ export async function getItemWithPriceLevels(
     }
 
     return { success: true, data: result }
+}
+
+// ============================================================================
+// LEVEL-SPECIFIC CRUD OPERATIONS
+// ============================================================================
+
+/**
+ * Level 1: Update base item (global)
+ * Use when isAllLocations=true, no categoryId, no menuId
+ */
+export async function updateBaseItem(
+    menuItemId: string,
+    updates: {
+        name?: string
+        description?: string
+        price?: number
+        cashPrice?: number
+        image?: string
+        availability?: boolean
+        allergens?: string[]
+        cardBgColor?: string
+        stockTrackingMode?: string
+        mealTypes?: string[]
+    }
+): Promise<UpdateResult> {
+    return updateItemOverride({
+        menuItemId,
+        categoryId: null,
+        menuId: null,
+        locationId: null,
+        name: updates.name,
+        description: updates.description,
+        price: updates.price,
+        cashPrice: updates.cashPrice,
+        image: updates.image,
+        availability: updates.availability,
+        allergens: updates.allergens,
+        cardBgColor: updates.cardBgColor,
+        stockTrackingMode: updates.stockTrackingMode,
+        mealTypes: updates.mealTypes
+    })
+}
+
+/**
+ * Level 2: Update location-specific item override
+ * Use when viewing a specific location, no categoryId, no menuId
+ */
+export async function updateLocationItemOverride(
+    menuItemId: string,
+    locationId: string,
+    updates: {
+        customPrice?: number | null
+        customCashPrice?: number | null
+        priceModifier?: number | null
+        priceModifierType?: 'add' | 'percent' | null
+        isAvailable?: boolean
+        stockTrackingMode?: string
+        currentStock?: number | null
+    }
+): Promise<UpdateResult> {
+    return updateItemOverride({
+        menuItemId,
+        categoryId: null,
+        menuId: null,
+        locationId,
+        price: updates.customPrice,
+        cashPrice: updates.customCashPrice,
+        priceModifier: updates.priceModifier,
+        priceModifierType: updates.priceModifierType,
+        availability: updates.isAvailable,
+        stockTrackingMode: updates.stockTrackingMode,
+        currentStock: updates.currentStock
+    })
+}
+
+/**
+ * Level 3: Update category-specific item with full options
+ * Use when isAllLocations=true, has categoryId, no menuId
+ * Updates category_items table
+ */
+export async function updateCategoryItemFull(
+    categoryId: string,
+    menuItemId: string,
+    updates: {
+        customPrice?: number | null
+        customCashPrice?: number | null
+        isAvailable?: boolean
+        isFeatured?: boolean
+        displayOrder?: number
+    }
+): Promise<UpdateResult> {
+    return updateItemOverride({
+        menuItemId,
+        categoryId,
+        menuId: null,
+        locationId: null,
+        price: updates.customPrice,
+        cashPrice: updates.customCashPrice,
+        availability: updates.isAvailable,
+        isFeatured: updates.isFeatured,
+        displayOrder: updates.displayOrder
+    })
+}
+
+/**
+ * Level 4: Update location + category specific override
+ * Use when viewing a specific location, has categoryId, no menuId
+ * Updates location_category_item_overrides table
+ */
+export async function updateLocationCategoryItemOverride(
+    locationId: string,
+    categoryId: string,
+    menuItemId: string,
+    updates: {
+        customPrice?: number | null
+        customCashPrice?: number | null
+        isAvailable?: boolean
+        displayOrder?: number
+        isFeatured?: boolean
+    }
+): Promise<UpdateResult> {
+    return updateItemOverride({
+        menuItemId,
+        categoryId,
+        menuId: null,
+        locationId,
+        price: updates.customPrice,
+        cashPrice: updates.customCashPrice,
+        availability: updates.isAvailable,
+        displayOrder: updates.displayOrder,
+        isFeatured: updates.isFeatured
+    })
+}
+
+/**
+ * Level 5: Update location + menu + category specific override
+ * Use when viewing a specific location, has menuId and categoryId
+ * Updates location_menu_item_overrides table
+ */
+export async function updateLocationMenuCategoryItemOverride(
+    locationId: string,
+    menuId: string,
+    categoryId: string,
+    menuItemId: string,
+    updates: {
+        customPrice?: number | null
+        customCashPrice?: number | null
+        isAvailable?: boolean
+        displayOrder?: number
+    }
+): Promise<UpdateResult> {
+    return updateItemOverride({
+        menuItemId,
+        categoryId,
+        menuId,
+        locationId,
+        price: updates.customPrice,
+        cashPrice: updates.customCashPrice,
+        availability: updates.isAvailable,
+        displayOrder: updates.displayOrder
+    })
+}
+
+// ============================================================================
+// BATCH OPERATIONS
+// ============================================================================
+
+/**
+ * Update multiple items at once (same level)
+ */
+export async function batchUpdateItems(
+    updates: Array<{
+        menuItemId: string
+        categoryId?: string | null
+        menuId?: string | null
+        locationId?: string | null
+        price?: number | null
+        cashPrice?: number | null
+        availability?: boolean
+        displayOrder?: number
+    }>
+): Promise<{ success: boolean; results: UpdateResult[]; errors: string[] }> {
+    const results: UpdateResult[] = []
+    const errors: string[] = []
+
+    for (const update of updates) {
+        try {
+            const result = await updateItemOverride({
+                menuItemId: update.menuItemId,
+                categoryId: update.categoryId,
+                menuId: update.menuId,
+                locationId: update.locationId,
+                price: update.price,
+                cashPrice: update.cashPrice,
+                availability: update.availability,
+                displayOrder: update.displayOrder
+            })
+
+            results.push(result)
+            if (!result.success && result.error) {
+                errors.push(`Item ${update.menuItemId}: ${result.error}`)
+            }
+        } catch (err) {
+            errors.push(`Item ${update.menuItemId}: ${err instanceof Error ? err.message : 'Unknown error'}`)
+        }
+    }
+
+    return {
+        success: errors.length === 0,
+        results,
+        errors
+    }
+}
+
+/**
+ * Toggle availability for an item in a category at a location
+ * Convenience function that handles the level detection automatically
+ */
+export async function toggleItemAvailabilityInCategory(
+    menuItemId: string,
+    categoryId: string,
+    isAvailable: boolean,
+    options?: {
+        menuId?: string | null
+        locationId?: string | null
+    }
+): Promise<UpdateResult> {
+    return updateItemOverride({
+        menuItemId,
+        categoryId,
+        menuId: options?.menuId,
+        locationId: options?.locationId,
+        availability: isAvailable
+    })
+}
+
+/**
+ * Add item to a category with optional initial pricing
+ */
+export async function addItemToCategoryWithPrice(
+    categoryId: string,
+    menuItemId: string,
+    options?: {
+        customPrice?: number
+        customCashPrice?: number
+        displayOrder?: number
+        isFeatured?: boolean
+    }
+): Promise<UpdateResult> {
+    const supabase = await createServerSupabaseClient()
+
+    const { data, error } = await supabase.rpc('add_item_to_category', {
+        p_category_id: categoryId,
+        p_menu_item_id: menuItemId,
+        p_display_order: options?.displayOrder ?? 0,
+        p_custom_price: options?.customPrice || null,
+        p_is_featured: options?.isFeatured ?? false
+    })
+
+    if (error) {
+        return { success: false, error: error.message }
+    }
+
+    return { success: true, data }
 }

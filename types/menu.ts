@@ -242,6 +242,11 @@ export interface CategoryWithItems {
     description: string | null;
     image: string | null;
     display_order: number;
+    is_global: boolean;
+
+    // Null if global, otherwise the location ID is location specific category
+    location_id: string | null;
+    location_name: string | null;
 
     // Global availability
     is_active: boolean;
@@ -261,6 +266,7 @@ export interface CategoryWithItems {
     menu_count: number;
 
     created_at: string;
+    created_by: string;
     updated_at: string;
 }
 
@@ -275,6 +281,8 @@ export interface MenuCategoryDetails {
     image: string | null;
     has_location_override: boolean;
     has_menu_category_override: boolean;
+    location_id?: string | null;  // NULL if global category, UUID if location-scoped
+    location_name?: string | null;  // Name of the location if location-scoped
 }
 
 export interface MenuCategory {

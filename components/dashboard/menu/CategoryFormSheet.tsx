@@ -33,12 +33,13 @@ import {
 import { cn } from '@/lib/utils'
 import { CreateCategory, UpdateCategory } from '@/app/dashboard/actions/categories'
 import { MenusModel, SchedulesModel } from '@/types/db-modles'
+import { useSelectedLocation } from '@/stores/location-store'
 
 // Form schema
 const categorySchema = z.object({
     name: z.string().min(2, 'Category name must be at least 2 characters').max(100, 'Category name must be less than 100 characters'),
     description: z.string().max(500, 'Description must be less than 500 characters').optional(),
-    image_url: z.string().url().optional().nullable(),
+    image: z.string().optional(),
     display_order: z.number().min(0).optional().nullable(),
     is_active: z.boolean().default(true),
 })
@@ -67,6 +68,7 @@ export function CategoryFormSheet({
     const queryClient = useQueryClient()
     const [selectedMenu, setSelectedMenu] = React.useState<string | null>(null)
     const [selectedSchedules, setSelectedSchedules] = React.useState<string[]>([])
+    const selectedLocation = useSelectedLocation()
     const [expandedSections, setExpandedSections] = React.useState({
         appearance: false,
         scheduling: false,
@@ -79,7 +81,7 @@ export function CategoryFormSheet({
         defaultValues: {
             name: '',
             description: '',
-            image_url: '',
+            image: '',
             display_order: null,
             is_active: true,
         },
@@ -91,7 +93,7 @@ export function CategoryFormSheet({
             form.reset({
                 name: editCategory.name || '',
                 description: editCategory.description || '',
-                image_url: editCategory.image_url || '',
+                image: editCategory.image || '',
                 display_order: editCategory.display_order || null,
                 is_active: editCategory.is_active ?? true,
             })
@@ -109,7 +111,7 @@ export function CategoryFormSheet({
             form.reset({
                 name: '',
                 description: '',
-                image_url: '',
+                image: '',
                 display_order: null,
                 is_active: true,
             })
@@ -130,6 +132,7 @@ export function CategoryFormSheet({
         )
     }
 
+
     const onSubmit = async (values: CategoryFormValues) => {
         if (!clerkOrgId) {
             toast.error('Organization Not Found', {
@@ -137,6 +140,8 @@ export function CategoryFormSheet({
             })
             return
         }
+
+        console.log('values NEW CATEGORY FORM SHEET', values)
 
         setIsSubmitting(true)
         try {
@@ -147,20 +152,23 @@ export function CategoryFormSheet({
                 result = await UpdateCategory(editCategory.id, {
                     name: values.name,
                     description: values.description,
-                    image_url: values.image_url ?? undefined,
+                    image: values.image ?? undefined,
                     display_order: values.display_order ?? undefined,
                     is_active: values.is_active,
                 })
             } else {
                 // Create new category
-                result = await CreateCategory(clerkOrgId, {
-                    name: values.name,
-                    description: values.description,
-                    image_url: values.image_url ?? undefined,
-                    display_order: values.display_order ?? undefined,
-                    is_active: values.is_active,
-                    menu_id: selectedMenu || undefined,
-                })
+                result = await CreateCategory(
+                    clerkOrgId, 
+                    selectedLocation?.id ?? null,
+                    {
+                        name: values.name,
+                        description: values.description,
+                        image: values.image ?? undefined,
+                        display_order: values.display_order ?? undefined,
+                        is_active: values.is_active,
+                        menu_id: selectedMenu || undefined,
+                    })
             }
 
             if (result.error) {
@@ -217,7 +225,7 @@ export function CategoryFormSheet({
                 <BottomSheetBody>
                     <div className="flex flex-col lg:flex-row h-full gap-6">
                         {/* Form Section */}
-                        <div className="flex-1 overflow-y-auto space-y-4">
+                        <div className="flex-1 overflow-y-auto space-y-4 px-2">
                             <Form {...form}>
                                 <form id="category-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                                     {/* Basic Info Section */}
@@ -265,7 +273,7 @@ export function CategoryFormSheet({
                                     </div>
 
                                     {/* Menu Assignment */}
-                                    <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-300" style={{ animationDelay: '100ms' }}>
+                                    {/* <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-300" style={{ animationDelay: '100ms' }}>
                                         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                                             Menu Assignment
                                         </h3>
@@ -304,7 +312,7 @@ export function CategoryFormSheet({
                                                 </button>
                                             ))}
                                         </div>
-                                    </div>
+                                    </div> */}
 
                                     {/* Appearance Section */}
                                     <Collapsible open={expandedSections.appearance} onOpenChange={() => toggleSection('appearance')}>
@@ -327,7 +335,7 @@ export function CategoryFormSheet({
                                         <CollapsibleContent className="pt-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
                                             <FormField
                                                 control={form.control}
-                                                name="image_url"
+                                                name="image"
                                                 render={({ field }) => (
                                                     <FormItem>
                                                         <FormLabel>Category Image URL</FormLabel>
@@ -511,10 +519,10 @@ export function CategoryFormSheet({
 
                             {/* Category Preview Card */}
                             <div className="bg-card rounded-xl border-2 border-border/50 p-4 shadow-lg transition-all duration-300 hover:shadow-xl">
-                                {watchedValues.image_url ? (
+                                {watchedValues.image ? (
                                     <div className="aspect-video rounded-lg bg-muted mb-3 overflow-hidden">
                                         <img
-                                            src={watchedValues.image_url}
+                                            src={watchedValues.image}
                                             alt="Category preview"
                                             className="w-full h-full object-cover"
                                             onError={(e) => {
@@ -544,9 +552,6 @@ export function CategoryFormSheet({
                                 <div className="flex items-center gap-2 mt-3">
                                     <Badge variant={watchedValues.is_active ? "default" : "secondary"}>
                                         {watchedValues.is_active ? 'Active' : 'Inactive'}
-                                    </Badge>
-                                    <Badge variant="outline">
-                                        {selectedMenu ? menus.find(m => m.id === selectedMenu)?.name || 'Menu' : 'Global'}
                                     </Badge>
                                 </div>
                             </div>

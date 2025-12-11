@@ -4,15 +4,15 @@ import { useParams, useRouter } from 'next/navigation'
 import React, { useState, useMemo, useEffect } from 'react'
 import { useMenuWithCategories } from '../../hooks/useMenu'
 import { useUserInfo } from '../../../manage/hooks/useUserInfo.'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Utensils, Tag, Calendar, Settings, Plus, Trash2, Clock, Power, Save, Info, AlertTriangle, Globe, MapPin, ChevronDown, ChevronRight, Star, DollarSign } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { DeleteMenu, UpdateMenu, ToggleMenuActive } from '../../actions/menus'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Utensils, Tag, Calendar, Clock, Wand2, ArrowLeft, Trash2 } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { DeleteMenu, UpdateMenu, ToggleMenuActive } from '../../actions/menus'
+import { ToggleCategoryInMenu, RemoveLocationMenuCategoryOverride, UpdateLocationMenuCategoryOverride } from '../../actions/categories'
 import {
     CreateSchedule,
     AssignScheduleToMenu,
@@ -29,185 +29,21 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
-import { ScheduleCard } from '@/components/dashboard/menu/ScheduleCard'
-import { WeeklyScheduleView } from '@/components/dashboard/menu/WeeklyScheduleView'
 import { ScheduleFormSheet } from '@/components/dashboard/menu/ScheduleFormSheet'
 import { SchedulesModel, ScheduleTimeSlotsModel } from '@/types/db-modles'
-import { cn } from '@/lib/utils'
 import { useLocationStore } from '@/stores/location-store'
 import { MenuCategory, MenuCategoryItem } from '@/types/menu'
-import {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
-} from '@/components/ui/collapsible'
-
-// Category Section Component with collapsible items
-function CategorySection({
-    category,
-    isExpanded,
-    onToggle,
-    onItemClick,
-    showLocationPricing
-}: {
-    category: MenuCategory
-    isExpanded: boolean
-    onToggle: () => void
-    onItemClick: (itemId: string) => void
-    showLocationPricing: boolean
-}) {
-    const itemCount = category.items?.length || 0
-
-    return (
-        <Collapsible open={isExpanded} onOpenChange={onToggle}>
-            <Card className="overflow-hidden">
-                <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                {isExpanded ? (
-                                    <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                                ) : (
-                                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                                )}
-                                <div>
-                                    <CardTitle className="text-lg">
-                                        {category.category?.name || 'Unnamed Category'}
-                                    </CardTitle>
-                                    {category.category?.description && (
-                                        <CardDescription className="mt-1">
-                                            {category.category.description}
-                                        </CardDescription>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                {!category.is_active && (
-                                    <Badge variant="secondary">Inactive</Badge>
-                                )}
-                                <Badge variant="outline">
-                                    {itemCount} item{itemCount !== 1 ? 's' : ''}
-                                </Badge>
-                            </div>
-                        </div>
-                    </CardHeader>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                    <CardContent className="pt-0">
-                        {itemCount === 0 ? (
-                            <div className="text-center py-8 text-muted-foreground">
-                                No items in this category
-                            </div>
-                        ) : (
-                            <div className="divide-y">
-                                {category.items?.map((item: MenuCategoryItem) => (
-                                    <CategoryItemRow
-                                        key={item.id}
-                                        item={item}
-                                        onClick={() => onItemClick(item.menu_item_id)}
-                                        showLocationPricing={showLocationPricing}
-                                    />
-                                ))}
-                            </div>
-                        )}
-                    </CardContent>
-                </CollapsibleContent>
-            </Card>
-        </Collapsible>
-    )
-}
-
-// Individual item row within a category
-function CategoryItemRow({
-    item,
-    onClick,
-    showLocationPricing
-}: {
-    item: MenuCategoryItem
-    onClick: () => void
-    showLocationPricing: boolean
-}) {
-    const menuItem = item.menu_item
-    const priceSource = menuItem?.price_source || 'base'
-
-    const getPriceSourceBadge = () => {
-        switch (priceSource) {
-            case 'location_menu':
-                return <Badge variant="default" className="text-xs">L5: Menu Override</Badge>
-            case 'location_category':
-                return <Badge variant="default" className="text-xs">L4: Location Category</Badge>
-            case 'category':
-                return <Badge variant="secondary" className="text-xs">L3: Category Price</Badge>
-            case 'location_item':
-                return <Badge variant="secondary" className="text-xs">L2: Location Base</Badge>
-            default:
-                return null
-        }
-    }
-
-    return (
-        <div
-            className="flex items-center gap-4 py-4 px-2 hover:bg-muted/50 cursor-pointer transition-colors rounded-lg"
-            onClick={onClick}
-        >
-            {/* Item Image */}
-            <div className="h-16 w-16 rounded-lg bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
-                {menuItem?.image ? (
-                    <img
-                        src={menuItem.image}
-                        alt={menuItem?.name || ''}
-                        className="h-full w-full object-cover"
-                    />
-                ) : (
-                    <Utensils className="h-6 w-6 text-muted-foreground" />
-                )}
-            </div>
-
-            {/* Item Details */}
-            <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                    <h4 className="font-medium truncate">{menuItem?.name}</h4>
-                    {item.is_featured && (
-                        <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                    )}
-                </div>
-                {menuItem?.description && (
-                    <p className="text-sm text-muted-foreground truncate">
-                        {menuItem.description}
-                    </p>
-                )}
-                <div className="flex items-center gap-2 mt-1">
-                    {menuItem?.allergens && menuItem.allergens.length > 0 && (
-                        <Badge variant="outline" className="text-xs">
-                            {menuItem.allergens.length} allergen{menuItem.allergens.length !== 1 ? 's' : ''}
-                        </Badge>
-                    )}
-                    {showLocationPricing && getPriceSourceBadge()}
-                </div>
-            </div>
-
-            {/* Price */}
-            <div className="text-right flex-shrink-0">
-                <div className="flex items-center gap-1">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-semibold">
-                        {menuItem?.effective_price?.toFixed(2) || '0.00'}
-                    </span>
-                </div>
-                {menuItem?.effective_cash_price && menuItem.effective_cash_price !== menuItem.effective_price && (
-                    <div className="text-sm text-muted-foreground">
-                        Cash: ${menuItem.effective_cash_price.toFixed(2)}
-                    </div>
-                )}
-                {!menuItem?.effective_availability && (
-                    <Badge variant="destructive" className="text-xs mt-1">
-                        Unavailable
-                    </Badge>
-                )}
-            </div>
-        </div>
-    )
-}
+import { useCategoriesWithItems } from '../../hooks/useCategories'
+import { useLocations } from '../../hooks/useLocations'
+import { NewEditItemFormSheet, EditItemWithOverrides } from '@/components/dashboard/menu/NewEditItemFormSheet'
+import { AddCategoryToMenuWizard } from '@/components/dashboard/menu/AddCategoryToMenuWizard'
+import { Dialog as SheetDialog, DialogContent as SheetContent, DialogHeader as SheetHeader, DialogTitle as SheetTitle, DialogDescription as SheetDescription, DialogFooter as SheetFooter } from '@/components/ui/dialog'
+import { CategorySection } from '@/components/dashboard/menu/menuId/CategorySection'
+import { MenuHeader } from '@/components/dashboard/menu/menuId/MenuHeader'
+import { MenuOverviewTab } from '@/components/dashboard/menu/menuId/MenuOverviewTab'
+import { MenuCategoriesTab } from '@/components/dashboard/menu/menuId/MenuCategoriesTab'
+import { MenuSchedulesTab } from '@/components/dashboard/menu/menuId/MenuSchedulesTab'
+import { MenuSettingsTab } from '@/components/dashboard/menu/menuId/MenuSettingsTab'
 
 export default function MenuDetailPage() {
     const params = useParams()
@@ -218,6 +54,13 @@ export default function MenuDetailPage() {
     const { selectedLocationId } = useLocationStore()
     const { data: userInfo } = useUserInfo()
     const clerkOrgId = userInfo?.members?.[0]?.organizations?.id
+    const isAllLocations = !selectedLocationId || selectedLocationId === 'all'
+
+    // Categories for wizard selections
+    const { data: categoriesWithItems } = useCategoriesWithItems(clerkOrgId || '', selectedLocationId)
+
+    // Locations for mapping location_id to location name
+    const { data: locations } = useLocations(clerkOrgId || '')
 
     // Track expanded categories
     const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
@@ -225,6 +68,17 @@ export default function MenuDetailPage() {
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
     const [isScheduleSheetOpen, setIsScheduleSheetOpen] = useState(false)
+    const [isCategoryWizardOpen, setIsCategoryWizardOpen] = useState(false)
+    const [isScheduleWizardOpen, setIsScheduleWizardOpen] = useState(false)
+
+    // Schedule wizard
+    const [scheduleWizardId, setScheduleWizardId] = useState<string | null>(null)
+    const [isSavingScheduleWizard, setIsSavingScheduleWizard] = useState(false)
+
+    // Item editing within menu-category context
+    const [editingItem, setEditingItem] = useState<EditItemWithOverrides | null>(null)
+    const [isItemSheetOpen, setIsItemSheetOpen] = useState(false)
+    const [editingCategoryContext, setEditingCategoryContext] = useState<{ id: string; name: string } | null>(null)
 
     // Settings state
     const [isTogglingActive, setIsTogglingActive] = useState(false)
@@ -253,6 +107,84 @@ export default function MenuDetailPage() {
         }
     }, [editedName, editedDescription, menu])
 
+    const allCategories = menu?.categories || []
+
+    // Filter categories based on location scoping:
+    // - When viewing all locations: show all categories (global + location-specific)
+    // - When viewing a specific location: show only global categories (location_id = null) + that location's categories
+    const filteredCategories = useMemo(() => {
+        if (isAllLocations) {
+            // Show all categories when viewing all locations
+            return allCategories
+        }
+
+        // When viewing a specific location, only show:
+        // 1. Global categories (location_id is null or undefined)
+        // 2. Categories specific to this location (location_id === selectedLocationId)
+        return allCategories.filter(cat => {
+            const categoryLocationId = cat.category?.location_id
+            return !categoryLocationId || categoryLocationId === selectedLocationId
+        })
+    }, [allCategories, isAllLocations, selectedLocationId])
+
+    // Enrich categories with location names
+    const enrichedCategories = useMemo(() => {
+        return filteredCategories.map(cat => {
+            const categoryLocationId = cat.category?.location_id
+            const location = categoryLocationId
+                ? locations?.find(l => l.id === categoryLocationId)
+                : null
+
+            return {
+                ...cat,
+                category: {
+                    ...cat.category,
+                    location_id: categoryLocationId,
+                    location_name: location?.name || null
+                }
+            }
+        })
+    }, [filteredCategories, locations])
+
+    const hiddenCategories = enrichedCategories.filter(c => !c.is_active)
+    const visibleCategories = enrichedCategories.filter(c => c.is_active)
+
+    const mapMenuCategoryItemToEdit = (category: MenuCategory, item: MenuCategoryItem): EditItemWithOverrides => {
+        const mi = item.menu_item
+        const priceLevels = (mi as any).price_levels || {}
+        return {
+            id: mi.id,
+            name: mi.name,
+            description: mi.description || undefined,
+            price: (mi as any).price ?? priceLevels.level_1_base ?? mi.effective_price ?? 0,
+            cash_price: (mi as any).cash_price ?? priceLevels.level_1_cash ?? mi.effective_cash_price ?? null,
+            image: mi.image || undefined,
+            availability: mi.effective_availability ?? true,
+            allergens: mi.allergens ?? [],
+            card_bg_color: mi.card_bg_color ?? undefined,
+            category_items: [{ id: category.category_id, name: category.category?.name || '' }],
+            price_levels: {
+                level_1_base: (mi as any).price ?? priceLevels.level_1_base ?? 0,
+                level_1_cash: (mi as any).cash_price ?? priceLevels.level_1_cash ?? null,
+                level_2_location_item: (mi as any).location_item_override?.custom_price ?? priceLevels.level_2_location_item ?? null,
+                level_2_location_item_cash: (mi as any).location_item_override?.custom_cash_price ?? priceLevels.level_2_location_item_cash ?? null,
+                level_2_modifier: priceLevels.level_2_modifier ?? null,
+                level_2_modifier_type: null,
+                level_3_category: (item as any).custom_price ?? null,
+                level_3_category_cash: (item as any).custom_cash_price ?? null,
+                level_4_location_category: (mi as any).location_category_override?.custom_price ?? priceLevels.level_4_location_category ?? null,
+                level_4_location_category_cash: (mi as any).location_category_override?.custom_cash_price ?? priceLevels.level_4_location_category_cash ?? null,
+                level_5_location_menu: null,
+                level_5_location_menu_cash: null,
+            },
+            effective_price: mi.effective_price,
+            effective_cash_price: mi.effective_cash_price,
+            has_location_item_override: !!(mi as any).location_item_override,
+            has_category_override: !!(item as any).custom_price,
+            has_location_category_override: !!(mi as any).location_category_override,
+        }
+    }
+
     const toggleCategory = (categoryId: string) => {
         setExpandedCategories(prev => {
             const next = new Set(prev)
@@ -272,6 +204,13 @@ export default function MenuDetailPage() {
 
     const collapseAllCategories = () => {
         setExpandedCategories(new Set())
+    }
+
+    const handleEditMenuItem = (item: MenuCategoryItem, category: MenuCategory) => {
+        const mapped = mapMenuCategoryItemToEdit(category, item)
+        setEditingCategoryContext({ id: category.category_id, name: category.category?.name || '' })
+        setEditingItem(mapped)
+        setIsItemSheetOpen(true)
     }
 
     const handleToggleMenuActive = async () => {
@@ -295,6 +234,31 @@ export default function MenuDetailPage() {
             })
         } finally {
             setIsTogglingActive(false)
+        }
+    }
+
+
+    const handleAddScheduleToMenu = async () => {
+        if (!scheduleWizardId) {
+            toast.error('Select a schedule')
+            return
+        }
+        setIsSavingScheduleWizard(true)
+        try {
+            const result = await AssignScheduleToMenu(menuId, scheduleWizardId)
+            if ((result as any)?.error) {
+                toast.error('Add Failed', { description: (result as any).error })
+                return
+            }
+            toast.success('Schedule Added', { description: 'Schedule attached to this menu.' })
+            queryClient.invalidateQueries({ queryKey: ['menu-with-categories', menuId] })
+            refetchMenu()
+            setIsScheduleWizardOpen(false)
+            setScheduleWizardId(null)
+        } catch {
+            toast.error('Add Failed', { description: 'Unable to add schedule' })
+        } finally {
+            setIsSavingScheduleWizard(false)
         }
     }
 
@@ -461,6 +425,65 @@ export default function MenuDetailPage() {
         }
     }
 
+    // Handle toggling category visibility
+    const handleToggleCategoryVisibility = async (categoryId: string, isActive: boolean) => {
+        try {
+            const result = await ToggleCategoryInMenu(
+                menuId,
+                categoryId,
+                isActive,
+                selectedLocationId === 'all' ? null : selectedLocationId
+            )
+
+            if (result.error) {
+                toast.error('Update Failed', { description: result.error })
+                return
+            }
+
+            toast.success(isActive ? 'Category Shown' : 'Category Hidden', {
+                description: isActive
+                    ? 'This category is now visible in the menu.'
+                    : 'This category is now hidden from the menu.'
+            })
+
+            queryClient.invalidateQueries({ queryKey: ['menu-with-categories', menuId] })
+            refetchMenu()
+        } catch {
+            toast.error('Update Failed', {
+                description: 'Unable to update category visibility. Please try again.'
+            })
+        }
+    }
+
+    // Handle resetting category override to global
+    const handleResetCategoryOverride = async (categoryId: string) => {
+        if (!selectedLocationId || selectedLocationId === 'all') return
+
+        try {
+            const result = await RemoveLocationMenuCategoryOverride(
+                selectedLocationId,
+                menuId,
+                categoryId
+            )
+
+            if (result.error) {
+                toast.error('Reset Failed', { description: result.error })
+                return
+            }
+
+            toast.success('Reset Complete', {
+                description: 'Category settings have been reset to global defaults.'
+            })
+
+            queryClient.invalidateQueries({ queryKey: ['menu-with-categories', menuId] })
+            refetchMenu()
+        } catch {
+            toast.error('Reset Failed', {
+                description: 'Unable to reset category settings. Please try again.'
+            })
+        }
+    }
+
     if (isLoading) {
         return (
             <div className="space-y-6 animate-in fade-in duration-500">
@@ -488,63 +511,26 @@ export default function MenuDetailPage() {
         )
     }
 
-    const categories = menu.categories || []
+    //TODO: Handle editing location specific menu settings should follow location scope rulings
+    //TODO: Handle editing location specific menu categories should follow location scope rulings
+    //TODO: Handle switching between location to location should send you back to menu
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
-            <div className="flex items-center gap-4">
-                <div className="flex-1">
-                    {/* Breadcrumbs */}
-                    <div className="text-sm text-muted-foreground flex items-center gap-2 mb-2">
-                        <Button variant="ghost" size="icon" onClick={() => router.back()}>
-                            <ArrowLeft className="h-4 w-4" />
-                        </Button>
-                        <button
-                            type="button"
-                            className="hover:underline"
-                            onClick={() => router.push('/dashboard/menu')}
-                        >
-                            Menus
-                        </button>
-                        <span className="mx-2">/</span>
-                        <div className="text-foreground">{menu.name}</div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <h2 className='text-2xl font-bold tracking-tight'>{menu.name}</h2>
-                        <Badge variant={menu.is_location_owned ? "secondary" : "default"}>
-                            {menu.is_location_owned ? (
-                                <div className="flex items-center gap-2">
-                                    <MapPin className="h-4 w-4" />
-                                    <p>Location Menu</p>
-                                </div>
-                            ) : (
-                                <div className="flex items-center gap-2">
-                                    <Globe className="h-4 w-4" />
-                                    <p>Global Menu</p>
-                                </div>
-                            )}
-                        </Badge>
-                    </div>
-                    {menu.description && (
-                        <p className="text-muted-foreground">{menu.description}</p>
-                    )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                    <Badge variant={menu.is_active ? "default" : "secondary"}>
-                        {menu.is_active ? 'Active' : 'Inactive'}
-                    </Badge>
-                </div>
-            </div>
+            <MenuHeader
+                menu={menu}
+                onBack={() => router.back()}
+                onNavigateToMenus={() => router.push('/dashboard/menu')}
+            />
 
             <Tabs defaultValue="overview" className="space-y-4">
                 <TabsList>
                     <TabsTrigger value="overview">Overview</TabsTrigger>
                     <TabsTrigger value="categories" className="flex items-center gap-1.5">
                         Categories & Items
-                        {categories.length > 0 && (
+                        {enrichedCategories.length > 0 && (
                             <Badge variant="secondary" className="h-5 px-1.5 text-xs">
-                                {categories.length}
+                                {enrichedCategories.length}
                             </Badge>
                         )}
                     </TabsTrigger>
@@ -560,395 +546,65 @@ export default function MenuDetailPage() {
                 </TabsList>
 
                 <TabsContent value="overview" className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-3">
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Categories</CardTitle>
-                                <Tag className="h-4 w-4 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold">{categories.length}</div>
-                                <p className="text-xs text-muted-foreground">
-                                    Total categories
-                                </p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Items</CardTitle>
-                                <Utensils className="h-4 w-4 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold">{totalItems}</div>
-                                <p className="text-xs text-muted-foreground">
-                                    Total items across all categories
-                                </p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Schedules</CardTitle>
-                                <Clock className="h-4 w-4 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold">{menuSchedules.length}</div>
-                                <p className="text-xs text-muted-foreground">
-                                    Active schedules
-                                </p>
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    {/* Quick Schedule Preview */}
-                    {menuSchedules.length > 0 && (
-                        <WeeklyScheduleView schedules={menuSchedules} />
-                    )}
+                    <MenuOverviewTab
+                        categoriesCount={enrichedCategories.length}
+                        totalItems={totalItems}
+                        menuSchedules={menuSchedules}
+                    />
                 </TabsContent>
 
                 <TabsContent value="categories" className="space-y-4">
-                    {/* Controls */}
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={expandAllCategories}
-                            >
-                                Expand All
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={collapseAllCategories}
-                            >
-                                Collapse All
-                            </Button>
-                        </div>
-                        <div className='flex items-center gap-2'>
-                            {selectedLocationId !== 'all' && (
-                                <p className="text-xs text-muted-foreground">
-                                    Viewing location-specific pricing
-                                </p>
-                            )}
-                            <Button
-                                disabled={selectedLocationId !== 'all'}
-                                onClick={() => router.push('/dashboard/menu/categories')}
-                            >
-                                <Plus className="h-4 w-4 mr-2" />
-                                Manage Categories
-                            </Button>
-                        </div>
-                    </div>
-
-                    {/* Category Sections */}
-                    {categories.length === 0 ? (
-                        <Empty
-                            icon={Tag}
-                            title="No categories"
-                            description="Add categories to organize your menu items. Items are displayed within their categories."
-                            action={
-                                <Button onClick={() => router.push('/dashboard/menu/categories')}>
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    Add Categories
-                                </Button>
-                            }
-                        />
-                    ) : (
-                        <div className="space-y-4">
-                            {categories.map((category) => (
-                                <CategorySection
-                                    key={category.id}
-                                    category={category}
-                                    isExpanded={expandedCategories.has(category.id)}
-                                    onToggle={() => toggleCategory(category.id)}
-                                    onItemClick={(itemId) => router.push(`/dashboard/menu/items/${itemId}`)}
-                                    showLocationPricing={selectedLocationId !== 'all'}
-                                />
-                            ))}
-                        </div>
-                    )}
+                    <MenuCategoriesTab
+                        visibleCategories={visibleCategories}
+                        hiddenCategories={hiddenCategories}
+                        expandedCategories={expandedCategories}
+                        selectedLocationId={selectedLocationId}
+                        menuId={menuId}
+                        isMenuLocationOwned={menu?.is_location_owned}
+                        onToggleCategory={toggleCategory}
+                        onExpandAll={expandAllCategories}
+                        onCollapseAll={collapseAllCategories}
+                        onItemClick={(itemId) => router.push(`/dashboard/menu/items/${itemId}`)}
+                        onToggleVisibility={handleToggleCategoryVisibility}
+                        onResetOverride={handleResetCategoryOverride}
+                        onEditItem={handleEditMenuItem}
+                        onAddCategory={() => setIsCategoryWizardOpen(true)}
+                        onNavigateToCategories={() => router.push('/dashboard/menu/categories')}
+                        refetchMenu={refetchMenu}
+                    />
                 </TabsContent>
 
                 <TabsContent value="schedules" className="space-y-4">
-                    {/* Weekly Schedule Overview */}
-                    {menuSchedules.length > 0 && (
-                        <WeeklyScheduleView schedules={menuSchedules} />
-                    )}
-
-                    {/* Schedule Cards */}
-                    <Card>
-                        <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <CardTitle>Assigned Schedules</CardTitle>
-                                    <CardDescription>
-                                        {menuSchedules.length === 0
-                                            ? "No schedules assigned yet"
-                                            : `${menuSchedules.length} schedule${menuSchedules.length !== 1 ? 's' : ''} controlling menu availability`
-                                        }
-                                    </CardDescription>
-                                </div>
-                                <div className='items-end justify-end flex flex-col gap-2'>
-                                    <Button
-                                        disabled={selectedLocationId !== 'all'}
-                                        onClick={() => setIsScheduleSheetOpen(true)}>
-                                        <Plus className="h-4 w-4 mr-2" />
-                                        Add Schedule
-                                    </Button>
-                                    {selectedLocationId !== 'all' && <p className="text-xs text-muted-foreground mt-3">
-                                        * Addition is only available when viewing all locations.
-                                    </p>}
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            {isLoading ? (
-                                <div className="space-y-3">
-                                    {[1, 2].map((i) => (
-                                        <Skeleton key={i} className="h-32 w-full" />
-                                    ))}
-                                </div>
-                            ) : menuSchedules.length === 0 ? (
-                                <Empty
-                                    icon={Calendar}
-                                    title="No schedules assigned"
-                                    description="Add schedules to control when this menu is available to customers"
-                                    action={
-                                        <Button onClick={() => setIsScheduleSheetOpen(true)}>
-                                            <Plus className="h-4 w-4 mr-2" />
-                                            Add Schedule
-                                        </Button>
-                                    }
-                                />
-                            ) : (
-                                <div className="space-y-4">
-                                    {menuSchedules.map((schedule, index) => (
-                                        <ScheduleCard
-                                            key={schedule.id}
-                                            schedule={schedule}
-                                            index={index}
-                                            onRemove={() => handleRemoveSchedule(schedule.id)}
-                                        />
-                                    ))}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                    <MenuSchedulesTab
+                        menuSchedules={menuSchedules}
+                        isLoading={isLoading}
+                        onAddSchedule={() => setIsScheduleWizardOpen(true)}
+                        onOpenScheduleSheet={() => setIsScheduleSheetOpen(true)}
+                        onRemoveSchedule={handleRemoveSchedule}
+                    />
                 </TabsContent>
 
                 <TabsContent value="settings" className="space-y-4">
-                    {/* Status Card */}
-                    <Card className={cn(
-                        "transition-all",
-                        menu.is_active
-                            ? "border-green-200 bg-green-50/50 dark:border-green-900 dark:bg-green-950/20"
-                            : "border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20"
-                    )}>
-                        <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className={cn(
-                                        "h-10 w-10 rounded-lg flex items-center justify-center",
-                                        menu.is_active
-                                            ? "bg-green-500/20 text-green-600"
-                                            : "bg-amber-500/20 text-amber-600"
-                                    )}>
-                                        <Power className="h-5 w-5" />
-                                    </div>
-                                    <div>
-                                        <CardTitle className="text-base">Menu Status</CardTitle>
-                                        <CardDescription>
-                                            {menu.is_active
-                                                ? 'This menu is currently active and visible to customers'
-                                                : 'This menu is currently inactive and hidden from customers'
-                                            }
-                                        </CardDescription>
-                                    </div>
-                                </div>
-                                <Badge
-                                    variant={menu.is_active ? "default" : "secondary"}
-                                    className={cn(
-                                        "text-sm px-3 py-1",
-                                        menu.is_active
-                                            ? "bg-green-500 hover:bg-green-600"
-                                            : "bg-amber-500 hover:bg-amber-600 text-white"
-                                    )}
-                                >
-                                    {menu.is_active ? 'Active' : 'Inactive'}
-                                </Badge>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <Button
-                                onClick={handleToggleMenuActive}
-                                disabled={isTogglingActive}
-                                variant={menu.is_active ? "outline" : "default"}
-                                className={cn(
-                                    menu.is_active
-                                        ? "border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-400"
-                                        : "bg-green-600 hover:bg-green-700"
-                                )}
-                            >
-                                {isTogglingActive ? (
-                                    <>
-                                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                        </svg>
-                                        Updating...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Power className="h-4 w-4 mr-2" />
-                                        {menu.is_active ? 'Deactivate Menu' : 'Activate Menu'}
-                                    </>
-                                )}
-                            </Button>
-                        </CardContent>
-                    </Card>
-
-                    {/* General Settings */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Settings className="h-5 w-5" />
-                                General Settings
-                            </CardTitle>
-                            <CardDescription>Update menu name and description</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="menu-name">Menu Name</Label>
-                                <Input
-                                    id="menu-name"
-                                    value={editedName}
-                                    onChange={(e) => setEditedName(e.target.value)}
-                                    placeholder="Enter menu name"
-                                    className="max-w-md"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="menu-description">Description</Label>
-                                <Input
-                                    id="menu-description"
-                                    value={editedDescription}
-                                    onChange={(e) => setEditedDescription(e.target.value)}
-                                    placeholder="Enter menu description (optional)"
-                                    className="max-w-md"
-                                />
-                            </div>
-
-                            {hasSettingsChanges && (
-                                <div className="flex items-center gap-3 pt-2 animate-in fade-in slide-in-from-bottom-2">
-                                    <Button
-                                        onClick={handleSaveSettings}
-                                        disabled={isSavingSettings || !editedName.trim()}
-                                    >
-                                        {isSavingSettings ? (
-                                            <>
-                                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
-                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                                </svg>
-                                                Saving...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Save className="h-4 w-4 mr-2" />
-                                                Save Changes
-                                            </>
-                                        )}
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        onClick={() => {
-                                            setEditedName(menu.name)
-                                            setEditedDescription(menu.description || '')
-                                        }}
-                                        disabled={isSavingSettings}
-                                    >
-                                        Cancel
-                                    </Button>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    {/* Info Card */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-base">
-                                <Info className="h-4 w-4" />
-                                Menu Information
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="grid gap-4 md:grid-cols-2 text-sm">
-                                <div className="space-y-1">
-                                    <span className="text-muted-foreground">Created</span>
-                                    <p className="font-medium">{new Date(menu.created_at).toLocaleDateString('en-US', {
-                                        year: 'numeric',
-                                        month: 'long',
-                                        day: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit'
-                                    })}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-muted-foreground">Last Updated</span>
-                                    <p className="font-medium">{new Date(menu.updated_at).toLocaleDateString('en-US', {
-                                        year: 'numeric',
-                                        month: 'long',
-                                        day: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit'
-                                    })}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-muted-foreground">Categories</span>
-                                    <p className="font-medium">{categories.length} categories</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-muted-foreground">Items</span>
-                                    <p className="font-medium">{totalItems} items</p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Danger Zone */}
-                    <Card className="border-destructive/50">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-destructive">
-                                <AlertTriangle className="h-5 w-5" />
-                                Danger Zone
-                            </CardTitle>
-                            <CardDescription>
-                                Irreversible actions for this menu
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="flex items-center justify-between p-4 rounded-lg bg-destructive/5 border border-destructive/20">
-                                <div>
-                                    <h4 className="font-medium text-destructive">Delete Menu</h4>
-                                    <p className="text-sm text-muted-foreground">
-                                        Permanently delete this menu and all its associations
-                                    </p>
-                                </div>
-                                <Button
-                                    variant="destructive"
-                                    disabled={selectedLocationId !== 'all'}
-                                    onClick={() => setIsDeleteDialogOpen(true)}
-                                >
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    Delete Menu
-                                </Button>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-3">
-                                * Deletion is only available when viewing all locations.
-                            </p>
-                        </CardContent>
-                    </Card>
+                    <MenuSettingsTab
+                        menu={menu}
+                        categoriesCount={enrichedCategories.length}
+                        totalItems={totalItems}
+                        editedName={editedName}
+                        editedDescription={editedDescription}
+                        hasSettingsChanges={hasSettingsChanges}
+                        isTogglingActive={isTogglingActive}
+                        isSavingSettings={isSavingSettings}
+                        selectedLocationId={selectedLocationId}
+                        onNameChange={setEditedName}
+                        onDescriptionChange={setEditedDescription}
+                        onToggleActive={handleToggleMenuActive}
+                        onSaveSettings={handleSaveSettings}
+                        onCancelSettings={() => {
+                            setEditedName(menu.name)
+                            setEditedDescription(menu.description || '')
+                        }}
+                        onDeleteMenu={() => setIsDeleteDialogOpen(true)}
+                    />
                 </TabsContent>
             </Tabs>
 
@@ -996,6 +652,78 @@ export default function MenuDetailPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Category Wizard */}
+            <AddCategoryToMenuWizard
+                open={isCategoryWizardOpen}
+                onOpenChange={setIsCategoryWizardOpen}
+                menuId={menuId}
+                menuName={menu?.name}
+                categoriesWithItems={categoriesWithItems?.data || []}
+                onSuccess={() => {
+                    refetchMenu()
+                }}
+            />
+
+            {/* Schedule Wizard */}
+            <SheetDialog open={isScheduleWizardOpen} onOpenChange={setIsScheduleWizardOpen}>
+                <SheetContent>
+                    <SheetHeader>
+                        <SheetTitle>Add Schedule to Menu</SheetTitle>
+                        <SheetDescription>Attach an existing schedule to control availability.</SheetDescription>
+                    </SheetHeader>
+                    <div className="space-y-4 mt-4">
+                        <div className="space-y-2">
+                            <Label>Schedule ID</Label>
+                            <Input value={scheduleWizardId ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setScheduleWizardId(e.target.value)} placeholder="Schedule UUID" />
+                        </div>
+                    </div>
+                    <SheetFooter className="mt-4">
+                        <Button variant="outline" onClick={() => setIsScheduleWizardOpen(false)}>Cancel</Button>
+                        <Button onClick={handleAddScheduleToMenu} disabled={isSavingScheduleWizard} className="gap-2">
+                            {isSavingScheduleWizard && <Clock className="h-4 w-4 animate-spin" />}
+                            Add Schedule
+                        </Button>
+                    </SheetFooter>
+                </SheetContent>
+            </SheetDialog>
+
+            {/* Item edit in menu-category context */}
+            <NewEditItemFormSheet
+                open={isItemSheetOpen}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setIsItemSheetOpen(false)
+                        setEditingItem(null)
+                        setEditingCategoryContext(null)
+                    }
+                }}
+                clerkOrgId={clerkOrgId || ''}
+                editItem={editingItem || undefined}
+                categoryId={editingCategoryContext?.id}
+                categoryName={editingCategoryContext?.name}
+                menuId={menuId}
+                categories={(menu?.categories || []).map(c => ({
+                    id: c.category_id,
+                    name: c.category?.name || '',
+                    description: c.category?.description || null,
+                    is_active: c.is_active,
+                    display_order: c.display_order,
+                    merchant_id: menu?.merchant_id || '',
+                    menu_id: menu?.id,
+                    image: (c.category as any)?.image || null,
+                    created_at: menu?.created_at || '',
+                    updated_at: menu?.updated_at || '',
+                }))}
+                modifierGroups={[]}
+                onSuccess={() => {
+                    setIsItemSheetOpen(false)
+                    setEditingItem(null)
+                    setEditingCategoryContext(null)
+                    queryClient.invalidateQueries({ queryKey: ['menu-with-categories', menuId] })
+                    refetchMenu()
+                }}
+            />
 
             {/* Schedule Form Sheet */}
             <ScheduleFormSheet
