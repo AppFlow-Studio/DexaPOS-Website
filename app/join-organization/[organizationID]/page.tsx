@@ -1,3 +1,4 @@
+'use client'
 // app/join-organization/page.tsx (or .jsx)
 import { useEffect } from 'react';
 import { useAuth, useOrganizationList } from '@clerk/nextjs';
