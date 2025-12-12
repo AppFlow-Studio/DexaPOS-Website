@@ -22,6 +22,7 @@ export function useCategories(clerkOrgId: string, menuId?: string | null) {
 export function useCategoriesWithItems(clerkOrgId: string, locationId?: string | null) {
     const { selectedLocationId } = useLocationStore()
     const effectiveLocationId = locationId ?? selectedLocationId
+    console.log('effectiveLocationId', effectiveLocationId)
 
     return useQuery<{ success: boolean; data: CategoryWithItems[]; error?: string }>({
         queryKey: ['categories-with-items', clerkOrgId, effectiveLocationId],

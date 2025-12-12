@@ -79,6 +79,7 @@ export async function getMenuForLocation(menuId: string, locationId?: string) {
             p_menu_id: menuId,
             p_location_id: location_Id || null
         })
+        console.log('newData', newData)
 
     if (!newError && newData) {
         // Transform to legacy format for backwards compatibility
@@ -180,6 +181,7 @@ export async function GetMenus(clerkOrgId: string, locationId?: string | null) {
             `
             )
             .eq('merchant_id', merchant.id)
+
             .order('display_order', { ascending: true, nullsFirst: false })
             .order('created_at', { ascending: false })
 
@@ -190,17 +192,17 @@ export async function GetMenus(clerkOrgId: string, locationId?: string | null) {
         return data as MenusModel[]
     }
 
-    // Location-specific view - get global menus with location status
-    const { data: location, error: locationError } = await supabase
-        .from('locations')
-        .select('uses_global_menu')
-        .eq('id', locationId)
-        .single()
+    // // Location-specific view - get global menus with location status
+    // const { data: location, error: locationError } = await supabase
+    //     .from('locations')
+    //     .select('uses_global_menu')
+    //     .eq('id', locationId)
+    //     .single()
 
-    if (locationError) {
-        console.error('Error getting location:', locationError)
-        return []
-    }
+    // if (locationError) {
+    //     console.error('Error getting location:', locationError)
+    //     return []
+    // }
 
     // Get all global menus for this merchant
     const { data: globalMenus, error: menusError } = await supabase
@@ -218,13 +220,14 @@ export async function GetMenus(clerkOrgId: string, locationId?: string | null) {
 
     // Get location_menus records to see which are active at this location
     const { data: locationMenus } = await supabase
-        .from('location_menus')
+        .from('menus')
         .select('*')
         .eq('location_id', locationId)
 
     const locationMenuMap = new Map(
         (locationMenus || []).map(lm => [lm.menu_id, lm])
     )
+    console.log('locationMenus', locationMenus)
 
     // Build result with location status
     const result: MenuWithLocationStatus[] = globalMenus.map(menu => {
@@ -233,9 +236,7 @@ export async function GetMenus(clerkOrgId: string, locationId?: string | null) {
         return {
             ...menu,
             location_menu_id: locationMenu?.id,
-            is_active_at_location: locationMenu
-                ? locationMenu.is_active
-                : location?.uses_global_menu ?? true,
+            is_active_at_location: locationMenu,
             display_order_at_location: locationMenu?.display_order,
             is_inherited: true,
         }

@@ -76,6 +76,8 @@ export async function GetCategoriesForLocation(
         p_location_id: location_Id || null
     })
 
+    console.log('data', data)
+
     if (error) {
         console.error('Error getting categories for location:', error)
         return { success: false, error: error.message, data: [] }

@@ -16,7 +16,7 @@ import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import { CreateMenu, ToggleMenuActive, DeleteMenu } from '../actions/menus'
 import { MenuListView, MenuWithLocation } from '@/components/dashboard/menu/MenuListView'
-import { useLocationStore } from '@/stores/location-store'
+import { useLocationStore, useSelectedLocation } from '@/stores/location-store'
 import { Badge } from '@/components/ui/badge'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
@@ -37,7 +37,9 @@ export default function MenuPage() {
     const clerkOrgId = userInfo?.members?.[0]?.organizations?.id
     const queryClient = useQueryClient()
 
-    const { selectedLocationId } = useLocationStore()
+    const selectedLocation = useSelectedLocation()
+    console.log('selectedLocation', selectedLocation)
+    const selectedLocationId = selectedLocation?.id || null
     const isAllLocations = selectedLocationId === 'all' || !selectedLocationId
 
     const { data: locations } = useLocations(clerkOrgId || '')

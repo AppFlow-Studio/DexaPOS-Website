@@ -43,6 +43,137 @@ export async function getCategoriesForLocation(merchantId: string, locationId?: 
 }
 
 // ============================================================================
+// GET ITEMS FLAT (Transform category-centric to item-centric)
+// For Items Library view - returns flat list with category associations
+// ============================================================================
+
+export interface FlatItem {
+    id: string
+    name: string
+    description: string | null
+    image: string | null
+    allergens: string[] | null
+    meal_types: string[] | null
+    card_bg_color: string | null
+
+    // Base prices (Level 1)
+    base_price: number
+    base_cash_price: number | null
+    base_availability: boolean
+
+    // Effective values (computed with overrides)
+    effective_price: number
+    effective_cash_price: number | null
+    effective_availability: boolean
+
+    // Override flags
+    has_location_override: boolean
+    price_source: 'base' | 'location_item' | 'category' | 'location_category' | 'location_menu' | string
+
+    // Location override details (Level 2)
+    location_override: {
+        id: string
+        custom_price: number | null
+        custom_cash_price: number | null
+        price_modifier: number | null
+        price_modifier_type: string | null
+        is_available: boolean
+        stock_tracking_mode: string | null
+        current_stock: number | null
+    } | null
+
+    // Categories this item belongs to
+    categories: Array<{
+        id: string
+        name: string
+        location_id: string | null
+        location_name: string | null
+        is_global: boolean
+    }>
+
+    // Stock info
+    stock_tracking_mode: string | null
+    current_stock: number | null
+}
+
+export async function getItemsForLocationFlat(merchantId: string, locationId?: string | null) {
+    // Get category-centric data from RPC
+    const result = await getCategoriesForLocation(merchantId, locationId)
+
+    if (!result.success || !result.data) {
+        return result
+    }
+
+    // Transform: flatten items from all categories
+    const itemsMap = new Map<string, FlatItem>()
+
+    for (const category of result.data) {
+        const categoryInfo = {
+            id: category.id,
+            name: category.name,
+            location_id: category.location_id,
+            location_name: category.location_name,
+            is_global: category.is_global
+        }
+
+        for (const categoryItem of category.items || []) {
+            const menuItem = categoryItem.menu_item
+            if (!menuItem) continue
+
+            const itemId = menuItem.id
+
+            if (!itemsMap.has(itemId)) {
+                // Create new item entry
+                itemsMap.set(itemId, {
+                    id: menuItem.id,
+                    name: menuItem.name,
+                    description: menuItem.description,
+                    image: menuItem.image,
+                    allergens: menuItem.allergens,
+                    meal_types: menuItem.meal_types,
+                    card_bg_color: menuItem.card_bg_color,
+
+                    base_price: menuItem.base_price,
+                    base_cash_price: menuItem.base_cash_price,
+                    base_availability: menuItem.base_availability ?? true,
+
+                    effective_price: menuItem.effective_price,
+                    effective_cash_price: menuItem.effective_cash_price,
+                    effective_availability: menuItem.effective_availability ?? true,
+
+                    has_location_override: menuItem.has_location_item_override ?? false,
+                    price_source: menuItem.price_source || 'base',
+
+                    location_override: menuItem.location_item_override || null,
+
+                    categories: [categoryInfo],
+
+                    stock_tracking_mode: menuItem.stock_tracking_mode || null,
+                    current_stock: menuItem.location_item_override?.current_stock ?? null,
+                })
+            } else {
+                // Add this category to existing item
+                const existingItem = itemsMap.get(itemId)!
+                if (!existingItem.categories.some(c => c.id === category.id)) {
+                    existingItem.categories.push(categoryInfo)
+                }
+            }
+        }
+    }
+
+    // Sort items by name
+    const items = Array.from(itemsMap.values()).sort((a, b) =>
+        a.name.localeCompare(b.name)
+    )
+
+    return {
+        success: true,
+        data: items,
+        categories: result.data // Also return categories for filtering UI
+    }
+}
+
+// ============================================================================
 // GET MENU WITH CATEGORIES (Primary menu view)
 // ============================================================================
 

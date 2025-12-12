@@ -25,7 +25,7 @@ import {
     OverrideData
 } from '../actions/location-menu-overrides'
 import { toast } from 'sonner'
-import { getItemsForLocation } from '../actions/menu-items-rpc'
+import { getItemsForLocationFlat } from '../actions/menu-items-rpc'
 
 // ============================================================================
 // Hook helpers
@@ -61,11 +61,13 @@ function useEffectiveLocationId() {
  */
 export function useLocationScopedMenus() {
     const clerkOrgId = useClerkOrgId()
-    const locationId = useEffectiveLocationId()
-
+    const locationId = useSelectedLocation()
+    console.log('locationId', locationId)
+    const effectiveLocationId = locationId?.id || null
+    console.log('effectiveLocationId', effectiveLocationId)
     return useQuery({
-        queryKey: ['menus', clerkOrgId, locationId, 'scoped'],
-        queryFn: () => GetMenus(clerkOrgId, locationId),
+        queryKey: ['menus', clerkOrgId, 'scoped'],
+        queryFn: () => GetMenus(clerkOrgId, effectiveLocationId),
         enabled: !!clerkOrgId,
     })
 }
@@ -113,19 +115,18 @@ export function useMenuItemWithLocationContext(itemId: string) {
 
 /**
  * Get menu items with their categories, scoped to the current location
- * Returns items with effective prices based on location overrides
+ * Returns FLAT list of items with effective prices based on location overrides
+ * Each item includes its category associations
  */
 export function useLocationScopedMenuItemsWithCategories() {
-    // const clerkOrgId = useClerkOrgId()
     const { data: userInfo } = useUserInfo()
     const merchantId = userInfo?.members?.[0]?.organizations?.merchants?.id || ''
     const locationId = useSelectedLocation()
-    console.log('locationId', locationId)
     const effectiveLocationId = locationId?.id || null
-    console.log('merchantId', merchantId, 'effectiveLocationId', effectiveLocationId)
+
     return useQuery({
-        queryKey: ['menu-items-with-categories', merchantId, 'scoped'],
-        queryFn: () => getItemsForLocation(merchantId, effectiveLocationId),
+        queryKey: ['menu-items-flat', merchantId, effectiveLocationId, 'scoped'],
+        queryFn: () => getItemsForLocationFlat(merchantId, effectiveLocationId),
         enabled: !!merchantId,
     })
 }
