@@ -1,3 +1,4 @@
+'use client'
 import { useOrganizationInfo } from '@/app/manage/hooks/useOrganizationInfo'
 import { useUser } from '@clerk/nextjs'
 
