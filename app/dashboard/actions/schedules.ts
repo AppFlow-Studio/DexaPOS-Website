@@ -2,12 +2,13 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { SchedulesModel, ScheduleTimeSlotsModel } from '@/types/db-modles'
+import { GetLocationScheduleOverrides } from './location-schedule-overrides'
 
 // ============================================================================
 // GET OPERATIONS
 // ============================================================================
 
-export async function GetSchedules(clerkOrgId: string) {
+export async function GetSchedules(clerkOrgId: string, locationId?: string) {
     if (!clerkOrgId) {
         return []
     }
@@ -26,17 +27,52 @@ export async function GetSchedules(clerkOrgId: string) {
         return []
     }
 
-    const { data, error } = await supabase
+    // Build query based on location context
+    let query = supabase
         .from('schedules')
-        .select('*')
+        .select(
+            `*,
+            schedule_time_slots(*)
+        `
+        )
         .eq('merchant_id', merchant.id)
-        .order('created_at', { ascending: false })
+
+    if (locationId === 'all' || !locationId) {
+        // All Locations view: return all schedules (global + all location-specific)
+        // No additional filtering needed
+    } else {
+        // Specific Location view: return global schedules + this location's specific schedules
+        query = query.or(`location_id.is.null,location_id.eq.${locationId}`)
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false })
 
     if (error) {
         console.error('Error getting schedules:', error)
         return []
     }
-    return data as SchedulesModel[]
+
+    // If viewing specific location, fetch overrides and merge
+    if (locationId && locationId !== 'all') {
+        const overrides = await GetLocationScheduleOverrides(locationId)
+        const overrideMap = new Map(overrides.map(o => [o.schedule_id, o]))
+
+        return data.map(schedule => ({
+            ...schedule,
+            has_location_override: overrideMap.has(schedule.id),
+            effective_is_active: overrideMap.get(schedule.id)?.is_active ?? schedule.is_active,
+            location_override: overrideMap.get(schedule.id) || null,
+            is_location_specific: schedule.location_id !== null,
+        }))
+    }
+
+    return data.map(schedule => ({
+        ...schedule,
+        has_location_override: false,
+        effective_is_active: schedule.is_active,
+        location_override: null,
+        is_location_specific: schedule.location_id !== null,
+    }))
 }
 
 export async function GetSchedule(scheduleId: string) {
@@ -75,6 +111,7 @@ export async function CreateSchedule(
         name: string
         description?: string
         is_active?: boolean
+        location_id?: string | null
         time_slots?: Array<{
             day_of_week: number
             start_time: string
@@ -109,6 +146,7 @@ export async function CreateSchedule(
             name: data.name,
             description: data.description || null,
             is_active: data.is_active ?? true,
+            location_id: data.location_id || null,
         })
         .select()
         .single()
@@ -126,6 +164,7 @@ export async function CreateSchedule(
             start_time: slot.start_time,
             end_time: slot.end_time,
             is_active: slot.is_active ?? true,
+            merchant_id: merchant.id,
         }))
 
         const { error: slotsError } = await supabase
@@ -207,6 +246,55 @@ export async function DeleteSchedule(scheduleId: string) {
 // ============================================================================
 // ASSIGNMENT OPERATIONS
 // ============================================================================
+
+/**
+ * Get schedules assigned to a category with location context
+ */
+export async function GetCategorySchedules(
+    categoryId: string,
+    locationId?: string
+) {
+    if (!categoryId) {
+        return []
+    }
+
+    const supabase = createServerSupabaseClient()
+
+    const { data, error } = await supabase
+        .from('category_schedules')
+        .select(`
+            id,
+            schedule:schedules(
+                *,
+                schedule_time_slots(*)
+            )
+        `)
+        .eq('category_id', categoryId)
+
+    if (error) {
+        console.error('Error getting category schedules:', error)
+        return []
+    }
+
+    const schedules = data
+        .map(item => item.schedule)
+        .filter(Boolean)
+
+    // If viewing specific location, fetch overrides and merge
+    if (locationId && locationId !== 'all') {
+        const overrides = await GetLocationScheduleOverrides(locationId)
+        const overrideMap = new Map(overrides.map(o => [o.schedule_id, o]))
+
+        return schedules.map(schedule => ({
+            ...schedule,
+            has_location_override: overrideMap.has(schedule.id),
+            effective_is_active: overrideMap.get(schedule.id)?.is_active ?? schedule.is_active,
+            location_override: overrideMap.get(schedule.id) || null,
+        }))
+    }
+
+    return schedules
+}
 
 export async function AssignScheduleToMenu(menuId: string, scheduleId: string) {
     if (!menuId || !scheduleId) {

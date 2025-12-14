@@ -153,6 +153,17 @@ export async function GetMenus(clerkOrgId: string, locationId?: string | null) {
     }
 
     const supabase = createServerSupabaseClient()
+    // if( locationId != 'all' && locationId != null){
+    //     const { data: FullMenusAndItems, error: FullMenusAndItemsError } = await supabase.rpc('get_pos_full_sync', {
+    //         p_location_id: locationId
+    //     })
+    //     console.log('FullMenusAndItems', FullMenusAndItems)
+    //     if(FullMenusAndItemsError){
+    //         console.error('Error getting full menus and items:', FullMenusAndItemsError)
+    //         return []
+    //     }
+    //     return FullMenusAndItems as MenuWithCategories[]      
+    // }
 
     // First, get the merchant ID from the clerk_org_id
     const { data: merchant, error: merchantError } = await supabase

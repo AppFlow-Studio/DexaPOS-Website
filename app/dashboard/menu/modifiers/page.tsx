@@ -3,17 +3,20 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Layers, Plus, Search, Edit3, Trash2, Settings2, Utensils } from 'lucide-react'
+import { Layers, Plus, Search, Edit3, Trash2, Settings2, Utensils, Eye, EyeOff, MapPin } from 'lucide-react'
 import { useState } from 'react'
-import { useModifierGroups } from '../../hooks/useModifierGroups'
+import {
+    useLocationScopedModifierGroups,
+    useIsAllLocations,
+    useSelectedLocation,
+    useDeleteModifierGroupMutation,
+    useModifierGroupVisibilityMutation
+} from '../../hooks/useLocationScopedModifiers'
 import { useUserInfo } from '../../../manage/hooks/useUserInfo.'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Empty } from '@/components/ui/empty'
 import { ModifierGroupFormSheet } from '@/components/dashboard/menu/ModifierGroupFormSheet'
-import { DeleteModifierGroup } from '../../actions/modifier-groups'
-import { toast } from 'sonner'
-import { useQueryClient } from '@tanstack/react-query'
 import {
     Dialog,
     DialogContent,
@@ -29,9 +32,13 @@ import { ChevronDown } from 'lucide-react'
 export default function ModifiersPage() {
     const { data: userInfo } = useUserInfo()
     const clerkOrgId = userInfo?.members?.[0]?.organizations?.id
-    const queryClient = useQueryClient()
+    const isAllLocations = useIsAllLocations()
+    const selectedLocation = useSelectedLocation()
 
-    const { data: modifierGroups, isLoading, refetch } = useModifierGroups(clerkOrgId)
+    const { data: modifierGroups, isLoading, refetch } = useLocationScopedModifierGroups()
+    const deleteGroupMutation = useDeleteModifierGroupMutation()
+    const visibilityMutation = useModifierGroupVisibilityMutation()
+
     const [searchTerm, setSearchTerm] = useState('')
     const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false)
     const [editingGroup, setEditingGroup] = useState<any>(null)
@@ -54,27 +61,15 @@ export default function ModifiersPage() {
 
     const handleDelete = async () => {
         if (!deletingGroup) return
-
-        try {
-            const result = await DeleteModifierGroup(deletingGroup.id)
-            if (result.error) {
-                toast.error('Delete Failed', {
-                    description: result.error
-                })
-                return
+        deleteGroupMutation.mutate(deletingGroup.id, {
+            onSuccess: () => {
+                setDeletingGroup(null)
             }
-            toast.success('Modifier Group Deleted', {
-                description: `"${deletingGroup.name}" has been permanently deleted.`
-            })
-            queryClient.invalidateQueries({ queryKey: ['modifier-groups'] })
-            refetch()
-        } catch (error) {
-            toast.error('Delete Failed', {
-                description: 'Unable to delete the modifier group. Please try again.'
-            })
-        } finally {
-            setDeletingGroup(null)
-        }
+        })
+    }
+
+    const handleToggleVisibility = (groupId: string, isActive: boolean) => {
+        visibilityMutation.mutate({ modifierGroupId: groupId, isActive })
     }
 
     return (
@@ -84,11 +79,16 @@ export default function ModifiersPage() {
                     <h2 className="text-2xl font-bold tracking-tight">Modifier Groups</h2>
                     <p className="text-muted-foreground">
                         Manage customization options for your menu items
+                        {!isAllLocations && selectedLocation && (
+                            <Badge variant="secondary" className="ml-2">
+                                {selectedLocation.name}
+                            </Badge>
+                        )}
                     </p>
                 </div>
                 <Button onClick={() => setIsCreateSheetOpen(true)} className="gap-2">
                     <Plus className="h-4 w-4" />
-                    Create Modifier Group
+                    {isAllLocations ? 'Create Global Group' : 'Create Location Group'}
                 </Button>
             </div>
 
@@ -190,33 +190,62 @@ export default function ModifiersPage() {
                         />
                     ) : (
                         <div className="space-y-3">
-                            {filteredGroups.map((group, index) => (
-                                <Collapsible
-                                    key={group.id}
-                                    open={expandedGroups[group.id]}
-                                    onOpenChange={() => toggleExpand(group.id)}
-                                >
-                                    <Card
-                                        className={cn(
-                                            "transition-all hover:shadow-md animate-in fade-in slide-in-from-left-4",
-                                            expandedGroups[group.id] && "ring-2 ring-primary/20"
-                                        )}
-                                        style={{ animationDelay: `${index * 50}ms` }}
+                            {filteredGroups.map((group, index) => {
+                                const isGlobal = !group.location_id
+                                const isLocationSpecific = !!group.location_id
+                                const hasLocationOverride = group.location_override && group.location_override.length > 0
+                                const locationOverride = hasLocationOverride ? group.location_override?.[0] : null
+                                const effectiveIsActive = locationOverride ? locationOverride.is_active : true
+
+                                return (
+                                    <Collapsible
+                                        key={group.id}
+                                        open={expandedGroups[group.id]}
+                                        onOpenChange={() => toggleExpand(group.id)}
                                     >
-                                        <CollapsibleTrigger asChild>
-                                            <CardContent className="p-4 cursor-pointer">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-4 flex-1">
-                                                        <div className="h-12 w-12 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                                                            <Layers className="h-6 w-6 text-purple-500" />
-                                                        </div>
-                                                        <div className="flex-1">
-                                                            <div className="font-semibold flex items-center gap-2">
-                                                                {group.name}
-                                                                {group.is_required && (
-                                                                    <Badge variant="destructive" className="text-xs">Required</Badge>
-                                                                )}
+                                        <Card
+                                            className={cn(
+                                                "transition-all hover:shadow-md animate-in fade-in slide-in-from-left-4",
+                                                expandedGroups[group.id] && "ring-2 ring-primary/20",
+                                                !effectiveIsActive && !isAllLocations && "opacity-50"
+                                            )}
+                                            style={{ animationDelay: `${index * 50}ms` }}
+                                        >
+                                            <CollapsibleTrigger asChild>
+                                                <CardContent className="p-4 cursor-pointer">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-4 flex-1">
+                                                            <div className="h-12 w-12 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                                                                <Layers className="h-6 w-6 text-purple-500" />
                                                             </div>
+                                                            <div className="flex-1">
+                                                                <div className="font-semibold flex items-center gap-2 flex-wrap">
+                                                                    {group.name}
+                                                                    {group.is_required && (
+                                                                        <Badge variant="destructive" className="text-xs">Required</Badge>
+                                                                    )}
+                                                                    {isGlobal && (
+                                                                        <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                                                                            Global
+                                                                        </Badge>
+                                                                    )}
+                                                                    {isLocationSpecific && (
+                                                                        <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                                                                            <MapPin className="h-3 w-3 mr-1" />
+                                                                            {selectedLocation?.name} 
+                                                                        </Badge>
+                                                                    )}
+                                                                    {hasLocationOverride && !isLocationSpecific && (
+                                                                        <Badge variant="default" className="text-xs bg-yellow-100 text-yellow-800 border-yellow-300">
+                                                                            Custom at Location
+                                                                        </Badge>
+                                                                    )}
+                                                                    {!effectiveIsActive && !isAllLocations && (
+                                                                        <Badge variant="outline" className="text-xs text-muted-foreground">
+                                                                            Hidden Here
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
                                                             {group.description && (
                                                                 <div className="text-sm text-muted-foreground line-clamp-1">
                                                                     {group.description}
@@ -322,6 +351,31 @@ export default function ModifiersPage() {
 
                                                 {/* Actions */}
                                                 <div className="mt-4 flex items-center gap-2">
+                                                    {/* Hide/Show button for global groups at specific location */}
+                                                    {!isAllLocations && isGlobal && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                handleToggleVisibility(group.id, !effectiveIsActive)
+                                                            }}
+                                                        >
+                                                            {effectiveIsActive ? (
+                                                                <>
+                                                                    <EyeOff className="h-4 w-4 mr-1" />
+                                                                    Hide Here
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Eye className="h-4 w-4 mr-1" />
+                                                                    Show Here
+                                                                </>
+                                                            )}
+                                                        </Button>
+                                                    )}
+
+                                                    {/* Edit button - disabled for location-specific groups when viewing all locations */}
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
@@ -329,10 +383,13 @@ export default function ModifiersPage() {
                                                             e.stopPropagation()
                                                             setEditingGroup(group)
                                                         }}
+                                                        disabled={isLocationSpecific && isAllLocations}
                                                     >
                                                         <Edit3 className="h-4 w-4 mr-1" />
                                                         Edit
                                                     </Button>
+
+                                                    {/* Delete button - disabled for location-specific groups when viewing all locations */}
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
@@ -341,6 +398,7 @@ export default function ModifiersPage() {
                                                             setDeletingGroup(group)
                                                         }}
                                                         className="text-destructive hover:text-destructive"
+                                                        disabled={(isLocationSpecific && isAllLocations) || ( group.location_id == null && selectedLocation?.id != null)}
                                                     >
                                                         <Trash2 className="h-4 w-4 mr-1" />
                                                         Delete
@@ -350,7 +408,8 @@ export default function ModifiersPage() {
                                         </CollapsibleContent>
                                     </Card>
                                 </Collapsible>
-                            ))}
+                                )
+                            })}
                         </div>
                     )}
                 </CardContent>
