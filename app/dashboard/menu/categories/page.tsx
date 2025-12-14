@@ -3,7 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Tag, Plus, Search, Edit3, Trash2, Sparkles, Utensils, ChevronDown, ChevronUp, ExternalLink, X, Globe, MapPin, Settings2, Eye, EyeOff, RotateCcw, Info, DollarSign } from 'lucide-react'
+import { Tag, Plus, Search, Edit3, Trash2, Sparkles, Utensils, ChevronDown, ChevronUp, ExternalLink, X, Globe, MapPin, Settings2, Eye, EyeOff, RotateCcw, Info, DollarSign, Edit2 } from 'lucide-react'
 import { useState, useMemo } from 'react'
 import { useCategories, useCategoriesWithItems } from '../../hooks/useCategories'
 import { useMenus } from '../../hooks/useMenus'
@@ -872,11 +872,11 @@ export default function CategoriesPage() {
                                                                                         className="h-8 w-8 text-muted-foreground hover:text-primary"
                                                                                         onClick={(e) => handleEditItem(item, category, e)}
                                                                                     >
-                                                                                        <DollarSign className="h-4 w-4" />
+                                                                                        <Edit2 className="h-4 w-4" />
                                                                                     </Button>
                                                                                 </TooltipTrigger>
                                                                                 <TooltipContent>
-                                                                                    <p>Edit {isAllLocations ? 'category' : 'location'} pricing</p>
+                                                                                    <p>Edit {isAllLocations ? 'category' : 'location'} state</p>
                                                                                 </TooltipContent>
                                                                             </Tooltip>
                                                                         </TooltipProvider>

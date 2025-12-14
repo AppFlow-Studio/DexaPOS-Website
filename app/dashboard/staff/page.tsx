@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-import { useLocationStore, useIsAllLocations } from '@/stores/location-store'
+import { useLocationStore, useIsAllLocations, useSelectedLocation } from '@/stores/location-store'
 import { useLocations } from '../hooks/useLocations'
 import { useStaff, useInviteClerk, useCreatePosStaff, useCancelInvite } from '../hooks/useStaff'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -46,6 +46,7 @@ export default function MerchantStaffPage() {
     const clerkUserId = userInfo?.id || ''
 
     const { selectedLocationId } = useLocationStore()
+    const selectedLocation = useSelectedLocation()
     const isAllLocations = useIsAllLocations()
 
     const { data: locationsData } = useLocations(userInfo?.members?.[0]?.organizations?.id || '')
@@ -190,7 +191,7 @@ export default function MerchantStaffPage() {
                         {requireLocation ? (
                             <Badge variant="outline" className="gap-1"><Globe className="h-3 w-3" />All Locations</Badge>
                         ) : (
-                            <Badge variant="outline" className="gap-1"><MapPin className="h-3 w-3" />Location</Badge>
+                            <Badge variant="outline" className="gap-1"><MapPin className="h-3 w-3" />{selectedLocation?.name}</Badge>
                         )}
                     </div>
                     <p className="text-muted-foreground">Manage dashboard and POS access by location.</p>

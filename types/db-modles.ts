@@ -381,11 +381,19 @@ export interface MenuItemMenusModel {
 export interface SchedulesModel {
     id: string
     merchant_id: string // FK to merchants table
+    location_id: string | null // FK to locations table, NULL = global, UUID = location-specific
     name: string
     description: string | null
     is_active: boolean
     created_at: string
     updated_at: string
+
+    // Computed fields (from queries)
+    has_location_override?: boolean
+    effective_is_active?: boolean
+    location_override?: LocationScheduleOverride | null
+    is_location_specific?: boolean
+    schedule_time_slots?: ScheduleTimeSlotsModel[]
 }
 
 export interface ScheduleTimeSlotsModel {
@@ -411,6 +419,17 @@ export interface CategorySchedulesModel {
     category_id: string // FK to categories table
     schedule_id: string // FK to schedules table
     created_at: string
+}
+
+// Location Schedule Overrides
+export interface LocationScheduleOverride {
+    id: string
+    location_id: string // FK to locations table
+    schedule_id: string // FK to schedules table
+    merchant_id: string // FK to merchants table
+    is_active: boolean
+    created_at: string
+    updated_at: string
 }
 
 // Item Configuration Tables
@@ -440,6 +459,7 @@ export interface ItemAddonsModel {
 export interface ModifierGroupsModel {
     id: string
     merchant_id: string // FK to merchants table
+    location_id: string | null // FK to locations table - NULL = global, UUID = location-specific
     name: string
     description: string | null
     is_required: boolean
@@ -468,6 +488,32 @@ export interface MenuItemModifierGroupsModel {
     modifier_group_id: string // FK to modifier_groups table
     display_order: number | null
     created_at: string
+}
+
+// Location Modifier Group Overrides
+export interface LocationModifierGroupOverridesModel {
+    id: string
+    location_id: string // FK to locations table
+    modifier_group_id: string // FK to modifier_groups table
+    merchant_id: string // FK to merchants table
+    is_active: boolean
+    created_at: string
+    updated_at: string
+}
+
+export interface LocationModifierItemOverridesModel {
+    id: string
+    location_id: string // FK to locations table
+    modifier_group_item_id: string // FK to modifier_group_items table
+    merchant_id: string // FK to merchants table
+    price_modifier: number | null // Override price modifier
+    is_active: boolean | null // Override availability
+    display_order: number | null // Override display order
+    stock_tracking_mode: 'quantity' | 'in_stock' | 'out_of_stock' | null
+    current_stock: number | null
+    low_stock_threshold: number
+    created_at: string
+    updated_at: string
 }
 
 export interface DiscountsModel {

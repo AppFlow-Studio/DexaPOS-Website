@@ -58,7 +58,7 @@ function BottomSheetOverlay({
                 "duration-300 ease-out",
                 className
             )}
-            style={{ zIndex: 50 + (level - 1) * 10 }}
+            style={{ zIndex: 51 + (level - 1) * 10 }}
             {...props}
         />
     )

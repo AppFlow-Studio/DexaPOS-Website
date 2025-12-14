@@ -85,7 +85,7 @@ export function AddItemToCategoryWizard({
     const { selectedLocationId } = useLocationStore()
     const isAllLocations = useIsAllLocations()
     const { data: userInfo } = useUserInfo()
-
+    const merchantId = userInfo?.members?.[0]?.organizations?.merchants?.id || ''
     // State
     const [activeTab, setActiveTab] = React.useState<'existing' | 'create'>('existing')
     const [searchQuery, setSearchQuery] = React.useState('')
@@ -188,7 +188,7 @@ export function AddItemToCategoryWizard({
             let errorCount = 0
 
             for (const itemId of itemIds) {
-                const result = await AddItemToCategory(categoryId, itemId)
+                const result = await AddItemToCategory(categoryId, itemId, merchantId)
                 if (result.error) {
                     errorCount++
                     console.error(`Failed to add item ${itemId}:`, result.error)

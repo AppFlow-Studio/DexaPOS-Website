@@ -42,6 +42,9 @@ import {
     DeleteModifierGroupItem
 } from '@/app/dashboard/actions/modifier-groups'
 import { ModifierGroupsModel, ModifierGroupItemsModel } from '@/types/db-modles'
+import { useIsAllLocations, useSelectedLocation } from '@/app/dashboard/hooks/useLocationScopedModifiers'
+import { ModifierItemOverrideDialog } from './ModifierItemOverrideDialog'
+import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
 
 // Form schema for modifier group
 const modifierGroupSchema = z.object({
@@ -92,6 +95,8 @@ export function ModifierGroupFormSheet({
     editGroup,
 }: ModifierGroupFormSheetProps) {
     const queryClient = useQueryClient()
+    const { data: userInfo } = useUserInfo()
+    const merchantId = userInfo?.members?.[0]?.organizations?.merchants?.id || ''
     const [options, setOptions] = React.useState<TempOption[]>([])
     const [isAddOptionSheetOpen, setIsAddOptionSheetOpen] = React.useState(false)
     const [editingOption, setEditingOption] = React.useState<TempOption | null>(null)
@@ -100,6 +105,17 @@ export function ModifierGroupFormSheet({
         advanced: false,
     })
     const [isSubmitting, setIsSubmitting] = React.useState(false)
+    const [overrideDialogOpen, setOverrideDialogOpen] = React.useState(false)
+    const [selectedItemForOverride, setSelectedItemForOverride] = React.useState<TempOption | null>(null)
+
+    // Location context
+    const isAllLocations = useIsAllLocations()
+    const selectedLocation = useSelectedLocation()
+
+    // Determine editing permissions
+    const isGlobalGroup = editGroup && !editGroup.location_id
+    const isLocationView = !isAllLocations
+    const canEditStructure = !isGlobalGroup || !isLocationView
 
     const form = useForm<ModifierGroupFormValues>({
         resolver: zodResolver(modifierGroupSchema),
@@ -215,58 +231,66 @@ export function ModifierGroupFormSheet({
         setIsSubmitting(true)
         try {
             if (editGroup) {
-                // Update existing group
-                const updateResult = await UpdateModifierGroup(editGroup.id, {
-                    name: values.name,
-                    description: values.description,
-                    is_required: values.is_required,
-                    min_selections: values.min_selections,
-                    max_selections: values.max_selections,
-                    display_order: values.display_order ?? undefined,
-                })
-
-                if (updateResult.error) {
-                    toast.error('Update Failed', {
-                        description: updateResult.error
+                // Update existing group (only if allowed to edit structure)
+                if (canEditStructure) {
+                    const updateResult = await UpdateModifierGroup(editGroup.id, {
+                        name: values.name,
+                        description: values.description,
+                        is_required: values.is_required,
+                        min_selections: values.min_selections,
+                        max_selections: values.max_selections,
+                        display_order: values.display_order ?? undefined,
                     })
-                    return
-                }
 
-                // Handle options updates
-                for (const option of options) {
-                    if (option.isNew) {
-                        // Create new option
-                        await CreateModifierGroupItem(editGroup.id, {
-                            name: option.name,
-                            description: option.description,
-                            price_modifier: option.price_modifier,
-                            display_order: option.display_order,
-                            is_active: option.is_active,
+                    if (updateResult.error) {
+                        toast.error('Update Failed', {
+                            description: updateResult.error
                         })
-                    } else {
-                        // Update existing option
-                        await UpdateModifierGroupItem(option.id, {
-                            name: option.name,
-                            description: option.description,
-                            price_modifier: option.price_modifier,
-                            display_order: option.display_order,
-                            is_active: option.is_active,
-                        })
+                        return
                     }
+
+                    // Handle options updates (only if allowed)
+                    for (const option of options) {
+                        if (option.isNew) {
+                            // Create new option
+                            await CreateModifierGroupItem(editGroup.id, {
+                                name: option.name,
+                                description: option.description,
+                                price_modifier: option.price_modifier,
+                                display_order: option.display_order,
+                                is_active: option.is_active,
+                                merchant_id: merchantId,
+                            })
+                        } else {
+                            // Update existing option
+                            await UpdateModifierGroupItem(option.id, {
+                                name: option.name,
+                                description: option.description,
+                                price_modifier: option.price_modifier,
+                                display_order: option.display_order,
+                                is_active: option.is_active,
+                            })
+                        }
+                    }
+
+                    // Delete removed options
+                    const currentOptionIds = options.filter(o => !o.isNew).map(o => o.id)
+                    const originalOptionIds = editGroup.modifier_group_items?.map(o => o.id) || []
+                    const deletedOptionIds = originalOptionIds.filter(id => !currentOptionIds.includes(id))
+
+                    for (const id of deletedOptionIds) {
+                        await DeleteModifierGroupItem(id)
+                    }
+
+                    toast.success('Modifier Group Updated', {
+                        description: `"${values.name}" has been updated with ${options.length} option${options.length !== 1 ? 's' : ''}.`
+                    })
+                } else {
+                    // At location level viewing global group - overrides are handled via ModifierItemOverrideDialog
+                    toast.info('Location View', {
+                        description: 'Use "Edit State" buttons to customize options at this location.'
+                    })
                 }
-
-                // Delete removed options
-                const currentOptionIds = options.filter(o => !o.isNew).map(o => o.id)
-                const originalOptionIds = editGroup.modifier_group_items?.map(o => o.id) || []
-                const deletedOptionIds = originalOptionIds.filter(id => !currentOptionIds.includes(id))
-
-                for (const id of deletedOptionIds) {
-                    await DeleteModifierGroupItem(id)
-                }
-
-                toast.success('Modifier Group Updated', {
-                    description: `"${values.name}" has been updated with ${options.length} option${options.length !== 1 ? 's' : ''}.`
-                })
             } else {
                 // Create new group with options
                 const result = await CreateModifierGroup(clerkOrgId, {
@@ -276,11 +300,13 @@ export function ModifierGroupFormSheet({
                     min_selections: values.min_selections,
                     max_selections: values.max_selections ?? undefined,
                     display_order: values.display_order ?? undefined,
+                    location_id: selectedLocation?.id == 'all' ? null : selectedLocation?.id,
                     options: options.map((opt, index) => ({
                         name: opt.name,
                         description: opt.description,
                         price_modifier: opt.price_modifier,
                         display_order: opt.display_order ?? index,
+                        merchant_id: merchantId,
                     })),
                 })
 
@@ -326,10 +352,20 @@ export function ModifierGroupFormSheet({
                     <BottomSheetHeader>
                         <BottomSheetTitle className="flex items-center gap-2">
                             <Layers className="h-5 w-5 text-purple-500" />
-                            {editGroup ? 'Edit Modifier Group' : 'Create Modifier Group'}
+                            {!canEditStructure ? (
+                                <>Customize Global Group at Location</>
+                            ) : editGroup ? (
+                                'Edit Modifier Group'
+                            ) : (
+                                'Create Modifier Group'
+                            )}
                         </BottomSheetTitle>
                         <BottomSheetDescription>
-                            Modifier groups let customers customize their orders (e.g., size, toppings, sauces).
+                            {!canEditStructure ? (
+                                <>Customize pricing, visibility, ordering, and stock for options at <Badge variant="secondary" className="ml-1">{selectedLocation?.name}</Badge></>
+                            ) : (
+                                'Modifier groups let customers customize their orders (e.g., size, toppings, sauces).'
+                            )}
                         </BottomSheetDescription>
                     </BottomSheetHeader>
 
@@ -356,9 +392,15 @@ export function ModifierGroupFormSheet({
                                                             <Input
                                                                 placeholder="e.g., Size, Toppings, Sauce"
                                                                 className="h-12 text-lg"
+                                                                disabled={!canEditStructure}
                                                                 {...field}
                                                             />
                                                         </FormControl>
+                                                        {!canEditStructure && (
+                                                            <FormDescription className="text-xs text-muted-foreground">
+                                                                Global group settings cannot be edited at location level
+                                                            </FormDescription>
+                                                        )}
                                                         <FormMessage />
                                                     </FormItem>
                                                 )}
@@ -374,6 +416,7 @@ export function ModifierGroupFormSheet({
                                                             <textarea
                                                                 className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
                                                                 placeholder="Optional description for this modifier group..."
+                                                                disabled={!canEditStructure}
                                                                 {...field}
                                                             />
                                                         </FormControl>
@@ -418,10 +461,12 @@ export function ModifierGroupFormSheet({
                                                                     type="button"
                                                                     role="switch"
                                                                     aria-checked={field.value}
-                                                                    onClick={() => field.onChange(!field.value)}
+                                                                    onClick={() => canEditStructure && field.onChange(!field.value)}
+                                                                    disabled={!canEditStructure}
                                                                     className={cn(
                                                                         "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                                                                        field.value ? "bg-primary" : "bg-muted"
+                                                                        field.value ? "bg-primary" : "bg-muted",
+                                                                        !canEditStructure && "opacity-50 cursor-not-allowed"
                                                                     )}
                                                                 >
                                                                     <span
@@ -447,6 +492,7 @@ export function ModifierGroupFormSheet({
                                                                     <Input
                                                                         type="number"
                                                                         min="0"
+                                                                        disabled={!canEditStructure}
                                                                         {...field}
                                                                         onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                                                                     />
@@ -467,6 +513,7 @@ export function ModifierGroupFormSheet({
                                                                         type="number"
                                                                         min="0"
                                                                         placeholder="Unlimited"
+                                                                        disabled={!canEditStructure}
                                                                         {...field}
                                                                         value={field.value ?? ''}
                                                                         onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
@@ -488,20 +535,30 @@ export function ModifierGroupFormSheet({
                                                     <DollarSign className="h-4 w-4 text-green-500" />
                                                     Options ({options.length})
                                                 </h3>
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        setEditingOption(null)
-                                                        optionForm.reset()
-                                                        setIsAddOptionSheetOpen(true)
-                                                    }}
-                                                >
-                                                    <Plus className="h-4 w-4 mr-1" />
-                                                    Add Option
-                                                </Button>
+                                                {canEditStructure && (
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            setEditingOption(null)
+                                                            optionForm.reset()
+                                                            setIsAddOptionSheetOpen(true)
+                                                        }}
+                                                    >
+                                                        <Plus className="h-4 w-4 mr-1" />
+                                                        Add Option
+                                                    </Button>
+                                                )}
                                             </div>
+
+                                            {!canEditStructure && (
+                                                <div className="rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-3">
+                                                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                                                        <strong>Location View:</strong> You can customize pricing, visibility, ordering, and stock for this global group's options at this location, but cannot add or remove options.
+                                                    </p>
+                                                </div>
+                                            )}
 
                                             {options.length === 0 ? (
                                                 <div className="text-center py-8 border-2 border-dashed rounded-lg">
@@ -550,25 +607,42 @@ export function ModifierGroupFormSheet({
                                                                 </span>
                                                             </div>
 
-                                                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    onClick={() => handleEditOption(option)}
-                                                                >
-                                                                    <Edit3 className="h-4 w-4" />
-                                                                </Button>
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    onClick={() => handleDeleteOption(option.id)}
-                                                                    className="text-destructive hover:text-destructive"
-                                                                >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </Button>
-                                                            </div>
+                                                            {canEditStructure ? (
+                                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        onClick={() => handleEditOption(option)}
+                                                                    >
+                                                                        <Edit3 className="h-4 w-4" />
+                                                                    </Button>
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        onClick={() => handleDeleteOption(option.id)}
+                                                                        className="text-destructive hover:text-destructive"
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center gap-1">
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        onClick={() => {
+                                                                            setSelectedItemForOverride(option)
+                                                                            setOverrideDialogOpen(true)
+                                                                        }}
+                                                                    >
+                                                                        <Settings2 className="h-4 w-4 mr-1" />
+                                                                        Edit State
+                                                                    </Button>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     ))}
                                                 </div>
@@ -655,24 +729,26 @@ export function ModifierGroupFormSheet({
 
                     <BottomSheetFooter>
                         <Button type="button" variant="outline" onClick={handleClose} className="flex-1 lg:flex-none">
-                            Cancel
+                            {canEditStructure ? 'Cancel' : 'Close'}
                         </Button>
-                        <Button
-                            type="submit"
-                            form="modifier-group-form"
-                            disabled={isSubmitting}
-                            className="flex-1 lg:flex-none lg:min-w-[150px]"
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                    </svg>
-                                    Saving...
-                                </>
-                            ) : editGroup ? 'Save Changes' : 'Create Group'}
-                        </Button>
+                        {canEditStructure && (
+                            <Button
+                                type="submit"
+                                form="modifier-group-form"
+                                disabled={isSubmitting}
+                                className="flex-1 lg:flex-none lg:min-w-[150px]"
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                        </svg>
+                                        Saving...
+                                    </>
+                                ) : editGroup ? 'Save Changes' : 'Create Group'}
+                            </Button>
+                        )}
                     </BottomSheetFooter>
                 </BottomSheetContent>
             </BottomSheet>
@@ -684,6 +760,7 @@ export function ModifierGroupFormSheet({
                     optionForm.reset()
                 }
                 setIsAddOptionSheetOpen(open)
+                
             }}>
                 <BottomSheetContent height="auto" className="!rounded-t-[24px]">
                     <BottomSheetHeader>
@@ -696,7 +773,7 @@ export function ModifierGroupFormSheet({
                         </BottomSheetDescription>
                     </BottomSheetHeader>
 
-                    <BottomSheetBody>
+                    <BottomSheetBody className=''>
                         <Form {...optionForm}>
                             <form id="option-form" onSubmit={optionForm.handleSubmit(handleAddOption)} className="space-y-4">
                                 <FormField
@@ -821,6 +898,22 @@ export function ModifierGroupFormSheet({
                     </BottomSheetFooter>
                 </BottomSheetContent>
             </BottomSheet>
+
+            {/* Override Dialog for Location-Level Customization */}
+            {selectedItemForOverride && selectedLocation && (
+                <ModifierItemOverrideDialog
+                    open={overrideDialogOpen}
+                    onOpenChange={setOverrideDialogOpen}
+                    item={{
+                        id: selectedItemForOverride.id,
+                        name: selectedItemForOverride.name,
+                        price_modifier: selectedItemForOverride.price_modifier,
+                        display_order: selectedItemForOverride.display_order ?? null,
+                        is_active: selectedItemForOverride.is_active,
+                    }}
+                    locationName={selectedLocation.name}
+                />
+            )}
         </>
     )
 }

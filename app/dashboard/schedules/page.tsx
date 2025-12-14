@@ -1,5 +1,6 @@
 'use client'
-
+//TODO: SETUP HEIRARCHY FOR SCHEDULES 
+//WILL SET THIS UP JUST LIKE THE POS SCHEDULES PAGE
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Calendar, Plus, Clock, User } from 'lucide-react'

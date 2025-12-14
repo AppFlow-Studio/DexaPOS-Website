@@ -7,7 +7,7 @@ import { ModifierGroupsModel, ModifierGroupItemsModel } from '@/types/db-modles'
 // GET OPERATIONS - MODIFIER GROUPS
 // ============================================================================
 
-export async function GetModifierGroups(clerkOrgId: string) {
+export async function GetModifierGroups(clerkOrgId: string, locationId?: string | null) {
     if (!clerkOrgId) {
         return []
     }
@@ -26,8 +26,8 @@ export async function GetModifierGroups(clerkOrgId: string) {
         return []
     }
 
-    // Get modifier groups with their items and usage count
-    const { data, error } = await supabase
+    // Build query with location filtering
+    let query = supabase
         .from('modifier_groups')
         .select(`
             *,
@@ -35,11 +35,29 @@ export async function GetModifierGroups(clerkOrgId: string) {
             menu_item_modifier_groups(
                 id,
                 menu_item:menu_items(id, name, price)
+            ),
+            location_override:location_modifier_group_overrides!left(
+                id,
+                is_active,
+                location_id
             )
         `)
         .eq('merchant_id', merchant.id)
+
+    // Add location filtering if locationId provided
+    if (locationId && locationId !== 'all') {
+        // Return: global groups (location_id IS NULL) + this location's specific groups
+        query = query.or(`location_id.is.null,location_id.eq.${locationId}`)
+        // Also filter location_override to current location
+        query = query.eq('location_modifier_group_overrides.location_id', locationId)
+    }
+
+    query = query
         .order('display_order', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: false })
+
+
+    const { data, error } = await query
 
     if (error) {
         console.error('Error getting modifier groups:', error)
@@ -55,6 +73,11 @@ export async function GetModifierGroups(clerkOrgId: string) {
                 name: string
                 price: number
             }
+        }>
+        location_override?: Array<{
+            id: string
+            is_active: boolean
+            location_id: string
         }>
     })[]
 }
@@ -98,11 +121,13 @@ export async function CreateModifierGroup(
         min_selections?: number
         max_selections?: number
         display_order?: number
+        location_id?: string | null
         options?: Array<{
             name: string
             description?: string
             price_modifier: number
             display_order?: number
+            merchant_id: string
         }>
     }
 ) {
@@ -129,6 +154,7 @@ export async function CreateModifierGroup(
         .from('modifier_groups')
         .insert({
             merchant_id: merchant.id,
+            location_id: data.location_id || null,
             name: data.name,
             description: data.description || null,
             is_required: data.is_required ?? false,
@@ -153,6 +179,7 @@ export async function CreateModifierGroup(
             price_modifier: opt.price_modifier,
             display_order: opt.display_order ?? index,
             is_active: true,
+            merchant_id: opt.merchant_id,
         }))
 
         const { error: optionsError } = await supabase
@@ -181,6 +208,7 @@ export async function UpdateModifierGroup(
         min_selections?: number
         max_selections?: number | null
         display_order?: number
+        location_id?: string | null
     }
 ) {
     if (!modifierGroupId) {
@@ -196,6 +224,7 @@ export async function UpdateModifierGroup(
     if (data.min_selections !== undefined) updateData.min_selections = data.min_selections
     if (data.max_selections !== undefined) updateData.max_selections = data.max_selections
     if (data.display_order !== undefined) updateData.display_order = data.display_order
+    if (data.location_id !== undefined) updateData.location_id = data.location_id
 
     const { data: modifierGroup, error } = await supabase
         .from('modifier_groups')
@@ -223,6 +252,28 @@ export async function DeleteModifierGroup(modifierGroupId: string) {
 
     const supabase = createServerSupabaseClient()
 
+    // Check if this is a location-specific group and if it's in use
+    const { data: group } = await supabase
+        .from('modifier_groups')
+        .select('location_id')
+        .eq('id', modifierGroupId)
+        .single()
+
+    // If location-specific, check usage count
+    if (group?.location_id) {
+        const { count } = await supabase
+            .from('menu_item_modifier_groups')
+            .select('*', { count: 'exact', head: true })
+            .eq('modifier_group_id', modifierGroupId)
+
+        if (count && count > 0) {
+            return {
+                error: `Cannot delete: This location-specific modifier group is assigned to ${count} menu item(s). Please unassign it from all menu items first.`
+            }
+        }
+    }
+
+    // Delete the group (global groups can always be deleted, cascade to overrides)
     const { error } = await supabase
         .from('modifier_groups')
         .delete()
@@ -248,6 +299,7 @@ export async function CreateModifierGroupItem(
         price_modifier: number
         display_order?: number
         is_active?: boolean
+        merchant_id: string
     }
 ) {
     if (!modifierGroupId) {
@@ -265,6 +317,7 @@ export async function CreateModifierGroupItem(
             price_modifier: data.price_modifier,
             display_order: data.display_order || null,
             is_active: data.is_active ?? true,
+            merchant_id: data.merchant_id,
         })
         .select()
         .single()
