@@ -31,7 +31,7 @@ import { getItemsForLocationFlat } from '../actions/menu-items-rpc'
 // Hook helpers
 // ============================================================================
 
-function useClerkOrgId() {
+export function useClerkOrgId() {
     const { data: userInfo } = useUserInfo()
     return userInfo?.members?.[0]?.organizations?.id || ''
 }

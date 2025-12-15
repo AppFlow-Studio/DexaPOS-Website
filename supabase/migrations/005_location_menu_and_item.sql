@@ -148,8 +148,6 @@ user_id text NOT NULL,
 
 role_code text NOT NULL,
 
-is_primary_location boolean NOT NULL DEFAULT false,
-
 is_active boolean NOT NULL DEFAULT true,
 
 employment_type text CHECK (employment_type = ANY (ARRAY['full_time'::text, 'part_time'::text, 'contractor'::text, 'seasonal'::text])),
