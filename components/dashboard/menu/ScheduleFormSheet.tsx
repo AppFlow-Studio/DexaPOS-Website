@@ -31,7 +31,8 @@ import {
 import { SchedulesModel, ScheduleTimeSlotsModel } from '@/types/db-modles'
 import { toast } from 'sonner'
 import { DAYS_OF_WEEK, DAYS_FULL, formatTime } from './ScheduleCard'
-
+import { CreateSchedule } from '@/app/dashboard/actions/schedules'
+import { useCreateScheduleMutation } from '@/app/dashboard/hooks/useLocationScopedSchedules'
 interface TimeSlotInput {
     id: string
     day_of_week: number
@@ -73,7 +74,7 @@ export function ScheduleFormSheet({
     const [mode, setMode] = useState<Mode>('create')
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [showSuccess, setShowSuccess] = useState(false)
-
+    const createScheduleMutation = useCreateScheduleMutation()
     // Create mode state
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
@@ -182,7 +183,7 @@ export function ScheduleFormSheet({
 
         try {
             if (mode === 'create') {
-                const result = await onCreateSchedule({
+                const result = await createScheduleMutation.mutateAsync({
                     name: name.trim(),
                     description: description.trim() || undefined,
                     time_slots: timeSlots.map(slot => ({
@@ -231,6 +232,7 @@ export function ScheduleFormSheet({
             setIsSubmitting(false)
         }
     }
+
 
     return (
         <BottomSheet open={open} onOpenChange={onOpenChange}>

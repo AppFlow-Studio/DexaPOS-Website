@@ -76,7 +76,6 @@ export async function GetCategoriesForLocation(
         p_location_id: location_Id || null
     })
 
-    console.log('data', data)
 
     if (error) {
         console.error('Error getting categories for location:', error)
@@ -430,9 +429,10 @@ export async function AssignCategoryToMenu(categoryId: string, menuId: string, d
 export async function AddItemToCategory(
     categoryId: string,
     menuItemId: string,
+    merchantId: string,
     displayOrder?: number,
     customPrice?: number,
-    isFeatured?: boolean
+    isFeatured?: boolean,
 ) {
     if (!categoryId || !menuItemId) {
         return { error: 'Category ID and Menu Item ID are required' }
@@ -440,12 +440,13 @@ export async function AddItemToCategory(
 
     const supabase = createServerSupabaseClient()
 
-    const { data, error } = await supabase.rpc('add_item_to_category', {
-        p_category_id: categoryId,
-        p_menu_item_id: menuItemId,
-        p_display_order: displayOrder ?? 0,
-        p_custom_price: customPrice || null,
-        p_is_featured: isFeatured ?? false
+    const { data, error } = await supabase.from('category_items').insert({
+        category_id: categoryId,
+        menu_item_id: menuItemId,
+        display_order: displayOrder ?? 0,
+        custom_price: customPrice || null,
+        is_featured: isFeatured ?? false,
+        merchant_id: merchantId,
     })
 
     if (error) {

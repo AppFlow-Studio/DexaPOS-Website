@@ -946,16 +946,25 @@ export async function addItemToCategoryWithPrice(
         customCashPrice?: number
         displayOrder?: number
         isFeatured?: boolean
+        merchant_id: string
     }
 ): Promise<UpdateResult> {
     const supabase = await createServerSupabaseClient()
 
-    const { data, error } = await supabase.rpc('add_item_to_category', {
-        p_category_id: categoryId,
-        p_menu_item_id: menuItemId,
-        p_display_order: options?.displayOrder ?? 0,
-        p_custom_price: options?.customPrice || null,
-        p_is_featured: options?.isFeatured ?? false
+    // const { data, error } = await supabase.rpc('add_item_to_category', {
+    //     p_category_id: categoryId,
+    //     p_menu_item_id: menuItemId,
+    //     p_display_order: options?.displayOrder ?? 0,
+    //     p_custom_price: options?.customPrice || null,
+    //     p_is_featured: options?.isFeatured ?? false
+    // })
+    const { data, error } = await supabase.from('category_items').insert({
+        category_id: categoryId,
+        menu_item_id: menuItemId,
+        display_order: options?.displayOrder ?? 0,
+        custom_price: options?.customPrice || null,
+        is_featured: options?.isFeatured ?? false,
+        merchant_id: options?.merchant_id,
     })
 
     if (error) {

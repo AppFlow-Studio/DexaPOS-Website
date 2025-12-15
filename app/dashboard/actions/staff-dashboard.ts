@@ -1,32 +1,35 @@
 'use server'
 
 import { CreateLocationInvite, CancelLocationInvite, GetLocationInvites, GetLocationMembers } from './location-members'
-import { quickAddStaff } from './staff'
+import { inviteStaffMember, InviteStaffParams, quickAddStaff } from './staff'
 
-export async function GetStaffAndInvites(locationId: string) {
+export async function GetStaffAndInvites(locationId: string, merchantId: string) {
     if (!locationId) {
         return { members: [], invites: [] }
     }
 
     const [members, invites] = await Promise.all([
-        GetLocationMembers(locationId),
-        GetLocationInvites(locationId)
+        GetLocationMembers(locationId, merchantId),
+        GetLocationInvites(locationId, merchantId)
     ])
 
     return { members, invites }
 }
 
-export async function InviteClerkToLocation(params: {
-    locationId: string
-    email: string
-    role_code: string
-    invited_by_user_id: string
-}) {
-    return CreateLocationInvite(params.locationId, {
+export async function InviteClerkToLocation(params: InviteStaffParams, clerkOrgId: string) {
+    return inviteStaffMember({
+        merchantId: params.merchantId,
+        phone: params.phone,
+        firstName: params.firstName,
+        lastName: params.lastName,
         email: params.email,
-        role_code: params.role_code,
-        invited_by_user_id: params.invited_by_user_id
-    })
+        roleCode: params.roleCode,
+        locationAssignments: params.locationAssignments,
+        employmentType: params.employmentType,
+        hourlyRate: params.hourlyRate,
+        employeeId: params.employeeId,
+        invited_by_user_id: params.invited_by_user_id,
+    }, clerkOrgId)
 }
 
 export async function CancelLocationInviteById(inviteId: string) {

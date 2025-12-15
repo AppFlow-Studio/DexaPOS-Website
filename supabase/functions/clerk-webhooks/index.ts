@@ -82,6 +82,8 @@ Deno.serve(async (req) => {
 
         return new Response(JSON.stringify({ user }), { status: 200 })
       }
+
+      // Check for merchant location invites and update the status
     }
 
     case 'user.updated': {
@@ -245,21 +247,79 @@ Deno.serve(async (req) => {
     }
 
     case 'organizationMembership.created': {
+      const userId = event.data.public_user_data?.user_id
+      const organizationId = event.data.organization?.id
+      const merchantId = event.data?.public_metadata?.merchantId
+      const createdAt = new Date(event.data.created_at).toISOString()
+      const updatedAt = new Date(event.data.updated_at).toISOString()
+      const locationAssignments = event.data?.public_metadata?.location_assignments
+
+
       const { data, error } = await supabase
         .from('members')
         .insert([
           {
             id: event.data.id,
-            user_id: event.data.public_user_data?.user_id,
-            organization_id: event.data.organization?.id,
-            role : event.data.public_user_data.public_metadata?.role,
-            created_at: new Date(event.data.created_at).toISOString(),
-            updated_at: new Date(event.data.updated_at).toISOString(),
+            user_id: userId,
+            organization_id: organizationId,
+            role: event.data?.public_metadata?.role,
+            created_at: createdAt,
+            updated_at: updatedAt,
           },
         ])
         .select()
         .single()
 
+        //TODO: CLERK UPDATE USER PUBLIC METADATA
+
+      // Insert into location_members table & location 
+      const { data: locationMembersData, error: locationMembersError } = await supabase
+        .from('location_members')
+        .insert(
+          locationAssignments?.map((location:
+            {
+              locationId: string
+              role_code?: string  // Override role at this location
+              hourly_rate?: number
+              pin_code?: string
+            }
+          ) => ({
+            user_id: userId,
+            merchant_id: merchantId,
+            assigned_at: createdAt,
+            updated_at: updatedAt,
+            location_id: location.locationId,
+            role_code: location?.role_code,
+            hourly_rate: location?.hourly_rate,
+            pin_code: location?.pin_code,
+          }))
+        )
+        .select()
+        .single()
+
+      if (locationMembersError) {
+        console.error('Error inserting location members:', locationMembersError)
+        return new Response(JSON.stringify({ error: locationMembersError.message }), { status: 500 })
+      }
+
+      // Insert values into user_roles table and for merchant locations invite insert there
+      // const { data: userRolesData, error: userRolesError } = await supabase
+      //   .from('user_roles')
+      //   .insert([
+      //     {
+      //       user_id: userId,
+      //       organization_id: organizationId,
+      //       created_at: createdAt,
+      //       updated_at: updatedAt,
+      //     },
+      //   ])
+      //   .select()
+      //   .single()
+
+      // if (userRolesError) {
+      //   console.error('Error inserting user roles:', userRolesError)
+      //   return new Response(JSON.stringify({ error: userRolesError.message }), { status: 500 })
+      // }
       if (error) {
         console.error('Error updating member:', error)
         return new Response(JSON.stringify({ error: error.message }), { status: 500 })
@@ -286,6 +346,27 @@ Deno.serve(async (req) => {
       }
 
       return new Response(JSON.stringify({ data }), { status: 200 })
+    }
+
+
+    case 'organizationInvitation.accepted': {
+      const clerkInviteId = event.data.id
+      const { data, error } = await supabase
+        .from('location_invites')
+        .update({
+          status: 'accepted',
+          accepted_at: new Date().toISOString(),
+        })
+        .eq('clerk_invite_id', clerkInviteId)
+
+
+      if (error) {
+        console.error('Error updating location invites:', error)
+        return new Response(JSON.stringify({ error: error.message }), { status: 500 })
+      }
+
+      return new Response(JSON.stringify({ data }), { status: 200 })
+      // TODO: See how i can shift admin and etc logic here
     }
 
     default: {

@@ -6,13 +6,19 @@ import { LocationMemberWithDetails, LocationInviteWithDetails } from '@/types/me
 // ============================================================================
 // GET OPERATIONS
 // ============================================================================
-
-export async function GetLocationMembers(locationId: string): Promise<LocationMemberWithDetails[]> {
+// TODO: ALTER THIS TO ACCOUNT FOR MERCHANT OWNER VIEWING ALL LOCATIONS & LOCATION SCOPED VIEWS
+export async function GetLocationMembers(locationId: string, merchantId: string): Promise<LocationMemberWithDetails[]> {
     if (!locationId) {
         return []
     }
 
     const supabase = createServerSupabaseClient()
+    if (locationId === 'all' || locationId === null) {
+        const { data, error } = await supabase.from('location_members').select(`
+           *
+        `).eq('merchant_id', merchantId)
+        return data as unknown as LocationMemberWithDetails[]
+    }
 
     const { data, error } = await supabase
         .from('location_members')
@@ -21,26 +27,13 @@ export async function GetLocationMembers(locationId: string): Promise<LocationMe
             location_id,
             user_id,
             role_code,
-            is_primary_location,
             is_active,
             employment_type,
             hourly_rate,
             pin_code,
             assigned_at,
             updated_at,
-            user:users!location_members_user_id_fkey(
-                id,
-                first_name,
-                last_name,
-                email,
-                avatar_url
-            ),
-            role:roles!location_members_role_code_fkey(
-                code,
-                name,
-                level,
-                level_type
-            )
+            users(*)
         `)
         .eq('location_id', locationId)
         .order('assigned_at', { ascending: false })
@@ -63,33 +56,55 @@ export async function GetLocationMembers(locationId: string): Promise<LocationMe
         pin_code: member.pin_code,
         assigned_at: member.assigned_at,
         updated_at: member.updated_at,
-        user: member.user,
+        
+        user: member.users,
         role: member.role
     })) as LocationMemberWithDetails[]
 }
 
-export async function GetLocationInvites(locationId: string): Promise<LocationInviteWithDetails[]> {
+export async function GetLocationInvites(locationId: string, merchantId: string): Promise<LocationInviteWithDetails[]> {
     if (!locationId) {
         return []
     }
 
     const supabase = createServerSupabaseClient()
 
+    if (locationId === 'all' || locationId === null) {
+        const { data, error } = await supabase.from('location_invites').select(`
+           *
+        `)
+            .eq('merchant_id', merchantId)
+        return data as unknown as LocationInviteWithDetails[]
+    }
+
+    console.log('locationId', locationId)
+    const searchCriterionObject = {
+        "locationId": locationId
+    };
+
+    // Stringify the object and wrap it in a JS array for the 'contains' check
+    const filterValue = JSON.stringify([searchCriterionObject]);
+
     const { data, error } = await supabase
         .from('location_invites')
         .select(`
             id,
-            location_id,
             invited_by_user_id,
             email,
             role_code,
             clerk_invite_id,
             status,
-            accepted_by_user_id,
             expires_at,
             accepted_at,
+            hourly_rate,
+            merchant_id,
             created_at,
             updated_at,
+            invite_type,
+            first_name,
+            last_name,
+            phone,
+            location_assignments,
             invited_by:users!location_invites_invited_by_user_id_fkey(
                 id,
                 first_name,
@@ -102,13 +117,14 @@ export async function GetLocationInvites(locationId: string): Promise<LocationIn
                 level
             )
         `)
-        .eq('location_id', locationId)
+        .filter('location_assignments', 'cs', filterValue)
         .order('created_at', { ascending: false })
 
     if (error) {
         console.error('Error getting location invites:', error)
         return []
     }
+    console.log('data', data)
 
     // Transform the data to match the expected type
     return (data || []).map((invite: any) => ({
@@ -304,6 +320,7 @@ export async function RemoveLocationMember(memberId: string) {
 // ============================================================================
 
 export async function CreateLocationInvite(
+    clerkOrgId: string,
     locationId: string,
     data: {
         email: string
@@ -314,6 +331,8 @@ export async function CreateLocationInvite(
     if (!locationId || !data.email || !data.role_code || !data.invited_by_user_id) {
         return { error: 'All fields are required' }
     }
+
+    // Send Clerk Organization Invitation
 
     const supabase = createServerSupabaseClient()
 

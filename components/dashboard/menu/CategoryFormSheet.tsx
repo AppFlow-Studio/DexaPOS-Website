@@ -29,11 +29,19 @@ import {
     Sparkles,
     Palette,
     Settings2,
+    MapPin,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CreateCategory, UpdateCategory } from '@/app/dashboard/actions/categories'
 import { MenusModel, SchedulesModel } from '@/types/db-modles'
-import { useSelectedLocation } from '@/stores/location-store'
+import { useSelectedLocation, useIsAllLocations } from '@/stores/location-store'
+import {
+    useCategorySchedules,
+    useAssignScheduleToCategoryMutation,
+    useRemoveScheduleFromCategoryMutation,
+    useLocationScopedSchedules
+} from '@/app/dashboard/hooks/useLocationScopedSchedules'
+import { ScheduleOverrideDialog } from './ScheduleOverrideDialog'
 
 // Form schema
 const categorySchema = z.object({
@@ -69,12 +77,20 @@ export function CategoryFormSheet({
     const [selectedMenu, setSelectedMenu] = React.useState<string | null>(null)
     const [selectedSchedules, setSelectedSchedules] = React.useState<string[]>([])
     const selectedLocation = useSelectedLocation()
+    const isAllLocations = useIsAllLocations()
     const [expandedSections, setExpandedSections] = React.useState({
         appearance: false,
         scheduling: false,
         advanced: false,
     })
     const [isSubmitting, setIsSubmitting] = React.useState(false)
+    const [scheduleOverrideDialog, setScheduleOverrideDialog] = React.useState<any>(null)
+
+    // Fetch location-scoped schedules
+    const { data: locationSchedules } = useLocationScopedSchedules()
+    const { data: categorySchedules } = useCategorySchedules(editCategory?.id || '')
+    const assignScheduleMutation = useAssignScheduleToCategoryMutation()
+    const removeScheduleMutation = useRemoveScheduleFromCategoryMutation()
 
     const form = useForm<CategoryFormValues>({
         resolver: zodResolver(categorySchema),
@@ -103,10 +119,6 @@ export function CategoryFormSheet({
             } else {
                 setSelectedMenu(null)
             }
-            // Set selected schedules from editCategory
-            if (editCategory.category_schedules) {
-                setSelectedSchedules(editCategory.category_schedules.map((s: any) => s.schedule_id || s.schedule?.id).filter(Boolean))
-            }
         } else {
             form.reset({
                 name: '',
@@ -120,16 +132,48 @@ export function CategoryFormSheet({
         }
     }, [editCategory, form])
 
+    // Load category schedules when editing
+    React.useEffect(() => {
+        if (editCategory && categorySchedules) {
+            setSelectedSchedules(categorySchedules.map((s: any) => s.id))
+        }
+    }, [editCategory, categorySchedules])
+
     const toggleSection = (section: keyof typeof expandedSections) => {
         setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }))
     }
 
-    const toggleSchedule = (scheduleId: string) => {
-        setSelectedSchedules(prev =>
-            prev.includes(scheduleId)
-                ? prev.filter(id => id !== scheduleId)
-                : [...prev, scheduleId]
-        )
+    const handleToggleSchedule = (scheduleId: string) => {
+        if (!editCategory) {
+            // If creating new category, just toggle in state
+            setSelectedSchedules(prev =>
+                prev.includes(scheduleId)
+                    ? prev.filter(id => id !== scheduleId)
+                    : [...prev, scheduleId]
+            )
+            return
+        }
+
+        // If editing, call the mutation
+        if (selectedSchedules.includes(scheduleId)) {
+            removeScheduleMutation.mutate({
+                categoryId: editCategory.id,
+                scheduleId
+            }, {
+                onSuccess: () => {
+                    setSelectedSchedules(prev => prev.filter(id => id !== scheduleId))
+                }
+            })
+        } else {
+            assignScheduleMutation.mutate({
+                categoryId: editCategory.id,
+                scheduleId
+            }, {
+                onSuccess: () => {
+                    setSelectedSchedules(prev => [...prev, scheduleId])
+                }
+            })
+        }
     }
 
 
@@ -380,48 +424,75 @@ export function CategoryFormSheet({
                                             </button>
                                         </CollapsibleTrigger>
                                         <CollapsibleContent className="pt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                                            {schedules.length === 0 ? (
+                                            {(!locationSchedules || locationSchedules.length === 0) ? (
                                                 <div className="text-center py-4 text-muted-foreground text-sm">
                                                     No schedules available. Create schedules first to control when this category is available.
                                                 </div>
                                             ) : (
                                                 <div className="space-y-2">
-                                                    {schedules.map((schedule) => (
-                                                        <button
-                                                            key={schedule.id}
-                                                            type="button"
-                                                            onClick={() => toggleSchedule(schedule.id)}
-                                                            className={cn(
-                                                                "w-full p-3 rounded-lg border text-left transition-all duration-200",
-                                                                "hover:shadow-md",
-                                                                selectedSchedules.includes(schedule.id)
-                                                                    ? "border-primary bg-primary/5 shadow-sm"
-                                                                    : "border-border hover:border-primary/50"
-                                                            )}
-                                                        >
-                                                            <div className="flex items-center justify-between">
-                                                                <div>
-                                                                    <div className="font-medium">{schedule.name}</div>
-                                                                    {schedule.description && (
-                                                                        <div className="text-sm text-muted-foreground mt-1">
-                                                                            {schedule.description}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                                <div className={cn(
-                                                                    "w-5 h-5 rounded-full border-2 transition-all duration-200 flex items-center justify-center",
+                                                    {locationSchedules.map((schedule: any) => (
+                                                        <div key={schedule.id} className="flex items-center gap-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleToggleSchedule(schedule.id)}
+                                                                className={cn(
+                                                                    "flex-1 p-3 rounded-lg border text-left transition-all duration-200",
+                                                                    "hover:shadow-md",
                                                                     selectedSchedules.includes(schedule.id)
-                                                                        ? "border-primary bg-primary"
-                                                                        : "border-muted-foreground"
-                                                                )}>
-                                                                    {selectedSchedules.includes(schedule.id) && (
-                                                                        <svg className="w-3 h-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                                                        </svg>
-                                                                    )}
+                                                                        ? "border-primary bg-primary/5 shadow-sm"
+                                                                        : "border-border hover:border-primary/50"
+                                                                )}
+                                                            >
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex-1">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <div className="font-medium">{schedule.name}</div>
+                                                                            {schedule.is_location_specific && (
+                                                                                <Badge variant="outline" className="text-xs">
+                                                                                    <MapPin className="h-3 w-3 mr-1" />
+                                                                                    Location
+                                                                                </Badge>
+                                                                            )}
+                                                                            {schedule.has_location_override && (
+                                                                                <Badge variant="secondary" className="text-xs">
+                                                                                    Override
+                                                                                </Badge>
+                                                                            )}
+                                                                        </div>
+                                                                        {schedule.description && (
+                                                                            <div className="text-sm text-muted-foreground mt-1">
+                                                                                {schedule.description}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className={cn(
+                                                                        "w-5 h-5 rounded-full border-2 transition-all duration-200 flex items-center justify-center ml-2",
+                                                                        selectedSchedules.includes(schedule.id)
+                                                                            ? "border-primary bg-primary"
+                                                                            : "border-muted-foreground"
+                                                                    )}>
+                                                                        {selectedSchedules.includes(schedule.id) && (
+                                                                            <svg className="w-3 h-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                                            </svg>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
-                                                            </div>
-                                                        </button>
+                                                            </button>
+                                                            {!isAllLocations && !schedule.is_location_specific && (
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation()
+                                                                        setScheduleOverrideDialog(schedule)
+                                                                    }}
+                                                                >
+                                                                    <Settings2 className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
+                                                        </div>
                                                     ))}
                                                 </div>
                                             )}
@@ -591,6 +662,16 @@ export function CategoryFormSheet({
                     </Button>
                 </BottomSheetFooter>
             </BottomSheetContent>
+
+            {/* Schedule Override Dialog */}
+            {scheduleOverrideDialog && selectedLocation && (
+                <ScheduleOverrideDialog
+                    open={!!scheduleOverrideDialog}
+                    onOpenChange={(open) => !open && setScheduleOverrideDialog(null)}
+                    schedule={scheduleOverrideDialog}
+                    locationName={selectedLocation.name}
+                />
+            )}
         </BottomSheet>
     )
 }
