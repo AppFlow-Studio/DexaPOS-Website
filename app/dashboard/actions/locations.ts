@@ -34,7 +34,7 @@ export async function GetLocations(clerkOrgId: string) {
         .order('created_at', { ascending: false })
 
     if (error) {
-        console.error('Error getting locations:', error)
+        console.error('[GetLocations] Error getting locations:', error)
         return []
     }
     return data as Location[]

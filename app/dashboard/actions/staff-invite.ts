@@ -82,7 +82,7 @@ async function getLocationsFallback(userId: string, merchantId: string, supabase
             .select('*')
             .eq('merchant_id', merchantId)
         if (error) {
-            console.error('Error getting locations:', error)
+            console.error('[getLocationsFallback] Error getting locations:', error)
             return []
         }
         return data as LocationsModel[]

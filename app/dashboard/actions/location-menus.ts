@@ -253,7 +253,7 @@ export async function SyncMenuToAllLocations(menuId: string) {
         .eq('uses_global_menu', true)
 
     if (locationsError) {
-        console.error('Error getting locations:', locationsError)
+        console.error('[SyncMenuToAllLocations] Error getting locations:', locationsError)
         return { error: locationsError.message }
     }
 

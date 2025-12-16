@@ -23,11 +23,10 @@ Deno.serve(async (req) => {
 
   switch (event.type) {
     case 'user.created': {
-      console.log('User created:', event.data)
       // Handle user creation
       const { data: user, error } = await supabase
         .from('users')
-        .insert([
+        .upsert([
           {
             id: event.data.id,
             first_name: event.data.first_name,
@@ -38,9 +37,11 @@ Deno.serve(async (req) => {
             created_at: new Date(event.data.created_at).toISOString(),
             updated_at: new Date(event.data.updated_at).toISOString(),
           },
-        ])
-        .select()
-        .single()
+        ], { onConflict: 'id' }) // Ensure we update if ID exists
+
+      console.log('User created:', event.data)
+      console.log('User Supabase Response:', user)
+      console.log('User Error:', error)
 
       //Check if public metadata has a attached organizationid, if so create clerkorganizationmembership
       if (event.data.public_metadata?.organizationId) {
@@ -249,84 +250,197 @@ Deno.serve(async (req) => {
     case 'organizationMembership.created': {
       const userId = event.data.public_user_data?.user_id
       const organizationId = event.data.organization?.id
-      const merchantId = event.data?.public_metadata?.merchantId
       const createdAt = new Date(event.data.created_at).toISOString()
       const updatedAt = new Date(event.data.updated_at).toISOString()
-      const locationAssignments = event.data?.public_metadata?.location_assignments
 
+      try {
+          // --- CRITICAL FIX: ENSURE USER EXISTS FIRST ---
+          // To prevent FK errors on staff_profiles if this webhook beats user.created
+          const userData = event.data.public_user_data
 
-      const { data, error } = await supabase
-        .from('members')
-        .insert([
-          {
-            id: event.data.id,
-            user_id: userId,
-            organization_id: organizationId,
-            role: event.data?.public_metadata?.role,
-            created_at: createdAt,
-            updated_at: updatedAt,
-          },
-        ])
-        .select()
-        .single()
+          // Upsert user based on the limited public data we have here
+          // The real user.created webhook will update this with full details later
+          const { error: userUpsertError } = await supabase
+            .from('users')
+            .upsert({
+              id: userId,
+              first_name: userData.first_name,
+              last_name: userData.last_name,
+              email: userData.identifier, // Usually email in this context
+              avatar_url: userData.image_url,
+              // We don't have public_metadata here, but user.created will fill it
+              updated_at: updatedAt
+            }, { onConflict: 'id', ignoreDuplicates: true })
+          // ignoreDuplicates ensures we don't overwrite if user.created ran first
 
-        //TODO: CLERK UPDATE USER PUBLIC METADATA
+          if (userUpsertError) {
+            console.error('[organizationMembership.created] Failed to ensure user exists:', userUpsertError)
+            // We continue anyway, hoping user exists, otherwise next step fails
+          }
 
-      // Insert into location_members table & location 
-      const { data: locationMembersData, error: locationMembersError } = await supabase
-        .from('location_members')
-        .insert(
-          locationAssignments?.map((location:
-            {
-              locationId: string
-              role_code?: string  // Override role at this location
-              hourly_rate?: number
-              pin_code?: string
+          // Get user's publicMetadata (contains our custom data)
+          const clerkClient = createClerkClient({ secretKey: clerkSecretKey! })
+          const user = await clerkClient.users.getUser(userId)
+          const userMetadata = user.publicMetadata || {}
+
+          // Determine merchant ID (from membership or user metadata)
+          const merchantIdFromMembership = event.data?.public_metadata?.merchantId
+          const merchantIdFromUser = userMetadata?.merchantId
+          const merchantId = merchantIdFromMembership || merchantIdFromUser
+
+          if (!merchantId) {
+            console.error('[organizationMembership.created] No merchantId found')
+            return new Response(
+              JSON.stringify({ error: 'merchantId not found in metadata' }),
+              { status: 400 }
+            )
+          }
+
+          // Get location assignments (from membership or user metadata)  - using camelCase
+          const locationAssignments =
+            event.data?.public_metadata?.locationAssignments ||
+            userMetadata?.locationAssignments ||
+            []
+
+          console.log('[organizationMembership.created] Location assignments:', locationAssignments)
+
+          // Determine role
+          const roleCode =
+            event.data?.public_metadata?.roleCode ||
+            userMetadata?.roleCode ||
+            'staff'
+
+          // Check creation type
+          const creationType = userMetadata?.creationType || 'invitation'
+          const isDirectCreation = creationType === 'direct'
+
+          // 1. Check if staff_profile already exists (for direct creation)
+          let staffProfile
+          const { data: existingProfile } = await supabase
+            .from('staff_profiles')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('merchant_id', merchantId)
+            .maybeSingle()
+
+          if (existingProfile) {
+            staffProfile = existingProfile
+            console.log('[organizationMembership.created] Using existing staff_profile:', staffProfile.id)
+          } else {
+            // Create staff_profile if it doesn't exist (for invitation flow)
+            const { data: newProfile, error: profileError } = await supabase
+              .from('staff_profiles')
+              .insert({
+                merchant_id: merchantId,
+                user_id: userId,
+                first_name: user.firstName || userMetadata?.firstName || '',
+                last_name: user.lastName || userMetadata?.lastName || '',
+                email: user.emailAddresses[0]?.emailAddress || '',
+                phone: userMetadata?.phone || null,
+                public_metadata : userMetadata,
+                account_type: 'clerk',
+                is_active: true,
+              })
+              .select()
+              .single()
+
+            if (profileError) {
+              console.error('[organizationMembership.created] Failed to create staff profile:', profileError)
+              return new Response(
+                JSON.stringify({ error: profileError.message }),
+                { status: 500 }
+              )
             }
-          ) => ({
-            user_id: userId,
-            merchant_id: merchantId,
-            assigned_at: createdAt,
-            updated_at: updatedAt,
-            location_id: location.locationId,
-            role_code: location?.role_code,
-            hourly_rate: location?.hourly_rate,
-            pin_code: location?.pin_code,
-          }))
-        )
-        .select()
-        .single()
+            staffProfile = newProfile
+            console.log('[organizationMembership.created] Created new staff_profile:', staffProfile.id)
+          }
 
-      if (locationMembersError) {
-        console.error('Error inserting location members:', locationMembersError)
-        return new Response(JSON.stringify({ error: locationMembersError.message }), { status: 500 })
+          // 2. Create member record
+          const { data: member, error: memberError } = await supabase
+            .from('members')
+            .upsert({
+              id: event.data.id,
+              user_id: userId,
+              staff_profile_id: staffProfile.id,
+              organization_id: organizationId,
+              role : roleCode,
+              created_at: createdAt,
+              updated_at: updatedAt,
+            })
+            .select()
+            .single()
+
+          if (memberError) {
+            console.error('[organizationMembership.created] Error creating member:', memberError)
+            return new Response(
+              JSON.stringify({ error: memberError.message }),
+              { status: 500 }
+            )
+          }
+
+          console.log('[organizationMembership.created] Created member:', member.id)
+
+          // 3. Create location_members records (using camelCase field names)
+          if (locationAssignments && locationAssignments.length > 0) {
+            const locationMembersData = locationAssignments.map((assignment: any) => ({
+              location_id: assignment.locationId,
+              merchant_id: merchantId,
+              user_id: userId,
+              staff_profile_id: staffProfile.id,
+              role_code: assignment.roleCode || roleCode,
+              is_primary_location: assignment.isPrimaryLocation || false,
+              is_active: true,
+              hourly_rate: assignment.hourlyRate || null,
+              employment_type: assignment.employmentType || null,
+              pin_code: assignment.pinCode || null,
+              assigned_at: createdAt,
+              updated_at: updatedAt,
+            }))
+
+            const { error: locationMembersError } = await supabase
+              .from('location_members')
+              .insert(locationMembersData)
+
+            if (locationMembersError) {
+              console.error('[organizationMembership.created] Error creating location members:', locationMembersError)
+              return new Response(
+                JSON.stringify({ error: locationMembersError.message }),
+                { status: 500 }
+              )
+            }
+
+            console.log('[organizationMembership.created] Created location_members:', locationMembersData.length)
+          }
+
+          // 4. Update location_invites if this was from an invitation
+          if (!isDirectCreation) {
+            await supabase
+              .from('location_invites')
+              .update({
+                status: 'accepted',
+                accepted_at: createdAt,
+                accepted_by_user_id: userId,
+              })
+              .eq('email', user.emailAddresses[0]?.emailAddress)
+              .eq('status', 'pending')
+              .eq('merchant_id', merchantId)
+
+            console.log('[organizationMembership.created] Updated location_invites for invitation flow')
+          }
+
+          return new Response(
+            JSON.stringify({ success: true, member_id: member.id }),
+            { status: 200 }
+          )
+
+        } catch (error) {
+          console.error('[organizationMembership.created] Unexpected error:', error)
+          return new Response(
+            JSON.stringify({ error: error.message }),
+            { status: 500 }
+          )
+        }
       }
-
-      // Insert values into user_roles table and for merchant locations invite insert there
-      // const { data: userRolesData, error: userRolesError } = await supabase
-      //   .from('user_roles')
-      //   .insert([
-      //     {
-      //       user_id: userId,
-      //       organization_id: organizationId,
-      //       created_at: createdAt,
-      //       updated_at: updatedAt,
-      //     },
-      //   ])
-      //   .select()
-      //   .single()
-
-      // if (userRolesError) {
-      //   console.error('Error inserting user roles:', userRolesError)
-      //   return new Response(JSON.stringify({ error: userRolesError.message }), { status: 500 })
-      // }
-      if (error) {
-        console.error('Error updating member:', error)
-        return new Response(JSON.stringify({ error: error.message }), { status: 500 })
-      }
-
-      return new Response(JSON.stringify({ data }), { status: 200 })
-    }
 
     case 'organizationMembership.updated': {
       const { data, error } = await supabase
