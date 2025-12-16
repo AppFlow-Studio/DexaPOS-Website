@@ -40,7 +40,7 @@ import {
 import { GetMerchantRoles } from '@/app/dashboard/actions/staff-invite'
 import { RolesModel, LocationsModel } from '@/types/db-modles'
 import { useLocations } from '@/app/dashboard/hooks/useLocations'
-import { useCreatePOSStaff, useInviteClerkStaff } from '@/app/dashboard/hooks/useStaff'
+import { useCreatePOSStaff, useInviteClerkStaff, useCreateClerkUserDirectly } from '@/app/dashboard/hooks/useStaff'
 import { InviteStaffFormData, StaffType, EmploymentType } from '@/types/staff'
 import { useClerkOrgId } from '@/app/dashboard/hooks/useLocationScoped'
 
@@ -91,9 +91,11 @@ export function InviteUserWizard({
     // Mutations
     const createPOSStaff = useCreatePOSStaff()
     const inviteClerkStaff = useInviteClerkStaff()
+    const createClerkUserDirectly = useCreateClerkUserDirectly()
 
     // Form state - matching InviteStaffFormData interface
     const [staffType, setStaffType] = React.useState<StaffType>('clerk')
+    const [creationMethod, setCreationMethod] = React.useState<'direct' | 'invitation'>('direct')
     const [firstName, setFirstName] = React.useState('')
     const [lastName, setLastName] = React.useState('')
     const [email, setEmail] = React.useState('')
@@ -231,9 +233,15 @@ export function InviteUserWizard({
 
         try {
             if (staffType === 'pos') {
+                // POS staff - always create directly
                 await createPOSStaff.mutateAsync(formData)
             } else {
-                await inviteClerkStaff.mutateAsync(formData)
+                // Clerk user - check creation method
+                if (creationMethod === 'direct') {
+                    await createClerkUserDirectly.mutateAsync(formData)
+                } else {
+                    await inviteClerkStaff.mutateAsync(formData)
+                }
             }
 
             onOpenChange(false)
@@ -246,7 +254,29 @@ export function InviteUserWizard({
         }
     }
 
-    const selectedRole = roles.find(r => r.code === selectedRoleCode)
+    // Filter roles based on staff type
+    const filteredRoles = React.useMemo(() => {
+        if (staffType === 'clerk') {
+            // Dashboard users: admin and manager level roles
+            return roles.filter(r => r.level_type === 'admin' || r.level_type === 'manager')
+        } else {
+            // POS staff: member level roles
+            return roles.filter(r => r.level_type === 'member')
+        }
+    }, [roles, staffType])
+
+    // Auto-select first role when staffType changes or filtered roles change
+    React.useEffect(() => {
+        if (filteredRoles.length > 0) {
+            // Only auto-select if current selection is not in filtered list
+            const currentRoleInFiltered = filteredRoles.some(r => r.code === selectedRoleCode)
+            if (!currentRoleInFiltered) {
+                setSelectedRoleCode(filteredRoles[0].code)
+            }
+        }
+    }, [filteredRoles, staffType])
+
+    const selectedRole = filteredRoles.find(r => r.code === selectedRoleCode)
     const selectedLocations = locations.filter(loc => selectedLocationIds.has(loc.id))
 
     const toggleLocation = (locationId: string) => {
@@ -340,7 +370,7 @@ export function InviteUserWizard({
                             </BottomSheetDescription>
                         </BottomSheetHeader>
 
-                        <BottomSheetBody className="flex-1 overflow-y-auto max-h-[calc(88vh-200px)]">
+                        <BottomSheetBody className="flex-1 overflow-y-auto max-h-[calc(98vh-200px)]">
                             {isLoading ? (
                                 <div className="flex items-center justify-center h-full">
                                     <div className="text-center space-y-2">
@@ -373,7 +403,7 @@ export function InviteUserWizard({
                                                             <div className="flex items-center gap-2">
                                                                 <Users className="h-4 w-4" />
                                                                 <span className="font-medium">Dashboard User</span>
-                                                                <Badge variant="outline" className="text-xs">Recommended</Badge>
+                                                                {/* <Badge variant="outline" className="text-xs">Recommended</Badge> */}
                                                             </div>
                                                             <div className="text-sm text-muted-foreground mt-1">
                                                                 Full access to dashboard with email invitation. Can manage settings, view reports, and use POS.
@@ -410,6 +440,65 @@ export function InviteUserWizard({
                                     {/* Step 1: Details */}
                                     {currentStep === 'details' && (
                                         <div className="space-y-6">
+                                            {/* Creation Method Selection - Only for Clerk users */}
+                                            {staffType === 'clerk' && (
+                                                <>
+                                                    <div className="space-y-4">
+                                                        <Label>Account Creation Method</Label>
+                                                        <RadioGroup value={creationMethod} onValueChange={(value) => setCreationMethod(value as 'direct' | 'invitation')}>
+                                                            <div className="space-y-3">
+                                                                {/* Direct Creation Option */}
+                                                                <div
+                                                                    className={cn(
+                                                                        'flex items-start gap-4 p-4 rounded-lg border-2 transition-all cursor-pointer',
+                                                                        creationMethod === 'direct'
+                                                                            ? 'border-primary bg-primary/5'
+                                                                            : 'border-muted hover:border-primary/50'
+                                                                    )}
+                                                                    onClick={() => setCreationMethod('direct')}
+                                                                >
+                                                                    <RadioGroupItem value="direct" id="method-direct" className="mt-1" />
+                                                                    <label htmlFor="method-direct" className="flex-1 cursor-pointer">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <UserCheck className="h-4 w-4" />
+                                                                            <span className="font-medium">Create Account Immediately</span>
+                                                                            <Badge variant="outline" className="text-xs">Recommended</Badge>
+                                                                        </div>
+                                                                        <div className="text-sm text-muted-foreground mt-1">
+                                                                            Create account with password now. User can login immediately and access dashboard right away.
+                                                                        </div>
+                                                                    </label>
+                                                                </div>
+
+                                                                {/* Invitation Option */}
+                                                                <div
+                                                                    className={cn(
+                                                                        'flex items-start gap-4 p-4 rounded-lg border-2 transition-all cursor-pointer',
+                                                                        creationMethod === 'invitation'
+                                                                            ? 'border-primary bg-primary/5'
+                                                                            : 'border-muted hover:border-primary/50'
+                                                                    )}
+                                                                    onClick={() => setCreationMethod('invitation')}
+                                                                >
+                                                                    <RadioGroupItem value="invitation" id="method-invitation" className="mt-1" />
+                                                                    <label htmlFor="method-invitation" className="flex-1 cursor-pointer">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Mail className="h-4 w-4" />
+                                                                            <span className="font-medium">Send Email Invitation</span>
+                                                                        </div>
+                                                                        <div className="text-sm text-muted-foreground mt-1">
+                                                                            Send invitation email. User must accept and set their own password before accessing dashboard.
+                                                                        </div>
+                                                                    </label>
+                                                                </div>
+                                                            </div>
+                                                        </RadioGroup>
+                                                    </div>
+
+                                                    <Separator />
+                                                </>
+                                            )}
+
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div className="space-y-2">
                                                     <Label htmlFor="firstName">First name *</Label>
@@ -462,6 +551,7 @@ export function InviteUserWizard({
                                     )}
 
                                     {/* Step 2: Assign Role */}
+                                    {/* TODO: Might drop some roles here and keep only 5 Main Ones  */}
                                     {currentStep === 'role' && (
                                         <div className="space-y-4">
                                             <div className="text-sm text-muted-foreground">
@@ -469,7 +559,7 @@ export function InviteUserWizard({
                                             </div>
                                             <RadioGroup value={selectedRoleCode} onValueChange={setSelectedRoleCode}>
                                                 <div className="space-y-3">
-                                                    {roles.map((role) => (
+                                                    {filteredRoles.map((role) => (
                                                         <div
                                                             key={role.code}
                                                             className={cn(

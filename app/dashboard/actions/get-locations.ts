@@ -18,7 +18,7 @@ export async function GetLocations(clerkOrgId: string) {
         .single()
 
     if (merchantError || !merchant) {
-        console.error('Error getting merchant:', merchantError)
+        console.error('[GetLocations] Error getting merchant:', merchantError)
         return []
     }
 
@@ -30,7 +30,7 @@ export async function GetLocations(clerkOrgId: string) {
         .order('created_at', { ascending: false })
 
     if (error) {
-        console.error('Error getting locations:', error)
+        console.error('[GetLocations] Error getting locations:', error)
         return []
     }
     return data as LocationsModel[]

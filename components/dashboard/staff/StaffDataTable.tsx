@@ -48,6 +48,7 @@ import {
 } from 'lucide-react'
 import { UnifiedStaffMember } from '@/types/staff'
 import { useUpdateStaffAssignment, useResetStaffPIN, useDeactivateStaff, useReactivateStaff } from '@/app/dashboard/hooks/useStaff'
+import { StaffDetailSheet } from './StaffDetailSheet'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -63,10 +64,18 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
     const [rowSelection, setRowSelection] = React.useState({})
     const [globalFilter, setGlobalFilter] = React.useState('')
 
+    const [selectedStaff, setSelectedStaff] = React.useState<UnifiedStaffMember | null>(null)
+    const [isDetailOpen, setIsDetailOpen] = React.useState(false)
+
     const updateAssignment = useUpdateStaffAssignment()
     const resetPIN = useResetStaffPIN()
     const deactivateStaff = useDeactivateStaff()
     const reactivateStaff = useReactivateStaff()
+
+    const handleRowClick = (staff: UnifiedStaffMember) => {
+        setSelectedStaff(staff)
+        setIsDetailOpen(true)
+    }
 
     const columns: ColumnDef<UnifiedStaffMember>[] = [
         {
@@ -88,7 +97,10 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                 const initials = `${staff.first_name?.[0] || ''}${staff.last_name?.[0] || ''}`.toUpperCase()
 
                 return (
-                    <div className="flex items-center gap-3">
+                    <div
+                        className="flex items-center gap-3 cursor-pointer hover:bg-muted/60 rounded-md px-2 py-1 -mx-2"
+                        onClick={() => handleRowClick(staff)}
+                    >
                         <Avatar className="h-9 w-9">
                             <AvatarImage src={staff.avatar_url || undefined} alt={staff.display_name} />
                             <AvatarFallback className="text-xs">{initials}</AvatarFallback>
@@ -414,6 +426,18 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                     Showing {table.getFilteredRowModel().rows.length} of {data.length} staff member(s)
                 </div>
             </div>
+
+            {/* Staff detail sheet */}
+            <StaffDetailSheet
+                staff={selectedStaff}
+                open={isDetailOpen && !!selectedStaff}
+                onOpenChange={(open) => {
+                    setIsDetailOpen(open)
+                    if (!open) {
+                        setSelectedStaff(null)
+                    }
+                }}
+            />
         </div>
     )
 }

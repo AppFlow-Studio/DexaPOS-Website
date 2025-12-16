@@ -1,11 +1,13 @@
 'use client'
 
+import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
 import { useLocationStore } from '@/stores/location-store'
 import {
     GetUnifiedStaffView,
     CreatePOSStaff,
+    CreateClerkUserDirectly,
     InviteClerkStaff,
     UpdateStaffLocationAssignment,
     ResetStaffPIN,
@@ -14,6 +16,29 @@ import {
 } from '../actions/unified-staff'
 import { InviteStaffFormData, UnifiedStaffMember, UpdateStaffAssignmentData } from '@/types/staff'
 import { toast } from 'sonner'
+import { CredentialToast } from '@/components/ui/credential-toast'
+
+// Helper function to show credential toast
+function showCredentialToast(pin?: string, password?: string) {
+    return toast.custom(
+        (t) => {
+            return React.createElement(
+                'div',
+                { className: 'rounded-lg border bg-background shadow-lg' },
+                React.createElement(CredentialToast, {
+                    pin,
+                    password,
+                    duration: 15,
+                    onDismiss: () => toast.dismiss(t),
+                })
+            )
+        },
+        {
+            duration: 15000, // 15 seconds
+            position: 'top-center' as const,
+        }
+    )
+}
 
 // ============================================================================
 // Helper Hooks
@@ -97,12 +122,14 @@ export function useCreatePOSStaff() {
                 return
             }
 
-            // Show generated PIN if available
-            const description = result.data?.generated_pin
-                ? `POS staff created. PIN: ${result.data.generated_pin}`
-                : 'POS staff member has been added successfully'
-
-            toast.success('Staff member created', { description })
+            // Show enhanced credential toast if PIN was generated
+            if (result.data?.generated_pin) {
+                showCredentialToast(result.data.generated_pin)
+            } else {
+                toast.success('Staff member created', {
+                    description: 'POS staff member has been added successfully'
+                })
+            }
 
             queryClient.invalidateQueries({ queryKey: ['unified-staff'] })
         },
@@ -116,14 +143,50 @@ export function useCreatePOSStaff() {
 }
 
 /**
+ * Create Clerk user directly (no invitation)
+ */
+export function useCreateClerkUserDirectly() {
+    const queryClient = useQueryClient()
+    const clerkOrgId = useClerkOrgId()
+
+    return useMutation({
+        mutationFn: (data: InviteStaffFormData) => CreateClerkUserDirectly(clerkOrgId, data),
+        onSuccess: (result) => {
+            if (result.error) {
+                toast.error('Failed to create user', { description: result.error })
+                return
+            }
+
+            // Show enhanced credential toast if password or PIN was generated
+            if (result.data?.temp_password || result.data?.generated_pin) {
+                showCredentialToast(result.data?.generated_pin, result.data?.temp_password)
+            } else {
+                toast.success('User created successfully', {
+                    description: 'User account has been created'
+                })
+            }
+
+            queryClient.invalidateQueries({ queryKey: ['unified-staff'] })
+        },
+        onError: (error) => {
+            toast.error('Failed to create user', {
+                description: 'An unexpected error occurred'
+            })
+            console.error('Create Clerk user error:', error)
+        }
+    })
+}
+
+/**
  * Invite Clerk user
  */
 export function useInviteClerkStaff() {
     const queryClient = useQueryClient()
     const clerkOrgId = useClerkOrgId()
+    const { data : userInfo } = useUserInfo()
 
     return useMutation({
-        mutationFn: (data: InviteStaffFormData) => InviteClerkStaff(clerkOrgId, data),
+        mutationFn: (data: InviteStaffFormData) => InviteClerkStaff(userInfo.id, clerkOrgId, data),
         onSuccess: (result) => {
             if (result.error) {
                 toast.error('Failed to send invite', { description: result.error })
