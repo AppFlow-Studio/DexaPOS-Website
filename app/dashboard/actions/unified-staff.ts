@@ -659,7 +659,7 @@ export async function ResetStaffPIN(
 
         const { error } = await supabase
             .from('location_members')
-            .update({ pin_code: hashedPin })
+            .update({ pin_code: hashedPin, updated_at: new Date().toISOString() })
             .eq('user_id', member.user_id || '')
             .eq('location_id', locationId)
 

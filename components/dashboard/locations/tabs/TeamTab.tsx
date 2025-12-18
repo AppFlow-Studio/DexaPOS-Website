@@ -225,7 +225,7 @@ export function TeamTab({ location }: TeamTabProps) {
                                         variant="outline"
                                         className={cn("text-xs capitalize shrink-0", getRoleBadgeClass(member.role_code))}
                                     >
-                                        {member.role.name}
+                                        {member.role}
                                     </Badge>
                                     <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                                 </button>
@@ -325,7 +325,7 @@ export function TeamTab({ location }: TeamTabProps) {
                                         variant="outline"
                                         className={cn("text-sm", getRoleBadgeClass(selectedMember.role_code))}
                                     >
-                                        {selectedMember.role.name}
+                                        {selectedMember.role}
                                     </Badge>
                                     <p className="text-sm text-muted-foreground mt-2">
                                         Level: {selectedMember.role.level} ({selectedMember.role.level_type})
