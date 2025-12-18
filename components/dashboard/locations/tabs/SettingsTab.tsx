@@ -1,5 +1,5 @@
 'use client'
-
+//TODO : ADD Tax Rate Configuration
 import { useState } from 'react'
 import { Location } from '@/types/merchant_locations'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
