@@ -46,7 +46,6 @@ export function MenuCategoriesTab({
     refetchMenu,
 }: MenuCategoriesTabProps) {
     const isAllLocations = !selectedLocationId || selectedLocationId === 'all'
-
     return (
         <div className="space-y-4">
             {/* Controls */}
@@ -65,7 +64,7 @@ export function MenuCategoriesTab({
                             Location view
                         </Badge>
                     )}
-                
+
                     <Button onClick={onAddCategory} className="gap-1">
                         <Wand2 className="h-4 w-4" />
                         Add Category
@@ -105,6 +104,7 @@ export function MenuCategoriesTab({
                             onToggleVisibility={onToggleVisibility}
                             onResetOverride={onResetOverride}
                             onEditItem={onEditItem}
+                            onCategoryRemoved={refetchMenu}
                         />
                     ))}
                 </div>

@@ -244,6 +244,7 @@ export async function CreateCategory(
             display_order: data.display_order || null,
             image: data.image || null,
             is_active: data.is_active ?? true,
+            is_global: locationId === null ? true : false,
         })
         .select()
         .single()

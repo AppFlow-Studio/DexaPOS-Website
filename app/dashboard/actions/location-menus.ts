@@ -141,6 +141,8 @@ export async function GetLocationMenu(
  * Creates location_menus records for all global menus that don't have one
  */
 // TODO: Database Trigger to automatically sync global menus to location when a new location is created
+
+// TODO: UPDATE THIS 
 export async function SyncGlobalMenusToLocation(locationId: string) {
     if (!locationId) {
         return { error: 'Location ID is required' }

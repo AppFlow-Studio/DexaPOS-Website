@@ -55,7 +55,7 @@ export default function MenuDetailPage() {
     const { data: userInfo } = useUserInfo()
     const clerkOrgId = userInfo?.members?.[0]?.organizations?.id
     const isAllLocations = !selectedLocationId || selectedLocationId === 'all'
-
+   console.log(menu)
     // Categories for wizard selections
     const { data: categoriesWithItems } = useCategoriesWithItems(clerkOrgId || '', selectedLocationId)
 
@@ -659,6 +659,8 @@ export default function MenuDetailPage() {
                 onOpenChange={setIsCategoryWizardOpen}
                 menuId={menuId}
                 menuName={menu?.name}
+                menu={menu}
+                userRole={userInfo?.members?.[0]?.role}
                 categoriesWithItems={categoriesWithItems?.data || []}
                 onSuccess={() => {
                     refetchMenu()

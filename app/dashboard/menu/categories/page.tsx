@@ -209,6 +209,24 @@ export default function CategoriesPage() {
     const handleDelete = async () => {
         if (!deletingCategory) return
 
+        // Prevent deletion of global categories when viewing a location
+        if (!isAllLocations && deletingCategory.is_global) {
+            toast.error('Cannot Delete Global Category', {
+                description: 'Global categories cannot be deleted when viewing a specific location. Switch to "All Locations" view to delete global categories.'
+            })
+            setDeletingCategory(null)
+            return
+        }
+
+        // Ensure location-specific categories can only be deleted when viewing that location
+        if (!isAllLocations && deletingCategory.location_id !== selectedLocationId) {
+            toast.error('Cannot Delete Category', {
+                description: 'You can only delete categories that belong to the currently selected location.'
+            })
+            setDeletingCategory(null)
+            return
+        }
+
         try {
             const result = await DeleteCategory(deletingCategory.id)
             if (result.error) {
@@ -221,6 +239,7 @@ export default function CategoriesPage() {
                 description: `"${deletingCategory.name}" has been permanently deleted.`
             })
             queryClient.invalidateQueries({ queryKey: ['categories'] })
+            queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
             refetch()
         } catch (error) {
             toast.error('Delete Failed', {
@@ -551,20 +570,37 @@ export default function CategoriesPage() {
                                                                 </Button>
                                                             )}
 
-                                                            {/* Delete button - only for global view */}
-                                                            {isAllLocations && (
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-8 w-8 text-destructive hover:text-destructive"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation()
-                                                                        setDeletingCategory(category)
-                                                                    }}
-                                                                >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </Button>
-                                                            )}
+                                                            {/* Delete button - show for all categories when viewing all locations, or for location-specific categories when viewing that location */}
+                                                            {(() => {
+                                                                const canDelete = isAllLocations
+                                                                    ? true // Can delete any category when viewing all locations
+                                                                    : !category.is_global && category.location_id === selectedLocationId // Can only delete location-specific categories for the current location
+
+                                                                if (!canDelete) return null
+
+                                                                return (
+                                                                    <TooltipProvider>
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger asChild>
+                                                                                <Button
+                                                                                    variant="ghost"
+                                                                                    size="icon"
+                                                                                    className="h-8 w-8 text-destructive hover:text-destructive"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation()
+                                                                                        setDeletingCategory(category)
+                                                                                    }}
+                                                                                >
+                                                                                    <Trash2 className="h-4 w-4" />
+                                                                                </Button>
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent>
+                                                                                <p>Delete category</p>
+                                                                            </TooltipContent>
+                                                                        </Tooltip>
+                                                                    </TooltipProvider>
+                                                                )
+                                                            })()}
 
                                                             {/* Reset to global button - only for location view when there's an override */}
                                                             {!isAllLocations && category.location_override && (
@@ -1025,9 +1061,24 @@ export default function CategoriesPage() {
             <Dialog open={!!deletingCategory} onOpenChange={(open) => !open && setDeletingCategory(null)}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Delete Category</DialogTitle>
+                        <DialogTitle className="flex items-center gap-2 text-destructive">
+                            <Trash2 className="h-5 w-5" />
+                            Delete Category
+                        </DialogTitle>
                         <DialogDescription>
-                            Are you sure you want to delete "{deletingCategory?.name}"? This will unlink all items from this category. This action cannot be undone.
+                            {deletingCategory?.is_global ? (
+                                <>
+                                    Are you sure you want to delete the global category &quot;{deletingCategory?.name}&quot;?
+                                    This will remove it from all locations and unlink all items from this category.
+                                    <span className="block mt-2 font-medium text-foreground">This action cannot be undone.</span>
+                                </>
+                            ) : (
+                                <>
+                                    Are you sure you want to delete the location-specific category &quot;{deletingCategory?.name}&quot;?
+                                    This will unlink all items from this category at {currentLocation?.name || 'this location'}.
+                                    <span className="block mt-2 font-medium text-foreground">This action cannot be undone.</span>
+                                </>
+                            )}
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
@@ -1035,7 +1086,8 @@ export default function CategoriesPage() {
                             Cancel
                         </Button>
                         <Button variant="destructive" onClick={handleDelete}>
-                            Delete
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete Category
                         </Button>
                     </DialogFooter>
                 </DialogContent>

@@ -31,6 +31,7 @@ export async function GetModifierGroups(clerkOrgId: string, locationId?: string 
         .from('modifier_groups')
         .select(`
             *,
+            location_name:locations(name),
             modifier_group_items(*),
             menu_item_modifier_groups(
                 id,
@@ -66,6 +67,9 @@ export async function GetModifierGroups(clerkOrgId: string, locationId?: string 
 
     return data as (ModifierGroupsModel & {
         modifier_group_items: ModifierGroupItemsModel[]
+        location_name: {
+            name: string
+        }
         menu_item_modifier_groups: Array<{
             id: string
             menu_item: {
@@ -127,6 +131,7 @@ export async function CreateModifierGroup(
             description?: string
             price_modifier: number
             display_order?: number
+            is_default?: boolean
             merchant_id: string
         }>
     }
@@ -172,19 +177,22 @@ export async function CreateModifierGroup(
 
     // Create options if provided
     if (data.options && data.options.length > 0) {
-        const options = data.options.map((opt, index) => ({
+        // Ensure only one default is set - unset all others if multiple are set
+        const defaultOptions = data.options.filter((opt: any) => opt.is_default)
+        const normalizedOptions = data.options.map((opt: any, index: number) => ({
             modifier_group_id: modifierGroup.id,
             name: opt.name,
             description: opt.description || null,
             price_modifier: opt.price_modifier,
             display_order: opt.display_order ?? index,
             is_active: true,
+            is_default: defaultOptions.length > 0 ? (opt === defaultOptions[0] || (opt.id && opt.id === defaultOptions[0]?.id)) : (opt.is_default ?? false),
             merchant_id: opt.merchant_id,
         }))
 
         const { error: optionsError } = await supabase
             .from('modifier_group_items')
-            .insert(options)
+            .insert(normalizedOptions)
 
         if (optionsError) {
             console.error('Error creating modifier group options:', optionsError)
@@ -299,6 +307,7 @@ export async function CreateModifierGroupItem(
         price_modifier: number
         display_order?: number
         is_active?: boolean
+        is_default?: boolean
         merchant_id: string
     }
 ) {
@@ -307,6 +316,19 @@ export async function CreateModifierGroupItem(
     }
 
     const supabase = createServerSupabaseClient()
+
+    // If setting as default, unset other defaults in this group
+    if (data.is_default) {
+        const { error: unsetError } = await supabase
+            .from('modifier_group_items')
+            .update({ is_default: false })
+            .eq('modifier_group_id', modifierGroupId)
+            .eq('is_default', true)
+
+        if (unsetError) {
+            console.error('Error unsetting other defaults:', unsetError)
+        }
+    }
 
     const { data: item, error } = await supabase
         .from('modifier_group_items')
@@ -317,6 +339,7 @@ export async function CreateModifierGroupItem(
             price_modifier: data.price_modifier,
             display_order: data.display_order || null,
             is_active: data.is_active ?? true,
+            is_default: data.is_default ?? false,
             merchant_id: data.merchant_id,
         })
         .select()
@@ -342,6 +365,7 @@ export async function UpdateModifierGroupItem(
         price_modifier?: number
         display_order?: number
         is_active?: boolean
+        is_default?: boolean
     }
 ) {
     if (!itemId) {
@@ -350,12 +374,35 @@ export async function UpdateModifierGroupItem(
 
     const supabase = createServerSupabaseClient()
 
+    // If setting as default, get the modifier_group_id first and unset other defaults
+    if (data.is_default) {
+        const { data: currentItem } = await supabase
+            .from('modifier_group_items')
+            .select('modifier_group_id')
+            .eq('id', itemId)
+            .single()
+
+        if (currentItem?.modifier_group_id) {
+            const { error: unsetError } = await supabase
+                .from('modifier_group_items')
+                .update({ is_default: false })
+                .eq('modifier_group_id', currentItem.modifier_group_id)
+                .eq('is_default', true)
+                .neq('id', itemId) // Don't unset the current item
+
+            if (unsetError) {
+                console.error('Error unsetting other defaults:', unsetError)
+            }
+        }
+    }
+
     const updateData: any = {}
     if (data.name !== undefined) updateData.name = data.name
     if (data.description !== undefined) updateData.description = data.description
     if (data.price_modifier !== undefined) updateData.price_modifier = data.price_modifier
     if (data.display_order !== undefined) updateData.display_order = data.display_order
     if (data.is_active !== undefined) updateData.is_active = data.is_active
+    if (data.is_default !== undefined) updateData.is_default = data.is_default
 
     const { data: item, error } = await supabase
         .from('modifier_group_items')

@@ -5,7 +5,8 @@ import { WaitlistEntry } from '@/types/floor-plan'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Clock, Users, Phone, Bell, CheckCircle2 } from 'lucide-react'
+import { Clock, Users, Phone, Bell, CheckCircle2, Plus } from 'lucide-react'
+import { AddToWaitlistWizard } from './AddToWaitlistWizard'
 // Date formatting helper
 function formatDistanceToNow(dateString: string): string {
     const date = new Date(dateString)
@@ -23,29 +24,59 @@ function formatDistanceToNow(dateString: string): string {
 }
 
 interface WaitlistPanelProps {
-    waitlist: WaitlistEntry[]
+    locationId: string
+    waitlistInfo?: {
+        waitlist: WaitlistEntry[]
+        summary: {
+            total_waiting: number
+            total_notified: number
+            avg_wait_time: number
+        }
+    }
     onNotify?: (entryId: string) => void
     onSeat?: (entryId: string) => void
     onRemove?: (entryId: string) => void
+    onRefresh?: () => void
 }
 
-export function WaitlistPanel({ waitlist, onNotify, onSeat, onRemove }: WaitlistPanelProps) {
+export function WaitlistPanel({ locationId, waitlistInfo, onNotify, onSeat, onRemove, onRefresh }: WaitlistPanelProps) {
+    const handleSuccess = () => {
+        onRefresh?.()
+    }
+
+    const waitlist = waitlistInfo?.waitlist || []
+
     if (waitlist.length === 0) {
         return (
-            <Card>
-                <CardContent className="py-8">
-                    <div className="text-center text-muted-foreground">
-                        <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                        <p>No one on the waitlist</p>
-                    </div>
-                </CardContent>
-            </Card>
+            <div className="space-y-4">
+                <AddToWaitlistWizard locationId={locationId} onSuccess={handleSuccess}>
+                    <Button className="w-full" size="sm">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Party to Waitlist
+                    </Button>
+                </AddToWaitlistWizard>
+                <Card>
+                    <CardContent className="py-8">
+                        <div className="text-center text-muted-foreground">
+                            <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                            <p>No one on the waitlist</p>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
         )
     }
 
     return (
         <div className="space-y-2">
-            {waitlist?.map((entry) => (
+            {/* Add to Waitlist Button */}
+            <AddToWaitlistWizard locationId={locationId} onSuccess={handleSuccess}>
+                <Button className="w-full mb-4" size="sm" variant="default">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Party to Waitlist
+                </Button>
+            </AddToWaitlistWizard>
+            {waitlist.map((entry) => (
                 <Card key={entry.id} className="hover:shadow-md transition-shadow">
                     <CardHeader className="pb-3">
                         <div className="flex items-start justify-between">
@@ -92,9 +123,7 @@ export function WaitlistPanel({ waitlist, onNotify, onSeat, onRemove }: Waitlist
                                 <div className="flex items-center justify-between text-sm">
                                     <span className="text-muted-foreground">Estimated ready</span>
                                     <span className="font-medium">
-                                        {formatDistanceToNow(new Date(entry.estimated_ready_at), {
-                                            addSuffix: true,
-                                        })}
+                                        {formatDistanceToNow(entry.estimated_ready_at)}
                                     </span>
                                 </div>
                             )}

@@ -478,6 +478,7 @@ export interface ModifierGroupItemsModel {
     price_modifier: number
     display_order: number | null
     is_active: boolean
+    is_default: boolean
     created_at: string
     updated_at: string
 }

@@ -29,6 +29,8 @@ import {
     AddTableAction,
     UpdateTablePositionAction,
     UpdateTablePositionsBatchAction,
+    UpdateTableNameAction,
+    UpdateTableRotationAction,
     RemoveTableAction,
     LoadWaitlistAction,
     LoadReservationsAction,
@@ -50,6 +52,11 @@ interface FloorPlanState {
     error: string | null;
     lastSyncAt: Date | null;
 
+    // Draft State (local-only, not yet saved to DB)
+    draftTables: FloorPlanObject[];
+    originalTables: FloorPlanObject[]; // Snapshot of last saved state
+    lastDraftSavedAt: Date | null;
+
     // Undo/Redo (design mode only)
     past: FloorPlanObject[][];
     future: FloorPlanObject[][];
@@ -69,6 +76,21 @@ interface FloorPlanState {
 
     // Table Design Actions (Design Mode)
     setDesignMode: (enabled: boolean) => void;
+
+    // Draft Actions (Local-only, no DB calls)
+    initializeDraft: (tables: FloorPlanObject[]) => void;
+    resetDraft: () => void;
+    addTableToDraft: (tableData: Partial<FloorPlanObject>) => string; // Returns temp ID
+    updateTableInDraft: (tableId: string, updates: Partial<FloorPlanObject>) => void;
+    updateTablePositionInDraft: (tableId: string, x: number, y: number) => void;
+    updateTableRotationInDraft: (tableId: string, rotation: number) => void;
+    updateTableNameInDraft: (tableId: string, name: string) => void;
+    removeTableFromDraft: (tableId: string) => void;
+
+    // Batch save draft to database
+    saveDraftToDatabase: () => Promise<void>;
+
+    // Legacy actions (kept for compatibility, but will be deprecated)
     addTable: (tableData: Partial<FloorPlanObject>) => Promise<string>;
     updateTablePosition: (tableId: string, x: number, y: number, rotation?: number) => Promise<void>;
     updateTablePositionsBatch: (updates: Array<{ id: string; x: number; y: number; rotation?: number }>) => Promise<void>;
@@ -90,6 +112,9 @@ interface FloorPlanState {
     redo: () => void;
     saveSnapshot: () => void;
 
+    // Computed state
+    hasUnsavedChanges: () => boolean;
+
     // Internal
     setupRealtimeSubscriptions: (locationId: string) => void;
 }
@@ -110,6 +135,9 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                 isLoading: false,
                 error: null,
                 lastSyncAt: null,
+                draftTables: [],
+                originalTables: [],
+                lastDraftSavedAt: null,
                 past: [],
                 future: [],
                 isOnline: true,
@@ -297,9 +325,266 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                 setDesignMode: (enabled: boolean) => {
                     set({ isDesignMode: enabled, selectedTableIds: [] });
                     if (!enabled) {
-                        // Clear undo history when exiting design mode
-                        set({ past: [], future: [] });
+                        // Clear undo history and draft when exiting design mode
+                        set({ past: [], future: [], draftTables: [], originalTables: [] });
                     }
+                },
+
+                // ====================================================================
+                // DRAFT ACTIONS (Local-only, no DB calls)
+                // ====================================================================
+
+                initializeDraft: (tables: FloorPlanObject[]) => {
+                    set({
+                        draftTables: tables.map(t => ({ ...t })), // Deep clone
+                        originalTables: tables.map(t => ({ ...t })), // Deep clone
+                        past: [],
+                        future: [],
+                        lastDraftSavedAt: null
+                    });
+                },
+
+                resetDraft: () => {
+                    const original = get().originalTables;
+                    set({
+                        draftTables: original.map(t => ({ ...t })), // Reset to original
+                        past: [],
+                        future: []
+                    });
+                },
+
+                addTableToDraft: (tableData: Partial<FloorPlanObject>) => {
+                    const floorPlanId = get().activeFloorPlanId;
+                    if (!floorPlanId) throw new Error('No floor plan selected');
+
+                    get().saveSnapshot();
+
+                    const shape = TABLE_SHAPES[tableData.shape_id as keyof typeof TABLE_SHAPES];
+                    const tempId = `temp-${Date.now()}-${Math.random()}`;
+
+                    const newTable: FloorPlanObject = {
+                        id: tempId,
+                        floor_plan_id: floorPlanId,
+                        name: tableData.name || `New ${shape?.label || 'Table'}`,
+                        shape_id: tableData.shape_id as keyof typeof TABLE_SHAPES,
+                        category: (shape?.category || tableData.category || 'table') as FloorPlanObject['category'],
+                        x: tableData.x || 100,
+                        y: tableData.y || 100,
+                        rotation: tableData.rotation || 0,
+                        width: tableData.width || shape?.width,
+                        height: tableData.height || shape?.height,
+                        capacity: tableData.capacity || shape?.capacity,
+                        z_index: tableData.z_index || 1,
+                        is_active: tableData.is_active !== undefined ? tableData.is_active : true,
+                        is_visible: tableData.is_visible !== undefined ? tableData.is_visible : true,
+                    };
+
+                    set(state => ({
+                        draftTables: [...state.draftTables, newTable]
+                    }));
+
+                    return tempId;
+                },
+
+                updateTableInDraft: (tableId: string, updates: Partial<FloorPlanObject>) => {
+                    set(state => ({
+                        draftTables: state.draftTables.map(t =>
+                            t.id === tableId ? { ...t, ...updates } : t
+                        )
+                    }));
+                },
+
+                updateTablePositionInDraft: (tableId: string, x: number, y: number) => {
+                    set(state => ({
+                        draftTables: state.draftTables.map(t =>
+                            t.id === tableId ? { ...t, x, y } : t
+                        )
+                    }));
+                },
+
+                updateTableRotationInDraft: (tableId: string, rotation: number) => {
+                    set(state => ({
+                        draftTables: state.draftTables.map(t =>
+                            t.id === tableId ? { ...t, rotation } : t
+                        )
+                    }));
+                },
+
+                updateTableNameInDraft: (tableId: string, name: string) => {
+                    get().saveSnapshot();
+                    set(state => ({
+                        draftTables: state.draftTables.map(t =>
+                            t.id === tableId ? { ...t, name, label_override: name } : t
+                        )
+                    }));
+                },
+
+                removeTableFromDraft: (tableId: string) => {
+                    get().saveSnapshot();
+                    set(state => ({
+                        draftTables: state.draftTables.filter(t => t.id !== tableId),
+                        selectedTableIds: state.selectedTableIds.filter(id => id !== tableId)
+                    }));
+                },
+
+                saveDraftToDatabase: async () => {
+                    const floorPlanId = get().activeFloorPlanId;
+                    if (!floorPlanId) throw new Error('No floor plan selected');
+
+                    const draftTables = get().draftTables;
+                    const originalTables = get().originalTables;
+
+                    // Identify changes
+                    const originalMap = new Map(originalTables.map(t => [t.id, t]));
+                    const draftMap = new Map(draftTables.map(t => [t.id, t]));
+
+                    const toAdd = draftTables.filter(t => !originalMap.has(t.id) || t.id.startsWith('temp-'));
+                    const toRemove = originalTables.filter(t => !draftMap.has(t.id) && !t.id.startsWith('temp-'));
+                    const toUpdate = draftTables.filter(t => {
+                        const original = originalMap.get(t.id);
+                        if (!original || t.id.startsWith('temp-')) return false;
+                        return (
+                            t.x !== original.x ||
+                            t.y !== original.y ||
+                            t.rotation !== original.rotation ||
+                            t.name !== original.name
+                        );
+                    });
+
+                    const promises: Promise<any>[] = [];
+                    const tempIdToRealIdMap = new Map<string, string>();
+
+                    // Add new tables
+                    for (const table of toAdd) {
+                        const shapeDef = TABLE_SHAPES[table.shape_id];
+                        if (!shapeDef) continue;
+
+                        const isTemp = table.id.startsWith('temp-');
+
+                        const result = await AddTableAction(floorPlanId, {
+                            shape_id: table.shape_id,
+                            category: table.category,
+                            x: table.x,
+                            y: table.y,
+                            rotation: table.rotation,
+                            capacity: table.capacity,
+                            width: table.width,
+                            height: table.height,
+                            name: table.name,
+                        });
+
+                        if (isTemp && result?.objectId) {
+                            tempIdToRealIdMap.set(table.id, result.objectId);
+                        }
+                    }
+
+                    // Remove deleted tables
+                    for (const table of toRemove) {
+                        if (!table.id.startsWith('temp-')) {
+                            promises.push(RemoveTableAction(table.id));
+                        }
+                    }
+
+                    // Batch update positions/rotations
+                    const positionUpdates = toUpdate
+                        .filter(t => {
+                            const original = originalMap.get(t.id);
+                            return original && (t.x !== original.x || t.y !== original.y || t.rotation !== original.rotation);
+                        })
+                        .map(t => ({
+                            id: t.id,
+                            x: t.x,
+                            y: t.y,
+                            rotation: t.rotation,
+                        }));
+
+                    if (positionUpdates.length > 0) {
+                        promises.push(UpdateTablePositionsBatchAction(positionUpdates));
+                    }
+
+                    // Update names individually
+                    for (const table of toUpdate) {
+                        const original = originalMap.get(table.id);
+                        if (original && table.name !== original.name) {
+                            promises.push(UpdateTableNameAction(table.id, table.name));
+                        }
+                    }
+
+                    await Promise.all(promises);
+
+                    // Replace temp IDs with real IDs in draft
+                    if (tempIdToRealIdMap.size > 0) {
+                        set(state => ({
+                            draftTables: state.draftTables.map(t => {
+                                const realId = tempIdToRealIdMap.get(t.id);
+                                return realId ? { ...t, id: realId } : t;
+                            })
+                        }));
+                    }
+
+                    // Reload floor plans to get fresh data with real IDs
+                    const locationId = get().locationId;
+                    if (locationId) {
+                        const floorPlans = await InitializeFloorPlan(locationId);
+                        const updatedFloorPlan = floorPlans?.find(fp => fp.id === floorPlanId);
+
+                        if (updatedFloorPlan?.objects) {
+                            // Update draft and original with fresh data from database
+                            set({
+                                draftTables: updatedFloorPlan.objects.map(t => ({ ...t })),
+                                originalTables: updatedFloorPlan.objects.map(t => ({ ...t })),
+                                past: [],
+                                future: [],
+                                lastDraftSavedAt: new Date()
+                            });
+                        } else {
+                            // Fallback: use current draft with real IDs
+                            const updatedDraft = get().draftTables;
+                            set({
+                                originalTables: updatedDraft.map(t => ({ ...t })),
+                                draftTables: updatedDraft.map(t => ({ ...t })),
+                                past: [],
+                                future: [],
+                                lastDraftSavedAt: new Date()
+                            });
+                        }
+                    }
+                },
+
+                hasUnsavedChanges: () => {
+                    const draft = get().draftTables;
+                    const original = get().originalTables;
+
+                    if (draft.length !== original.length) return true;
+
+                    const originalMap = new Map(original.map(t => [t.id, t]));
+                    const draftMap = new Map(draft.map(t => [t.id, t]));
+
+                    // Check for additions or deletions
+                    for (const table of draft) {
+                        if (!originalMap.has(table.id)) return true;
+                    }
+
+                    for (const table of original) {
+                        if (!draftMap.has(table.id) && !table.id.startsWith('temp-')) return true;
+                    }
+
+                    // Check for updates
+                    for (const table of draft) {
+                        const originalTable = originalMap.get(table.id);
+                        if (!originalTable) continue;
+
+                        if (
+                            table.x !== originalTable.x ||
+                            table.y !== originalTable.y ||
+                            table.rotation !== originalTable.rotation ||
+                            table.name !== originalTable.name
+                        ) {
+                            return true;
+                        }
+                    }
+
+                    return false;
                 },
 
                 addTable: async (tableData: Partial<FloorPlanObject>) => {
@@ -425,13 +710,11 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                 // ====================================================================
 
                 saveSnapshot: () => {
-                    const tables = get().tables.map(t => {
-                        const { session, next_reservation, ...rest } = t;
-                        return rest;
-                    });
+                    const draftTables = get().draftTables;
+                    const snapshot = draftTables.map(t => ({ ...t })); // Deep clone
 
                     set(state => ({
-                        past: [...state.past.slice(-19), tables], // Keep last 20
+                        past: [...state.past.slice(-19), snapshot], // Keep last 20
                         future: []
                     }));
                 },
@@ -441,13 +724,10 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                         if (state.past.length === 0) return state;
 
                         const previous = state.past[state.past.length - 1];
-                        const current = state.tables.map(t => {
-                            const { session, next_reservation, ...rest } = t;
-                            return rest;
-                        });
+                        const current = state.draftTables.map(t => ({ ...t })); // Deep clone
 
                         return {
-                            tables: previous.map(t => ({ ...t, session: null, next_reservation: null })) as TableWithSession[],
+                            draftTables: previous.map(t => ({ ...t })), // Deep clone
                             past: state.past.slice(0, -1),
                             future: [current, ...state.future]
                         };
@@ -459,13 +739,10 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                         if (state.future.length === 0) return state;
 
                         const next = state.future[0];
-                        const current = state.tables.map(t => {
-                            const { session, next_reservation, ...rest } = t;
-                            return rest;
-                        });
+                        const current = state.draftTables.map(t => ({ ...t })); // Deep clone
 
                         return {
-                            tables: next.map(t => ({ ...t, session: null, next_reservation: null })) as TableWithSession[],
+                            draftTables: next.map(t => ({ ...t })), // Deep clone
                             past: [...state.past, current],
                             future: state.future.slice(1)
                         };
@@ -476,9 +753,14 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                 name: 'floor-plan-storage',
                 storage: createJSONStorage(() => localStorage),
                 partialize: (state) => ({
-                    // Only persist essential data, not realtime state
+                    // Persist essential data and draft state
                     activeFloorPlanId: state.activeFloorPlanId,
-                    isDesignMode: state.isDesignMode
+                    isDesignMode: state.isDesignMode,
+                    draftTables: state.draftTables,
+                    originalTables: state.originalTables,
+                    lastDraftSavedAt: state.lastDraftSavedAt,
+                    past: state.past,
+                    future: state.future
                 })
             }
         )

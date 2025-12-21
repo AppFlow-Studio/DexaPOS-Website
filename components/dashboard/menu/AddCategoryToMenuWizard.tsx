@@ -27,7 +27,7 @@ import {
     Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { CategoryWithItems } from '@/types/menu'
+import { CategoryWithItems, MenuWithCategories } from '@/types/menu'
 import {
     AddCategoryToMenu,
     ToggleCategoryInMenu,
@@ -41,6 +41,8 @@ interface AddCategoryToMenuWizardProps {
     onOpenChange: (open: boolean) => void
     menuId: string
     menuName?: string
+    menu?: MenuWithCategories | null
+    userRole?: string
     categoriesWithItems?: CategoryWithItems[]
     onSuccess?: () => void
 }
@@ -50,6 +52,8 @@ export function AddCategoryToMenuWizard({
     onOpenChange,
     menuId,
     menuName,
+    menu,
+    userRole,
     categoriesWithItems = [],
     onSuccess,
 }: AddCategoryToMenuWizardProps) {
@@ -58,6 +62,7 @@ export function AddCategoryToMenuWizard({
     const isAllLocations = useIsAllLocations()
     const { data: userInfo } = useUserInfo()
     const merchantId = userInfo?.members?.[0]?.organizations?.merchants?.id
+    const effectiveUserRole = userRole || userInfo?.members?.[0]?.role
     const [selectedCategories, setSelectedCategories] = React.useState<Set<string>>(new Set())
     const [searchQuery, setSearchQuery] = React.useState('')
     const [isSaving, setIsSaving] = React.useState(false)
@@ -67,16 +72,92 @@ export function AddCategoryToMenuWizard({
         isActive: boolean
     }>>({})
 
-    // Filter categories
+    // Determine user role type
+    const isMerchantOwner = effectiveUserRole === 'merchant.owner'
+    const isMerchantManager = effectiveUserRole === 'merchant.manager'
+
+    // Determine menu type
+    const isGlobalMenu = menu?.is_global === true
+    const isLocationMenu = menu?.is_location_owned === true
+
+    // Identify categories already in the menu
+    const alreadyInMenu = React.useMemo(() => {
+        if (!menu?.categories) return new Set<string>()
+        return new Set(menu.categories.map(c => c.category_id))
+    }, [menu?.categories])
+
+    // Determine if user can add/remove categories
+    const canAddRemoveCategories = React.useMemo(() => {
+        // Merchant.owner viewing all locations can always add/remove
+        if (isMerchantOwner && isAllLocations) {
+            return true
+        }
+        // Merchant.owner/manager viewing location menu can add/remove
+        if ((isMerchantOwner || isMerchantManager) && isLocationMenu) {
+            return true
+        }
+        // Merchant.owner/manager location scoped viewing global menu can only edit state
+        if ((isMerchantOwner || isMerchantManager) && !isAllLocations && isGlobalMenu) {
+            return false
+        }
+        // Default: allow add/remove
+        return true
+    }, [isMerchantOwner, isMerchantManager, isAllLocations, isGlobalMenu, isLocationMenu])
+
+    // Filter categories based on restrictions and exclude already-in-menu categories
+    const availableCategories = React.useMemo(() => {
+        let filtered = categoriesWithItems
+
+        // Merchant.owner + all locations + global menu: Show only global categories
+        if (isMerchantOwner && isAllLocations && isGlobalMenu) {
+            filtered = filtered.filter(cat => cat.is_global === true)
+        }
+        // Merchant.owner + all locations + location menu: Show global + location categories
+        else if (isMerchantOwner && isAllLocations && isLocationMenu) {
+            // Show all categories (global + location)
+            filtered = filtered
+        }
+        // Merchant.owner + location scoped + global menu: Show all but disable add/remove
+        else if (isMerchantOwner && !isAllLocations && isGlobalMenu) {
+            // Show all categories but they're read-only
+            filtered = filtered
+        }
+        // Merchant.owner + location scoped + location menu: Show global + location scoped
+        else if (isMerchantOwner && !isAllLocations && isLocationMenu) {
+            filtered = filtered.filter(cat =>
+                cat.is_global === true ||
+                (cat.location_id === selectedLocationId || menu.location_id)
+            )
+        }
+        // Merchant.manager + location scoped + global menu: Show all but disable add/remove
+        else if (isMerchantManager && !isAllLocations && isGlobalMenu) {
+            // Show all categories but they're read-only
+            filtered = filtered
+        }
+        // Merchant.manager + location scoped + location menu: Show global + location scoped
+        else if (isMerchantManager && !isAllLocations && isLocationMenu) {
+            filtered = filtered.filter(cat =>
+                cat.is_global === true ||
+                (cat.location_id === selectedLocationId)
+            )
+        }
+
+        // Exclude categories that are already in the menu
+        filtered = filtered.filter(cat => !alreadyInMenu.has(cat.id))
+
+        return filtered
+    }, [categoriesWithItems, isMerchantOwner, isMerchantManager, isAllLocations, isGlobalMenu, isLocationMenu, selectedLocationId, alreadyInMenu])
+
+    // Filter categories by search query
     const filteredCategories = React.useMemo(() => {
-        if (!searchQuery.trim()) return categoriesWithItems
+        if (!searchQuery.trim()) return availableCategories
 
         const query = searchQuery.toLowerCase()
-        return categoriesWithItems.filter(cat =>
+        return availableCategories.filter(cat =>
             cat.name.toLowerCase().includes(query) ||
             cat.description?.toLowerCase().includes(query)
         )
-    }, [categoriesWithItems, searchQuery])
+    }, [availableCategories, searchQuery])
 
     // Separate global and location categories
     const globalCategories = filteredCategories.filter(cat => cat.is_global)
@@ -93,6 +174,11 @@ export function AddCategoryToMenuWizard({
 
     // Initialize override defaults when category is selected
     const handleToggleCategory = (categoryId: string) => {
+        // Don't allow toggling if user can't add/remove categories
+        if (!canAddRemoveCategories) {
+            return
+        }
+
         setSelectedCategories(prev => {
             const next = new Set(prev)
             if (next.has(categoryId)) {
@@ -105,7 +191,7 @@ export function AddCategoryToMenuWizard({
             } else {
                 next.add(categoryId)
                 // Initialize override with defaults
-                const category = categoriesWithItems.find(c => c.id === categoryId)
+                const category = availableCategories.find(c => c.id === categoryId)
                 if (category) {
                     setCategoryOverrides(prev => ({
                         ...prev,
@@ -122,12 +208,14 @@ export function AddCategoryToMenuWizard({
     }
 
     const handleSelectAll = (categoryIds: string[]) => {
+        if (!canAddRemoveCategories) return
+
         setSelectedCategories(prev => {
             const next = new Set(prev)
             categoryIds.forEach(id => {
                 if (!next.has(id)) {
                     next.add(id)
-                    const category = categoriesWithItems.find(c => c.id === id)
+                    const category = availableCategories.find(c => c.id === id)
                     if (category) {
                         setCategoryOverrides(prevOverrides => ({
                             ...prevOverrides,
@@ -145,6 +233,8 @@ export function AddCategoryToMenuWizard({
     }
 
     const handleDeselectAll = (categoryIds: string[]) => {
+        if (!canAddRemoveCategories) return
+
         setSelectedCategories(prev => {
             const next = new Set(prev)
             categoryIds.forEach(id => {
@@ -169,18 +259,25 @@ export function AddCategoryToMenuWizard({
             return
         }
 
+        if (!canAddRemoveCategories) {
+            toast.error('Cannot add categories', {
+                description: 'You do not have permission to add categories to this menu.',
+            })
+            return
+        }
+
         setIsSaving(true)
         try {
             const results = await Promise.allSettled(
                 Array.from(selectedCategories).map(async (categoryId) => {
                     const override = categoryOverrides[categoryId]
-                    const category = categoriesWithItems.find(c => c.id === categoryId)
+                    const category = availableCategories.find(c => c.id === categoryId)
 
                     if (!category) {
                         throw new Error(`Category ${categoryId} not found`)
                     }
 
-                    // Attach category to menu
+                    // Add category to menu
                     const attachResult = await AddCategoryToMenu(
                         menuId,
                         categoryId,
@@ -192,16 +289,14 @@ export function AddCategoryToMenuWizard({
                         throw new Error((attachResult as any).error)
                     }
 
-                    //If in location and editing a custom location menu then insert into base menu_categories table and 
-
-                    // Apply location override if in location view and updating
-                    // if (!isAllLocations && override) {
+                    // // Apply location override if in location view
+                    // if (!isAllLocations && selectedLocationId && override) {
                     //     await UpdateLocationMenuCategoryOverride(
-                    //         selectedLocationId!,
+                    //         selectedLocationId,
                     //         menuId,
                     //         categoryId,
                     //         {
-                    //             customTitle: override.customTitle || undefined,
+                    //             customTitle: override.customTitle !== category.name ? override.customTitle : undefined,
                     //             displayOrder: override.displayOrder ?? undefined,
                     //             isActive: override.isActive,
                     //         }
@@ -279,6 +374,11 @@ export function AddCategoryToMenuWizard({
                                     </Button>
                                 </div>
                             )}
+                            {!canAddRemoveCategories && (
+                                <div className="mt-3 p-3 bg-muted/50 rounded-md text-sm text-muted-foreground">
+                                    <p>You do not have permission to add categories to this menu.</p>
+                                </div>
+                            )}
                         </div>
 
                         {/* Categories List */}
@@ -296,7 +396,7 @@ export function AddCategoryToMenuWizard({
                                         </div>
                                         {globalCategories.length > 0 && (
                                             <div className="flex items-center gap-2">
-                                                {selectedCategories.size < globalCategories.length && (
+                                                {selectedCategories.size < globalCategories.length && canAddRemoveCategories && (
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
@@ -305,7 +405,7 @@ export function AddCategoryToMenuWizard({
                                                         Select All
                                                     </Button>
                                                 )}
-                                                {Array.from(selectedCategories).some(id => globalCategories.some(c => c.id === id)) && (
+                                                {Array.from(selectedCategories).some(id => globalCategories.some(c => c.id === id)) && canAddRemoveCategories && (
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
@@ -326,12 +426,13 @@ export function AddCategoryToMenuWizard({
                                                 <div
                                                     key={category.id}
                                                     className={cn(
-                                                        "border rounded-lg p-4 transition-all cursor-pointer",
+                                                        "border rounded-lg p-4 transition-all",
+                                                        canAddRemoveCategories ? "cursor-pointer" : "cursor-not-allowed opacity-60",
                                                         isSelected
                                                             ? "border-primary bg-primary/5 shadow-sm"
                                                             : "border-muted hover:border-primary/50"
                                                     )}
-                                                    onClick={() => handleToggleCategory(category.id)}
+                                                    onClick={() => canAddRemoveCategories && handleToggleCategory(category.id)}
                                                 >
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div className="flex-1 min-w-0">
@@ -429,7 +530,7 @@ export function AddCategoryToMenuWizard({
                             )}
 
                             {/* Location Categories */}
-                            {!isAllLocations && locationCategories.length > 0 && (
+                            {locationCategories.length > 0 && (
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
@@ -441,7 +542,7 @@ export function AddCategoryToMenuWizard({
                                         </div>
                                         {locationCategories.length > 0 && (
                                             <div className="flex items-center gap-2">
-                                                {selectedCategories.size < locationCategories.length && (
+                                                {selectedCategories.size < locationCategories.length && canAddRemoveCategories && (
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
@@ -450,7 +551,7 @@ export function AddCategoryToMenuWizard({
                                                         Select All
                                                     </Button>
                                                 )}
-                                                {Array.from(selectedCategories).some(id => locationCategories.some(c => c.id === id)) && (
+                                                {Array.from(selectedCategories).some(id => locationCategories.some(c => c.id === id)) && canAddRemoveCategories && (
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
@@ -471,12 +572,13 @@ export function AddCategoryToMenuWizard({
                                                 <div
                                                     key={category.id}
                                                     className={cn(
-                                                        "border rounded-lg p-4 transition-all cursor-pointer",
+                                                        "border rounded-lg p-4 transition-all",
+                                                        canAddRemoveCategories ? "cursor-pointer" : "cursor-not-allowed opacity-60",
                                                         isSelected
                                                             ? "border-primary bg-primary/5 shadow-sm"
                                                             : "border-muted hover:border-primary/50"
                                                     )}
-                                                    onClick={() => handleToggleCategory(category.id)}
+                                                    onClick={() => canAddRemoveCategories && handleToggleCategory(category.id)}
                                                 >
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div className="flex-1 min-w-0">
@@ -487,8 +589,8 @@ export function AddCategoryToMenuWizard({
                                                                     <div className="h-5 w-5 rounded-full border-2 border-muted-foreground shrink-0" />
                                                                 )}
                                                                 <span className="font-medium">{category.name}</span>
-                                                                <Badge variant="outline" className="text-xs bg-amber-50 text-amber-600 border-amber-200">
-                                                                    Location
+                                                                <Badge variant="outline" className="text-xs bg-purple-50 text-purple-600 border-purple-200">
+                                                                    {category.location_name}
                                                                 </Badge>
                                                             </div>
                                                             {category.description && (
@@ -505,7 +607,7 @@ export function AddCategoryToMenuWizard({
                                                     </div>
 
                                                     {/* Override settings */}
-                                                    {isSelected && (
+                                                    {isSelected && !isAllLocations && (
                                                         <div
                                                             className="mt-3 pt-3 border-t space-y-3"
                                                             onClick={(e) => e.stopPropagation()}

@@ -31,7 +31,7 @@ export async function LoadFloorPlanStatus(floorPlanId: string) {
         p_floor_plan_id: floorPlanId,
     })
 
-    console.log('[LoadFloorPlanStatus] data', data)
+    // console.log('[LoadFloorPlanStatus] data', data)
     if (error) {
         throw error
     }
@@ -119,6 +119,7 @@ export async function UpdateTablePositionsBatchAction(
     updates: Array<{ id: string; x: number; y: number; rotation?: number }>
 ) {
     const supabase = createServerSupabaseClient()
+    console.log('[UpdateTablePositionsBatchAction] updates', updates)
 
     const { error } = await supabase.rpc('update_floor_plan_objects_batch', {
         p_updates: updates,
@@ -181,7 +182,14 @@ export async function LoadWaitlistAction(locationId: string) {
 
     if (error) throw error
 
-    return (data || []) as WaitlistEntry[]
+    return {
+        waitlist: (data?.waitlist || []) as WaitlistEntry[],
+        summary: (data?.summary || {
+            total_waiting: 0,
+            total_notified: 0,
+            avg_wait_time: 0,
+        }) as { total_waiting: number; total_notified: number; avg_wait_time: number },
+    }
 }
 
 export async function LoadReservationsAction(locationId: string, date?: string) {
@@ -195,5 +203,37 @@ export async function LoadReservationsAction(locationId: string, date?: string) 
     if (error) throw error
 
     return (data || []) as Reservation[]
+}
+
+export async function AddToWaitlistAction(
+    locationId: string,
+    params: {
+        partyName: string
+        partySize: number
+        phone?: string
+        notes?: string
+        preferredSection?: string
+        quotedWaitMinutes?: number
+    }
+) {
+    const supabase = createServerSupabaseClient()
+
+    const { data, error } = await supabase.rpc('add_to_waitlist', {
+        p_location_id: locationId,
+        p_party_name: params.partyName,
+        p_party_size: params.partySize,
+        p_phone: params.phone || null,
+        p_notes: params.notes || null,
+        p_preferred_section: params.preferredSection || null,
+        p_quoted_wait_minutes: params.quotedWaitMinutes || null,
+    })
+
+    if (error) throw error
+
+    return {
+        waitlistId: data.waitlist_id,
+        position: data.position,
+        quotedWait: data.quoted_wait_minutes,
+    }
 }
 

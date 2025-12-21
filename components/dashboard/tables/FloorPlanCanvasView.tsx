@@ -1,951 +1,352 @@
 'use client'
 
-import * as React from 'react'
-import { useMemo } from 'react'
-import {
-    useFloorPlans,
-    useCreateFloorPlanMutation,
-    useAddTableMutation,
-    useUpdateTablePositionMutation,
-    useUpdateTablePositionsBatchMutation,
-    useUpdateTableRotationMutation,
-    useUpdateTableNameMutation,
-    useRemoveTableMutation,
-    useMergeTablesMutation,
-    useUnmergeTablesMutation,
-} from '@/app/dashboard/hooks/useFloorPlan'
-import { FloorPlanToolbar } from './FloorPlanToolbar'
-import { InteractiveCanvas } from './InteractiveCanvas'
-import { TablePalette } from './TablePalette'
-import { TABLE_SHAPES } from '@/utils/tables/table-shapes'
-import { FloorPlanObject } from '@/types/floor-plan'
-import { toast } from 'sonner'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import React, { useState, useCallback, useEffect } from 'react'
+import { FloorPlanEditorSidebar } from './FloorPlanToolbar'
+import { RuntimeFloorPlanView } from './RuntimeFloorPlanView'
 import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
+import { Save, Undo2, Undo, Redo } from 'lucide-react'
+import { toast } from 'sonner'
+import { useFloorPlans } from '@/app/dashboard/hooks/useFloorPlan'
+import { useFloorPlanStore } from '@/stores/floor-plan-store'
+import { FloorPlanObject } from '@/types/floor-plan'
+import { TABLE_SHAPES } from '@/utils/tables/table-shapes'
 
 interface FloorPlanCanvasViewProps {
     locationId: string
     onBack: () => void
+    refetchFloorPlanStatus: () => void
 }
 
-// Helper to sanitize tables for history (remove non-serializable data)
-const sanitizeTables = (tables: FloorPlanObject[]): FloorPlanObject[] => {
-    return tables.map((t) => ({
-        id: t.id,
-        floor_plan_id: t.floor_plan_id,
-        name: t.name,
-        shape_id: t.shape_id,
-        category: t.category,
-        x: t.x,
-        y: t.y,
-        rotation: t.rotation,
-        width: t.width,
-        height: t.height,
-        capacity: t.capacity,
-        min_capacity: t.min_capacity,
-        is_reservable: t.is_reservable,
-        is_combinable: t.is_combinable,
-        default_turn_time: t.default_turn_time,
-        section_id: t.section_id,
-        zone_name: t.zone_name,
-        label_override: t.label_override,
-        color_override: t.color_override,
-        z_index: t.z_index,
-        is_visible: t.is_visible,
-        is_active: t.is_active,
-        mergedWith: t.mergedWith,
-        isPrimary: t.isPrimary,
-    }))
-}
+export function FloorPlanCanvasView({ locationId, onBack, refetchFloorPlanStatus }: FloorPlanCanvasViewProps) {
+    const { data: floorPlans } = useFloorPlans(locationId)
 
-// Find next available position for a table (avoiding overlaps)
-const findNextAvailablePosition = (
-    existingTables: FloorPlanObject[],
-    newTableDimensions: { width: number; height: number },
-    gridSize: number,
-    canvasWidth: number,
-    canvasHeight: number,
-    padding: number = 20
-): { x: number; y: number } => {
-    for (let y = gridSize; y < canvasHeight; y += gridSize) {
-        for (let x = gridSize; x < canvasWidth; x += gridSize) {
-            const candidateRect = {
-                x,
-                y,
-                width: newTableDimensions.width + padding * 2,
-                height: newTableDimensions.height + padding * 2,
+    // Zustand Store
+    const {
+        floorPlans: storeFloorPlans,
+        activeFloorPlanId,
+        draftTables,
+        past,
+        future,
+        selectedTableIds,
+        initializeDraft,
+        addTableToDraft,
+        updateTablePositionInDraft,
+        updateTableRotationInDraft,
+        updateTableNameInDraft,
+        removeTableFromDraft,
+        saveSnapshot,
+        undo,
+        redo,
+        saveDraftToDatabase,
+        hasUnsavedChanges,
+        toggleTableSelection,
+        clearSelection,
+        setActiveFloorPlan,
+    } = useFloorPlanStore()
+
+    // Use floor plans from React Query (most up-to-date) or fallback to store
+    const availableFloorPlans = floorPlans || storeFloorPlans
+
+    // Determine active floor plan: use store's activeFloorPlanId if set, otherwise default
+    const effectiveActiveFloorPlanId = activeFloorPlanId ||
+        availableFloorPlans?.find((fp) => fp.is_default)?.id ||
+        availableFloorPlans?.[0]?.id
+
+    const activeFloorPlan = availableFloorPlans?.find((fp) => fp.id === effectiveActiveFloorPlanId) ||
+        availableFloorPlans?.find((fp) => fp.is_default) ||
+        availableFloorPlans?.[0]
+
+    // Sync store's activeFloorPlanId if it's not set but we have floor plans
+    useEffect(() => {
+        if (availableFloorPlans && availableFloorPlans.length > 0 && !activeFloorPlanId && effectiveActiveFloorPlanId) {
+            setActiveFloorPlan(effectiveActiveFloorPlanId).catch(console.error)
+        }
+    }, [availableFloorPlans, activeFloorPlanId, effectiveActiveFloorPlanId, setActiveFloorPlan])
+
+    const [isSaving, setIsSaving] = useState(false)
+    const [hasInitialized, setHasInitialized] = useState(false)
+    const [lastActiveFloorPlanId, setLastActiveFloorPlanId] = useState<string | null>(null)
+
+    // Get unsaved changes state from store
+    const hasChanges = hasUnsavedChanges()
+
+    // Handle floor plan selection change
+    const handleFloorPlanChange = useCallback(
+        async (floorPlanId: string) => {
+            // Check if there are unsaved changes
+            if (hasChanges) {
+                const confirmed = window.confirm(
+                    'You have unsaved changes. Do you want to discard them and switch to another floor plan?'
+                )
+                if (!confirmed) return
             }
 
-            let isOverlapping = false
-            for (const table of existingTables) {
-                if (!table.is_visible || !table.is_active) continue
+            try {
+                // Set active floor plan in store
+                await setActiveFloorPlan(floorPlanId)
 
-                const shape = TABLE_SHAPES[table.shape_id]
-                if (!shape) continue
-
-                const existingWidth = table.width || shape.width || 100
-                const existingHeight = table.height || shape.height || 100
-
-                const existingRect = {
-                    x: table.x - padding,
-                    y: table.y - padding,
-                    width: existingWidth + padding * 2,
-                    height: existingHeight + padding * 2,
-                }
-
-                if (
-                    candidateRect.x < existingRect.x + existingRect.width &&
-                    candidateRect.x + candidateRect.width > existingRect.x &&
-                    candidateRect.y < existingRect.y + existingRect.height &&
-                    candidateRect.y + candidateRect.height > existingRect.y
-                ) {
-                    isOverlapping = true
-                    break
-                }
+                // Reset initialization flag to allow re-initialization
+                setHasInitialized(false)
+                setLastActiveFloorPlanId(floorPlanId)
+            } catch (error) {
+                console.error('Error switching floor plan:', error)
+                toast.error('Failed to switch floor plan')
             }
+        },
+        [setActiveFloorPlan, hasChanges]
+    )
 
-            if (!isOverlapping) {
-                return { x, y }
-            }
+    // Initialize draft when floor plan loads or changes
+    useEffect(() => {
+        if (activeFloorPlan?.objects && (activeFloorPlan.id !== lastActiveFloorPlanId || !hasInitialized)) {
+            const tables = activeFloorPlan.objects || []
+            initializeDraft(tables)
+            setHasInitialized(true)
+            setLastActiveFloorPlanId(activeFloorPlan.id)
         }
-    }
+    }, [activeFloorPlan?.id, activeFloorPlan?.objects, initializeDraft, hasInitialized, lastActiveFloorPlanId])
 
-    // Fallback to center if no position found
-    return { x: canvasWidth / 2, y: canvasHeight / 2 }
-}
+    // Undo/Redo handlers
+    const handleUndo = useCallback(() => {
+        undo()
+    }, [undo])
 
-export function FloorPlanCanvasView({ locationId, onBack }: FloorPlanCanvasViewProps) {
-    // React Query hooks
-    const { data: floorPlans = [], isLoading, error } = useFloorPlans(locationId)
-    const createFloorPlanMutation = useCreateFloorPlanMutation(locationId)
-    const addTableMutation = useAddTableMutation(locationId)
-    const updateTablePositionMutation = useUpdateTablePositionMutation(locationId)
-    const updateTablePositionsBatchMutation = useUpdateTablePositionsBatchMutation(locationId)
-    const updateTableRotationMutation = useUpdateTableRotationMutation(locationId)
-    const updateTableNameMutation = useUpdateTableNameMutation(locationId)
-    const removeTableMutation = useRemoveTableMutation(locationId)
-    const mergeTablesMutation = useMergeTablesMutation(locationId)
-    const unmergeTablesMutation = useUnmergeTablesMutation(locationId)
-
-    // Local state for design mode (for fast, snappy updates)
-    const [localTables, setLocalTables] = React.useState<FloorPlanObject[]>([])
-    const [pendingDeletions, setPendingDeletions] = React.useState<Set<string>>(new Set())
-    const [pendingAdditions, setPendingAdditions] = React.useState<FloorPlanObject[]>([])
-
-    // Local UI state
-    const [activeFloorPlanId, setActiveFloorPlanId] = React.useState<string | null>(null)
-    const [isDesignMode, setIsDesignMode] = React.useState(false)
-    const [selectedTableIds, setSelectedTableIds] = React.useState<string[]>([])
-    const [hasUnsavedChanges, setHasUnsavedChanges] = React.useState(false)
-    const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false)
-    const [isMultipleAddDialogOpen, setIsMultipleAddDialogOpen] = React.useState(false)
-    const [newFloorPlanName, setNewFloorPlanName] = React.useState('')
-    const [newFloorPlanDescription, setNewFloorPlanDescription] = React.useState('')
-
-    // Undo/Redo history
-    const [past, setPast] = React.useState<FloorPlanObject[][]>([])
-    const [future, setFuture] = React.useState<FloorPlanObject[][]>([])
-
-    // Refs for tracking original state
-    const originalTablesRef = React.useRef<Map<string, { x: number; y: number; rotation: number }>>(new Map())
-    const prevTablesRef = React.useRef<string>('')
-    const dragStartSnapshotRef = React.useRef<FloorPlanObject[] | null>(null)
-
-    // Derive active floor plan from query data
-    const activeFloorPlan = useMemo(() => {
-        if (!activeFloorPlanId) {
-            // Auto-select default or first floor plan
-            const defaultPlan = floorPlans.find((fp) => fp.is_default) || floorPlans[0]
-            if (defaultPlan && !activeFloorPlanId) {
-                setActiveFloorPlanId(defaultPlan.id)
-                return defaultPlan
-            }
-            return null
-        }
-        return floorPlans.find((fp) => fp.id === activeFloorPlanId) || null
-    }, [floorPlans, activeFloorPlanId])
-
-    // Get tables from active floor plan's objects (server data)
-    const serverTables = useMemo(() => {
-        return activeFloorPlan?.objects || []
-    }, [activeFloorPlan])
-
-    // Use local tables in design mode, server tables otherwise
-    const tables = useMemo(() => {
-        if (isDesignMode && localTables.length > 0) {
-            // Filter out deleted tables and add pending additions
-            return [
-                ...localTables.filter((t) => !pendingDeletions.has(t.id)),
-                ...pendingAdditions,
-            ]
-        }
-        return serverTables
-    }, [isDesignMode, localTables, serverTables, pendingDeletions, pendingAdditions])
-
-    // Initialize local tables when entering design mode
-    React.useEffect(() => {
-        if (isDesignMode && serverTables.length > 0 && localTables.length === 0) {
-            setLocalTables(sanitizeTables(serverTables))
-            setPendingDeletions(new Set())
-            setPendingAdditions([])
-        } else if (!isDesignMode) {
-            // Reset local state when exiting design mode
-            setLocalTables([])
-            setPendingDeletions(new Set())
-            setPendingAdditions([])
-        }
-    }, [isDesignMode, serverTables.length])
-
-    // Save snapshot for undo/redo (using local tables)
-    const saveSnapshot = React.useCallback(() => {
-        if (!isDesignMode) return
-        const snapshot = sanitizeTables(tables)
-        setPast((prev) => [...prev.slice(-49), snapshot]) // Keep last 50
-        setFuture([])
-    }, [tables, isDesignMode])
-
-    // Undo function (works with local state in design mode)
-    const handleUndo = React.useCallback(() => {
-        if (past.length === 0 || !isDesignMode) return
-
-        const previous = past[past.length - 1]
-        const current = sanitizeTables(tables)
-
-        // Restore previous state by separating existing tables from new/deleted ones
-        const previousExisting = previous.filter((t) => !t.id.startsWith('temp-'))
-        const previousNew = previous.filter((t) => t.id.startsWith('temp-'))
-
-        // Restore local tables to previous state
-        setLocalTables(previousExisting)
-        // Restore pending additions
-        setPendingAdditions(previousNew)
-        // Restore pending deletions by comparing with server tables
-        const previousIds = new Set(previous.map((t) => t.id))
-        const deletedIds = serverTables.filter((t) => !previousIds.has(t.id)).map((t) => t.id)
-        setPendingDeletions(new Set(deletedIds))
-
-        setPast((prev) => prev.slice(0, -1))
-        setFuture((prev) => [current, ...prev])
-    }, [past, tables, isDesignMode, serverTables])
-
-    // Redo function (works with local state in design mode)
-    const handleRedo = React.useCallback(() => {
-        if (future.length === 0 || !isDesignMode) return
-
-        const next = future[0]
-        const current = sanitizeTables(tables)
-
-        // Restore next state
-        const nextExisting = next.filter((t) => !t.id.startsWith('temp-'))
-        const nextNew = next.filter((t) => t.id.startsWith('temp-'))
-
-        // Restore local tables to next state
-        setLocalTables(nextExisting)
-        // Restore pending additions
-        setPendingAdditions(nextNew)
-        // Restore pending deletions
-        const nextIds = new Set(next.map((t) => t.id))
-        const deletedIds = serverTables.filter((t) => !nextIds.has(t.id)).map((t) => t.id)
-        setPendingDeletions(new Set(deletedIds))
-
-        setFuture((prev) => prev.slice(1))
-        setPast((prev) => [...prev, current])
-    }, [future, tables, isDesignMode, serverTables])
-
-    // Track original tables when entering design mode
-    React.useEffect(() => {
-        if (isDesignMode && serverTables.length > 0 && originalTablesRef.current.size === 0) {
-            // Capture snapshot of server tables when entering design mode
-            originalTablesRef.current = new Map(
-                serverTables.map((t) => [t.id, { x: t.x, y: t.y, rotation: t.rotation || 0 }])
-            )
-            prevTablesRef.current = JSON.stringify(
-                serverTables.map((t) => ({ id: t.id, x: t.x, y: t.y, rotation: t.rotation || 0 }))
-            )
-            // Initialize history with server tables
-            setPast([sanitizeTables(serverTables)])
-            setFuture([])
-        } else if (!isDesignMode) {
-            // Reset when exiting design mode
-            originalTablesRef.current.clear()
-            prevTablesRef.current = ''
-            setHasUnsavedChanges(false)
-            setPast([])
-            setFuture([])
-        }
-    }, [isDesignMode, serverTables.length, serverTables])
-
-    // Detect changes - only when in design mode
-    React.useEffect(() => {
-        if (!isDesignMode || originalTablesRef.current.size === 0) {
-            return
-        }
-
-        // Create a stable string representation for comparison
-        const currentTablesStr = JSON.stringify(
-            tables.map((t) => ({ id: t.id, x: t.x, y: t.y, rotation: t.rotation || 0 }))
-        )
-
-        // Only check for changes if the string representation changed
-        if (currentTablesStr === prevTablesRef.current) {
-            return
-        }
-
-        prevTablesRef.current = currentTablesStr
-
-        // Compare tables efficiently (including additions/deletions)
-        const hasPositionChanges = tables.some((table) => {
-            const original = originalTablesRef.current.get(table.id)
-            if (!original) return false // New table
-            return (
-                Math.abs(table.x - original.x) > 0.01 ||
-                Math.abs(table.y - original.y) > 0.01 ||
-                (table.rotation || 0) !== original.rotation
-            )
-        })
-
-        const hasAdditionsOrDeletions = pendingAdditions.length > 0 || pendingDeletions.size > 0
-        const hasChanges = hasPositionChanges || hasAdditionsOrDeletions || tables.length !== originalTablesRef.current.size
-
-        setHasUnsavedChanges(hasChanges)
-    }, [tables, isDesignMode])
+    const handleRedo = useCallback(() => {
+        redo()
+    }, [redo])
 
     // Keyboard shortcuts for undo/redo
-    React.useEffect(() => {
-        if (!isDesignMode) return
-
+    useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
                 e.preventDefault()
                 handleUndo()
-            } else if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+            } else if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) {
                 e.preventDefault()
                 handleRedo()
-            } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedTableIds.length > 0) {
-                e.preventDefault()
-                // Delete selected tables
-                saveSnapshot()
-                selectedTableIds.forEach((tableId) => {
-                    if (tableId.startsWith('temp-')) {
-                        // Remove from pending additions
-                        setPendingAdditions((prev) => prev.filter((t) => t.id !== tableId))
-                    } else {
-                        // Mark for deletion
-                        setPendingDeletions((prev) => new Set([...prev, tableId]))
-                        // Remove from local tables
-                        setLocalTables((prev) => prev.filter((t) => t.id !== tableId))
-                    }
-                })
-                setSelectedTableIds([])
             }
         }
 
         window.addEventListener('keydown', handleKeyDown)
         return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [isDesignMode, handleUndo, handleRedo])
+    }, [handleUndo, handleRedo])
 
-    const handleTableClick = (tableId: string) => {
-        if (isDesignMode) {
-            setSelectedTableIds((prev) =>
-                prev.includes(tableId) ? prev.filter((id) => id !== tableId) : [...prev, tableId]
-            )
-        }
-    }
+    // --- HANDLERS ---
 
-    const handleTableDoubleClick = (tableId: string) => {
-        if (!isDesignMode) return
+    const handleAddShape = useCallback(
+        (shapeId: string, x: number, y: number) => {
+            if (!activeFloorPlan) return
 
-        saveSnapshot()
+            const shapeDef = TABLE_SHAPES[shapeId as keyof typeof TABLE_SHAPES]
+            if (!shapeDef) return
 
-        // Update local state immediately
-        setLocalTables((prev) =>
-            prev.map((t) =>
-                t.id === tableId
-                    ? { ...t, rotation: ((t.rotation || 0) + 90) % 360 }
-                    : t
-            )
-        )
-    }
-
-    const handleTableDragStart = () => {
-        if (!isDesignMode) return
-        // Save snapshot when drag starts
-        if (dragStartSnapshotRef.current === null) {
-            dragStartSnapshotRef.current = sanitizeTables(tables)
-            saveSnapshot()
-        }
-    }
-
-    const handleTableDrag = (tableId: string, x: number, y: number) => {
-        if (!isDesignMode) return
-
-        // Update local state immediately for snappy feel
-        setLocalTables((prev) =>
-            prev.map((t) => (t.id === tableId ? { ...t, x, y } : t))
-        )
-    }
-
-    const handleTableDragEnd = () => {
-        dragStartSnapshotRef.current = null
-    }
-
-    const handleCanvasDrop = (x: number, y: number, shapeId?: string) => {
-        if (!isDesignMode || !shapeId || !activeFloorPlanId) return
-
-        const shape = TABLE_SHAPES[shapeId as keyof typeof TABLE_SHAPES]
-        if (!shape) return
-
-        saveSnapshot()
-
-        // Create temporary table for local state (will get real ID on save)
-        const tempId = `temp-${Date.now()}-${Math.random()}`
-        const newTable: FloorPlanObject = {
-            id: tempId,
-            floor_plan_id: activeFloorPlanId,
-            name: shape.label || 'New Table',
-            shape_id: shapeId as keyof typeof TABLE_SHAPES,
-            category: (shape?.category || 'table') as FloorPlanObject['category'],
-            x,
-            y,
-            rotation: 0,
-            width: shape?.width,
-            height: shape?.height,
-            capacity: shape?.capacity,
-            z_index: 1,
-            is_visible: true,
-            is_active: true,
-        }
-
-        // Add to pending additions (will be persisted on save)
-        setPendingAdditions((prev) => [...prev, newTable])
-    }
-
-    const handleTableSelect = (shapeId: keyof typeof TABLE_SHAPES) => {
-        if (!isDesignMode || !activeFloorPlanId || !activeFloorPlan) return
-
-        const shape = TABLE_SHAPES[shapeId]
-        if (!shape) return
-
-        saveSnapshot()
-
-        // Use smart positioning
-        const position = findNextAvailablePosition(
-            tables,
-            {
-                width: shape.width || 100,
-                height: shape.height || 100,
-            },
-            activeFloorPlan.grid_size || 20,
-            activeFloorPlan.canvas_width || 2000,
-            activeFloorPlan.canvas_height || 1500
-        )
-
-        // Create temporary table for local state
-        const tempId = `temp-${Date.now()}-${Math.random()}`
-        const newTable: FloorPlanObject = {
-            id: tempId,
-            floor_plan_id: activeFloorPlanId,
-            name: shape.label || 'New Table',
-            shape_id: shapeId,
-            category: (shape?.category || 'table') as FloorPlanObject['category'],
-            x: position.x,
-            y: position.y,
-            rotation: 0,
-            width: shape?.width,
-            height: shape?.height,
-            capacity: shape?.capacity,
-            z_index: 1,
-            is_visible: true,
-            is_active: true,
-        }
-
-        // Add to pending additions
-        setPendingAdditions((prev) => [...prev, newTable])
-    }
-
-    const handleAddMultipleTables = (items: Array<{ shapeId: keyof typeof TABLE_SHAPES; quantity: number }>) => {
-        if (!isDesignMode || !activeFloorPlanId || !activeFloorPlan) return
-
-        saveSnapshot()
-
-        let tempTables = [...tables]
-        const newTables: FloorPlanObject[] = []
-
-        for (const item of items) {
-            const shape = TABLE_SHAPES[item.shapeId]
-            if (!shape) continue
-
-            for (let i = 0; i < item.quantity; i++) {
-                const position = findNextAvailablePosition(
-                    tempTables,
-                    {
-                        width: shape.width || 100,
-                        height: shape.height || 100,
-                    },
-                    activeFloorPlan.grid_size || 20,
-                    activeFloorPlan.canvas_width || 2000,
-                    activeFloorPlan.canvas_height || 1500
-                )
-
-                const tempId = `temp-${Date.now()}-${Math.random()}-${i}`
-                const newTable: FloorPlanObject = {
-                    id: tempId,
-                    floor_plan_id: activeFloorPlanId,
-                    name: `${shape.label} ${tables.length + newTables.length + 1}`,
-                    shape_id: item.shapeId,
-                    category: (shape?.category || 'table') as FloorPlanObject['category'],
-                    x: position.x,
-                    y: position.y,
-                    rotation: 0,
-                    width: shape.width,
-                    height: shape.height,
-                    capacity: shape.capacity,
-                    z_index: 1,
-                    is_visible: true,
-                    is_active: true,
-                }
-
-                newTables.push(newTable)
-                tempTables.push(newTable)
-            }
-        }
-
-        // Add all to pending additions
-        setPendingAdditions((prev) => [...prev, ...newTables])
-        setIsMultipleAddDialogOpen(false)
-    }
-
-    // Client-side merge state (since DB doesn't have merge columns yet)
-    const [mergedTables, setMergedTables] = React.useState<Map<string, string[]>>(new Map())
-
-    const handleMergeTables = () => {
-        if (selectedTableIds.length < 2) {
-            toast.error('Select at least 2 tables to merge')
-            return
-        }
-
-        saveSnapshot()
-
-        const primaryTableId = selectedTableIds[0]
-        const mergedWith = selectedTableIds.slice(1)
-
-        // Update merge state
-        setMergedTables((prev) => {
-            const newMap = new Map(prev)
-            newMap.set(primaryTableId, mergedWith)
-            // Mark merged tables as being merged with primary
-            mergedWith.forEach((id) => {
-                newMap.set(id, [primaryTableId])
+            // Add to draft (local-only, no DB call)
+            addTableToDraft({
+                shape_id: shapeId as keyof typeof TABLE_SHAPES,
+                category: shapeDef.category as FloorPlanObject['category'],
+                x,
+                y,
+                width: shapeDef.width,
+                height: shapeDef.height,
+                rotation: 0,
+                name: `New ${shapeDef.label}`,
+                capacity: shapeDef.capacity,
+                z_index: 1,
+                is_active: true,
+                is_visible: true,
             })
-            return newMap
-        })
-
-        setSelectedTableIds([])
-        toast.success('Tables merged', {
-            description: 'Tables have been merged successfully',
-        })
-    }
-
-    const handleUnmergeTables = (tableId: string) => {
-        saveSnapshot()
-
-        setMergedTables((prev) => {
-            const newMap = new Map(prev)
-            const mergedWith = newMap.get(tableId) || []
-            // Remove merge state for all related tables
-            newMap.delete(tableId)
-            mergedWith.forEach((id) => {
-                newMap.delete(id)
-            })
-            return newMap
-        })
-
-        setSelectedTableIds([])
-        toast.success('Tables unmerged', {
-            description: 'Tables have been unmerged successfully',
-        })
-    }
-
-    // Apply merge state to tables for rendering
-    const tablesWithMergeState = useMemo(() => {
-        return tables.map((table) => {
-            const mergedWith = mergedTables.get(table.id)
-            const isPrimary = mergedWith && mergedWith.length > 0
-            return {
-                ...table,
-                mergedWith: mergedWith || [],
-                isPrimary: isPrimary || undefined,
-            }
-        })
-    }, [tables, mergedTables])
-
-    const handleUpdateTableName = (tableId: string, newName: string) => {
-        if (!newName.trim()) return
-
-        saveSnapshot()
-
-        // Update local state immediately
-        setLocalTables((prev) =>
-            prev.map((t) => (t.id === tableId ? { ...t, name: newName.trim() } : t))
-        )
-        // Also update pending additions if it's a new table
-        setPendingAdditions((prev) =>
-            prev.map((t) => (t.id === tableId ? { ...t, name: newName.trim() } : t))
-        )
-    }
-
-    const handleSave = async () => {
-        if (!isDesignMode || !activeFloorPlanId) return
-
-        try {
-            // Collect all changes to batch persist
-            const updates: Array<{ id: string; x: number; y: number; rotation?: number }> = []
-            const nameUpdates: Array<{ id: string; name: string }> = []
-
-            // Get current tables (local + pending additions, excluding deletions)
-            const currentTables = [
-                ...localTables.filter((t) => !pendingDeletions.has(t.id)),
-                ...pendingAdditions,
-            ]
-
-            // Compare with original server tables to find position/rotation changes
-            for (const table of currentTables) {
-                const original = serverTables.find((t) => t.id === table.id)
-                if (original) {
-                    // Check if position or rotation changed
-                    if (
-                        Math.abs(table.x - original.x) > 0.01 ||
-                        Math.abs(table.y - original.y) > 0.01 ||
-                        (table.rotation || 0) !== (original.rotation || 0)
-                    ) {
-                        updates.push({
-                            id: table.id,
-                            x: table.x,
-                            y: table.y,
-                            rotation: table.rotation || 0,
-                        })
-                    }
-
-                    // Check if name changed
-                    if (table.name !== original.name) {
-                        nameUpdates.push({
-                            id: table.id,
-                            name: table.name,
-                        })
-                    }
-                }
-            }
-
-            // Batch update positions/rotations
-            if (updates.length > 0) {
-                await updateTablePositionsBatchMutation.mutateAsync(updates)
-            }
-
-            // Update names individually (no batch endpoint for names)
-            for (const nameUpdate of nameUpdates) {
-                await updateTableNameMutation.mutateAsync({
-                    tableId: nameUpdate.id,
-                    name: nameUpdate.name,
-                })
-            }
-
-            // Add new tables
-            for (const newTable of pendingAdditions) {
-                await addTableMutation.mutateAsync({
-                    floorPlanId: activeFloorPlanId,
-                    tableData: {
-                        name: newTable.name,
-                        shape_id: newTable.shape_id,
-                        category: newTable.category,
-                        x: newTable.x,
-                        y: newTable.y,
-                        rotation: newTable.rotation || 0,
-                        capacity: newTable.capacity,
-                        width: newTable.width,
-                        height: newTable.height,
-                    },
-                })
-            }
-
-            // Delete removed tables
-            for (const tableId of pendingDeletions) {
-                await removeTableMutation.mutateAsync(tableId)
-            }
-
-            // Reset local state and mark as saved
-            originalTablesRef.current = new Map(
-                currentTables.map((t) => [t.id, { x: t.x, y: t.y, rotation: t.rotation || 0 }])
-            )
-            prevTablesRef.current = JSON.stringify(
-                currentTables.map((t) => ({ id: t.id, x: t.x, y: t.y, rotation: t.rotation || 0 }))
-            )
-            setHasUnsavedChanges(false)
-            setPast([])
-            setFuture([])
-            setPendingDeletions(new Set())
-            setPendingAdditions([])
-
-            toast.success('Floor plan saved', {
-                description: 'All changes have been saved successfully',
-            })
-        } catch (error) {
-            toast.error('Error saving floor plan', {
-                description: error instanceof Error ? error.message : 'Failed to save changes',
-            })
-            throw error
-        }
-    }
-
-    const handleCreateFloorPlan = async () => {
-        if (!newFloorPlanName.trim()) {
-            toast.error('Name required', {
-                description: 'Please enter a name for the floor plan',
-            })
-            return
-        }
-
-        try {
-            const result = await createFloorPlanMutation.mutateAsync({
-                name: newFloorPlanName,
-                description: newFloorPlanDescription || undefined,
-            })
-            setActiveFloorPlanId(result.floorPlanId)
-            setIsCreateDialogOpen(false)
-            setNewFloorPlanName('')
-            setNewFloorPlanDescription('')
-            toast.success('Floor plan created', {
-                description: 'New floor plan has been created successfully',
-            })
-        } catch (error) {
-            toast.error('Error creating floor plan', {
-                description: error instanceof Error ? error.message : 'Failed to create floor plan',
-            })
-        }
-    }
-
-    const handleFloorPlanChange = (floorPlanId: string) => {
-        setActiveFloorPlanId(floorPlanId)
-        setSelectedTableIds([])
-        // Reset unsaved changes when switching floor plans
-        setHasUnsavedChanges(false)
-        originalTablesRef.current.clear()
-        prevTablesRef.current = ''
-        setPast([])
-        setFuture([])
-    }
-
-    if (isLoading) {
-        return (
-            <div className="flex items-center justify-center h-screen">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                    <p className="text-muted-foreground">Loading floor plan...</p>
-                </div>
-            </div>
-        )
-    }
-
-    if (error) {
-        return (
-            <div className="flex items-center justify-center h-screen">
-                <div className="text-center">
-                    <p className="text-destructive mb-4">Error loading floor plans</p>
-                    <p className="text-sm text-muted-foreground mb-4">
-                        {error instanceof Error ? error.message : 'Unknown error'}
-                    </p>
-                    <Button onClick={onBack}>Go Back</Button>
-                </div>
-            </div>
-        )
-    }
-
-    return (
-        <div className="flex flex-col h-screen">
-            <FloorPlanToolbar
-                floorPlans={floorPlans}
-                activeFloorPlanId={activeFloorPlanId}
-                isDesignMode={isDesignMode}
-                hasUnsavedChanges={hasUnsavedChanges}
-                selectedTableIds={selectedTableIds}
-                canUndo={past.length > 0}
-                canRedo={future.length > 0}
-                onBack={onBack}
-                onFloorPlanChange={handleFloorPlanChange}
-                onDesignModeToggle={() => setIsDesignMode(!isDesignMode)}
-                onCreateFloorPlan={() => setIsCreateDialogOpen(true)}
-                onSave={handleSave}
-                onUndo={handleUndo}
-                onRedo={handleRedo}
-                onMerge={selectedTableIds.length >= 2 ? handleMergeTables : undefined}
-            />
-
-            <div className="flex-1 flex overflow-hidden">
-                {isDesignMode && (
-                    <div className="border-r">
-                        <TablePalette
-                            onTableSelect={handleTableSelect}
-                            onAddMultiple={() => setIsMultipleAddDialogOpen(true)}
-                        />
-                    </div>
-                )}
-
-                <div className="flex-1 relative">
-                    {activeFloorPlan ? (
-                        <InteractiveCanvas
-                            floorPlan={activeFloorPlan}
-                            tables={tablesWithMergeState}
-                            selectedTableIds={selectedTableIds}
-                            isDesignMode={isDesignMode}
-                            onTableClick={handleTableClick}
-                            onTableDoubleClick={handleTableDoubleClick}
-                            onTableDrag={handleTableDrag}
-                            onTableDragStart={handleTableDragStart}
-                            onTableDragEnd={handleTableDragEnd}
-                            onCanvasDrop={handleCanvasDrop}
-                            onUpdateTableName={handleUpdateTableName}
-                            onUnmergeTable={handleUnmergeTables}
-                        />
-                    ) : (
-                        <div className="flex items-center justify-center h-full">
-                            <div className="text-center">
-                                <p className="text-muted-foreground mb-4">No floor plan selected</p>
-                                <Button onClick={() => setIsCreateDialogOpen(true)}>Create Floor Plan</Button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Create Floor Plan Dialog */}
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Create New Floor Plan</DialogTitle>
-                        <DialogDescription>Create a new floor plan for this location</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                        <div>
-                            <Label htmlFor="name">Name *</Label>
-                            <Input
-                                id="name"
-                                value={newFloorPlanName}
-                                onChange={(e) => setNewFloorPlanName(e.target.value)}
-                                placeholder="Main Dining Room"
-                            />
-                        </div>
-                        <div>
-                            <Label htmlFor="description">Description</Label>
-                            <Input
-                                id="description"
-                                value={newFloorPlanDescription}
-                                onChange={(e) => setNewFloorPlanDescription(e.target.value)}
-                                placeholder="First floor dining area"
-                            />
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                            Cancel
-                        </Button>
-                        <Button onClick={handleCreateFloorPlan} disabled={createFloorPlanMutation.isPending}>
-                            {createFloorPlanMutation.isPending ? 'Creating...' : 'Create'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Add Multiple Tables Dialog */}
-            <MultipleTablesDialog
-                open={isMultipleAddDialogOpen}
-                onOpenChange={setIsMultipleAddDialogOpen}
-                onAdd={handleAddMultipleTables}
-            />
-        </div>
+        },
+        [activeFloorPlan, addTableToDraft]
     )
-}
 
-// Multiple Tables Dialog Component
-interface MultipleTablesDialogProps {
-    open: boolean
-    onOpenChange: (open: boolean) => void
-    onAdd: (items: Array<{ shapeId: keyof typeof TABLE_SHAPES; quantity: number }>) => void
-}
+    const handleUpdatePosition = useCallback(
+        (id: string, x: number, y: number) => {
+            // Update in draft (local-only, no DB call)
+            updateTablePositionInDraft(id, x, y)
+        },
+        [updateTablePositionInDraft]
+    )
 
-function MultipleTablesDialog({ open, onOpenChange, onAdd }: MultipleTablesDialogProps) {
-    const [items, setItems] = React.useState<Array<{ shapeId: keyof typeof TABLE_SHAPES; quantity: number }>>([
-        { shapeId: 'square-4', quantity: 1 },
-    ])
+    const handleDragStart = useCallback(() => {
+        // Save snapshot when drag starts (for undo/redo)
+        // Only save if we don't have a recent snapshot to avoid too many snapshots
+        saveSnapshot()
+    }, [saveSnapshot])
 
-    const addItem = () => {
-        setItems([...items, { shapeId: 'square-4', quantity: 1 }])
+    const handleDragEnd = useCallback(() => {
+        // No DB call needed - position is already updated in draft
+        // Just ensure snapshot was saved
+    }, [])
+
+    const handleUpdateName = useCallback(
+        (id: string, name: string) => {
+            // Update in draft (local-only, no DB call)
+            updateTableNameInDraft(id, name)
+        },
+        [updateTableNameInDraft]
+    )
+
+    const handleUpdateRotation = useCallback(
+        (id: string, rotation: number) => {
+            // Update in draft (local-only, no DB call) - smooth 60fps updates
+            updateTableRotationInDraft(id, rotation)
+        },
+        [updateTableRotationInDraft]
+    )
+
+    const handleRotateEnd = useCallback(
+        (id: string, rotation: number) => {
+            // Snapshot is already taken by handleDragStart
+            // Rotation is already updated in draft, no DB call needed
+        },
+        []
+    )
+
+    const handleRemoveTable = useCallback(
+        (id: string) => {
+            // Remove from draft (local-only, no DB call)
+            removeTableFromDraft(id)
+        },
+        [removeTableFromDraft]
+    )
+
+    const handleTableClick = useCallback((tableId: string) => {
+        toggleTableSelection(tableId)
+    }, [toggleTableSelection])
+
+    const handleSave = useCallback(async () => {
+        if (!activeFloorPlan || !hasChanges) return
+
+        setIsSaving(true)
+
+        try {
+            // Save draft to database (batches all changes)
+            await saveDraftToDatabase()
+            refetchFloorPlanStatus()
+            toast.success('Layout saved successfully')
+
+            // Exit edit mode
+            onBack()
+        } catch (error) {
+            console.error('Error saving:', error)
+            toast.error('Failed to save layout')
+        } finally {
+            setIsSaving(false)
+        }
+    }, [activeFloorPlan, hasChanges, saveDraftToDatabase, onBack])
+
+    if (!activeFloorPlan) {
+        return (
+            <div className="flex items-center justify-center h-screen">
+                <div className="text-muted-foreground">Loading floor plan...</div>
+            </div>
+        )
     }
 
-    const removeItem = (index: number) => {
-        setItems(items.filter((_, i) => i !== index))
-    }
-
-    const updateItem = (index: number, updates: Partial<typeof items[0]>) => {
-        setItems(items.map((item, i) => (i === index ? { ...item, ...updates } : item)))
-    }
-
-    const handleSubmit = () => {
-        onAdd(items.filter((item) => item.quantity > 0))
-        setItems([{ shapeId: 'square-4', quantity: 1 }])
-        onOpenChange(false)
-    }
+    const canUndo = past.length > 0
+    const canRedo = future.length > 0
+    const selectedTableId = selectedTableIds[0]
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                    <DialogTitle>Add Multiple Tables</DialogTitle>
-                    <DialogDescription>Add multiple tables at once with smart positioning</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 max-h-[60vh] overflow-y-auto">
-                    {items.map((item, index) => (
-                        <div key={index} className="flex items-center gap-4 p-4 border rounded-lg">
-                            <Select
-                                value={item.shapeId}
-                                onValueChange={(value) => updateItem(index, { shapeId: value as keyof typeof TABLE_SHAPES })}
-                            >
-                                <SelectTrigger className="w-[200px]">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {Object.entries(TABLE_SHAPES).map(([id, shape]) => (
-                                        <SelectItem key={id} value={id}>
-                                            {shape.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <Input
-                                type="number"
-                                min="1"
-                                value={item.quantity}
-                                onChange={(e) => updateItem(index, { quantity: parseInt(e.target.value) || 1 })}
-                                className="w-24"
-                            />
-                            <span className="text-sm text-muted-foreground">tables</span>
-                            <Button variant="ghost" size="icon" onClick={() => removeItem(index)}>
-                                ×
-                            </Button>
-                        </div>
-                    ))}
-                    <Button variant="outline" onClick={addItem} className="w-full">
-                        + Add Another Table Type
-                    </Button>
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <div className="flex flex-col max-h-screen h-[90vh] bg-slate-50 shadow-xl rounded-lg overflow-hidden">
+            {/* Top Bar - Edit Mode Specific */}
+            <header className="h-14 border-b bg-white px-4 flex items-center justify-between shrink-0 z-10">
+                <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm" onClick={onBack}>
+                        <Undo2 className="w-4 h-4 mr-2" />
                         Cancel
                     </Button>
-                    <Button onClick={handleSubmit}>Add Tables</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                    <span className="text-sm font-semibold text-slate-500">Editing:</span>
+                    {availableFloorPlans && availableFloorPlans.length > 0 && (
+                        <Select
+                            value={effectiveActiveFloorPlanId || ''}
+                            onValueChange={handleFloorPlanChange}
+                        >
+                            <SelectTrigger className="w-[280px]">
+                                <SelectValue placeholder="Select floor plan" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {availableFloorPlans.map((fp) => (
+                                    <SelectItem key={fp.id} value={fp.id}>
+                                        <div className="flex items-center justify-between w-full">
+                                            <span>{fp.name}</span>
+                                            <span className="text-xs text-muted-foreground ml-2">
+                                                {fp.is_default && '(Default)'}
+                                                {fp.table_count !== undefined && ` • ${fp.table_count} tables`}
+                                            </span>
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
+                    {(!availableFloorPlans || availableFloorPlans.length === 0) && activeFloorPlan && (
+                        <span className="text-sm font-semibold text-slate-900">{activeFloorPlan.name}</span>
+                    )}
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleUndo}
+                        disabled={!canUndo}
+                        title="Undo (Ctrl/Cmd+Z)"
+                    >
+                        <Undo className="w-4 h-4 mr-2" />
+                        Undo
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRedo}
+                        disabled={!canRedo}
+                        title="Redo (Ctrl/Cmd+Shift+Z)"
+                    >
+                        <Redo className="w-4 h-4 mr-2" />
+                        Redo
+                    </Button>
+                    <Button
+                        size="sm"
+                        onClick={handleSave}
+                        disabled={isSaving || !hasChanges}
+                        className="bg-blue-600 hover:bg-blue-700"
+                    >
+                        {isSaving ? 'Saving...' : 'Save Changes'}
+                        <Save className="w-4 h-4 ml-2" />
+                    </Button>
+                </div>
+            </header>
+
+            <div className="flex overflow-hidden relative h-full">
+                {/* 1. LEFT SIDEBAR (Shape Library) */}
+                <FloorPlanEditorSidebar />
+
+                {/* 2. MAIN CANVAS (Reused Runtime Component) */}
+                <div className="flex-1 relative h-full bg-[#e5e5e5]">
+                    <RuntimeFloorPlanView
+                        floorPlan={activeFloorPlan}
+                        tables={draftTables}
+                        selectedTableId={selectedTableId}
+                        isDesignMode={true}
+                        onTableClick={handleTableClick}
+                        onUpdateTablePosition={handleUpdatePosition}
+                        onUpdateTableName={handleUpdateName}
+                        onUpdateTableRotation={handleUpdateRotation}
+                        onRotateEnd={handleRotateEnd}
+                        onRemoveTable={handleRemoveTable}
+                        onCanvasDrop={handleAddShape}
+                        onTableDragStart={handleDragStart}
+                        onTableDragEnd={handleDragEnd}
+                    />
+                </div>
+            </div>
+        </div>
     )
 }

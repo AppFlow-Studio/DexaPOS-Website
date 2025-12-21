@@ -3,11 +3,22 @@
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
 import { ArrowLeft, Search, Edit } from 'lucide-react'
 import { Location } from '@/types/merchant_locations'
+import { FloorPlan } from '@/types/floor-plan'
 
 interface TablesTopBarProps {
     location: Location | null
+    floorPlans?: FloorPlan[]
+    activeFloorPlanId?: string | null
+    onFloorPlanChange?: (floorPlanId: string) => void
     searchQuery: string
     onSearchChange: (query: string) => void
     onBack?: () => void
@@ -16,6 +27,9 @@ interface TablesTopBarProps {
 
 export function TablesTopBar({
     location,
+    floorPlans,
+    activeFloorPlanId,
+    onFloorPlanChange,
     searchQuery,
     onSearchChange,
     onBack,
@@ -24,15 +38,39 @@ export function TablesTopBar({
     return (
         <div className="flex items-center justify-between gap-4 p-4 border-b bg-background">
             <div className="flex items-center gap-4 flex-1">
-                {/* {onBack && (
+                {onBack && (
                     <Button variant="ghost" size="sm" onClick={onBack}>
                         <ArrowLeft className="h-4 w-4 mr-2" />
                     </Button>
-                )} */}
+                )}
                 <div className="flex items-center gap-2">
                     {location && (
+                        <span className="text-sm font-semibold text-foreground">{location.name}</span>
+                    )}
+                    {floorPlans && floorPlans.length > 0 && onFloorPlanChange && (
                         <>
-                            <span className="text-sm text-muted-foreground">{location.name}</span>
+                            <span className="text-sm text-muted-foreground">•</span>
+                            <Select
+                                value={activeFloorPlanId || ''}
+                                onValueChange={onFloorPlanChange}
+                            >
+                                <SelectTrigger className="w-[250px]">
+                                    <SelectValue placeholder="Select floor plan" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {floorPlans.map((fp) => (
+                                        <SelectItem key={fp.id} value={fp.id}>
+                                            <div className="flex items-center justify-between w-full">
+                                                <span>{fp.name}</span>
+                                                <span className="text-xs text-muted-foreground ml-2">
+                                                    {fp.is_default && '(Default)'}
+                                                    {fp.table_count !== undefined && ` • ${fp.table_count} tables`}
+                                                </span>
+                                            </div>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </>
                     )}
                 </div>

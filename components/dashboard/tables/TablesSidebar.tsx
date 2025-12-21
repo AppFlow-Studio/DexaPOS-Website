@@ -11,8 +11,16 @@ import { TableStatusBadge } from './TableStatusBadge'
 import { cn } from '@/lib/utils'
 
 interface TablesSidebarProps {
+    locationId: string
     tables: TableWithSession[]
-    waitlist: WaitlistEntry[]
+    waitlistInfo?: {
+        waitlist: WaitlistEntry[]
+        summary: {
+            total_waiting: number
+            total_notified: number
+            avg_wait_time: number
+        }
+    }
     reservations: Reservation[]
     searchQuery: string
     selectedTableId?: string
@@ -34,8 +42,9 @@ const getTableStatusColor = (status: string | null): 'green' | 'blue' | 'red' | 
 }
 
 export function TablesSidebar({
+    locationId,
     tables,
-    waitlist,
+    waitlistInfo,
     reservations,
     searchQuery,
     selectedTableId,
@@ -150,7 +159,7 @@ export function TablesSidebar({
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <div className="text-xs text-muted-foreground mt-0.5">
+                                                    <div className={`text-xs mt-0.5 ${isSelected ? 'text-white' : 'text-muted-foreground'}`}>
                                                         {table.session?.guest_name || 'Available'}
                                                         {table.session?.party_size && (
                                                             <span className="ml-1">
@@ -171,10 +180,14 @@ export function TablesSidebar({
                         <div className="h-full overflow-y-auto">
                             <div className="p-4">
                                 <WaitlistPanel
-                                    waitlist={waitlist}
+                                    locationId={locationId}
+                                    waitlistInfo={waitlistInfo}
                                     onNotify={onWaitlistNotify}
                                     onSeat={onWaitlistSeat}
                                     onRemove={onWaitlistRemove}
+                                    onRefresh={() => {
+                                        // This will be handled by the wizard's query invalidation
+                                    }}
                                 />
                             </div>
                         </div>

@@ -196,7 +196,6 @@ export default function ModifiersPage() {
                                 const hasLocationOverride = group.location_override && group.location_override.length > 0
                                 const locationOverride = hasLocationOverride ? group.location_override?.[0] : null
                                 const effectiveIsActive = locationOverride ? locationOverride.is_active : true
-
                                 return (
                                     <Collapsible
                                         key={group.id}
@@ -232,7 +231,7 @@ export default function ModifiersPage() {
                                                                     {isLocationSpecific && (
                                                                         <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
                                                                             <MapPin className="h-3 w-3 mr-1" />
-                                                                            {selectedLocation?.name} 
+                                                                            {group?.location_name?.name}
                                                                         </Badge>
                                                                     )}
                                                                     {hasLocationOverride && !isLocationSpecific && (
@@ -246,168 +245,177 @@ export default function ModifiersPage() {
                                                                         </Badge>
                                                                     )}
                                                                 </div>
-                                                            {group.description && (
-                                                                <div className="text-sm text-muted-foreground line-clamp-1">
-                                                                    {group.description}
+                                                                {group.description && (
+                                                                    <div className="text-sm text-muted-foreground line-clamp-1">
+                                                                        {group.description}
+                                                                    </div>
+                                                                )}
+                                                                <div className="flex flex-wrap gap-1 mt-2">
+                                                                    {group.modifier_group_items?.slice(0, 5).map((item) => (
+                                                                        <Badge key={item.id} variant="outline" className="text-xs">
+                                                                            {item.name}
+                                                                            {item.price_modifier > 0 && (
+                                                                                <span className="text-green-600 ml-1">+${item.price_modifier}</span>
+                                                                            )}
+                                                                        </Badge>
+                                                                    ))}
+                                                                    {(group.modifier_group_items?.length || 0) > 5 && (
+                                                                        <Badge variant="outline" className="text-xs">
+                                                                            +{(group.modifier_group_items?.length || 0) - 5} more
+                                                                        </Badge>
+                                                                    )}
                                                                 </div>
-                                                            )}
-                                                            <div className="flex flex-wrap gap-1 mt-2">
-                                                                {group.modifier_group_items?.slice(0, 5).map((item) => (
-                                                                    <Badge key={item.id} variant="outline" className="text-xs">
-                                                                        {item.name}
-                                                                        {item.price_modifier > 0 && (
-                                                                            <span className="text-green-600 ml-1">+${item.price_modifier}</span>
-                                                                        )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="text-right text-sm text-muted-foreground">
+                                                                {group.modifier_group_items?.length || 0} options
+                                                            </div>
+                                                            <ChevronDown className={cn(
+                                                                "h-5 w-5 text-muted-foreground transition-transform duration-200",
+                                                                expandedGroups[group.id] && "rotate-180"
+                                                            )} />
+                                                        </div>
+                                                    </div>
+                                                </CardContent>
+                                            </CollapsibleTrigger>
+
+                                            <CollapsibleContent>
+                                                <div className="px-4 pb-4 pt-0 border-t">
+                                                    {/* Options List */}
+                                                    <div className="mt-4 space-y-2">
+                                                        <h4 className="text-sm font-medium text-muted-foreground">Options</h4>
+                                                        {group.modifier_group_items && group.modifier_group_items.length > 0 ? (
+                                                            <div className="grid gap-2 md:grid-cols-2">
+                                                                {group.modifier_group_items.map((item) => (
+                                                                    <div
+                                                                        key={item.id}
+                                                                        className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                                                                    >
+                                                                        <div>
+                                                                            <div className='flex items-center gap-2'>
+                                                                                <div className="font-medium">{item.name}</div>
+                                                                                {
+                                                                                    item?.is_default && (
+                                                                                        <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
+                                                                                            Default
+                                                                                        </Badge>
+                                                                                    )
+                                                                                }
+                                                                            </div>
+                                                                            {item.description && (
+                                                                                <div className="text-sm text-muted-foreground">{item.description}</div>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className={cn(
+                                                                            "font-semibold",
+                                                                            item.price_modifier > 0 ? "text-green-600" :
+                                                                                item.price_modifier < 0 ? "text-red-500" : "text-muted-foreground"
+                                                                        )}>
+                                                                            {item.price_modifier !== 0 && (
+                                                                                <>
+                                                                                    {item.price_modifier > 0 ? '+' : ''}${item.price_modifier.toFixed(2)}
+                                                                                </>
+                                                                            )}
+                                                                            {item.price_modifier === 0 && '$0.00'}
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <p className="text-sm text-muted-foreground">No options added yet</p>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Used by Items */}
+                                                    {group.menu_item_modifier_groups && group.menu_item_modifier_groups.length > 0 && (
+                                                        <div className="mt-4 space-y-2">
+                                                            <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                                                                <Utensils className="h-4 w-4" />
+                                                                Used by {group.menu_item_modifier_groups.length} item(s)
+                                                            </h4>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {group.menu_item_modifier_groups.slice(0, 8).map((assignment: any) => (
+                                                                    <Badge key={assignment.id} variant="secondary">
+                                                                        {assignment.menu_item?.name || 'Unknown Item'}
                                                                     </Badge>
                                                                 ))}
-                                                                {(group.modifier_group_items?.length || 0) > 5 && (
-                                                                    <Badge variant="outline" className="text-xs">
-                                                                        +{(group.modifier_group_items?.length || 0) - 5} more
+                                                                {group.menu_item_modifier_groups.length > 8 && (
+                                                                    <Badge variant="outline">
+                                                                        +{group.menu_item_modifier_groups.length - 8} more
                                                                     </Badge>
                                                                 )}
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="text-right text-sm text-muted-foreground">
-                                                            {group.modifier_group_items?.length || 0} options
-                                                        </div>
-                                                        <ChevronDown className={cn(
-                                                            "h-5 w-5 text-muted-foreground transition-transform duration-200",
-                                                            expandedGroups[group.id] && "rotate-180"
-                                                        )} />
-                                                    </div>
-                                                </div>
-                                            </CardContent>
-                                        </CollapsibleTrigger>
-
-                                        <CollapsibleContent>
-                                            <div className="px-4 pb-4 pt-0 border-t">
-                                                {/* Options List */}
-                                                <div className="mt-4 space-y-2">
-                                                    <h4 className="text-sm font-medium text-muted-foreground">Options</h4>
-                                                    {group.modifier_group_items && group.modifier_group_items.length > 0 ? (
-                                                        <div className="grid gap-2 md:grid-cols-2">
-                                                            {group.modifier_group_items.map((item) => (
-                                                                <div
-                                                                    key={item.id}
-                                                                    className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
-                                                                >
-                                                                    <div>
-                                                                        <div className="font-medium">{item.name}</div>
-                                                                        {item.description && (
-                                                                            <div className="text-sm text-muted-foreground">{item.description}</div>
-                                                                        )}
-                                                                    </div>
-                                                                    <div className={cn(
-                                                                        "font-semibold",
-                                                                        item.price_modifier > 0 ? "text-green-600" :
-                                                                            item.price_modifier < 0 ? "text-red-500" : "text-muted-foreground"
-                                                                    )}>
-                                                                        {item.price_modifier !== 0 && (
-                                                                            <>
-                                                                                {item.price_modifier > 0 ? '+' : ''}${item.price_modifier.toFixed(2)}
-                                                                            </>
-                                                                        )}
-                                                                        {item.price_modifier === 0 && '$0.00'}
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <p className="text-sm text-muted-foreground">No options added yet</p>
                                                     )}
-                                                </div>
 
-                                                {/* Used by Items */}
-                                                {group.menu_item_modifier_groups && group.menu_item_modifier_groups.length > 0 && (
-                                                    <div className="mt-4 space-y-2">
-                                                        <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                                                            <Utensils className="h-4 w-4" />
-                                                            Used by {group.menu_item_modifier_groups.length} item(s)
-                                                        </h4>
-                                                        <div className="flex flex-wrap gap-2">
-                                                            {group.menu_item_modifier_groups.slice(0, 8).map((assignment: any) => (
-                                                                <Badge key={assignment.id} variant="secondary">
-                                                                    {assignment.menu_item?.name || 'Unknown Item'}
-                                                                </Badge>
-                                                            ))}
-                                                            {group.menu_item_modifier_groups.length > 8 && (
-                                                                <Badge variant="outline">
-                                                                    +{group.menu_item_modifier_groups.length - 8} more
-                                                                </Badge>
-                                                            )}
-                                                        </div>
+                                                    {/* Selection Rules */}
+                                                    <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
+                                                        <span>
+                                                            Select: {group.min_selections > 0 ? group.min_selections : 'Any'}
+                                                            {group.max_selections ? ` - ${group.max_selections}` : group.min_selections > 0 ? '+' : ''}
+                                                        </span>
                                                     </div>
-                                                )}
 
-                                                {/* Selection Rules */}
-                                                <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
-                                                    <span>
-                                                        Select: {group.min_selections > 0 ? group.min_selections : 'Any'}
-                                                        {group.max_selections ? ` - ${group.max_selections}` : group.min_selections > 0 ? '+' : ''}
-                                                    </span>
-                                                </div>
+                                                    {/* Actions */}
+                                                    <div className="mt-4 flex items-center gap-2">
+                                                        {/* Hide/Show button for global groups at specific location */}
+                                                        {!isAllLocations && isGlobal && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    handleToggleVisibility(group.id, !effectiveIsActive)
+                                                                }}
+                                                            >
+                                                                {effectiveIsActive ? (
+                                                                    <>
+                                                                        <EyeOff className="h-4 w-4 mr-1" />
+                                                                        Hide Here
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <Eye className="h-4 w-4 mr-1" />
+                                                                        Show Here
+                                                                    </>
+                                                                )}
+                                                            </Button>
+                                                        )}
 
-                                                {/* Actions */}
-                                                <div className="mt-4 flex items-center gap-2">
-                                                    {/* Hide/Show button for global groups at specific location */}
-                                                    {!isAllLocations && isGlobal && (
+                                                        {/* Edit button - disabled for location-specific groups when viewing all locations */}
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
                                                             onClick={(e) => {
                                                                 e.stopPropagation()
-                                                                handleToggleVisibility(group.id, !effectiveIsActive)
+                                                                setEditingGroup(group)
                                                             }}
+                                                            disabled={isLocationSpecific && isAllLocations}
                                                         >
-                                                            {effectiveIsActive ? (
-                                                                <>
-                                                                    <EyeOff className="h-4 w-4 mr-1" />
-                                                                    Hide Here
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <Eye className="h-4 w-4 mr-1" />
-                                                                    Show Here
-                                                                </>
-                                                            )}
+                                                            <Edit3 className="h-4 w-4 mr-1" />
+                                                            Edit
                                                         </Button>
-                                                    )}
 
-                                                    {/* Edit button - disabled for location-specific groups when viewing all locations */}
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            setEditingGroup(group)
-                                                        }}
-                                                        disabled={isLocationSpecific && isAllLocations}
-                                                    >
-                                                        <Edit3 className="h-4 w-4 mr-1" />
-                                                        Edit
-                                                    </Button>
-
-                                                    {/* Delete button - disabled for location-specific groups when viewing all locations */}
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            setDeletingGroup(group)
-                                                        }}
-                                                        className="text-destructive hover:text-destructive"
-                                                        disabled={(isLocationSpecific && isAllLocations) || ( group.location_id == null && selectedLocation?.id != null)}
-                                                    >
-                                                        <Trash2 className="h-4 w-4 mr-1" />
-                                                        Delete
-                                                    </Button>
+                                                        {/* Delete button - disabled for location-specific groups when viewing all locations */}
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                setDeletingGroup(group)
+                                                            }}
+                                                            className="text-destructive hover:text-destructive"
+                                                            disabled={(isLocationSpecific && isAllLocations) || (group.location_id == null && selectedLocation?.id != null)}
+                                                        >
+                                                            <Trash2 className="h-4 w-4 mr-1" />
+                                                            Delete
+                                                        </Button>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </CollapsibleContent>
-                                    </Card>
-                                </Collapsible>
+                                            </CollapsibleContent>
+                                        </Card>
+                                    </Collapsible>
                                 )
                             })}
                         </div>

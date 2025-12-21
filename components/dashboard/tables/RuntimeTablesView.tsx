@@ -1,7 +1,6 @@
 'use client'
 
 import * as React from 'react'
-import { useLocationStore } from '@/stores/location-store'
 import { useFloorPlans, useFloorPlanStatus, useWaitlist, useReservations } from '@/app/dashboard/hooks/useFloorPlan'
 import { GetLocation } from '@/app/dashboard/actions/locations'
 import { Location } from '@/types/merchant_locations'
@@ -26,9 +25,10 @@ export function RuntimeTablesView({ locationId, onBack }: RuntimeTablesViewProps
 
     const { data: userInfo } = useUserInfo()
     const { data: floorPlans, isLoading: isLoadingFloorPlans } = useFloorPlans(locationId)
-    const { data: floorPlanStatus, isLoading: isLoadingStatus } = useFloorPlanStatus(activeFloorPlanId)
-    console.log('[RuntimeTablesView] floorPlanStatus', floorPlanStatus)
-    const { data: waitlist = [] } = useWaitlist(locationId)
+    // IMPORTANT: This hook fetches the tables WITH sessions (runtime status)
+    const { data: floorPlanStatus, isLoading: isLoadingStatus, refetch: refetchFloorPlanStatus } = useFloorPlanStatus(activeFloorPlanId)
+
+    const { data: waitlistInfo, isLoading: isLoadingWaitlistInfo, refetch: refetchWaitlist } = useWaitlist(locationId)
     const { data: reservations = [] } = useReservations(locationId)
 
     // Load location details
@@ -47,6 +47,8 @@ export function RuntimeTablesView({ locationId, onBack }: RuntimeTablesViewProps
     }, [floorPlans, activeFloorPlanId])
 
     const activeFloorPlan = floorPlans?.find((fp) => fp.id === activeFloorPlanId) || null
+
+    // These tables contain the 'session' data needed for status colors
     const tables = floorPlanStatus?.tables || []
 
     const handleEditLayout = () => {
@@ -57,8 +59,13 @@ export function RuntimeTablesView({ locationId, onBack }: RuntimeTablesViewProps
         setIsDesignMode(false)
     }
 
+    const handleFloorPlanChange = (floorPlanId: string) => {
+        setActiveFloorPlanId(floorPlanId)
+    }
+
+    // 1. SWITCH TO EDIT MODE
     if (isDesignMode) {
-        return <FloorPlanCanvasView locationId={locationId} onBack={handleBackFromDesign} />
+        return <FloorPlanCanvasView locationId={locationId} onBack={handleBackFromDesign} refetchFloorPlanStatus={refetchFloorPlanStatus} />
     }
 
     if (isLoadingFloorPlans || isLoadingStatus) {
@@ -75,32 +82,41 @@ export function RuntimeTablesView({ locationId, onBack }: RuntimeTablesViewProps
         )
     }
 
+    // 2. RUNTIME VIEW MODE
     return (
-        <div className="flex flex-col h-screen">
+        <div className="flex flex-col h-screen max-h-[90vh] rounded-lg shadow-xl  overflow-hidden bg-background">
             <TablesTopBar
                 location={location}
+                floorPlans={floorPlans}
+                activeFloorPlanId={activeFloorPlanId}
+                onFloorPlanChange={handleFloorPlanChange}
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
                 onBack={onBack}
                 onEditLayout={handleEditLayout}
             />
-            <div className="flex flex-1 overflow-hidden">
+            <div className="flex overflow-hidden relative h-full ">
                 <TablesSidebar
+                    locationId={locationId}
                     tables={tables}
-                    waitlist={waitlist}
+                    waitlistInfo={waitlistInfo || undefined}
                     reservations={reservations || []}
                     searchQuery={searchQuery}
                     selectedTableId={selectedTableId}
                     onTableClick={setSelectedTableId}
                 />
+
+                {/* PASS DATA ONLY. 
+                   We don't need drag handlers here because isDesignMode is false.
+                */}
                 <RuntimeFloorPlanView
                     floorPlan={activeFloorPlan}
                     tables={tables}
                     selectedTableId={selectedTableId}
+                    isDesignMode={false} // <--- Explicitly disable editing
                     onTableClick={setSelectedTableId}
                 />
             </div>
         </div>
     )
 }
-

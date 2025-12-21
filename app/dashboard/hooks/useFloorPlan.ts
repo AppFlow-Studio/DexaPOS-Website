@@ -44,7 +44,14 @@ export function useFloorPlanStatus(floorPlanId: string | null) {
  * Get waitlist for a location
  */
 export function useWaitlist(locationId: string | null) {
-    return useQuery<WaitlistEntry[]>({
+    return useQuery<{
+        waitlist: WaitlistEntry[]
+        summary: {
+            total_waiting: number
+            total_notified: number
+            avg_wait_time: number
+        }
+    }>({
         queryKey: ['waitlist', locationId],
         queryFn: () => LoadWaitlistAction(locationId!),
         enabled: !!locationId,
