@@ -30,7 +30,7 @@ import { LocationDetailSheet } from '@/components/dashboard/locations/LocationDe
 export default function LocationsPage() {
     const { data: userInfo } = useUserInfo()
     const clerkOrgId = userInfo?.members?.[0]?.organizations?.id
-    const { data: locations, isLoading, refetch } = useLocations(clerkOrgId || '')
+    const { data: locations, isLoading, refetch } = useLocations(clerkOrgId || '', userInfo?.id || '')
     const router = useRouter()
     const queryClient = useQueryClient()
 

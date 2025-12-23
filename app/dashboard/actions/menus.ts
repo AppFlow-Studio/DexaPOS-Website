@@ -51,11 +51,13 @@ export async function GetMenuWithCategories(
 
     const supabase = createServerSupabaseClient()
     const location_Id = locationId === 'all' ? null : locationId
+    console.log('[GetMenuWithCategories] location_Id', location_Id)
 
     const { data, error } = await supabase.rpc('get_menu_with_categories', {
         p_menu_id: menuId,
         p_location_id: location_Id || null
     })
+    console.log('[GetMenuWithCategories] data', data)
 
     if (error) {
         console.error('Error getting menu with categories:', error)
@@ -79,7 +81,7 @@ export async function getMenuForLocation(menuId: string, locationId?: string) {
             p_menu_id: menuId,
             p_location_id: location_Id || null
         })
-        console.log('newData', newData)
+    console.log('newData', newData)
 
     if (!newError && newData) {
         // Transform to legacy format for backwards compatibility
@@ -238,7 +240,6 @@ export async function GetMenus(clerkOrgId: string, locationId?: string | null) {
     const locationMenuMap = new Map(
         (locationMenus || []).map(lm => [lm.menu_id, lm])
     )
-    console.log('locationMenus', locationMenus)
 
     // Build result with location status
     const result: MenuWithLocationStatus[] = globalMenus.map(menu => {
@@ -467,6 +468,54 @@ export async function UpdateMenu(
     }
 
     return { data: menu as MenusModel }
+}
+
+/**
+ * Batch update display order for multiple menus
+ */
+export async function UpdateMenusOrder(
+    menuOrders: Array<{ menuId: string; displayOrder: number }>
+) {
+    if (!menuOrders || menuOrders.length === 0) {
+        return { error: 'Menu orders are required' }
+    }
+
+    const supabase = createServerSupabaseClient()
+
+    // Validate all menus belong to the same merchant
+    const menuIds = menuOrders.map(mo => mo.menuId)
+    const { data: menus, error: fetchError } = await supabase
+        .from('menus')
+        .select('id, merchant_id')
+        .in('id', menuIds)
+
+    if (fetchError || !menus || menus.length !== menuIds.length) {
+        return { error: 'One or more menus not found' }
+    }
+
+    // Check all menus belong to same merchant
+    const merchantIds = new Set(menus.map(m => m.merchant_id))
+    if (merchantIds.size > 1) {
+        return { error: 'All menus must belong to the same merchant' }
+    }
+
+    // Batch update display_order
+    const updates = menuOrders.map(({ menuId, displayOrder }) =>
+        supabase
+            .from('menus')
+            .update({ display_order: displayOrder, updated_at: new Date().toISOString() })
+            .eq('id', menuId)
+    )
+
+    const results = await Promise.all(updates)
+    const errors = results.filter(r => r.error)
+
+    if (errors.length > 0) {
+        console.error('Error updating menu orders:', errors)
+        return { error: 'Failed to update some menu orders' }
+    }
+
+    return { success: true }
 }
 
 export async function ToggleMenuActive(menuId: string) {

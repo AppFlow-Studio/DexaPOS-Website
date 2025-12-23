@@ -29,7 +29,7 @@ function useClerkOrgId() {
     return userInfo?.members?.[0]?.organizations?.id || ''
 }
 
-function useMerchantId() {
+export function useMerchantId() {
     const { data: userInfo } = useUserInfo()
     return userInfo?.members?.[0]?.organizations?.merchants?.id || ''
 }

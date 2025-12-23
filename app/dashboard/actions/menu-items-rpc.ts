@@ -70,6 +70,14 @@ export interface FlatItem {
     has_location_override: boolean
     price_source: 'base' | 'location_item' | 'category' | 'location_category' | 'location_menu' | string
 
+    // Tax & Inventory Control fields (migration 014)
+    tax_category: string                  // Base tax category (L1)
+    is_tax_exempt: boolean                // Base exemption status (L1)
+    available_channels: string[]          // Base channels (L1)
+    effective_tax_category: string        // Effective after L2 override
+    effective_is_tax_exempt: boolean      // Effective after L2 override
+    effective_available_channels: string[] // Effective after L2 override
+
     // Location override details (Level 2)
     location_override: {
         id: string
@@ -80,6 +88,10 @@ export interface FlatItem {
         is_available: boolean
         stock_tracking_mode: string | null
         current_stock: number | null
+        // Tax & channel overrides
+        tax_category: string | null
+        is_tax_exempt: boolean | null
+        available_channels: string[] | null
     } | null
 
     // Categories this item belongs to
@@ -124,6 +136,8 @@ export async function getItemsForLocationFlat(merchantId: string, locationId?: s
 
             if (!itemsMap.has(itemId)) {
                 // Create new item entry
+                const locationOverride = menuItem.location_item_override
+
                 itemsMap.set(itemId, {
                     id: menuItem.id,
                     name: menuItem.name,
@@ -144,7 +158,22 @@ export async function getItemsForLocationFlat(merchantId: string, locationId?: s
                     has_location_override: menuItem.has_location_item_override ?? false,
                     price_source: menuItem.price_source || 'base',
 
-                    location_override: menuItem.location_item_override || null,
+                    // Tax & Inventory Control (migration 014) - with fallbacks
+                    tax_category: (menuItem as any).tax_category || 'standard',
+                    is_tax_exempt: (menuItem as any).is_tax_exempt || false,
+                    available_channels: (menuItem as any).available_channels || ['pos', 'online'],
+
+                    // Effective values (L2 > L1 inheritance)
+                    effective_tax_category: (locationOverride as any)?.tax_category || (menuItem as any).tax_category || 'standard',
+                    effective_is_tax_exempt: (locationOverride as any)?.is_tax_exempt ?? (menuItem as any).is_tax_exempt ?? false,
+                    effective_available_channels: (locationOverride as any)?.available_channels || (menuItem as any).available_channels || ['pos', 'online'],
+
+                    location_override: locationOverride ? {
+                        ...locationOverride,
+                        tax_category: (locationOverride as any).tax_category || null,
+                        is_tax_exempt: (locationOverride as any).is_tax_exempt ?? null,
+                        available_channels: (locationOverride as any).available_channels || null,
+                    } : null,
 
                     categories: [categoryInfo],
 
@@ -215,6 +244,11 @@ export interface UpdateItemParams {
     stockTrackingMode?: string
     mealTypes?: string[]
 
+    // Tax & Inventory Control fields (migration 014)
+    taxCategory?: string           // 'standard', 'alcohol', 'food', etc.
+    isTaxExempt?: boolean
+    availableChannels?: string[]   // ['pos', 'online', 'kiosk']
+
     // Location-specific fields
     priceModifier?: number | null
     priceModifierType?: 'add' | 'percent' | null
@@ -279,11 +313,13 @@ export async function updateItemOverride(params: UpdateItemParams): Promise<Upda
     // If updating base item fields (name, description, etc.) - these are always global
     if (params.name !== undefined || params.description !== undefined ||
         params.image !== undefined || params.allergens !== undefined ||
-        params.cardBgColor !== undefined || params.mealTypes !== undefined) {
+        params.cardBgColor !== undefined || params.mealTypes !== undefined ||
+        params.taxCategory !== undefined || params.isTaxExempt !== undefined ||
+        params.availableChannels !== undefined) {
 
         // Only merchant admin can update base item fields
         if (!locationId && !params.menuId && !params.categoryId) {
-            // Merchant admin in Items Library - update base item
+            // Merchant admin in Items Library - update base item (L1)
             const updateData: Record<string, unknown> = { updated_at: new Date().toISOString() }
             if (params.name !== undefined) updateData.name = params.name
             if (params.description !== undefined) updateData.description = params.description
@@ -293,6 +329,11 @@ export async function updateItemOverride(params: UpdateItemParams): Promise<Upda
             if (params.mealTypes !== undefined) updateData.meal_types = params.mealTypes
             if (params.stockTrackingMode !== undefined) updateData.stock_tracking_mode = params.stockTrackingMode
 
+            // Tax & Inventory Control fields (migration 014)
+            if (params.taxCategory !== undefined) updateData.tax_category = params.taxCategory
+            if (params.isTaxExempt !== undefined) updateData.is_tax_exempt = params.isTaxExempt
+            if (params.availableChannels !== undefined) updateData.available_channels = params.availableChannels
+
             const { error } = await supabase
                 .from('menu_items')
                 .update(updateData)
@@ -300,6 +341,32 @@ export async function updateItemOverride(params: UpdateItemParams): Promise<Upda
 
             if (error) {
                 return { success: false, error: error.message }
+            }
+        }
+        // If locationId is set, update location_item_overrides (L2)
+        else if (locationId && !params.menuId && !params.categoryId) {
+            const overrideData: Record<string, unknown> = { updated_at: new Date().toISOString() }
+
+            // Tax & Inventory Control overrides (migration 014)
+            if (params.taxCategory !== undefined) overrideData.tax_category = params.taxCategory
+            if (params.isTaxExempt !== undefined) overrideData.is_tax_exempt = params.isTaxExempt
+            if (params.availableChannels !== undefined) overrideData.available_channels = params.availableChannels
+
+            // Only upsert if we have tax/channel fields to update
+            if (Object.keys(overrideData).length > 1) { // > 1 because updated_at is always included
+                const { error } = await supabase
+                    .from('location_item_overrides')
+                    .upsert({
+                        location_id: locationId,
+                        menu_item_id: params.menuItemId,
+                        ...overrideData
+                    }, {
+                        onConflict: 'location_id,menu_item_id'
+                    })
+
+                if (error) {
+                    return { success: false, error: error.message }
+                }
             }
         }
     }

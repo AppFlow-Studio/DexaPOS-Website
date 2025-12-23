@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Utensils, Tag, Calendar, Clock, Wand2, ArrowLeft, Trash2 } from 'lucide-react'
+import { Utensils, Tag, Calendar, Clock, Wand2, ArrowLeft, Trash2, Save, Info } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { DeleteMenu, UpdateMenu, ToggleMenuActive } from '../../actions/menus'
 import { ToggleCategoryInMenu, RemoveLocationMenuCategoryOverride, UpdateLocationMenuCategoryOverride } from '../../actions/categories'
@@ -55,12 +55,11 @@ export default function MenuDetailPage() {
     const { data: userInfo } = useUserInfo()
     const clerkOrgId = userInfo?.members?.[0]?.organizations?.id
     const isAllLocations = !selectedLocationId || selectedLocationId === 'all'
-
     // Categories for wizard selections
     const { data: categoriesWithItems } = useCategoriesWithItems(clerkOrgId || '', selectedLocationId)
 
     // Locations for mapping location_id to location name
-    const { data: locations } = useLocations(clerkOrgId || '')
+    const { data: locations } = useLocations(clerkOrgId || '', userInfo?.id || '')
 
     // Track expanded categories
     const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
@@ -86,6 +85,10 @@ export default function MenuDetailPage() {
     const [editedName, setEditedName] = useState('')
     const [editedDescription, setEditedDescription] = useState('')
     const [hasSettingsChanges, setHasSettingsChanges] = useState(false)
+    const [categoryViewMode, setCategoryViewMode] = useState<'list' | 'table'>('list')
+    const [reorderedCategories, setReorderedCategories] = useState<MenuCategory[]>([])
+    const [hasCategoryOrderChanges, setHasCategoryOrderChanges] = useState(false)
+    const [isSavingCategoryOrder, setIsSavingCategoryOrder] = useState(false)
 
     // Initialize settings and expand all categories when menu loads
     useEffect(() => {
@@ -146,8 +149,27 @@ export default function MenuDetailPage() {
         })
     }, [filteredCategories, locations])
 
-    const hiddenCategories = enrichedCategories.filter(c => !c.is_active)
-    const visibleCategories = enrichedCategories.filter(c => c.is_active)
+    // Sort categories by display_order
+    const sortedCategories = useMemo(() => {
+        return [...enrichedCategories].sort((a, b) => {
+            const aOrder = a.display_order ?? 999999
+            const bOrder = b.display_order ?? 999999
+            return aOrder - bOrder
+        })
+    }, [enrichedCategories])
+
+    // Use reordered categories if there are unsaved changes, otherwise use sorted categories
+    const displayCategories = hasCategoryOrderChanges ? reorderedCategories : sortedCategories
+
+    const hiddenCategories = displayCategories.filter(c => !c.is_active)
+    const visibleCategories = displayCategories.filter(c => c.is_active)
+
+    // Initialize reordered categories when categories load
+    useEffect(() => {
+        if (sortedCategories.length > 0 && reorderedCategories.length === 0 && !hasCategoryOrderChanges) {
+            setReorderedCategories(sortedCategories)
+        }
+    }, [sortedCategories, reorderedCategories.length, hasCategoryOrderChanges])
 
     const mapMenuCategoryItemToEdit = (category: MenuCategory, item: MenuCategoryItem): EditItemWithOverrides => {
         const mi = item.menu_item
@@ -484,6 +506,99 @@ export default function MenuDetailPage() {
         }
     }
 
+    // Category reorder handlers
+    const handleMoveCategoryUp = (index: number) => {
+        if (index === 0) return
+
+        const newOrder = [...reorderedCategories]
+        const temp = newOrder[index]
+        newOrder[index] = newOrder[index - 1]
+        newOrder[index - 1] = temp
+
+        // Update display_order values
+        newOrder.forEach((category, idx) => {
+            category.display_order = idx + 1
+        })
+
+        setReorderedCategories(newOrder)
+        setHasCategoryOrderChanges(true)
+    }
+
+    const handleMoveCategoryDown = (index: number) => {
+        if (index === reorderedCategories.length - 1) return
+
+        const newOrder = [...reorderedCategories]
+        const temp = newOrder[index]
+        newOrder[index] = newOrder[index + 1]
+        newOrder[index + 1] = temp
+
+        // Update display_order values
+        newOrder.forEach((category, idx) => {
+            category.display_order = idx + 1
+        })
+
+        setReorderedCategories(newOrder)
+        setHasCategoryOrderChanges(true)
+    }
+
+    const handleSaveCategoryOrder = async () => {
+        setIsSavingCategoryOrder(true)
+        try {
+            const { UpdateMenuCategoriesOrder } = await import('../../actions/item-assignments')
+
+            const categoryOrders = reorderedCategories.map((category, index) => ({
+                categoryId: category.category_id,
+                displayOrder: index + 1
+            }))
+
+            const result = await UpdateMenuCategoriesOrder(menuId, categoryOrders)
+
+            if (result.error) {
+                toast.error('Save Failed', {
+                    description: result.error
+                })
+                return
+            }
+
+            toast.success('Order Saved', {
+                description: 'Category display order has been updated.'
+            })
+
+            setHasCategoryOrderChanges(false)
+            queryClient.invalidateQueries({ queryKey: ['menu-with-categories', menuId] })
+            refetchMenu()
+        } catch (error) {
+            toast.error('Save Failed', {
+                description: 'Unable to save category order. Please try again.'
+            })
+        } finally {
+            setIsSavingCategoryOrder(false)
+        }
+    }
+
+    const handleRemoveCategory = async (categoryId: string) => {
+        try {
+            const { RemoveCategoryFromMenu } = await import('../../actions/categories')
+            const result = await RemoveCategoryFromMenu(menuId, categoryId)
+
+            if (result.error) {
+                toast.error('Remove Failed', { description: result.error })
+                return
+            }
+
+            toast.success('Category Removed', {
+                description: 'The category has been removed from this menu.'
+            })
+
+            queryClient.invalidateQueries({ queryKey: ['menu-with-categories', menuId] })
+            refetchMenu()
+        } catch {
+            toast.error('Remove Failed', {
+                description: 'Unable to remove category. Please try again.'
+            })
+        }
+    }
+
     if (isLoading) {
         return (
             <div className="space-y-6 animate-in fade-in duration-500">
@@ -571,6 +686,14 @@ export default function MenuDetailPage() {
                         onAddCategory={() => setIsCategoryWizardOpen(true)}
                         onNavigateToCategories={() => router.push('/dashboard/menu/categories')}
                         refetchMenu={refetchMenu}
+                        categoryViewMode={categoryViewMode}
+                        onViewModeChange={setCategoryViewMode}
+                        onMoveCategoryUp={handleMoveCategoryUp}
+                        onMoveCategoryDown={handleMoveCategoryDown}
+                        onSaveCategoryOrder={handleSaveCategoryOrder}
+                        hasCategoryOrderChanges={hasCategoryOrderChanges}
+                        isSavingCategoryOrder={isSavingCategoryOrder}
+                        onRemoveCategory={handleRemoveCategory}
                     />
                 </TabsContent>
 
@@ -659,6 +782,8 @@ export default function MenuDetailPage() {
                 onOpenChange={setIsCategoryWizardOpen}
                 menuId={menuId}
                 menuName={menu?.name}
+                menu={menu}
+                userRole={userInfo?.members?.[0]?.role}
                 categoriesWithItems={categoriesWithItems?.data || []}
                 onSuccess={() => {
                     refetchMenu()

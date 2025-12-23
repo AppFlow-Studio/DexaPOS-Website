@@ -22,10 +22,13 @@ export interface InviteStaffParams {
         locationId: string
         roleCode?: string  // Override role at this location
         isPrimary?: boolean
+        hourlyRate?: number
+        pinCode?: string
     }[]
     employmentType?: 'full_time' | 'part_time' | 'contractor' | 'seasonal'
     hourlyRate?: number
     employeeId?: string
+    invited_by_user_id: string
 }
 
 export interface QuickAddStaffParams {
@@ -59,9 +62,9 @@ export interface CreateCustomRoleParams {
 // INVITE STAFF MEMBER
 // ============================================================================
 
-export async function inviteStaffMember(params: InviteStaffParams) {
-    const { userId, orgId } = await auth()
-    if (!userId || !orgId) {
+export async function inviteStaffMember(params: InviteStaffParams, clerkOrgId: string) {
+    const { userId } = await auth()
+    if (!userId) {
         return { success: false, error: 'Unauthorized' }
     }
 
@@ -92,42 +95,57 @@ export async function inviteStaffMember(params: InviteStaffParams) {
             // Create Clerk organization invitation
             const clerk = await clerkClient()
             const invitation = await clerk.organizations.createOrganizationInvitation({
-                organizationId: orgId,
+                organizationId: clerkOrgId,
                 emailAddress: params.email,
-                role: role.level_type === 'admin' ? 'admin' : 'member',
+                role: role.level_type === 'admin' ? 'org:admin' : 'org:member',
                 publicMetadata: {
-                    dexa_role: params.roleCode,
-                    merchant_id: params.merchantId,
-                    location_assignments: params.locationAssignments,
+                    role: params.roleCode,
+                    merchantId: params.merchantId,
+                    organizationId: clerkOrgId,
+                    location_assignments: params.locationAssignments.map((location: any) => ({
+                        locationId: location.locationId,
+                        role_code: location.roleCode,
+                        is_primary_location: location.isPrimary,
+                        hourly_rate: location.hourlyRate,
+                        pin_code: location.pinCode,
+                    })),
                 },
             })
+            console.log('Clerk invitation:', invitation)
 
-            // Store invite in our DB
-            const { error: inviteError } = await supabase
-                .from('staff_invites')
-                .insert({
-                    merchant_id: params.merchantId,
-                    email: params.email,
-                    first_name: params.firstName,
-                    last_name: params.lastName,
-                    phone: params.phone,
-                    role_code: params.roleCode,
-                    location_assignments: params.locationAssignments,
-                    invite_type: 'clerk',
-                    clerk_invite_id: invitation.id,
-                    employment_type: params.employmentType,
-                    hourly_rate: params.hourlyRate,
-                    employee_id: params.employeeId,
-                    invited_by_user_id: userId,
-                    status: 'pending',
-                })
+            if (invitation.id) {
+                // Store invite in our DB
+                const { error: inviteError } = await supabase
+                    .from('location_invites')
+                    .insert({
+                        merchant_id: params.merchantId,
+                        email: params.email,
+                        first_name: params.firstName,
+                        last_name: params.lastName,
+                        phone: params.phone,
+                        role_code: params.roleCode,
+                        location_assignments: params.locationAssignments,
+                        invite_type: 'clerk',
+                        clerk_invite_id: invitation.id,
+                        hourly_rate: params.hourlyRate,
+                        employee_id: params.employeeId,
+                        invited_by_user_id: userId,
+                        status: 'pending',
+                    })
 
-            if (inviteError) throw inviteError
+                if (inviteError) throw inviteError
 
-            return {
-                success: true,
-                inviteType: 'clerk',
-                invitationId: invitation.id
+                return {
+                    success: true,
+                    inviteType: 'clerk',
+                    invitationId: invitation.id
+                }
+            }
+            else {
+                return {
+                    success: false,
+                    error: 'Failed to create Clerk invitation'
+                }
             }
 
         } else {
@@ -138,7 +156,7 @@ export async function inviteStaffMember(params: InviteStaffParams) {
             const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
 
             const { data: invite, error: inviteError } = await supabase
-                .from('staff_invites')
+                .from('location_invites')
                 .insert({
                     merchant_id: params.merchantId,
                     email: params.email,
@@ -150,7 +168,6 @@ export async function inviteStaffMember(params: InviteStaffParams) {
                     invite_type: 'pos_only',
                     invite_token: inviteToken,
                     invite_token_expires_at: expiresAt.toISOString(),
-                    employment_type: params.employmentType,
                     hourly_rate: params.hourlyRate,
                     employee_id: params.employeeId,
                     invited_by_user_id: userId,

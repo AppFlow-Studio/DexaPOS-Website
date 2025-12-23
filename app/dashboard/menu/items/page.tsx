@@ -1,12 +1,12 @@
 'use client'
-//TODO: Setup or remove the items detailed page 
+//TODO: Setup or remove the items detailed page
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
     Utensils, Plus, Search, Grid3x3, List, Package, DollarSign, Edit3, Eye,
     MoreVertical, Tag, X, Filter, MapPin, Info, ChevronDown, ChevronRight,
-    Globe, Layers, Sparkles
+    Globe, Layers, Sparkles, CreditCard, Monitor, ShieldCheck, ShieldX
 } from 'lucide-react'
 import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
@@ -31,11 +31,20 @@ import {
     CollapsibleContent,
     CollapsibleTrigger,
 } from '@/components/ui/collapsible'
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { useLocationScopedMenuItemsWithCategories, useLocationContext } from '../../hooks/useLocationScoped'
 import { NewEditItemFormSheet, EditItemWithOverrides } from '@/components/dashboard/menu/NewEditItemFormSheet'
 import { FlatItem } from '../../actions/menu-items-rpc'
 import { CategoryWithItems } from '@/types/menu'
 import { useLocationStore } from '@/stores/location-store'
+import { useLocationTaxRates } from '../../hooks/useTaxRates'
+import { TAX_CATEGORY_LABELS, CHANNEL_LABELS } from '@/types/tax'
+import { AVAILABLE_CHANNELS } from '@/types/inventory'
 
 // ============================================================================
 // TYPES
@@ -99,15 +108,23 @@ function ItemCard({
     item,
     onEdit,
     onView,
-    index = 0
+    index = 0,
+    taxRates = []
 }: {
     item: FlatItem
     onEdit: () => void
     onView: () => void
     index?: number
+    taxRates?: any[]
 }) {
     const hasOverride = item.has_location_override
     const priceColors = PRICE_SOURCE_COLORS[item.price_source] || PRICE_SOURCE_COLORS.base
+
+    // Tax info
+    const taxRate = taxRates.find(r => r.tax_category === item.effective_tax_category)
+    const taxAmount = taxRate && !item.effective_is_tax_exempt
+        ? (item.effective_price * taxRate.percentage / 100).toFixed(2)
+        : '0.00'
 
     return (
         <div
@@ -249,6 +266,70 @@ function ItemCard({
                                 </Badge>
                             )}
                         </div>
+
+                        {/* Tax & Channel Badges */}
+                        <div className="flex flex-wrap gap-1.5 pt-3 border-t mt-3">
+                            {/* Tax Badge */}
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Badge
+                                            variant="outline"
+                                            className={cn(
+                                                "text-[10px] px-1.5 py-0.5 cursor-help",
+                                                item.effective_is_tax_exempt
+                                                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                                                    : "bg-blue-50 text-blue-700 border-blue-200"
+                                            )}
+                                        >
+                                            {item.effective_is_tax_exempt ? (
+                                                <>
+                                                    <ShieldX className="h-2.5 w-2.5 mr-0.5" />
+                                                    Tax Exempt
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <ShieldCheck className="h-2.5 w-2.5 mr-0.5" />
+                                                    {TAX_CATEGORY_LABELS[item.effective_tax_category as keyof typeof TAX_CATEGORY_LABELS] || item.effective_tax_category}
+                                                    {taxRate && `: ${taxRate.percentage}%`}
+                                                </>
+                                            )}
+                                        </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs">
+                                        {item.effective_is_tax_exempt ? (
+                                            <p>This item is tax exempt</p>
+                                        ) : taxRate ? (
+                                            <div className="space-y-1">
+                                                <p className="font-medium">{taxRate.name}</p>
+                                                <p className="text-xs">
+                                                    Rate: {taxRate.percentage}% • Tax: ${taxAmount}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    Total with tax: ${(parseFloat(item.effective_price.toString()) + parseFloat(taxAmount)).toFixed(2)}
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs text-amber-600">No tax rate set for this category</p>
+                                        )}
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+
+                            {/* Channel Badges */}
+                            {item.effective_available_channels?.map((channel) => (
+                                <Badge
+                                    key={channel}
+                                    variant="secondary"
+                                    className="text-[10px] px-1.5 py-0.5"
+                                >
+                                    {channel === 'pos' && <CreditCard className="h-2.5 w-2.5 mr-0.5" />}
+                                    {channel === 'online' && <Globe className="h-2.5 w-2.5 mr-0.5" />}
+                                    {channel === 'kiosk' && <Monitor className="h-2.5 w-2.5 mr-0.5" />}
+                                    {channel.toUpperCase()}
+                                </Badge>
+                            ))}
+                        </div>
                     </div>
                 </CardContent>
             </Card>
@@ -264,15 +345,23 @@ function ItemRow({
     item,
     onEdit,
     onView,
-    index = 0
+    index = 0,
+    taxRates = []
 }: {
     item: FlatItem
     onEdit: () => void
     onView: () => void
     index?: number
+    taxRates?: any[]
 }) {
     const hasOverride = item.has_location_override
     const priceColors = PRICE_SOURCE_COLORS[item.price_source] || PRICE_SOURCE_COLORS.base
+
+    // Tax info
+    const taxRate = taxRates.find(r => r.tax_category === item.effective_tax_category)
+    const taxAmount = taxRate && !item.effective_is_tax_exempt
+        ? (item.effective_price * taxRate.percentage / 100).toFixed(2)
+        : '0.00'
 
     return (
         <div
@@ -310,35 +399,85 @@ function ItemRow({
                                     {item.description}
                                 </p>
                             )}
-                            {/* Category tags */}
-                            {item.categories.length > 0 && (
-                                <div className="flex flex-wrap gap-1 mt-2">
-                                    {item.categories.slice(0, 3).map((cat) => (
-                                        <Badge
-                                            key={cat.id}
-                                            variant="outline"
-                                            className={cn(
-                                                "text-[10px] px-1.5 py-0",
-                                                cat.is_global
-                                                    ? "border-emerald-200 text-emerald-700"
-                                                    : "border-purple-200 text-purple-700"
-                                            )}
-                                        >
-                                            {cat.is_global ? (
-                                                <Globe className="h-2.5 w-2.5 mr-0.5" />
+                            {/* Category, Tax & Channel tags */}
+                            <div className="flex flex-wrap gap-1 mt-2">
+                                {/* Category tags */}
+                                {item.categories.slice(0, 3).map((cat) => (
+                                    <Badge
+                                        key={cat.id}
+                                        variant="outline"
+                                        className={cn(
+                                            "text-[10px] px-1.5 py-0",
+                                            cat.is_global
+                                                ? "border-emerald-200 text-emerald-700"
+                                                : "border-purple-200 text-purple-700"
+                                        )}
+                                    >
+                                        {cat.is_global ? (
+                                            <Globe className="h-2.5 w-2.5 mr-0.5" />
+                                        ) : (
+                                            <MapPin className="h-2.5 w-2.5 mr-0.5" />
+                                        )}
+                                        {cat.name}
+                                    </Badge>
+                                ))}
+                                {item.categories.length > 3 && (
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                        +{item.categories.length - 3}
+                                    </Badge>
+                                )}
+
+                                {/* Tax Badge */}
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Badge
+                                                variant="outline"
+                                                className={cn(
+                                                    "text-[10px] px-1.5 py-0 cursor-help",
+                                                    item.effective_is_tax_exempt
+                                                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                                                        : "bg-blue-50 text-blue-700 border-blue-200"
+                                                )}
+                                            >
+                                                {item.effective_is_tax_exempt ? (
+                                                    <>
+                                                        <ShieldX className="h-2.5 w-2.5 mr-0.5" />
+                                                        Exempt
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <ShieldCheck className="h-2.5 w-2.5 mr-0.5" />
+                                                        {TAX_CATEGORY_LABELS[item.effective_tax_category as keyof typeof TAX_CATEGORY_LABELS] || item.effective_tax_category}
+                                                    </>
+                                                )}
+                                            </Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs">
+                                            {item.effective_is_tax_exempt ? (
+                                                <p>Tax exempt</p>
+                                            ) : taxRate ? (
+                                                <div className="space-y-1">
+                                                    <p className="font-medium text-xs">{taxRate.name}</p>
+                                                    <p className="text-xs">Rate: {taxRate.percentage}% • Tax: ${taxAmount}</p>
+                                                </div>
                                             ) : (
-                                                <MapPin className="h-2.5 w-2.5 mr-0.5" />
+                                                <p className="text-xs text-amber-600">No rate set</p>
                                             )}
-                                            {cat.name}
-                                        </Badge>
-                                    ))}
-                                    {item.categories.length > 3 && (
-                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                                            +{item.categories.length - 3}
-                                        </Badge>
-                                    )}
-                                </div>
-                            )}
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+
+                                {/* Channel Badges */}
+                                {item.effective_available_channels?.map((channel) => (
+                                    <Badge key={channel} variant="secondary" className="text-[10px] px-1.5 py-0">
+                                        {channel === 'pos' && <CreditCard className="h-2.5 w-2.5 mr-0.5" />}
+                                        {channel === 'online' && <Globe className="h-2.5 w-2.5 mr-0.5" />}
+                                        {channel === 'kiosk' && <Monitor className="h-2.5 w-2.5 mr-0.5" />}
+                                        {channel.toUpperCase()}
+                                    </Badge>
+                                ))}
+                            </div>
                         </div>
 
                         {/* Price and indicators */}
@@ -497,6 +636,7 @@ function CategoryGroup({
                                         key={item.id}
                                         item={item}
                                         index={idx}
+                                        taxRates={taxRates}
                                         onEdit={() => onEditItem(item)}
                                         onView={() => onViewItem(item)}
                                     />
@@ -524,6 +664,10 @@ export default function MenuItemsPage() {
 
     // Location context
     const { isAllLocations, locationName } = useLocationContext()
+
+    // Tax rates for current location
+    const { data: taxRatesData } = useLocationTaxRates()
+    const taxRates = taxRatesData?.data || []
 
     // Get flat items with categories
     const { data: itemsData, isLoading, isError, refetch } = useLocationScopedMenuItemsWithCategories()
@@ -1052,6 +1196,7 @@ export default function MenuItemsPage() {
                                     key={item.id}
                                     item={item}
                                     index={index}
+                                    taxRates={taxRates}
                                     onEdit={() => handleQuickEdit(item)}
                                     onView={() => handleViewDetails(item)}
                                 />
@@ -1065,6 +1210,7 @@ export default function MenuItemsPage() {
                                     key={item.id}
                                     item={item}
                                     index={index}
+                                    taxRates={taxRates}
                                     onEdit={() => handleQuickEdit(item)}
                                     onView={() => handleViewDetails(item)}
                                 />

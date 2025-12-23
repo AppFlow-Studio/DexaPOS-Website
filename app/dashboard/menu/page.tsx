@@ -3,8 +3,9 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Utensils, Plus, Search, Grid3x3, List, Globe, MapPin, Info } from 'lucide-react'
+import { Utensils, Plus, Search, Grid3x3, List, Globe, MapPin, Info, Save } from 'lucide-react'
 import { useState } from 'react'
+import * as React from 'react'
 import { useMenus } from '../hooks/useMenus'
 import { useUserInfo } from '../../manage/hooks/useUserInfo.'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
@@ -14,7 +15,7 @@ import * as z from 'zod'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
-import { CreateMenu, ToggleMenuActive, DeleteMenu } from '../actions/menus'
+import { CreateMenu, ToggleMenuActive, DeleteMenu, GetMenuWithCategories, UpdateMenusOrder } from '../actions/menus'
 import { MenuListView, MenuWithLocation } from '@/components/dashboard/menu/MenuListView'
 import { useLocationStore, useSelectedLocation } from '@/stores/location-store'
 import { Badge } from '@/components/ui/badge'
@@ -22,7 +23,6 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { useLocations } from '../hooks/useLocations'
-
 const menuSchema = z.object({
     name: z.string().min(2, "Menu name must be at least 2 characters").max(100, "Menu name must be less than 100 characters"),
     description: z.string().max(500, "Description must be less than 500 characters").optional(),
@@ -42,17 +42,34 @@ export default function MenuPage() {
     const selectedLocationId = selectedLocation?.id || null
     const isAllLocations = selectedLocationId === 'all' || !selectedLocationId
 
-    const { data: locations } = useLocations(clerkOrgId || '')
+    const { data: locations } = useLocations(clerkOrgId || '', userInfo?.id || '')
     const currentLocation = locations?.find(l => l.id === selectedLocationId)
 
     const { data: menus, isLoading, refetch } = useMenus(clerkOrgId || '', selectedLocationId)
     const [searchTerm, setSearchTerm] = useState('')
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
     const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+    const [reorderedMenus, setReorderedMenus] = useState<MenuWithLocation[]>([])
+    const [hasOrderChanges, setHasOrderChanges] = useState(false)
+    const [isSavingOrder, setIsSavingOrder] = useState(false)
 
     // Cast menus to include location info
     const menusList = (Array.isArray(menus) ? menus : []) as MenuWithLocation[]
-    const filteredMenus = menusList.filter(menu =>
+
+    // Sort menus by display_order (ascending, nulls last)
+    const sortedMenus = React.useMemo(() => {
+        const sorted = [...menusList].sort((a, b) => {
+            const aOrder = a.display_order ?? 999999
+            const bOrder = b.display_order ?? 999999
+            return aOrder - bOrder
+        })
+        return sorted
+    }, [menusList])
+
+    // Use reordered menus if there are unsaved changes, otherwise use sorted menus
+    const displayMenus = hasOrderChanges ? reorderedMenus : sortedMenus
+
+    const filteredMenus = displayMenus.filter(menu =>
         menu.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         menu.description?.toLowerCase().includes(searchTerm.toLowerCase())
     )
@@ -72,12 +89,23 @@ export default function MenuPage() {
         },
     })
 
+    // Reset form when location changes
+    React.useEffect(() => {
+        form.reset({
+            name: '',
+            description: '',
+            is_active: true,
+            menu_type: isAllLocations ? 'global' : 'location',
+        })
+    }, [isAllLocations, form])
+
     const menuType = form.watch('menu_type')
 
     const onSubmit = async (values: MenuFormValues) => {
         try {
-            // Determine location_id based on menu type selection
-            const locationId = values.menu_type === 'global'
+            // Determine location_id based on menu type selection and location scope
+            // When scoped to a location, always create location-specific menu
+            const locationId = isAllLocations && values.menu_type === 'global'
                 ? null
                 : (selectedLocationId === 'all' ? null : selectedLocationId)
 
@@ -96,7 +124,7 @@ export default function MenuPage() {
                 return
             }
 
-            const menuTypeLabel = values.menu_type === 'global' ? 'global' : 'location-specific'
+            const menuTypeLabel = isAllLocations && values.menu_type === 'global' ? 'global' : 'location-specific'
             toast.success('Menu Created', {
                 description: `"${values.name}" has been created as a ${menuTypeLabel} menu.`
             })
@@ -158,7 +186,112 @@ export default function MenuPage() {
 
     const handleDialogClose = () => {
         setIsCreateDialogOpen(false)
-        form.reset()
+        form.reset({
+            name: '',
+            description: '',
+            is_active: true,
+            menu_type: isAllLocations ? 'global' : 'location',
+        })
+    }
+
+    const handleDuplicate = async (menuId: string, targetLocationId: string | null) => {
+        // Get Menu Info with all the items and categories and modifiers and set settings 
+        const menu = await GetMenuWithCategories(menuId)
+        if (!menu) {
+            toast.error('Duplicate Failed', {
+                description: 'Unable to duplicate the menu. Please try again.'
+            })
+            return
+        }
+        // Create a new menu with the same name and description and settings
+        const result = await CreateMenu(clerkOrgId || '', {
+            name: menu.name,
+            description: menu.description || '',
+            location_id: targetLocationId,
+            is_active: menu.is_active,
+            created_by: userInfo?.first_name + ' ' + userInfo?.last_name,
+        })
+        if (result.error) {
+            toast.error('Duplicate Failed', {
+                description: result.error
+            })
+        }
+    }
+
+    // Initialize reordered menus when menus load
+    React.useEffect(() => {
+        if (sortedMenus.length > 0 && reorderedMenus.length === 0 && !hasOrderChanges) {
+            setReorderedMenus(sortedMenus)
+        }
+    }, [sortedMenus, reorderedMenus.length, hasOrderChanges])
+
+    // Reorder handlers
+    const handleMoveMenuUp = (index: number) => {
+        if (index === 0) return
+
+        const newOrder = [...reorderedMenus]
+        const temp = newOrder[index]
+        newOrder[index] = newOrder[index - 1]
+        newOrder[index - 1] = temp
+
+        // Update display_order values
+        newOrder.forEach((menu, idx) => {
+            menu.display_order = idx + 1
+        })
+
+        setReorderedMenus(newOrder)
+        setHasOrderChanges(true)
+    }
+
+    const handleMoveMenuDown = (index: number) => {
+        if (index === reorderedMenus.length - 1) return
+
+        const newOrder = [...reorderedMenus]
+        const temp = newOrder[index]
+        newOrder[index] = newOrder[index + 1]
+        newOrder[index + 1] = temp
+
+        // Update display_order values
+        newOrder.forEach((menu, idx) => {
+            menu.display_order = idx + 1
+        })
+
+        setReorderedMenus(newOrder)
+        setHasOrderChanges(true)
+    }
+
+    const handleSaveOrder = async () => {
+        setIsSavingOrder(true)
+        try {
+
+            const menuOrders = reorderedMenus.map((menu, index) => ({
+                menuId: menu.id,
+                displayOrder: index + 1
+            }))
+
+            const result = await UpdateMenusOrder(menuOrders)
+
+            if (result.error) {
+                toast.error('Save Failed', {
+                    description: result.error
+                })
+                return
+            }
+
+            toast.success('Order Saved', {
+                description: 'Menu display order has been updated.'
+            })
+
+            setHasOrderChanges(false)
+            queryClient.invalidateQueries({ queryKey: ['menus'] })
+            refetch()
+        } catch (error) {
+            toast.error('Save Failed', {
+                description: 'Unable to save menu order. Please try again.'
+            })
+        } finally {
+            setIsSavingOrder(false)
+        }
     }
 
     return (
@@ -173,7 +306,15 @@ export default function MenuPage() {
                 <Dialog open={isCreateDialogOpen} onOpenChange={(open) => {
                     setIsCreateDialogOpen(open)
                     if (!open) {
-                        form.reset()
+                        form.reset({
+                            name: '',
+                            description: '',
+                            is_active: true,
+                            menu_type: isAllLocations ? 'global' : 'location',
+                        })
+                    } else {
+                        // When opening, ensure menu_type matches location scope
+                        form.setValue('menu_type', isAllLocations ? 'global' : 'location')
                     }
                 }}>
                     <DialogTrigger asChild>
@@ -191,84 +332,86 @@ export default function MenuPage() {
                         </DialogHeader>
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                                {/* Menu Type Selection */}
-                                <FormField
-                                    control={form.control}
-                                    name="menu_type"
-                                    render={({ field }) => (
-                                        <FormItem className="space-y-3">
-                                            <FormLabel>Menu Type</FormLabel>
-                                            <FormControl>
-                                                <RadioGroup
-                                                    onValueChange={field.onChange}
-                                                    value={field.value}
-                                                    className="grid grid-cols-2 gap-4"
-                                                >
-                                                    <div>
-                                                        <RadioGroupItem
-                                                            value="global"
-                                                            id="global"
-                                                            className="peer sr-only"
-                                                        />
-                                                        <Label
-                                                            htmlFor="global"
-                                                            className={cn(
-                                                                "flex flex-col items-center justify-between rounded-lg border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground cursor-pointer transition-all",
-                                                                "peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
-                                                            )}
-                                                        >
-                                                            <Globe className="h-6 w-6 mb-2 text-emerald-500" />
-                                                            <span className="font-semibold">Global Menu</span>
-                                                            <span className="text-xs text-muted-foreground text-center mt-1">
-                                                                Available at all locations
-                                                            </span>
-                                                        </Label>
-                                                    </div>
-                                                    <div>
-                                                        <RadioGroupItem
-                                                            value="location"
-                                                            id="location"
-                                                            className="peer sr-only"
-                                                            disabled={isAllLocations}
-                                                        />
-                                                        <Label
-                                                            htmlFor="location"
-                                                            className={cn(
-                                                                "flex flex-col items-center justify-between rounded-lg border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground cursor-pointer transition-all",
-                                                                "peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary",
-                                                                isAllLocations && "opacity-50 cursor-not-allowed hover:bg-popover"
-                                                            )}
-                                                        >
-                                                            <MapPin className="h-6 w-6 mb-2 text-blue-500" />
-                                                            <span className="font-semibold">Location Menu</span>
-                                                            <span className="text-xs text-muted-foreground text-center mt-1">
-                                                                {isAllLocations
-                                                                    ? 'Select a location first'
-                                                                    : `For ${currentLocation?.name || 'this location'} only`
-                                                                }
-                                                            </span>
-                                                        </Label>
-                                                    </div>
-                                                </RadioGroup>
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
+                                {/* Menu Type Selection - Only show when viewing all locations */}
+                                {isAllLocations && (
+                                    <FormField
+                                        control={form.control}
+                                        name="menu_type"
+                                        render={({ field }: { field: any }) => (
+                                            <FormItem className="space-y-3">
+                                                <FormLabel>Menu Type</FormLabel>
+                                                <FormControl>
+                                                    <RadioGroup
+                                                        onValueChange={field.onChange}
+                                                        value={field.value}
+                                                        className="grid grid-cols-1 gap-4"
+                                                    >
+                                                        <div>
+                                                            <RadioGroupItem
+                                                                value="global"
+                                                                id="global"
+                                                                className="peer sr-only"
+                                                            />
+                                                            <Label
+                                                                htmlFor="global"
+                                                                className={cn(
+                                                                    "flex flex-col items-center justify-between rounded-lg border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground cursor-pointer transition-all",
+                                                                    "peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                                                                )}
+                                                            >
+                                                                <Globe className="h-6 w-6 mb-2 text-emerald-500" />
+                                                                <span className="font-semibold">Global Menu</span>
+                                                                <span className="text-xs text-muted-foreground text-center mt-1">
+                                                                    Available at all locations
+                                                                </span>
+                                                            </Label>
+                                                        </div>
+                                                        {/* <div>
+                                                            <RadioGroupItem
+                                                                value="location"
+                                                                id="location"
+                                                                className="peer sr-only"
+                                                                disabled={isAllLocations}
+                                                            />
+                                                            <Label
+                                                                htmlFor="location"
+                                                                className={cn(
+                                                                    "flex flex-col items-center justify-between rounded-lg border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground cursor-pointer transition-all",
+                                                                    "peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary",
+                                                                    isAllLocations && "opacity-50 cursor-not-allowed hover:bg-popover"
+                                                                )}
+                                                            >
+                                                                <MapPin className="h-6 w-6 mb-2 text-blue-500" />
+                                                                <span className="font-semibold">Location Menu</span>
+                                                                <span className="text-xs text-muted-foreground text-center mt-1">
+                                                                    {isAllLocations
+                                                                        ? 'Select a location first'
+                                                                        : `For ${currentLocation?.name || 'this location'} only`
+                                                                    }
+                                                                </span>
+                                                            </Label>
+                                                        </div> */}
+                                                    </RadioGroup>
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                )}
 
                                 {/* Context Banner */}
                                 <div className={cn(
                                     "flex items-center gap-3 px-4 py-3 rounded-lg border text-sm",
-                                    menuType === 'global'
+                                    isAllLocations && menuType === 'global'
                                         ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950 dark:border-emerald-800"
                                         : "bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800"
                                 )}>
                                     <Info className={cn(
                                         "h-4 w-4",
-                                        menuType === 'global' ? "text-emerald-600" : "text-blue-600"
+                                        isAllLocations && menuType === 'global' ? "text-emerald-600" : "text-blue-600"
                                     )} />
                                     <span className="text-muted-foreground">
-                                        {menuType === 'global'
+                                        {isAllLocations && menuType === 'global'
                                             ? 'This menu will be available at all locations. Locations can customize pricing and availability.'
                                             : `This menu will only be available at ${currentLocation?.name || 'the selected location'}. You have full control over this menu.`
                                         }
@@ -278,7 +421,7 @@ export default function MenuPage() {
                                 <FormField
                                     control={form.control}
                                     name="name"
-                                    render={({ field }) => (
+                                    render={({ field }: { field: any }) => (
                                         <FormItem>
                                             <FormLabel>Menu Name</FormLabel>
                                             <FormControl>
@@ -291,7 +434,7 @@ export default function MenuPage() {
                                 <FormField
                                     control={form.control}
                                     name="description"
-                                    render={({ field }) => (
+                                    render={({ field }: { field: any }) => (
                                         <FormItem>
                                             <FormLabel>Description</FormLabel>
                                             <FormControl>
@@ -306,8 +449,8 @@ export default function MenuPage() {
                                         Cancel
                                     </Button>
                                     <Button type="submit" className="gap-2">
-                                        {menuType === 'global' ? <Globe className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
-                                        Create {menuType === 'global' ? 'Global' : 'Location'} Menu
+                                        {isAllLocations && menuType === 'global' ? <Globe className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
+                                        Create {isAllLocations && menuType === 'global' ? 'Global' : 'Location'} Menu
                                     </Button>
                                 </DialogFooter>
                             </form>
@@ -377,6 +520,18 @@ export default function MenuPage() {
                             <CardDescription>View and manage all your menus</CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
+                            {hasOrderChanges && (
+                                <Button
+                                    variant="default"
+                                    size="sm"
+                                    onClick={handleSaveOrder}
+                                    disabled={isSavingOrder}
+                                    className="gap-2"
+                                >
+                                    <Save className="h-4 w-4" />
+                                    {isSavingOrder ? 'Saving...' : 'Save Order'}
+                                </Button>
+                            )}
                             <div className="relative">
                                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input
@@ -414,6 +569,7 @@ export default function MenuPage() {
                         viewMode={viewMode}
                         onToggleActive={handleToggleActive}
                         onDelete={handleDelete}
+                        onDuplicate={handleDuplicate}
                         onCreateNew={() => setIsCreateDialogOpen(true)}
                         emptyStateTitle={menusList.length === 0 ? "No menus yet" : "No menus found"}
                         emptyStateDescription={
@@ -421,7 +577,16 @@ export default function MenuPage() {
                                 ? "Get started by creating your first menu"
                                 : "Try adjusting your search terms"
                         }
+                        onMoveUp={handleMoveMenuUp}
+                        onMoveDown={handleMoveMenuDown}
+                        hasOrderChanges={hasOrderChanges}
                     />
+                    {filteredMenus.length > 0 && (
+                        <div className="flex items-center gap-2 mt-4 text-sm text-muted-foreground">
+                            <Info className="h-4 w-4" />
+                            <span>This order determines how menus appear on the POS system</span>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         </div>

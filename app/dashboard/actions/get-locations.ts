@@ -3,7 +3,11 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { LocationsModel } from '@/types/db-modles'
 
-export async function GetLocations(clerkOrgId: string) {
+export interface LocationWithPrimary extends LocationsModel {
+    is_primary_location?: boolean
+}
+
+export async function GetLocations(clerkOrgId: string, user_id: string) {
     if (!clerkOrgId) {
         return []
     }
@@ -18,20 +22,48 @@ export async function GetLocations(clerkOrgId: string) {
         .single()
 
     if (merchantError || !merchant) {
-        console.error('Error getting merchant:', merchantError)
+        console.error('[GetLocations] Error getting merchant:', merchantError)
         return []
     }
 
     // Then get locations for this merchant
+
+    // Check the locations this user has in the merchant organization
+    const { data: userLocations, error: userLocationsError } = await supabase
+        .from('location_members')
+        .select('*')
+        .eq('user_id', user_id)
+        .eq('merchant_id', merchant.id)
+
+    if (userLocationsError) {
+        console.error('[GetLocations] Error getting user locations:', userLocationsError)
+        return []
+    }
+
+    console.log('[GetLocations] userLocations', userLocations)
+
     const { data, error } = await supabase
         .from('locations')
         .select('*')
         .eq('merchant_id', merchant.id)
+        .in('id', userLocations.map((location) => location.location_id))
         .order('created_at', { ascending: false })
 
     if (error) {
-        console.error('Error getting locations:', error)
+        console.error('[GetLocations] Error getting locations:', error)
         return []
     }
-    return data as LocationsModel[]
+
+    // Map locations with is_primary_location from location_members
+    const locationsWithPrimary: LocationWithPrimary[] = data.map((location) => {
+        const locationMember = userLocations.find(
+            (lm) => lm.location_id === location.id
+        )
+        return {
+            ...location,
+            is_primary_location: locationMember?.is_primary_location ?? false,
+        }
+    })
+
+    return locationsWithPrimary
 }

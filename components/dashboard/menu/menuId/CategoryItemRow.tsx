@@ -26,7 +26,6 @@ export function CategoryItemRow({
 }: CategoryItemRowProps) {
     const menuItem = item.menu_item
     const priceSource = menuItem?.price_source || 'base'
-
     const getPriceSourceBadge = () => {
         switch (priceSource) {
             case 'location_menu':
@@ -45,7 +44,7 @@ export function CategoryItemRow({
     return (
         <div
             className="flex items-center gap-4 py-4 px-2 hover:bg-muted/50 cursor-pointer transition-colors rounded-lg"
-            onClick={onClick}
+            onClick={onEdit}
         >
             {/* Item Image */}
             <div className="h-16 w-16 rounded-lg bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
@@ -119,7 +118,7 @@ export function CategoryItemRow({
                             </Button>
                         </TooltipTrigger>
                         <TooltipContent>
-                            <p>Edit pricing in this menu/category context</p>
+                            <p>Edit state of this item in this menu/category context</p>
                         </TooltipContent>
                     </Tooltip>
                 </TooltipProvider>

@@ -33,6 +33,12 @@ import {
     Edit3,
     Sparkles,
 } from 'lucide-react'
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import {
     CreateModifierGroup,
@@ -65,6 +71,7 @@ const optionSchema = z.object({
     price_modifier: z.number().default(0),
     display_order: z.number().min(0).optional().nullable(),
     is_active: z.boolean().default(true),
+    is_default: z.boolean().default(false),
 })
 
 type OptionFormValues = z.infer<typeof optionSchema>
@@ -74,8 +81,9 @@ interface TempOption {
     name: string
     description?: string
     price_modifier: number
-    display_order?: number
+    display_order?: number | null
     is_active: boolean
+    is_default: boolean
     isNew: boolean
 }
 
@@ -137,6 +145,7 @@ export function ModifierGroupFormSheet({
             price_modifier: 0,
             display_order: null,
             is_active: true,
+            is_default: false,
         },
     })
 
@@ -160,6 +169,7 @@ export function ModifierGroupFormSheet({
                     price_modifier: item.price_modifier,
                     display_order: item.display_order ?? undefined,
                     is_active: item.is_active ?? true,
+                    is_default: (item as any).is_default ?? false,
                     isNew: false,
                 })))
             }
@@ -181,10 +191,23 @@ export function ModifierGroupFormSheet({
     }
 
     const handleAddOption = (values: OptionFormValues) => {
+        // If setting as default, unset other defaults
+        if (values.is_default) {
+            setOptions(prev => prev.map(opt => ({ ...opt, is_default: false })))
+        }
+
         if (editingOption) {
             setOptions(prev => prev.map(opt =>
                 opt.id === editingOption.id
-                    ? { ...opt, ...values }
+                    ? {
+                        ...opt,
+                        name: values.name,
+                        description: values.description,
+                        price_modifier: values.price_modifier,
+                        display_order: values.display_order ?? null,
+                        is_active: values.is_active,
+                        is_default: values.is_default,
+                    }
                     : opt
             ))
             setEditingOption(null)
@@ -196,6 +219,7 @@ export function ModifierGroupFormSheet({
                 price_modifier: values.price_modifier,
                 display_order: values.display_order ?? options.length,
                 is_active: values.is_active,
+                is_default: values.is_default,
                 isNew: true,
             }
             setOptions(prev => [...prev, newOption])
@@ -212,8 +236,32 @@ export function ModifierGroupFormSheet({
             price_modifier: option.price_modifier,
             display_order: option.display_order ?? null,
             is_active: option.is_active,
+            is_default: option.is_default,
         })
         setIsAddOptionSheetOpen(true)
+    }
+
+    const handleToggleDefault = (optionId: string) => {
+        if (!canEditStructure) return
+
+        setOptions(prev => {
+            const option = prev.find(o => o.id === optionId)
+            if (!option) return prev
+
+            // If setting as default, unset all other defaults
+            if (!option.is_default) {
+                return prev.map(opt => ({
+                    ...opt,
+                    is_default: opt.id === optionId
+                }))
+            } else {
+                // Unsetting default
+                return prev.map(opt => ({
+                    ...opt,
+                    is_default: false
+                }))
+            }
+        })
     }
 
     const handleDeleteOption = (optionId: string) => {
@@ -226,6 +274,17 @@ export function ModifierGroupFormSheet({
                 description: 'Please ensure you are logged into an organization.'
             })
             return
+        }
+
+        // Validate: If group is required, at least one default option must be set
+        if (values.is_required && options.length > 0) {
+            const hasDefault = options.some(opt => opt.is_default)
+            if (!hasDefault) {
+                toast.error('Default Option Required', {
+                    description: 'Required modifier groups must have at least one option set as default.'
+                })
+                return
+            }
         }
 
         setIsSubmitting(true)
@@ -250,6 +309,17 @@ export function ModifierGroupFormSheet({
                     }
 
                     // Handle options updates (only if allowed)
+                    // First, unset all defaults if multiple are set
+                    const defaultOptions = options.filter(opt => opt.is_default)
+                    if (defaultOptions.length > 1) {
+                        // Keep only the first one as default
+                        const firstDefault = defaultOptions[0]
+                        setOptions(prev => prev.map(opt => ({
+                            ...opt,
+                            is_default: opt.id === firstDefault.id
+                        })))
+                    }
+
                     for (const option of options) {
                         if (option.isNew) {
                             // Create new option
@@ -257,8 +327,9 @@ export function ModifierGroupFormSheet({
                                 name: option.name,
                                 description: option.description,
                                 price_modifier: option.price_modifier,
-                                display_order: option.display_order,
+                                display_order: option.display_order ?? undefined,
                                 is_active: option.is_active,
+                                is_default: option.is_default,
                                 merchant_id: merchantId,
                             })
                         } else {
@@ -267,8 +338,9 @@ export function ModifierGroupFormSheet({
                                 name: option.name,
                                 description: option.description,
                                 price_modifier: option.price_modifier,
-                                display_order: option.display_order,
+                                display_order: option.display_order ?? undefined,
                                 is_active: option.is_active,
+                                is_default: option.is_default,
                             })
                         }
                     }
@@ -292,6 +364,13 @@ export function ModifierGroupFormSheet({
                     })
                 }
             } else {
+                // Ensure only one default is set
+                const defaultOptions = options.filter(opt => opt.is_default)
+                const normalizedOptions = options.map((opt, index) => ({
+                    ...opt,
+                    is_default: defaultOptions.length > 0 ? opt.id === defaultOptions[0].id : false
+                }))
+
                 // Create new group with options
                 const result = await CreateModifierGroup(clerkOrgId, {
                     name: values.name,
@@ -301,11 +380,12 @@ export function ModifierGroupFormSheet({
                     max_selections: values.max_selections ?? undefined,
                     display_order: values.display_order ?? undefined,
                     location_id: selectedLocation?.id == 'all' ? null : selectedLocation?.id,
-                    options: options.map((opt, index) => ({
+                    options: normalizedOptions.map((opt, index) => ({
                         name: opt.name,
                         description: opt.description,
                         price_modifier: opt.price_modifier,
                         display_order: opt.display_order ?? index,
+                        is_default: opt.is_default,
                         merchant_id: merchantId,
                     })),
                 })
@@ -370,9 +450,9 @@ export function ModifierGroupFormSheet({
                     </BottomSheetHeader>
 
                     <BottomSheetBody>
-                        <div className="flex flex-col lg:flex-row h-full gap-6">
+                        <div className="flex flex-col lg:flex-row h-full gap-6 ">
                             {/* Form Section */}
-                            <div className="flex-1 overflow-y-auto space-y-4">
+                            <div className="w-full h-full overflow-y-auto space-y-4 px-4">
                                 <Form {...form}>
                                     <form id="modifier-group-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                                         {/* Basic Info */}
@@ -588,6 +668,9 @@ export function ModifierGroupFormSheet({
                                                                     {option.isNew && (
                                                                         <Badge variant="secondary" className="text-xs">New</Badge>
                                                                     )}
+                                                                    {option.is_default && (
+                                                                        <Badge variant="default" className="text-xs bg-yellow-500 text-white">Default</Badge>
+                                                                    )}
                                                                     {!option.is_active && (
                                                                         <Badge variant="outline" className="text-xs">Inactive</Badge>
                                                                     )}
@@ -609,6 +692,29 @@ export function ModifierGroupFormSheet({
 
                                                             {canEditStructure ? (
                                                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    {/* Set Default Toggle - Only show if group is required */}
+                                                                    {watchedValues.is_required && (
+                                                                        <TooltipProvider>
+                                                                            <Tooltip>
+                                                                                <TooltipTrigger asChild>
+                                                                                    <Button
+                                                                                        type="button"
+                                                                                        variant={option.is_default ? "default" : "ghost"}
+                                                                                        size="sm"
+                                                                                        onClick={() => handleToggleDefault(option.id)}
+                                                                                        className={cn(
+                                                                                            option.is_default && "bg-yellow-500 hover:bg-yellow-600"
+                                                                                        )}
+                                                                                    >
+                                                                                        <Sparkles className="h-4 w-4" />
+                                                                                    </Button>
+                                                                                </TooltipTrigger>
+                                                                                <TooltipContent>
+                                                                                    <p>{option.is_default ? 'Remove default' : 'Set as default'}</p>
+                                                                                </TooltipContent>
+                                                                            </Tooltip>
+                                                                        </TooltipProvider>
+                                                                    )}
                                                                     <Button
                                                                         type="button"
                                                                         variant="ghost"
@@ -701,7 +807,12 @@ export function ModifierGroupFormSheet({
                                                         !option.is_active && "opacity-50"
                                                     )}
                                                 >
-                                                    <span className="text-sm">{option.name}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm">{option.name}</span>
+                                                        {option.is_default && (
+                                                            <Badge variant="default" className="text-xs bg-yellow-500 text-white px-1.5 py-0">Default</Badge>
+                                                        )}
+                                                    </div>
                                                     <span className={cn(
                                                         "text-sm font-medium",
                                                         option.price_modifier > 0 ? "text-green-600" :
@@ -760,7 +871,7 @@ export function ModifierGroupFormSheet({
                     optionForm.reset()
                 }
                 setIsAddOptionSheetOpen(open)
-                
+
             }}>
                 <BottomSheetContent height="auto" className="!rounded-t-[24px]">
                     <BottomSheetHeader>
@@ -871,6 +982,55 @@ export function ModifierGroupFormSheet({
                                         </FormItem>
                                     )}
                                 />
+
+                                {/* Set Default - Only show if parent group is required */}
+                                {form.watch('is_required') && (
+                                    <FormField
+                                        control={optionForm.control}
+                                        name="is_default"
+                                        render={({ field }) => (
+                                            <FormItem className="flex items-center justify-between rounded-lg border p-4 bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800">
+                                                <div className="space-y-0.5">
+                                                    <FormLabel className="text-base flex items-center gap-2">
+                                                        <Sparkles className="h-4 w-4 text-yellow-600" />
+                                                        Set as Default
+                                                    </FormLabel>
+                                                    <FormDescription>
+                                                        This option will be pre-selected when the modifier group is required
+                                                    </FormDescription>
+                                                </div>
+                                                <FormControl>
+                                                    <button
+                                                        type="button"
+                                                        role="switch"
+                                                        aria-checked={field.value}
+                                                        onClick={() => {
+                                                            // Unset other defaults before setting this one
+                                                            if (!field.value) {
+                                                                setOptions(prev => prev.map(opt => ({
+                                                                    ...opt,
+                                                                    is_default: false
+                                                                })))
+                                                            }
+                                                            field.onChange(!field.value)
+                                                        }}
+                                                        className={cn(
+                                                            "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                                                            field.value ? "bg-yellow-500" : "bg-muted"
+                                                        )}
+                                                    >
+                                                        <span
+                                                            className={cn(
+                                                                "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                                                                field.value ? "translate-x-6" : "translate-x-1"
+                                                            )}
+                                                        />
+                                                    </button>
+                                                </FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
+                                )}
                             </form>
                         </Form>
                     </BottomSheetBody>

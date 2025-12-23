@@ -6,6 +6,14 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
+import {
     Collapsible,
     CollapsibleContent,
     CollapsibleTrigger,
@@ -16,11 +24,13 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { ChevronDown, ChevronRight, MapPin, Eye, EyeOff, RotateCcw, Globe } from 'lucide-react'
+import { ChevronDown, ChevronRight, MapPin, Eye, EyeOff, RotateCcw, Globe, Trash2, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MenuCategory, MenuCategoryItem } from '@/types/menu'
 import { LevelIndicator, getEditingLevel } from '../LevelIndicator'
 import { CategoryItemRow } from './CategoryItemRow'
+import { RemoveCategoryFromMenu } from '@/app/dashboard/actions/categories'
+import { toast } from 'sonner'
 
 interface CategorySectionProps {
     category: MenuCategory
@@ -31,9 +41,11 @@ interface CategorySectionProps {
     showLocationPricing: boolean
     locationId?: string | null
     isMenuLocationOwned?: boolean
+    canModifyCategories?: boolean
     onToggleVisibility: (categoryId: string, isActive: boolean) => Promise<void>
     onResetOverride: (categoryId: string) => Promise<void>
     onEditItem: (item: MenuCategoryItem, category: MenuCategory) => void
+    onCategoryRemoved?: () => void
 }
 
 export function CategorySection({
@@ -45,12 +57,16 @@ export function CategorySection({
     showLocationPricing,
     locationId,
     isMenuLocationOwned,
+    canModifyCategories = true,
     onToggleVisibility,
     onResetOverride,
     onEditItem,
+    onCategoryRemoved,
 }: CategorySectionProps) {
     const itemCount = category.items?.length || 0
     const [isToggling, setIsToggling] = useState(false)
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+    const [isDeleting, setIsDeleting] = useState(false)
     const isAllLocations = !locationId || locationId === 'all'
 
     // Check if this category has a location-specific override
@@ -81,6 +97,33 @@ export function CategorySection({
             await onResetOverride(category.category_id)
         } finally {
             setIsToggling(false)
+        }
+    }
+
+    const handleRemoveCategory = async () => {
+        setIsDeleting(true)
+        try {
+            const result = await RemoveCategoryFromMenu(menuId, category.category_id)
+
+            if (result.error) {
+                toast.error('Failed to remove category', {
+                    description: result.error,
+                })
+                return
+            }
+
+            toast.success('Category removed', {
+                description: `"${category.category?.name || 'Category'}" has been removed from this menu.`,
+            })
+
+            setIsDeleteDialogOpen(false)
+            onCategoryRemoved?.()
+        } catch (error) {
+            toast.error('Failed to remove category', {
+                description: error instanceof Error ? error.message : 'An unexpected error occurred.',
+            })
+        } finally {
+            setIsDeleting(false)
         }
     }
 
@@ -239,9 +282,74 @@ export function CategorySection({
                                 ))}
                             </div>
                         )}
+
+                        {canModifyCategories && (
+                            <div className='flex flex-row items-center justify-end mt-2'>
+                                <Button
+                                    variant="destructive"
+                                    className='text-xs'
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        setIsDeleteDialogOpen(true)
+                                    }}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                    Remove Category From Menu
+                                </Button>
+                            </div>
+                        )}
                     </CardContent>
                 </CollapsibleContent>
             </Card>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-destructive">
+                            <Trash2 className="h-5 w-5" />
+                            Remove Category from Menu
+                        </DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to remove &quot;{category.category?.name || 'this category'}&quot; from this menu?
+                            {itemCount > 0 && (
+                                <span className="block mt-2 text-muted-foreground">
+                                    This category contains {itemCount} item{itemCount !== 1 ? 's' : ''} that will no longer appear in this menu.
+                                </span>
+                            )}
+                            <span className="block mt-2 font-medium text-foreground">
+                                This action cannot be undone.
+                            </span>
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsDeleteDialogOpen(false)}
+                            disabled={isDeleting}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleRemoveCategory}
+                            disabled={isDeleting}
+                        >
+                            {isDeleting ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Removing...
+                                </>
+                            ) : (
+                                <>
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Remove Category
+                                </>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </Collapsible>
     )
 }
