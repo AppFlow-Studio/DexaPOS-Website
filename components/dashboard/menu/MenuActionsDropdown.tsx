@@ -45,7 +45,6 @@ export function MenuActionsDropdown({
 
     // Determine scope context
     const isViewingAllLocations = selectedLocationId === 'all'
-    const isViewingSpecificLocation = !isViewingAllLocations && selectedLocationId
     const isGlobalMenu = menuLocationId === null
     const isMenuOwnedByCurrentLocation = menuLocationId === selectedLocationId
 
@@ -53,7 +52,7 @@ export function MenuActionsDropdown({
     // - Global menus: Can only be edited/deleted when viewing "All Locations"
     // - Location-specific menus: Can only be edited/deleted by that location's scope
     const canEditOrDelete = isViewingAllLocations || isMenuOwnedByCurrentLocation
-    const canDuplicateToLocation = isViewingSpecificLocation && isGlobalMenu && onDuplicate
+    const canDuplicateToLocation = selectedLocationId && isGlobalMenu && onDuplicate
 
     const handleViewDetails = (e: React.MouseEvent) => {
         e.stopPropagation()
@@ -86,6 +85,7 @@ export function MenuActionsDropdown({
         e.stopPropagation()
         onSettings?.(menuId)
     }
+
 
     return (
         <DropdownMenu>
@@ -186,7 +186,7 @@ export function MenuActionsDropdown({
                 )}
 
                 {/* Info text for location-scoped users viewing global menus */}
-                {!canEditOrDelete && isGlobalMenu && isViewingSpecificLocation && (
+                {!canEditOrDelete && isGlobalMenu && selectedLocationId && (
                     <>
                         <DropdownMenuSeparator />
                         <div className="px-2 py-1.5 text-xs text-muted-foreground">

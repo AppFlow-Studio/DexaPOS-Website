@@ -5,8 +5,9 @@ import { FloorPlanObject } from '@/types/floor-plan'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { useGesture } from '@use-gesture/react'
-import { Users } from 'lucide-react'
+import { Users, Trash2 } from 'lucide-react'
 import { TABLE_SHAPES } from '@/utils/tables/table-shapes'
+import { Button } from '@/components/ui/button'
 
 interface TableNodeProps {
     table: FloorPlanObject
@@ -36,6 +37,7 @@ export function TableNode({
     onUpdateName,
     onUpdateRotation,
     onRotateEnd,
+    onDelete,
     onDoubleClick,
     onDragStart,
     onDragEnd,
@@ -185,10 +187,21 @@ export function TableNode({
                 if (isDesignMode) setIsEditing(true)
             }}
         >
-            {/* SELECTION UI */}
+            {/* SELECTION UI - Border wrapper to ensure visibility */}
             {isSelected && (
                 <>
-                    <div className="absolute -inset-[3px] border-[2px] border-[#0d99ff] pointer-events-none z-50 rounded-sm" />
+                    <div
+                        className="absolute pointer-events-none z-[100]"
+                        style={{
+                            top: '-4px',
+                            left: '-4px',
+                            right: '-4px',
+                            bottom: '-4px',
+                            border: '3px solid #0d99ff',
+                            borderRadius: '4px',
+                            boxShadow: '0 0 0 2px rgba(13, 153, 255, 0.3), 0 0 8px rgba(13, 153, 255, 0.2)',
+                        }}
+                    />
 
                     {/* ROTATION HANDLE */}
                     {isDesignMode && (
@@ -202,6 +215,26 @@ export function TableNode({
                         >
                             <div className={cn("w-3 h-3 bg-white border-2 border-[#0d99ff] rounded-full shadow-sm hover:scale-125 transition-transform", isRotating && "bg-[#0d99ff]")} />
                             <div className="w-[1.5px] h-5 bg-[#0d99ff]" />
+                        </div>
+                    )}
+
+                    {/* DELETE BUTTON */}
+                    {isDesignMode && onDelete && (
+                        <div
+                            className="absolute -top-8 right-0 z-50 touch-none"
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                onDelete()
+                            }}
+                        >
+                            <Button
+                                variant="destructive"
+                                size="icon"
+                                className="h-6 w-6 rounded-full shadow-lg"
+                                title="Delete table (Delete key)"
+                            >
+                                <Trash2 className="h-3 w-3" />
+                            </Button>
                         </div>
                     )}
                 </>

@@ -48,7 +48,7 @@ export default function CategoriesPage() {
     // Primary data source: RPC with full category + items data
     const { data: categoriesWithItems, isLoading: loadingCategoriesWithItems, refetch } = useCategoriesWithItems(clerkOrgId || '', selectedLocationId)
     const { data: menus } = useMenus(clerkOrgId || '')
-    const { data: locations } = useLocations(clerkOrgId || '')
+    const { data: locations } = useLocations(clerkOrgId || '', userInfo?.id || '')
 
     const currentLocation = locations?.find(l => l.id === selectedLocationId)
 

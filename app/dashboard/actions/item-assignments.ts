@@ -144,6 +144,51 @@ export async function UpdateCategoryItemsOrder(
     return { success: true }
 }
 
+/**
+ * Batch update display order for multiple menu categories
+ */
+export async function UpdateMenuCategoriesOrder(
+    menuId: string,
+    categoryOrders: Array<{ categoryId: string; displayOrder: number }>
+) {
+    if (!menuId || !categoryOrders || categoryOrders.length === 0) {
+        return { error: 'Menu ID and category orders are required' }
+    }
+
+    const supabase = createServerSupabaseClient()
+
+    // Validate all categories belong to the menu
+    const categoryIds = categoryOrders.map(co => co.categoryId)
+    const { data: menuCategories, error: fetchError } = await supabase
+        .from('menu_categories')
+        .select('id, category_id')
+        .eq('menu_id', menuId)
+        .in('category_id', categoryIds)
+
+    if (fetchError || !menuCategories || menuCategories.length !== categoryIds.length) {
+        return { error: 'One or more categories not found in this menu' }
+    }
+
+    // Batch update display_order
+    const updates = categoryOrders.map(({ categoryId, displayOrder }) =>
+        supabase
+            .from('menu_categories')
+            .update({ display_order: displayOrder, updated_at: new Date().toISOString() })
+            .eq('menu_id', menuId)
+            .eq('category_id', categoryId)
+    )
+
+    const results = await Promise.all(updates)
+    const errors = results.filter(r => r.error)
+
+    if (errors.length > 0) {
+        console.error('Error updating menu category orders:', errors)
+        return { error: 'Failed to update some category orders' }
+    }
+
+    return { success: true }
+}
+
 // ============================================================================
 // CATEGORY-MENU ASSIGNMENTS
 // ============================================================================

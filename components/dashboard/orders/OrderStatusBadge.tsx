@@ -39,7 +39,7 @@ export function OrderStatusBadge({ status, className }: OrderStatusBadgeProps) {
         cancelled: {
             label: 'Cancelled',
             variant: 'destructive',
-            className: 'bg-red-100 text-red-800 border-red-300',
+            className: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900 dark:text-red-100 dark:border-red-800',
         },
         refunded: {
             label: 'Refunded',
@@ -48,8 +48,8 @@ export function OrderStatusBadge({ status, className }: OrderStatusBadgeProps) {
         },
         void: {
             label: 'Void',
-            variant: 'outline',
-            className: 'bg-slate-100 text-slate-700 border-slate-300',
+            variant: 'destructive',
+            className: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900 dark:text-red-100 dark:border-red-800',
         },
     }
 

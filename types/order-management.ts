@@ -163,6 +163,27 @@ export interface ProcessPaymentParams {
   p_transaction_details?: Record<string, any>;
 }
 
+export interface OrderStatusHistory {
+  id: string;
+  order_id: string;
+  from_status: OrderStatus;
+  to_status: OrderStatus;
+  changed_by_staff_id?: string;
+  changed_by_user_id?: string;
+  changed_at: string;
+  device_id?: string;
+  reason?: string;
+  staff_profiles?: {
+    first_name: string;
+    last_name: string;
+  };
+  users?: {
+    first_name: string;
+    last_name: string;
+  };
+  notes?: string;
+  metadata?: Record<string, any>;
+}
 
 export interface OrderResponse {
   id: string;
@@ -192,4 +213,36 @@ export interface OrderResponse {
   sync_version: number;
   order_items: OrderItem[];
   order_payments: OrderPayment[];
-} 
+  order_status_history: OrderStatusHistory[];
+  table_sessions: TableSessionWithEvents[];
+}
+
+export interface TableSessionWithEvents {
+  id: string;
+  order_id: string;
+  session_id: string;
+  session_type: string;
+  session_status: string;
+  session_start_time: string;
+  session_end_time: string;
+  table_session_events: TableSessionEvent[];
+}
+
+export interface TableSessionEvent {
+  id: string;
+  session_id: string;
+  event_type: string;
+  event_data: Record<string, any>;
+  notes: string;
+  triggered_by_staff_id?: string;
+  triggered_by_user_id?: string;
+  triggered_by_system?: boolean;
+  occurred_at: string;
+  minutes_since_previous: number;
+  staff_profiles?: StaffProfile;
+}
+
+export interface StaffProfile {
+  first_name: string;
+  last_name: string;
+}

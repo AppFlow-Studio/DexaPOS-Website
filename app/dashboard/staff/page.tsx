@@ -3,15 +3,18 @@ import { useMemo, useState } from 'react'
 
 import { useIsAllLocations, useSelectedLocation } from '@/stores/location-store'
 import { useUnifiedStaff } from '../hooks/useStaff'
+import { useOrders } from '../hooks/useOrder'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
-    UserPlus, Users, MapPin, Globe, Lock, Mail
+    UserPlus, Users, MapPin, Globe, Lock, Mail, TrendingUp, Activity
 } from 'lucide-react'
 import { InviteUserWizard } from '@/components/dashboard/staff/InviteUserWizard'
 import { StaffDataTable } from '@/components/dashboard/staff/StaffDataTable'
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 
 export default function MerchantStaffPage() {
     const selectedLocation = useSelectedLocation()
@@ -19,7 +22,9 @@ export default function MerchantStaffPage() {
 
     // Fetch unified staff data with automatic location scoping
     const { data: staffMembers, isLoading, refetch } = useUnifiedStaff()
+    const { data: orders } = useOrders()
     const staff = staffMembers || []
+    const ordersList = Array.isArray(orders) ? orders : []
 
     const [isWizardOpen, setIsWizardOpen] = useState(false)
 
@@ -32,13 +37,42 @@ export default function MerchantStaffPage() {
             staff.flatMap(s => s.location_assignments.map(a => a.location_id))
         ).size
 
+        // Calculate staff by role
+        const byRole = staff.reduce((acc, s) => {
+            const role = s.role || 'unassigned'
+            acc[role] = (acc[role] || 0) + 1
+            return acc
+        }, {} as Record<string, number>)
+
+        // Calculate recent activity (orders in last 7 days)
+        const sevenDaysAgo = new Date()
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+        const recentOrders = ordersList.filter(o => new Date(o.created_at) >= sevenDaysAgo)
+
         return {
             active: activeCount,
             clerk: clerkUsers,
             posOnly: posOnly,
-            locations: uniqueLocations
+            locations: uniqueLocations,
+            byRole,
+            recentOrders: recentOrders.length,
         }
-    }, [staff])
+    }, [staff, ordersList])
+
+    // Chart data for staff by role
+    const roleChartData = useMemo(() => {
+        return Object.entries(stats.byRole).map(([role, count]) => ({
+            role: role.charAt(0).toUpperCase() + role.slice(1).replace('_', ' '),
+            count,
+        }))
+    }, [stats.byRole])
+
+    const chartConfig = {
+        count: {
+            label: 'Staff',
+            color: 'var(--chart-1)',
+        },
+    } satisfies ChartConfig
 
     return (
         <main className="space-y-6 animate-in fade-in duration-500">
@@ -99,7 +133,9 @@ export default function MerchantStaffPage() {
                         {isLoading ? <Skeleton className="h-8 w-16" /> : (
                             <div className="text-2xl font-bold text-green-600">{stats.active}</div>
                         )}
-                        <p className="text-xs text-muted-foreground">Currently active</p>
+                        <p className="text-xs text-muted-foreground">
+                            {stats.active > 0 ? `${((stats.active / staff.length) * 100).toFixed(0)}% of total` : 'Currently active'}
+                        </p>
                     </CardContent>
                 </Card>
 
@@ -118,14 +154,14 @@ export default function MerchantStaffPage() {
 
                 <Card className="transition-all hover:shadow-md">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">POS Only</CardTitle>
-                        <Lock className="h-4 w-4 text-purple-500" />
+                        <CardTitle className="text-sm font-medium">Recent Activity</CardTitle>
+                        <Activity className="h-4 w-4 text-purple-500" />
                     </CardHeader>
                     <CardContent>
                         {isLoading ? <Skeleton className="h-8 w-16" /> : (
-                            <div className="text-2xl font-bold text-purple-600">{stats.posOnly}</div>
+                            <div className="text-2xl font-bold text-purple-600">{stats.recentOrders}</div>
                         )}
-                        <p className="text-xs text-muted-foreground">PIN-based accounts</p>
+                        <p className="text-xs text-muted-foreground">Orders (last 7 days)</p>
                     </CardContent>
                 </Card>
             </div>

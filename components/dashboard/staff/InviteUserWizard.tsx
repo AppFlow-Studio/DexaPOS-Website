@@ -43,6 +43,7 @@ import { useLocations } from '@/app/dashboard/hooks/useLocations'
 import { useCreatePOSStaff, useInviteClerkStaff, useCreateClerkUserDirectly } from '@/app/dashboard/hooks/useStaff'
 import { InviteStaffFormData, StaffType, EmploymentType } from '@/types/staff'
 import { useClerkOrgId } from '@/app/dashboard/hooks/useLocationScoped'
+import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
 
 interface InviteUserWizardProps {
     open?: boolean
@@ -78,6 +79,7 @@ export function InviteUserWizard({
     children,
 }: InviteUserWizardProps) {
     const clerkOrgId = useClerkOrgId()
+    const { data: userInfo } = useUserInfo()
     const [internalOpen, setInternalOpen] = React.useState(false)
     const open = controlledOpen !== undefined ? controlledOpen : internalOpen
     const onOpenChange = controlledOnOpenChange || setInternalOpen
@@ -85,7 +87,7 @@ export function InviteUserWizard({
     const [currentStep, setCurrentStep] = React.useState<Step>('type')
     const [isLoading, setIsLoading] = React.useState(false)
     const [roles, setRoles] = React.useState<RolesModel[]>([])
-    const { data: locationsData } = useLocations(clerkOrgId)
+    const { data: locationsData } = useLocations(clerkOrgId, userInfo?.id || '')
     const locations = locationsData || []
 
     // Mutations

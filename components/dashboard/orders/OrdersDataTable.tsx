@@ -9,8 +9,10 @@ import {
     flexRender,
     getCoreRowModel,
     getFilteredRowModel,
+    getPaginationRowModel,
     getSortedRowModel,
     useReactTable,
+
 } from '@tanstack/react-table'
 import {
     Table,
@@ -44,6 +46,10 @@ import {
     Truck,
     Globe,
     ChefHat,
+    ChevronLeft,
+    ChevronsLeft,
+    ChevronRight,
+    ChevronsRight,
 } from 'lucide-react'
 import { Order, OrderResponse, OrderType } from '@/types/order-management'
 import { OrderStatusBadge } from './OrderStatusBadge'
@@ -325,17 +331,25 @@ export function OrdersDataTable({ data, isLoading, onOrderClick }: OrdersDataTab
         getCoreRowModel: getCoreRowModel(),
         getSortedRowModel: getSortedRowModel(),
         getFilteredRowModel: getFilteredRowModel(),
+        getPaginationRowModel: getPaginationRowModel(), // Required for pagination
         onSortingChange: setSorting,
         onColumnFiltersChange: setColumnFilters,
         onColumnVisibilityChange: setColumnVisibility,
         onGlobalFilterChange: setGlobalFilter,
+        initialState: {
+            pagination: {
+                pageSize: 50, // Sets the default number of rows per page to 50
+            },
+        },
         state: {
             sorting,
             columnFilters,
             columnVisibility,
             globalFilter,
         },
+
     })
+
 
     return (
         <div className="space-y-4">
@@ -392,7 +406,10 @@ export function OrdersDataTable({ data, isLoading, onOrderClick }: OrdersDataTab
                                 >
                                     {row.getVisibleCells().map((cell) => (
                                         <TableCell key={cell.id}>
-                                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                            {flexRender(
+                                                cell.column.columnDef.cell,
+                                                cell.getContext()
+                                            )}
                                         </TableCell>
                                     ))}
                                 </TableRow>
@@ -414,8 +431,51 @@ export function OrdersDataTable({ data, isLoading, onOrderClick }: OrdersDataTab
             {/* Results count */}
             <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <div>
-                    Showing {table.getFilteredRowModel().rows.length} of {data.length} order(s)
+                    Page {table.getState().pagination.pageIndex + 1} of{" "}
+                    {table.getPageCount()}
                 </div>
+            </div>
+            <div className="flex items-center space-x-2">
+                <Button
+                    variant="outline"
+                    size="icon"
+                    className="hidden size-8 lg:flex"
+                    onClick={() => table.setPageIndex(0)}
+                    disabled={!table.getCanPreviousPage()}
+                >
+                    <span className="sr-only">Go to first page</span>
+                    <ChevronsLeft />
+                </Button>
+                <Button
+                    variant="outline"
+                    size="icon"
+                    className="size-8"
+                    onClick={() => table.previousPage()}
+                    disabled={!table.getCanPreviousPage()}
+                >
+                    <span className="sr-only">Go to previous page</span>
+                    <ChevronLeft />
+                </Button>
+                <Button
+                    variant="outline"
+                    size="icon"
+                    className="size-8"
+                    onClick={() => table.nextPage()}
+                    disabled={!table.getCanNextPage()}
+                >
+                    <span className="sr-only">Go to next page</span>
+                    <ChevronRight />
+                </Button>
+                <Button
+                    variant="outline"
+                    size="icon"
+                    className="hidden size-8 lg:flex"
+                    onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                    disabled={!table.getCanNextPage()}
+                >
+                    <span className="sr-only">Go to last page</span>
+                    <ChevronsRight />
+                </Button>
             </div>
         </div>
     )

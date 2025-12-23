@@ -26,6 +26,8 @@ export function useFloorPlans(locationId: string | null) {
         queryKey: ['floor-plans', locationId],
         queryFn: () => InitializeFloorPlan(locationId!),
         enabled: !!locationId,
+        staleTime: 2 * 60 * 1000, // 2 minutes - Floor plans can change but not frequently
+        refetchOnWindowFocus: false, // Don't refetch on window focus
     })
 }
 

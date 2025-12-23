@@ -21,6 +21,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Switch } from '@/components/ui/switch'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form'
 import { ItemPreviewCard } from './ItemPreviewCard'
 import {
@@ -47,16 +52,19 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
-    updateItemOverride,
-    createMenuItem,
-    resetItemToLevel,
-    type UpdateItemParams
-} from '@/app/dashboard/actions/menu-items-rpc'
+    UpdateMenuItem,
+    CreateMenuItem,
+    ResetMenuItemToGlobal,
+} from '@/app/dashboard/actions/menu-items'
 import { CategoriesModel, ModifierGroupsModel, ModifierGroupItemsModel } from '@/types/db-modles'
 import { useLocationStore, useIsAllLocations } from '@/stores/location-store'
 import ModifierItemRow, { ExtendedModifierItem } from './ModifierItemRow'
 import { LocationLibraryItem, ModifierGroup, ModifierItem } from '@/types/menu'
 import { LevelIndicator, EditingContextBanner, getEditingLevel, type PricingLevel } from './LevelIndicator'
+import { TAX_CATEGORIES, TAX_CATEGORY_LABELS, TAX_CATEGORY_DESCRIPTIONS, TaxCategory } from '@/types/tax'
+import { AVAILABLE_CHANNELS, CHANNEL_LABELS, CHANNEL_DESCRIPTIONS } from '@/types/inventory'
+import { useLocationTaxRates } from '@/app/dashboard/hooks/useTaxRates'
+import Link from 'next/link'
 
 // ============================================================================
 // TYPES
@@ -152,6 +160,11 @@ const itemSchema = z.object({
     allergens: z.array(z.string()).default([]),
     card_bg_color: z.string().optional().nullable(),
     stock_tracking_mode: z.enum(['in_stock', 'out_of_stock', 'quantity']).default('in_stock'),
+
+    // Tax & Inventory Control fields (migration 014)
+    tax_category: z.enum(['standard', 'alcohol', 'food', 'grocery', 'retail', 'service']).default('standard'),
+    is_tax_exempt: z.boolean().default(false),
+    available_channels: z.array(z.enum(['pos', 'online', 'kiosk'])).default(['pos', 'online']),
 })
 
 type ItemFormValues = z.infer<typeof itemSchema>
@@ -555,8 +568,13 @@ export function NewEditItemFormSheet({
     const { selectedLocationId, locations } = useLocationStore()
     const isAllLocations = useIsAllLocations()
 
+    // Tax rates for current location
+    const { data: taxRatesData } = useLocationTaxRates()
+    const taxRates = taxRatesData?.data || []
+
     const [selectedCategories, setSelectedCategories] = React.useState<string[]>([])
     const [selectedModifiers, setSelectedModifiers] = React.useState<string[]>([])
+    const [activeTab, setActiveTab] = React.useState('general')
     const [expandedSections, setExpandedSections] = React.useState({
         pricing: true,
         categories: false,
@@ -631,6 +649,10 @@ export function NewEditItemFormSheet({
             allergens: [],
             card_bg_color: '',
             stock_tracking_mode: 'in_stock',
+            // Tax & Inventory Control (migration 014)
+            tax_category: 'standard',
+            is_tax_exempt: false,
+            available_channels: ['pos', 'online'],
         },
     })
 
@@ -649,6 +671,10 @@ export function NewEditItemFormSheet({
                 allergens: editItem.allergens || [],
                 card_bg_color: editItem.card_bg_color || '',
                 stock_tracking_mode: (editItem.stock_tracking_mode as 'in_stock' | 'out_of_stock' | 'quantity') || 'in_stock',
+                // Tax & Inventory Control fields (with fallbacks for backward compatibility)
+                tax_category: ((editItem as any).tax_category || 'standard') as any,
+                is_tax_exempt: (editItem as any).is_tax_exempt || false,
+                available_channels: ((editItem as any).available_channels || ['pos', 'online']) as any,
             })
 
             // Support both old menu_item_categories and new category_items
@@ -809,27 +835,35 @@ export function NewEditItemFormSheet({
                     updateParams.allergens = values.allergens
                     updateParams.cardBgColor = values.card_bg_color ?? undefined
                     updateParams.stockTrackingMode = values.stock_tracking_mode
+                    // Tax & Inventory Control fields (migration 014)
+                    updateParams.taxCategory = values.tax_category
+                    updateParams.isTaxExempt = values.is_tax_exempt
+                    updateParams.availableChannels = values.available_channels
                 }
 
-                result = await updateItemOverride(updateParams)
+                result = await UpdateMenuItem(editItem.id, updateParams)
 
 
             } else {
                 // Create new item (always Level 1 - global)
-                result = await createMenuItem(clerkOrgId, {
+                result = await CreateMenuItem(clerkOrgId, {
                     name: values.name,
                     description: values.description,
                     price: values.price,
-                    cashPrice: values.cash_price ?? undefined,
+                    cash_price: values.cash_price ?? undefined,
                     image: values.image_url ?? undefined,
                     availability: values.availability,
                     allergens: values.allergens,
-                    cardBgColor: values.card_bg_color ?? undefined,
-                    stockTrackingMode: values.stock_tracking_mode,
+                    card_bg_color: values.card_bg_color ?? undefined,
+                    stock_tracking_mode: values.stock_tracking_mode,
+                    // Tax & Inventory Control fields (migration 014)
+                    tax_category: values.tax_category,
+                    is_tax_exempt: values.is_tax_exempt,
+                    available_channels: values.available_channels,
                 })
             }
 
-            if (!result.success) {
+            if (result.error) {
                 toast.error('Operation Failed', { description: result.error })
                 return
             }
@@ -1063,18 +1097,25 @@ export function NewEditItemFormSheet({
 
                             <Form {...form}>
                                 <form id="item-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                                        <TabsList className="grid w-full grid-cols-4 mb-6">
+                                            <TabsTrigger value="general">General</TabsTrigger>
+                                            <TabsTrigger value="pricing">Pricing</TabsTrigger>
+                                            <TabsTrigger value="tax">Tax & Fees</TabsTrigger>
+                                            <TabsTrigger value="availability">Availability</TabsTrigger>
+                                        </TabsList>
 
-                                    {/* Basic Info Section - Only editable at Level 1 */}
-                                    <div className="space-y-4">
-                                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                                            <Settings2 className="h-4 w-4" />
-                                            Basic Information
-                                            {!editingContext.canEditBaseFields && editItem && (
-                                                <Badge variant="outline" className="text-xs ml-2">
-                                                    View Only
-                                                </Badge>
-                                            )}
-                                        </h3>
+                                        {/* TAB 1: GENERAL */}
+                                        <TabsContent value="general" className="space-y-4">
+                                            <div className="flex items-center gap-2 mb-4">
+                                                <Settings2 className="h-4 w-4 text-muted-foreground" />
+                                                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                                                    Basic Information
+                                                </h3>
+                                                {!editingContext.canEditBaseFields && editItem && (
+                                                    <Badge variant="outline" className="text-xs">View Only</Badge>
+                                                )}
+                                            </div>
 
                                         <FormField
                                             control={form.control}
@@ -1141,40 +1182,91 @@ export function NewEditItemFormSheet({
                                                 </FormItem>
                                             )}
                                         />
-                                    </div>
 
-                                    {/* Pricing Section */}
-                                    <Collapsible open={expandedSections.pricing} onOpenChange={() => toggleSection('pricing')}>
-                                        <CollapsibleTrigger asChild>
-                                            <button
-                                                type="button"
-                                                className="flex items-center justify-between w-full p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                                            >
-                                                <span className="text-sm font-semibold flex items-center gap-2">
-                                                    <DollarSign className="h-4 w-4 text-green-500" />
-                                                    Pricing
-                                                    <Badge
-                                                        variant="outline"
-                                                        className={cn(
-                                                            "text-xs ml-1",
-                                                            editingContext.level === 1 && "bg-gray-100",
-                                                            editingContext.level === 2 && "bg-blue-100 text-blue-700",
-                                                            editingContext.level === 3 && "bg-purple-100 text-purple-700",
-                                                            editingContext.level === 4 && "bg-amber-100 text-amber-700",
-                                                            editingContext.level === 5 && "bg-green-100 text-green-700",
-                                                        )}
-                                                    >
-                                                        {editingContext.priceLabel}
-                                                    </Badge>
-                                                </span>
-                                                {expandedSections.pricing ? (
-                                                    <ChevronDown className="h-4 w-4" />
-                                                ) : (
-                                                    <ChevronRight className="h-4 w-4" />
-                                                )}
-                                            </button>
-                                        </CollapsibleTrigger>
-                                        <CollapsibleContent className="pt-4 space-y-4">
+                                        {/* Allergens */}
+                                        <FormField
+                                            control={form.control}
+                                            name="allergens"
+                                            render={() => (
+                                                <FormItem>
+                                                    <FormLabel>Allergens</FormLabel>
+                                                    <FormDescription>Select all that apply</FormDescription>
+                                                    <div className="flex flex-wrap gap-2 mt-2">
+                                                        {COMMON_ALLERGENS.map((allergen) => (
+                                                            <button
+                                                                key={allergen}
+                                                                type="button"
+                                                                onClick={() => toggleAllergen(allergen)}
+                                                                disabled={!editingContext.canEditBaseFields && !!editItem}
+                                                                className={cn(
+                                                                    "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
+                                                                    "border hover:scale-105 active:scale-95",
+                                                                    "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
+                                                                    watchedValues.allergens?.includes(allergen)
+                                                                        ? "bg-orange-500 text-white border-orange-500 shadow-md"
+                                                                        : "bg-background border-border hover:border-orange-500/50"
+                                                                )}
+                                                            >
+                                                                {allergen}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </FormItem>
+                                            )}
+                                        />
+
+                                        {/* Card Background Color */}
+                                        <FormField
+                                            control={form.control}
+                                            name="card_bg_color"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Card Background Color</FormLabel>
+                                                    <FormControl>
+                                                        <div className="flex gap-2">
+                                                            <Input
+                                                                type="color"
+                                                                className="w-12 h-10 p-1 cursor-pointer"
+                                                                disabled={!editingContext.canEditBaseFields && !!editItem}
+                                                                {...field}
+                                                                value={field.value || '#ffffff'}
+                                                            />
+                                                            <Input
+                                                                placeholder="#000000"
+                                                                disabled={!editingContext.canEditBaseFields && !!editItem}
+                                                                {...field}
+                                                                value={field.value || ''}
+                                                            />
+                                                        </div>
+                                                    </FormControl>
+                                                    <FormDescription>Custom color for the item card in POS</FormDescription>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        </TabsContent>
+
+                                        {/* TAB 2: PRICING & INVENTORY */}
+                                        <TabsContent value="pricing" className="space-y-4">
+                                            <div className="flex items-center gap-2 mb-4">
+                                                <DollarSign className="h-4 w-4 text-green-500" />
+                                                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                                                    Pricing & Inventory
+                                                </h3>
+                                                <Badge
+                                                    variant="outline"
+                                                    className={cn(
+                                                        "text-xs",
+                                                        editingContext.level === 1 && "bg-gray-100",
+                                                        editingContext.level === 2 && "bg-blue-100 text-blue-700",
+                                                        editingContext.level === 3 && "bg-purple-100 text-purple-700",
+                                                        editingContext.level === 4 && "bg-amber-100 text-amber-700",
+                                                        editingContext.level === 5 && "bg-green-100 text-green-700",
+                                                    )}
+                                                >
+                                                    {editingContext.priceLabel}
+                                                </Badge>
+                                            </div>
 
                                             {/* Price Breakdown - Show hierarchy */}
                                             {editItem && <PriceBreakdown />}
@@ -1263,41 +1355,258 @@ export function NewEditItemFormSheet({
                                                     </span>
                                                 </div>
                                             )}
-                                        </CollapsibleContent>
-                                    </Collapsible>
 
-                                    {/* Categories Section - More Prominent for New Items */}
-                                    <Collapsible
-                                        open={expandedSections.categories}
-                                        onOpenChange={() => toggleSection('categories')}
-                                        defaultOpen={!editItem} // Open by default for new items
-                                    >
-                                        <CollapsibleTrigger asChild>
-                                            <button
-                                                type="button"
-                                                className={cn(
-                                                    "flex items-center justify-between w-full p-3 rounded-lg transition-colors",
-                                                    !editItem && selectedCategories.length === 0
-                                                        ? "bg-amber-50 border border-amber-200 hover:bg-amber-100" // Highlight when no category selected for new items
-                                                        : "bg-muted/50 hover:bg-muted"
+                                            {/* Stock Tracking Mode */}
+                                            <FormField
+                                                control={form.control}
+                                                name="stock_tracking_mode"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Stock Tracking</FormLabel>
+                                                        <Select
+                                                            value={field.value}
+                                                            onValueChange={field.onChange}
+                                                            disabled={!editingContext.canEditBaseFields && !!editItem}
+                                                        >
+                                                            <FormControl>
+                                                                <SelectTrigger>
+                                                                    <SelectValue placeholder="Select tracking mode" />
+                                                                </SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                <SelectItem value="in_stock">In Stock</SelectItem>
+                                                                <SelectItem value="out_of_stock">Out of Stock</SelectItem>
+                                                                <SelectItem value="quantity">Track Quantity</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <FormDescription>How to track inventory for this item</FormDescription>
+                                                        <FormMessage />
+                                                    </FormItem>
                                                 )}
-                                            >
-                                                <span className="text-sm font-semibold flex items-center gap-2">
-                                                    <Tag className={cn(
-                                                        "h-4 w-4",
-                                                        !editItem && selectedCategories.length === 0 ? "text-amber-600" : "text-blue-500"
-                                                    )} />
-                                                    Categories
-                                                    {selectedCategories.length > 0 ? (
-                                                        <Badge variant="secondary" className="ml-2">{selectedCategories.length}</Badge>
-                                                    ) : !editItem && (
-                                                        <Badge variant="outline" className="ml-2 text-amber-600 border-amber-300">Select at least one</Badge>
-                                                    )}
-                                                </span>
-                                                {expandedSections.categories ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                                            </button>
-                                        </CollapsibleTrigger>
-                                        <CollapsibleContent className="pt-4 space-y-3">
+                                            />
+                                        </TabsContent>
+
+                                        {/* TAB 3: TAX & FEES */}
+                                        <TabsContent value="tax" className="space-y-4">
+                                            <div className="flex items-center gap-2 mb-4">
+                                                <DollarSign className="h-4 w-4 text-emerald-500" />
+                                                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                                                    Tax & Fees Configuration
+                                                </h3>
+                                                {!editingContext.canEditBaseFields && editItem && (
+                                                    <Badge variant="outline" className="text-xs">View Only</Badge>
+                                                )}
+                                            </div>
+
+                                            {/* Tax Exempt Switch */}
+                                            <FormField
+                                                control={form.control}
+                                                name="is_tax_exempt"
+                                                render={({ field }) => (
+                                                    <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                                                        <div className="space-y-0.5">
+                                                            <FormLabel className="text-base">Tax Exempt</FormLabel>
+                                                            <FormDescription>
+                                                                Mark this item as tax-exempt (no tax will be applied)
+                                                            </FormDescription>
+                                                        </div>
+                                                        <FormControl>
+                                                            <Switch
+                                                                checked={field.value}
+                                                                onCheckedChange={field.onChange}
+                                                                disabled={!editingContext.canEditBaseFields && !!editItem}
+                                                            />
+                                                        </FormControl>
+                                                    </FormItem>
+                                                )}
+                                            />
+
+                                            {/* Tax Category Select */}
+                                            <FormField
+                                                control={form.control}
+                                                name="tax_category"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Tax Category</FormLabel>
+                                                        <Select
+                                                            value={field.value}
+                                                            onValueChange={field.onChange}
+                                                            disabled={(watchedValues.is_tax_exempt || (!editingContext.canEditBaseFields && !!editItem))}
+                                                        >
+                                                            <FormControl>
+                                                                <SelectTrigger>
+                                                                    <SelectValue placeholder="Select tax category" />
+                                                                </SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                {TAX_CATEGORIES.map((category) => (
+                                                                    <SelectItem key={category} value={category}>
+                                                                        {TAX_CATEGORY_LABELS[category]}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <FormDescription>
+                                                            {TAX_CATEGORY_DESCRIPTIONS[field.value as TaxCategory]}
+                                                        </FormDescription>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+
+                                            {/* Tax Rate Preview */}
+                                            {!isAllLocations && !watchedValues.is_tax_exempt && (
+                                                <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <Info className="h-4 w-4 text-muted-foreground" />
+                                                        <h4 className="text-sm font-medium">Tax Preview for {currentLocationName}</h4>
+                                                    </div>
+                                                    {(() => {
+                                                        const taxRate = taxRates.find(r => r.tax_category === watchedValues.tax_category)
+                                                        const itemPrice = watchedValues.price || 0
+                                                        const taxAmount = taxRate ? (itemPrice * taxRate.percentage / 100) : 0
+                                                        const totalWithTax = itemPrice + taxAmount
+
+                                                        return taxRate ? (
+                                                            <div className="space-y-2">
+                                                                <div className="flex justify-between text-sm">
+                                                                    <span className="text-muted-foreground">Tax Rate:</span>
+                                                                    <span className="font-medium">{taxRate.name} ({taxRate.percentage}%)</span>
+                                                                </div>
+                                                                <div className="flex justify-between text-sm">
+                                                                    <span className="text-muted-foreground">Item Price:</span>
+                                                                    <span className="font-medium">${itemPrice.toFixed(2)}</span>
+                                                                </div>
+                                                                <div className="flex justify-between text-sm">
+                                                                    <span className="text-muted-foreground">Tax Amount:</span>
+                                                                    <span className="font-medium text-emerald-600">${taxAmount.toFixed(2)}</span>
+                                                                </div>
+                                                                <div className="pt-2 border-t flex justify-between">
+                                                                    <span className="font-semibold">Total with Tax:</span>
+                                                                    <span className="font-bold text-lg">${totalWithTax.toFixed(2)}</span>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <Alert>
+                                                                <AlertCircle className="h-4 w-4" />
+                                                                <AlertTitle>No Tax Rate Set</AlertTitle>
+                                                                <AlertDescription className="space-y-2">
+                                                                    <p>No tax rate is configured for "{TAX_CATEGORY_LABELS[watchedValues.tax_category as TaxCategory]}" at this location.</p>
+                                                                    <Link href="/dashboard/settings/taxes" className="text-primary hover:underline text-sm font-medium">
+                                                                        Configure tax rates →
+                                                                    </Link>
+                                                                </AlertDescription>
+                                                            </Alert>
+                                                        )
+                                                    })()}
+                                                </div>
+                                            )}
+
+                                            {isAllLocations && (
+                                                <Alert>
+                                                    <Info className="h-4 w-4" />
+                                                    <AlertTitle>Tax Preview Not Available</AlertTitle>
+                                                    <AlertDescription>
+                                                        Select a specific location to see tax rate preview and calculations.
+                                                    </AlertDescription>
+                                                </Alert>
+                                            )}
+                                        </TabsContent>
+
+                                        {/* TAB 4: AVAILABILITY */}
+                                        <TabsContent value="availability" className="space-y-4">
+                                            <div className="flex items-center gap-2 mb-4">
+                                                <CheckCircle2 className="h-4 w-4 text-blue-500" />
+                                                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                                                    Availability & Channels
+                                                </h3>
+                                            </div>
+
+                                            {/* General Availability Toggle */}
+                                            <FormField
+                                                control={form.control}
+                                                name="availability"
+                                                render={({ field }) => (
+                                                    <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                                                        <div className="space-y-0.5">
+                                                            <FormLabel className="text-base">
+                                                                {editingContext.level === 1 ? 'Available for Sale' :
+                                                                    editingContext.level === 2 ? 'Available at This Location' :
+                                                                        'Available on This Menu'}
+                                                            </FormLabel>
+                                                            <FormDescription>
+                                                                {editingContext.level === 1 && 'Master switch - affects all locations and menus'}
+                                                                {editingContext.level === 2 && 'Toggle availability at this location'}
+                                                                {editingContext.level >= 3 && 'Toggle availability on this category'}
+                                                            </FormDescription>
+                                                        </div>
+                                                        <FormControl>
+                                                            <Switch
+                                                                checked={field.value}
+                                                                onCheckedChange={field.onChange}
+                                                            />
+                                                        </FormControl>
+                                                    </FormItem>
+                                                )}
+                                            />
+
+                                            {/* Available Channels */}
+                                            <FormField
+                                                control={form.control}
+                                                name="available_channels"
+                                                render={() => (
+                                                    <FormItem>
+                                                        <FormLabel>Sales Channels</FormLabel>
+                                                        <FormDescription>Select where this item can be sold</FormDescription>
+                                                        <div className="space-y-2 mt-2">
+                                                            {AVAILABLE_CHANNELS.map((channel) => (
+                                                                <FormField
+                                                                    key={channel}
+                                                                    control={form.control}
+                                                                    name="available_channels"
+                                                                    render={({ field }) => (
+                                                                        <FormItem className="flex items-start space-x-3 space-y-0 rounded-lg border p-3">
+                                                                            <FormControl>
+                                                                                <Checkbox
+                                                                                    checked={field.value?.includes(channel)}
+                                                                                    onCheckedChange={(checked) => {
+                                                                                        const current = field.value || []
+                                                                                        if (checked) {
+                                                                                            field.onChange([...current, channel])
+                                                                                        } else {
+                                                                                            field.onChange(current.filter((c: string) => c !== channel))
+                                                                                        }
+                                                                                    }}
+                                                                                    disabled={!editingContext.canEditBaseFields && !!editItem}
+                                                                                />
+                                                                            </FormControl>
+                                                                            <div className="flex-1">
+                                                                                <FormLabel className="text-sm font-medium cursor-pointer">
+                                                                                    {CHANNEL_LABELS[channel]}
+                                                                                </FormLabel>
+                                                                                <FormDescription className="text-xs">
+                                                                                    {CHANNEL_DESCRIPTIONS[channel]}
+                                                                                </FormDescription>
+                                                                            </div>
+                                                                        </FormItem>
+                                                                    )}
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+
+                                    {/* Categories Section */}
+                                    <div className="space-y-3">
+                                        <div className="flex items-center gap-2">
+                                            <Tag className="h-4 w-4 text-blue-500" />
+                                            <FormLabel>Categories</FormLabel>
+                                            {selectedCategories.length > 0 && (
+                                                <Badge variant="secondary" className="text-xs">{selectedCategories.length}</Badge>
+                                            )}
+                                        </div>
                                             {/* Suggestion for new items */}
                                             {!editItem && selectedCategories.length === 0 && categories.length > 0 && (
                                                 <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
@@ -1359,27 +1668,17 @@ export function NewEditItemFormSheet({
                                                     )}
                                                 </div>
                                             )}
-                                        </CollapsibleContent>
-                                    </Collapsible>
+                                    </div>
 
                                     {/* Modifiers Section */}
-                                    <Collapsible open={expandedSections.modifiers} onOpenChange={() => toggleSection('modifiers')}>
-                                        <CollapsibleTrigger asChild>
-                                            <button
-                                                type="button"
-                                                className="flex items-center justify-between w-full p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                                            >
-                                                <span className="text-sm font-semibold flex items-center gap-2">
-                                                    <Layers className="h-4 w-4 text-purple-500" />
-                                                    Modifier Groups
-                                                    {selectedModifiers.length > 0 && (
-                                                        <Badge variant="secondary" className="ml-2">{selectedModifiers.length}</Badge>
-                                                    )}
-                                                </span>
-                                                {expandedSections.modifiers ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                                            </button>
-                                        </CollapsibleTrigger>
-                                        <CollapsibleContent className="pt-4 space-y-4">
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-2">
+                                            <Layers className="h-4 w-4 text-purple-500" />
+                                            <FormLabel>Modifier Groups</FormLabel>
+                                            {selectedModifiers.length > 0 && (
+                                                <Badge variant="secondary" className="text-xs">{selectedModifiers.length}</Badge>
+                                            )}
+                                        </div>
                                             {(() => {
                                                 // Get enriched selected groups from editItem (has location-specific overrides)
                                                 // These contain the actual modifier items with their current prices/availability
@@ -1560,135 +1859,10 @@ export function NewEditItemFormSheet({
                                                     </>
                                                 )
                                             })()}
-                                        </CollapsibleContent>
-                                    </Collapsible>
+                                    </div>
 
-                                    {/* Allergens Section */}
-                                    <Collapsible open={expandedSections.allergens} onOpenChange={() => toggleSection('allergens')}>
-                                        <CollapsibleTrigger asChild>
-                                            <button
-                                                type="button"
-                                                className="flex items-center justify-between w-full p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                                            >
-                                                <span className="text-sm font-semibold flex items-center gap-2">
-                                                    <AlertCircle className="h-4 w-4 text-orange-500" />
-                                                    Allergens
-                                                    {watchedValues.allergens?.length > 0 && (
-                                                        <Badge variant="secondary" className="ml-2">{watchedValues.allergens.length}</Badge>
-                                                    )}
-                                                </span>
-                                                {expandedSections.allergens ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                                            </button>
-                                        </CollapsibleTrigger>
-                                        <CollapsibleContent className="pt-4">
-                                            <div className="flex flex-wrap gap-2">
-                                                {COMMON_ALLERGENS.map((allergen) => (
-                                                    <button
-                                                        key={allergen}
-                                                        type="button"
-                                                        onClick={() => toggleAllergen(allergen)}
-                                                        disabled={!editingContext.canEditBaseFields && !!editItem}
-                                                        className={cn(
-                                                            "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
-                                                            "border hover:scale-105 active:scale-95",
-                                                            "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
-                                                            watchedValues.allergens?.includes(allergen)
-                                                                ? "bg-orange-500 text-white border-orange-500 shadow-md"
-                                                                : "bg-background border-border hover:border-orange-500/50"
-                                                        )}
-                                                    >
-                                                        {allergen}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </CollapsibleContent>
-                                    </Collapsible>
-
-                                    {/* Advanced Settings */}
-                                    <Collapsible open={expandedSections.advanced} onOpenChange={() => toggleSection('advanced')}>
-                                        <CollapsibleTrigger asChild>
-                                            <button
-                                                type="button"
-                                                className="flex items-center justify-between w-full p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                                            >
-                                                <span className="text-sm font-semibold flex items-center gap-2">
-                                                    <Settings2 className="h-4 w-4 text-gray-500" />
-                                                    Advanced Settings
-                                                </span>
-                                                {expandedSections.advanced ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                                            </button>
-                                        </CollapsibleTrigger>
-                                        <CollapsibleContent className="pt-4 space-y-4">
-                                            <FormField
-                                                control={form.control}
-                                                name="availability"
-                                                render={({ field }) => (
-                                                    <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                                                        <div className="space-y-0.5">
-                                                            <FormLabel className="text-base">
-                                                                {editingContext.level === 1 ? 'Available for Sale' :
-                                                                    editingContext.level === 2 ? 'Available at This Location' :
-                                                                        'Available on This Menu'}
-                                                            </FormLabel>
-                                                            <FormDescription>
-                                                                {editingContext.level === 1 && 'Master switch - affects all locations and menus'}
-                                                                {editingContext.level === 2 && 'Toggle availability at this location'}
-                                                                {editingContext.level >= 3 && 'Toggle availability on this category'}
-                                                            </FormDescription>
-                                                        </div>
-                                                        <FormControl>
-                                                            <button
-                                                                type="button"
-                                                                role="switch"
-                                                                aria-checked={field.value}
-                                                                onClick={() => field.onChange(!field.value)}
-                                                                className={cn(
-                                                                    "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                                                                    field.value ? "bg-primary" : "bg-muted"
-                                                                )}
-                                                            >
-                                                                <span
-                                                                    className={cn(
-                                                                        "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                                                                        field.value ? "translate-x-6" : "translate-x-1"
-                                                                    )}
-                                                                />
-                                                            </button>
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-
-                                            <FormField
-                                                control={form.control}
-                                                name="card_bg_color"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Card Background Color</FormLabel>
-                                                        <FormControl>
-                                                            <div className="flex gap-2">
-                                                                <Input
-                                                                    type="color"
-                                                                    className="w-12 h-10 p-1 cursor-pointer"
-                                                                    disabled={!editingContext.canEditBaseFields && !!editItem}
-                                                                    {...field}
-                                                                    value={field.value || '#ffffff'}
-                                                                />
-                                                                <Input
-                                                                    placeholder="#000000"
-                                                                    disabled={!editingContext.canEditBaseFields && !!editItem}
-                                                                    {...field}
-                                                                    value={field.value || ''}
-                                                                />
-                                                            </div>
-                                                        </FormControl>
-                                                        <FormDescription>Custom color for the item card in POS</FormDescription>
-                                                        <FormMessage />
-                                                    </FormItem>
-                                                )}
-                                            />
-                                        </CollapsibleContent>
-                                    </Collapsible>
+                                        </TabsContent>
+                                    </Tabs>
                                 </form>
                             </Form>
                         </div>
@@ -1756,8 +1930,8 @@ export function NewEditItemFormSheet({
                             </>
                         ) : editItem ? (
                             editingContext.level === 1 ? 'Save Changes' :
-                                editingContext.level === 2 ? 'Save Location Price' :
-                                    editingContext.level === 3 ? 'Save Menu Price' :
+                                editingContext.level === 2 ? 'Save  ' :
+                                    editingContext.level === 3 ? 'Save  ' :
                                         editingContext.level === 4 ? 'Save Location Override' :
                                             'Save'
                         ) : 'Create Item'}

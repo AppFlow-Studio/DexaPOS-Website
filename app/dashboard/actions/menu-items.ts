@@ -341,6 +341,9 @@ export async function CreateMenuItem(
         image?: string
         meal_types?: ("Lunch" | "Dinner" | "Brunch" | "Specials")[]
         allergens?: string[]
+        tax_category?: string
+        is_tax_exempt?: boolean
+        available_channels?: string[]
         card_bg_color?: string
         availability?: boolean
         stock_tracking_mode?: "in_stock" | "out_of_stock" | "quantity"

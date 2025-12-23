@@ -195,10 +195,10 @@ export function FloorPlanEditorSidebar() {
     }
 
     return (
-        <div className="w-64 bg-white border-r h-full flex flex-col z-20 shadow-xl">
+        <div className="w-64 bg-background border-r h-full flex flex-col z-20 shadow-xl">
             <div className="p-4 border-b">
                 <h3 className="font-semibold text-sm">Library</h3>
-                <p className="text-xs text-slate-500">Drag items onto the canvas</p>
+                <p className="text-xs text-muted-foreground">Drag items onto the canvas</p>
             </div>
 
             <ScrollArea className="flex-1 h-full">
@@ -210,12 +210,12 @@ export function FloorPlanEditorSidebar() {
                                 key={shape.id}
                                 draggable
                                 onDragStart={(e) => handleDragStart(e, shape.id)}
-                                className="flex flex-col items-center gap-2 p-3 rounded-lg border border-slate-200 bg-slate-50 hover:border-blue-500 hover:bg-blue-50 cursor-grab active:cursor-grabbing transition-all"
+                                className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border bg-background hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing transition-all"
                             >
                                 <div className="w-12 h-12 relative flex items-center justify-center pointer-events-none">
                                     <ShapeIcon width={40} height={40} />
                                 </div>
-                                <span className="text-[10px] font-medium text-slate-600 text-center leading-tight">
+                                <span className="text-[10px] font-medium text-muted-foreground text-center leading-tight">
                                     {shape.label}
                                 </span>
                             </div>

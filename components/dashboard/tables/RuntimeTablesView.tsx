@@ -8,6 +8,8 @@ import { TablesTopBar } from './TablesTopBar'
 import { TablesSidebar } from './TablesSidebar'
 import { RuntimeFloorPlanView } from './RuntimeFloorPlanView'
 import { FloorPlanCanvasView } from './FloorPlanCanvasView'
+import { EmptyFloorPlanView } from './EmptyFloorPlanView'
+import { CreateFloorPlanDialog } from './CreateFloorPlanDialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
 
@@ -22,14 +24,19 @@ export function RuntimeTablesView({ locationId, onBack }: RuntimeTablesViewProps
     const [selectedTableId, setSelectedTableId] = React.useState<string | undefined>()
     const [location, setLocation] = React.useState<Location | null>(null)
     const [activeFloorPlanId, setActiveFloorPlanId] = React.useState<string | null>(null)
+    const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false)
 
     const { data: userInfo } = useUserInfo()
     const { data: floorPlans, isLoading: isLoadingFloorPlans } = useFloorPlans(locationId)
     // IMPORTANT: This hook fetches the tables WITH sessions (runtime status)
+    // This will automatically refetch when activeFloorPlanId changes
     const { data: floorPlanStatus, isLoading: isLoadingStatus, refetch: refetchFloorPlanStatus } = useFloorPlanStatus(activeFloorPlanId)
 
     const { data: waitlistInfo, isLoading: isLoadingWaitlistInfo, refetch: refetchWaitlist } = useWaitlist(locationId)
     const { data: reservations = [] } = useReservations(locationId)
+
+    // Track previous location to detect changes
+    const prevLocationIdRef = React.useRef<string | null>(null)
 
     // Load location details
     React.useEffect(() => {
@@ -38,11 +45,36 @@ export function RuntimeTablesView({ locationId, onBack }: RuntimeTablesViewProps
         }
     }, [locationId])
 
-    // Set active floor plan to default or first one
+    // Reset active floor plan when location changes
     React.useEffect(() => {
-        if (floorPlans && floorPlans.length > 0 && !activeFloorPlanId) {
-            const defaultFloorPlan = floorPlans.find((fp) => fp.is_default) || floorPlans[0]
-            setActiveFloorPlanId(defaultFloorPlan.id)
+        if (locationId !== prevLocationIdRef.current && prevLocationIdRef.current !== null) {
+            // Location changed - reset active floor plan and selected table
+            setActiveFloorPlanId(null)
+            setSelectedTableId(undefined)
+        }
+        prevLocationIdRef.current = locationId
+    }, [locationId])
+
+    // Set active floor plan to first created one (or default) when floor plans load
+    React.useEffect(() => {
+        if (floorPlans && floorPlans.length > 0) {
+            // If we don't have an active floor plan, or location changed, set a new one
+            if (!activeFloorPlanId) {
+                // Sort by display_order (first created typically has lowest display_order)
+                // Priority: is_default > display_order (lower = created first)
+                const sortedPlans = [...floorPlans].sort((a, b) => {
+                    // First priority: is_default
+                    if (a.is_default && !b.is_default) return -1
+                    if (!a.is_default && b.is_default) return 1
+                    // Second priority: display_order (lower = created first)
+                    return (a.display_order || 0) - (b.display_order || 0)
+                })
+
+                const defaultFloorPlan = sortedPlans[0]
+                if (defaultFloorPlan) {
+                    setActiveFloorPlanId(defaultFloorPlan.id)
+                }
+            }
         }
     }, [floorPlans, activeFloorPlanId])
 
@@ -61,6 +93,13 @@ export function RuntimeTablesView({ locationId, onBack }: RuntimeTablesViewProps
 
     const handleFloorPlanChange = (floorPlanId: string) => {
         setActiveFloorPlanId(floorPlanId)
+    }
+
+    const handleCreateFloorPlanSuccess = (floorPlanId: string) => {
+        // Set the newly created floor plan as active
+        setActiveFloorPlanId(floorPlanId)
+        // Automatically switch to design mode
+        setIsDesignMode(true)
     }
 
     // 1. SWITCH TO EDIT MODE
@@ -82,41 +121,88 @@ export function RuntimeTablesView({ locationId, onBack }: RuntimeTablesViewProps
         )
     }
 
-    // 2. RUNTIME VIEW MODE
-    return (
-        <div className="flex flex-col h-screen max-h-[90vh] rounded-lg shadow-xl  overflow-hidden bg-background">
-            <TablesTopBar
-                location={location}
-                floorPlans={floorPlans}
-                activeFloorPlanId={activeFloorPlanId}
-                onFloorPlanChange={handleFloorPlanChange}
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
-                onBack={onBack}
-                onEditLayout={handleEditLayout}
-            />
-            <div className="flex overflow-hidden relative h-full ">
-                <TablesSidebar
+    // 2. EMPTY STATE - No floor plans exist
+    if (!floorPlans || floorPlans.length === 0) {
+        return (
+            <>
+                <div className="flex flex-col h-screen max-h-[90vh] rounded-lg shadow-xl overflow-hidden bg-background">
+                    {onBack && (
+                        <div className="flex items-center gap-4 p-4 border-b bg-background">
+                            <button
+                                onClick={onBack}
+                                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                                ← Back
+                            </button>
+                            {location && (
+                                <span className="text-sm font-semibold text-foreground">{location.name}</span>
+                            )}
+                        </div>
+                    )}
+                    <EmptyFloorPlanView
+                        locationName={location?.name}
+                        onCreateFloorPlan={() => setIsCreateDialogOpen(true)}
+                    />
+                </div>
+                <CreateFloorPlanDialog
+                    open={isCreateDialogOpen}
+                    onOpenChange={setIsCreateDialogOpen}
                     locationId={locationId}
-                    tables={tables}
-                    waitlistInfo={waitlistInfo || undefined}
-                    reservations={reservations || []}
-                    searchQuery={searchQuery}
-                    selectedTableId={selectedTableId}
-                    onTableClick={setSelectedTableId}
+                    onSuccess={handleCreateFloorPlanSuccess}
                 />
+            </>
+        )
+    }
 
-                {/* PASS DATA ONLY. 
-                   We don't need drag handlers here because isDesignMode is false.
-                */}
-                <RuntimeFloorPlanView
-                    floorPlan={activeFloorPlan}
-                    tables={tables}
-                    selectedTableId={selectedTableId}
-                    isDesignMode={false} // <--- Explicitly disable editing
-                    onTableClick={setSelectedTableId}
+    // 3. RUNTIME VIEW MODE
+    return (
+        <>
+            <div className="flex flex-col h-screen max-h-[90vh] rounded-lg shadow-xl  overflow-hidden bg-background">
+                <TablesTopBar
+                    location={location}
+                    floorPlans={floorPlans}
+                    activeFloorPlanId={activeFloorPlanId}
+                    onFloorPlanChange={handleFloorPlanChange}
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
+                    onBack={onBack}
+                    onEditLayout={handleEditLayout}
                 />
+                <div className="flex overflow-hidden relative h-full ">
+                    <TablesSidebar
+                        locationId={locationId}
+                        tables={tables}
+                        waitlistInfo={waitlistInfo || undefined}
+                        reservations={reservations || []}
+                        searchQuery={searchQuery}
+                        selectedTableId={selectedTableId}
+                        onTableClick={setSelectedTableId}
+                    />
+
+                    {/* PASS DATA ONLY. 
+                       We don't need drag handlers here because isDesignMode is false.
+                       Key prop ensures smooth remount when location/floor plan changes
+                    */}
+                    <div
+                        className="relative flex-1 transition-opacity duration-300 ease-in-out"
+                        key={`${locationId}-${activeFloorPlanId}`}
+                    >
+                        <RuntimeFloorPlanView
+                            floorPlan={activeFloorPlan}
+                            tables={tables}
+                            selectedTableId={selectedTableId}
+                            isDesignMode={false} // <--- Explicitly disable editing
+                            onTableClick={setSelectedTableId}
+                        />
+                    </div>
+                </div>
             </div>
-        </div>
+            <CreateFloorPlanDialog
+                open={isCreateDialogOpen}
+                onOpenChange={setIsCreateDialogOpen}
+                locationId={locationId}
+                onSuccess={handleCreateFloorPlanSuccess}
+            />
+        </>
     )
 }

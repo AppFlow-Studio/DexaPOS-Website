@@ -197,6 +197,7 @@ export default function OrdersPage() {
                             <TabsTrigger value="ready">Ready</TabsTrigger>
                             <TabsTrigger value="completed">Completed</TabsTrigger>
                             <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
+                            <TabsTrigger value="void">Void</TabsTrigger>
                         </TabsList>
                     </Tabs>
 

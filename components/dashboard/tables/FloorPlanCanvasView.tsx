@@ -13,6 +13,14 @@ import {
 } from '@/components/ui/select'
 import { Save, Undo2, Undo, Redo } from 'lucide-react'
 import { toast } from 'sonner'
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
 import { useFloorPlans } from '@/app/dashboard/hooks/useFloorPlan'
 import { useFloorPlanStore } from '@/stores/floor-plan-store'
 import { FloorPlanObject } from '@/types/floor-plan'
@@ -73,6 +81,7 @@ export function FloorPlanCanvasView({ locationId, onBack, refetchFloorPlanStatus
     const [isSaving, setIsSaving] = useState(false)
     const [hasInitialized, setHasInitialized] = useState(false)
     const [lastActiveFloorPlanId, setLastActiveFloorPlanId] = useState<string | null>(null)
+    const [tableToDelete, setTableToDelete] = useState<string | null>(null)
 
     // Get unsaved changes state from store
     const hasChanges = hasUnsavedChanges()
@@ -122,21 +131,48 @@ export function FloorPlanCanvasView({ locationId, onBack, refetchFloorPlanStatus
         redo()
     }, [redo])
 
-    // Keyboard shortcuts for undo/redo
+    // Keyboard shortcuts for undo/redo and delete
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            // Prevent deletion if user is typing in an input
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+                return
+            }
+
             if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
                 e.preventDefault()
                 handleUndo()
             } else if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) {
                 e.preventDefault()
                 handleRedo()
+            } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                // Delete selected tables
+                if (selectedTableIds.length > 0) {
+                    e.preventDefault()
+                    // Show confirmation for first table, or delete all if confirmed
+                    if (selectedTableIds.length === 1) {
+                        setTableToDelete(selectedTableIds[0])
+                    } else {
+                        // For multiple tables, show confirmation
+                        const confirmed = window.confirm(
+                            `Are you sure you want to delete ${selectedTableIds.length} tables? This action can be undone.`
+                        )
+                        if (confirmed) {
+                            // removeTableFromDraft already saves snapshots internally
+                            selectedTableIds.forEach((tableId) => {
+                                removeTableFromDraft(tableId)
+                            })
+                            clearSelection()
+                            toast.success(`${selectedTableIds.length} tables deleted`)
+                        }
+                    }
+                }
             }
         }
 
         window.addEventListener('keydown', handleKeyDown)
         return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [handleUndo, handleRedo])
+    }, [handleUndo, handleRedo, selectedTableIds, removeTableFromDraft, clearSelection])
 
     // --- HANDLERS ---
 
@@ -211,11 +247,24 @@ export function FloorPlanCanvasView({ locationId, onBack, refetchFloorPlanStatus
 
     const handleRemoveTable = useCallback(
         (id: string) => {
-            // Remove from draft (local-only, no DB call)
-            removeTableFromDraft(id)
+            // Show confirmation dialog
+            setTableToDelete(id)
         },
-        [removeTableFromDraft]
+        []
     )
+
+    const confirmDeleteTable = useCallback(() => {
+        if (!tableToDelete) return
+
+        // removeTableFromDraft already saves a snapshot internally
+        removeTableFromDraft(tableToDelete)
+        setTableToDelete(null)
+        toast.success('Table deleted')
+    }, [tableToDelete, removeTableFromDraft])
+
+    const cancelDeleteTable = useCallback(() => {
+        setTableToDelete(null)
+    }, [])
 
     const handleTableClick = useCallback((tableId: string) => {
         toggleTableSelection(tableId)
@@ -255,15 +304,15 @@ export function FloorPlanCanvasView({ locationId, onBack, refetchFloorPlanStatus
     const selectedTableId = selectedTableIds[0]
 
     return (
-        <div className="flex flex-col max-h-screen h-[90vh] bg-slate-50 shadow-xl rounded-lg overflow-hidden">
+        <div className="flex flex-col max-h-screen h-[90vh] bg-background shadow-xl rounded-lg overflow-hidden">
             {/* Top Bar - Edit Mode Specific */}
-            <header className="h-14 border-b bg-white px-4 flex items-center justify-between shrink-0 z-10">
+            <header className="h-14 border-b bg-background px-4 flex items-center justify-between shrink-0 z-10">
                 <div className="flex items-center gap-2">
                     <Button variant="ghost" size="sm" onClick={onBack}>
                         <Undo2 className="w-4 h-4 mr-2" />
                         Cancel
                     </Button>
-                    <span className="text-sm font-semibold text-slate-500">Editing:</span>
+                    <span className="text-sm font-semibold text-muted-foreground">Editing:</span>
                     {availableFloorPlans && availableFloorPlans.length > 0 && (
                         <Select
                             value={effectiveActiveFloorPlanId || ''}
@@ -277,7 +326,7 @@ export function FloorPlanCanvasView({ locationId, onBack, refetchFloorPlanStatus
                                     <SelectItem key={fp.id} value={fp.id}>
                                         <div className="flex items-center justify-between w-full">
                                             <span>{fp.name}</span>
-                                            <span className="text-xs text-muted-foreground ml-2">
+                                            <span className="text-xs text-foreground ml-2">
                                                 {fp.is_default && '(Default)'}
                                                 {fp.table_count !== undefined && ` • ${fp.table_count} tables`}
                                             </span>
@@ -347,6 +396,26 @@ export function FloorPlanCanvasView({ locationId, onBack, refetchFloorPlanStatus
                     />
                 </div>
             </div>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={!!tableToDelete} onOpenChange={(open) => !open && setTableToDelete(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete Table</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete this table? This action can be undone using the Undo button.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={cancelDeleteTable}>
+                            Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={confirmDeleteTable}>
+                            Delete
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

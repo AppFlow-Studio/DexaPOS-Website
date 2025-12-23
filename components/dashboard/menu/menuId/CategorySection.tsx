@@ -41,6 +41,7 @@ interface CategorySectionProps {
     showLocationPricing: boolean
     locationId?: string | null
     isMenuLocationOwned?: boolean
+    canModifyCategories?: boolean
     onToggleVisibility: (categoryId: string, isActive: boolean) => Promise<void>
     onResetOverride: (categoryId: string) => Promise<void>
     onEditItem: (item: MenuCategoryItem, category: MenuCategory) => void
@@ -56,6 +57,7 @@ export function CategorySection({
     showLocationPricing,
     locationId,
     isMenuLocationOwned,
+    canModifyCategories = true,
     onToggleVisibility,
     onResetOverride,
     onEditItem,
@@ -281,19 +283,21 @@ export function CategorySection({
                             </div>
                         )}
 
-                        <div className='flex flex-row items-center justify-end mt-2'>
-                            <Button
-                                variant="destructive"
-                                className='text-xs'
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    setIsDeleteDialogOpen(true)
-                                }}
-                            >
-                                <Trash2 className="h-4 w-4" />
-                                Remove Category From Menu
-                            </Button>
-                        </div>
+                        {canModifyCategories && (
+                            <div className='flex flex-row items-center justify-end mt-2'>
+                                <Button
+                                    variant="destructive"
+                                    className='text-xs'
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        setIsDeleteDialogOpen(true)
+                                    }}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                    Remove Category From Menu
+                                </Button>
+                            </div>
+                        )}
                     </CardContent>
                 </CollapsibleContent>
             </Card>

@@ -18,6 +18,7 @@ interface LocationState {
     setLocations: (locations: Location[]) => void
     setLoading: (loading: boolean) => void
     initialize: () => void
+    validateSelectedLocation: (locations: Location[]) => void
     reset: () => void
 }
 
@@ -43,7 +44,41 @@ export const useLocationStore = create<LocationState>()(
             },
 
             setLocations: (locations: Location[]) => {
-                set({ locations })
+                const currentState = get()
+                // Only update if we have new locations or current locations are empty
+                // This prevents clearing locations during refetches
+                if (locations.length > 0 || currentState.locations.length === 0) {
+                    set({ locations })
+                    // Validate selected location exists in new locations array
+                    get().validateSelectedLocation(locations)
+                }
+            },
+
+            validateSelectedLocation: (locations: Location[]) => {
+                const { selectedLocationId } = get()
+
+                // If 'all' is selected, no validation needed
+                if (selectedLocationId === 'all') return
+
+                // If no locations, can't validate
+                if (locations.length === 0) return
+
+                // Check if selected location exists in locations array
+                const exists = locations.some(l => l.id === selectedLocationId)
+
+                if (!exists) {
+                    // Find primary location first, then fallback to first available
+                    const primaryLocation = locations.find(
+                        (l) => (l as any).is_primary_location === true
+                    )
+                    const fallbackId = primaryLocation?.id || locations[0].id
+                    set({ selectedLocationId: fallbackId })
+
+                    // Dispatch event for components that need to sync
+                    if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('locationChanged', { detail: fallbackId }))
+                    }
+                }
             },
 
             setLoading: (loading: boolean) => {
@@ -64,6 +99,12 @@ export const useLocationStore = create<LocationState>()(
             partialize: (state) => ({
                 selectedLocationId: state.selectedLocationId,
             }),
+            onRehydrateStorage: () => (state) => {
+                // Validate persisted state after rehydration
+                if (state && state.locations && state.locations.length > 0) {
+                    state.validateSelectedLocation(state.locations)
+                }
+            },
         }
     )
 )
@@ -86,6 +127,10 @@ export const useLocationById = (id: string) => {
     return useLocationStore(state =>
         state.locations.find(l => l.id === id) || null
     )
+}
+
+export const useHasLocations = () => {
+    return useLocationStore(state => state.locations.length > 0)
 }
 
 // ============================================================================

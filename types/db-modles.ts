@@ -267,6 +267,12 @@ export interface MenuItemsModel {
     card_bg_color: string | null
     availability: boolean
     stock_tracking_mode: "in_stock" | "out_of_stock" | "quantity" | null
+
+    // Tax & Inventory Controls (added in migration 014)
+    tax_category: string // 'standard', 'alcohol', 'food', 'grocery', 'retail', 'service'
+    is_tax_exempt: boolean
+    available_channels: string[] // ['pos', 'online', 'kiosk']
+
     created_at: string
     updated_at: string
 }
@@ -347,6 +353,25 @@ export interface LocationItemOverridesModel {
     is_available: boolean
     stock_tracking_mode: 'in_stock' | 'out_of_stock' | 'quantity' | 'use_default' | null
     current_stock: number | null
+
+    // Tax & Inventory Control Overrides (added in migration 014)
+    // Null = inherit from menu_items (L1)
+    tax_category: string | null
+    is_tax_exempt: boolean | null
+    available_channels: string[] | null
+
+    created_at: string
+    updated_at: string
+}
+
+// Tax Rates (Location-Specific Percentages) - added in migration 014
+export interface TaxRatesModel {
+    id: string
+    location_id: string // FK to locations table
+    name: string // e.g., "NYC Liquor Tax", "CA Sales Tax"
+    percentage: number // e.g., 8.875 for 8.875%
+    tax_category: string // 'standard', 'alcohol', 'food', 'grocery', 'retail', 'service'
+    is_active: boolean
     created_at: string
     updated_at: string
 }

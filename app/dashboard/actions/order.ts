@@ -70,7 +70,19 @@ export async function GetOrderDetails(orderId: string): Promise<OrderResponse | 
                     *,
                     order_item_modifiers(*)
                 ),
-                order_payments(*)
+                order_payments(*),
+                order_status_history(
+                *,
+                users(first_name, last_name),
+                staff_profiles(first_name, last_name)
+                ),
+                table_sessions(
+                *,
+                table_session_events(
+                *,
+                staff_profiles(first_name, last_name)
+                )
+                )
                 `
             )
             .eq('id', orderId)
@@ -80,6 +92,7 @@ export async function GetOrderDetails(orderId: string): Promise<OrderResponse | 
             console.error('[GetOrderDetails] Error getting order:', orderError)
             return null
         }
+        console.log('order', order)
 
         return order as OrderResponse
     } catch (error) {

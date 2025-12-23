@@ -14,7 +14,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table'
-import { Utensils, Plus, MapPin, Globe } from 'lucide-react'
+import { Utensils, Plus, MapPin, Globe, GripVertical, ChevronUp, ChevronDown } from 'lucide-react'
 import { MenuActionsDropdown } from './MenuActionsDropdown'
 
 // Extended Menu type with location info
@@ -47,6 +47,9 @@ interface MenuListViewProps {
     onSettings?: (menuId: string) => void
     emptyStateTitle?: string
     emptyStateDescription?: string
+    onMoveUp?: (index: number) => void
+    onMoveDown?: (index: number) => void
+    hasOrderChanges?: boolean
 }
 
 export function MenuListView({
@@ -60,6 +63,9 @@ export function MenuListView({
     onSettings,
     emptyStateTitle = "No menus yet",
     emptyStateDescription = "Get started by creating your first menu",
+    onMoveUp,
+    onMoveDown,
+    hasOrderChanges = false,
 }: MenuListViewProps) {
     const router = useRouter()
 
@@ -117,9 +123,16 @@ export function MenuListView({
                         <CardHeader>
                             <div className="flex items-start justify-between">
                                 <div className="flex-1 space-y-1">
-                                    <CardTitle className="group-hover:text-primary transition-colors">
-                                        {menu.name}
-                                    </CardTitle>
+                                    <div className="flex items-center gap-2">
+                                        <CardTitle className="group-hover:text-primary transition-colors">
+                                            {menu.name}
+                                        </CardTitle>
+                                        {menu.display_order !== null && (
+                                            <Badge variant="outline" className="text-xs">
+                                                #{menu.display_order}
+                                            </Badge>
+                                        )}
+                                    </div>
                                     {menu.description && (
                                         <CardDescription className="line-clamp-2">
                                             {menu.description}
@@ -163,6 +176,7 @@ export function MenuListView({
             <Table>
                 <TableHeader>
                     <TableRow className="bg-muted/50">
+                        <TableHead className="w-[60px]">Order</TableHead>
                         <TableHead className="w-[300px]">Menu Name</TableHead>
                         <TableHead>Description</TableHead>
                         <TableHead className="w-[150px]">Location</TableHead>
@@ -175,11 +189,49 @@ export function MenuListView({
                     {menus.map((menu, index) => (
                         <TableRow
                             key={menu.id}
-                            className="group cursor-pointer transition-colors hover:bg-muted/50 animate-in fade-in slide-in-from-left-2"
+                            className="group transition-colors hover:bg-muted/50 animate-in fade-in slide-in-from-left-2"
                             style={{ animationDelay: `${index * 30}ms` }}
-                            onClick={() => handleRowClick(menu.id)}
                         >
-                            <TableCell className="font-medium">
+                            <TableCell>
+                                <div className="flex items-center gap-1">
+                                    <GripVertical className="h-4 w-4 text-muted-foreground" />
+                                    <div className="flex flex-col gap-0.5">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-5 w-5"
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                onMoveUp?.(index)
+                                            }}
+                                            disabled={index === 0 || !onMoveUp}
+                                            title="Move up"
+                                        >
+                                            <ChevronUp className="h-3 w-3" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-5 w-5"
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                onMoveDown?.(index)
+                                            }}
+                                            disabled={index === menus.length - 1 || !onMoveDown}
+                                            title="Move down"
+                                        >
+                                            <ChevronDown className="h-3 w-3" />
+                                        </Button>
+                                    </div>
+                                    <span className="text-xs text-muted-foreground ml-1">
+                                        {menu.display_order ?? '—'}
+                                    </span>
+                                </div>
+                            </TableCell>
+                            <TableCell
+                                className="font-medium cursor-pointer"
+                                onClick={() => handleRowClick(menu.id)}
+                            >
                                 <div className="flex items-center gap-3">
                                     <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors shrink-0">
                                         <Utensils className="h-5 w-5 text-primary" />
@@ -189,20 +241,32 @@ export function MenuListView({
                                     </span>
                                 </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell
+                                className="cursor-pointer"
+                                onClick={() => handleRowClick(menu.id)}
+                            >
                                 <span className="text-muted-foreground line-clamp-1 max-w-[300px]">
                                     {menu.description || '—'}
                                 </span>
                             </TableCell>
-                            <TableCell>
+                            <TableCell
+                                className="cursor-pointer"
+                                onClick={() => handleRowClick(menu.id)}
+                            >
                                 <LocationBadge menu={menu} />
                             </TableCell>
-                            <TableCell>
+                            <TableCell
+                                className="cursor-pointer"
+                                onClick={() => handleRowClick(menu.id)}
+                            >
                                 <Badge variant={menu.is_active ? "default" : "secondary"}>
                                     {menu.is_active ? 'Active' : 'Inactive'}
                                 </Badge>
                             </TableCell>
-                            <TableCell className="text-muted-foreground">
+                            <TableCell
+                                className="text-muted-foreground cursor-pointer"
+                                onClick={() => handleRowClick(menu.id)}
+                            >
                                 {new Date(menu.created_at).toLocaleDateString()}
                             </TableCell>
                             <TableCell className="text-right">

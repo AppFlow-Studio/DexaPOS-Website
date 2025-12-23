@@ -38,11 +38,11 @@ export function TablesTopBar({
     return (
         <div className="flex items-center justify-between gap-4 p-4 border-b bg-background">
             <div className="flex items-center gap-4 flex-1">
-                {onBack && (
+                {/* {onBack && (
                     <Button variant="ghost" size="sm" onClick={onBack}>
                         <ArrowLeft className="h-4 w-4 mr-2" />
                     </Button>
-                )}
+                )} */}
                 <div className="flex items-center gap-2">
                     {location && (
                         <span className="text-sm font-semibold text-foreground">{location.name}</span>

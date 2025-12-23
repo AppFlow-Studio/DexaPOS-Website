@@ -45,12 +45,14 @@ import {
     UserCheck,
     ArrowUpDown,
     CheckCircle2,
+    User,
 } from 'lucide-react'
 import { UnifiedStaffMember } from '@/types/staff'
 import { useUpdateStaffAssignment, useResetStaffPIN, useDeactivateStaff, useReactivateStaff } from '@/app/dashboard/hooks/useStaff'
 import { StaffDetailSheet } from './StaffDetailSheet'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
 
 interface StaffDataTableProps {
     data: UnifiedStaffMember[]
@@ -58,6 +60,7 @@ interface StaffDataTableProps {
 }
 
 export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
+    const { data: userInfo } = useUserInfo()
     const [sorting, setSorting] = React.useState<SortingState>([])
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
     const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
@@ -107,7 +110,10 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                         </Avatar>
                         <div className="flex flex-col">
                             <span className="font-medium text-sm">
-                                {staff.first_name} {staff.last_name}
+                                {staff.first_name} {staff.last_name} {userInfo?.id == staff.user_id && 
+                                <Badge variant="secondary" className="text-xs w-fit">
+                                    (You)
+                                </Badge>}
                             </span>
                             {staff.email ? (
                                 <span className="text-xs text-muted-foreground flex items-center gap-1">

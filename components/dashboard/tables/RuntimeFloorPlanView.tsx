@@ -64,6 +64,13 @@ export const RuntimeFloorPlanView = forwardRef<RuntimeFloorPlanViewRef, RuntimeF
     const transformRef = useRef({ x: 0, y: 0, scale: 1 })
     const scaleRef = useRef(1)
     const [interactionMode, setInteractionMode] = useState<'select' | 'pan'>('select')
+
+    // Ensure design mode always uses select mode
+    React.useEffect(() => {
+        if (isDesignMode && interactionMode !== 'select') {
+            setInteractionMode('select')
+        }
+    }, [isDesignMode, interactionMode])
     const initialTransformRef = useRef<{ x: number; y: number; scale: number } | null>(null)
 
     // --- 1. DOM Transform ---
@@ -186,16 +193,21 @@ export const RuntimeFloorPlanView = forwardRef<RuntimeFloorPlanViewRef, RuntimeF
         fitToView,
     }), [fitToView])
 
-    // Auto fit on mount or when tables change
+    // Auto fit on mount or when floor plan/tables change
     useLayoutEffect(() => {
-        if (initialTables.length > 0 && !initialTransformRef.current) {
+        if (initialTables.length > 0) {
+            // Reset transform when floor plan changes (detected by floorPlan.id)
+            if (floorPlan?.id) {
+                initialTransformRef.current = null
+            }
+
             // Small delay to ensure container is rendered
             const timer = setTimeout(() => {
                 fitToView()
-            }, 50)
+            }, 100)
             return () => clearTimeout(timer)
         }
-    }, [initialTables.length, fitToView])
+    }, [initialTables.length, floorPlan?.id, fitToView])
 
     // --- 3. DROP HANDLERS (CRITICAL) ---
     const handleDragOver = (e: React.DragEvent) => {
@@ -227,7 +239,7 @@ export const RuntimeFloorPlanView = forwardRef<RuntimeFloorPlanViewRef, RuntimeF
     }
 
     return (
-        <div className=" relative bg-[#e5e5e5] h-full w-full overflow-hidden select-none">
+        <div className="relative bg-[#e5e5e5] h-full w-full overflow-hidden select-none animate-in fade-in duration-300">
             {/* Zoom Controls */}
             <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
                 <Button
@@ -260,8 +272,16 @@ export const RuntimeFloorPlanView = forwardRef<RuntimeFloorPlanViewRef, RuntimeF
             </div>
 
             {/* Background - POINTER EVENTS NONE ensures drops pass through to container */}
-            <div className="absolute inset-0 pointer-events-none opacity-[0.4]"
-                style={{ backgroundImage: 'radial-gradient(#a1a1aa 1px, transparent 1px)', backgroundSize: '20px 20px' }}
+            <div 
+                style={{
+                    backgroundImage: 'radial-gradient(var(--floor-bg-dot-color, #6b7280) 1px, transparent 1px)',
+                    backgroundSize: '20px 20px'
+                }}
+                className={cn(
+                    "absolute inset-0 pointer-events-none opacity-[0.4]",
+                    "dark:bg-[--floor-bg-dot-color:var(--background)]",
+                    "" 
+                )}
             />
 
             {/* Viewport Container */}
@@ -280,7 +300,7 @@ export const RuntimeFloorPlanView = forwardRef<RuntimeFloorPlanViewRef, RuntimeF
                                     table={table}
                                     scaleRef={scaleRef}
                                     isSelected={selectedTableId === table.id}
-                                    isDesignMode={isDesignMode && interactionMode === 'select'}
+                                    isDesignMode={isDesignMode}
                                     onSelect={() => onTableClick?.(table.id)}
 
                                     onUpdatePosition={onUpdateTablePosition || (() => { })}

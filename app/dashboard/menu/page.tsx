@@ -3,7 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Utensils, Plus, Search, Grid3x3, List, Globe, MapPin, Info } from 'lucide-react'
+import { Utensils, Plus, Search, Grid3x3, List, Globe, MapPin, Info, Save } from 'lucide-react'
 import { useState } from 'react'
 import * as React from 'react'
 import { useMenus } from '../hooks/useMenus'
@@ -15,7 +15,7 @@ import * as z from 'zod'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
-import { CreateMenu, ToggleMenuActive, DeleteMenu } from '../actions/menus'
+import { CreateMenu, ToggleMenuActive, DeleteMenu, GetMenuWithCategories, UpdateMenusOrder } from '../actions/menus'
 import { MenuListView, MenuWithLocation } from '@/components/dashboard/menu/MenuListView'
 import { useLocationStore, useSelectedLocation } from '@/stores/location-store'
 import { Badge } from '@/components/ui/badge'
@@ -23,7 +23,6 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { useLocations } from '../hooks/useLocations'
-
 const menuSchema = z.object({
     name: z.string().min(2, "Menu name must be at least 2 characters").max(100, "Menu name must be less than 100 characters"),
     description: z.string().max(500, "Description must be less than 500 characters").optional(),
@@ -43,17 +42,34 @@ export default function MenuPage() {
     const selectedLocationId = selectedLocation?.id || null
     const isAllLocations = selectedLocationId === 'all' || !selectedLocationId
 
-    const { data: locations } = useLocations(clerkOrgId || '')
+    const { data: locations } = useLocations(clerkOrgId || '', userInfo?.id || '')
     const currentLocation = locations?.find(l => l.id === selectedLocationId)
 
     const { data: menus, isLoading, refetch } = useMenus(clerkOrgId || '', selectedLocationId)
     const [searchTerm, setSearchTerm] = useState('')
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
     const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+    const [reorderedMenus, setReorderedMenus] = useState<MenuWithLocation[]>([])
+    const [hasOrderChanges, setHasOrderChanges] = useState(false)
+    const [isSavingOrder, setIsSavingOrder] = useState(false)
 
     // Cast menus to include location info
     const menusList = (Array.isArray(menus) ? menus : []) as MenuWithLocation[]
-    const filteredMenus = menusList.filter(menu =>
+
+    // Sort menus by display_order (ascending, nulls last)
+    const sortedMenus = React.useMemo(() => {
+        const sorted = [...menusList].sort((a, b) => {
+            const aOrder = a.display_order ?? 999999
+            const bOrder = b.display_order ?? 999999
+            return aOrder - bOrder
+        })
+        return sorted
+    }, [menusList])
+
+    // Use reordered menus if there are unsaved changes, otherwise use sorted menus
+    const displayMenus = hasOrderChanges ? reorderedMenus : sortedMenus
+
+    const filteredMenus = displayMenus.filter(menu =>
         menu.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         menu.description?.toLowerCase().includes(searchTerm.toLowerCase())
     )
@@ -178,6 +194,106 @@ export default function MenuPage() {
         })
     }
 
+    const handleDuplicate = async (menuId: string, targetLocationId: string | null) => {
+        // Get Menu Info with all the items and categories and modifiers and set settings 
+        const menu = await GetMenuWithCategories(menuId)
+        if (!menu) {
+            toast.error('Duplicate Failed', {
+                description: 'Unable to duplicate the menu. Please try again.'
+            })
+            return
+        }
+        // Create a new menu with the same name and description and settings
+        const result = await CreateMenu(clerkOrgId || '', {
+            name: menu.name,
+            description: menu.description || '',
+            location_id: targetLocationId,
+            is_active: menu.is_active,
+            created_by: userInfo?.first_name + ' ' + userInfo?.last_name,
+        })
+        if (result.error) {
+            toast.error('Duplicate Failed', {
+                description: result.error
+            })
+        }
+    }
+
+    // Initialize reordered menus when menus load
+    React.useEffect(() => {
+        if (sortedMenus.length > 0 && reorderedMenus.length === 0 && !hasOrderChanges) {
+            setReorderedMenus(sortedMenus)
+        }
+    }, [sortedMenus, reorderedMenus.length, hasOrderChanges])
+
+    // Reorder handlers
+    const handleMoveMenuUp = (index: number) => {
+        if (index === 0) return
+
+        const newOrder = [...reorderedMenus]
+        const temp = newOrder[index]
+        newOrder[index] = newOrder[index - 1]
+        newOrder[index - 1] = temp
+
+        // Update display_order values
+        newOrder.forEach((menu, idx) => {
+            menu.display_order = idx + 1
+        })
+
+        setReorderedMenus(newOrder)
+        setHasOrderChanges(true)
+    }
+
+    const handleMoveMenuDown = (index: number) => {
+        if (index === reorderedMenus.length - 1) return
+
+        const newOrder = [...reorderedMenus]
+        const temp = newOrder[index]
+        newOrder[index] = newOrder[index + 1]
+        newOrder[index + 1] = temp
+
+        // Update display_order values
+        newOrder.forEach((menu, idx) => {
+            menu.display_order = idx + 1
+        })
+
+        setReorderedMenus(newOrder)
+        setHasOrderChanges(true)
+    }
+
+    const handleSaveOrder = async () => {
+        setIsSavingOrder(true)
+        try {
+
+            const menuOrders = reorderedMenus.map((menu, index) => ({
+                menuId: menu.id,
+                displayOrder: index + 1
+            }))
+
+            const result = await UpdateMenusOrder(menuOrders)
+
+            if (result.error) {
+                toast.error('Save Failed', {
+                    description: result.error
+                })
+                return
+            }
+
+            toast.success('Order Saved', {
+                description: 'Menu display order has been updated.'
+            })
+
+            setHasOrderChanges(false)
+            queryClient.invalidateQueries({ queryKey: ['menus'] })
+            refetch()
+        } catch (error) {
+            toast.error('Save Failed', {
+                description: 'Unable to save menu order. Please try again.'
+            })
+        } finally {
+            setIsSavingOrder(false)
+        }
+    }
+
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex items-center justify-between">
@@ -221,7 +337,7 @@ export default function MenuPage() {
                                     <FormField
                                         control={form.control}
                                         name="menu_type"
-                                        render={({ field }) => (
+                                        render={({ field }: { field: any }) => (
                                             <FormItem className="space-y-3">
                                                 <FormLabel>Menu Type</FormLabel>
                                                 <FormControl>
@@ -305,7 +421,7 @@ export default function MenuPage() {
                                 <FormField
                                     control={form.control}
                                     name="name"
-                                    render={({ field }) => (
+                                    render={({ field }: { field: any }) => (
                                         <FormItem>
                                             <FormLabel>Menu Name</FormLabel>
                                             <FormControl>
@@ -318,7 +434,7 @@ export default function MenuPage() {
                                 <FormField
                                     control={form.control}
                                     name="description"
-                                    render={({ field }) => (
+                                    render={({ field }: { field: any }) => (
                                         <FormItem>
                                             <FormLabel>Description</FormLabel>
                                             <FormControl>
@@ -404,6 +520,18 @@ export default function MenuPage() {
                             <CardDescription>View and manage all your menus</CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
+                            {hasOrderChanges && (
+                                <Button
+                                    variant="default"
+                                    size="sm"
+                                    onClick={handleSaveOrder}
+                                    disabled={isSavingOrder}
+                                    className="gap-2"
+                                >
+                                    <Save className="h-4 w-4" />
+                                    {isSavingOrder ? 'Saving...' : 'Save Order'}
+                                </Button>
+                            )}
                             <div className="relative">
                                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input
@@ -441,6 +569,7 @@ export default function MenuPage() {
                         viewMode={viewMode}
                         onToggleActive={handleToggleActive}
                         onDelete={handleDelete}
+                        onDuplicate={handleDuplicate}
                         onCreateNew={() => setIsCreateDialogOpen(true)}
                         emptyStateTitle={menusList.length === 0 ? "No menus yet" : "No menus found"}
                         emptyStateDescription={
@@ -448,7 +577,16 @@ export default function MenuPage() {
                                 ? "Get started by creating your first menu"
                                 : "Try adjusting your search terms"
                         }
+                        onMoveUp={handleMoveMenuUp}
+                        onMoveDown={handleMoveMenuDown}
+                        hasOrderChanges={hasOrderChanges}
                     />
+                    {filteredMenus.length > 0 && (
+                        <div className="flex items-center gap-2 mt-4 text-sm text-muted-foreground">
+                            <Info className="h-4 w-4" />
+                            <span>This order determines how menus appear on the POS system</span>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         </div>

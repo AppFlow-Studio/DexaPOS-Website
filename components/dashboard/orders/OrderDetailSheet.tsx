@@ -13,7 +13,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { Order, OrderItem, OrderPayment, OrderItemModifier, OrderResponse } from '@/types/order-management'
+import { Order, OrderItem, OrderPayment, OrderItemModifier, OrderResponse, OrderStatusHistory, TableSessionWithEvents } from '@/types/order-management'
 import { OrderStatusBadge } from './OrderStatusBadge'
 import { PaymentStatusBadge } from './PaymentStatusBadge'
 import { cn } from '@/lib/utils'
@@ -36,6 +36,7 @@ import { useRouter } from 'next/navigation'
 import { GetOrderDetails } from '@/app/dashboard/actions/order'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ArrowRight } from 'lucide-react'
+import { OrderStatusTimeline } from './OrderStatusTimeline'
 
 interface OrderDetailSheetProps {
     order: Order | OrderResponse | null
@@ -101,6 +102,8 @@ export function OrderDetailSheet({ order, open, onOpenChange }: OrderDetailSheet
     const displayOrder = (orderDetails || order) as OrderResponse
     const items = (displayOrder.order_items || []) as (OrderItem & { order_item_modifiers?: OrderItemModifier[] })[]
     const payments = (displayOrder.order_payments || []) as OrderPayment[]
+    const statusHistory = (displayOrder.order_status_history || []) as OrderStatusHistory[]
+    const tableSessions = (displayOrder.table_sessions || []) as TableSessionWithEvents[]
 
     const handleViewMoreDetails = () => {
         onOpenChange(false)
@@ -355,6 +358,20 @@ export function OrderDetailSheet({ order, open, onOpenChange }: OrderDetailSheet
                                         {displayOrder.special_instructions}
                                     </p>
                                 </div>
+                            </>
+                        )}
+
+                        {/* Order Status Timeline */}
+                        {(statusHistory.length > 0 || tableSessions.length > 0 || displayOrder.created_at) && (
+                            <>
+                                <Separator />
+                                <OrderStatusTimeline
+                                    statusHistory={statusHistory}
+                                    currentStatus={displayOrder.status}
+                                    createdAt={displayOrder.created_at}
+
+                                    tableSessions={tableSessions}
+                                />
                             </>
                         )}
 
