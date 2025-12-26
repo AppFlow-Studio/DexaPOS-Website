@@ -1,144 +1,386 @@
 'use client'
-//TODO: SETUP HEIRARCHY FOR SCHEDULES 
-//WILL SET THIS UP JUST LIKE THE POS SCHEDULES PAGE
+
+import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Calendar, Plus, Clock, User } from 'lucide-react'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Empty } from '@/components/ui/empty'
+import {
+    Calendar,
+    Plus,
+    Clock,
+    Edit3,
+    Trash2,
+    Search,
+    MoreVertical,
+    MapPin,
+    Globe,
+    Power,
+    PowerOff
+} from 'lucide-react'
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+// import {
+//     AlertDialog,
+//     AlertDialogAction,
+//     AlertDialogCancel,
+//     AlertDialogContent,
+//     AlertDialogDescription,
+//     AlertDialogFooter,
+//     AlertDialogHeader,
+//     AlertDialogTitle,
+// } from '@/components/ui/alert-dialog'
+import { ScheduleFormSheet } from '@/components/dashboard/menu/ScheduleFormSheet'
+import { useLocationScopedSchedulesWithTimeSlots } from '../hooks/useLocationScoped'
+import { useDeleteScheduleMutation, useToggleScheduleActiveMutation } from '../hooks/useLocationScopedSchedules'
+import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
+import { useLocationStore } from '@/stores/location-store'
+import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
+import { SchedulesModel, ScheduleTimeSlotsModel } from '@/types/db-modles'
+import { DAYS_OF_WEEK, DAYS_FULL } from '@/components/dashboard/menu/ScheduleCard'
 
-export default function EmployeeSchedulesPage() {
+type ScheduleWithSlots = SchedulesModel & {
+    schedule_time_slots?: ScheduleTimeSlotsModel[]
+}
+
+export default function SchedulesPage() {
+    const { data: userInfo } = useUserInfo()
+    const clerkOrgId = userInfo?.members?.[0]?.organizations?.id
+    const { selectedLocationId } = useLocationStore()
+
+    const { data: schedules, isLoading } = useLocationScopedSchedulesWithTimeSlots()
+    const deleteScheduleMutation = useDeleteScheduleMutation()
+    const toggleActiveMutation = useToggleScheduleActiveMutation()
+
+    const [searchTerm, setSearchTerm] = useState('')
+    const [isFormOpen, setIsFormOpen] = useState(false)
+    const [editingSchedule, setEditingSchedule] = useState<ScheduleWithSlots | null>(null)
+    const [deletingSchedule, setDeletingSchedule] = useState<ScheduleWithSlots | null>(null)
+
+    const schedulesList = schedules || []
+
+    // Filter schedules
+    const filteredSchedules = schedulesList.filter(schedule =>
+        schedule.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        schedule.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+
+    // Stats
+    const stats = {
+        total: schedulesList.length,
+        active: schedulesList.filter(s => s.is_active).length,
+        inactive: schedulesList.filter(s => !s.is_active).length,
+        global: schedulesList.filter(s => !s.location_id).length,
+    }
+
+    const handleCreate = () => {
+        setEditingSchedule(null)
+        setIsFormOpen(true)
+    }
+
+    const handleEdit = (schedule: ScheduleWithSlots) => {
+        setEditingSchedule(schedule)
+        setIsFormOpen(true)
+    }
+
+    const handleDelete = async () => {
+        if (!deletingSchedule) return
+
+        const result = await deleteScheduleMutation.mutateAsync(deletingSchedule.id)
+
+        if (result.error) {
+            toast.error('Failed to delete schedule', { description: result.error })
+        } else {
+            toast.success('Schedule deleted', {
+                description: `"${deletingSchedule.name}" has been removed`
+            })
+        }
+
+        setDeletingSchedule(null)
+    }
+
+    const handleToggleActive = async (schedule: ScheduleWithSlots) => {
+        const result = await toggleActiveMutation.mutateAsync(schedule.id)
+
+        if (result.error) {
+            toast.error('Failed to update schedule', { description: result.error })
+        } else {
+            toast.success(
+                schedule.is_active ? 'Schedule deactivated' : 'Schedule activated',
+                { description: `"${schedule.name}" is now ${schedule.is_active ? 'inactive' : 'active'}` }
+            )
+        }
+    }
+
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-in fade-in duration-500">
+            {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Employee Schedules</h2>
+                    <h2 className="text-2xl font-bold tracking-tight">Schedules</h2>
                     <p className="text-muted-foreground">
-                        Manage work schedules and shifts for your staff members.
+                        Control when menus and categories are available
                     </p>
                 </div>
-                <Button>
+                <Button onClick={handleCreate}>
                     <Plus className="h-4 w-4 mr-2" />
                     Create Schedule
                 </Button>
             </div>
 
-            {/* Schedule Overview */}
-            <div className="grid gap-4 md:grid-cols-3">
-                <Card>
+            {/* Stats */}
+            <div className="grid gap-4 md:grid-cols-4">
+                <Card className="transition-all hover:shadow-md">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">This Week</CardTitle>
+                        <CardTitle className="text-sm font-medium">Total Schedules</CardTitle>
                         <Calendar className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">0</div>
+                        <div className="text-2xl font-bold">{stats.total}</div>
                         <p className="text-xs text-muted-foreground">
-                            Scheduled shifts
+                            {stats.global} global, {stats.total - stats.global} location-specific
                         </p>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="transition-all hover:shadow-md">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active Staff</CardTitle>
-                        <User className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-sm font-medium">Active</CardTitle>
+                        <Power className="h-4 w-4 text-green-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">0</div>
+                        <div className="text-2xl font-bold text-green-600">{stats.active}</div>
                         <p className="text-xs text-muted-foreground">
-                            Employees scheduled
+                            Currently in use
                         </p>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="transition-all hover:shadow-md">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Hours</CardTitle>
-                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-sm font-medium">Inactive</CardTitle>
+                        <PowerOff className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">0h</div>
+                        <div className="text-2xl font-bold text-muted-foreground">{stats.inactive}</div>
                         <p className="text-xs text-muted-foreground">
-                            Scheduled this week
+                            Not currently active
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card className="transition-all hover:shadow-md">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Global</CardTitle>
+                        <Globe className="h-4 w-4 text-primary" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-primary">{stats.global}</div>
+                        <p className="text-xs text-muted-foreground">
+                            Available everywhere
                         </p>
                     </CardContent>
                 </Card>
             </div>
 
-            {/* Schedule Views */}
+            {/* Schedules List */}
             <Card>
                 <CardHeader>
-                    <CardTitle>Schedule</CardTitle>
-                    <CardDescription>View and manage employee schedules by week or month</CardDescription>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <CardTitle>All Schedules</CardTitle>
+                            <CardDescription>
+                                {filteredSchedules.length} schedule{filteredSchedules.length !== 1 ? 's' : ''} found
+                            </CardDescription>
+                        </div>
+                        <div className="relative w-full sm:w-64">
+                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Search schedules..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="pl-9"
+                            />
+                        </div>
+                    </div>
                 </CardHeader>
+
                 <CardContent>
-                    <Tabs defaultValue="week" className="w-full">
-                        <TabsList>
-                            <TabsTrigger value="week">Week View</TabsTrigger>
-                            <TabsTrigger value="month">Month View</TabsTrigger>
-                            <TabsTrigger value="list">List View</TabsTrigger>
-                        </TabsList>
-
-                        <TabsContent value="week" className="mt-4">
-                            <div className="flex flex-col items-center justify-center py-12 border rounded-lg">
-                                <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
-                                <h3 className="text-lg font-semibold mb-2">Weekly Schedule</h3>
-                                <p className="text-sm text-muted-foreground mb-4">
-                                    Weekly schedule view coming soon
-                                </p>
-                                <Button variant="outline">
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    Add Shift
-                                </Button>
-                            </div>
-                        </TabsContent>
-
-                        <TabsContent value="month" className="mt-4">
-                            <div className="flex flex-col items-center justify-center py-12 border rounded-lg">
-                                <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
-                                <h3 className="text-lg font-semibold mb-2">Monthly Schedule</h3>
-                                <p className="text-sm text-muted-foreground mb-4">
-                                    Monthly schedule view coming soon
-                                </p>
-                                <Button variant="outline">
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    Add Shift
-                                </Button>
-                            </div>
-                        </TabsContent>
-
-                        <TabsContent value="list" className="mt-4">
-                            <div className="space-y-4">
-                                <div className="flex flex-col items-center justify-center py-12 border rounded-lg">
-                                    <Clock className="h-12 w-12 text-muted-foreground mb-4" />
-                                    <h3 className="text-lg font-semibold mb-2">No Schedules</h3>
-                                    <p className="text-sm text-muted-foreground mb-4">
-                                        Create your first employee schedule to get started
-                                    </p>
-                                    <Button>
+                    {isLoading ? (
+                        <div className="space-y-3">
+                            {[1, 2, 3].map((i) => (
+                                <Skeleton key={i} className="h-32 w-full" />
+                            ))}
+                        </div>
+                    ) : filteredSchedules.length === 0 ? (
+                        <Empty
+                            icon={Calendar}
+                            title={schedulesList.length === 0 ? "No schedules yet" : "No schedules found"}
+                            description={
+                                schedulesList.length === 0
+                                    ? "Create your first schedule to control when menus are available"
+                                    : "Try adjusting your search terms"
+                            }
+                            action={
+                                schedulesList.length === 0 ? (
+                                    <Button onClick={handleCreate}>
                                         <Plus className="h-4 w-4 mr-2" />
                                         Create Schedule
                                     </Button>
-                                </div>
-                            </div>
-                        </TabsContent>
-                    </Tabs>
+                                ) : null
+                            }
+                        />
+                    ) : (
+                        <div className="space-y-3">
+                            {filteredSchedules.map((schedule, index) => {
+                                const timeSlots = schedule.schedule_time_slots || []
+                                const days = [...new Set(timeSlots.map(s => s.day_of_week))].sort((a, b) => a - b)
+
+                                return (
+                                    <div
+                                        key={schedule.id}
+                                        className={cn(
+                                            "group p-4 rounded-xl border bg-card transition-all duration-200",
+                                            "hover:shadow-md hover:border-primary/30",
+                                            "animate-in fade-in slide-in-from-bottom-2"
+                                        )}
+                                        style={{ animationDelay: `${Math.min(index * 30, 300)}ms` }}
+                                    >
+                                        <div className="flex items-start justify-between gap-4">
+                                            {/* Content */}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <Calendar className={cn(
+                                                        "h-4 w-4 shrink-0",
+                                                        schedule.is_active ? "text-primary" : "text-muted-foreground"
+                                                    )} />
+                                                    <h4 className="font-semibold truncate">{schedule.name}</h4>
+                                                    {schedule.location_id ? (
+                                                        <Badge variant="outline" className="text-xs bg-purple-50 text-purple-600 border-purple-200">
+                                                            <MapPin className="h-2.5 w-2.5 mr-1" />
+                                                            Location
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200">
+                                                            <Globe className="h-2.5 w-2.5 mr-1" />
+                                                            Global
+                                                        </Badge>
+                                                    )}
+                                                    <Badge variant={schedule.is_active ? "default" : "secondary"}>
+                                                        {schedule.is_active ? 'Active' : 'Inactive'}
+                                                    </Badge>
+                                                </div>
+                                                {schedule.description && (
+                                                    <p className="text-sm text-muted-foreground mb-3">
+                                                        {schedule.description}
+                                                    </p>
+                                                )}
+
+                                                {/* Time slots */}
+                                                <div className="flex flex-wrap gap-2">
+                                                    {days.length === 0 ? (
+                                                        <Badge variant="outline" className="text-xs text-amber-600 bg-amber-50 border-amber-200">
+                                                            No time slots
+                                                        </Badge>
+                                                    ) : (
+                                                        days.map(day => {
+                                                            const daySlots = timeSlots.filter(s => s.day_of_week === day)
+                                                            return (
+                                                                <Badge
+                                                                    key={day}
+                                                                    variant="outline"
+                                                                    className="text-xs"
+                                                                >
+                                                                    {DAYS_OF_WEEK[day]}: {daySlots.length} slot{daySlots.length !== 1 ? 's' : ''}
+                                                                </Badge>
+                                                            )
+                                                        })
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Actions */}
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 shrink-0"
+                                                    >
+                                                        <MoreVertical className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onClick={() => handleEdit(schedule)}>
+                                                        <Edit3 className="h-4 w-4 mr-2" />
+                                                        Edit Schedule
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleToggleActive(schedule)}>
+                                                        {schedule.is_active ? (
+                                                            <>
+                                                                <PowerOff className="h-4 w-4 mr-2" />
+                                                                Deactivate
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Power className="h-4 w-4 mr-2" />
+                                                                Activate
+                                                            </>
+                                                        )}
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem
+                                                        onClick={() => setDeletingSchedule(schedule)}
+                                                        className="text-destructive focus:text-destructive"
+                                                    >
+                                                        <Trash2 className="h-4 w-4 mr-2" />
+                                                        Delete
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
-            {/* Upcoming Shifts */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Upcoming Shifts</CardTitle>
-                    <CardDescription>Shifts scheduled for the next 7 days</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex flex-col items-center justify-center py-8">
-                        <Clock className="h-10 w-10 text-muted-foreground mb-3" />
-                        <p className="text-sm text-muted-foreground">
-                            No upcoming shifts scheduled
-                        </p>
-                    </div>
-                </CardContent>
-            </Card>
+            {/* Form Sheet */}
+            <ScheduleFormSheet
+                open={isFormOpen}
+                onOpenChange={setIsFormOpen}
+                editSchedule={editingSchedule}
+                mode={editingSchedule ? 'edit' : 'create'}
+            />
+
+            {/* Delete Confirmation Dialog
+            <AlertDialog open={!!deletingSchedule} onOpenChange={() => setDeletingSchedule(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Schedule?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete "{deletingSchedule?.name}"? This action cannot be undone.
+                            Any menus or categories using this schedule will no longer be controlled by it.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDelete}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            Delete Schedule
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog> */}
         </div>
     )
 }

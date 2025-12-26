@@ -418,9 +418,15 @@ export async function UpdateMenuItem(
         card_bg_color?: string
         availability?: boolean
         stock_tracking_mode?: "in_stock" | "out_of_stock" | "quantity"
+        tax_category?: string
+        is_tax_exempt?: boolean
+        available_channels?: string[]
     },
     locationId?: string | null
 ) {
+    console.log('UpdateMenuItem data', data)
+    console.log('UpdateMenuItem locationId', locationId)
+    console.log('UpdateMenuItem itemId', itemId)
     if (!itemId) {
         return { error: 'Item ID is required' }
     }
@@ -429,6 +435,7 @@ export async function UpdateMenuItem(
 
     // Determine if this is a location-scoped update
     const isLocationScoped = locationId && locationId !== 'all'
+    console.log('UpdateMenuItem isLocationScoped', isLocationScoped)
 
     // Fields that can be overridden at location level
     const locationOverrideFields = ['price', 'cash_price', 'availability', 'stock_tracking_mode']
@@ -436,7 +443,9 @@ export async function UpdateMenuItem(
     // Check if we have any location-overridable fields in the data
     const hasLocationOverrideData = locationOverrideFields.some(
         field => data[field as keyof typeof data] !== undefined
+        
     )
+    console.log('UpdateMenuItem hasLocationOverrideData', hasLocationOverrideData)
 
     // If location-scoped and has overridable data, use location override
     if (isLocationScoped && hasLocationOverrideData) {
@@ -446,13 +455,13 @@ export async function UpdateMenuItem(
         if (data.price !== undefined) {
             overrideData.custom_price = data.price
         }
-        if (data.cash_price !== undefined) {
-            overrideData.custom_cash_price = data.cash_price
+        if (data.cashPrice !== undefined) {
+            overrideData.custom_cash_price = data.cashPrice
         }
         if (data.availability !== undefined) {
             overrideData.is_available = data.availability
         }
-        if (data.stock_tracking_mode !== undefined) {
+        if (data.stockTrackingMode !== undefined) {
             overrideData.stock_tracking_mode = data.stock_tracking_mode as OverrideData['stock_tracking_mode']
         }
 
@@ -494,13 +503,15 @@ export async function UpdateMenuItem(
         if (data.name !== undefined) updateData.name = data.name
         if (data.description !== undefined) updateData.description = data.description
         if (data.price !== undefined) updateData.price = data.price
-        if (data.cash_price !== undefined) updateData.cash_price = data.cash_price
+        if (data.cashPrice !== undefined) updateData.cash_price = data.cashPrice
         if (data.image !== undefined) updateData.image = data.image
-        if (data.meal_types !== undefined) updateData.meal_types = data.meal_types
+        if (data.mealTypes !== undefined) updateData.meal_types = data.mealTypes
         if (data.allergens !== undefined) updateData.allergens = data.allergens
-        if (data.card_bg_color !== undefined) updateData.card_bg_color = data.card_bg_color
-        if (data.availability !== undefined) updateData.availability = data.availability
-        if (data.stock_tracking_mode !== undefined) updateData.stock_tracking_mode = data.stock_tracking_mode
+        if (data.cardBgColor !== undefined) updateData.card_bg_color = data.cardBgColor
+        if (data.stockTrackingMode !== undefined) updateData.stock_tracking_mode = data.stockTrackingMode
+        if (data.taxCategory !== undefined) updateData.tax_category = data.taxCategory
+        if (data.isTaxExempt !== undefined) updateData.is_tax_exempt = data.isTaxExempt
+        if (data.availableChannels !== undefined) updateData.available_channels = data.availableChannels
     } else {
         // Only include non-overridable fields for location-scoped updates
         if (data.name !== undefined) updateData.name = data.name
@@ -511,6 +522,7 @@ export async function UpdateMenuItem(
         if (data.card_bg_color !== undefined) updateData.card_bg_color = data.card_bg_color
     }
 
+    console.log('UpdateMenuItem updateData', updateData)
     // If nothing to update in global table, return early
     if (Object.keys(updateData).length === 0) {
         const item = await GetMenuItemWithLocationContext(itemId, locationId)

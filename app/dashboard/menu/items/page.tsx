@@ -43,7 +43,7 @@ import { FlatItem } from '../../actions/menu-items-rpc'
 import { CategoryWithItems } from '@/types/menu'
 import { useLocationStore } from '@/stores/location-store'
 import { useLocationTaxRates } from '../../hooks/useTaxRates'
-import { TAX_CATEGORY_LABELS, CHANNEL_LABELS } from '@/types/tax'
+import { TAX_CATEGORY_LABELS } from '@/types/tax'
 import { AVAILABLE_CHANNELS } from '@/types/inventory'
 
 // ============================================================================
@@ -260,7 +260,7 @@ function ItemCard({
                                     </span>
                                 )}
                             </div>
-                            {item.effective_cash_price && item.effective_cash_price !== item.effective_price && (
+                            {item.effective_cash_price && (
                                 <Badge variant="outline" className="text-xs">
                                     Cash: ${item.effective_cash_price.toFixed(2)}
                                 </Badge>

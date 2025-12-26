@@ -8,7 +8,9 @@ import {
     GetSchedule,
     CreateSchedule,
     UpdateSchedule,
+    UpdateScheduleWithTimeSlots,
     DeleteSchedule,
+    ToggleScheduleActive,
     GetCategorySchedules,
     AssignScheduleToCategory,
     RemoveScheduleFromCategory,
@@ -136,19 +138,20 @@ export function useCreateScheduleMutation() {
  * Update schedule - only allows editing if appropriate permissions
  * - Global schedules: can edit in "All Locations" view
  * - Location-specific: can edit when that location is selected
+ * - Supports updating time slots
  */
 export function useUpdateScheduleMutation() {
     const queryClient = useQueryClient()
 
     return useMutation({
         mutationFn: async ({
-            id,
+            scheduleId,
             data
         }: {
-            id: string
-            data: Parameters<typeof UpdateSchedule>[1]
+            scheduleId: string
+            data: Parameters<typeof UpdateScheduleWithTimeSlots>[1]
         }) => {
-            return UpdateSchedule(id, data)
+            return UpdateScheduleWithTimeSlots(scheduleId, data)
         },
         onSuccess: (result, variables) => {
             if (result.error) {
@@ -158,7 +161,7 @@ export function useUpdateScheduleMutation() {
 
             toast.success('Schedule Updated')
             queryClient.invalidateQueries({ queryKey: ['schedules'] })
-            queryClient.invalidateQueries({ queryKey: ['schedule', variables.id] })
+            queryClient.invalidateQueries({ queryKey: ['schedule', variables.scheduleId] })
         },
         onError: (error) => {
             toast.error('Update Failed', { description: 'An unexpected error occurred' })
@@ -187,6 +190,29 @@ export function useDeleteScheduleMutation() {
         onError: (error) => {
             toast.error('Deletion Failed', { description: 'An unexpected error occurred' })
             console.error('Schedule deletion error:', error)
+        }
+    })
+}
+
+/**
+ * Toggle schedule active status
+ */
+export function useToggleScheduleActiveMutation() {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: (scheduleId: string) => ToggleScheduleActive(scheduleId),
+        onSuccess: (result) => {
+            if (result.error) {
+                toast.error('Failed to toggle schedule', { description: result.error })
+                return
+            }
+
+            queryClient.invalidateQueries({ queryKey: ['schedules'] })
+        },
+        onError: (error) => {
+            toast.error('Toggle Failed', { description: 'An unexpected error occurred' })
+            console.error('Schedule toggle error:', error)
         }
     })
 }

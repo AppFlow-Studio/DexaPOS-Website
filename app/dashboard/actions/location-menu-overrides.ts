@@ -168,7 +168,7 @@ export async function UpsertLocationMenuItemOverride(
     }
 
     const { data: override, error } = await supabase
-        .from('location_menu_item_overrides')
+        .from('location_item_overrides')
         .upsert(upsertData, {
             onConflict: 'location_id,menu_item_id',
         })

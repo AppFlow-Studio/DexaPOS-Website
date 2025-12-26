@@ -14,16 +14,18 @@ import {
     DollarSign,
     MapPin,
     Globe,
+    RefreshCcwDot,
 } from 'lucide-react'
 import { OrdersDataTable } from '@/components/dashboard/orders/OrdersDataTable'
 import { Order, OrderResponse, OrderStatus } from '@/types/order-management'
 import { OrderDetailSheet } from '@/components/dashboard/orders/OrderDetailSheet'
 import { Empty } from '@/components/ui/empty'
+import { Button } from '@/components/ui/button'
 
 export default function OrdersPage() {
     const selectedLocation = useSelectedLocation()
     const isAllLocations = useIsAllLocations()
-    const { data: orders, isLoading } = useOrders()
+    const { data: orders, isLoading, refetch: refetchOrders } = useOrders()
 
     const [selectedOrder, setSelectedOrder] = useState<OrderResponse | null>(null)
     const [isDetailOpen, setIsDetailOpen] = useState(false)
@@ -174,14 +176,18 @@ export default function OrdersPage() {
 
             {/* Filter Tabs and Orders Table */}
             <Card>
-                <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <CardTitle>All Orders</CardTitle>
-                            <CardDescription>
-                                View and manage orders. Click on an order to view details.
-                            </CardDescription>
-                        </div>
+                <CardHeader className='w-full'>
+                    <div className="flex flex-col items-start justify-between w-full">
+                        <CardTitle>All Orders</CardTitle>
+                        <CardDescription className=' flex flex-row justify-between w-full'>
+                            <div className=''>View and manage orders. Click on an order to view details.</div>
+                            <div className=''>
+                                <Button variant="outline" className='hover:bg-accent hover:text-accent-foreground cursor-pointer' size="sm" onClick={async () => await refetchOrders()}>
+                                    <RefreshCcwDot className="h-4 w-4" />
+                                    Refresh Orders
+                                </Button>
+                            </div>
+                        </CardDescription>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -231,7 +237,7 @@ export default function OrdersPage() {
             {/* Order Detail Sheet */}
             <OrderDetailSheet
                 order={selectedOrder}
-                
+
                 open={isDetailOpen && !!selectedOrder}
                 onOpenChange={handleDetailClose}
             />

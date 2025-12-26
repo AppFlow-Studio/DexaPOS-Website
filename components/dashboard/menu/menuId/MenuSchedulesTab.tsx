@@ -39,7 +39,7 @@ export function MenuSchedulesTab({
                 <CardHeader>
                     <div className="flex items-center justify-between">
                         <div>
-                            <CardTitle>Assigned Schedules</CardTitle>
+                            <CardTitle>Assigned Schedule</CardTitle>
                             <CardDescription>
                                 {menuSchedules.length === 0
                                     ? "No schedules assigned yet"
@@ -47,18 +47,18 @@ export function MenuSchedulesTab({
                                 }
                             </CardDescription>
                         </div>
-                        <div className='items-end justify-end flex flex-col gap-2'>
+                        {/* <div className='items-end justify-end flex flex-col gap-2'>
                             <Button onClick={onAddSchedule}>
                                 <Plus className="h-4 w-4 mr-2" />
                                 Add Schedule
                             </Button>
-                        </div>
+                        </div> */}
                     </div>
                 </CardHeader>
                 <CardContent>
                     {isLoading ? (
                         <div className="space-y-3">
-                            {[1, 2].map((i) => (
+                            {[1].map((i) => (
                                 <Skeleton key={i} className="h-32 w-full" />
                             ))}
                         </div>

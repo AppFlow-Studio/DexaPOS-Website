@@ -109,96 +109,72 @@ export interface FlatItem {
 }
 
 export async function getItemsForLocationFlat(merchantId: string, locationId?: string | null) {
-    // Get category-centric data from RPC
-    const result = await getCategoriesForLocation(merchantId, locationId)
+    const supabase = createServerSupabaseClient()
 
-    if (!result.success || !result.data) {
-        return result
+    // Use the new Items Library-specific RPC function
+    // This excludes category prices (L3, L4) from the effective_price cascade
+    const { data, error } = await supabase.rpc('get_items_for_location_library', {
+        p_merchant_id: merchantId,
+        p_location_id: locationId || null
+    })
+
+    if (error) {
+        console.error('getItemsForLocationFlat error:', error)
+        return { success: false, error: error.message }
     }
 
-    // Transform: flatten items from all categories
-    const itemsMap = new Map<string, FlatItem>()
-
-    for (const category of result.data) {
-        const categoryInfo = {
-            id: category.id,
-            name: category.name,
-            location_id: category.location_id,
-            location_name: category.location_name,
-            is_global: category.is_global
-        }
-
-        for (const categoryItem of category.items || []) {
-            const menuItem = categoryItem.menu_item
-            if (!menuItem) continue
-
-            const itemId = menuItem.id
-
-            if (!itemsMap.has(itemId)) {
-                // Create new item entry
-                const locationOverride = menuItem.location_item_override
-
-                itemsMap.set(itemId, {
-                    id: menuItem.id,
-                    name: menuItem.name,
-                    description: menuItem.description,
-                    image: menuItem.image,
-                    allergens: menuItem.allergens,
-                    meal_types: menuItem.meal_types,
-                    card_bg_color: menuItem.card_bg_color,
-
-                    base_price: menuItem.base_price,
-                    base_cash_price: menuItem.base_cash_price,
-                    base_availability: menuItem.base_availability ?? true,
-
-                    effective_price: menuItem.effective_price,
-                    effective_cash_price: menuItem.effective_cash_price,
-                    effective_availability: menuItem.effective_availability ?? true,
-
-                    has_location_override: menuItem.has_location_item_override ?? false,
-                    price_source: menuItem.price_source || 'base',
-
-                    // Tax & Inventory Control (migration 014) - with fallbacks
-                    tax_category: (menuItem as any).tax_category || 'standard',
-                    is_tax_exempt: (menuItem as any).is_tax_exempt || false,
-                    available_channels: (menuItem as any).available_channels || ['pos', 'online'],
-
-                    // Effective values (L2 > L1 inheritance)
-                    effective_tax_category: (locationOverride as any)?.tax_category || (menuItem as any).tax_category || 'standard',
-                    effective_is_tax_exempt: (locationOverride as any)?.is_tax_exempt ?? (menuItem as any).is_tax_exempt ?? false,
-                    effective_available_channels: (locationOverride as any)?.available_channels || (menuItem as any).available_channels || ['pos', 'online'],
-
-                    location_override: locationOverride ? {
-                        ...locationOverride,
-                        tax_category: (locationOverride as any).tax_category || null,
-                        is_tax_exempt: (locationOverride as any).is_tax_exempt ?? null,
-                        available_channels: (locationOverride as any).available_channels || null,
-                    } : null,
-
-                    categories: [categoryInfo],
-
-                    stock_tracking_mode: menuItem.stock_tracking_mode || null,
-                    current_stock: menuItem.location_item_override?.current_stock ?? null,
-                })
-            } else {
-                // Add this category to existing item
-                const existingItem = itemsMap.get(itemId)!
-                if (!existingItem.categories.some(c => c.id === category.id)) {
-                    existingItem.categories.push(categoryInfo)
-                }
-            }
-        }
+    if (!data || !Array.isArray(data)) {
+        return { success: true, data: [] }
     }
 
-    // Sort items by name
-    const items = Array.from(itemsMap.values()).sort((a, b) =>
-        a.name.localeCompare(b.name)
-    )
+    // Transform to FlatItem type
+    const items: FlatItem[] = data.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        image: item.image,
+        allergens: item.allergens,
+        meal_types: item.meal_types,
+        card_bg_color: item.card_bg_color,
+
+        // Base prices (L1)
+        base_price: item.base_price,
+        base_cash_price: item.base_cash_price,
+        base_availability: item.base_availability ?? true,
+
+        // Effective prices (L2 > L1 ONLY, no category prices!)
+        effective_price: item.effective_price,
+        effective_cash_price: item.effective_cash_price,
+        effective_availability: item.effective_availability ?? true,
+
+        // Override flags
+        has_location_override: item.has_location_override ?? false,
+        price_source: item.price_source || 'base',
+
+        // Tax & Inventory Control (L1)
+        tax_category: item.tax_category || 'standard',
+        is_tax_exempt: item.is_tax_exempt || false,
+        available_channels: item.available_channels || ['pos', 'online'],
+
+        // Effective Tax & Inventory (L2 > L1)
+        effective_tax_category: item.effective_tax_category || 'standard',
+        effective_is_tax_exempt: item.effective_is_tax_exempt ?? false,
+        effective_available_channels: item.effective_available_channels || ['pos', 'online'],
+
+        // Location override details (L2)
+        location_override: item.location_override,
+
+        // Categories this item belongs to
+        categories: item.categories || [],
+
+        // Stock info
+        stock_tracking_mode: item.stock_tracking_mode || null,
+        current_stock: item.location_override?.current_stock ?? null,
+    }))
 
     return {
         success: true,
-        data: items,
-        categories: result.data // Also return categories for filtering UI
+        data: items
     }
 }
 

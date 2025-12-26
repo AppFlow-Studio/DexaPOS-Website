@@ -36,6 +36,7 @@ import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { NewEditItemFormSheet, EditItemWithOverrides } from '@/components/dashboard/menu/NewEditItemFormSheet'
 import { AddItemToCategoryWizard } from '@/components/dashboard/menu/categories/AddItemToCategoryWizard'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 export default function CategoriesPage() {
     const router = useRouter()
@@ -762,7 +763,7 @@ export default function CategoriesPage() {
                                                                 )
                                                             })()}
 
-                                                            <Button
+                                                            {/* <Button
                                                                 variant="ghost"
                                                                 size="sm"
                                                                 onClick={(e) => {
@@ -772,7 +773,7 @@ export default function CategoriesPage() {
                                                             >
                                                                 View All
                                                                 <ExternalLink className="h-3 w-3 ml-1" />
-                                                            </Button>
+                                                            </Button> */}
                                                         </div>
                                                     </div>
 
@@ -826,25 +827,22 @@ export default function CategoriesPage() {
                                                         }
 
                                                         return (
-                                                            <div className="space-y-2">
-                                                                {categoryItems.slice(0, 5).map((item: CategoryMenuItem, itemIndex: number) => (
+                                                            <ScrollArea className="space-y-2 flex flex-col max-h-100 h-100">
+                                                                {categoryItems.map((item: CategoryMenuItem, itemIndex: number) => (
                                                                     <div
                                                                         key={item.id}
                                                                         className={cn(
-                                                                            "flex items-center gap-3 p-3 rounded-lg bg-background border",
+                                                                            "flex items-center gap-3 p-3 my-1 rounded-lg bg-background border",
                                                                             "hover:shadow-sm hover:border-primary/30 cursor-pointer transition-all",
                                                                             "animate-in fade-in slide-in-from-left-2",
                                                                             !item.menu_item.effective_availability && "opacity-60"
                                                                         )}
                                                                         style={{ animationDelay: `${itemIndex * 50}ms` }}
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation()
-                                                                            handleNavigateToItem(item.menu_item_id)
-                                                                        }}
+                                                                        onClick={(e) => handleEditItem(item, category, e)}
                                                                     >
                                                                         {/* Item Image */}
                                                                         <div className="w-12 h-12 rounded-lg overflow-hidden bg-muted/30 shrink-0">
-                                                                            {item.menu_item.image ? (
+                                                                            {item.menu_item.image && item.menu_item.image.includes('http') ? (
                                                                                 <img
                                                                                     src={item.menu_item.image}
                                                                                     alt={item.menu_item.name}
@@ -941,20 +939,7 @@ export default function CategoriesPage() {
                                                                     </div>
                                                                 ))}
 
-                                                                {categoryItems.length > 5 && (
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        className="w-full"
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation()
-                                                                            router.push(`/dashboard/menu/items?category=${category.id}`)
-                                                                        }}
-                                                                    >
-                                                                        View all {categoryItems.length} items
-                                                                        <ExternalLink className="h-3 w-3 ml-1" />
-                                                                    </Button>
-                                                                )}
-                                                            </div>
+                                                            </ScrollArea>
                                                         )
                                                     })()}
                                                 </div>
