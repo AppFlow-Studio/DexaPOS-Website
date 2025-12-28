@@ -594,7 +594,7 @@ export async function DeleteMenuItem(itemId: string) {
         .from('menu_items')
         .delete()
         .eq('id', itemId)
-
+   //TODO: Add rls policy to delete menu items based on location access
     if (error) {
         console.error('Error deleting menu item:', error)
         return { error: error.message }

@@ -915,26 +915,35 @@ export default function CategoriesPage() {
                                                                             </Tooltip>
                                                                         </TooltipProvider>
 
-                                                                        {/* Remove button (only for all locations) */}
-                                                                        {isAllLocations && (
-                                                                            <TooltipProvider>
-                                                                                <Tooltip>
-                                                                                    <TooltipTrigger asChild>
-                                                                                        <Button
-                                                                                            variant="ghost"
-                                                                                            size="icon"
-                                                                                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                                                                            onClick={(e) => handleRemoveItemFromCategory(category.id, item.menu_item_id, e)}
-                                                                                        >
-                                                                                            <X className="h-4 w-4" />
-                                                                                        </Button>
-                                                                                    </TooltipTrigger>
-                                                                                    <TooltipContent>
-                                                                                        <p>Remove from category</p>
-                                                                                    </TooltipContent>
-                                                                                </Tooltip>
-                                                                            </TooltipProvider>
-                                                                        )}
+                                                                        {/* Remove button - show when user can add items (same permission check) */}
+                                                                        {(() => {
+                                                                            // Same permission logic as Add Item button
+                                                                            const canAddItems = isAllLocations
+                                                                                ? category.is_global
+                                                                                : category.location_id === selectedLocationId
+
+                                                                            if (!canAddItems) return null
+
+                                                                            return (
+                                                                                <TooltipProvider>
+                                                                                    <Tooltip>
+                                                                                        <TooltipTrigger asChild>
+                                                                                            <Button
+                                                                                                variant="ghost"
+                                                                                                size="icon"
+                                                                                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                                                                                onClick={(e) => handleRemoveItemFromCategory(category.id, item.menu_item_id, e)}
+                                                                                            >
+                                                                                                <X className="h-4 w-4" />
+                                                                                            </Button>
+                                                                                        </TooltipTrigger>
+                                                                                        <TooltipContent>
+                                                                                            <p>Remove from category</p>
+                                                                                        </TooltipContent>
+                                                                                    </Tooltip>
+                                                                                </TooltipProvider>
+                                                                            )
+                                                                        })()}
                                                                         <ExternalLink className="h-4 w-4 text-muted-foreground" />
                                                                     </div>
                                                                 ))}

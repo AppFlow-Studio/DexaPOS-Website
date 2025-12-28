@@ -58,7 +58,7 @@ export default function OrdersPage() {
         ).length
         const completedToday = todayOrders.filter(o => o.status === 'completed').length
         const revenueToday = todayOrders
-            .filter(o => o.status === 'completed')
+            .filter(o => o.payment_status === 'captured' || o.payment_status === 'paid')
             .reduce((sum, o) => sum + o.total_amount, 0)
 
         return {

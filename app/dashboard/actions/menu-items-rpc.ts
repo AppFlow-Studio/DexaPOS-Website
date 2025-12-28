@@ -106,12 +106,15 @@ export interface FlatItem {
     // Stock info
     stock_tracking_mode: string | null
     current_stock: number | null
+
+    // Location-specific item flag
+    location_id: string | null
 }
 
 export async function getItemsForLocationFlat(merchantId: string, locationId?: string | null) {
     const supabase = createServerSupabaseClient()
 
-    // Use the new Items Library-specific RPC function
+    // Use the new Items Library-specific RPC function ( Only show L2 Prices)
     // This excludes category prices (L3, L4) from the effective_price cascade
     const { data, error } = await supabase.rpc('get_items_for_location_library', {
         p_merchant_id: merchantId,
@@ -170,6 +173,9 @@ export async function getItemsForLocationFlat(merchantId: string, locationId?: s
         // Stock info
         stock_tracking_mode: item.stock_tracking_mode || null,
         current_stock: item.location_override?.current_stock ?? null,
+
+        // Location-specific item flag
+        location_id: item.location_id || null,
     }))
 
     return {

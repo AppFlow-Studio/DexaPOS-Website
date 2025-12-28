@@ -239,6 +239,8 @@ export function AddItemToCategoryWizard({
                 price: values.price,
                 cashPrice: values.cash_price ?? undefined,
                 image: values.image,
+            }, {
+                locationId: isAllLocations ? null : selectedLocationId
             })
 
             if (result.error) {
