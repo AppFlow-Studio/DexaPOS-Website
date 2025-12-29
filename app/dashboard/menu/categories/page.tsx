@@ -140,6 +140,7 @@ export default function CategoriesPage() {
         setTogglingCategories(prev => new Set(prev).add(categoryId))
 
         try {
+            
             const result = await UpdateLocationCategoryOverride(
                 selectedLocationId,
                 categoryId,
