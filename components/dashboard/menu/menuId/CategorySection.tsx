@@ -44,7 +44,7 @@ interface CategorySectionProps {
     canModifyCategories?: boolean
     onToggleVisibility: (categoryId: string, isActive: boolean) => Promise<void>
     onResetOverride: (categoryId: string) => Promise<void>
-    onEditItem: (item: MenuCategoryItem, category: MenuCategory) => void
+    onEditItem: (item: MenuCategoryItem, category: MenuCategory, menuId: string) => void
     onCategoryRemoved?: () => void
 }
 
@@ -277,7 +277,7 @@ export function CategorySection({
                                         item={item}
                                         onClick={() => onItemClick(item.menu_item_id)}
                                         showLocationPricing={showLocationPricing}
-                                        onEdit={() => onEditItem(item, category)}
+                                        onEdit={() => onEditItem(item, category, menuId)}
                                     />
                                 ))}
                             </div>

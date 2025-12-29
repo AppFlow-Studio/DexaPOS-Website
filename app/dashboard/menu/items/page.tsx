@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import {
     Utensils, Plus, Search, Grid3x3, List, Package, DollarSign, Edit3, Eye,
     MoreVertical, Tag, X, Filter, MapPin, Info, ChevronDown, ChevronRight,
-    Globe, Layers, Sparkles, CreditCard, Monitor, ShieldCheck, ShieldX
+    Globe, Layers, Sparkles, CreditCard, Monitor, ShieldCheck, ShieldX, Trash2
 } from 'lucide-react'
 import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
@@ -37,14 +37,40 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip'
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
 import { useLocationScopedMenuItemsWithCategories, useLocationContext } from '../../hooks/useLocationScoped'
 import { NewEditItemFormSheet, EditItemWithOverrides } from '@/components/dashboard/menu/NewEditItemFormSheet'
-import { FlatItem } from '../../actions/menu-items-rpc'
+import { FlatItem, resetItemToLevel } from '../../actions/menu-items-rpc'
 import { CategoryWithItems } from '@/types/menu'
 import { useLocationStore } from '@/stores/location-store'
 import { useLocationTaxRates } from '../../hooks/useTaxRates'
-import { TAX_CATEGORY_LABELS, CHANNEL_LABELS } from '@/types/tax'
+import { TAX_CATEGORY_LABELS } from '@/types/tax'
 import { AVAILABLE_CHANNELS } from '@/types/inventory'
+import { DeleteMenuItem } from '../../actions/menu-items'
+import { CreateItemInCategory, AddItemToCategory } from '../../actions/item-assignments'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import * as z from 'zod'
+import {
+    BottomSheet,
+    BottomSheetContent,
+    BottomSheetHeader,
+    BottomSheetBody,
+    BottomSheetFooter,
+    BottomSheetTitle,
+    BottomSheetDescription,
+} from '@/components/ui/bottom-sheet'
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
+import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Loader2 } from 'lucide-react'
 
 // ============================================================================
 // TYPES
@@ -108,14 +134,18 @@ function ItemCard({
     item,
     onEdit,
     onView,
+    onDelete,
     index = 0,
-    taxRates = []
+    taxRates = [],
+    canDelete = false
 }: {
     item: FlatItem
     onEdit: () => void
     onView: () => void
+    onDelete: () => void
     index?: number
     taxRates?: any[]
+    canDelete?: boolean
 }) {
     const hasOverride = item.has_location_override
     const priceColors = PRICE_SOURCE_COLORS[item.price_source] || PRICE_SOURCE_COLORS.base
@@ -236,6 +266,7 @@ function ItemCard({
                                 <Eye className="h-3.5 w-3.5 mr-1.5" />
                                 Details
                             </Button>
+
                         </div>
                     </div>
                 </div>
@@ -260,7 +291,7 @@ function ItemCard({
                                     </span>
                                 )}
                             </div>
-                            {item.effective_cash_price && item.effective_cash_price !== item.effective_price && (
+                            {item.effective_cash_price && (
                                 <Badge variant="outline" className="text-xs">
                                     Cash: ${item.effective_cash_price.toFixed(2)}
                                 </Badge>
@@ -331,6 +362,20 @@ function ItemCard({
                             ))}
                         </div>
                     </div>
+                    {canDelete && (
+                        <Button
+                            size="sm"
+                            variant="destructive"
+                            className="h-8 bg-red-500/95 hover:bg-red-600 shadow-lg"
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                onDelete()
+                            }}
+                        >
+                            <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                            Delete
+                        </Button>
+                    )}
                 </CardContent>
             </Card>
         </div>
@@ -345,14 +390,18 @@ function ItemRow({
     item,
     onEdit,
     onView,
+    onDelete,
     index = 0,
-    taxRates = []
+    taxRates = [],
+    canDelete = false
 }: {
     item: FlatItem
     onEdit: () => void
     onView: () => void
+    onDelete: () => void
     index?: number
     taxRates?: any[]
+    canDelete?: boolean
 }) {
     const hasOverride = item.has_location_override
     const priceColors = PRICE_SOURCE_COLORS[item.price_source] || PRICE_SOURCE_COLORS.base
@@ -539,6 +588,20 @@ function ItemRow({
                         <Eye className="h-3.5 w-3.5 mr-1.5" />
                         Details
                     </Button>
+                    {canDelete && (
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                onDelete()
+                            }}
+                        >
+                            <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                            Delete
+                        </Button>
+                    )}
                 </div>
 
                 {/* Mobile dropdown */}
@@ -562,6 +625,15 @@ function ItemRow({
                             <Eye className="h-4 w-4 mr-2" />
                             View Details
                         </DropdownMenuItem>
+                        {canDelete && (
+                            <DropdownMenuItem
+                                onClick={onDelete}
+                                className="text-destructive focus:text-destructive"
+                            >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                            </DropdownMenuItem>
+                        )}
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
@@ -580,6 +652,11 @@ function CategoryGroup({
     onToggle,
     onEditItem,
     onViewItem,
+    onDeleteItem,
+    canDeleteItems = false,
+    taxRates = [],
+    isAllLocations = false,
+    selectedLocationId = null,
 }: {
     category: { id: string; name: string; is_global: boolean; location_name?: string | null }
     items: FlatItem[]
@@ -587,6 +664,11 @@ function CategoryGroup({
     onToggle: () => void
     onEditItem: (item: FlatItem) => void
     onViewItem: (item: FlatItem) => void
+    onDeleteItem: (item: FlatItem) => void
+    canDeleteItems?: boolean
+    taxRates?: any[]
+    isAllLocations?: boolean
+    selectedLocationId?: string | null
 }) {
     return (
         <Collapsible open={isExpanded} onOpenChange={onToggle}>
@@ -631,16 +713,24 @@ function CategoryGroup({
                             </div>
                         ) : (
                             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                                {items.map((item, idx) => (
-                                    <ItemCard
-                                        key={item.id}
-                                        item={item}
-                                        index={idx}
-                                        taxRates={taxRates}
-                                        onEdit={() => onEditItem(item)}
-                                        onView={() => onViewItem(item)}
-                                    />
-                                ))}
+                                {items.map((item, idx) => {
+                                    // Can delete if: viewing all locations OR item belongs to current location
+                                    const itemCanDelete = isAllLocations
+                                        ? true
+                                        : (!isAllLocations && item.location_id === selectedLocationId)
+                                    return (
+                                        <ItemCard
+                                            key={item.id}
+                                            item={item}
+                                            index={idx}
+                                            taxRates={taxRates}
+                                            onEdit={() => onEditItem(item)}
+                                            onView={() => onViewItem(item)}
+                                            onDelete={() => onDeleteItem(item)}
+                                            canDelete={itemCanDelete && canDeleteItems}
+                                        />
+                                    )
+                                })}
                             </div>
                         )}
                     </CardContent>
@@ -684,6 +774,9 @@ export default function MenuItemsPage() {
     const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
     const [showCategoryFilter, setShowCategoryFilter] = useState(false)
     const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+    const [deletingItem, setDeletingItem] = useState<FlatItem | null>(null)
+    const [isDeleting, setIsDeleting] = useState(false)
+    const [isCreateWizardOpen, setIsCreateWizardOpen] = useState(false)
 
     // Read category filter from URL
     useEffect(() => {
@@ -839,6 +932,85 @@ export default function MenuItemsPage() {
         setExpandedCategories(new Set())
     }
 
+    // Handle deleting location override (reset to global)
+    const handleDeleteLocationOverride = async () => {
+        if (!deletingItem || !selectedLocationId || isAllLocations) return
+
+        setIsDeleting(true)
+        try {
+            const result = await resetItemToLevel(deletingItem.id, 1, {
+                locationId: selectedLocationId
+            })
+
+            if (result.error || !result.success) {
+                toast.error('Delete Failed', {
+                    description: result.error || 'Unable to remove location override. Please try again.'
+                })
+                return
+            }
+
+            toast.success('Location Override Removed', {
+                description: `"${deletingItem.name}" will now use global pricing at this location.`
+            })
+
+            queryClient.invalidateQueries({ queryKey: ['menu-items-flat'] })
+            queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
+            refetch()
+        } catch (error) {
+            toast.error('Delete Failed', {
+                description: 'Unable to remove location override. Please try again.'
+            })
+        } finally {
+            setIsDeleting(false)
+            setDeletingItem(null)
+        }
+    }
+
+    // Handle deleting item entirely
+    const handleDeleteItem = async () => {
+        if (!deletingItem) return
+
+        // When viewing a specific location, only allow deleting location-specific items
+        if (!isAllLocations) {
+            if (deletingItem.location_id !== selectedLocationId) {
+                toast.error('Delete Failed', {
+                    description: 'You can only delete items that belong to this location.'
+                })
+                setDeletingItem(null)
+                return
+            }
+        }
+
+        setIsDeleting(true)
+        try {
+            const result = await DeleteMenuItem(deletingItem.id)
+
+            if (result.error) {
+                toast.error('Delete Failed', {
+                    description: result.error
+                })
+                return
+            }
+
+            toast.success('Item Deleted', {
+                description: isAllLocations
+                    ? `"${deletingItem.name}" has been permanently deleted from all locations.`
+                    : `"${deletingItem.name}" has been permanently deleted.`
+            })
+
+            queryClient.invalidateQueries({ queryKey: ['menu-items-flat'] })
+            queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
+            refetch()
+        } catch (error) {
+            toast.error('Delete Failed', {
+                description: 'Unable to delete item. Please try again.'
+            })
+        } finally {
+            setIsDeleting(false)
+            setDeletingItem(null)
+        }
+    }
+
     // Error state
     const hasError = (itemsData && 'error' in itemsData && itemsData.error) || itemsData?.success === false
     const errorMessage = itemsData && 'error' in itemsData && typeof itemsData.error === 'string'
@@ -864,7 +1036,424 @@ export default function MenuItemsPage() {
                         </Button>
                     }
                 />
+
+                {/* Create Item Wizard */}
+                <CreateItemWizard
+                    open={isCreateWizardOpen}
+                    onOpenChange={setIsCreateWizardOpen}
+                    clerkOrgId={clerkOrgId || ''}
+                    categoriesList={categoriesList}
+                    isAllLocations={isAllLocations}
+                    selectedLocationId={selectedLocationId}
+                    onSuccess={() => {
+                        setIsCreateWizardOpen(false)
+                        queryClient.invalidateQueries({ queryKey: ['menu-items-flat'] })
+                        queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
+                        refetch()
+                    }}
+                />
             </div>
+        )
+    }
+
+    // ============================================================================
+    // CREATE ITEM WIZARD COMPONENT
+    // ============================================================================
+
+    const createItemSchema = z.object({
+        name: z.string().min(2, 'Name must be at least 2 characters').max(100),
+        description: z.string().max(500).optional(),
+        price: z.number().min(0, 'Price must be positive'),
+        cash_price: z.number().min(0).optional().nullable(),
+        image: z.string().optional(),
+    })
+
+    type CreateItemFormValues = z.infer<typeof createItemSchema>
+
+    interface CreateItemWizardProps {
+        open: boolean
+        onOpenChange: (open: boolean) => void
+        clerkOrgId: string
+        categoriesList: CategoryWithItems[]
+        isAllLocations: boolean
+        selectedLocationId: string | null
+        onSuccess?: () => void
+    }
+
+    function CreateItemWizard({
+        open,
+        onOpenChange,
+        clerkOrgId,
+        categoriesList,
+        isAllLocations,
+        selectedLocationId,
+        onSuccess,
+    }: CreateItemWizardProps) {
+        const queryClient = useQueryClient()
+        const { data: userInfo } = useUserInfo()
+        const merchantId = userInfo?.members?.[0]?.organizations?.merchants?.id || ''
+        const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set())
+        const [isSaving, setIsSaving] = useState(false)
+
+        // Filter categories based on location context
+        const accessibleCategories = useMemo(() => {
+            return categoriesList.filter(c =>
+                isAllLocations
+                    ? c.is_global
+                    : c.location_id === selectedLocationId
+            )
+        }, [categoriesList, isAllLocations, selectedLocationId])
+
+        const form = useForm<CreateItemFormValues>({
+            resolver: zodResolver(createItemSchema),
+            defaultValues: {
+                name: '',
+                description: '',
+                price: 0,
+                cash_price: null,
+                image: '',
+            },
+        })
+
+        // Reset on close
+        useEffect(() => {
+            if (!open) {
+                setSelectedCategories(new Set())
+                form.reset()
+            }
+        }, [open, form])
+
+        const handleToggleCategory = (categoryId: string) => {
+            setSelectedCategories(prev => {
+                const next = new Set(prev)
+                if (next.has(categoryId)) {
+                    next.delete(categoryId)
+                } else {
+                    next.add(categoryId)
+                }
+                return next
+            })
+        }
+
+        const handleCreateItem = async (values: CreateItemFormValues) => {
+            if (selectedCategories.size === 0) {
+                toast.error('Please select at least one category')
+                return
+            }
+
+            if (!clerkOrgId) {
+                toast.error('Organization not found')
+                return
+            }
+
+            setIsSaving(true)
+
+            try {
+                const categoryIds = Array.from(selectedCategories)
+                let successCount = 0
+                let errorCount = 0
+                let createdItemId: string | null = null
+
+                // Create item in first category, then add to others
+                for (let i = 0; i < categoryIds.length; i++) {
+                    const categoryId = categoryIds[i]
+                    const result = await CreateItemInCategory(
+                        clerkOrgId,
+                        categoryId,
+                        {
+                            name: values.name,
+                            description: values.description,
+                            price: values.price,
+                            cashPrice: values.cash_price ?? undefined,
+                            image: values.image,
+                        },
+                        {
+                            locationId: isAllLocations ? null : selectedLocationId
+                        }
+                    )
+
+                    if (result.error) {
+                        errorCount++
+                        console.error(`Failed to create item in category ${categoryId}:`, result.error)
+                    } else {
+                        successCount++
+                        if (i === 0 && result.data) {
+                            createdItemId = result.data.id
+                        }
+                    }
+
+                    // For subsequent categories, add the item to them
+                    if (i > 0 && createdItemId && merchantId) {
+                        const addResult = await AddItemToCategory(
+                            categoryId,
+                            createdItemId,
+                            merchantId
+                        )
+                        if (addResult.error) {
+                            errorCount++
+                        } else {
+                            successCount++
+                        }
+                    }
+                }
+
+                if (successCount > 0) {
+                    toast.success(`Item created and added to ${successCount} categor${successCount !== 1 ? 'ies' : 'y'}`, {
+                        description: errorCount > 0 ? `${errorCount} category assignment${errorCount !== 1 ? 's' : ''} failed` : undefined,
+                    })
+                } else {
+                    toast.error('Failed to create item', {
+                        description: 'Please try again',
+                    })
+                    return
+                }
+
+                queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
+                queryClient.invalidateQueries({ queryKey: ['menu-items'] })
+                queryClient.invalidateQueries({ queryKey: ['menu-items-flat'] })
+
+                onSuccess?.()
+                onOpenChange(false)
+            } catch (error) {
+                console.error('Error creating item:', error)
+                toast.error('Failed to create item')
+            } finally {
+                setIsSaving(false)
+            }
+        }
+
+        return (
+            <BottomSheet open={open} onOpenChange={onOpenChange}>
+                <BottomSheetContent className="h-[85vh]">
+                    <BottomSheetHeader>
+                        <BottomSheetTitle className="flex items-center gap-2">
+                            <Plus className="h-5 w-5 text-primary" />
+                            Create New Item
+                        </BottomSheetTitle>
+                        <BottomSheetDescription>
+                            Create a new menu item and assign it to categories
+                        </BottomSheetDescription>
+                    </BottomSheetHeader>
+
+                    <BottomSheetBody className="flex-1 overflow-y-auto">
+                        {/* Context Banner */}
+                        <div className="mb-4 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                            <div className="flex items-center gap-2 text-sm">
+                                <MapPin className="h-4 w-4 text-primary" />
+                                <span className="font-medium">Creating for:</span>
+                                <Badge variant="outline" className="bg-background">
+                                    {isAllLocations ? 'All Locations (Global)' : 'This Location'}
+                                </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                {isAllLocations
+                                    ? 'This item will be available at all locations.'
+                                    : 'This item will be specific to this location only.'}
+                            </p>
+                        </div>
+
+                        <Form {...form}>
+                            <form onSubmit={form.handleSubmit(handleCreateItem)} className="space-y-4">
+                                {/* Name */}
+                                <FormField
+                                    control={form.control}
+                                    name="name"
+                                    render={({ field }: { field: any }) => (
+                                        <FormItem>
+                                            <FormLabel>Item Name *</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="e.g., Margherita Pizza" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                {/* Description */}
+                                <FormField
+                                    control={form.control}
+                                    name="description"
+                                    render={({ field }: { field: any }) => (
+                                        <FormItem>
+                                            <FormLabel>Description</FormLabel>
+                                            <FormControl>
+                                                <Textarea
+                                                    placeholder="Describe your item..."
+                                                    className="resize-none"
+                                                    rows={3}
+                                                    {...field}
+                                                />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                {/* Prices */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <FormField
+                                        control={form.control}
+                                        name="price"
+                                        render={({ field }: { field: any }) => (
+                                            <FormItem>
+                                                <FormLabel className="flex items-center gap-1">
+                                                    <DollarSign className="h-3 w-3" />
+                                                    Price *
+                                                </FormLabel>
+                                                <FormControl>
+                                                    <Input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        placeholder="0.00"
+                                                        {...field}
+                                                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                                                    />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+
+                                    <FormField
+                                        control={form.control}
+                                        name="cash_price"
+                                        render={({ field }: { field: any }) => (
+                                            <FormItem>
+                                                <FormLabel className="flex items-center gap-1">
+                                                    <DollarSign className="h-3 w-3" />
+                                                    Cash Price
+                                                </FormLabel>
+                                                <FormControl>
+                                                    <Input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        placeholder="Optional"
+                                                        value={field.value ?? ''}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value
+                                                            field.onChange(val ? parseFloat(val) : null)
+                                                        }}
+                                                    />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+
+                                {/* Image URL */}
+                                <FormField
+                                    control={form.control}
+                                    name="image"
+                                    render={({ field }: { field: any }) => (
+                                        <FormItem>
+                                            <FormLabel>Image URL</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="https://..." {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                {/* Category Selection */}
+                                <div className="space-y-3">
+                                    <FormLabel className="text-base font-semibold">
+                                        Assign to Categories * <span className="text-muted-foreground text-sm font-normal">(Select at least one)</span>
+                                    </FormLabel>
+                                    {accessibleCategories.length === 0 ? (
+                                        <div className="p-4 rounded-lg border bg-muted/30 text-center">
+                                            <Tag className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
+                                            <p className="text-sm text-muted-foreground">
+                                                {isAllLocations
+                                                    ? 'No global categories available. Create a global category first.'
+                                                    : 'No location-specific categories available. Create a category for this location first.'}
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2 max-h-64 overflow-y-auto border rounded-lg p-3">
+                                            {accessibleCategories.map((category) => {
+                                                const isSelected = selectedCategories.has(category.id)
+                                                return (
+                                                    <div
+                                                        key={category.id}
+                                                        className={cn(
+                                                            "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all",
+                                                            isSelected
+                                                                ? "border-primary bg-primary/5 ring-1 ring-primary"
+                                                                : "border-border hover:border-primary/30 hover:bg-muted/30"
+                                                        )}
+                                                        onClick={() => handleToggleCategory(category.id)}
+                                                    >
+                                                        <Checkbox
+                                                            checked={isSelected}
+                                                            onCheckedChange={() => handleToggleCategory(category.id)}
+                                                            className="shrink-0"
+                                                        />
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center gap-2">
+                                                                <h4 className="font-medium text-sm">{category.name}</h4>
+                                                                {category.is_global ? (
+                                                                    <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200">
+                                                                        <Globe className="h-3 w-3 mr-1" />
+                                                                        Global
+                                                                    </Badge>
+                                                                ) : (
+                                                                    <Badge variant="outline" className="text-xs bg-purple-50 text-purple-600 border-purple-200">
+                                                                        <MapPin className="h-3 w-3 mr-1" />
+                                                                        Location
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                            {category.description && (
+                                                                <p className="text-xs text-muted-foreground truncate mt-1">
+                                                                    {category.description}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            </form>
+                        </Form>
+                    </BottomSheetBody>
+
+                    <BottomSheetFooter className="border-t pt-4">
+                        <div className="flex items-center justify-between w-full">
+                            <Button
+                                variant="outline"
+                                onClick={() => onOpenChange(false)}
+                                disabled={isSaving}
+                            >
+                                Cancel
+                            </Button>
+
+                            <Button
+                                onClick={form.handleSubmit(handleCreateItem)}
+                                disabled={isSaving || selectedCategories.size === 0 || !form.formState.isValid}
+                                className="gap-2"
+                            >
+                                {isSaving ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Creating...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Plus className="h-4 w-4" />
+                                        Create Item
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </BottomSheetFooter>
+                </BottomSheetContent>
+            </BottomSheet>
         )
     }
 
@@ -907,10 +1496,16 @@ export default function MenuItemsPage() {
                             : `Viewing items for ${locationName} with location-specific pricing.`}
                     </p>
                 </div>
-                <Button onClick={() => router.push('/dashboard/menu/categories')} className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Add Items to Categories
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button onClick={() => setIsCreateWizardOpen(true)} className="gap-2">
+                        <Plus className="h-4 w-4" />
+                        Create Item
+                    </Button>
+                    <Button onClick={() => router.push('/dashboard/menu/categories')} variant="outline" className="gap-2">
+                        <Plus className="h-4 w-4" />
+                        Add Items to Categories
+                    </Button>
+                </div>
             </div>
 
             {/* Stats */}
@@ -1171,50 +1766,76 @@ export default function MenuItemsPage() {
                     ) : viewMode === 'categories' ? (
                         // Category Groups View
                         <div className="space-y-4">
-                            {itemsByCategory.map((group) => (
-                                <CategoryGroup
-                                    key={group.category.id}
-                                    category={{
-                                        id: group.category.id,
-                                        name: group.category.name,
-                                        is_global: group.category.is_global,
-                                        location_name: group.category.location_name
-                                    }}
-                                    items={group.items}
-                                    isExpanded={expandedCategories.has(group.category.id)}
-                                    onToggle={() => toggleCategoryExpanded(group.category.id)}
-                                    onEditItem={handleQuickEdit}
-                                    onViewItem={handleViewDetails}
-                                />
-                            ))}
+                            {itemsByCategory.map((group) => {
+                                // Can delete if: viewing all locations OR any item in group belongs to current location
+                                const canDelete = isAllLocations || group.items.some(item => item.location_id === selectedLocationId)
+                                return (
+                                    <CategoryGroup
+                                        key={group.category.id}
+                                        category={{
+                                            id: group.category.id,
+                                            name: group.category.name,
+                                            is_global: group.category.is_global,
+                                            location_name: group.category.location_name
+                                        }}
+                                        items={group.items}
+                                        isExpanded={expandedCategories.has(group.category.id)}
+                                        onToggle={() => toggleCategoryExpanded(group.category.id)}
+                                        onEditItem={handleQuickEdit}
+                                        onViewItem={handleViewDetails}
+                                        onDeleteItem={(item) => setDeletingItem(item)}
+                                        canDeleteItems={canDelete}
+                                        taxRates={taxRates}
+                                        isAllLocations={isAllLocations}
+                                        selectedLocationId={selectedLocationId}
+                                    />
+                                )
+                            })}
                         </div>
                     ) : viewMode === 'grid' ? (
                         // Grid View
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                            {filteredItems.map((item, index) => (
-                                <ItemCard
-                                    key={item.id}
-                                    item={item}
-                                    index={index}
-                                    taxRates={taxRates}
-                                    onEdit={() => handleQuickEdit(item)}
-                                    onView={() => handleViewDetails(item)}
-                                />
-                            ))}
+                            {filteredItems.map((item, index) => {
+                                // Can delete if: viewing all locations OR item belongs to current location
+                                const canDelete = isAllLocations
+                                    ? true
+                                    : (!isAllLocations && item.location_id === selectedLocationId)
+
+                                return (
+                                    <ItemCard
+                                        key={item.id}
+                                        item={item}
+                                        index={index}
+                                        taxRates={taxRates}
+                                        onEdit={() => handleQuickEdit(item)}
+                                        onView={() => handleViewDetails(item)}
+                                        onDelete={() => setDeletingItem(item)}
+                                        canDelete={canDelete}
+                                    />
+                                )
+                            })}
                         </div>
                     ) : (
                         // List View
                         <div className="space-y-2">
-                            {filteredItems.map((item, index) => (
-                                <ItemRow
-                                    key={item.id}
-                                    item={item}
-                                    index={index}
-                                    taxRates={taxRates}
-                                    onEdit={() => handleQuickEdit(item)}
-                                    onView={() => handleViewDetails(item)}
-                                />
-                            ))}
+                            {filteredItems.map((item, index) => {
+                                // Can delete if: viewing all locations OR item belongs to current location
+                                const canDelete = isAllLocations
+                                    ? true
+                                    : (!isAllLocations && item.location_id === selectedLocationId)
+                                return (
+                                    <ItemRow
+                                        key={item.id}
+                                        item={item}
+                                        index={index}
+                                        taxRates={taxRates}
+                                        onEdit={() => handleQuickEdit(item)}
+                                        onView={() => handleViewDetails(item)}
+                                        onDelete={() => setDeletingItem(item)}
+                                        canDelete={canDelete}
+                                    />
+                                )
+                            })}
                         </div>
                     )}
                 </CardContent>
@@ -1250,6 +1871,58 @@ export default function MenuItemsPage() {
                     refetch()
                 }}
             />
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={!!deletingItem} onOpenChange={(open) => !open && setDeletingItem(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-destructive">
+                            <Trash2 className="h-5 w-5" />
+                            {isAllLocations ? 'Delete Item' : 'Remove Location Override'}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {isAllLocations ? (
+                                <>
+                                    Are you sure you want to delete &quot;{deletingItem?.name}&quot;?
+                                    This will permanently remove the item from all locations, menus, and categories.
+                                    <span className="block mt-2 font-medium text-foreground">This action cannot be undone.</span>
+                                </>
+                            ) : (
+                                <>
+                                    Are you sure you want to delete &quot;{deletingItem?.name}&quot;?
+                                    This will permanently remove this location-specific item from {locationName}.
+                                    <span className="block mt-2 font-medium text-foreground">This action cannot be undone.</span>
+                                    <span className="block mt-2 text-sm text-muted-foreground">
+                                        Only items that belong to this location can be deleted.
+                                    </span>
+                                </>
+                            )}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setDeletingItem(null)} disabled={isDeleting}>
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleDeleteItem}
+                            disabled={isDeleting}
+                        >
+                            {isDeleting ? (
+                                <>
+                                    <span className="animate-spin mr-2">⏳</span>
+                                    Deleting...
+                                </>
+                            ) : (
+                                <>
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete Item
+                                </>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

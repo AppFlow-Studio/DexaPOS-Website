@@ -65,6 +65,7 @@ import { TAX_CATEGORIES, TAX_CATEGORY_LABELS, TAX_CATEGORY_DESCRIPTIONS, TaxCate
 import { AVAILABLE_CHANNELS, CHANNEL_LABELS, CHANNEL_DESCRIPTIONS } from '@/types/inventory'
 import { useLocationTaxRates } from '@/app/dashboard/hooks/useTaxRates'
 import Link from 'next/link'
+import { resetItemToLevel, updateItemOverride, UpdateItemParams } from '@/app/dashboard/actions/menu-items-rpc'
 
 // ============================================================================
 // TYPES
@@ -564,10 +565,12 @@ export function NewEditItemFormSheet({
     menuName,
     isMenuLocationOwned = false,
 }: NewEditItemFormSheetProps) {
+    console.log('menuId', menuId)
     const queryClient = useQueryClient()
     const { selectedLocationId, locations } = useLocationStore()
     const isAllLocations = useIsAllLocations()
 
+    console.log(editItem)
     // Tax rates for current location
     const { data: taxRatesData } = useLocationTaxRates()
     const taxRates = taxRatesData?.data || []
@@ -823,9 +826,9 @@ export function NewEditItemFormSheet({
                     price: values.price,
                     cashPrice: values.cash_price ?? null,
                     availability: values.availability,
+                    
                 }
 
-                console.log('updateParams NEW EDIT ITEM FORM SHEET', updateParams)
 
                 // Only include base fields if we can edit them (Level 1)
                 if (editingContext.canEditBaseFields) {
@@ -840,8 +843,9 @@ export function NewEditItemFormSheet({
                     updateParams.isTaxExempt = values.is_tax_exempt
                     updateParams.availableChannels = values.available_channels
                 }
+                console.log('updateParams NEW EDIT ITEM FORM SHEET', updateParams)
 
-                result = await UpdateMenuItem(editItem.id, updateParams)
+                result = await updateItemOverride(updateParams)
 
 
             } else {

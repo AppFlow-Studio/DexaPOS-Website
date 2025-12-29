@@ -258,6 +258,7 @@ export async function GetCategorySchedules(
         return []
     }
 
+
     const supabase = createServerSupabaseClient()
 
     const { data, error } = await supabase
@@ -296,12 +297,25 @@ export async function GetCategorySchedules(
     return schedules
 }
 
-export async function AssignScheduleToMenu(menuId: string, scheduleId: string) {
+export async function AssignScheduleToMenu(menuId: string, scheduleId: string, clerkOrgId: string) {
     if (!menuId || !scheduleId) {
         return { error: 'Menu ID and Schedule ID are required' }
     }
 
+
+    console.log('clerkOrgId', clerkOrgId)
     const supabase = createServerSupabaseClient()
+    // First, get the merchant ID from the clerk_org_id
+    const { data: merchant, error: merchantError } = await supabase
+        .from('merchants')
+        .select('id')
+        .eq('clerk_org_id', clerkOrgId)
+        .single()
+
+    if (merchantError || !merchant) {
+        console.error('Error getting merchant:', merchantError)
+        return { error: 'Merchant not found' }
+    }
 
     // Check if assignment already exists
     const { data: existing } = await supabase
@@ -321,6 +335,7 @@ export async function AssignScheduleToMenu(menuId: string, scheduleId: string) {
         .insert({
             menu_id: menuId,
             schedule_id: scheduleId,
+            merchant_id: merchant.id,
         })
         .select()
         .single()
@@ -712,5 +727,116 @@ export async function DeleteTimeSlot(timeSlotId: string) {
     }
 
     return { success: true }
+}
+
+// ============================================================================
+// BULK OPERATIONS
+// ============================================================================
+
+/**
+ * Update schedule with time slots (replaces all time slots)
+ * This is used when editing a schedule - it removes old slots and creates new ones
+ */
+export async function UpdateScheduleWithTimeSlots(
+    scheduleId: string,
+    data: {
+        name?: string
+        description?: string
+        is_active?: boolean
+        time_slots?: Array<{
+            day_of_week: number
+            start_time: string
+            end_time: string
+            is_active?: boolean
+        }>
+    }
+) {
+    if (!scheduleId) {
+        return { error: 'Schedule ID is required' }
+    }
+
+    const supabase = createServerSupabaseClient()
+
+    // Get merchant_id from schedule
+    const { data: schedule, error: scheduleError } = await supabase
+        .from('schedules')
+        .select('merchant_id')
+        .eq('id', scheduleId)
+        .single()
+
+    if (scheduleError || !schedule) {
+        console.error('Error getting schedule:', scheduleError)
+        return { error: 'Schedule not found' }
+    }
+
+    // Update schedule details
+    const updateData: any = {}
+    if (data.name !== undefined) updateData.name = data.name
+    if (data.description !== undefined) updateData.description = data.description
+    if (data.is_active !== undefined) updateData.is_active = data.is_active
+
+    if (Object.keys(updateData).length > 0) {
+        const { error } = await supabase
+            .from('schedules')
+            .update(updateData)
+            .eq('id', scheduleId)
+
+        if (error) {
+            console.error('Error updating schedule:', error)
+            return { error: error.message }
+        }
+    }
+
+    // Update time slots if provided
+    if (data.time_slots !== undefined) {
+        // Delete existing time slots
+        const { error: deleteError } = await supabase
+            .from('schedule_time_slots')
+            .delete()
+            .eq('schedule_id', scheduleId)
+
+        if (deleteError) {
+            console.error('Error deleting old time slots:', deleteError)
+            return { error: 'Failed to update time slots' }
+        }
+
+        // Insert new time slots
+        if (data.time_slots.length > 0) {
+            const timeSlots = data.time_slots.map(slot => ({
+                schedule_id: scheduleId,
+                merchant_id: schedule.merchant_id,
+                day_of_week: slot.day_of_week,
+                start_time: slot.start_time,
+                end_time: slot.end_time,
+                is_active: slot.is_active ?? true,
+            }))
+
+            const { error: insertError } = await supabase
+                .from('schedule_time_slots')
+                .insert(timeSlots)
+
+            if (insertError) {
+                console.error('Error creating new time slots:', insertError)
+                return { error: 'Failed to create time slots' }
+            }
+        }
+    }
+
+    // Fetch updated schedule with slots
+    const { data: updatedSchedule, error: fetchError } = await supabase
+        .from('schedules')
+        .select(`
+            *,
+            schedule_time_slots(*)
+        `)
+        .eq('id', scheduleId)
+        .single()
+
+    if (fetchError) {
+        console.error('Error fetching updated schedule:', fetchError)
+        return { error: 'Schedule updated but failed to fetch' }
+    }
+
+    return { data: updatedSchedule as SchedulesModel & { schedule_time_slots: ScheduleTimeSlotsModel[] } }
 }
 

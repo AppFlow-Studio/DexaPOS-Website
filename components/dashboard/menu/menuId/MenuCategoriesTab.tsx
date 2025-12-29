@@ -28,7 +28,7 @@ interface MenuCategoriesTabProps {
     onItemClick: (itemId: string) => void
     onToggleVisibility: (categoryId: string, isActive: boolean) => Promise<void>
     onResetOverride: (categoryId: string) => Promise<void>
-    onEditItem: (item: MenuCategoryItem, category: MenuCategory) => void
+    onEditItem: (item: MenuCategoryItem, category: MenuCategory, menuId: string) => void
     onAddCategory: () => void
     onNavigateToCategories: () => void
     refetchMenu: () => void

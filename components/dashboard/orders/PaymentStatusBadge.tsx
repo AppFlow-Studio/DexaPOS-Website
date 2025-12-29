@@ -56,6 +56,13 @@ export function PaymentStatusBadge({ status, className }: PaymentStatusBadgeProp
             variant: 'outline',
             className: 'bg-slate-100 text-slate-700 border-slate-300',
         },
+        paid: {
+
+            label: 'Paid',
+            variant: 'default',
+            className: 'bg-green-100 text-green-800 border-green-300',
+
+        }
     }
 
     const config = statusConfig[status] || statusConfig.pending

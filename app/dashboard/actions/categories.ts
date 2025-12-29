@@ -591,6 +591,50 @@ export async function UpdateLocationCategoryOverride(
 
     const supabase = createServerSupabaseClient()
 
+    // First, check if this is a location-specific category
+    const { data: category, error: categoryError } = await supabase
+        .from('categories')
+        .select('location_id')
+        .eq('id', categoryId)
+        .single()
+
+    if (categoryError || !category) {
+        console.error('Error fetching category:', categoryError)
+        return { error: 'Category not found' }
+    }
+
+    // If this is a location-specific category owned by this location, update the category directly
+    if (category.location_id === locationId) {
+        const updateData: {
+            is_active?: boolean
+            display_order?: number
+            updated_at: string
+        } = {
+            updated_at: new Date().toISOString()
+        }
+
+        if (data.isActive !== undefined) {
+            updateData.is_active = data.isActive
+        }
+        if (data.displayOrder !== undefined) {
+            updateData.display_order = data.displayOrder
+        }
+
+        const { error } = await supabase
+            .from('categories')
+            .update(updateData)
+            .eq('id', categoryId)
+
+        if (error) {
+            console.error('Error updating location-specific category:', error)
+            return { error: error.message }
+        }
+
+        return { success: true }
+    }
+
+    // For global categories (or location-specific categories from other locations),
+    // use location_category_overrides
     const { error } = await supabase
         .from('location_category_overrides')
         .upsert({

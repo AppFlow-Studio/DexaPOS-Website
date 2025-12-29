@@ -26,6 +26,7 @@ export function CategoryItemRow({
 }: CategoryItemRowProps) {
     const menuItem = item.menu_item
     const priceSource = menuItem?.price_source || 'base'
+    console.log('item', menuItem)
     const getPriceSourceBadge = () => {
         switch (priceSource) {
             case 'location_menu':

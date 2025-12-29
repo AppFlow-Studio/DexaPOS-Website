@@ -366,6 +366,9 @@ export async function RemoveModifierFromItem(menuItemId: string, modifierGroupId
 /**
  * Creates a new menu item and immediately assigns it to a category.
  * This enforces the hierarchical structure where items must belong to categories.
+ * 
+ * @param locationId - Optional location ID. If provided, creates a location-specific item.
+ *                     If null/undefined, creates a global item (location_id = null).
  */
 export async function CreateItemInCategory(
     clerkOrgId: string,
@@ -386,6 +389,7 @@ export async function CreateItemInCategory(
         displayOrder?: number
         customPrice?: number
         isFeatured?: boolean
+        locationId?: string | null
     }
 ) {
     if (!clerkOrgId) {
@@ -415,6 +419,7 @@ export async function CreateItemInCategory(
         .from('menu_items')
         .insert({
             merchant_id: merchant.id,
+            location_id: options?.locationId || null,
             name: item.name,
             description: item.description,
             price: item.price,

@@ -31,7 +31,7 @@ export function useOrders() {
         queryKey: ['orders', clerkOrgId, effectiveLocationId],
         queryFn: () => GetOrders(clerkOrgId, effectiveLocationId === 'all' ? null : effectiveLocationId) as Promise<OrderResponse[]>,
         enabled: !!clerkOrgId,
-        staleTime: 30000, // 30 seconds
+        staleTime: 5000, // 5 seconds
     })
 }
 

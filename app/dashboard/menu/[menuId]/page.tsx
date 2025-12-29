@@ -44,16 +44,17 @@ import { MenuOverviewTab } from '@/components/dashboard/menu/menuId/MenuOverview
 import { MenuCategoriesTab } from '@/components/dashboard/menu/menuId/MenuCategoriesTab'
 import { MenuSchedulesTab } from '@/components/dashboard/menu/menuId/MenuSchedulesTab'
 import { MenuSettingsTab } from '@/components/dashboard/menu/menuId/MenuSettingsTab'
+import { useClerkOrgId } from '../../hooks/useLocationScoped'
 
 export default function MenuDetailPage() {
     const params = useParams()
     const router = useRouter()
     const queryClient = useQueryClient()
+    const clerkOrgId = useClerkOrgId() || ''
     const menuId = params.menuId as string
     const { data: menu, isLoading, refetch: refetchMenu } = useMenuWithCategories(menuId)
     const { selectedLocationId } = useLocationStore()
     const { data: userInfo } = useUserInfo()
-    const clerkOrgId = userInfo?.members?.[0]?.organizations?.id
     const isAllLocations = !selectedLocationId || selectedLocationId === 'all'
     // Categories for wizard selections
     const { data: categoriesWithItems } = useCategoriesWithItems(clerkOrgId || '', selectedLocationId)
@@ -171,7 +172,7 @@ export default function MenuDetailPage() {
         }
     }, [sortedCategories, reorderedCategories.length, hasCategoryOrderChanges])
 
-    const mapMenuCategoryItemToEdit = (category: MenuCategory, item: MenuCategoryItem): EditItemWithOverrides => {
+    const mapMenuCategoryItemToEdit = (category: MenuCategory, item: MenuCategoryItem, menuId: string): EditItemWithOverrides => {
         const mi = item.menu_item
         const priceLevels = (mi as any).price_levels || {}
         return {
@@ -196,8 +197,8 @@ export default function MenuDetailPage() {
                 level_3_category_cash: (item as any).custom_cash_price ?? null,
                 level_4_location_category: (mi as any).location_category_override?.custom_price ?? priceLevels.level_4_location_category ?? null,
                 level_4_location_category_cash: (mi as any).location_category_override?.custom_cash_price ?? priceLevels.level_4_location_category_cash ?? null,
-                level_5_location_menu: null,
-                level_5_location_menu_cash: null,
+                level_5_location_menu: (mi as any).location_menu_override?.custom_price ?? priceLevels.level_5_location_menu ?? null,
+                level_5_location_menu_cash: (mi as any).location_menu_override?.custom_cash_price ?? priceLevels.level_5_location_menu_cash ?? null,
             },
             effective_price: mi.effective_price,
             effective_cash_price: mi.effective_cash_price,
@@ -267,7 +268,8 @@ export default function MenuDetailPage() {
         }
         setIsSavingScheduleWizard(true)
         try {
-            const result = await AssignScheduleToMenu(menuId, scheduleWizardId)
+            console.log('clerkOrgId', clerkOrgId)
+            const result = await AssignScheduleToMenu(menuId, scheduleWizardId, clerkOrgId)
             if ((result as any)?.error) {
                 toast.error('Add Failed', { description: (result as any).error })
                 return
@@ -400,7 +402,7 @@ export default function MenuDetailPage() {
             return { error: createResult.error || 'Failed to create schedule' }
         }
 
-        const assignResult = await AssignScheduleToMenu(menuId, createResult.data.id)
+        const assignResult = await AssignScheduleToMenu(menuId, createResult.data.id, clerkOrgId)
 
         if (assignResult.error) {
             return { error: assignResult.error }
@@ -413,7 +415,7 @@ export default function MenuDetailPage() {
     }
 
     const handleAssignSchedule = async (scheduleId: string) => {
-        const result = await AssignScheduleToMenu(menuId, scheduleId)
+        const result = await AssignScheduleToMenu(menuId, scheduleId, clerkOrgId)
 
         if (result.error) {
             return { error: result.error }

@@ -34,7 +34,8 @@ export type PaymentStatus =
   | 'declined'
   | 'refunded'
   | 'partially_refunded'
-  | 'void';
+  | 'void'
+  | 'paid';
 
 export type TerminalType =
   | 'dejavoo_spinapi'
