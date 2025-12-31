@@ -24,6 +24,7 @@ import {
   Globe,
   Power,
   PowerOff,
+  Utensils,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -44,6 +45,8 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { SchedulesModel, ScheduleTimeSlotsModel } from "@/types/db-modles";
 import { DAYS_OF_WEEK } from "@/components/dashboard/menu/ScheduleCard";
+import { AssignMenusSheet } from "./AssignMenusSheet";
+import { DeleteScheduleDialog } from "./DeleteScheduleDialog";
 
 type ScheduleWithSlots = SchedulesModel & {
   schedule_time_slots?: ScheduleTimeSlotsModel[];
@@ -65,12 +68,16 @@ export function MenuSchedulesView() {
     useState<ScheduleWithSlots | null>(null);
   const [deletingSchedule, setDeletingSchedule] =
     useState<ScheduleWithSlots | null>(null);
+  const [assigningSchedule, setAssigningSchedule] =
+    useState<ScheduleWithSlots | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  const schedulesList = schedules || [];
+  const schedulesList: ScheduleWithSlots[] = (schedules ||
+    []) as ScheduleWithSlots[];
 
   // Filter schedules
   const filteredSchedules = schedulesList.filter(
-    (schedule) =>
+    (schedule: ScheduleWithSlots) =>
       schedule.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       schedule.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -78,9 +85,11 @@ export function MenuSchedulesView() {
   // Stats
   const stats = {
     total: schedulesList.length,
-    active: schedulesList.filter((s) => s.is_active).length,
-    inactive: schedulesList.filter((s) => !s.is_active).length,
-    global: schedulesList.filter((s) => !s.location_id).length,
+    active: schedulesList.filter((s: ScheduleWithSlots) => s.is_active).length,
+    inactive: schedulesList.filter((s: ScheduleWithSlots) => !s.is_active)
+      .length,
+    global: schedulesList.filter((s: ScheduleWithSlots) => !s.location_id)
+      .length,
   };
 
   const handleCreate = () => {
@@ -96,6 +105,7 @@ export function MenuSchedulesView() {
   const handleDelete = async () => {
     if (!deletingSchedule) return;
 
+    setIsDeleting(true);
     const result = await deleteScheduleMutation.mutateAsync(
       deletingSchedule.id
     );
@@ -110,6 +120,7 @@ export function MenuSchedulesView() {
       });
     }
 
+    setIsDeleting(false);
     setDeletingSchedule(null);
   };
 
@@ -267,7 +278,8 @@ export function MenuSchedulesView() {
                 const timeSlots = schedule.schedule_time_slots || [];
                 const days = [
                   ...new Set(timeSlots.map((s) => s.day_of_week)),
-                ].sort((a: any, b: any) => a - b);
+                ] as number[];
+                days.sort((a, b) => a - b);
 
                 return (
                   <div
@@ -337,9 +349,10 @@ export function MenuSchedulesView() {
                               No time slots
                             </Badge>
                           ) : (
-                            days.map((day: any) => {
+                            days.map((day: number) => {
                               const daySlots = timeSlots.filter(
-                                (s) => s.day_of_week === day
+                                (s: ScheduleTimeSlotsModel) =>
+                                  s.day_of_week === day
                               );
                               return (
                                 <Badge
@@ -389,6 +402,12 @@ export function MenuSchedulesView() {
                               </>
                             )}
                           </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setAssigningSchedule(schedule)}
+                          >
+                            <Utensils className="h-4 w-4 mr-2" />
+                            Assign to Menus
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             onClick={() => setDeletingSchedule(schedule)}
@@ -414,6 +433,22 @@ export function MenuSchedulesView() {
         onOpenChange={setIsFormOpen}
         editSchedule={editingSchedule}
         mode={editingSchedule ? "edit" : "create"}
+      />
+
+      {/* Assign Menus Sheet */}
+      <AssignMenusSheet
+        open={!!assigningSchedule}
+        onOpenChange={(open) => !open && setAssigningSchedule(null)}
+        schedule={assigningSchedule}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteScheduleDialog
+        open={!!deletingSchedule}
+        onOpenChange={(open) => !open && setDeletingSchedule(null)}
+        schedule={deletingSchedule}
+        onConfirm={handleDelete}
+        isDeleting={isDeleting}
       />
     </div>
   );
