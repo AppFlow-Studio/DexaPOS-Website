@@ -49,6 +49,7 @@ import {
     X,
     Grip,
     Search,
+    Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -65,7 +66,7 @@ import { TAX_CATEGORIES, TAX_CATEGORY_LABELS, TAX_CATEGORY_DESCRIPTIONS, TaxCate
 import { AVAILABLE_CHANNELS, CHANNEL_LABELS, CHANNEL_DESCRIPTIONS } from '@/types/inventory'
 import { useLocationTaxRates } from '@/app/dashboard/hooks/useTaxRates'
 import Link from 'next/link'
-import { resetItemToLevel, updateItemOverride, UpdateItemParams } from '@/app/dashboard/actions/menu-items-rpc'
+import { resetItemToLevel, updateItemOverride, updateModifierItem, UpdateItemParams } from '@/app/dashboard/actions/menu-items-rpc'
 
 // ============================================================================
 // TYPES
@@ -588,6 +589,8 @@ export function NewEditItemFormSheet({
     const [isSubmitting, setIsSubmitting] = React.useState(false)
     const [isResetting, setIsResetting] = React.useState(false)
     const [showAddModifier, setShowAddModifier] = React.useState(false)
+    const [modifierEdits, setModifierEdits] = React.useState<Record<string, { price?: number | null; isActive?: boolean; isSaving?: boolean }>>({})
+    const locationIdForEdits = isAllLocations ? null : selectedLocationId
 
     // Get editing context based on current state (includes category for 5-level cascade)
     const editingContext = React.useMemo(() =>
@@ -741,6 +744,47 @@ export function NewEditItemFormSheet({
         )
     }
 
+    const setModifierDraft = (id: string, patch: Partial<{ price: number | null; isActive: boolean; isSaving: boolean }>) => {
+        setModifierEdits(prev => ({
+            ...prev,
+            [id]: { ...prev[id], ...patch },
+        }))
+    }
+
+    const handleSaveModifierItem = async (item: any) => {
+        const draft = modifierEdits[item.id] || {}
+        const price = draft.price !== undefined ? draft.price : item.price_modifier ?? null
+        const isActive = draft.isActive !== undefined
+            ? draft.isActive
+            : (item.location_override?.is_active ?? item.is_active ?? true)
+
+        setModifierDraft(item.id, { isSaving: true })
+        try {
+            const result = await updateModifierItem({
+                modifierItemId: item.id,
+                priceModifier: price,
+                isActive,
+                locationId: locationIdForEdits || null,
+            })
+
+            if (!result.success) {
+                toast.error('Failed to update modifier', { description: result.error })
+                return
+            }
+
+            toast.success('Modifier updated', {
+                description: locationIdForEdits ? 'Location override saved' : 'Global modifier updated',
+            })
+
+            queryClient.invalidateQueries({ queryKey: ['menu-items'] })
+            queryClient.invalidateQueries({ queryKey: ['menu-items-flat'] })
+        } catch (error) {
+            toast.error('Failed to update modifier', { description: 'Please try again.' })
+        } finally {
+            setModifierDraft(item.id, { isSaving: false })
+        }
+    }
+
     const toggleAllergen = (allergen: string) => {
         const current = form.getValues('allergens')
         if (current.includes(allergen)) {
@@ -826,7 +870,7 @@ export function NewEditItemFormSheet({
                     price: values.price,
                     cashPrice: values.cash_price ?? null,
                     availability: values.availability,
-                    
+
                 }
 
 
@@ -1121,133 +1165,133 @@ export function NewEditItemFormSheet({
                                                 )}
                                             </div>
 
-                                        <FormField
-                                            control={form.control}
-                                            name="name"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Item Name *</FormLabel>
-                                                    <FormControl>
-                                                        <Input
-                                                            placeholder="e.g., Crispy Chicken Wings"
-                                                            className="h-12 text-lg"
-                                                            disabled={!editingContext.canEditBaseFields && !!editItem}
-                                                            {...field}
-                                                        />
-                                                    </FormControl>
-                                                    {!editingContext.canEditBaseFields && editItem && (
-                                                        <FormDescription className="text-amber-600">
-                                                            Switch to "All Locations" to edit item details
-                                                        </FormDescription>
-                                                    )}
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
-
-                                        <FormField
-                                            control={form.control}
-                                            name="description"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Description</FormLabel>
-                                                    <FormControl>
-                                                        <textarea
-                                                            className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
-                                                            placeholder="Describe your dish..."
-                                                            disabled={!editingContext.canEditBaseFields && !!editItem}
-                                                            {...field}
-                                                        />
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
-
-                                        <FormField
-                                            control={form.control}
-                                            name="image_url"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Image URL</FormLabel>
-                                                    <FormControl>
-                                                        <div className="relative">
-                                                            <ImageIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                            <FormField
+                                                control={form.control}
+                                                name="name"
+                                                render={({ field }: { field: any }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Item Name *</FormLabel>
+                                                        <FormControl>
                                                             <Input
-                                                                className="pl-10"
-                                                                placeholder="https://example.com/image.jpg"
+                                                                placeholder="e.g., Crispy Chicken Wings"
+                                                                className="h-12 text-lg"
                                                                 disabled={!editingContext.canEditBaseFields && !!editItem}
                                                                 {...field}
-                                                                value={field.value || ''}
                                                             />
+                                                        </FormControl>
+                                                        {!editingContext.canEditBaseFields && editItem && (
+                                                            <FormDescription className="text-amber-600">
+                                                                Switch to "All Locations" to edit item details
+                                                            </FormDescription>
+                                                        )}
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+
+                                            <FormField
+                                                control={form.control}
+                                                name="description"
+                                                render={({ field }: { field: any }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Description</FormLabel>
+                                                        <FormControl>
+                                                            <textarea
+                                                                className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                                                                placeholder="Describe your dish..."
+                                                                disabled={!editingContext.canEditBaseFields && !!editItem}
+                                                                {...field}
+                                                            />
+                                                        </FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+
+                                            <FormField
+                                                control={form.control}
+                                                name="image_url"
+                                                render={({ field }: { field: any }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Image URL</FormLabel>
+                                                        <FormControl>
+                                                            <div className="relative">
+                                                                <ImageIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                                                <Input
+                                                                    className="pl-10"
+                                                                    placeholder="https://example.com/image.jpg"
+                                                                    disabled={!editingContext.canEditBaseFields && !!editItem}
+                                                                    {...field}
+                                                                    value={field.value || ''}
+                                                                />
+                                                            </div>
+                                                        </FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+
+                                            {/* Allergens */}
+                                            <FormField
+                                                control={form.control}
+                                                name="allergens"
+                                                render={() => (
+                                                    <FormItem>
+                                                        <FormLabel>Allergens</FormLabel>
+                                                        <FormDescription>Select all that apply</FormDescription>
+                                                        <div className="flex flex-wrap gap-2 mt-2">
+                                                            {COMMON_ALLERGENS.map((allergen) => (
+                                                                <button
+                                                                    key={allergen}
+                                                                    type="button"
+                                                                    onClick={() => toggleAllergen(allergen)}
+                                                                    disabled={!editingContext.canEditBaseFields && !!editItem}
+                                                                    className={cn(
+                                                                        "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
+                                                                        "border hover:scale-105 active:scale-95",
+                                                                        "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
+                                                                        watchedValues.allergens?.includes(allergen)
+                                                                            ? "bg-orange-500 text-white border-orange-500 shadow-md"
+                                                                            : "bg-background border-border hover:border-orange-500/50"
+                                                                    )}
+                                                                >
+                                                                    {allergen}
+                                                                </button>
+                                                            ))}
                                                         </div>
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
+                                                    </FormItem>
+                                                )}
+                                            />
 
-                                        {/* Allergens */}
-                                        <FormField
-                                            control={form.control}
-                                            name="allergens"
-                                            render={() => (
-                                                <FormItem>
-                                                    <FormLabel>Allergens</FormLabel>
-                                                    <FormDescription>Select all that apply</FormDescription>
-                                                    <div className="flex flex-wrap gap-2 mt-2">
-                                                        {COMMON_ALLERGENS.map((allergen) => (
-                                                            <button
-                                                                key={allergen}
-                                                                type="button"
-                                                                onClick={() => toggleAllergen(allergen)}
-                                                                disabled={!editingContext.canEditBaseFields && !!editItem}
-                                                                className={cn(
-                                                                    "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
-                                                                    "border hover:scale-105 active:scale-95",
-                                                                    "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
-                                                                    watchedValues.allergens?.includes(allergen)
-                                                                        ? "bg-orange-500 text-white border-orange-500 shadow-md"
-                                                                        : "bg-background border-border hover:border-orange-500/50"
-                                                                )}
-                                                            >
-                                                                {allergen}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </FormItem>
-                                            )}
-                                        />
-
-                                        {/* Card Background Color */}
-                                        <FormField
-                                            control={form.control}
-                                            name="card_bg_color"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Card Background Color</FormLabel>
-                                                    <FormControl>
-                                                        <div className="flex gap-2">
-                                                            <Input
-                                                                type="color"
-                                                                className="w-12 h-10 p-1 cursor-pointer"
-                                                                disabled={!editingContext.canEditBaseFields && !!editItem}
-                                                                {...field}
-                                                                value={field.value || '#ffffff'}
-                                                            />
-                                                            <Input
-                                                                placeholder="#000000"
-                                                                disabled={!editingContext.canEditBaseFields && !!editItem}
-                                                                {...field}
-                                                                value={field.value || ''}
-                                                            />
-                                                        </div>
-                                                    </FormControl>
-                                                    <FormDescription>Custom color for the item card in POS</FormDescription>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
+                                            {/* Card Background Color */}
+                                            <FormField
+                                                control={form.control}
+                                                name="card_bg_color"
+                                                render={({ field }: { field: any }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Card Background Color</FormLabel>
+                                                        <FormControl>
+                                                            <div className="flex gap-2">
+                                                                <Input
+                                                                    type="color"
+                                                                    className="w-12 h-10 p-1 cursor-pointer"
+                                                                    disabled={!editingContext.canEditBaseFields && !!editItem}
+                                                                    {...field}
+                                                                    value={field.value || '#ffffff'}
+                                                                />
+                                                                <Input
+                                                                    placeholder="#000000"
+                                                                    disabled={!editingContext.canEditBaseFields && !!editItem}
+                                                                    {...field}
+                                                                    value={field.value || ''}
+                                                                />
+                                                            </div>
+                                                        </FormControl>
+                                                        <FormDescription>Custom color for the item card in POS</FormDescription>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
                                         </TabsContent>
 
                                         {/* TAB 2: PRICING & INVENTORY */}
@@ -1280,7 +1324,7 @@ export function NewEditItemFormSheet({
                                                 <FormField
                                                     control={form.control}
                                                     name="price"
-                                                    render={({ field }) => (
+                                                    render={({ field }: { field: any }) => (
                                                         <FormItem>
                                                             <FormLabel>{editingContext.priceLabel} *</FormLabel>
                                                             <FormControl>
@@ -1307,7 +1351,7 @@ export function NewEditItemFormSheet({
                                                 <FormField
                                                     control={form.control}
                                                     name="cash_price"
-                                                    render={({ field }) => (
+                                                    render={({ field }: { field: any }) => (
                                                         <FormItem>
                                                             <FormLabel>Cash Price</FormLabel>
                                                             <FormControl>
@@ -1364,7 +1408,7 @@ export function NewEditItemFormSheet({
                                             <FormField
                                                 control={form.control}
                                                 name="stock_tracking_mode"
-                                                render={({ field }) => (
+                                                render={({ field }: { field: any }) => (
                                                     <FormItem>
                                                         <FormLabel>Stock Tracking</FormLabel>
                                                         <Select
@@ -1406,7 +1450,7 @@ export function NewEditItemFormSheet({
                                             <FormField
                                                 control={form.control}
                                                 name="is_tax_exempt"
-                                                render={({ field }) => (
+                                                render={({ field }: { field: any }) => (
                                                     <FormItem className="flex items-center justify-between rounded-lg border p-4">
                                                         <div className="space-y-0.5">
                                                             <FormLabel className="text-base">Tax Exempt</FormLabel>
@@ -1429,7 +1473,7 @@ export function NewEditItemFormSheet({
                                             <FormField
                                                 control={form.control}
                                                 name="tax_category"
-                                                render={({ field }) => (
+                                                render={({ field }: { field: any }) => (
                                                     <FormItem>
                                                         <FormLabel>Tax Category</FormLabel>
                                                         <Select
@@ -1530,7 +1574,7 @@ export function NewEditItemFormSheet({
                                             <FormField
                                                 control={form.control}
                                                 name="availability"
-                                                render={({ field }) => (
+                                                render={({ field }: { field: any }) => (
                                                     <FormItem className="flex items-center justify-between rounded-lg border p-4">
                                                         <div className="space-y-0.5">
                                                             <FormLabel className="text-base">
@@ -1568,7 +1612,7 @@ export function NewEditItemFormSheet({
                                                                     key={channel}
                                                                     control={form.control}
                                                                     name="available_channels"
-                                                                    render={({ field }) => (
+                                                                    render={({ field }: { field: any }) => (
                                                                         <FormItem className="flex items-start space-x-3 space-y-0 rounded-lg border p-3">
                                                                             <FormControl>
                                                                                 <Checkbox
@@ -1602,268 +1646,336 @@ export function NewEditItemFormSheet({
                                                 )}
                                             />
 
-                                    {/* Categories Section */}
-                                    <div className="space-y-3">
-                                        <div className="flex items-center gap-2">
-                                            <Tag className="h-4 w-4 text-blue-500" />
-                                            <FormLabel>Categories</FormLabel>
-                                            {selectedCategories.length > 0 && (
-                                                <Badge variant="secondary" className="text-xs">{selectedCategories.length}</Badge>
-                                            )}
-                                        </div>
-                                            {/* Suggestion for new items */}
-                                            {!editItem && selectedCategories.length === 0 && categories.length > 0 && (
-                                                <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
-                                                    <Info className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                                                    <div className="space-y-1">
-                                                        <p className="text-amber-800 font-medium">Select a category for your item</p>
-                                                        <p className="text-amber-700 text-xs">
-                                                            Categories help organize your menu. Items without a category will be placed in "Uncategorized".
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {categories.length === 0 ? (
-                                                <div className="text-center py-6 text-muted-foreground text-sm border border-dashed rounded-lg">
-                                                    <Tag className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                                                    <p>No categories available</p>
-                                                    <p className="text-xs mt-1">Create categories first to organize your menu items.</p>
-                                                </div>
-                                            ) : (
-                                                <div className="space-y-3">
-                                                    {/* Category grid */}
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {categories.map((category) => (
-                                                            <button
-                                                                key={category.id}
-                                                                type="button"
-                                                                onClick={() => toggleCategory(category.id)}
-                                                                disabled={!editingContext.canEditBaseFields && !!editItem}
-                                                                className={cn(
-                                                                    "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
-                                                                    "border hover:scale-105 active:scale-95",
-                                                                    "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
-                                                                    selectedCategories.includes(category.id)
-                                                                        ? "bg-primary text-primary-foreground border-primary shadow-md"
-                                                                        : "bg-background border-border hover:border-primary/50"
-                                                                )}
-                                                            >
-                                                                {category.name}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-
-                                                    {/* Skip option for new items */}
-                                                    {!editItem && (
-                                                        <div className="pt-2 border-t">
-                                                            <button
-                                                                type="button"
-                                                                className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-                                                                onClick={() => {
-                                                                    // Clear all categories - item will go to "Uncategorized"
-                                                                    setSelectedCategories([])
-                                                                }}
-                                                            >
-                                                                <X className="h-3 w-3" />
-                                                                Skip - Add to "Uncategorized"
-                                                            </button>
-                                                        </div>
+                                            {/* Categories Section */}
+                                            <div className="space-y-3">
+                                                <div className="flex items-center gap-2">
+                                                    <Tag className="h-4 w-4 text-blue-500" />
+                                                    <FormLabel>Categories</FormLabel>
+                                                    {selectedCategories.length > 0 && (
+                                                        <Badge variant="secondary" className="text-xs">{selectedCategories.length}</Badge>
                                                     )}
                                                 </div>
-                                            )}
-                                    </div>
+                                                {/* Suggestion for new items */}
+                                                {!editItem && selectedCategories.length === 0 && categories.length > 0 && (
+                                                    <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
+                                                        <Info className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                                                        <div className="space-y-1">
+                                                            <p className="text-amber-800 font-medium">Select a category for your item</p>
+                                                            <p className="text-amber-700 text-xs">
+                                                                Categories help organize your menu. Items without a category will be placed in "Uncategorized".
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                )}
 
-                                    {/* Modifiers Section */}
-                                    <div className="space-y-4">
-                                        <div className="flex items-center gap-2">
-                                            <Layers className="h-4 w-4 text-purple-500" />
-                                            <FormLabel>Modifier Groups</FormLabel>
-                                            {selectedModifiers.length > 0 && (
-                                                <Badge variant="secondary" className="text-xs">{selectedModifiers.length}</Badge>
-                                            )}
-                                        </div>
-                                            {(() => {
-                                                // Get enriched selected groups from editItem (has location-specific overrides)
-                                                // These contain the actual modifier items with their current prices/availability
-                                                const itemModifierGroups = editItem?.menu_item_modifier_groups || []
-                                                // Build selected groups with enriched data from editItem
-                                                const selectedGroups = itemModifierGroups
-                                                    .map((assignment: { modifier_group_id?: string; modifier_groups?: { id: string; name: string }; id?: string; name?: string; description?: string | null; is_required?: boolean; min_selections?: number; max_selections?: number | null; is_active?: boolean; items?: ModifierItem[] }) => {
-                                                        // The assignment may have modifier_group nested or be the group itself
-                                                        const groupData = assignment as ModifierGroup
-                                                        const groupId = (assignment as any).modifier_group_id || assignment.id
+                                                {categories.length === 0 ? (
+                                                    <div className="text-center py-6 text-muted-foreground text-sm border border-dashed rounded-lg">
+                                                        <Tag className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                                        <p>No categories available</p>
+                                                        <p className="text-xs mt-1">Create categories first to organize your menu items.</p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-3">
+                                                        {/* Category grid */}
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {categories.map((category) => (
+                                                                <button
+                                                                    key={category.id}
+                                                                    type="button"
+                                                                    onClick={() => toggleCategory(category.id)}
+                                                                    disabled={!editingContext.canEditBaseFields && !!editItem}
+                                                                    className={cn(
+                                                                        "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
+                                                                        "border hover:scale-105 active:scale-95",
+                                                                        "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
+                                                                        selectedCategories.includes(category.id)
+                                                                            ? "bg-primary text-primary-foreground border-primary shadow-md"
+                                                                            : "bg-background border-border hover:border-primary/50"
+                                                                    )}
+                                                                >
+                                                                    {category.name}
+                                                                </button>
+                                                            ))}
+                                                        </div>
 
-                                                        // Find the base group info from modifierGroups prop
-                                                        const baseGroup = modifierGroups.find(g => g.id === groupId)
-
-                                                        if (!baseGroup && !groupData.name) return null
-
-                                                        // Merge: use editItem data for modifier_group_items (has overrides),
-                                                        // fallback to base group for other properties
-                                                        return {
-                                                            id: groupId,
-                                                            name: groupData.name || baseGroup?.name || 'Unknown Group',
-                                                            description: groupData.description || baseGroup?.description,
-                                                            is_required: groupData.is_required ?? baseGroup?.is_required ?? false,
-                                                            min_selections: groupData.min_selections ?? baseGroup?.min_selections ?? 0,
-                                                            max_selections: groupData.max_selections ?? baseGroup?.max_selections,
-                                                            is_active: groupData.is_active ?? true,
-                                                            // Use modifier_group_items from editItem - this has location-specific data
-                                                            modifier_group_items: groupData.items || baseGroup?.modifier_group_items || [],
-                                                        }
-                                                    })
-                                                    .filter(Boolean)
-
-
-                                                // Get IDs of selected groups
-                                                const selectedGroupIds = selectedGroups.map((g: any) => g.id)
-
-                                                // Available groups are ones not in selectedGroupIds
-                                                const availableGroups = modifierGroups.filter(g => !selectedGroupIds.includes(g.id))
-
-                                                return (
-                                                    <>
-                                                        {/* Selected Modifier Groups */}
-                                                        {selectedGroups.length === 0 ? (
-                                                            <div className="text-center py-6 text-muted-foreground">
-                                                                <Layers className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                                                                <p className="text-sm">No modifier groups assigned</p>
-                                                                <p className="text-xs mt-1">Add modifier groups to let customers customize this item</p>
+                                                        {/* Skip option for new items */}
+                                                        {!editItem && (
+                                                            <div className="pt-2 border-t">
+                                                                <button
+                                                                    type="button"
+                                                                    className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                                                                    onClick={() => {
+                                                                        // Clear all categories - item will go to "Uncategorized"
+                                                                        setSelectedCategories([])
+                                                                    }}
+                                                                >
+                                                                    <X className="h-3 w-3" />
+                                                                    Skip - Add to "Uncategorized"
+                                                                </button>
                                                             </div>
-                                                        ) : (
-                                                            <div className="space-y-2">
-                                                                {selectedGroups.map((group: any, index: number) => {
-                                                                    const showItems = editingContext.level > 1
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
 
-                                                                    return (
-                                                                        <div
-                                                                            key={group.id}
-                                                                            className="rounded-lg border border-primary/30 bg-primary/5 overflow-hidden animate-in fade-in slide-in-from-top-2"
-                                                                            style={{ animationDelay: `${index * 50}ms` }}
-                                                                        >
-                                                                            <div className="p-3 flex items-center gap-3">
-                                                                                {/* Drag Handle (visual only for now) */}
-                                                                                <div className="text-muted-foreground/50">
-                                                                                    <Grip className="h-4 w-4" />
-                                                                                </div>
+                                            {/* Modifiers Section */}
+                                            <div className="space-y-4">
+                                                <div className="flex items-center gap-2">
+                                                    <Layers className="h-4 w-4 text-purple-500" />
+                                                    <FormLabel>Modifier Groups</FormLabel>
+                                                    {selectedModifiers.length > 0 && (
+                                                        <Badge variant="secondary" className="text-xs">{selectedModifiers.length}</Badge>
+                                                    )}
+                                                </div>
+                                                {(() => {
+                                                    // Get enriched selected groups from editItem (has location-specific overrides)
+                                                    // These contain the actual modifier items with their current prices/availability
+                                                    const itemModifierGroups = editItem?.menu_item_modifier_groups || []
+                                                    // Build selected groups with enriched data from editItem
+                                                    const selectedGroups = itemModifierGroups
+                                                        .map((assignment: { modifier_group_id?: string; modifier_groups?: { id: string; name: string }; id?: string; name?: string; description?: string | null; is_required?: boolean; min_selections?: number; max_selections?: number | null; is_active?: boolean; items?: ModifierItem[] }) => {
+                                                            // The assignment may have modifier_group nested or be the group itself
+                                                            const groupData = assignment as ModifierGroup
+                                                            const groupId = (assignment as any).modifier_group_id || assignment.id
 
-                                                                                {/* Icon */}
-                                                                                <div className="h-8 w-8 rounded-md bg-purple-100 flex items-center justify-center shrink-0">
-                                                                                    <Layers className="h-4 w-4 text-purple-600" />
-                                                                                </div>
+                                                            // Find the base group info from modifierGroups prop
+                                                            const baseGroup = modifierGroups.find(g => g.id === groupId)
 
-                                                                                {/* Info */}
-                                                                                <div className="flex-1 min-w-0">
-                                                                                    <div className="font-medium text-sm flex items-center gap-2">
-                                                                                        {group.name}
-                                                                                        {group.is_required && (
-                                                                                            <Badge variant="destructive" className="text-[10px] h-4 px-1.5">
-                                                                                                Required
-                                                                                            </Badge>
-                                                                                        )}
+                                                            if (!baseGroup && !groupData.name) return null
+
+                                                            // Merge: use editItem data for modifier_group_items (has overrides),
+                                                            // fallback to base group for other properties
+                                                            return {
+                                                                id: groupId,
+                                                                name: groupData.name || baseGroup?.name || 'Unknown Group',
+                                                                description: groupData.description || baseGroup?.description,
+                                                                is_required: groupData.is_required ?? baseGroup?.is_required ?? false,
+                                                                min_selections: groupData.min_selections ?? baseGroup?.min_selections ?? 0,
+                                                                max_selections: groupData.max_selections ?? baseGroup?.max_selections,
+                                                                is_active: groupData.is_active ?? true,
+                                                                // Use modifier_group_items from editItem - this has location-specific data
+                                                                modifier_group_items: groupData.items || baseGroup?.modifier_group_items || [],
+                                                            }
+                                                        })
+                                                        .filter(Boolean)
+
+
+                                                    // Get IDs of selected groups
+                                                    const selectedGroupIds = selectedGroups.map((g: any) => g.id)
+
+                                                    // Available groups are ones not in selectedGroupIds
+                                                    const availableGroups = modifierGroups.filter(g => !selectedGroupIds.includes(g.id))
+
+                                                    return (
+                                                        <>
+                                                            {/* Selected Modifier Groups */}
+                                                            {selectedGroups.length === 0 ? (
+                                                                <div className="text-center py-6 text-muted-foreground">
+                                                                    <Layers className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                                                                    <p className="text-sm">No modifier groups assigned</p>
+                                                                    <p className="text-xs mt-1">Add modifier groups to let customers customize this item</p>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="space-y-2">
+                                                                    {selectedGroups.map((group: any, index: number) => {
+                                                                        const showItems = editingContext.level > 1
+
+                                                                        return (
+                                                                            <div
+                                                                                key={group.id}
+                                                                                className="rounded-lg border border-primary/30 bg-primary/5 overflow-hidden animate-in fade-in slide-in-from-top-2"
+                                                                                style={{ animationDelay: `${index * 50}ms` }}
+                                                                            >
+                                                                                <div className="p-3 flex items-center gap-3">
+                                                                                    {/* Drag Handle (visual only for now) */}
+                                                                                    <div className="text-muted-foreground/50">
+                                                                                        <Grip className="h-4 w-4" />
                                                                                     </div>
-                                                                                    <div className="text-xs text-muted-foreground">
-                                                                                        {group.modifier_group_items?.length || 0} options •
-                                                                                        Min: {group.min_selections || 0} •
-                                                                                        Max: {group.max_selections || '∞'}
+
+                                                                                    {/* Icon */}
+                                                                                    <div className="h-8 w-8 rounded-md bg-purple-100 flex items-center justify-center shrink-0">
+                                                                                        <Layers className="h-4 w-4 text-purple-600" />
                                                                                     </div>
+
+                                                                                    {/* Info */}
+                                                                                    <div className="flex-1 min-w-0">
+                                                                                        <div className="font-medium text-sm flex items-center gap-2">
+                                                                                            {group.name}
+                                                                                            {group.is_required && (
+                                                                                                <Badge variant="destructive" className="text-[10px] h-4 px-1.5">
+                                                                                                    Required
+                                                                                                </Badge>
+                                                                                            )}
+                                                                                        </div>
+                                                                                        <div className="text-xs text-muted-foreground">
+                                                                                            {group.modifier_group_items?.length || 0} options •
+                                                                                            Min: {group.min_selections || 0} •
+                                                                                            Max: {group.max_selections || '∞'}
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    {/* Remove Button (Level 1 only) */}
+                                                                                    {editingContext.level === 1 && (
+                                                                                        <Button
+                                                                                            type="button"
+                                                                                            variant="ghost"
+                                                                                            size="icon"
+                                                                                            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                                                            onClick={() => toggleModifier(group.id)}
+                                                                                        >
+                                                                                            <X className="h-4 w-4" />
+                                                                                        </Button>
+                                                                                    )}
                                                                                 </div>
 
-                                                                                {/* Remove Button (Level 1 only) */}
-                                                                                {editingContext.level === 1 && (
-                                                                                    <Button
-                                                                                        type="button"
-                                                                                        variant="ghost"
-                                                                                        size="icon"
-                                                                                        className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                                                                        onClick={() => toggleModifier(group.id)}
-                                                                                    >
-                                                                                        <X className="h-4 w-4" />
-                                                                                    </Button>
+                                                                                {/* Items List (Drill Down for Location Managers) */}
+                                                                                {showItems && group.modifier_group_items && group.modifier_group_items.length > 0 && (
+                                                                                    <div className="border-t bg-background/50 px-3 py-2 space-y-1">
+                                                                                        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">
+                                                                                            Manage Options ({currentLocationName})
+                                                                                        </div>
+                                                                                        {group.modifier_group_items.map((item: any) => {
+                                                                                            const draft = modifierEdits[item.id] || {}
+                                                                                            const price =
+                                                                                                draft.price !== undefined
+                                                                                                    ? draft.price
+                                                                                                    : item.location_override?.price_modifier ?? item.price_modifier ?? 0
+                                                                                            const isActive =
+                                                                                                draft.isActive !== undefined
+                                                                                                    ? draft.isActive
+                                                                                                    : (item.location_override?.is_active ?? item.is_active ?? true)
+                                                                                            const isSaving = draft.isSaving
+
+                                                                                            return (
+                                                                                                <div
+                                                                                                    key={item.id}
+                                                                                                    className="flex flex-col gap-2 rounded-lg border bg-white px-3 py-2"
+                                                                                                >
+                                                                                                    <div className="flex items-center justify-between gap-2">
+                                                                                                        <div>
+                                                                                                            <div className="font-medium text-sm">{item.name}</div>
+                                                                                                            {item.description && (
+                                                                                                                <div className="text-xs text-muted-foreground">{item.description}</div>
+                                                                                                            )}
+                                                                                                        </div>
+                                                                                                        <Badge variant="outline" className="text-[10px]">
+                                                                                                            {locationIdForEdits ? 'Location Override' : 'Global'}
+                                                                                                        </Badge>
+                                                                                                    </div>
+
+                                                                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+                                                                                                        <div>
+                                                                                                            <label className="text-xs text-muted-foreground">Price Modifier</label>
+                                                                                                            <div className="relative">
+                                                                                                                <span className="absolute left-2 top-2 text-muted-foreground text-sm">$</span>
+                                                                                                                <Input
+                                                                                                                    className="pl-6 h-9"
+                                                                                                                    type="number"
+                                                                                                                    step="0.01"
+                                                                                                                    value={price ?? ''}
+                                                                                                                    onChange={(e) => {
+                                                                                                                        const val = e.target.value
+                                                                                                                        setModifierDraft(item.id, { price: val === '' ? null : parseFloat(val) })
+                                                                                                                    }}
+                                                                                                                />
+                                                                                                            </div>
+                                                                                                        </div>
+
+                                                                                                        <div className="flex items-center justify-between md:justify-start gap-2">
+                                                                                                            <div className="text-xs text-muted-foreground">Active</div>
+                                                                                                            <Switch
+                                                                                                                checked={!!isActive}
+                                                                                                                onCheckedChange={(checked) => setModifierDraft(item.id, { isActive: checked })}
+                                                                                                            />
+                                                                                                        </div>
+
+                                                                                                        <div className="flex justify-end">
+                                                                                                            <Button
+                                                                                                                size="sm"
+                                                                                                                onClick={() => handleSaveModifierItem(item)}
+                                                                                                                disabled={isSaving}
+                                                                                                                className="gap-1"
+                                                                                                            >
+                                                                                                                {isSaving ? (
+                                                                                                                    <>
+                                                                                                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                                                                                                        Saving...
+                                                                                                                    </>
+                                                                                                                ) : (
+                                                                                                                    <>
+                                                                                                                        <Sparkles className="h-4 w-4" />
+                                                                                                                        Save
+                                                                                                                    </>
+                                                                                                                )}
+                                                                                                            </Button>
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            )
+                                                                                        })}
+                                                                                    </div>
                                                                                 )}
                                                                             </div>
+                                                                        )
+                                                                    })}
+                                                                </div>
+                                                            )}
 
-                                                                            {/* Items List (Drill Down for Location Managers) */}
-                                                                            {showItems && group.modifier_group_items && group.modifier_group_items.length > 0 && (
-                                                                                <div className="border-t bg-background/50 px-3 py-2 space-y-1">
-                                                                                    <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">
-                                                                                        Manage Options ({currentLocationName})
-                                                                                    </div>
-                                                                                    {group.modifier_group_items.map((item: any) => (
-                                                                                        <ModifierItemRow
-                                                                                            key={item.id}
-                                                                                            item={item as ExtendedModifierItem}
-                                                                                            locationId={selectedLocationId || ''}
-                                                                                            onUpdate={() => {
-                                                                                                queryClient.invalidateQueries({ queryKey: ['menu-items'] })
-                                                                                                queryClient.invalidateQueries({ queryKey: ['menu-item', editItem?.id] })
-                                                                                            }}
-                                                                                        />
-                                                                                    ))}
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    )
-                                                                })}
-                                                            </div>
-                                                        )}
+                                                            {/* Add Modifier Section (Level 1 only) */}
+                                                            {editingContext.level === 2 && availableGroups.length > 0 && (
+                                                                <div className="pt-2">
+                                                                    <Collapsible open={showAddModifier} onOpenChange={setShowAddModifier}>
+                                                                        <CollapsibleTrigger asChild>
+                                                                            <button
+                                                                                type="button"
+                                                                                className={cn(
+                                                                                    "w-full p-3 rounded-lg border-2 border-dashed transition-all flex items-center justify-center gap-2",
+                                                                                    showAddModifier
+                                                                                        ? "border-primary bg-primary/5 text-primary"
+                                                                                        : "border-muted-foreground/30 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5"
+                                                                                )}
+                                                                            >
+                                                                                <Plus className={cn(
+                                                                                    "h-4 w-4 transition-transform",
+                                                                                    showAddModifier && "rotate-45"
+                                                                                )} />
+                                                                                <span className="text-sm font-medium">
+                                                                                    {showAddModifier ? 'Cancel' : `Add Modifier Group (${availableGroups.length} available)`}
+                                                                                </span>
+                                                                            </button>
+                                                                        </CollapsibleTrigger>
+                                                                        <CollapsibleContent className="pt-3">
+                                                                            <ModifierGroupSearchList
+                                                                                availableGroups={availableGroups}
+                                                                                onSelect={(groupId) => {
+                                                                                    toggleModifier(groupId)
+                                                                                    if (availableGroups.length === 1) {
+                                                                                        setShowAddModifier(false)
+                                                                                    }
+                                                                                }}
+                                                                            />
+                                                                        </CollapsibleContent>
+                                                                    </Collapsible>
+                                                                </div>
+                                                            )}
 
-                                                        {/* Add Modifier Section (Level 1 only) */}
-                                                        {editingContext.level === 2 && availableGroups.length > 0 && (
-                                                            <div className="pt-2">
-                                                                <Collapsible open={showAddModifier} onOpenChange={setShowAddModifier}>
-                                                                    <CollapsibleTrigger asChild>
-                                                                        <button
-                                                                            type="button"
-                                                                            className={cn(
-                                                                                "w-full p-3 rounded-lg border-2 border-dashed transition-all flex items-center justify-center gap-2",
-                                                                                showAddModifier
-                                                                                    ? "border-primary bg-primary/5 text-primary"
-                                                                                    : "border-muted-foreground/30 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5"
-                                                                            )}
-                                                                        >
-                                                                            <Plus className={cn(
-                                                                                "h-4 w-4 transition-transform",
-                                                                                showAddModifier && "rotate-45"
-                                                                            )} />
-                                                                            <span className="text-sm font-medium">
-                                                                                {showAddModifier ? 'Cancel' : `Add Modifier Group (${availableGroups.length} available)`}
-                                                                            </span>
-                                                                        </button>
-                                                                    </CollapsibleTrigger>
-                                                                    <CollapsibleContent className="pt-3">
-                                                                        <ModifierGroupSearchList
-                                                                            availableGroups={availableGroups}
-                                                                            onSelect={(groupId) => {
-                                                                                toggleModifier(groupId)
-                                                                                if (availableGroups.length === 1) {
-                                                                                    setShowAddModifier(false)
-                                                                                }
-                                                                            }}
-                                                                        />
-                                                                    </CollapsibleContent>
-                                                                </Collapsible>
-                                                            </div>
-                                                        )}
+                                                            {/* No Available Modifiers Message */}
+                                                            {editingContext.level === 1 && availableGroups.length === 0 && modifierGroups.length > 0 && (
+                                                                <div className="text-center py-2 text-xs text-muted-foreground">
+                                                                    All modifier groups have been added
+                                                                </div>
+                                                            )}
 
-                                                        {/* No Available Modifiers Message */}
-                                                        {editingContext.level === 1 && availableGroups.length === 0 && modifierGroups.length > 0 && (
-                                                            <div className="text-center py-2 text-xs text-muted-foreground">
-                                                                All modifier groups have been added
-                                                            </div>
-                                                        )}
-
-                                                        {/* No Modifiers at All */}
-                                                        {modifierGroups.length === 0 && (
-                                                            <div className="text-center py-4 text-muted-foreground text-sm">
-                                                                No modifier groups available in your organization.
-                                                            </div>
-                                                        )}
-                                                    </>
-                                                )
-                                            })()}
-                                    </div>
+                                                            {/* No Modifiers at All */}
+                                                            {modifierGroups.length === 0 && (
+                                                                <div className="text-center py-4 text-muted-foreground text-sm">
+                                                                    No modifier groups available in your organization.
+                                                                </div>
+                                                            )}
+                                                        </>
+                                                    )
+                                                })()}
+                                            </div>
 
                                         </TabsContent>
                                     </Tabs>

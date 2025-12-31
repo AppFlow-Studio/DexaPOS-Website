@@ -762,6 +762,7 @@ export default function MenuItemsPage() {
     // Get flat items with categories
     const { data: itemsData, isLoading, isError, refetch } = useLocationScopedMenuItemsWithCategories()
 
+    console.log('itemsData', itemsData?.data?.[0])
     // Get categories for filtering
     const { data: categoriesData } = useCategoriesWithItems(clerkOrgId || '', selectedLocationId)
     const { data: modifierGroups } = useModifierGroups(clerkOrgId)

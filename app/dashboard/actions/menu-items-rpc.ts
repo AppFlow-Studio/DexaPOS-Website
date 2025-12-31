@@ -109,6 +109,174 @@ export interface FlatItem {
 
     // Location-specific item flag
     location_id: string | null
+    modifier_groups: Array<{
+        id: string
+        name: string
+        description: string | null
+        base_min_selections: number
+        base_max_selections: number | null
+        base_is_required: boolean
+        base_is_active: boolean
+        location_override: {
+            id: string
+            custom_price: number | null
+            custom_cash_price: number | null
+            price_modifier: number | null
+            price_modifier_type: string | null
+            is_available: boolean
+            stock_tracking_mode: string | null
+            current_stock: number | null
+            tax_category: string | null
+            is_tax_exempt: boolean | null
+            available_channels: string[] | null
+        } | null
+        effective_availability: boolean
+        has_location_override: boolean
+        items: Array<{
+            id: string
+            name: string
+            description: string | null
+            base_price: number
+            base_is_default: boolean
+            base_is_active: boolean
+            location_override: {
+                id: string
+                custom_price: number | null
+                price_modifier: number | null
+                price_modifier_type: string | null
+                is_available: boolean
+                stock_tracking_mode: string | null
+                current_stock: number | null
+            } | null
+            effective_price: number
+            effective_availability: boolean
+            has_location_override: boolean
+        }>
+    }>
+}
+
+// ============================================================================
+// MODIFIER GROUP / ITEM UPDATES (GLOBAL + LOCATION OVERRIDE)
+// ============================================================================
+
+interface UpdateModifierGroupParams {
+    modifierGroupId: string
+    isActive?: boolean
+    displayOrder?: number | null
+    locationId?: string | null
+}
+
+interface UpdateModifierItemParams {
+    modifierItemId: string
+    priceModifier?: number | null
+    isActive?: boolean
+    stockTrackingMode?: 'quantity' | 'in_stock' | 'out_of_stock' | null
+    currentStock?: number | null
+    locationId?: string | null
+}
+
+/**
+ * Update modifier group visibility/order.
+ * - Global: updates modifier_groups
+ * - Location: upserts into location_modifier_group_overrides
+ */
+export async function updateModifierGroup(params: UpdateModifierGroupParams) {
+    const { userId } = await auth()
+    if (!userId) return { success: false, error: 'Unauthorized' }
+
+    const supabase = createServerSupabaseClient()
+    const { modifierGroupId, isActive, displayOrder, locationId } = params
+
+    // Location-specific override
+    if (locationId) {
+        // Fetch merchant_id to satisfy FK
+        const { data: baseGroup, error: groupError } = await supabase
+            .from('modifier_groups')
+            .select('merchant_id')
+            .eq('id', modifierGroupId)
+            .single()
+
+        if (groupError || !baseGroup) {
+            return { success: false, error: 'Modifier group not found' }
+        }
+
+        const { error } = await supabase
+            .from('location_modifier_group_overrides')
+            .upsert({
+                location_id: locationId,
+                modifier_group_id: modifierGroupId,
+                merchant_id: baseGroup.merchant_id,
+                is_active: isActive,
+                display_order: displayOrder,
+                updated_at: new Date().toISOString(),
+            }, { onConflict: 'location_id,modifier_group_id' })
+
+        if (error) return { success: false, error: error.message }
+        return { success: true, level: 'location' }
+    }
+
+    // Global update
+    const updateData: Record<string, any> = { updated_at: new Date().toISOString() }
+    if (isActive !== undefined) updateData.is_active = isActive
+    if (displayOrder !== undefined) updateData.display_order = displayOrder
+
+    const { error } = await supabase
+        .from('modifier_groups')
+        .update(updateData)
+        .eq('id', modifierGroupId)
+
+    if (error) return { success: false, error: error.message }
+    return { success: true, level: 'global' }
+}
+
+/**
+ * Update modifier item price/availability.
+ * - Global: updates modifier_group_items
+ * - Location: uses upsert_modifier_override RPC (location_modifier_item_overrides)
+ */
+export async function updateModifierItem(params: UpdateModifierItemParams) {
+    const { userId } = await auth()
+    if (!userId) return { success: false, error: 'Unauthorized' }
+
+    const supabase = createServerSupabaseClient()
+    const {
+        modifierItemId,
+        priceModifier,
+        isActive,
+        stockTrackingMode,
+        currentStock,
+        locationId,
+    } = params
+
+    if (locationId) {
+        // Location override via RPC
+        const { data, error } = await supabase.rpc('upsert_modifier_override', {
+            p_location_id: locationId,
+            p_modifier_item_id: modifierItemId,
+            p_price_modifier: priceModifier ?? null,
+            p_is_active: isActive ?? null,
+            p_stock_tracking_mode: stockTrackingMode ?? null,
+            p_current_stock: currentStock ?? null,
+        })
+
+        if (error) return { success: false, error: error.message }
+        return { success: true, level: 'location', data }
+    }
+
+    // Global update
+    const updateData: Record<string, any> = { updated_at: new Date().toISOString() }
+    if (priceModifier !== undefined) updateData.price_modifier = priceModifier
+    if (isActive !== undefined) updateData.is_active = isActive
+    if (stockTrackingMode !== undefined) updateData.stock_tracking_mode = stockTrackingMode
+    if (currentStock !== undefined) updateData.current_stock = currentStock
+
+    const { error } = await supabase
+        .from('modifier_group_items')
+        .update(updateData)
+        .eq('id', modifierItemId)
+
+    if (error) return { success: false, error: error.message }
+    return { success: true, level: 'global' }
 }
 
 export async function getItemsForLocationFlat(merchantId: string, locationId?: string | null) {
@@ -176,6 +344,8 @@ export async function getItemsForLocationFlat(merchantId: string, locationId?: s
 
         // Location-specific item flag
         location_id: item.location_id || null,
+
+        modifier_groups: item.modifier_groups || [],
     }))
 
     return {

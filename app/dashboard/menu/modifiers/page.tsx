@@ -3,6 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import { Layers, Plus, Search, Edit3, Trash2, Settings2, Utensils, Eye, EyeOff, MapPin } from 'lucide-react'
 import { useState } from 'react'
 import {
@@ -28,6 +29,9 @@ import {
 import { cn } from '@/lib/utils'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { ChevronDown } from 'lucide-react'
+import { updateModifierGroup, updateModifierItem } from '../../actions/menu-items-rpc'
+import { toast } from 'sonner'
+import { Loader2, Sparkles } from 'lucide-react'
 
 export default function ModifiersPage() {
     const { data: userInfo } = useUserInfo()
@@ -44,6 +48,8 @@ export default function ModifiersPage() {
     const [editingGroup, setEditingGroup] = useState<any>(null)
     const [deletingGroup, setDeletingGroup] = useState<any>(null)
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+    const [modifierDrafts, setModifierDrafts] = useState<Record<string, { price?: number | null; isActive?: boolean; isSaving?: boolean }>>({})
+    const [groupDrafts, setGroupDrafts] = useState<Record<string, { isActive?: boolean; isSaving?: boolean }>>({})
 
     const groupsList = Array.isArray(modifierGroups) ? modifierGroups : []
     const filteredGroups = groupsList.filter(group =>
@@ -59,6 +65,14 @@ export default function ModifiersPage() {
         setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }))
     }
 
+    const setModifierDraft = (id: string, patch: Partial<{ price: number | null; isActive: boolean; isSaving: boolean }>) => {
+        setModifierDrafts(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }))
+    }
+
+    const setGroupDraft = (id: string, patch: Partial<{ isActive: boolean; isSaving: boolean }>) => {
+        setGroupDrafts(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }))
+    }
+
     const handleDelete = async () => {
         if (!deletingGroup) return
         deleteGroupMutation.mutate(deletingGroup.id, {
@@ -70,6 +84,59 @@ export default function ModifiersPage() {
 
     const handleToggleVisibility = (groupId: string, isActive: boolean) => {
         visibilityMutation.mutate({ modifierGroupId: groupId, isActive })
+    }
+
+    const handleGroupActiveChange = async (group: any, isActive: boolean) => {
+        const locId = isAllLocations ? null : selectedLocation?.id || null
+        setGroupDraft(group.id, { isActive, isSaving: true })
+        try {
+            const result = await updateModifierGroup({
+                modifierGroupId: group.id,
+                isActive,
+                locationId: locId || undefined,
+            })
+            if (!result.success) {
+                toast.error('Failed to update group', { description: result.error })
+                return
+            }
+            toast.success('Group updated', {
+                description: locId ? 'Location override saved' : 'Global group updated',
+            })
+            refetch()
+        } catch (error) {
+            toast.error('Failed to update group', { description: 'Please try again.' })
+        } finally {
+            setGroupDraft(group.id, { isSaving: false })
+        }
+    }
+
+    const handleSaveModifierItem = async (item: any) => {
+        const draft = modifierDrafts[item.id] || {}
+        const price = draft.price !== undefined ? draft.price : (item.location_override?.price_modifier ?? item.price_modifier ?? 0)
+        const isActive = draft.isActive !== undefined ? draft.isActive : (item.location_override?.is_active ?? item.is_active ?? true)
+        const locId = isAllLocations ? null : selectedLocation?.id || null
+
+        setModifierDraft(item.id, { isSaving: true })
+        try {
+            const result = await updateModifierItem({
+                modifierItemId: item.id,
+                priceModifier: price,
+                isActive,
+                locationId: locId || undefined,
+            })
+            if (!result.success) {
+                toast.error('Failed to update option', { description: result.error })
+                return
+            }
+            toast.success('Option updated', {
+                description: locId ? 'Location override saved' : 'Global option updated',
+            })
+            refetch()
+        } catch (error) {
+            toast.error('Failed to update option', { description: 'Please try again.' })
+        } finally {
+            setModifierDraft(item.id, { isSaving: false })
+        }
     }
 
     return (
@@ -268,6 +335,14 @@ export default function ModifiersPage() {
                                                             </div>
                                                         </div>
                                                         <div className="flex items-center gap-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-xs text-muted-foreground">Active</span>
+                                                                <Switch
+                                                                    checked={groupDrafts[group.id]?.isActive ?? effectiveIsActive}
+                                                                    disabled={groupDrafts[group.id]?.isSaving}
+                                                                    onCheckedChange={(checked) => handleGroupActiveChange(group, checked)}
+                                                                />
+                                                            </div>
                                                             <div className="text-right text-sm text-muted-foreground">
                                                                 {group.modifier_group_items?.length || 0} options
                                                             </div>
@@ -286,41 +361,88 @@ export default function ModifiersPage() {
                                                     <div className="mt-4 space-y-2">
                                                         <h4 className="text-sm font-medium text-muted-foreground">Options</h4>
                                                         {group.modifier_group_items && group.modifier_group_items.length > 0 ? (
-                                                            <div className="grid gap-2 md:grid-cols-2">
-                                                                {group.modifier_group_items.map((item) => (
-                                                                    <div
-                                                                        key={item.id}
-                                                                        className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
-                                                                    >
-                                                                        <div>
-                                                                            <div className='flex items-center gap-2'>
-                                                                                <div className="font-medium">{item.name}</div>
-                                                                                {
-                                                                                    item?.is_default && (
-                                                                                        <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
-                                                                                            Default
-                                                                                        </Badge>
-                                                                                    )
-                                                                                }
+                                                            <div className="space-y-3">
+                                                                {group.modifier_group_items.map((item) => {
+                                                                    const draft = modifierDrafts[item.id] || {}
+                                                                    const price = draft.price !== undefined ? draft.price : (item.location_override?.price_modifier ?? item.price_modifier ?? 0)
+                                                                    const isActive = draft.isActive !== undefined ? draft.isActive : (item.location_override?.is_active ?? item.is_active ?? true)
+                                                                    const isSaving = draft.isSaving
+                                                                    const scopeBadge = isAllLocations ? 'Global' : 'Location Override'
+
+                                                                    return (
+                                                                        <div
+                                                                            key={item.id}
+                                                                            className="p-3 rounded-lg border bg-muted/40 space-y-2"
+                                                                        >
+                                                                            <div className="flex items-center justify-between gap-2">
+                                                                                <div>
+                                                                                    <div className="flex items-center gap-2 font-medium">
+                                                                                        {item.name}
+                                                                                        {item?.is_default && (
+                                                                                            <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
+                                                                                                Default
+                                                                                            </Badge>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    {item.description && (
+                                                                                        <div className="text-xs text-muted-foreground">{item.description}</div>
+                                                                                    )}
+                                                                                </div>
+                                                                                <Badge variant="outline" className="text-[10px]">
+                                                                                    {scopeBadge}
+                                                                                </Badge>
                                                                             </div>
-                                                                            {item.description && (
-                                                                                <div className="text-sm text-muted-foreground">{item.description}</div>
-                                                                            )}
+
+                                                                            <div className="grid gap-3 md:grid-cols-3 items-center">
+                                                                                <div>
+                                                                                    <div className="text-xs text-muted-foreground mb-1">Price Modifier</div>
+                                                                                    <div className="relative">
+                                                                                        <span className="absolute left-2 top-2 text-muted-foreground text-sm">$</span>
+                                                                                        <Input
+                                                                                            className="pl-6 h-9"
+                                                                                            type="number"
+                                                                                            step="0.01"
+                                                                                            value={price ?? ''}
+                                                                                            onChange={(e) => {
+                                                                                                const val = e.target.value
+                                                                                                setModifierDraft(item.id, { price: val === '' ? null : parseFloat(val) })
+                                                                                            }}
+                                                                                        />
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <div className="text-xs text-muted-foreground">Active</div>
+                                                                                    <Switch
+                                                                                        checked={!!isActive}
+                                                                                        onCheckedChange={(checked) => setModifierDraft(item.id, { isActive: checked })}
+                                                                                    />
+                                                                                </div>
+
+                                                                                <div className="flex justify-end">
+                                                                                    <Button
+                                                                                        size="sm"
+                                                                                        onClick={() => handleSaveModifierItem(item)}
+                                                                                        disabled={isSaving}
+                                                                                        className="gap-2"
+                                                                                    >
+                                                                                        {isSaving ? (
+                                                                                            <>
+                                                                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                                                                Saving...
+                                                                                            </>
+                                                                                        ) : (
+                                                                                            <>
+                                                                                                <Sparkles className="h-4 w-4" />
+                                                                                                Save
+                                                                                            </>
+                                                                                        )}
+                                                                                    </Button>
+                                                                                </div>
+                                                                            </div>
                                                                         </div>
-                                                                        <div className={cn(
-                                                                            "font-semibold",
-                                                                            item.price_modifier > 0 ? "text-green-600" :
-                                                                                item.price_modifier < 0 ? "text-red-500" : "text-muted-foreground"
-                                                                        )}>
-                                                                            {item.price_modifier !== 0 && (
-                                                                                <>
-                                                                                    {item.price_modifier > 0 ? '+' : ''}${item.price_modifier.toFixed(2)}
-                                                                                </>
-                                                                            )}
-                                                                            {item.price_modifier === 0 && '$0.00'}
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
+                                                                    )
+                                                                })}
                                                             </div>
                                                         ) : (
                                                             <p className="text-sm text-muted-foreground">No options added yet</p>
