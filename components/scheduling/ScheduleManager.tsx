@@ -24,6 +24,11 @@ import { Button } from "@/components/ui/button";
 import { useScheduleStore } from "@/stores/useScheduleStore";
 import { Badge } from "@/components/ui/badge";
 import { WeeklyCalendar } from "./WeeklyCalendar";
+import { TemplateDrawer } from "./templates/TemplateDrawer";
+import { ApplyTemplateDialog } from "./templates/ApplyTemplateDialog";
+import { SaveTemplateDialog } from "./templates/SaveTemplateDialog";
+import { ApplyMode, ScheduleTemplate } from "@/types/schedule";
+import { useScheduleTemplateStore } from "@/stores/useScheduleTemplateStore";
 
 export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
   const {
@@ -31,7 +36,16 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
     setCurrentViewDate,
     weeklySchedules,
     schedulePeriods,
+    applyTemplate,
   } = useScheduleStore();
+  const { templates } = useScheduleTemplateStore();
+
+  const [isApplyDialogOpen, setIsApplyDialogOpen] = useState(false);
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
+    null
+  );
+  const [applyMode, setApplyMode] = useState<ApplyMode>("merge");
 
   // Fetch the current schedule to get its bounds
   const schedule = useMemo(() => {
@@ -90,6 +104,25 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
     if (canGoNext) setCurrentViewDate(addWeeks(currentDate, 1));
   };
 
+  // Template Handlers
+  const handleSelectTemplate = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    setIsApplyDialogOpen(true);
+  };
+
+  const handleApplyTemplate = () => {
+    if (!selectedTemplateId || !schedule) return;
+
+    const template = templates.find((t) => t.id === selectedTemplateId);
+    if (!template) return;
+
+    applyTemplate(scheduleId, schedule.type, template, applyMode);
+    setIsApplyDialogOpen(false);
+    setSelectedTemplateId(null);
+  };
+
+  const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
+
   /* Removed unused state and handlers */
 
   return (
@@ -132,9 +165,28 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
             Draft Mode
           </Badge>
           {/* Templates and Actions placeholders */}
-          <Button variant="outline" size="sm" className="gap-2">
+          {/* <TemplateManager onApply={handleSelectTemplate} /> Replaces with dedicated page */}
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-2"
+            onClick={() =>
+              window.open("/dashboard/schedules/templates", "_blank")
+            }
+            // Using window.open for now to keep context, or use router.push if we want to leave.
+            // Plan says "navigation to /dashboard/schedules/templates".
+          >
+            <CalendarIcon className="h-4 w-4" />
+            Library
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-2"
+            onClick={() => setIsSaveDialogOpen(true)}
+          >
             <Copy className="h-4 w-4" />
-            Templates
+            Save as Template
           </Button>
           <Button size="sm" className="gap-2">
             <Plus className="h-4 w-4" />
@@ -143,15 +195,42 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
         </div>
       </div>
 
-      {/* Main Calendar Area */}
-      <div className="flex-1 border rounded-lg overflow-hidden bg-background">
-        <WeeklyCalendar
-          currentDate={currentDate}
-          scheduleId={scheduleId}
-          minDate={scheduleStart || undefined}
-          maxDate={scheduleEnd || undefined}
-        />
+      {/* Main Content Area with Drawer */}
+      <div className="flex-1 flex overflow-hidden border rounded-lg bg-background">
+        <div className="flex-1 overflow-auto">
+          <WeeklyCalendar
+            currentDate={currentDate}
+            scheduleId={scheduleId}
+            minDate={scheduleStart || undefined}
+            maxDate={scheduleEnd || undefined}
+          />
+        </div>
+
+        {/* Template Drawer Sidebar */}
+        <TemplateDrawer onApplyTemplate={handleSelectTemplate} />
       </div>
+
+      {/* Template Dialogs */}
+      {selectedTemplate && (
+        <ApplyTemplateDialog
+          isOpen={isApplyDialogOpen}
+          onClose={() => setIsApplyDialogOpen(false)}
+          templateName={selectedTemplate.name}
+          shiftsToAdd={selectedTemplate.shifts.length}
+          conflictsDetected={0} // TODO: Implement pre-calculation if needed
+          applyMode={applyMode}
+          onApplyModeChange={setApplyMode}
+          onApply={handleApplyTemplate}
+        />
+      )}
+
+      {schedule && (
+        <SaveTemplateDialog
+          isOpen={isSaveDialogOpen}
+          onClose={() => setIsSaveDialogOpen(false)}
+          shiftsToSave={schedule.shifts || []}
+        />
+      )}
     </div>
   );
 }

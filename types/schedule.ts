@@ -13,12 +13,25 @@ export interface Shift {
   color?: string; // For UI customization
 }
 
+// Template-specific shift (uses relative DayOfWeek instead of absolute date)
+export interface TemplateShift {
+  tempId: string;
+  employeeId: string;
+  dayOfWeek: number; // 0-6 (Sun-Sat) or 1-7 depending on usage
+  startTime: string; // ISO datetime string (date part ignored)
+  endTime: string; // ISO datetime string
+  role: Role;
+  notes?: string;
+}
+
 export interface ScheduleTemplate {
   id: string;
   name: string;
-  shifts: Omit<Shift, "id" | "employee_name">[];
+  shifts: TemplateShift[];
   description?: string;
+  tags?: string[];
   created_at: string;
+  lastUsed?: Date;
 }
 
 export interface WeeklySchedule {
@@ -41,3 +54,5 @@ export interface SchedulePeriod {
   status: "draft" | "active" | "archived";
   type: "period";
 }
+
+export type ApplyMode = "merge" | "replace-all" | "fill-gaps";

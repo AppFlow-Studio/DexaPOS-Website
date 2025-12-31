@@ -5,6 +5,7 @@ import {
   ScheduleTemplate,
   WeeklySchedule,
   SchedulePeriod,
+  ApplyMode,
 } from "@/types/schedule";
 import {
   addDays,
@@ -37,11 +38,13 @@ interface ScheduleState {
     newEndTime: string,
     newEmployeeId?: string
   ) => void; // Updated for Drag-n-Drop
-
-  // Templates (Deferred)
-  // saveTemplate: (name: string, shiftIds: string[]) => void;
-  // applyTemplate: (scheduleId: string, templateId: string, startDate: string) => void;
-
+  // Templates
+  applyTemplate: (
+    scheduleId: string,
+    scheduleType: "period" | "weekly",
+    template: ScheduleTemplate,
+    mode: ApplyMode
+  ) => void;
   // View
   setCurrentViewDate: (date: Date) => void;
 
@@ -326,6 +329,150 @@ export const useScheduleStore = create<ScheduleState>()(
             };
           }
         }),
+      applyTemplate: (scheduleId, scheduleType, template, mode) => {
+        try {
+          console.log("Applying template:", {
+            scheduleId,
+            scheduleType,
+            templateName: template.name,
+            mode,
+          });
+          set((state) => {
+            let targetSchedule: WeeklySchedule | SchedulePeriod | undefined;
+            if (scheduleType === "weekly") {
+              targetSchedule = state.weeklySchedules.find(
+                (s) => s.id === scheduleId
+              );
+            } else {
+              targetSchedule = state.schedulePeriods.find(
+                (s) => s.id === scheduleId
+              );
+            }
+
+            if (!targetSchedule) {
+              console.error("Target schedule not found", scheduleId);
+              return {};
+            }
+
+            console.log("Found target schedule:", targetSchedule.id);
+            const startDate = parseISO(targetSchedule.startDate);
+            console.log("Target start date:", startDate);
+
+            const templateShifts = template.shifts
+              .map((tShift) => {
+                // Calculate relative day/time from template shift
+                // For simplicity, assuming template shifts are stored with 2024-01-01 base
+                // Adjust to target schedule's start date + relative day index
+
+                // Use start_time as the reference for date, since 'date' property doesn't exist on Shift
+                if (!tShift.start_time) {
+                  console.error("Template shift missing start_time", tShift);
+                  return null;
+                }
+
+                const tShiftDate = parseISO(tShift.start_time);
+                const dayIndex =
+                  (tShiftDate.getDay() - parseISO("2024-01-01").getDay() + 7) %
+                  7;
+                const targetShiftDate = addDays(startDate, dayIndex);
+
+                // Construct new date object preserving time
+                const originalStart = parseISO(tShift.start_time);
+                const originalEnd = parseISO(tShift.end_time);
+
+                const newStart = new Date(targetShiftDate);
+                newStart.setHours(
+                  originalStart.getHours(),
+                  originalStart.getMinutes(),
+                  0,
+                  0
+                );
+
+                const newEnd = new Date(targetShiftDate);
+                newEnd.setHours(
+                  originalEnd.getHours(),
+                  originalEnd.getMinutes(),
+                  0,
+                  0
+                );
+                // Handle overnight shifts
+                if (newEnd <= newStart) {
+                  newEnd.setDate(newEnd.getDate() + 1);
+                }
+
+                const newShift = {
+                  ...tShift,
+                  id: crypto.randomUUID(),
+                  // date: format(targetShiftDate, "yyyy-MM-dd"), // Shift interface doesn't have date
+                  start_time: newStart.toISOString(),
+                  end_time: newEnd.toISOString(),
+                  status: "open", // Reset status for new shifts
+                  employee_id: "00000000-0000-0000-0000-000000000000", // Reset employee assignment (use empty UUID or specific unassigned logic)
+                  employee_name: "Unassigned",
+                } as Shift;
+
+                return newShift;
+              })
+              .filter(Boolean) as Shift[];
+
+            console.log("Processed shifts:", templateShifts.length);
+
+            if (mode === "replace-all") {
+              targetSchedule.shifts = templateShifts;
+            } else if (mode === "merge") {
+              targetSchedule.shifts = [
+                ...(targetSchedule.shifts || []),
+                ...templateShifts,
+              ];
+            } else if (mode === "fill-gaps") {
+              // Only add if no shift exists for that role/time
+              const existingShifts = targetSchedule.shifts || [];
+              const nonConflictingShifts = templateShifts.filter((newShift) => {
+                const newInterval = {
+                  start: parseISO(newShift.start_time),
+                  end: parseISO(newShift.end_time),
+                };
+                return !existingShifts.some((existing) => {
+                  const existingInterval = {
+                    start: parseISO(existing.start_time),
+                    end: parseISO(existing.end_time),
+                  };
+                  return (
+                    existing.employee_id === newShift.employee_id && // Check per employee (or role if unassigned)
+                    areIntervalsOverlapping(newInterval, existingInterval)
+                  );
+                });
+              });
+              targetSchedule.shifts = [
+                ...existingShifts,
+                ...nonConflictingShifts,
+              ];
+            }
+
+            console.log(
+              "Shifts updated. New count:",
+              targetSchedule.shifts.length
+            );
+
+            // Propagate manual updates back to state arrays
+            if (scheduleType === "weekly") {
+              return {
+                weeklySchedules: state.weeklySchedules.map((s) =>
+                  s.id === scheduleId ? (targetSchedule as WeeklySchedule) : s
+                ),
+              };
+            } else {
+              return {
+                schedulePeriods: state.schedulePeriods.map((s) =>
+                  s.id === scheduleId ? (targetSchedule as SchedulePeriod) : s
+                ),
+              };
+            }
+          });
+        } catch (e) {
+          console.error("Error in applyTemplate:", e);
+        }
+      },
     }),
     {
       name: "schedule-storage",

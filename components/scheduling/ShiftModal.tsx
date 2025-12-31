@@ -21,8 +21,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useUnifiedStaff } from "@/app/dashboard/hooks/useStaff";
 import { useScheduleStore } from "@/stores/useScheduleStore";
-import { Shift, Role } from "@/types/schedule";
-import { format } from "date-fns";
+import { Shift, Role, TemplateShift } from "@/types/schedule";
+import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 
 interface ShiftModalProps {
@@ -30,11 +30,25 @@ interface ShiftModalProps {
   onOpenChange: (open: boolean) => void;
   defaultDate?: Date;
   defaultEmployeeId?: string;
-  editShift?: Shift | null;
-  scheduleId: string;
+  editShift?: Shift | TemplateShift | null; // Support both types
+  scheduleId?: string; // Optional now
+  isTemplateMode?: boolean;
+  dayOfWeek?: number; // For new template shifts
+  onSave?: (shiftData: any) => void; // Generic handler for templates
+  onDelete?: () => void; // External delete handler
 }
 
 const roles: Role[] = ["server", "cashier", "kitchen", "manager", "driver"];
+
+const DAYS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
 
 export function ShiftModal({
   open,
@@ -43,6 +57,10 @@ export function ShiftModal({
   defaultEmployeeId,
   editShift,
   scheduleId,
+  isTemplateMode = false,
+  dayOfWeek,
+  onSave: onExternalSave,
+  onDelete: onExternalDelete,
 }: ShiftModalProps) {
   const { addShift, updateShift, deleteShift, checkConflicts } =
     useScheduleStore();
@@ -51,6 +69,7 @@ export function ShiftModal({
   const [employeeId, setEmployeeId] = useState("");
   const [role, setRole] = useState<Role>("server");
   const [date, setDate] = useState("");
+  const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number>(1); // Default Monday
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("17:00");
   const [notes, setNotes] = useState("");
@@ -59,19 +78,40 @@ export function ShiftModal({
   useEffect(() => {
     if (open) {
       if (editShift) {
-        setEmployeeId(editShift.employee_id);
+        // Safe cast check - explicit discrimination would be better but simple checks work
+        const isTemplate = "tempId" in editShift;
+
+        const eId = isTemplate
+          ? (editShift as TemplateShift).employeeId
+          : (editShift as Shift).employee_id;
+        setEmployeeId(eId);
         setRole(editShift.role);
-        setDate(format(new Date(editShift.start_time), "yyyy-MM-dd"));
-        setStartTime(format(new Date(editShift.start_time), "HH:mm"));
-        setEndTime(format(new Date(editShift.end_time), "HH:mm"));
+
+        if (isTemplateMode || isTemplate) {
+          const tShift = editShift as TemplateShift;
+          setSelectedDayOfWeek(tShift.dayOfWeek);
+          setStartTime(format(parseISO(tShift.startTime), "HH:mm"));
+          setEndTime(format(parseISO(tShift.endTime), "HH:mm"));
+        } else {
+          const shift = editShift as Shift;
+          setDate(format(new Date(shift.start_time), "yyyy-MM-dd"));
+          setStartTime(format(new Date(shift.start_time), "HH:mm"));
+          setEndTime(format(new Date(shift.end_time), "HH:mm"));
+        }
         setNotes(editShift.notes || "");
       } else {
         setEmployeeId(defaultEmployeeId || "");
-        setDate(
-          defaultDate
-            ? format(defaultDate, "yyyy-MM-dd")
-            : format(new Date(), "yyyy-MM-dd")
-        );
+
+        if (isTemplateMode) {
+          setSelectedDayOfWeek(dayOfWeek ?? 1);
+        } else {
+          setDate(
+            defaultDate
+              ? format(defaultDate, "yyyy-MM-dd")
+              : format(new Date(), "yyyy-MM-dd")
+          );
+        }
+
         setStartTime("09:00");
         setEndTime("17:00");
         setRole("server");
@@ -79,18 +119,55 @@ export function ShiftModal({
       }
       setError(null);
     }
-  }, [open, editShift, defaultDate, defaultEmployeeId]);
+  }, [
+    open,
+    editShift,
+    defaultDate,
+    defaultEmployeeId,
+    isTemplateMode,
+    dayOfWeek,
+  ]);
 
   const handleSave = (force = false) => {
-    if (!employeeId || !date || !startTime || !endTime) {
+    if (!employeeId || (!isTemplateMode && !date) || !startTime || !endTime) {
       setError("Please fill all required fields");
       return;
     }
 
-    const startDateTime = `${date}T${startTime}:00`;
-    const endDateTime = `${date}T${endTime}:00`; // Simplified: assume same day for now
-
     const staff = staffMembers.find((s) => s.member_id === employeeId);
+
+    // TEMPLATE MODE HANDLER
+    if (isTemplateMode) {
+      // Create full ISO strings for time (using arbitrary date)
+      const baseDate = "2024-01-01"; // Arbitrary
+      const startDateTime = `${baseDate}T${startTime}:00`;
+      const endDateTime = `${baseDate}T${endTime}:00`;
+
+      const templateShiftData: Partial<TemplateShift> = {
+        tempId: (editShift as TemplateShift)?.tempId || crypto.randomUUID(), // Preserve or generate
+        employeeId,
+        dayOfWeek: selectedDayOfWeek,
+        role,
+        startTime: new Date(startDateTime).toISOString(),
+        endTime: new Date(endDateTime).toISOString(),
+        notes,
+      };
+
+      if (onExternalSave) {
+        onExternalSave(templateShiftData);
+      }
+      onOpenChange(false);
+      return;
+    }
+
+    // REGULAR SCHEDULE MODE
+    if (!scheduleId) {
+      setError("Missing Schedule ID");
+      return;
+    }
+
+    const startDateTime = `${date}T${startTime}:00`;
+    const endDateTime = `${date}T${endTime}:00`;
 
     const shiftData = {
       employee_id: employeeId,
@@ -102,7 +179,10 @@ export function ShiftModal({
       notes,
     };
 
-    if (!force && checkConflicts(scheduleId, shiftData, editShift?.id)) {
+    if (
+      !force &&
+      checkConflicts(scheduleId, shiftData, (editShift as Shift)?.id)
+    ) {
       toast("Conflict detected", {
         description:
           "This shift conflicts with another shift for this employee.",
@@ -115,7 +195,7 @@ export function ShiftModal({
     }
 
     if (editShift) {
-      updateShift(scheduleId, editShift.id, shiftData);
+      updateShift(scheduleId, (editShift as Shift).id, shiftData);
     } else {
       addShift(scheduleId, shiftData);
     }
@@ -126,16 +206,20 @@ export function ShiftModal({
   const handleDelete = () => {
     if (!editShift) return;
 
-    // For delete, we can just use a simple toast with undo?
-    // Or a persistent toast asking to confirm?
-    // User asked "not the dcoument warning".
-    // I'll use a toast with "Confirm" button to be safe.
+    // External delete handler (for templates)
+    if (onExternalDelete) {
+      onExternalDelete();
+      onOpenChange(false);
+      return;
+    }
+
+    if (!scheduleId) return;
 
     toast("Delete this shift?", {
       action: {
         label: "Confirm",
         onClick: () => {
-          deleteShift(scheduleId, editShift.id);
+          deleteShift(scheduleId, (editShift as Shift).id);
           onOpenChange(false);
         },
       },
@@ -184,15 +268,36 @@ export function ShiftModal({
             </Select>
           </div>
 
-          {/* Date */}
-          <div className="grid gap-2">
-            <Label>Date</Label>
-            <Input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
-          </div>
+          {/* Date OR Day of Week */}
+          {isTemplateMode ? (
+            <div className="grid gap-2">
+              <Label>Day of Week</Label>
+              <Select
+                value={String(selectedDayOfWeek)}
+                onValueChange={(v) => setSelectedDayOfWeek(Number(v))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DAYS.map((dayName, index) => (
+                    <SelectItem key={index} value={String(index)}>
+                      {dayName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div className="grid gap-2">
+              <Label>Date</Label>
+              <Input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
+            </div>
+          )}
 
           {/* Time Range */}
           <div className="grid grid-cols-2 gap-4">

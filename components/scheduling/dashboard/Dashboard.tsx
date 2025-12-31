@@ -67,6 +67,15 @@ export function ScheduleDashboard() {
         <h2 className="text-3xl font-bold tracking-tight">Schedule Manager</h2>
         <div className="flex items-center gap-2">
           <Button
+            variant="outline"
+            onClick={() => router.push("/dashboard/schedules/templates")}
+            className="gap-2"
+          >
+            <Plus className="h-4 w-4" />{" "}
+            {/* Using Plus generically or could use LayoutTemplate */}
+            Templates
+          </Button>
+          <Button
             onClick={() => setIsQuickScheduleModalOpen(true)}
             className="gap-2"
           >
