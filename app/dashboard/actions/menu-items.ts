@@ -1,133 +1,144 @@
-'use server'
+"use server";
 
-import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { MenuItemsModel } from '@/types/db-modles'
-import { UpsertLocationMenuItemOverride, GetLocationMenuItemOverride, OverrideData } from './location-menu-overrides'
-import { LocationLibraryItem } from '@/types/menu'
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { MenuItemsModel } from "@/types/db-modles";
+import {
+  UpsertLocationMenuItemOverride,
+  GetLocationMenuItemOverride,
+  OverrideData,
+} from "./location-menu-overrides";
+import { LocationLibraryItem } from "@/types/menu";
 // ============================================================================
 // TYPES
 // ============================================================================
 
 export interface MenuItemWithLocationContext extends MenuItemsModel {
-    // Location override data
-    effective_price: number
-    effective_cash_price: number | null
-    has_price_override: boolean
-    has_availability_override: boolean
-    location_is_available: boolean
-    global_price: number
-    global_cash_price: number | null
+  // Location override data
+  effective_price: number;
+  effective_cash_price: number | null;
+  has_price_override: boolean;
+  has_availability_override: boolean;
+  location_is_available: boolean;
+  global_price: number;
+  global_cash_price: number | null;
 }
 
 // ============================================================================
 // GET OPERATIONS
 // ============================================================================
 
-export async function GetMenuItems(clerkOrgId: string, locationId?: string | null) {
-    if (!clerkOrgId) {
-        return []
-    }
+export async function GetMenuItems(
+  clerkOrgId: string,
+  locationId?: string | null
+) {
+  if (!clerkOrgId) {
+    return [];
+  }
 
-    const supabase = createServerSupabaseClient()
+  const supabase = createServerSupabaseClient();
 
-    // Get merchant ID
-    const { data: merchant, error: merchantError } = await supabase
-        .from('merchants')
-        .select('id')
-        .eq('clerk_org_id', clerkOrgId)
-        .single()
+  // Get merchant ID
+  const { data: merchant, error: merchantError } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("clerk_org_id", clerkOrgId)
+    .single();
 
-    if (merchantError || !merchant) {
-        console.error('Error getting merchant:', merchantError)
-        return []
-    }
+  if (merchantError || !merchant) {
+    console.error("Error getting merchant:", merchantError);
+    return [];
+  }
 
-    const { data, error } = await supabase
-        .from('menu_items')
-        .select('*')
-        .eq('merchant_id', merchant.id)
-        .order('created_at', { ascending: false })
+  const { data, error } = await supabase
+    .from("menu_items")
+    .select("*")
+    .eq("merchant_id", merchant.id)
+    .order("created_at", { ascending: false });
 
-    if (error) {
-        console.error('Error getting menu items:', error)
-        return []
-    }
+  if (error) {
+    console.error("Error getting menu items:", error);
+    return [];
+  }
 
-    // If no location specified, return global items
-    if (!locationId || locationId === 'all') {
-        return data as MenuItemsModel[]
-    }
+  // If no location specified, return global items
+  if (!locationId || locationId === "all") {
+    return data as MenuItemsModel[];
+  }
 
-    // Get location overrides
-    const { data: overrides } = await supabase
-        .from('location_menu_item_overrides')
-        .select('*')
-        .eq('location_id', locationId)
+  // Get location overrides
+  const { data: overrides } = await supabase
+    .from("location_menu_item_overrides")
+    .select("*")
+    .eq("location_id", locationId);
 
-    const overrideMap = new Map(
-        (overrides || []).map(o => [o.menu_item_id, o])
-    )
+  const overrideMap = new Map(
+    (overrides || []).map((o) => [o.menu_item_id, o])
+  );
 
-    // Return items with effective prices
-    return data.map(item => {
-        const override = overrideMap.get(item.id)
-        return {
-            ...item,
-            effective_price: override?.custom_price ?? item.price,
-            effective_cash_price: override?.custom_cash_price ?? item.cash_price,
-            has_price_override: !!(override?.custom_price !== null || override?.custom_cash_price !== null),
-            has_availability_override: override?.is_available !== undefined && override?.is_available !== item.availability,
-            location_is_available: override?.is_available ?? item.availability,
-            global_price: item.price,
-            global_cash_price: item.cash_price,
-        } as MenuItemWithLocationContext
-    })
+  // Return items with effective prices
+  return data.map((item) => {
+    const override = overrideMap.get(item.id);
+    return {
+      ...item,
+      effective_price: override?.custom_price ?? item.price,
+      effective_cash_price: override?.custom_cash_price ?? item.cash_price,
+      has_price_override: !!(
+        override?.custom_price !== null || override?.custom_cash_price !== null
+      ),
+      has_availability_override:
+        override?.is_available !== undefined &&
+        override?.is_available !== item.availability,
+      location_is_available: override?.is_available ?? item.availability,
+      global_price: item.price,
+      global_cash_price: item.cash_price,
+    } as MenuItemWithLocationContext;
+  });
 }
 
-
 export async function GetMenuItem(
-    itemId: string,
-    locationId?: string | null // Optional: Add context if known
+  itemId: string,
+  locationId?: string | null // Optional: Add context if known
 ) {
-    if (!itemId) return null;
+  if (!itemId) return null;
 
-    const Location_Id = locationId == 'all' ? null : locationId
-    const supabase = createServerSupabaseClient();
+  const Location_Id = locationId == "all" ? null : locationId;
+  const supabase = createServerSupabaseClient();
 
-    const { data, error } = await supabase.rpc('get_menu_item_details', {
-        p_item_id: itemId,
-        p_location_id: Location_Id || null
-    });
-    console.log('data', data)
+  const { data, error } = await supabase.rpc("get_menu_item_details", {
+    p_item_id: itemId,
+    p_location_id: Location_Id || null,
+  });
+  console.log("data", data);
 
-    if (error) {
-        console.error('Error getting menu item:', error);
-        return null;
-    }
+  if (error) {
+    console.error("Error getting menu item:", error);
+    return null;
+  }
 
-    if (!data) return null;
+  if (!data) return null;
 
-    // Use explicit casting to ensure type safety with your updated interfaces
-    return data as LocationLibraryItem;
+  // Use explicit casting to ensure type safety with your updated interfaces
+  return data as LocationLibraryItem;
 }
 
 /**
  * Get menu item with location-specific pricing and availability context
  */
 export async function GetMenuItemWithLocationContext(
-    itemId: string,
-    locationId?: string | null
+  itemId: string,
+  locationId?: string | null
 ) {
-    if (!itemId) {
-        return null
-    }
+  if (!itemId) {
+    return null;
+  }
 
-    const supabase = createServerSupabaseClient()
+  const supabase = createServerSupabaseClient();
 
-    // Get menu item with all relations (using new category_items table)
-    const { data: item, error } = await supabase
-        .from('menu_items')
-        .select(`
+  // Get menu item with all relations (using new category_items table)
+  const { data: item, error } = await supabase
+    .from("menu_items")
+    .select(
+      `
             *,
             category_items(
                 id,
@@ -147,73 +158,79 @@ export async function GetMenuItemWithLocationContext(
                     modifier_group_items(*)
                 )
             )
-        `)
-        .eq('id', itemId)
-        .single()
-
-    if (error || !item) {
-        console.error('Error getting menu item:', error)
-        return null
-    }
-
-    // If no location specified, return item without override context
-    if (!locationId || locationId === 'all') {
-        return {
-            ...item,
-            effective_price: item.price,
-            effective_cash_price: item.cash_price,
-            has_price_override: false,
-            has_availability_override: false,
-            location_is_available: item.availability,
-            global_price: item.price,
-            global_cash_price: item.cash_price,
-            location_override: null,
-        }
-    }
-
-    // Get location override
-    const override = await GetLocationMenuItemOverride(locationId, itemId)
-
-    const hasPriceOverride = override && (
-        override.custom_price !== null ||
-        override.custom_cash_price !== null
+        `
     )
-    const hasAvailabilityOverride = override &&
-        override.is_available !== item.availability
+    .eq("id", itemId)
+    .single();
 
+  if (error || !item) {
+    console.error("Error getting menu item:", error);
+    return null;
+  }
+
+  // If no location specified, return item without override context
+  if (!locationId || locationId === "all") {
     return {
-        ...item,
-        effective_price: hasPriceOverride && override.custom_price !== null
-            ? override.custom_price
-            : item.price,
-        effective_cash_price: hasPriceOverride && override.custom_cash_price !== null
-            ? override.custom_cash_price
-            : item.cash_price,
-        has_price_override: !!hasPriceOverride,
-        has_availability_override: !!hasAvailabilityOverride,
-        location_is_available: override?.is_available ?? item.availability,
-        global_price: item.price,
-        global_cash_price: item.cash_price,
-        location_override: override,
-    }
+      ...item,
+      effective_price: item.price,
+      effective_cash_price: item.cash_price,
+      has_price_override: false,
+      has_availability_override: false,
+      location_is_available: item.availability,
+      global_price: item.price,
+      global_cash_price: item.cash_price,
+      location_override: null,
+    };
+  }
+
+  // Get location override
+  const override = await GetLocationMenuItemOverride(locationId, itemId);
+
+  const hasPriceOverride =
+    override &&
+    (override.custom_price !== null || override.custom_cash_price !== null);
+  const hasAvailabilityOverride =
+    override && override.is_available !== item.availability;
+
+  return {
+    ...item,
+    effective_price:
+      hasPriceOverride && override.custom_price !== null
+        ? override.custom_price
+        : item.price,
+    effective_cash_price:
+      hasPriceOverride && override.custom_cash_price !== null
+        ? override.custom_cash_price
+        : item.cash_price,
+    has_price_override: !!hasPriceOverride,
+    has_availability_override: !!hasAvailabilityOverride,
+    location_is_available: override?.is_available ?? item.availability,
+    global_price: item.price,
+    global_cash_price: item.cash_price,
+    location_override: override,
+  };
 }
 
 /**
  * @deprecated Use GetMenuWithCategories from menus.ts instead.
  * Items are now accessed through categories within a menu.
  */
-export async function GetMenuItemsByMenu(menuId: string, locationId?: string | null) {
-    if (!menuId) {
-        return []
-    }
+export async function GetMenuItemsByMenu(
+  menuId: string,
+  locationId?: string | null
+) {
+  if (!menuId) {
+    return [];
+  }
 
-    const supabase = createServerSupabaseClient()
+  const supabase = createServerSupabaseClient();
 
-    // Get items through category_items via menu_categories junction
-    // This replaces the deprecated menu_item_menus table
-    const { data, error } = await supabase
-        .from('menu_categories')
-        .select(`
+  // Get items through category_items via menu_categories junction
+  // This replaces the deprecated menu_item_menus table
+  const { data, error } = await supabase
+    .from("menu_categories")
+    .select(
+      `
             id,
             category_id,
             display_order,
@@ -231,100 +248,104 @@ export async function GetMenuItemsByMenu(menuId: string, locationId?: string | n
                     menu_item:menu_items(*)
                 )
             )
-        `)
-        .eq('menu_id', menuId)
-        .order('display_order', { ascending: true, nullsFirst: false })
-
-    if (error) {
-        console.error('Error getting menu items by menu:', error)
-        return []
-    }
-
-    // Flatten items from all categories
-    const items: Array<MenuItemsModel & {
-        category_item_id: string
-        category_id: string
-        custom_price?: number | null
-        custom_cash_price?: number | null
-        is_available_in_menu: boolean
-        display_order_in_menu?: number
-        is_featured?: boolean
-    }> = []
-
-    for (const menuCategory of (data || [])) {
-        const category = menuCategory.category as unknown as {
-            id: string
-            name: string
-            category_items: Array<{
-                id: string
-                menu_item_id: string
-                display_order: number
-                custom_price: number | null
-                custom_cash_price: number | null
-                is_available: boolean
-                is_featured: boolean
-                menu_item: MenuItemsModel
-            }>
-        } | null
-
-        if (!category?.category_items) continue
-
-        for (const categoryItem of category.category_items) {
-            if (!categoryItem.menu_item) continue
-            items.push({
-                ...categoryItem.menu_item,
-                category_item_id: categoryItem.id,
-                category_id: category.id,
-                custom_price: categoryItem.custom_price,
-                custom_cash_price: categoryItem.custom_cash_price,
-                is_available_in_menu: categoryItem.is_available,
-                display_order_in_menu: categoryItem.display_order,
-                is_featured: categoryItem.is_featured,
-            })
-        }
-    }
-
-    // If no location specified, return as is
-    if (!locationId || locationId === 'all') {
-        return items
-    }
-
-    // Get location overrides for these items
-    const itemIds = items.map(i => i.id).filter(Boolean)
-    if (!itemIds.length) return items
-
-    const { data: overrides } = await supabase
-        .from('location_menu_item_overrides')
-        .select('*')
-        .eq('location_id', locationId)
-        .in('menu_item_id', itemIds)
-
-    const overrideMap = new Map(
-        (overrides || []).map(o => [o.menu_item_id, o])
+        `
     )
+    .eq("menu_id", menuId)
+    .order("display_order", { ascending: true, nullsFirst: false });
 
-    // Apply location overrides to items
-    return items.map(item => {
-        const override = overrideMap.get(item.id)
-        const hasPriceOverride = override && (
-            override.custom_price !== null ||
-            override.custom_cash_price !== null
-        )
+  if (error) {
+    console.error("Error getting menu items by menu:", error);
+    return [];
+  }
 
-        return {
-            ...item,
-            effective_price: hasPriceOverride && override.custom_price !== null
-                ? override.custom_price
-                : item.price,
-            effective_cash_price: hasPriceOverride && override.custom_cash_price !== null
-                ? override.custom_cash_price
-                : item.cash_price,
-            has_price_override: !!hasPriceOverride,
-            location_is_available: override?.is_available ?? item.availability,
-            global_price: item.price,
-            global_cash_price: item.cash_price,
-        }
-    })
+  // Flatten items from all categories
+  const items: Array<
+    MenuItemsModel & {
+      category_item_id: string;
+      category_id: string;
+      custom_price?: number | null;
+      custom_cash_price?: number | null;
+      is_available_in_menu: boolean;
+      display_order_in_menu?: number;
+      is_featured?: boolean;
+    }
+  > = [];
+
+  for (const menuCategory of data || []) {
+    const category = menuCategory.category as unknown as {
+      id: string;
+      name: string;
+      category_items: Array<{
+        id: string;
+        menu_item_id: string;
+        display_order: number;
+        custom_price: number | null;
+        custom_cash_price: number | null;
+        is_available: boolean;
+        is_featured: boolean;
+        menu_item: MenuItemsModel;
+      }>;
+    } | null;
+
+    if (!category?.category_items) continue;
+
+    for (const categoryItem of category.category_items) {
+      if (!categoryItem.menu_item) continue;
+      items.push({
+        ...categoryItem.menu_item,
+        category_item_id: categoryItem.id,
+        category_id: category.id,
+        custom_price: categoryItem.custom_price,
+        custom_cash_price: categoryItem.custom_cash_price,
+        is_available_in_menu: categoryItem.is_available,
+        display_order_in_menu: categoryItem.display_order,
+        is_featured: categoryItem.is_featured,
+      });
+    }
+  }
+
+  // If no location specified, return as is
+  if (!locationId || locationId === "all") {
+    return items;
+  }
+
+  // Get location overrides for these items
+  const itemIds = items.map((i) => i.id).filter(Boolean);
+  if (!itemIds.length) return items;
+
+  const { data: overrides } = await supabase
+    .from("location_menu_item_overrides")
+    .select("*")
+    .eq("location_id", locationId)
+    .in("menu_item_id", itemIds);
+
+  const overrideMap = new Map(
+    (overrides || []).map((o) => [o.menu_item_id, o])
+  );
+
+  // Apply location overrides to items
+  return items.map((item) => {
+    const override = overrideMap.get(item.id);
+    const hasPriceOverride =
+      override &&
+      (override.custom_price !== null || override.custom_cash_price !== null);
+
+    return {
+      ...item,
+      effective_price:
+        hasPriceOverride && override.custom_price !== null
+          ? override.custom_price
+          : item.price,
+      effective_cash_price:
+        hasPriceOverride && override.custom_cash_price !== null
+          ? override.custom_cash_price
+          : item.cash_price,
+      has_price_override: !!hasPriceOverride,
+      location_is_available: override?.is_available ?? item.availability,
+      global_price: item.price,
+      global_cash_price: item.cash_price,
+    };
+  });
 }
 
 // ============================================================================
@@ -332,65 +353,83 @@ export async function GetMenuItemsByMenu(menuId: string, locationId?: string | n
 // ============================================================================
 
 export async function CreateMenuItem(
-    clerkOrgId: string,
-    data: {
-        name: string
-        description?: string
-        price: number
-        cash_price?: number
-        image?: string
-        meal_types?: ("Lunch" | "Dinner" | "Brunch" | "Specials")[]
-        allergens?: string[]
-        tax_category?: string
-        is_tax_exempt?: boolean
-        available_channels?: string[]
-        card_bg_color?: string
-        availability?: boolean
-        stock_tracking_mode?: "in_stock" | "out_of_stock" | "quantity"
-    }
+  clerkOrgId: string,
+  data: {
+    name: string;
+    description?: string;
+    price: number;
+    cash_price?: number;
+    image?: string;
+    meal_types?: ("Lunch" | "Dinner" | "Brunch" | "Specials")[];
+    allergens?: string[];
+    tax_category?: string;
+    is_tax_exempt?: boolean;
+    available_channels?: string[];
+    card_bg_color?: string;
+    availability?: boolean;
+    stock_tracking_mode?: "in_stock" | "out_of_stock" | "quantity";
+    modifier_group_ids?: string[];
+  }
 ) {
-    if (!clerkOrgId) {
-        return { error: 'Organization ID is required' }
+  if (!clerkOrgId) {
+    return { error: "Organization ID is required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  // Get merchant ID
+  const { data: merchant, error: merchantError } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("clerk_org_id", clerkOrgId)
+    .single();
+
+  if (merchantError || !merchant) {
+    console.error("Error getting merchant:", merchantError);
+    return { error: "Merchant not found" };
+  }
+
+  const { data: item, error } = await supabase
+    .from("menu_items")
+    .insert({
+      merchant_id: merchant.id,
+      name: data.name,
+      description: data.description || null,
+      price: data.price,
+      cash_price: data.cash_price || null,
+      image: data.image || null,
+      meal_types: data.meal_types || [],
+      allergens: data.allergens || [],
+      card_bg_color: data.card_bg_color || null,
+      availability: data.availability ?? true,
+      stock_tracking_mode: data.stock_tracking_mode || null,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error creating menu item:", error);
+    return { error: error.message };
+  }
+
+  // Insert modifier group assignments if provided
+  if (data.modifier_group_ids && data.modifier_group_ids.length > 0) {
+    const modifierInserts = data.modifier_group_ids.map((groupId) => ({
+      menu_item_id: item.id,
+      modifier_group_id: groupId,
+    }));
+
+    const { error: modifierError } = await supabase
+      .from("menu_item_modifier_groups")
+      .insert(modifierInserts);
+
+    if (modifierError) {
+      console.error("Error linking modifier groups:", modifierError);
+      // We don't fail the whole request, but we log it
     }
+  }
 
-    const supabase = createServerSupabaseClient()
-
-    // Get merchant ID
-    const { data: merchant, error: merchantError } = await supabase
-        .from('merchants')
-        .select('id')
-        .eq('clerk_org_id', clerkOrgId)
-        .single()
-
-    if (merchantError || !merchant) {
-        console.error('Error getting merchant:', merchantError)
-        return { error: 'Merchant not found' }
-    }
-
-    const { data: item, error } = await supabase
-        .from('menu_items')
-        .insert({
-            merchant_id: merchant.id,
-            name: data.name,
-            description: data.description || null,
-            price: data.price,
-            cash_price: data.cash_price || null,
-            image: data.image || null,
-            meal_types: data.meal_types || [],
-            allergens: data.allergens || [],
-            card_bg_color: data.card_bg_color || null,
-            availability: data.availability ?? true,
-            stock_tracking_mode: data.stock_tracking_mode || null,
-        })
-        .select()
-        .single()
-
-    if (error) {
-        console.error('Error creating menu item:', error)
-        return { error: error.message }
-    }
-
-    return { data: item as MenuItemsModel }
+  return { data: item as MenuItemsModel };
 }
 
 // ============================================================================
@@ -399,184 +438,248 @@ export async function CreateMenuItem(
 
 /**
  * Update a menu item - location-aware
- * 
+ *
  * If locationId is provided AND data contains price/availability changes:
  *   → Creates/updates location_menu_item_overrides (location-specific)
  * If locationId is null/undefined OR "all":
  *   → Updates the global menu_items table
  */
 export async function UpdateMenuItem(
-    itemId: string,
-    data: {
-        name?: string
-        description?: string
-        price?: number
-        cash_price?: number
-        image?: string
-        meal_types?: ("Lunch" | "Dinner" | "Brunch" | "Specials")[]
-        allergens?: string[]
-        card_bg_color?: string
-        availability?: boolean
-        stock_tracking_mode?: "in_stock" | "out_of_stock" | "quantity"
-        tax_category?: string
-        is_tax_exempt?: boolean
-        available_channels?: string[]
-    },
-    locationId?: string | null
+  itemId: string,
+  data: {
+    name?: string;
+    description?: string;
+    price?: number;
+    cash_price?: number;
+    image?: string;
+    meal_types?: ("Lunch" | "Dinner" | "Brunch" | "Specials")[];
+    allergens?: string[];
+    card_bg_color?: string;
+    availability?: boolean;
+    stock_tracking_mode?: "in_stock" | "out_of_stock" | "quantity";
+    tax_category?: string;
+    is_tax_exempt?: boolean;
+    available_channels?: string[];
+    modifier_group_ids?: string[];
+  },
+  locationId?: string | null
 ) {
-    console.log('UpdateMenuItem data', data)
-    console.log('UpdateMenuItem locationId', locationId)
-    console.log('UpdateMenuItem itemId', itemId)
-    if (!itemId) {
-        return { error: 'Item ID is required' }
+  console.log("UpdateMenuItem data", data);
+  console.log("UpdateMenuItem locationId", locationId);
+  console.log("UpdateMenuItem itemId", itemId);
+  if (!itemId) {
+    return { error: "Item ID is required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  // Determine if this is a location-scoped update
+  const isLocationScoped = locationId && locationId !== "all";
+  console.log("UpdateMenuItem isLocationScoped", isLocationScoped);
+
+  // Fields that can be overridden at location level
+  const locationOverrideFields = [
+    "price",
+    "cash_price",
+    "availability",
+    "stock_tracking_mode",
+  ];
+
+  // Check if we have any location-overridable fields in the data
+  const hasLocationOverrideData = locationOverrideFields.some(
+    (field) => data[field as keyof typeof data] !== undefined
+  );
+  console.log(
+    "UpdateMenuItem hasLocationOverrideData",
+    hasLocationOverrideData
+  );
+
+  // If location-scoped and has overridable data, use location override
+  if (isLocationScoped && hasLocationOverrideData) {
+    // Prepare override data
+    const overrideData: OverrideData = {};
+
+    if (data.price !== undefined) {
+      overrideData.custom_price = data.price;
+    }
+    if (data.cash_price !== undefined) {
+      overrideData.custom_cash_price = data.cash_price;
+    }
+    if (data.availability !== undefined) {
+      overrideData.is_available = data.availability;
+    }
+    if (data.stock_tracking_mode !== undefined) {
+      overrideData.stock_tracking_mode =
+        data.stock_tracking_mode as OverrideData["stock_tracking_mode"];
     }
 
-    const supabase = createServerSupabaseClient()
+    // Update/create location override
+    const overrideResult = await UpsertLocationMenuItemOverride(
+      locationId,
+      itemId,
+      overrideData
+    );
 
-    // Determine if this is a location-scoped update
-    const isLocationScoped = locationId && locationId !== 'all'
-    console.log('UpdateMenuItem isLocationScoped', isLocationScoped)
-
-    // Fields that can be overridden at location level
-    const locationOverrideFields = ['price', 'cash_price', 'availability', 'stock_tracking_mode']
-
-    // Check if we have any location-overridable fields in the data
-    const hasLocationOverrideData = locationOverrideFields.some(
-        field => data[field as keyof typeof data] !== undefined
-        
-    )
-    console.log('UpdateMenuItem hasLocationOverrideData', hasLocationOverrideData)
-
-    // If location-scoped and has overridable data, use location override
-    if (isLocationScoped && hasLocationOverrideData) {
-        // Prepare override data
-        const overrideData: OverrideData = {}
-
-        if (data.price !== undefined) {
-            overrideData.custom_price = data.price
-        }
-        if (data.cashPrice !== undefined) {
-            overrideData.custom_cash_price = data.cashPrice
-        }
-        if (data.availability !== undefined) {
-            overrideData.is_available = data.availability
-        }
-        if (data.stockTrackingMode !== undefined) {
-            overrideData.stock_tracking_mode = data.stock_tracking_mode as OverrideData['stock_tracking_mode']
-        }
-
-        // Update/create location override
-        const overrideResult = await UpsertLocationMenuItemOverride(
-            locationId,
-            itemId,
-            overrideData
-        )
-
-        if (overrideResult.error) {
-            return { error: overrideResult.error }
-        }
-
-        // Check if there are any non-location fields to update globally
-        const globalFields = ['name', 'description', 'image', 'meal_types', 'allergens', 'card_bg_color']
-        const hasGlobalData = globalFields.some(
-            field => data[field as keyof typeof data] !== undefined
-        )
-
-        // If no global fields, return success with just the override
-        if (!hasGlobalData) {
-            // Get updated item with context
-            const updatedItem = await GetMenuItemWithLocationContext(itemId, locationId)
-            return {
-                data: updatedItem,
-                location_override: overrideResult.data,
-            }
-        }
-
-        // Continue to update global fields below
+    if (overrideResult.error) {
+      return { error: overrideResult.error };
     }
 
-    // Build update object with only provided fields (non-location fields for scoped updates)
-    const updateData: Record<string, unknown> = {}
+    // Check if there are any non-location fields to update globally
+    const globalFields = [
+      "name",
+      "description",
+      "image",
+      "meal_types",
+      "allergens",
+      "card_bg_color",
+    ];
+    const hasGlobalData = globalFields.some(
+      (field) => data[field as keyof typeof data] !== undefined
+    );
 
-    if (!isLocationScoped || !hasLocationOverrideData) {
-        // Include all fields for global updates
-        if (data.name !== undefined) updateData.name = data.name
-        if (data.description !== undefined) updateData.description = data.description
-        if (data.price !== undefined) updateData.price = data.price
-        if (data.cashPrice !== undefined) updateData.cash_price = data.cashPrice
-        if (data.image !== undefined) updateData.image = data.image
-        if (data.mealTypes !== undefined) updateData.meal_types = data.mealTypes
-        if (data.allergens !== undefined) updateData.allergens = data.allergens
-        if (data.cardBgColor !== undefined) updateData.card_bg_color = data.cardBgColor
-        if (data.stockTrackingMode !== undefined) updateData.stock_tracking_mode = data.stockTrackingMode
-        if (data.taxCategory !== undefined) updateData.tax_category = data.taxCategory
-        if (data.isTaxExempt !== undefined) updateData.is_tax_exempt = data.isTaxExempt
-        if (data.availableChannels !== undefined) updateData.available_channels = data.availableChannels
-    } else {
-        // Only include non-overridable fields for location-scoped updates
-        if (data.name !== undefined) updateData.name = data.name
-        if (data.description !== undefined) updateData.description = data.description
-        if (data.image !== undefined) updateData.image = data.image
-        if (data.meal_types !== undefined) updateData.meal_types = data.meal_types
-        if (data.allergens !== undefined) updateData.allergens = data.allergens
-        if (data.card_bg_color !== undefined) updateData.card_bg_color = data.card_bg_color
+    // If no global fields, return success with just the override
+    if (!hasGlobalData) {
+      // Get updated item with context
+      const updatedItem = await GetMenuItemWithLocationContext(
+        itemId,
+        locationId
+      );
+      return {
+        data: updatedItem,
+        location_override: overrideResult.data,
+      };
     }
 
-    console.log('UpdateMenuItem updateData', updateData)
-    // If nothing to update in global table, return early
-    if (Object.keys(updateData).length === 0) {
-        const item = await GetMenuItemWithLocationContext(itemId, locationId)
-        return { data: item }
+    // Continue to update global fields below
+  }
+
+  // Build update object with only provided fields (non-location fields for scoped updates)
+  const updateData: Record<string, unknown> = {};
+
+  if (!isLocationScoped || !hasLocationOverrideData) {
+    // Include all fields for global updates
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.description !== undefined)
+      updateData.description = data.description;
+    if (data.price !== undefined) updateData.price = data.price;
+    if (data.cash_price !== undefined) updateData.cash_price = data.cash_price;
+    if (data.image !== undefined) updateData.image = data.image;
+    if (data.meal_types !== undefined) updateData.meal_types = data.meal_types;
+    if (data.allergens !== undefined) updateData.allergens = data.allergens;
+    if (data.card_bg_color !== undefined)
+      updateData.card_bg_color = data.card_bg_color;
+    if (data.stock_tracking_mode !== undefined)
+      updateData.stock_tracking_mode = data.stock_tracking_mode;
+    if (data.tax_category !== undefined)
+      updateData.tax_category = data.tax_category;
+    if (data.is_tax_exempt !== undefined)
+      updateData.is_tax_exempt = data.is_tax_exempt;
+    if (data.available_channels !== undefined)
+      updateData.available_channels = data.available_channels;
+  } else {
+    // Only include non-overridable fields for location-scoped updates
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.description !== undefined)
+      updateData.description = data.description;
+    if (data.image !== undefined) updateData.image = data.image;
+    if (data.meal_types !== undefined) updateData.meal_types = data.meal_types;
+    if (data.allergens !== undefined) updateData.allergens = data.allergens;
+    if (data.card_bg_color !== undefined)
+      updateData.card_bg_color = data.card_bg_color;
+  }
+
+  // Handle Modifier Group assignments (Global Only)
+  if (!isLocationScoped && data.modifier_group_ids !== undefined) {
+    // First delete existing assignments
+    const { error: deleteError } = await supabase
+      .from("menu_item_modifier_groups")
+      .delete()
+      .eq("menu_item_id", itemId);
+
+    if (deleteError) {
+      console.error(
+        "Error deleting existing modifier assignments:",
+        deleteError
+      );
+      return { error: "Failed to update modifiers" };
     }
 
-    const { data: item, error } = await supabase
-        .from('menu_items')
-        .update(updateData)
-        .eq('id', itemId)
-        .select()
-        .single()
+    // Insert new assignments if any
+    if (data.modifier_group_ids.length > 0) {
+      const modifierInserts = data.modifier_group_ids.map((groupId) => ({
+        menu_item_id: itemId,
+        modifier_group_id: groupId,
+      }));
 
-    if (error) {
-        console.error('Error updating menu item:', error)
-        return { error: error.message }
+      const { error: insertError } = await supabase
+        .from("menu_item_modifier_groups")
+        .insert(modifierInserts);
+
+      if (insertError) {
+        console.error("Error inserting modifier assignments:", insertError);
+        return { error: "Failed to update modifiers" };
+      }
     }
+  }
 
-    // Return with location context if applicable
-    if (isLocationScoped) {
-        const contextItem = await GetMenuItemWithLocationContext(itemId, locationId)
-        return { data: contextItem }
-    }
+  console.log("UpdateMenuItem updateData", updateData);
+  // If nothing to update in global table, return early
+  if (Object.keys(updateData).length === 0) {
+    const item = await GetMenuItemWithLocationContext(itemId, locationId);
+    return { data: item };
+  }
 
-    return { data: item as MenuItemsModel }
+  const { data: item, error } = await supabase
+    .from("menu_items")
+    .update(updateData)
+    .eq("id", itemId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error updating menu item:", error);
+    return { error: error.message };
+  }
+
+  // Return with location context if applicable
+  if (isLocationScoped) {
+    const contextItem = await GetMenuItemWithLocationContext(
+      itemId,
+      locationId
+    );
+    return { data: contextItem };
+  }
+
+  return { data: item as MenuItemsModel };
 }
 
 /**
  * Reset location-specific override to use global values
  */
 export async function ResetMenuItemToGlobal(
-    itemId: string,
-    locationId: string
+  itemId: string,
+  locationId: string
 ) {
-    if (!itemId || !locationId) {
-        return { error: 'Item ID and Location ID are required' }
-    }
+  if (!itemId || !locationId) {
+    return { error: "Item ID and Location ID are required" };
+  }
 
-    const supabase = createServerSupabaseClient()
+  const supabase = createServerSupabaseClient();
 
-    const { error } = await supabase
-        .from('location_menu_item_overrides')
-        .delete()
-        .eq('location_id', locationId)
-        .eq('menu_item_id', itemId)
+  const { error } = await supabase
+    .from("location_menu_item_overrides")
+    .delete()
+    .eq("location_id", locationId)
+    .eq("menu_item_id", itemId);
 
-    if (error) {
-        console.error('Error resetting menu item to global:', error)
-        return { error: error.message }
-    }
+  if (error) {
+    console.error("Error resetting menu item to global:", error);
+    return { error: error.message };
+  }
 
-    // Return the item with updated context
-    const item = await GetMenuItemWithLocationContext(itemId, locationId)
-    return { data: item }
+  // Return the item with updated context
+  const item = await GetMenuItemWithLocationContext(itemId, locationId);
+  return { data: item };
 }
 
 // ============================================================================
@@ -584,51 +687,52 @@ export async function ResetMenuItemToGlobal(
 // ============================================================================
 
 export async function DeleteMenuItem(itemId: string) {
-    if (!itemId) {
-        return { error: 'Item ID is required' }
-    }
+  if (!itemId) {
+    return { error: "Item ID is required" };
+  }
 
-    const supabase = createServerSupabaseClient()
+  const supabase = createServerSupabaseClient();
 
-    const { error } = await supabase
-        .from('menu_items')
-        .delete()
-        .eq('id', itemId)
-   //TODO: Add rls policy to delete menu items based on location access
-    if (error) {
-        console.error('Error deleting menu item:', error)
-        return { error: error.message }
-    }
+  const { error } = await supabase.from("menu_items").delete().eq("id", itemId);
+  //TODO: Add rls policy to delete menu items based on location access
+  if (error) {
+    console.error("Error deleting menu item:", error);
+    return { error: error.message };
+  }
 
-    return { success: true }
+  return { success: true };
 }
 
 // ============================================================================
 // ITEMS WITH CATEGORIES
 // ============================================================================
 
-export async function GetMenuItemsWithCategories(clerkOrgId: string, locationId?: string | null) {
-    if (!clerkOrgId) {
-        return []
-    }
+export async function GetMenuItemsWithCategories(
+  clerkOrgId: string,
+  locationId?: string | null
+) {
+  if (!clerkOrgId) {
+    return [];
+  }
 
-    const supabase = createServerSupabaseClient()
+  const supabase = createServerSupabaseClient();
 
-    // Get merchant ID
-    const { data: merchant, error: merchantError } = await supabase
-        .from('merchants')
-        .select('id')
-        .eq('clerk_org_id', clerkOrgId)
-        .single()
+  // Get merchant ID
+  const { data: merchant, error: merchantError } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("clerk_org_id", clerkOrgId)
+    .single();
 
-    if (merchantError || !merchant) {
-        console.error('Error getting merchant:', merchantError)
-        return []
-    }
+  if (merchantError || !merchant) {
+    console.error("Error getting merchant:", merchantError);
+    return [];
+  }
 
-    const { data, error } = await supabase
-        .from('menu_items')
-        .select(`
+  const { data, error } = await supabase
+    .from("menu_items")
+    .select(
+      `
             *,
             category_items(
                 id,
@@ -640,78 +744,81 @@ export async function GetMenuItemsWithCategories(clerkOrgId: string, locationId?
                     name
                 )
             )
-        `)
-        .eq('merchant_id', merchant.id)
-        .order('created_at', { ascending: false })
-
-    if (error) {
-        console.error('Error getting menu items with categories:', error)
-        return []
-    }
-
-    // If no location specified, return global items
-    if (!locationId || locationId === 'all') {
-        return data as (MenuItemsModel & {
-            category_items: Array<{
-                id: string
-                category_id: string
-                custom_price: number | null
-                is_featured: boolean
-                category: {
-                    id: string
-                    name: string
-                } | null
-            }>
-        })[]
-    }
-
-    // Get location overrides
-    const itemIds = data.map(d => d.id)
-    const { data: overrides } = await supabase
-        .from('location_menu_item_overrides')
-        .select('*')
-        .eq('location_id', locationId)
-        .in('menu_item_id', itemIds)
-
-    const overrideMap = new Map(
-        (overrides || []).map(o => [o.menu_item_id, o])
+        `
     )
+    .eq("merchant_id", merchant.id)
+    .order("created_at", { ascending: false });
 
-    // Return items with location context
-    return data.map(item => {
-        const override = overrideMap.get(item.id)
-        const hasPriceOverride = override && (
-            override.custom_price !== null ||
-            override.custom_cash_price !== null
-        )
+  if (error) {
+    console.error("Error getting menu items with categories:", error);
+    return [];
+  }
 
-        return {
-            ...item,
-            effective_price: hasPriceOverride && override.custom_price !== null
-                ? override.custom_price
-                : item.price,
-            effective_cash_price: hasPriceOverride && override.custom_cash_price !== null
-                ? override.custom_cash_price
-                : item.cash_price,
-            has_price_override: !!hasPriceOverride,
-            location_is_available: override?.is_available ?? item.availability,
-            global_price: item.price,
-            global_cash_price: item.cash_price,
-        }
-    })
+  // If no location specified, return global items
+  if (!locationId || locationId === "all") {
+    return data as (MenuItemsModel & {
+      category_items: Array<{
+        id: string;
+        category_id: string;
+        custom_price: number | null;
+        is_featured: boolean;
+        category: {
+          id: string;
+          name: string;
+        } | null;
+      }>;
+    })[];
+  }
+
+  // Get location overrides
+  const itemIds = data.map((d) => d.id);
+  const { data: overrides } = await supabase
+    .from("location_menu_item_overrides")
+    .select("*")
+    .eq("location_id", locationId)
+    .in("menu_item_id", itemIds);
+
+  const overrideMap = new Map(
+    (overrides || []).map((o) => [o.menu_item_id, o])
+  );
+
+  // Return items with location context
+  return data.map((item) => {
+    const override = overrideMap.get(item.id);
+    const hasPriceOverride =
+      override &&
+      (override.custom_price !== null || override.custom_cash_price !== null);
+
+    return {
+      ...item,
+      effective_price:
+        hasPriceOverride && override.custom_price !== null
+          ? override.custom_price
+          : item.price,
+      effective_cash_price:
+        hasPriceOverride && override.custom_cash_price !== null
+          ? override.custom_cash_price
+          : item.cash_price,
+      has_price_override: !!hasPriceOverride,
+      location_is_available: override?.is_available ?? item.availability,
+      global_price: item.price,
+      global_cash_price: item.cash_price,
+    };
+  });
 }
 
 export async function GetMenuItemsByCategory(categoryId: string) {
-    if (!categoryId) {
-        return []
-    }
+  if (!categoryId) {
+    return [];
+  }
 
-    const supabase = createServerSupabaseClient()
+  const supabase = createServerSupabaseClient();
 
-    // Use new category_items table
-    const { data, error } = await supabase
-        .from('category_items')
-        .select(`
+  // Use new category_items table
+  const { data, error } = await supabase
+    .from("category_items")
+    .select(
+      `
             id,
             display_order,
             custom_price,
@@ -719,38 +826,41 @@ export async function GetMenuItemsByCategory(categoryId: string) {
             is_available,
             is_featured,
             menu_item:menu_items(*)
-        `)
-        .eq('category_id', categoryId)
-        .order('display_order', { ascending: true })
+        `
+    )
+    .eq("category_id", categoryId)
+    .order("display_order", { ascending: true });
 
-    if (error) {
-        console.error('Error getting menu items by category:', error)
-        return []
-    }
+  if (error) {
+    console.error("Error getting menu items by category:", error);
+    return [];
+  }
 
-    // Transform to return items with category context
-    return data
-        .map((item) => {
-            const menuItem = item.menu_item as unknown as MenuItemsModel | null
-            if (!menuItem) return null
-            return {
-                ...menuItem,
-                category_item_id: item.id,
-                category_custom_price: item.custom_price,
-                category_custom_cash_price: item.custom_cash_price,
-                category_is_available: item.is_available,
-                is_featured: item.is_featured,
-                display_order: item.display_order,
-            }
-        })
-        .filter((item): item is MenuItemsModel & {
-            category_item_id: string
-            category_custom_price: number | null
-            category_custom_cash_price: number | null
-            category_is_available: boolean
-            is_featured: boolean
-            display_order: number
-        } => item !== null)
+  // Transform to return items with category context
+  return data
+    .map((item) => {
+      const menuItem = item.menu_item as unknown as MenuItemsModel | null;
+      if (!menuItem) return null;
+      return {
+        ...menuItem,
+        category_item_id: item.id,
+        category_custom_price: item.custom_price,
+        category_custom_cash_price: item.custom_cash_price,
+        category_is_available: item.is_available,
+        is_featured: item.is_featured,
+        display_order: item.display_order,
+      };
+    })
+    .filter(
+      (
+        item
+      ): item is MenuItemsModel & {
+        category_item_id: string;
+        category_custom_price: number | null;
+        category_custom_cash_price: number | null;
+        category_is_available: boolean;
+        is_featured: boolean;
+        display_order: number;
+      } => item !== null
+    );
 }
-
-

@@ -1,301 +1,401 @@
 // components/dashboard/menus/NewEditItemFormSheet.tsx
 
-'use client'
+"use client";
 
-import * as React from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import * as z from 'zod'
-import { toast } from 'sonner'
-import { useQueryClient } from '@tanstack/react-query'
+import * as React from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import {
-    BottomSheet,
-    BottomSheetContent,
-    BottomSheetHeader,
-    BottomSheetBody,
-    BottomSheetFooter,
-    BottomSheetTitle,
-    BottomSheetDescription,
-} from '@/components/ui/bottom-sheet'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Switch } from '@/components/ui/switch'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form'
-import { ItemPreviewCard } from './ItemPreviewCard'
+  BottomSheet,
+  BottomSheetContent,
+  BottomSheetHeader,
+  BottomSheetBody,
+  BottomSheetFooter,
+  BottomSheetTitle,
+  BottomSheetDescription,
+} from "@/components/ui/bottom-sheet";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
-    ChevronDown,
-    ChevronRight,
-    DollarSign,
-    Image as ImageIcon,
-    Tag,
-    Layers,
-    Settings2,
-    AlertCircle,
-    Sparkles,
-    MapPin,
-    RotateCcw,
-    Info,
-    Globe,
-    Building2,
-    Menu as MenuIcon,
-    CheckCircle2,
-    Plus,
-    X,
-    Grip,
-    Search,
-    Loader2,
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import {
-    UpdateMenuItem,
-    CreateMenuItem,
-    ResetMenuItemToGlobal,
-} from '@/app/dashboard/actions/menu-items'
-import { CategoriesModel, ModifierGroupsModel, ModifierGroupItemsModel } from '@/types/db-modles'
-import { useLocationStore, useIsAllLocations } from '@/stores/location-store'
-import ModifierItemRow, { ExtendedModifierItem } from './ModifierItemRow'
-import { LocationLibraryItem, ModifierGroup, ModifierItem } from '@/types/menu'
-import { LevelIndicator, EditingContextBanner, getEditingLevel, type PricingLevel } from './LevelIndicator'
-import { TAX_CATEGORIES, TAX_CATEGORY_LABELS, TAX_CATEGORY_DESCRIPTIONS, TaxCategory } from '@/types/tax'
-import { AVAILABLE_CHANNELS, CHANNEL_LABELS, CHANNEL_DESCRIPTIONS } from '@/types/inventory'
-import { useLocationTaxRates } from '@/app/dashboard/hooks/useTaxRates'
-import Link from 'next/link'
-import { resetItemToLevel, updateItemOverride, updateModifierItem, UpdateItemParams } from '@/app/dashboard/actions/menu-items-rpc'
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  FormDescription,
+} from "@/components/ui/form";
+import { ItemPreviewCard } from "./ItemPreviewCard";
+import {
+  ChevronDown,
+  ChevronRight,
+  DollarSign,
+  Image as ImageIcon,
+  Tag,
+  Layers,
+  Settings2,
+  AlertCircle,
+  Sparkles,
+  MapPin,
+  RotateCcw,
+  Info,
+  Globe,
+  Building2,
+  Menu as MenuIcon,
+  CheckCircle2,
+  Plus,
+  X,
+  Grip,
+  Search,
+  Loader2,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  UpdateMenuItem,
+  CreateMenuItem,
+  ResetMenuItemToGlobal,
+} from "@/app/dashboard/actions/menu-items";
+import {
+  CategoriesModel,
+  ModifierGroupsModel,
+  ModifierGroupItemsModel,
+} from "@/types/db-modles";
+import { useLocationStore, useIsAllLocations } from "@/stores/location-store";
+import ModifierItemRow, { ExtendedModifierItem } from "./ModifierItemRow";
+import { LocationLibraryItem, ModifierGroup, ModifierItem } from "@/types/menu";
+import {
+  LevelIndicator,
+  EditingContextBanner,
+  getEditingLevel,
+  type PricingLevel,
+} from "./LevelIndicator";
+import {
+  TAX_CATEGORIES,
+  TAX_CATEGORY_LABELS,
+  TAX_CATEGORY_DESCRIPTIONS,
+  TaxCategory,
+} from "@/types/tax";
+import {
+  AVAILABLE_CHANNELS,
+  CHANNEL_LABELS,
+  CHANNEL_DESCRIPTIONS,
+} from "@/types/inventory";
+import { useLocationTaxRates } from "@/app/dashboard/hooks/useTaxRates";
+import Link from "next/link";
+import {
+  resetItemToLevel,
+  updateItemOverride,
+  updateModifierItem,
+  UpdateItemParams,
+} from "@/app/dashboard/actions/menu-items-rpc";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
 interface PriceLevels {
-    level_1_base: number
-    level_1_cash: number | null
-    level_2_location_item: number | null
-    level_2_location_item_cash?: number | null
-    level_2_modifier: number | null
-    level_2_modifier_type: 'add' | 'percent' | null
-    level_3_category: number | null             // NEW: Category price
-    level_3_category_cash?: number | null
-    level_4_location_category: number | null    // NEW: Location + Category
-    level_4_location_category_cash?: number | null
-    level_5_location_menu: number | null        // NEW: Location + Menu + Category
-    level_5_location_menu_cash?: number | null
+  level_1_base: number;
+  level_1_cash: number | null;
+  level_2_location_item: number | null;
+  level_2_location_item_cash?: number | null;
+  level_2_modifier: number | null;
+  level_2_modifier_type: "add" | "percent" | null;
+  level_3_category: number | null; // NEW: Category price
+  level_3_category_cash?: number | null;
+  level_4_location_category: number | null; // NEW: Location + Category
+  level_4_location_category_cash?: number | null;
+  level_5_location_menu: number | null; // NEW: Location + Menu + Category
+  level_5_location_menu_cash?: number | null;
 }
 
 export interface EditItemWithOverrides {
-    id: string
-    name: string
-    description?: string
-    price: number
-    cash_price?: number | null
-    image?: string
-    image_url?: string
-    availability: boolean
-    allergens?: string[]
-    card_bg_color?: string
-    stock_tracking_mode?: string
-    meal_types?: string[]
-    /** @deprecated Use category_items instead */
-    menu_item_categories?: Array<{ category_id: string; category?: { id: string; name: string } }>
-    // Support multiple formats: full category_items from DB, or simple { id, name } from RPC
-    category_items?: Array<
-        | { category_id: string; custom_price?: number | null; category?: { id: string; name: string } }
-        | { id: string; name: string }
-    >
-    // Support multiple formats: junction table format or direct ModifierGroup[]
-    menu_item_modifier_groups?: Array<
-        | { modifier_group_id: string; modifier_groups?: { id: string; name: string } }
-        | ModifierGroup
-    >
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  cash_price?: number | null;
+  image?: string;
+  image_url?: string;
+  availability: boolean;
+  allergens?: string[];
+  card_bg_color?: string;
+  stock_tracking_mode?: string;
+  meal_types?: string[];
+  /** @deprecated Use category_items instead */
+  menu_item_categories?: Array<{
+    category_id: string;
+    category?: { id: string; name: string };
+  }>;
+  // Support multiple formats: full category_items from DB, or simple { id, name } from RPC
+  category_items?: Array<
+    | {
+        category_id: string;
+        custom_price?: number | null;
+        category?: { id: string; name: string };
+      }
+    | { id: string; name: string }
+  >;
+  // Support multiple formats: junction table format or direct ModifierGroup[]
+  menu_item_modifier_groups?: Array<
+    | {
+        modifier_group_id: string;
+        modifier_groups?: { id: string; name: string };
+      }
+    | ModifierGroup
+  >;
 
-    // Price level data (5-level cascade)
-    price_levels?: PriceLevels
-    effective_price?: number
-    effective_cash_price?: number | null
-    current_level?: 1 | 2 | 3 | 4 | 5
+  // Price level data (5-level cascade)
+  price_levels?: PriceLevels;
+  effective_price?: number;
+  effective_cash_price?: number | null;
+  current_level?: 1 | 2 | 3 | 4 | 5;
 
-    // Override flags for 5-level cascade
-    has_location_item_override?: boolean
-    has_category_override?: boolean           // NEW: L3
-    has_location_category_override?: boolean  // NEW: L4
-    has_location_menu_override?: boolean      // L5
+  // Override flags for 5-level cascade
+  has_location_item_override?: boolean;
+  has_category_override?: boolean; // NEW: L3
+  has_location_category_override?: boolean; // NEW: L4
+  has_location_menu_override?: boolean; // L5
 
-    // Override data
-    location_item_override?: { id: string; custom_price?: number | null; custom_cash_price?: number | null }
-    category_item?: { id: string; custom_price?: number | null; custom_cash_price?: number | null }
-    location_category_override?: { id: string; custom_price?: number | null; custom_cash_price?: number | null }
-    location_menu_override?: { id: string; custom_price?: number | null; custom_cash_price?: number | null }
+  // Override data
+  location_item_override?: {
+    id: string;
+    custom_price?: number | null;
+    custom_cash_price?: number | null;
+  };
+  category_item?: {
+    id: string;
+    custom_price?: number | null;
+    custom_cash_price?: number | null;
+  };
+  location_category_override?: {
+    id: string;
+    custom_price?: number | null;
+    custom_cash_price?: number | null;
+  };
+  location_menu_override?: {
+    id: string;
+    custom_price?: number | null;
+    custom_cash_price?: number | null;
+  };
 }
 
 interface NewEditItemFormSheetProps {
-    open: boolean
-    onOpenChange: (open: boolean) => void
-    clerkOrgId: string | undefined
-    categories?: CategoriesModel[]
-    modifierGroups?: (ModifierGroupsModel & { modifier_group_items: ModifierGroupItemsModel[] })[]
-    onSuccess?: () => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  clerkOrgId: string | undefined;
+  categories?: CategoriesModel[];
+  modifierGroups?: (ModifierGroupsModel & {
+    modifier_group_items: ModifierGroupItemsModel[];
+  })[];
+  onSuccess?: () => void;
 
-    // Item data
-    editItem?: EditItemWithOverrides
+  // Item data
+  editItem?: EditItemWithOverrides;
 
-    // Context - IMPORTANT: This determines which table gets updated
-    menuId?: string | null           // null = Items Library, string = within a menu
-    categoryId?: string | null       // null = no category context, string = within a category
-    categoryName?: string            // For display purposes
-    menuName?: string                // For display purposes
-    isMenuLocationOwned?: boolean    // Is the menu a location-specific menu (Level 5)?
+  // Context - IMPORTANT: This determines which table gets updated
+  menuId?: string | null; // null = Items Library, string = within a menu
+  categoryId?: string | null; // null = no category context, string = within a category
+  categoryName?: string; // For display purposes
+  menuName?: string; // For display purposes
+  isMenuLocationOwned?: boolean; // Is the menu a location-specific menu (Level 5)?
 }
 
 // Form schema
 const itemSchema = z.object({
-    name: z.string().min(2, 'Item name must be at least 2 characters').max(100, 'Item name must be less than 100 characters'),
-    description: z.string().max(500, 'Description must be less than 500 characters').optional(),
-    price: z.number().min(0, 'Price must be positive'),
-    cash_price: z.number().min(0, 'Cash price must be positive').optional().nullable(),
-    image_url: z.string().optional(),
-    availability: z.boolean().default(true),
-    allergens: z.array(z.string()).default([]),
-    card_bg_color: z.string().optional().nullable(),
-    stock_tracking_mode: z.enum(['in_stock', 'out_of_stock', 'quantity']).default('in_stock'),
+  name: z
+    .string()
+    .min(2, "Item name must be at least 2 characters")
+    .max(100, "Item name must be less than 100 characters"),
+  description: z
+    .string()
+    .max(500, "Description must be less than 500 characters")
+    .optional(),
+  price: z.number().min(0, "Price must be positive"),
+  cash_price: z
+    .number()
+    .min(0, "Cash price must be positive")
+    .optional()
+    .nullable(),
+  image_url: z.string().optional(),
+  availability: z.boolean().default(true),
+  allergens: z.array(z.string()).default([]),
+  card_bg_color: z.string().optional().nullable(),
+  stock_tracking_mode: z
+    .enum(["in_stock", "out_of_stock", "quantity"])
+    .default("in_stock"),
 
-    // Tax & Inventory Control fields (migration 014)
-    tax_category: z.enum(['standard', 'alcohol', 'food', 'grocery', 'retail', 'service']).default('standard'),
-    is_tax_exempt: z.boolean().default(false),
-    available_channels: z.array(z.enum(['pos', 'online', 'kiosk'])).default(['pos', 'online']),
-})
+  // Tax & Inventory Control fields (migration 014)
+  tax_category: z
+    .enum(["standard", "alcohol", "food", "grocery", "retail", "service"])
+    .default("standard"),
+  is_tax_exempt: z.boolean().default(false),
+  available_channels: z
+    .array(z.enum(["pos", "online", "kiosk"]))
+    .default(["pos", "online"]),
+});
 
-type ItemFormValues = z.infer<typeof itemSchema>
+type ItemFormValues = z.infer<typeof itemSchema>;
 
 const COMMON_ALLERGENS = [
-    'Dairy', 'Eggs', 'Fish', 'Shellfish', 'Tree Nuts', 'Peanuts', 'Wheat', 'Soy', 'Sesame'
-]
+  "Dairy",
+  "Eggs",
+  "Fish",
+  "Shellfish",
+  "Tree Nuts",
+  "Peanuts",
+  "Wheat",
+  "Soy",
+  "Sesame",
+];
 
 // ============================================================================
 // HELPER: Determine editing context
 // ============================================================================
 
 type EditingContext = {
-    level: 1 | 2 | 3 | 4 | 5
-    table: string
-    description: string
-    canEditBaseFields: boolean
-    priceLabel: string
-    resetToLevel: 1 | 2 | 3 | 4 | 5 | null
-    resetLabel: string | null
-}
+  level: 1 | 2 | 3 | 4 | 5;
+  table: string;
+  description: string;
+  canEditBaseFields: boolean;
+  priceLabel: string;
+  resetToLevel: 1 | 2 | 3 | 4 | 5 | null;
+  resetLabel: string | null;
+};
 
 function getEditingContext(
-    isAllLocations: boolean,
-    menuId: string | null | undefined,
-    categoryId: string | null | undefined,
-    isMenuLocationOwned: boolean | undefined
+  isAllLocations: boolean,
+  menuId: string | null | undefined,
+  categoryId: string | null | undefined,
+  isMenuLocationOwned: boolean | undefined
 ): EditingContext {
-    // Items Library + All Locations + No Category = Level 1 (Global Base)
-    if (!menuId && !categoryId && isAllLocations) {
-        return {
-            level: 1,
-            table: 'menu_items',
-            description: 'Editing global item. Changes affect all locations and menus.',
-            canEditBaseFields: true,
-            priceLabel: 'Base Price',
-            resetToLevel: null,
-            resetLabel: null,
-        }
-    }
-
-    // Items Library + Location Selected + No Category = Level 2 (Location Item Override)
-    if (!menuId && !categoryId && !isAllLocations) {
-        return {
-            level: 2,
-            table: 'location_item_overrides',
-            description: 'Editing location pricing. This price applies to ALL menus at this location.',
-            canEditBaseFields: false,
-            priceLabel: 'Location Base Price',
-            resetToLevel: 1,
-            resetLabel: 'Reset to Global',
-        }
-    }
-
-    // Category context + All Locations = Level 3 (Category Price)
-    if (categoryId && isAllLocations && !menuId) {
-        return {
-            level: 3,
-            table: 'category_items',
-            description: 'Editing category-specific pricing. This price applies at all locations for this category.',
-            canEditBaseFields: false,
-            priceLabel: 'Category Price',
-            resetToLevel: 1,
-            resetLabel: 'Reset to Base Price',
-        }
-    }
-
-    // Category context + Location Selected = Level 4 (Location + Category)
-    if (categoryId && !isAllLocations && !menuId) {
-        return {
-            level: 4,
-            table: 'location_category_item_overrides',
-            description: 'Editing location category pricing. This price applies to this category at this location.',
-            canEditBaseFields: false,
-            priceLabel: 'Location Category Price',
-            resetToLevel: 3,
-            resetLabel: 'Reset to Category Price',
-        }
-    }
-
-    // Menu + Category + All Locations = Level 3 (Category in menu context)
-    if (menuId && categoryId && isAllLocations) {
-        return {
-            level: 3,
-            table: 'category_items',
-            description: 'Editing category pricing for this menu. This price applies at all locations.',
-            canEditBaseFields: false,
-            priceLabel: 'Category Price',
-            resetToLevel: 1,
-            resetLabel: 'Reset to Base Price',
-        }
-    }
-
-    // Menu + Category + Location (Location-owned menu) = Level 5
-    if (menuId && categoryId && !isAllLocations && isMenuLocationOwned) {
-        return {
-            level: 5,
-            table: 'location_menu_item_overrides',
-            description: 'Editing your location\'s menu. You have full control over this pricing.',
-            canEditBaseFields: false,
-            priceLabel: 'Your Menu Price',
-            resetToLevel: 4,
-            resetLabel: 'Reset to Location Category',
-        }
-    }
-
-    // Menu + Category + Location (Global Menu) = Level 5 (Location + Menu + Category)
-    if (menuId && categoryId && !isAllLocations && !isMenuLocationOwned) {
-        return {
-            level: 5,
-            table: 'location_menu_item_overrides',
-            description: 'Editing this menu at your location only. Other locations are not affected.',
-            canEditBaseFields: false,
-            priceLabel: 'Location Menu Price',
-            resetToLevel: 4,
-            resetLabel: 'Reset to Location Category',
-        }
-    }
-
-    // Fallback
+  // Items Library + All Locations + No Category = Level 1 (Global Base)
+  if (!menuId && !categoryId && isAllLocations) {
     return {
-        level: 1,
-        table: 'menu_items',
-        description: 'Editing item.',
-        canEditBaseFields: true,
-        priceLabel: 'Price',
-        resetToLevel: null,
-        resetLabel: null,
-    }
+      level: 1,
+      table: "menu_items",
+      description:
+        "Editing global item. Changes affect all locations and menus.",
+      canEditBaseFields: true,
+      priceLabel: "Base Price",
+      resetToLevel: null,
+      resetLabel: null,
+    };
+  }
+
+  // Items Library + Location Selected + No Category = Level 2 (Location Item Override)
+  if (!menuId && !categoryId && !isAllLocations) {
+    return {
+      level: 2,
+      table: "location_item_overrides",
+      description:
+        "Editing location pricing. This price applies to ALL menus at this location.",
+      canEditBaseFields: false,
+      priceLabel: "Location Base Price",
+      resetToLevel: 1,
+      resetLabel: "Reset to Global",
+    };
+  }
+
+  // Category context + All Locations = Level 3 (Category Price)
+  if (categoryId && isAllLocations && !menuId) {
+    return {
+      level: 3,
+      table: "category_items",
+      description:
+        "Editing category-specific pricing. This price applies at all locations for this category.",
+      canEditBaseFields: false,
+      priceLabel: "Category Price",
+      resetToLevel: 1,
+      resetLabel: "Reset to Base Price",
+    };
+  }
+
+  // Category context + Location Selected = Level 4 (Location + Category)
+  if (categoryId && !isAllLocations && !menuId) {
+    return {
+      level: 4,
+      table: "location_category_item_overrides",
+      description:
+        "Editing location category pricing. This price applies to this category at this location.",
+      canEditBaseFields: false,
+      priceLabel: "Location Category Price",
+      resetToLevel: 3,
+      resetLabel: "Reset to Category Price",
+    };
+  }
+
+  // Menu + Category + All Locations = Level 3 (Category in menu context)
+  if (menuId && categoryId && isAllLocations) {
+    return {
+      level: 3,
+      table: "category_items",
+      description:
+        "Editing category pricing for this menu. This price applies at all locations.",
+      canEditBaseFields: false,
+      priceLabel: "Category Price",
+      resetToLevel: 1,
+      resetLabel: "Reset to Base Price",
+    };
+  }
+
+  // Menu + Category + Location (Location-owned menu) = Level 5
+  if (menuId && categoryId && !isAllLocations && isMenuLocationOwned) {
+    return {
+      level: 5,
+      table: "location_menu_item_overrides",
+      description:
+        "Editing your location's menu. You have full control over this pricing.",
+      canEditBaseFields: false,
+      priceLabel: "Your Menu Price",
+      resetToLevel: 4,
+      resetLabel: "Reset to Location Category",
+    };
+  }
+
+  // Menu + Category + Location (Global Menu) = Level 5 (Location + Menu + Category)
+  if (menuId && categoryId && !isAllLocations && !isMenuLocationOwned) {
+    return {
+      level: 5,
+      table: "location_menu_item_overrides",
+      description:
+        "Editing this menu at your location only. Other locations are not affected.",
+      canEditBaseFields: false,
+      priceLabel: "Location Menu Price",
+      resetToLevel: 4,
+      resetLabel: "Reset to Location Category",
+    };
+  }
+
+  // Fallback
+  return {
+    level: 1,
+    table: "menu_items",
+    description: "Editing item.",
+    canEditBaseFields: true,
+    priceLabel: "Price",
+    resetToLevel: null,
+    resetLabel: null,
+  };
 }
 
 // ============================================================================
@@ -303,152 +403,165 @@ function getEditingContext(
 // ============================================================================
 
 const LEVEL_INFO = {
-    1: {
-        name: 'Global Base',
-        icon: Globe,
-        color: 'text-emerald-600',
-        bgColor: 'bg-emerald-50',
-        borderColor: 'border-emerald-200',
-        description: 'Base item price that applies everywhere by default.',
-        affects: 'All locations and all menus',
-    },
-    2: {
-        name: 'Location Override',
-        icon: Building2,
-        color: 'text-blue-600',
-        bgColor: 'bg-blue-50',
-        borderColor: 'border-blue-200',
-        description: 'Location-specific base price that overrides the global price.',
-        affects: 'All menus at this location',
-    },
-    3: {
-        name: 'Menu Override',
-        icon: MenuIcon,
-        color: 'text-purple-600',
-        bgColor: 'bg-purple-50',
-        borderColor: 'border-purple-200',
-        description: 'Menu-specific price that applies when this menu is used.',
-        affects: 'This menu at all locations',
-    },
-    4: {
-        name: 'Location + Menu',
-        icon: MapPin,
-        color: 'text-orange-600',
-        bgColor: 'bg-orange-50',
-        borderColor: 'border-orange-200',
-        description: 'Price specific to this menu at this location only.',
-        affects: 'This menu at this location only',
-    },
-    5: {
-        name: 'Location Menu Owner',
-        icon: Sparkles,
-        color: 'text-pink-600',
-        bgColor: 'bg-pink-50',
-        borderColor: 'border-pink-200',
-        description: 'This is your location\'s own menu - you have full control.',
-        affects: 'Your menu at your location',
-    },
-} as const
+  1: {
+    name: "Global Base",
+    icon: Globe,
+    color: "text-emerald-600",
+    bgColor: "bg-emerald-50",
+    borderColor: "border-emerald-200",
+    description: "Base item price that applies everywhere by default.",
+    affects: "All locations and all menus",
+  },
+  2: {
+    name: "Location Override",
+    icon: Building2,
+    color: "text-blue-600",
+    bgColor: "bg-blue-50",
+    borderColor: "border-blue-200",
+    description:
+      "Location-specific base price that overrides the global price.",
+    affects: "All menus at this location",
+  },
+  3: {
+    name: "Menu Override",
+    icon: MenuIcon,
+    color: "text-purple-600",
+    bgColor: "bg-purple-50",
+    borderColor: "border-purple-200",
+    description: "Menu-specific price that applies when this menu is used.",
+    affects: "This menu at all locations",
+  },
+  4: {
+    name: "Location + Menu",
+    icon: MapPin,
+    color: "text-orange-600",
+    bgColor: "bg-orange-50",
+    borderColor: "border-orange-200",
+    description: "Price specific to this menu at this location only.",
+    affects: "This menu at this location only",
+  },
+  5: {
+    name: "Location Menu Owner",
+    icon: Sparkles,
+    color: "text-pink-600",
+    bgColor: "bg-pink-50",
+    borderColor: "border-pink-200",
+    description: "This is your location's own menu - you have full control.",
+    affects: "Your menu at your location",
+  },
+} as const;
 
 function EditingContextIndicator({ context }: { context: EditingContext }) {
-    const [isOpen, setIsOpen] = React.useState(false)
-    const levelInfo = LEVEL_INFO[context.level]
-    const Icon = levelInfo.icon
+  const [isOpen, setIsOpen] = React.useState(false);
+  const levelInfo = LEVEL_INFO[context.level];
+  const Icon = levelInfo.icon;
 
-    return (
-        <div className="relative">
-            <div
+  return (
+    <div className="relative">
+      <div
+        className={cn(
+          "flex items-center gap-2 px-3 py-2 rounded-lg border transition-all cursor-help hover:shadow-sm",
+          levelInfo.bgColor,
+          levelInfo.borderColor,
+          levelInfo.color
+        )}
+        onMouseEnter={() => setIsOpen(true)}
+        onMouseLeave={() => setIsOpen(false)}
+      >
+        <Icon className="h-4 w-4" />
+        <span className="text-sm font-medium">{levelInfo.name}</span>
+        <Info className="h-3.5 w-3.5 opacity-60" />
+      </div>
+
+      {/* Hover Card */}
+      {isOpen && (
+        <div
+          className="absolute bottom-full left-0 mb-2 w-80 p-4 bg-background border rounded-lg shadow-xl z-50 animate-in fade-in-0 zoom-in-95 duration-150"
+          onMouseEnter={() => setIsOpen(true)}
+          onMouseLeave={() => setIsOpen(false)}
+        >
+          <div className="space-y-3">
+            {/* Header */}
+            <div className="flex items-center gap-3">
+              <div
                 className={cn(
-                    "flex items-center gap-2 px-3 py-2 rounded-lg border transition-all cursor-help hover:shadow-sm",
-                    levelInfo.bgColor,
-                    levelInfo.borderColor,
-                    levelInfo.color
+                  "h-9 w-9 rounded-lg flex items-center justify-center shrink-0",
+                  levelInfo.bgColor
                 )}
-                onMouseEnter={() => setIsOpen(true)}
-                onMouseLeave={() => setIsOpen(false)}
-            >
-                <Icon className="h-4 w-4" />
-                <span className="text-sm font-medium">
-                    {levelInfo.name}
-                </span>
-                <Info className="h-3.5 w-3.5 opacity-60" />
+              >
+                <Icon className={cn("h-4 w-4", levelInfo.color)} />
+              </div>
+              <div>
+                <h4 className="font-semibold text-sm">{levelInfo.name}</h4>
+                <p className="text-xs text-muted-foreground">
+                  Level {context.level} Pricing
+                </p>
+              </div>
             </div>
 
-            {/* Hover Card */}
-            {isOpen && (
-                <div
-                    className="absolute bottom-full left-0 mb-2 w-80 p-4 bg-background border rounded-lg shadow-xl z-50 animate-in fade-in-0 zoom-in-95 duration-150"
-                    onMouseEnter={() => setIsOpen(true)}
-                    onMouseLeave={() => setIsOpen(false)}
-                >
-                    <div className="space-y-3">
-                        {/* Header */}
-                        <div className="flex items-center gap-3">
-                            <div className={cn(
-                                "h-9 w-9 rounded-lg flex items-center justify-center shrink-0",
-                                levelInfo.bgColor
-                            )}>
-                                <Icon className={cn("h-4 w-4", levelInfo.color)} />
-                            </div>
-                            <div>
-                                <h4 className="font-semibold text-sm">{levelInfo.name}</h4>
-                                <p className="text-xs text-muted-foreground">Level {context.level} Pricing</p>
-                            </div>
-                        </div>
+            {/* Description */}
+            <p className="text-sm text-muted-foreground">
+              {levelInfo.description}
+            </p>
 
-                        {/* Description */}
-                        <p className="text-sm text-muted-foreground">
-                            {levelInfo.description}
-                        </p>
+            {/* Affects */}
+            <div className="rounded-lg bg-muted/50 p-2.5">
+              <p className="text-[11px] font-medium text-muted-foreground mb-0.5">
+                Changes will affect:
+              </p>
+              <p className="text-xs font-medium">{levelInfo.affects}</p>
+            </div>
 
-                        {/* Affects */}
-                        <div className="rounded-lg bg-muted/50 p-2.5">
-                            <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Changes will affect:</p>
-                            <p className="text-xs font-medium">{levelInfo.affects}</p>
-                        </div>
+            {/* Price Hierarchy - Compact */}
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-medium text-muted-foreground">
+                Price Hierarchy:
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {[1, 2, 3, 4, 5].map((level) => {
+                  const info = LEVEL_INFO[level as keyof typeof LEVEL_INFO];
+                  const LevelIcon = info.icon;
+                  const isCurrentLevel = level === context.level;
 
-                        {/* Price Hierarchy - Compact */}
-                        <div className="space-y-1.5">
-                            <p className="text-[11px] font-medium text-muted-foreground">Price Hierarchy:</p>
-                            <div className="flex flex-wrap gap-1">
-                                {[1, 2, 3, 4, 5].map((level) => {
-                                    const info = LEVEL_INFO[level as keyof typeof LEVEL_INFO]
-                                    const LevelIcon = info.icon
-                                    const isCurrentLevel = level === context.level
-
-                                    return (
-                                        <div
-                                            key={level}
-                                            className={cn(
-                                                "flex items-center gap-1 px-2 py-1 rounded text-[10px]",
-                                                isCurrentLevel
-                                                    ? cn(info.bgColor, info.borderColor, "border", info.color, "font-medium")
-                                                    : "bg-muted/30 text-muted-foreground"
-                                            )}
-                                        >
-                                            <LevelIcon className="h-3 w-3" />
-                                            <span>{level}</span>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                        </div>
-
-                        {/* Reset info */}
-                        {context.resetLabel && (
-                            <div className="pt-2 border-t flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                                <RotateCcw className="h-3 w-3" />
-                                <span>"{context.resetLabel}" removes this override</span>
-                            </div>
-                        )}
+                  return (
+                    <div
+                      key={level}
+                      className={cn(
+                        "flex items-center gap-1 px-2 py-1 rounded text-[10px]",
+                        isCurrentLevel
+                          ? cn(
+                              info.bgColor,
+                              info.borderColor,
+                              "border",
+                              info.color,
+                              "font-medium"
+                            )
+                          : "bg-muted/30 text-muted-foreground"
+                      )}
+                    >
+                      <LevelIcon className="h-3 w-3" />
+                      <span>{level}</span>
                     </div>
+                  );
+                })}
+              </div>
+            </div>
 
-                    {/* Arrow */}
-                    <div className="absolute -bottom-1.5 left-6 w-3 h-3 bg-background border-b border-r rotate-45" />
-                </div>
+            {/* Reset info */}
+            {context.resetLabel && (
+              <div className="pt-2 border-t flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <RotateCcw className="h-3 w-3" />
+                <span>"{context.resetLabel}" removes this override</span>
+              </div>
             )}
+          </div>
+
+          {/* Arrow */}
+          <div className="absolute -bottom-1.5 left-6 w-3 h-3 bg-background border-b border-r rotate-45" />
         </div>
-    )
+      )}
+    </div>
+  );
 }
 
 // ============================================================================
@@ -456,96 +569,109 @@ function EditingContextIndicator({ context }: { context: EditingContext }) {
 // ============================================================================
 
 interface ModifierGroupSearchListProps {
-    availableGroups: (ModifierGroupsModel & { modifier_group_items: ModifierGroupItemsModel[] })[]
-    onSelect: (groupId: string) => void
+  availableGroups: (ModifierGroupsModel & {
+    modifier_group_items: ModifierGroupItemsModel[];
+  })[];
+  onSelect: (groupId: string) => void;
 }
 
-function ModifierGroupSearchList({ availableGroups, onSelect }: ModifierGroupSearchListProps) {
-    const [searchQuery, setSearchQuery] = React.useState('')
+function ModifierGroupSearchList({
+  availableGroups,
+  onSelect,
+}: ModifierGroupSearchListProps) {
+  const [searchQuery, setSearchQuery] = React.useState("");
 
-    const filteredGroups = React.useMemo(() => {
-        if (!searchQuery.trim()) return availableGroups
-        const query = searchQuery.toLowerCase()
-        return availableGroups.filter(group =>
-            group.name.toLowerCase().includes(query) ||
-            group.description?.toLowerCase().includes(query)
-        )
-    }, [availableGroups, searchQuery])
+  const filteredGroups = React.useMemo(() => {
+    if (!searchQuery.trim()) return availableGroups;
+    const query = searchQuery.toLowerCase();
+    return availableGroups.filter(
+      (group) =>
+        group.name.toLowerCase().includes(query) ||
+        group.description?.toLowerCase().includes(query)
+    );
+  }, [availableGroups, searchQuery]);
 
-    return (
-        <div className="rounded-lg border bg-muted/30 overflow-hidden">
-            {/* Search Input */}
-            <div className="p-2 border-b bg-background/50">
-                <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <input
-                        type="text"
-                        placeholder="Search modifier groups..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full h-9 pl-9 pr-3 rounded-md border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    />
-                    {searchQuery && (
-                        <button
-                            type="button"
-                            onClick={() => setSearchQuery('')}
-                            className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground"
-                        >
-                            <X className="h-4 w-4" />
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            {/* Results */}
-            <div className="p-2 space-y-1 max-h-[200px] overflow-y-auto">
-                {filteredGroups.length === 0 ? (
-                    <div className="py-6 text-center text-sm text-muted-foreground">
-                        {searchQuery ? (
-                            <>
-                                <Search className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                                <p>No modifier groups match "{searchQuery}"</p>
-                            </>
-                        ) : (
-                            <p>No available modifier groups</p>
-                        )}
-                    </div>
-                ) : (
-                    <>
-                        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-2">
-                            {searchQuery ? `${filteredGroups.length} result${filteredGroups.length !== 1 ? 's' : ''}` : 'Available Modifier Groups'}
-                        </div>
-                        {filteredGroups.map((group) => (
-                            <button
-                                key={group.id}
-                                type="button"
-                                onClick={() => onSelect(group.id)}
-                                className="w-full p-2.5 rounded-md bg-background hover:bg-accent transition-colors text-left flex items-center gap-3 group"
-                            >
-                                <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center shrink-0 group-hover:bg-purple-100 transition-colors">
-                                    <Layers className="h-4 w-4 text-muted-foreground group-hover:text-purple-600 transition-colors" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="font-medium text-sm flex items-center gap-2">
-                                        {group.name}
-                                        {group.is_required && (
-                                            <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
-                                                Required
-                                            </Badge>
-                                        )}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">
-                                        {group.modifier_group_items?.length || 0} options
-                                    </div>
-                                </div>
-                                <Plus className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                            </button>
-                        ))}
-                    </>
-                )}
-            </div>
+  return (
+    <div className="rounded-lg border bg-muted/30 overflow-hidden">
+      {/* Search Input */}
+      <div className="p-2 border-b bg-background/50">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search modifier groups..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full h-9 pl-9 pr-3 rounded-md border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
-    )
+      </div>
+
+      {/* Results */}
+      <div className="p-2 space-y-1 max-h-[200px] overflow-y-auto">
+        {filteredGroups.length === 0 ? (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            {searchQuery ? (
+              <>
+                <Search className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p>No modifier groups match "{searchQuery}"</p>
+              </>
+            ) : (
+              <p>No available modifier groups</p>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-2">
+              {searchQuery
+                ? `${filteredGroups.length} result${
+                    filteredGroups.length !== 1 ? "s" : ""
+                  }`
+                : "Available Modifier Groups"}
+            </div>
+            {filteredGroups.map((group) => (
+              <button
+                key={group.id}
+                type="button"
+                onClick={() => onSelect(group.id)}
+                className="w-full p-2.5 rounded-md bg-background hover:bg-accent transition-colors text-left flex items-center gap-3 group"
+              >
+                <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center shrink-0 group-hover:bg-purple-100 transition-colors">
+                  <Layers className="h-4 w-4 text-muted-foreground group-hover:text-purple-600 transition-colors" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm flex items-center gap-2">
+                    {group.name}
+                    {group.is_required && (
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] h-4 px-1.5"
+                      >
+                        Required
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {group.modifier_group_items?.length || 0} options
+                  </div>
+                </div>
+                <Plus className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+              </button>
+            ))}
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ============================================================================
@@ -553,1509 +679,1909 @@ function ModifierGroupSearchList({ availableGroups, onSelect }: ModifierGroupSea
 // ============================================================================
 
 export function NewEditItemFormSheet({
-    open,
-    onOpenChange,
-    clerkOrgId,
-    categories = [],
-    modifierGroups = [],
-    onSuccess,
-    editItem,
-    menuId,
-    categoryId,
-    categoryName,
-    menuName,
-    isMenuLocationOwned = false,
+  open,
+  onOpenChange,
+  clerkOrgId,
+  categories = [],
+  modifierGroups = [],
+  onSuccess,
+  editItem,
+  menuId,
+  categoryId,
+  categoryName,
+  menuName,
+  isMenuLocationOwned = false,
 }: NewEditItemFormSheetProps) {
-    console.log('menuId', menuId)
-    const queryClient = useQueryClient()
-    const { selectedLocationId, locations } = useLocationStore()
-    const isAllLocations = useIsAllLocations()
+  console.log("menuId", menuId);
+  const queryClient = useQueryClient();
+  const { selectedLocationId, locations } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
 
-    console.log(editItem)
-    // Tax rates for current location
-    const { data: taxRatesData } = useLocationTaxRates()
-    const taxRates = taxRatesData?.data || []
+  console.log(editItem);
+  // Tax rates for current location
+  const { data: taxRatesData } = useLocationTaxRates();
+  const taxRates = taxRatesData?.data || [];
 
-    const [selectedCategories, setSelectedCategories] = React.useState<string[]>([])
-    const [selectedModifiers, setSelectedModifiers] = React.useState<string[]>([])
-    const [activeTab, setActiveTab] = React.useState('general')
-    const [expandedSections, setExpandedSections] = React.useState({
-        pricing: true,
-        categories: false,
-        modifiers: false,
-        allergens: false,
-        advanced: false,
-    })
-    const [isSubmitting, setIsSubmitting] = React.useState(false)
-    const [isResetting, setIsResetting] = React.useState(false)
-    const [showAddModifier, setShowAddModifier] = React.useState(false)
-    const [modifierEdits, setModifierEdits] = React.useState<Record<string, { price?: number | null; isActive?: boolean; isSaving?: boolean }>>({})
-    const locationIdForEdits = isAllLocations ? null : selectedLocationId
+  const [selectedCategories, setSelectedCategories] = React.useState<string[]>(
+    []
+  );
+  const [selectedModifiers, setSelectedModifiers] = React.useState<string[]>(
+    []
+  );
+  const [activeTab, setActiveTab] = React.useState("general");
+  const [expandedSections, setExpandedSections] = React.useState({
+    pricing: true,
+    categories: false,
+    modifiers: false,
+    allergens: false,
+    advanced: false,
+  });
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isResetting, setIsResetting] = React.useState(false);
+  const [showAddModifier, setShowAddModifier] = React.useState(false);
+  const [modifierEdits, setModifierEdits] = React.useState<
+    Record<
+      string,
+      { price?: number | null; isActive?: boolean; isSaving?: boolean }
+    >
+  >({});
+  const locationIdForEdits = isAllLocations ? null : selectedLocationId;
 
-    // Get editing context based on current state (includes category for 5-level cascade)
-    const editingContext = React.useMemo(() =>
-        getEditingContext(isAllLocations, menuId, categoryId, isMenuLocationOwned),
-        [isAllLocations, menuId, categoryId, isMenuLocationOwned]
-    )
+  // Get editing context based on current state (includes category for 5-level cascade)
+  const editingContext = React.useMemo(
+    () =>
+      getEditingContext(
+        isAllLocations,
+        menuId,
+        categoryId,
+        isMenuLocationOwned
+      ),
+    [isAllLocations, menuId, categoryId, isMenuLocationOwned]
+  );
 
-    // Get current location name
-    const currentLocationName = React.useMemo(() => {
-        if (isAllLocations) return 'All Locations'
-        const location = locations.find(l => l.id === selectedLocationId)
-        return location?.name || 'Unknown Location'
-    }, [isAllLocations, selectedLocationId, locations])
+  // Get current location name
+  const currentLocationName = React.useMemo(() => {
+    if (isAllLocations) return "All Locations";
+    const location = locations.find((l) => l.id === selectedLocationId);
+    return location?.name || "Unknown Location";
+  }, [isAllLocations, selectedLocationId, locations]);
 
-    // Determine which price to show in the form based on context
-    const getPriceForContext = React.useCallback(() => {
-        if (!editItem) return { price: 0, cashPrice: null }
+  // Determine which price to show in the form based on context
+  const getPriceForContext = React.useCallback(() => {
+    if (!editItem) return { price: 0, cashPrice: null };
 
-        const levels = editItem.price_levels
+    const levels = editItem.price_levels;
 
-        // 5-level price cascade resolution
-        switch (editingContext.level) {
-            case 1: // Global Base
-                return {
-                    price: levels?.level_1_base ?? editItem.price,
-                    cashPrice: levels?.level_1_cash ?? editItem.cash_price
-                }
-            case 2: // Location Item Override
-                return {
-                    price: levels?.level_2_location_item ?? levels?.level_1_base ?? editItem.price,
-                    cashPrice: levels?.level_2_location_item_cash ?? levels?.level_1_cash ?? editItem.cash_price
-                }
-            case 3: // Category Price
-                return {
-                    price: levels?.level_3_category ?? levels?.level_1_base ?? editItem.price,
-                    cashPrice: levels?.level_3_category_cash ?? levels?.level_1_cash ?? editItem.cash_price
-                }
-            case 4: // Location + Category
-                return {
-                    price: levels?.level_4_location_category ?? levels?.level_3_category ?? levels?.level_2_location_item ?? levels?.level_1_base ?? editItem.price,
-                    cashPrice: levels?.level_4_location_category_cash ?? levels?.level_3_category_cash ?? levels?.level_2_location_item_cash ?? levels?.level_1_cash ?? editItem.cash_price
-                }
-            case 5: // Location + Menu + Category
-                return {
-                    price: levels?.level_5_location_menu ?? levels?.level_4_location_category ?? levels?.level_3_category ?? levels?.level_2_location_item ?? levels?.level_1_base ?? editItem.price,
-                    cashPrice: levels?.level_5_location_menu_cash ?? levels?.level_4_location_category_cash ?? levels?.level_3_category_cash ?? levels?.level_2_location_item_cash ?? levels?.level_1_cash ?? editItem.cash_price
-                }
-            default:
-                return { price: editItem.price, cashPrice: editItem.cash_price }
+    // 5-level price cascade resolution
+    switch (editingContext.level) {
+      case 1: // Global Base
+        return {
+          price: levels?.level_1_base ?? editItem.price,
+          cashPrice: levels?.level_1_cash ?? editItem.cash_price,
+        };
+      case 2: // Location Item Override
+        return {
+          price:
+            levels?.level_2_location_item ??
+            levels?.level_1_base ??
+            editItem.price,
+          cashPrice:
+            levels?.level_2_location_item_cash ??
+            levels?.level_1_cash ??
+            editItem.cash_price,
+        };
+      case 3: // Category Price
+        return {
+          price:
+            levels?.level_3_category ?? levels?.level_1_base ?? editItem.price,
+          cashPrice:
+            levels?.level_3_category_cash ??
+            levels?.level_1_cash ??
+            editItem.cash_price,
+        };
+      case 4: // Location + Category
+        return {
+          price:
+            levels?.level_4_location_category ??
+            levels?.level_3_category ??
+            levels?.level_2_location_item ??
+            levels?.level_1_base ??
+            editItem.price,
+          cashPrice:
+            levels?.level_4_location_category_cash ??
+            levels?.level_3_category_cash ??
+            levels?.level_2_location_item_cash ??
+            levels?.level_1_cash ??
+            editItem.cash_price,
+        };
+      case 5: // Location + Menu + Category
+        return {
+          price:
+            levels?.level_5_location_menu ??
+            levels?.level_4_location_category ??
+            levels?.level_3_category ??
+            levels?.level_2_location_item ??
+            levels?.level_1_base ??
+            editItem.price,
+          cashPrice:
+            levels?.level_5_location_menu_cash ??
+            levels?.level_4_location_category_cash ??
+            levels?.level_3_category_cash ??
+            levels?.level_2_location_item_cash ??
+            levels?.level_1_cash ??
+            editItem.cash_price,
+        };
+      default:
+        return { price: editItem.price, cashPrice: editItem.cash_price };
+    }
+  }, [editItem, editingContext.level]);
+
+  const form = useForm<ItemFormValues>({
+    resolver: zodResolver(itemSchema),
+    defaultValues: {
+      name: "",
+      description: "",
+      price: 0,
+      cash_price: undefined,
+      image_url: "",
+      availability: true,
+      allergens: [],
+      card_bg_color: "",
+      stock_tracking_mode: "in_stock",
+      // Tax & Inventory Control (migration 014)
+      tax_category: "standard",
+      is_tax_exempt: false,
+      available_channels: ["pos", "online"],
+    },
+  });
+
+  // Reset form when editItem or context changes
+  React.useEffect(() => {
+    if (editItem) {
+      const { price, cashPrice } = getPriceForContext();
+
+      form.reset({
+        name: editItem.name || "",
+        description: editItem.description || "",
+        price: price,
+        cash_price: cashPrice ?? undefined,
+        image_url: editItem.image || editItem.image_url || "",
+        availability: editItem.availability ?? true,
+        allergens: editItem.allergens || [],
+        card_bg_color: editItem.card_bg_color || "",
+        stock_tracking_mode:
+          (editItem.stock_tracking_mode as
+            | "in_stock"
+            | "out_of_stock"
+            | "quantity") || "in_stock",
+        // Tax & Inventory Control fields (with fallbacks for backward compatibility)
+        tax_category: ((editItem as any).tax_category || "standard") as any,
+        is_tax_exempt: (editItem as any).is_tax_exempt || false,
+        available_channels: ((editItem as any).available_channels || [
+          "pos",
+          "online",
+        ]) as any,
+      });
+
+      // Support both old menu_item_categories and new category_items
+      const categoryData =
+        editItem.category_items || editItem.menu_item_categories;
+      if (categoryData) {
+        setSelectedCategories(
+          categoryData
+            .map((c: any) => c.category_id || c.category?.id)
+            .filter(Boolean)
+        );
+      }
+      if (editItem.menu_item_modifier_groups) {
+        setSelectedModifiers(
+          editItem.menu_item_modifier_groups
+            .map((m: any) => {
+              // Handle different data structures:
+              // 1. { modifier_group_id: "xxx" } - assignment record
+              // 2. { modifier_group: { id: "xxx" } } - nested group
+              // 3. { id: "xxx", name: "..." } - the group itself
+              return m.modifier_group_id || m.modifier_group?.id || m.id;
+            })
+            .filter(Boolean)
+        );
+      }
+    } else {
+      form.reset({
+        name: "",
+        description: "",
+        price: 0,
+        cash_price: undefined,
+        image_url: "",
+        availability: true,
+        allergens: [],
+        card_bg_color: "",
+        stock_tracking_mode: "in_stock",
+      });
+      setSelectedCategories([]);
+      setSelectedModifiers([]);
+    }
+  }, [editItem, form, getPriceForContext]);
+
+  const watchedValues = form.watch();
+
+  const toggleSection = (section: keyof typeof expandedSections) => {
+    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const toggleCategory = (categoryId: string) => {
+    setSelectedCategories((prev) =>
+      prev.includes(categoryId)
+        ? prev.filter((id) => id !== categoryId)
+        : [...prev, categoryId]
+    );
+  };
+
+  const toggleModifier = (modifierId: string) => {
+    setSelectedModifiers((prev) =>
+      prev.includes(modifierId)
+        ? prev.filter((id) => id !== modifierId)
+        : [...prev, modifierId]
+    );
+  };
+
+  const setModifierDraft = (
+    id: string,
+    patch: Partial<{
+      price: number | null;
+      isActive: boolean;
+      isSaving: boolean;
+    }>
+  ) => {
+    setModifierEdits((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], ...patch },
+    }));
+  };
+
+  const handleSaveModifierItem = async (item: any) => {
+    const draft = modifierEdits[item.id] || {};
+    const price =
+      draft.price !== undefined ? draft.price : item.price_modifier ?? null;
+    const isActive =
+      draft.isActive !== undefined
+        ? draft.isActive
+        : item.location_override?.is_active ?? item.is_active ?? true;
+
+    setModifierDraft(item.id, { isSaving: true });
+    try {
+      const result = await updateModifierItem({
+        modifierItemId: item.id,
+        priceModifier: price,
+        isActive,
+        locationId: locationIdForEdits || null,
+      });
+
+      if (!result.success) {
+        toast.error("Failed to update modifier", { description: result.error });
+        return;
+      }
+
+      toast.success("Modifier updated", {
+        description: locationIdForEdits
+          ? "Location override saved"
+          : "Global modifier updated",
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
+    } catch (error) {
+      toast.error("Failed to update modifier", {
+        description: "Please try again.",
+      });
+    } finally {
+      setModifierDraft(item.id, { isSaving: false });
+    }
+  };
+
+  const toggleAllergen = (allergen: string) => {
+    const current = form.getValues("allergens");
+    if (current.includes(allergen)) {
+      form.setValue(
+        "allergens",
+        current.filter((a) => a !== allergen)
+      );
+    } else {
+      form.setValue("allergens", [...current, allergen]);
+    }
+  };
+
+  // ========================================================================
+  // RESET HANDLER
+  // ========================================================================
+
+  const handleReset = async () => {
+    if (!editItem?.id || !editingContext.resetToLevel) return;
+
+    setIsResetting(true);
+    try {
+      const result = await resetItemToLevel(
+        editItem.id,
+        editingContext.resetToLevel,
+        {
+          categoryId: categoryId || null,
+          menuId: menuId || null,
+          locationId: isAllLocations ? null : selectedLocationId,
         }
-    }, [editItem, editingContext.level])
+      );
 
-    const form = useForm<ItemFormValues>({
-        resolver: zodResolver(itemSchema),
-        defaultValues: {
-            name: '',
-            description: '',
-            price: 0,
-            cash_price: undefined,
-            image_url: '',
-            availability: true,
-            allergens: [],
-            card_bg_color: '',
-            stock_tracking_mode: 'in_stock',
-            // Tax & Inventory Control (migration 014)
-            tax_category: 'standard',
-            is_tax_exempt: false,
-            available_channels: ['pos', 'online'],
-        },
-    })
+      if (!result.success) {
+        toast.error("Reset Failed", { description: result.error });
+        return;
+      }
 
-    // Reset form when editItem or context changes
-    React.useEffect(() => {
-        if (editItem) {
-            const { price, cashPrice } = getPriceForContext()
+      const levelLabels = {
+        1: "global base",
+        2: "location base",
+        3: "category",
+        4: "location category",
+        5: "menu",
+      };
+      toast.success("Reset Successful", {
+        description: `Item now uses ${
+          levelLabels[editingContext.resetToLevel]
+        } pricing`,
+      });
 
-            form.reset({
-                name: editItem.name || '',
-                description: editItem.description || '',
-                price: price,
-                cash_price: cashPrice ?? undefined,
-                image_url: editItem.image || editItem.image_url || '',
-                availability: editItem.availability ?? true,
-                allergens: editItem.allergens || [],
-                card_bg_color: editItem.card_bg_color || '',
-                stock_tracking_mode: (editItem.stock_tracking_mode as 'in_stock' | 'out_of_stock' | 'quantity') || 'in_stock',
-                // Tax & Inventory Control fields (with fallbacks for backward compatibility)
-                tax_category: ((editItem as any).tax_category || 'standard') as any,
-                is_tax_exempt: (editItem as any).is_tax_exempt || false,
-                available_channels: ((editItem as any).available_channels || ['pos', 'online']) as any,
-            })
+      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-item", editItem.id] });
+      queryClient.invalidateQueries({ queryKey: ["menus"] });
+      queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      onOpenChange(false);
+      onSuccess?.();
+    } catch (error) {
+      toast.error("Reset Failed", {
+        description: "Unable to reset item pricing.",
+      });
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
-            // Support both old menu_item_categories and new category_items
-            const categoryData = editItem.category_items || editItem.menu_item_categories
-            if (categoryData) {
-                setSelectedCategories(
-                    categoryData
-                        .map((c: any) => c.category_id || c.category?.id)
-                        .filter(Boolean)
-                )
-            }
-            if (editItem.menu_item_modifier_groups) {
-                setSelectedModifiers(
-                    editItem.menu_item_modifier_groups
-                        .map((m: any) => {
-                            // Handle different data structures:
-                            // 1. { modifier_group_id: "xxx" } - assignment record
-                            // 2. { modifier_group: { id: "xxx" } } - nested group
-                            // 3. { id: "xxx", name: "..." } - the group itself
-                            return m.modifier_group_id || m.modifier_group?.id || m.id
-                        })
-                        .filter(Boolean)
-                )
-            }
-        } else {
-            form.reset({
-                name: '',
-                description: '',
-                price: 0,
-                cash_price: undefined,
-                image_url: '',
-                availability: true,
-                allergens: [],
-                card_bg_color: '',
-                stock_tracking_mode: 'in_stock',
-            })
-            setSelectedCategories([])
-            setSelectedModifiers([])
-        }
-    }, [editItem, form, getPriceForContext])
+  // ========================================================================
+  // SUBMIT HANDLER
+  // ========================================================================
 
-    const watchedValues = form.watch()
-
-    const toggleSection = (section: keyof typeof expandedSections) => {
-        setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }))
+  const onSubmit = async (values: ItemFormValues) => {
+    if (!clerkOrgId) {
+      toast.error("Organization Not Found", {
+        description: "Please ensure you are logged into an organization.",
+      });
+      return;
     }
 
-    const toggleCategory = (categoryId: string) => {
-        setSelectedCategories(prev =>
-            prev.includes(categoryId)
-                ? prev.filter(id => id !== categoryId)
-                : [...prev, categoryId]
-        )
-    }
+    setIsSubmitting(true);
+    try {
+      let result;
 
-    const toggleModifier = (modifierId: string) => {
-        setSelectedModifiers(prev =>
-            prev.includes(modifierId)
-                ? prev.filter(id => id !== modifierId)
-                : [...prev, modifierId]
-        )
-    }
+      if (editItem) {
+        // Build update params based on context (includes category for 5-level cascade)
+        const updateParams: UpdateItemParams = {
+          menuItemId: editItem.id,
+          categoryId: categoryId || null, // NEW: Category context for L3/L4/L5
+          menuId: menuId || null,
+          locationId: isAllLocations ? null : selectedLocationId,
+          price: values.price,
+          cashPrice: values.cash_price ?? null,
+          availability: values.availability,
+        };
 
-    const setModifierDraft = (id: string, patch: Partial<{ price: number | null; isActive: boolean; isSaving: boolean }>) => {
-        setModifierEdits(prev => ({
-            ...prev,
-            [id]: { ...prev[id], ...patch },
-        }))
-    }
-
-    const handleSaveModifierItem = async (item: any) => {
-        const draft = modifierEdits[item.id] || {}
-        const price = draft.price !== undefined ? draft.price : item.price_modifier ?? null
-        const isActive = draft.isActive !== undefined
-            ? draft.isActive
-            : (item.location_override?.is_active ?? item.is_active ?? true)
-
-        setModifierDraft(item.id, { isSaving: true })
-        try {
-            const result = await updateModifierItem({
-                modifierItemId: item.id,
-                priceModifier: price,
-                isActive,
-                locationId: locationIdForEdits || null,
-            })
-
-            if (!result.success) {
-                toast.error('Failed to update modifier', { description: result.error })
-                return
-            }
-
-            toast.success('Modifier updated', {
-                description: locationIdForEdits ? 'Location override saved' : 'Global modifier updated',
-            })
-
-            queryClient.invalidateQueries({ queryKey: ['menu-items'] })
-            queryClient.invalidateQueries({ queryKey: ['menu-items-flat'] })
-        } catch (error) {
-            toast.error('Failed to update modifier', { description: 'Please try again.' })
-        } finally {
-            setModifierDraft(item.id, { isSaving: false })
-        }
-    }
-
-    const toggleAllergen = (allergen: string) => {
-        const current = form.getValues('allergens')
-        if (current.includes(allergen)) {
-            form.setValue('allergens', current.filter(a => a !== allergen))
-        } else {
-            form.setValue('allergens', [...current, allergen])
-        }
-    }
-
-    // ========================================================================
-    // RESET HANDLER
-    // ========================================================================
-
-    const handleReset = async () => {
-        if (!editItem?.id || !editingContext.resetToLevel) return
-
-        setIsResetting(true)
-        try {
-            const result = await resetItemToLevel(
-                editItem.id,
-                editingContext.resetToLevel,
-                {
-                    categoryId: categoryId || null,
-                    menuId: menuId || null,
-                    locationId: isAllLocations ? null : selectedLocationId
-                }
-            )
-
-            if (!result.success) {
-                toast.error('Reset Failed', { description: result.error })
-                return
-            }
-
-            const levelLabels = {
-                1: 'global base',
-                2: 'location base',
-                3: 'category',
-                4: 'location category',
-                5: 'menu',
-            }
-            toast.success('Reset Successful', {
-                description: `Item now uses ${levelLabels[editingContext.resetToLevel]} pricing`
-            })
-
-            queryClient.invalidateQueries({ queryKey: ['menu-items'] })
-            queryClient.invalidateQueries({ queryKey: ['menu-item', editItem.id] })
-            queryClient.invalidateQueries({ queryKey: ['menus'] })
-            queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
-            onOpenChange(false)
-            onSuccess?.()
-        } catch (error) {
-            toast.error('Reset Failed', {
-                description: 'Unable to reset item pricing.'
-            })
-        } finally {
-            setIsResetting(false)
-        }
-    }
-
-    // ========================================================================
-    // SUBMIT HANDLER
-    // ========================================================================
-
-    const onSubmit = async (values: ItemFormValues) => {
-        if (!clerkOrgId) {
-            toast.error('Organization Not Found', {
-                description: 'Please ensure you are logged into an organization.'
-            })
-            return
+        // Only include base fields if we can edit them (Level 1)
+        if (editingContext.canEditBaseFields) {
+          updateParams.name = values.name;
+          updateParams.description = values.description;
+          updateParams.image = values.image_url;
+          updateParams.allergens = values.allergens;
+          updateParams.cardBgColor = values.card_bg_color ?? undefined;
+          updateParams.stockTrackingMode = values.stock_tracking_mode;
+          // Tax & Inventory Control fields (migration 014)
+          updateParams.taxCategory = values.tax_category;
+          updateParams.isTaxExempt = values.is_tax_exempt;
+          updateParams.availableChannels = values.available_channels;
+          updateParams.isTaxExempt = values.is_tax_exempt;
+          updateParams.availableChannels = values.available_channels;
         }
 
-        setIsSubmitting(true)
-        try {
-            let result
+        // Modifier groups are always global updates, even when editing at location level
+        updateParams.modifier_group_ids = selectedModifiers;
+        console.log("updateParams NEW EDIT ITEM FORM SHEET", updateParams);
 
-            if (editItem) {
-                // Build update params based on context (includes category for 5-level cascade)
-                const updateParams: UpdateItemParams = {
-                    menuItemId: editItem.id,
-                    categoryId: categoryId || null,  // NEW: Category context for L3/L4/L5
-                    menuId: menuId || null,
-                    locationId: isAllLocations ? null : selectedLocationId,
-                    price: values.price,
-                    cashPrice: values.cash_price ?? null,
-                    availability: values.availability,
+        result = await updateItemOverride(updateParams);
+      } else {
+        // Create new item (always Level 1 - global)
+        result = await CreateMenuItem(clerkOrgId, {
+          name: values.name,
+          description: values.description,
+          price: values.price,
+          cash_price: values.cash_price ?? undefined,
+          image: values.image_url ?? undefined,
+          availability: values.availability,
+          allergens: values.allergens,
+          card_bg_color: values.card_bg_color ?? undefined,
+          modifier_group_ids: selectedModifiers,
+          stock_tracking_mode: values.stock_tracking_mode,
+          // Tax & Inventory Control fields (migration 014)
+          tax_category: values.tax_category,
+          is_tax_exempt: values.is_tax_exempt,
+          available_channels: values.available_channels,
+        });
+      }
 
-                }
+      if (result.error) {
+        toast.error("Operation Failed", { description: result.error });
+        return;
+      }
 
+      // Success message based on context
+      const levelMessages: Record<number, string> = {
+        1: "Global item updated",
+        2: `Location pricing updated for ${currentLocationName}`,
+        3: `Menu pricing updated for "${menuName}"`,
+        4: `Menu pricing updated at ${currentLocationName}`,
+        5: `Your menu pricing updated`,
+      };
 
-                // Only include base fields if we can edit them (Level 1)
-                if (editingContext.canEditBaseFields) {
-                    updateParams.name = values.name
-                    updateParams.description = values.description
-                    updateParams.image = values.image_url
-                    updateParams.allergens = values.allergens
-                    updateParams.cardBgColor = values.card_bg_color ?? undefined
-                    updateParams.stockTrackingMode = values.stock_tracking_mode
-                    // Tax & Inventory Control fields (migration 014)
-                    updateParams.taxCategory = values.tax_category
-                    updateParams.isTaxExempt = values.is_tax_exempt
-                    updateParams.availableChannels = values.available_channels
-                }
-                console.log('updateParams NEW EDIT ITEM FORM SHEET', updateParams)
+      toast.success(editItem ? "Item Updated" : "Item Created", {
+        description: editItem
+          ? levelMessages[editingContext.level] || "Item saved"
+          : `"${values.name}" has been added to your menu.`,
+      });
 
-                result = await updateItemOverride(updateParams)
+      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-item", editItem?.id] });
+      queryClient.invalidateQueries({ queryKey: ["menus"] });
 
-
-            } else {
-                // Create new item (always Level 1 - global)
-                result = await CreateMenuItem(clerkOrgId, {
-                    name: values.name,
-                    description: values.description,
-                    price: values.price,
-                    cash_price: values.cash_price ?? undefined,
-                    image: values.image_url ?? undefined,
-                    availability: values.availability,
-                    allergens: values.allergens,
-                    card_bg_color: values.card_bg_color ?? undefined,
-                    stock_tracking_mode: values.stock_tracking_mode,
-                    // Tax & Inventory Control fields (migration 014)
-                    tax_category: values.tax_category,
-                    is_tax_exempt: values.is_tax_exempt,
-                    available_channels: values.available_channels,
-                })
-            }
-
-            if (result.error) {
-                toast.error('Operation Failed', { description: result.error })
-                return
-            }
-
-            // Success message based on context
-            const levelMessages: Record<number, string> = {
-                1: 'Global item updated',
-                2: `Location pricing updated for ${currentLocationName}`,
-                3: `Menu pricing updated for "${menuName}"`,
-                4: `Menu pricing updated at ${currentLocationName}`,
-                5: `Your menu pricing updated`,
-            }
-
-            toast.success(editItem ? 'Item Updated' : 'Item Created', {
-                description: editItem
-                    ? levelMessages[editingContext.level] || 'Item saved'
-                    : `"${values.name}" has been added to your menu.`
-            })
-
-            queryClient.invalidateQueries({ queryKey: ['menu-items'] })
-            queryClient.invalidateQueries({ queryKey: ['menu-item', editItem?.id] })
-            queryClient.invalidateQueries({ queryKey: ['menus'] })
-
-            form.reset()
-            setSelectedCategories([])
-            setSelectedModifiers([])
-            onOpenChange(false)
-            onSuccess?.()
-        } catch (error) {
-            toast.error(editItem ? 'Update Failed' : 'Creation Failed', {
-                description: 'Unable to save the menu item. Please try again.'
-            })
-        } finally {
-            setIsSubmitting(false)
-        }
+      form.reset();
+      setSelectedCategories([]);
+      setSelectedModifiers([]);
+      onOpenChange(false);
+      onSuccess?.();
+    } catch (error) {
+      toast.error(editItem ? "Update Failed" : "Creation Failed", {
+        description: "Unable to save the menu item. Please try again.",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
+  };
 
-    const handleClose = () => {
-        form.reset()
-        setSelectedCategories([])
-        setSelectedModifiers([])
-        onOpenChange(false)
-    }
+  const handleClose = () => {
+    form.reset();
+    setSelectedCategories([]);
+    setSelectedModifiers([]);
+    onOpenChange(false);
+  };
 
-    // ========================================================================
-    // PRICE BREAKDOWN COMPONENT
-    // ========================================================================
+  // ========================================================================
+  // PRICE BREAKDOWN COMPONENT
+  // ========================================================================
 
-    const PriceBreakdown = () => {
-        if (!editItem?.price_levels) return null
+  const PriceBreakdown = () => {
+    if (!editItem?.price_levels) return null;
 
-        const levels = editItem.price_levels
-        const currentLevel = editingContext.level
-
-        return (
-            <div className="space-y-2 p-3 rounded-lg bg-muted/30 border border-dashed">
-                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                    Price Hierarchy
-                </div>
-
-                {/* Level 1 - Global Base */}
-                <PriceLevelRow
-                    level={1}
-                    label="Global Base"
-                    icon={<Globe className="h-3 w-3" />}
-                    price={levels.level_1_base}
-                    cashPrice={levels.level_1_cash}
-                    isCurrentLevel={currentLevel === 1}
-                    isActive={levels.level_1_base !== null}
-                />
-
-                {/* Level 2 - Location Item (only if location selected) */}
-                {!isAllLocations && (
-                    <PriceLevelRow
-                        level={2}
-                        label="Location Base"
-                        icon={<Building2 className="h-3 w-3" />}
-                        price={levels.level_2_location_item}
-                        cashPrice={levels.level_2_location_item_cash}
-                        modifier={levels.level_2_modifier}
-                        modifierType={levels.level_2_modifier_type}
-                        isCurrentLevel={currentLevel === 2}
-                        isActive={levels.level_2_location_item !== null || levels.level_2_modifier !== null}
-                        isOverride
-                    />
-                )}
-
-                {/* Level 3 - Category Price */}
-                {categoryId && (
-                    <PriceLevelRow
-                        level={3}
-                        label={`Category: ${categoryName || 'Current'}`}
-                        icon={<Tag className="h-3 w-3" />}
-                        price={levels.level_3_category}
-                        cashPrice={levels.level_3_category_cash}
-                        isCurrentLevel={currentLevel === 3}
-                        isActive={levels.level_3_category !== null}
-                        isOverride
-                    />
-                )}
-
-                {/* Level 4 - Location + Category */}
-                {categoryId && !isAllLocations && (
-                    <PriceLevelRow
-                        level={4}
-                        label="Location + Category"
-                        icon={<MapPin className="h-3 w-3" />}
-                        price={levels.level_4_location_category}
-                        cashPrice={levels.level_4_location_category_cash}
-                        isCurrentLevel={currentLevel === 4}
-                        isActive={levels.level_4_location_category !== null}
-                        isOverride
-                    />
-                )}
-
-                {/* Level 5 - Location + Menu + Category */}
-                {menuId && categoryId && !isAllLocations && (
-                    <PriceLevelRow
-                        level={5}
-                        label={`Menu: ${menuName || 'Current'}`}
-                        icon={<MenuIcon className="h-3 w-3" />}
-                        price={levels.level_5_location_menu}
-                        cashPrice={levels.level_5_location_menu_cash}
-                        isCurrentLevel={currentLevel === 5}
-                        isActive={levels.level_5_location_menu !== null}
-                        isOverride
-                    />
-                )}
-
-                {/* Effective Price */}
-                <div className="pt-2 mt-2 border-t">
-                    <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">Effective Price:</span>
-                        <span className="text-lg font-bold text-green-600">
-                            ${editItem.effective_price?.toFixed(2)}
-                        </span>
-                    </div>
-                </div>
-            </div>
-        )
-    }
-
-    // ========================================================================
-    // RENDER
-    // ========================================================================
+    const levels = editItem.price_levels;
+    const currentLevel = editingContext.level;
 
     return (
-        <BottomSheet open={open} onOpenChange={handleClose}>
-            <BottomSheetContent className="!h-[95vh]">
-                <BottomSheetHeader>
-                    <BottomSheetTitle className="flex items-center gap-2">
-                        <Sparkles className="h-5 w-5 text-primary animate-pulse" />
-                        {editItem ? 'Edit Menu Item' : 'Create New Menu Item'}
-                    </BottomSheetTitle>
-                    <BottomSheetDescription className="space-y-2">
-                        <span>{editingContext.description}</span>
+      <div className="space-y-2 p-3 rounded-lg bg-muted/30 border border-dashed">
+        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+          Price Hierarchy
+        </div>
 
-                        {/* Context Badges */}
-                        {editItem && (
-                            <div className="flex flex-wrap items-center gap-2 mt-2">
-                                {/* Level Badge */}
-                                <Badge
-                                    variant="outline"
-                                    className={cn(
-                                        "gap-1",
-                                        editingContext.level === 1 && "bg-gray-100 text-gray-700 border-gray-300",
-                                        editingContext.level === 2 && "bg-blue-100 text-blue-700 border-blue-300",
-                                        editingContext.level === 3 && "bg-purple-100 text-purple-700 border-purple-300",
-                                        editingContext.level === 4 && "bg-amber-100 text-amber-700 border-amber-300",
-                                        editingContext.level === 5 && "bg-green-100 text-green-700 border-green-300",
-                                    )}
-                                >
-                                    {editingContext.level === 1 && <Globe className="h-3 w-3" />}
-                                    {editingContext.level === 2 && <Building2 className="h-3 w-3" />}
-                                    {editingContext.level === 3 && <MenuIcon className="h-3 w-3" />}
-                                    {editingContext.level === 4 && <MapPin className="h-3 w-3" />}
-                                    {editingContext.level === 5 && <Sparkles className="h-3 w-3" />}
-                                    Level {editingContext.level}
-                                </Badge>
+        {/* Level 1 - Global Base */}
+        <PriceLevelRow
+          level={1}
+          label="Global Base"
+          icon={<Globe className="h-3 w-3" />}
+          price={levels.level_1_base}
+          cashPrice={levels.level_1_cash}
+          isCurrentLevel={currentLevel === 1}
+          isActive={levels.level_1_base !== null}
+        />
 
-                                {/* Location Badge */}
-                                {!isAllLocations && (
-                                    <Badge variant="secondary" className="gap-1">
-                                        <MapPin className="h-3 w-3" />
-                                        {currentLocationName}
-                                    </Badge>
-                                )}
+        {/* Level 2 - Location Item (only if location selected) */}
+        {!isAllLocations && (
+          <PriceLevelRow
+            level={2}
+            label="Location Base"
+            icon={<Building2 className="h-3 w-3" />}
+            price={levels.level_2_location_item}
+            cashPrice={levels.level_2_location_item_cash}
+            modifier={levels.level_2_modifier}
+            modifierType={levels.level_2_modifier_type}
+            isCurrentLevel={currentLevel === 2}
+            isActive={
+              levels.level_2_location_item !== null ||
+              levels.level_2_modifier !== null
+            }
+            isOverride
+          />
+        )}
 
-                                {/* Menu Badge */}
-                                {menuId && menuName && (
-                                    <Badge variant="secondary" className="gap-1">
-                                        <MenuIcon className="h-3 w-3" />
-                                        {menuName}
-                                        {isMenuLocationOwned && (
-                                            <span className="text-xs">(Your Menu)</span>
-                                        )}
-                                    </Badge>
-                                )}
+        {/* Level 3 - Category Price */}
+        {categoryId && (
+          <PriceLevelRow
+            level={3}
+            label={`Category: ${categoryName || "Current"}`}
+            icon={<Tag className="h-3 w-3" />}
+            price={levels.level_3_category}
+            cashPrice={levels.level_3_category_cash}
+            isCurrentLevel={currentLevel === 3}
+            isActive={levels.level_3_category !== null}
+            isOverride
+          />
+        )}
 
-                                {/* Override indicator */}
-                                {editItem && (
-                                    (editItem.has_location_item_override ||
-                                        editItem.has_category_override ||
-                                        editItem.has_location_category_override ||
-                                        editItem.has_location_menu_override) && (
-                                        <Badge variant="outline" className="gap-1 bg-amber-50 text-amber-600 border-amber-200">
-                                            <Info className="h-3 w-3" />
-                                            Has overrides
-                                        </Badge>
-                                    )
-                                )}
-                            </div>
+        {/* Level 4 - Location + Category */}
+        {categoryId && !isAllLocations && (
+          <PriceLevelRow
+            level={4}
+            label="Location + Category"
+            icon={<MapPin className="h-3 w-3" />}
+            price={levels.level_4_location_category}
+            cashPrice={levels.level_4_location_category_cash}
+            isCurrentLevel={currentLevel === 4}
+            isActive={levels.level_4_location_category !== null}
+            isOverride
+          />
+        )}
+
+        {/* Level 5 - Location + Menu + Category */}
+        {menuId && categoryId && !isAllLocations && (
+          <PriceLevelRow
+            level={5}
+            label={`Menu: ${menuName || "Current"}`}
+            icon={<MenuIcon className="h-3 w-3" />}
+            price={levels.level_5_location_menu}
+            cashPrice={levels.level_5_location_menu_cash}
+            isCurrentLevel={currentLevel === 5}
+            isActive={levels.level_5_location_menu !== null}
+            isOverride
+          />
+        )}
+
+        {/* Effective Price */}
+        <div className="pt-2 mt-2 border-t">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">Effective Price:</span>
+            <span className="text-lg font-bold text-green-600">
+              ${editItem.effective_price?.toFixed(2)}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ========================================================================
+  // RENDER
+  // ========================================================================
+
+  return (
+    <BottomSheet open={open} onOpenChange={handleClose}>
+      <BottomSheetContent className="!h-[95vh]">
+        <BottomSheetHeader>
+          <BottomSheetTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary animate-pulse" />
+            {editItem ? "Edit Menu Item" : "Create New Menu Item"}
+          </BottomSheetTitle>
+          <BottomSheetDescription className="space-y-2">
+            <span>{editingContext.description}</span>
+
+            {/* Context Badges */}
+            {editItem && (
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                {/* Level Badge */}
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "gap-1",
+                    editingContext.level === 1 &&
+                      "bg-gray-100 text-gray-700 border-gray-300",
+                    editingContext.level === 2 &&
+                      "bg-blue-100 text-blue-700 border-blue-300",
+                    editingContext.level === 3 &&
+                      "bg-purple-100 text-purple-700 border-purple-300",
+                    editingContext.level === 4 &&
+                      "bg-amber-100 text-amber-700 border-amber-300",
+                    editingContext.level === 5 &&
+                      "bg-green-100 text-green-700 border-green-300"
+                  )}
+                >
+                  {editingContext.level === 1 && <Globe className="h-3 w-3" />}
+                  {editingContext.level === 2 && (
+                    <Building2 className="h-3 w-3" />
+                  )}
+                  {editingContext.level === 3 && (
+                    <MenuIcon className="h-3 w-3" />
+                  )}
+                  {editingContext.level === 4 && <MapPin className="h-3 w-3" />}
+                  {editingContext.level === 5 && (
+                    <Sparkles className="h-3 w-3" />
+                  )}
+                  Level {editingContext.level}
+                </Badge>
+
+                {/* Location Badge */}
+                {!isAllLocations && (
+                  <Badge variant="secondary" className="gap-1">
+                    <MapPin className="h-3 w-3" />
+                    {currentLocationName}
+                  </Badge>
+                )}
+
+                {/* Menu Badge */}
+                {menuId && menuName && (
+                  <Badge variant="secondary" className="gap-1">
+                    <MenuIcon className="h-3 w-3" />
+                    {menuName}
+                    {isMenuLocationOwned && (
+                      <span className="text-xs">(Your Menu)</span>
+                    )}
+                  </Badge>
+                )}
+
+                {/* Override indicator */}
+                {editItem &&
+                  (editItem.has_location_item_override ||
+                    editItem.has_category_override ||
+                    editItem.has_location_category_override ||
+                    editItem.has_location_menu_override) && (
+                    <Badge
+                      variant="outline"
+                      className="gap-1 bg-amber-50 text-amber-600 border-amber-200"
+                    >
+                      <Info className="h-3 w-3" />
+                      Has overrides
+                    </Badge>
+                  )}
+              </div>
+            )}
+          </BottomSheetDescription>
+        </BottomSheetHeader>
+
+        <BottomSheetBody className="px-0">
+          <div className="flex flex-col lg:flex-row h-full">
+            {/* Form Section */}
+            <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-4">
+              {/* Editing Context Banner - Shows which level user is editing */}
+              {editItem && editingContext.level > 1 && (
+                <EditingContextBanner
+                  level={editingContext.level as PricingLevel}
+                  locationName={
+                    !isAllLocations ? "Current Location" : undefined
+                  }
+                  categoryName={
+                    categoryId
+                      ? categories.find((c) => c.id === categoryId)?.name
+                      : undefined
+                  }
+                  menuName={menuId ? "Current Menu" : undefined}
+                  className="mb-4"
+                />
+              )}
+
+              <Form {...form}>
+                <form
+                  id="item-form"
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="space-y-4"
+                >
+                  <Tabs
+                    value={activeTab}
+                    onValueChange={setActiveTab}
+                    className="w-full"
+                  >
+                    <TabsList className="grid w-full grid-cols-4 mb-6">
+                      <TabsTrigger value="general">General</TabsTrigger>
+                      <TabsTrigger value="pricing">Pricing</TabsTrigger>
+                      <TabsTrigger value="modifiers">Modifiers</TabsTrigger>
+                      <TabsTrigger value="tax">Tax & Fees</TabsTrigger>
+                      <TabsTrigger value="availability">
+                        Availability
+                      </TabsTrigger>
+                    </TabsList>
+
+                    {/* TAB 1: GENERAL */}
+                    <TabsContent value="general" className="space-y-4">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Settings2 className="h-4 w-4 text-muted-foreground" />
+                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                          Basic Information
+                        </h3>
+                        {!editingContext.canEditBaseFields && editItem && (
+                          <Badge variant="outline" className="text-xs">
+                            View Only
+                          </Badge>
                         )}
-                    </BottomSheetDescription>
-                </BottomSheetHeader>
+                      </div>
 
-                <BottomSheetBody className="px-0">
-                    <div className="flex flex-col lg:flex-row h-full">
-                        {/* Form Section */}
-                        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-4">
-                            {/* Editing Context Banner - Shows which level user is editing */}
-                            {editItem && editingContext.level > 1 && (
-                                <EditingContextBanner
-                                    level={editingContext.level as PricingLevel}
-                                    locationName={!isAllLocations ? 'Current Location' : undefined}
-                                    categoryName={categoryId ? categories.find(c => c.id === categoryId)?.name : undefined}
-                                    menuName={menuId ? 'Current Menu' : undefined}
-                                    className="mb-4"
+                      <FormField
+                        control={form.control}
+                        name="name"
+                        render={({ field }: { field: any }) => (
+                          <FormItem>
+                            <FormLabel>Item Name *</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="e.g., Crispy Chicken Wings"
+                                className="h-12 text-lg"
+                                disabled={
+                                  !editingContext.canEditBaseFields &&
+                                  !!editItem
+                                }
+                                {...field}
+                              />
+                            </FormControl>
+                            {!editingContext.canEditBaseFields && editItem && (
+                              <FormDescription className="text-amber-600">
+                                Switch to "All Locations" to edit item details
+                              </FormDescription>
+                            )}
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="description"
+                        render={({ field }: { field: any }) => (
+                          <FormItem>
+                            <FormLabel>Description</FormLabel>
+                            <FormControl>
+                              <textarea
+                                className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                                placeholder="Describe your dish..."
+                                disabled={
+                                  !editingContext.canEditBaseFields &&
+                                  !!editItem
+                                }
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="image_url"
+                        render={({ field }: { field: any }) => (
+                          <FormItem>
+                            <FormLabel>Image URL</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <ImageIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                  className="pl-10"
+                                  placeholder="https://example.com/image.jpg"
+                                  disabled={
+                                    !editingContext.canEditBaseFields &&
+                                    !!editItem
+                                  }
+                                  {...field}
+                                  value={field.value || ""}
                                 />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* Allergens */}
+                      <FormField
+                        control={form.control}
+                        name="allergens"
+                        render={() => (
+                          <FormItem>
+                            <FormLabel>Allergens</FormLabel>
+                            <FormDescription>
+                              Select all that apply
+                            </FormDescription>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {COMMON_ALLERGENS.map((allergen) => (
+                                <button
+                                  key={allergen}
+                                  type="button"
+                                  onClick={() => toggleAllergen(allergen)}
+                                  disabled={
+                                    !editingContext.canEditBaseFields &&
+                                    !!editItem
+                                  }
+                                  className={cn(
+                                    "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
+                                    "border hover:scale-105 active:scale-95",
+                                    "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
+                                    watchedValues.allergens?.includes(allergen)
+                                      ? "bg-orange-500 text-white border-orange-500 shadow-md"
+                                      : "bg-background border-border hover:border-orange-500/50"
+                                  )}
+                                >
+                                  {allergen}
+                                </button>
+                              ))}
+                            </div>
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* Card Background Color */}
+                      <FormField
+                        control={form.control}
+                        name="card_bg_color"
+                        render={({ field }: { field: any }) => (
+                          <FormItem>
+                            <FormLabel>Card Background Color</FormLabel>
+                            <FormControl>
+                              <div className="flex gap-2">
+                                <Input
+                                  type="color"
+                                  className="w-12 h-10 p-1 cursor-pointer"
+                                  disabled={
+                                    !editingContext.canEditBaseFields &&
+                                    !!editItem
+                                  }
+                                  {...field}
+                                  value={field.value || "#ffffff"}
+                                />
+                                <Input
+                                  placeholder="#000000"
+                                  disabled={
+                                    !editingContext.canEditBaseFields &&
+                                    !!editItem
+                                  }
+                                  {...field}
+                                  value={field.value || ""}
+                                />
+                              </div>
+                            </FormControl>
+                            <FormDescription>
+                              Custom color for the item card in POS
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </TabsContent>
+
+                    {/* TAB 2: PRICING & INVENTORY */}
+                    <TabsContent value="pricing" className="space-y-4">
+                      <div className="flex items-center gap-2 mb-4">
+                        <DollarSign className="h-4 w-4 text-green-500" />
+                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                          Pricing & Inventory
+                        </h3>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-xs",
+                            editingContext.level === 1 && "bg-gray-100",
+                            editingContext.level === 2 &&
+                              "bg-blue-100 text-blue-700",
+                            editingContext.level === 3 &&
+                              "bg-purple-100 text-purple-700",
+                            editingContext.level === 4 &&
+                              "bg-amber-100 text-amber-700",
+                            editingContext.level === 5 &&
+                              "bg-green-100 text-green-700"
+                          )}
+                        >
+                          {editingContext.priceLabel}
+                        </Badge>
+                      </div>
+
+                      {/* Price Breakdown - Show hierarchy */}
+                      {editItem && <PriceBreakdown />}
+
+                      {/* Price Inputs */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="price"
+                          render={({ field }: { field: any }) => (
+                            <FormItem>
+                              <FormLabel>
+                                {editingContext.priceLabel} *
+                              </FormLabel>
+                              <FormControl>
+                                <div className="relative">
+                                  <span className="absolute left-3 top-2.5 text-muted-foreground font-medium">
+                                    $
+                                  </span>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    className={cn(
+                                      "pl-7",
+                                      editingContext.level > 1 &&
+                                        "border-blue-300 focus:ring-blue-500"
+                                    )}
+                                    placeholder="0.00"
+                                    {...field}
+                                    onChange={(e) =>
+                                      field.onChange(
+                                        parseFloat(e.target.value) || 0
+                                      )
+                                    }
+                                  />
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="cash_price"
+                          render={({ field }: { field: any }) => (
+                            <FormItem>
+                              <FormLabel>Cash Price</FormLabel>
+                              <FormControl>
+                                <div className="relative">
+                                  <span className="absolute left-3 top-2.5 text-muted-foreground font-medium">
+                                    $
+                                  </span>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    className="pl-7"
+                                    placeholder="Optional"
+                                    {...field}
+                                    value={field.value ?? ""}
+                                    onChange={(e) =>
+                                      field.onChange(
+                                        e.target.value
+                                          ? parseFloat(e.target.value)
+                                          : null
+                                      )
+                                    }
+                                  />
+                                </div>
+                              </FormControl>
+                              <FormDescription>
+                                Optional cash discount
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      {/* Reset Button */}
+                      {editItem && editingContext.resetLabel && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleReset}
+                          disabled={isResetting}
+                          className="w-full gap-2"
+                        >
+                          <RotateCcw
+                            className={cn(
+                              "h-4 w-4",
+                              isResetting && "animate-spin"
+                            )}
+                          />
+                          {editingContext.resetLabel}
+                        </Button>
+                      )}
+
+                      {/* Context explanation */}
+                      {editItem && editingContext.level > 1 && (
+                        <div className="text-xs text-muted-foreground flex items-start gap-2 p-2 bg-blue-50 rounded-md border border-blue-100">
+                          <Info className="h-3 w-3 text-blue-500 mt-0.5 flex-shrink-0" />
+                          <span>
+                            {editingContext.level === 2 &&
+                              "This price will apply to ALL menus at this location, unless a more specific override exists."}
+                            {editingContext.level === 3 &&
+                              "This price will apply to all locations using this menu, unless they have a location-specific override."}
+                            {editingContext.level === 4 &&
+                              "This price only applies to this menu at this location."}
+                            {editingContext.level === 5 &&
+                              "You have full control over pricing in your location's menu."}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Stock Tracking Mode */}
+                      <FormField
+                        control={form.control}
+                        name="stock_tracking_mode"
+                        render={({ field }: { field: any }) => (
+                          <FormItem>
+                            <FormLabel>Stock Tracking</FormLabel>
+                            <Select
+                              value={field.value}
+                              onValueChange={field.onChange}
+                              disabled={
+                                !editingContext.canEditBaseFields && !!editItem
+                              }
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select tracking mode" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="in_stock">
+                                  In Stock
+                                </SelectItem>
+                                <SelectItem value="out_of_stock">
+                                  Out of Stock
+                                </SelectItem>
+                                <SelectItem value="quantity">
+                                  Track Quantity
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormDescription>
+                              How to track inventory for this item
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </TabsContent>
+
+                    {/* TAB 3: MODIFIERS */}
+                    <TabsContent value="modifiers" className="space-y-4">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Layers className="h-4 w-4 text-purple-500" />
+                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                          Modifier Groups
+                        </h3>
+                      </div>
+                      {(() => {
+                        // Build selected groups with enriched data from editItem (has location-specific overrides)
+
+                        const selectedGroups = selectedModifiers
+                          .map((id) => {
+                            // 1. Try to find existing assignment in editItem (to keep overrides)
+                            const existingAssignment =
+                              editItem?.menu_item_modifier_groups?.find(
+                                (g: any) =>
+                                  g.modifier_group_id === id || g.id === id
+                              );
+
+                            // 2. Find base group data from global list
+                            const baseGroup = modifierGroups.find(
+                              (g) => g.id === id
+                            );
+
+                            if (!baseGroup && !existingAssignment) return null;
+
+                            // 3. Merge data
+                            const groupData = (existingAssignment ||
+                              baseGroup) as any;
+
+                            return {
+                              id: id,
+                              name:
+                                groupData.name ||
+                                baseGroup?.name ||
+                                "Unknown Group",
+                              description:
+                                groupData.description || baseGroup?.description,
+                              is_required:
+                                groupData.is_required ??
+                                baseGroup?.is_required ??
+                                false,
+                              min_selections:
+                                groupData.min_selections ??
+                                baseGroup?.min_selections ??
+                                0,
+                              max_selections:
+                                groupData.max_selections ??
+                                baseGroup?.max_selections,
+                              is_active: groupData.is_active ?? true,
+                              // Use modifier_group_items from editItem - this has location-specific data
+                              // If it's a new assignment, use items from baseGroup
+                              modifier_group_items:
+                                (existingAssignment as any)?.items ||
+                                (existingAssignment as any)
+                                  ?.modifier_group_items ||
+                                baseGroup?.modifier_group_items ||
+                                [],
+                            };
+                          })
+                          .filter(Boolean);
+
+                        // Get IDs of selected groups
+                        const selectedGroupIds = selectedGroups.map(
+                          (g: any) => g.id
+                        );
+
+                        // Available groups are ones not in selectedGroupIds
+                        const availableGroups = modifierGroups.filter(
+                          (g) => !selectedGroupIds.includes(g.id)
+                        );
+
+                        return (
+                          <>
+                            {/* Selected Modifier Groups */}
+                            {selectedGroups.length === 0 ? (
+                              <div className="text-center py-6 text-muted-foreground">
+                                <Layers className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                                <p className="text-sm">
+                                  No modifier groups assigned
+                                </p>
+                                <p className="text-xs mt-1">
+                                  Add modifier groups to let customers customize
+                                  this item
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                {selectedGroups.map(
+                                  (group: any, index: number) => {
+                                    const showItems = editingContext.level > 1;
+
+                                    return (
+                                      <div
+                                        key={group.id}
+                                        className="rounded-lg border border-primary/30 bg-primary/5 overflow-hidden animate-in fade-in slide-in-from-top-2"
+                                        style={{
+                                          animationDelay: `${index * 50}ms`,
+                                        }}
+                                      >
+                                        <div className="p-3 flex items-center gap-3">
+                                          {/* Drag Handle (visual only for now) */}
+                                          <div className="text-muted-foreground/50">
+                                            <Grip className="h-4 w-4" />
+                                          </div>
+
+                                          {/* Icon */}
+                                          <div className="h-8 w-8 rounded-md bg-purple-100 flex items-center justify-center shrink-0">
+                                            <Layers className="h-4 w-4 text-purple-600" />
+                                          </div>
+
+                                          {/* Info */}
+                                          <div className="flex-1 min-w-0">
+                                            <div className="font-medium text-sm flex items-center gap-2">
+                                              {group.name}
+                                              {group.is_required && (
+                                                <Badge
+                                                  variant="destructive"
+                                                  className="text-[10px] h-4 px-1.5"
+                                                >
+                                                  Required
+                                                </Badge>
+                                              )}
+                                            </div>
+                                            <div className="text-xs text-muted-foreground">
+                                              {group.modifier_group_items
+                                                ?.length || 0}{" "}
+                                              options • Min:{" "}
+                                              {group.min_selections || 0} • Max:{" "}
+                                              {group.max_selections || "∞"}
+                                            </div>
+                                          </div>
+
+                                          {/* Remove Button (All Levels) */}
+                                          {true && (
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                              onClick={() =>
+                                                toggleModifier(group.id)
+                                              }
+                                            >
+                                              <X className="h-4 w-4" />
+                                            </Button>
+                                          )}
+                                        </div>
+
+                                        {/* Items List (Drill Down for Location Managers) */}
+                                        {showItems &&
+                                          group.modifier_group_items &&
+                                          group.modifier_group_items.length >
+                                            0 && (
+                                            <div className="border-t bg-background/50 px-3 py-2 space-y-1">
+                                              <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">
+                                                Manage Options (
+                                                {currentLocationName})
+                                              </div>
+                                              {group.modifier_group_items.map(
+                                                (item: any) => {
+                                                  const draft =
+                                                    modifierEdits[item.id] ||
+                                                    {};
+                                                  const price =
+                                                    draft.price !== undefined
+                                                      ? draft.price
+                                                      : item.location_override
+                                                          ?.price_modifier ??
+                                                        item.price_modifier ??
+                                                        0;
+                                                  const isActive =
+                                                    draft.isActive !== undefined
+                                                      ? draft.isActive
+                                                      : item.location_override
+                                                          ?.is_active ??
+                                                        item.is_active ??
+                                                        true;
+                                                  const isSaving =
+                                                    draft.isSaving;
+
+                                                  return (
+                                                    <div
+                                                      key={item.id}
+                                                      className="flex flex-col gap-2 rounded-lg border bg-white px-3 py-2"
+                                                    >
+                                                      <div className="flex items-center justify-between gap-2">
+                                                        <div>
+                                                          <div className="font-medium text-sm">
+                                                            {item.name}
+                                                          </div>
+                                                          {item.description && (
+                                                            <div className="text-xs text-muted-foreground">
+                                                              {item.description}
+                                                            </div>
+                                                          )}
+                                                        </div>
+                                                        <Badge
+                                                          variant="outline"
+                                                          className="text-[10px]"
+                                                        >
+                                                          {locationIdForEdits
+                                                            ? "Location Override"
+                                                            : "Global"}
+                                                        </Badge>
+                                                      </div>
+
+                                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+                                                        <div>
+                                                          <label className="text-xs text-muted-foreground">
+                                                            Price Modifier
+                                                          </label>
+                                                          <div className="relative">
+                                                            <span className="absolute left-2 top-2 text-muted-foreground text-sm">
+                                                              $
+                                                            </span>
+                                                            <Input
+                                                              className="pl-6 h-9"
+                                                              type="number"
+                                                              step="0.01"
+                                                              value={
+                                                                price ?? ""
+                                                              }
+                                                              onChange={(e) => {
+                                                                const val =
+                                                                  e.target
+                                                                    .value;
+                                                                setModifierDraft(
+                                                                  item.id,
+                                                                  {
+                                                                    price:
+                                                                      val === ""
+                                                                        ? null
+                                                                        : parseFloat(
+                                                                            val
+                                                                          ),
+                                                                  }
+                                                                );
+                                                              }}
+                                                            />
+                                                          </div>
+                                                        </div>
+
+                                                        <div className="flex items-center justify-between md:justify-start gap-2">
+                                                          <div className="text-xs text-muted-foreground">
+                                                            Active
+                                                          </div>
+                                                          <Switch
+                                                            checked={!!isActive}
+                                                            onCheckedChange={(
+                                                              checked
+                                                            ) =>
+                                                              setModifierDraft(
+                                                                item.id,
+                                                                {
+                                                                  isActive:
+                                                                    checked,
+                                                                }
+                                                              )
+                                                            }
+                                                          />
+                                                        </div>
+
+                                                        <div className="flex justify-end">
+                                                          <Button
+                                                            size="sm"
+                                                            onClick={() =>
+                                                              handleSaveModifierItem(
+                                                                item
+                                                              )
+                                                            }
+                                                            disabled={isSaving}
+                                                            className="gap-1"
+                                                          >
+                                                            {isSaving ? (
+                                                              <>
+                                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                                Saving...
+                                                              </>
+                                                            ) : (
+                                                              <>
+                                                                <Sparkles className="h-4 w-4" />
+                                                                Save
+                                                              </>
+                                                            )}
+                                                          </Button>
+                                                        </div>
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                }
+                                              )}
+                                            </div>
+                                          )}
+                                      </div>
+                                    );
+                                  }
+                                )}
+                              </div>
                             )}
 
-                            <Form {...form}>
-                                <form id="item-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                                        <TabsList className="grid w-full grid-cols-4 mb-6">
-                                            <TabsTrigger value="general">General</TabsTrigger>
-                                            <TabsTrigger value="pricing">Pricing</TabsTrigger>
-                                            <TabsTrigger value="tax">Tax & Fees</TabsTrigger>
-                                            <TabsTrigger value="availability">Availability</TabsTrigger>
-                                        </TabsList>
+                            {/* Add Modifier Section (All Levels) */}
+                            {availableGroups.length > 0 && (
+                              <div className="pt-2">
+                                {/* Add Button / Collapsible Trigger */}
+                                <div className="pt-4 border-t">
+                                  <Collapsible
+                                    open={showAddModifier}
+                                    onOpenChange={setShowAddModifier}
+                                  >
+                                    <CollapsibleTrigger asChild>
+                                      <button
+                                        type="button"
+                                        className={cn(
+                                          "w-full p-3 rounded-lg border-2 border-dashed transition-all flex items-center justify-center gap-2",
+                                          showAddModifier
+                                            ? "border-primary bg-primary/5 text-primary"
+                                            : "border-muted-foreground/30 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5"
+                                        )}
+                                      >
+                                        <Plus
+                                          className={cn(
+                                            "h-4 w-4 transition-transform",
+                                            showAddModifier && "rotate-45"
+                                          )}
+                                        />
+                                        <span className="text-sm font-medium">
+                                          {showAddModifier
+                                            ? "Cancel"
+                                            : `Add Modifier Group (${availableGroups.length} available)`}
+                                        </span>
+                                      </button>
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent className="pt-3">
+                                      <ModifierGroupSearchList
+                                        availableGroups={availableGroups}
+                                        onSelect={(groupId) => {
+                                          toggleModifier(groupId);
+                                          if (availableGroups.length === 1) {
+                                            setShowAddModifier(false);
+                                          }
+                                        }}
+                                      />
+                                    </CollapsibleContent>
+                                  </Collapsible>
+                                </div>
+                              </div>
+                            )}
 
-                                        {/* TAB 1: GENERAL */}
-                                        <TabsContent value="general" className="space-y-4">
-                                            <div className="flex items-center gap-2 mb-4">
-                                                <Settings2 className="h-4 w-4 text-muted-foreground" />
-                                                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                                                    Basic Information
-                                                </h3>
-                                                {!editingContext.canEditBaseFields && editItem && (
-                                                    <Badge variant="outline" className="text-xs">View Only</Badge>
-                                                )}
-                                            </div>
+                            {/* No Available Modifiers Message */}
+                            {availableGroups.length === 0 &&
+                              modifierGroups.length > 0 && (
+                                <div className="text-center py-2 text-xs text-muted-foreground">
+                                  All modifier groups have been added
+                                </div>
+                              )}
 
-                                            <FormField
-                                                control={form.control}
-                                                name="name"
-                                                render={({ field }: { field: any }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Item Name *</FormLabel>
-                                                        <FormControl>
-                                                            <Input
-                                                                placeholder="e.g., Crispy Chicken Wings"
-                                                                className="h-12 text-lg"
-                                                                disabled={!editingContext.canEditBaseFields && !!editItem}
-                                                                {...field}
-                                                            />
-                                                        </FormControl>
-                                                        {!editingContext.canEditBaseFields && editItem && (
-                                                            <FormDescription className="text-amber-600">
-                                                                Switch to "All Locations" to edit item details
-                                                            </FormDescription>
-                                                        )}
-                                                        <FormMessage />
-                                                    </FormItem>
-                                                )}
-                                            />
+                            {/* No Modifiers at All */}
+                            {modifierGroups.length === 0 && (
+                              <div className="text-center py-4 text-muted-foreground text-sm">
+                                No modifier groups available in your
+                                organization.
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </TabsContent>
 
-                                            <FormField
-                                                control={form.control}
-                                                name="description"
-                                                render={({ field }: { field: any }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Description</FormLabel>
-                                                        <FormControl>
-                                                            <textarea
-                                                                className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
-                                                                placeholder="Describe your dish..."
-                                                                disabled={!editingContext.canEditBaseFields && !!editItem}
-                                                                {...field}
-                                                            />
-                                                        </FormControl>
-                                                        <FormMessage />
-                                                    </FormItem>
-                                                )}
-                                            />
+                    {/* TAB 4: TAX & FEES */}
+                    <TabsContent value="tax" className="space-y-4">
+                      <div className="flex items-center gap-2 mb-4">
+                        <DollarSign className="h-4 w-4 text-emerald-500" />
+                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                          Tax & Fees Configuration
+                        </h3>
+                        {!editingContext.canEditBaseFields && editItem && (
+                          <Badge variant="outline" className="text-xs">
+                            View Only
+                          </Badge>
+                        )}
+                      </div>
 
-                                            <FormField
-                                                control={form.control}
-                                                name="image_url"
-                                                render={({ field }: { field: any }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Image URL</FormLabel>
-                                                        <FormControl>
-                                                            <div className="relative">
-                                                                <ImageIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                                                                <Input
-                                                                    className="pl-10"
-                                                                    placeholder="https://example.com/image.jpg"
-                                                                    disabled={!editingContext.canEditBaseFields && !!editItem}
-                                                                    {...field}
-                                                                    value={field.value || ''}
-                                                                />
-                                                            </div>
-                                                        </FormControl>
-                                                        <FormMessage />
-                                                    </FormItem>
-                                                )}
-                                            />
+                      {/* Tax Exempt Switch */}
+                      <FormField
+                        control={form.control}
+                        name="is_tax_exempt"
+                        render={({ field }: { field: any }) => (
+                          <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                            <div className="space-y-0.5">
+                              <FormLabel className="text-base">
+                                Tax Exempt
+                              </FormLabel>
+                              <FormDescription>
+                                Mark this item as tax-exempt (no tax will be
+                                applied)
+                              </FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                disabled={
+                                  !editingContext.canEditBaseFields &&
+                                  !!editItem
+                                }
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
 
-                                            {/* Allergens */}
-                                            <FormField
-                                                control={form.control}
-                                                name="allergens"
-                                                render={() => (
-                                                    <FormItem>
-                                                        <FormLabel>Allergens</FormLabel>
-                                                        <FormDescription>Select all that apply</FormDescription>
-                                                        <div className="flex flex-wrap gap-2 mt-2">
-                                                            {COMMON_ALLERGENS.map((allergen) => (
-                                                                <button
-                                                                    key={allergen}
-                                                                    type="button"
-                                                                    onClick={() => toggleAllergen(allergen)}
-                                                                    disabled={!editingContext.canEditBaseFields && !!editItem}
-                                                                    className={cn(
-                                                                        "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
-                                                                        "border hover:scale-105 active:scale-95",
-                                                                        "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
-                                                                        watchedValues.allergens?.includes(allergen)
-                                                                            ? "bg-orange-500 text-white border-orange-500 shadow-md"
-                                                                            : "bg-background border-border hover:border-orange-500/50"
-                                                                    )}
-                                                                >
-                                                                    {allergen}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    </FormItem>
-                                                )}
-                                            />
+                      {/* Tax Category Select */}
+                      <FormField
+                        control={form.control}
+                        name="tax_category"
+                        render={({ field }: { field: any }) => (
+                          <FormItem>
+                            <FormLabel>Tax Category</FormLabel>
+                            <Select
+                              value={field.value}
+                              onValueChange={field.onChange}
+                              disabled={
+                                watchedValues.is_tax_exempt ||
+                                (!editingContext.canEditBaseFields &&
+                                  !!editItem)
+                              }
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select tax category" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {TAX_CATEGORIES.map((category) => (
+                                  <SelectItem key={category} value={category}>
+                                    {TAX_CATEGORY_LABELS[category]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormDescription>
+                              {
+                                TAX_CATEGORY_DESCRIPTIONS[
+                                  field.value as TaxCategory
+                                ]
+                              }
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                                            {/* Card Background Color */}
-                                            <FormField
-                                                control={form.control}
-                                                name="card_bg_color"
-                                                render={({ field }: { field: any }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Card Background Color</FormLabel>
-                                                        <FormControl>
-                                                            <div className="flex gap-2">
-                                                                <Input
-                                                                    type="color"
-                                                                    className="w-12 h-10 p-1 cursor-pointer"
-                                                                    disabled={!editingContext.canEditBaseFields && !!editItem}
-                                                                    {...field}
-                                                                    value={field.value || '#ffffff'}
-                                                                />
-                                                                <Input
-                                                                    placeholder="#000000"
-                                                                    disabled={!editingContext.canEditBaseFields && !!editItem}
-                                                                    {...field}
-                                                                    value={field.value || ''}
-                                                                />
-                                                            </div>
-                                                        </FormControl>
-                                                        <FormDescription>Custom color for the item card in POS</FormDescription>
-                                                        <FormMessage />
-                                                    </FormItem>
-                                                )}
-                                            />
-                                        </TabsContent>
+                      {/* Tax Rate Preview */}
+                      {!isAllLocations && !watchedValues.is_tax_exempt && (
+                        <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                          <div className="flex items-center gap-2">
+                            <Info className="h-4 w-4 text-muted-foreground" />
+                            <h4 className="text-sm font-medium">
+                              Tax Preview for {currentLocationName}
+                            </h4>
+                          </div>
+                          {(() => {
+                            const taxRate = taxRates.find(
+                              (r) =>
+                                r.tax_category === watchedValues.tax_category
+                            );
+                            const itemPrice = watchedValues.price || 0;
+                            const taxAmount = taxRate
+                              ? (itemPrice * taxRate.percentage) / 100
+                              : 0;
+                            const totalWithTax = itemPrice + taxAmount;
 
-                                        {/* TAB 2: PRICING & INVENTORY */}
-                                        <TabsContent value="pricing" className="space-y-4">
-                                            <div className="flex items-center gap-2 mb-4">
-                                                <DollarSign className="h-4 w-4 text-green-500" />
-                                                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                                                    Pricing & Inventory
-                                                </h3>
-                                                <Badge
-                                                    variant="outline"
-                                                    className={cn(
-                                                        "text-xs",
-                                                        editingContext.level === 1 && "bg-gray-100",
-                                                        editingContext.level === 2 && "bg-blue-100 text-blue-700",
-                                                        editingContext.level === 3 && "bg-purple-100 text-purple-700",
-                                                        editingContext.level === 4 && "bg-amber-100 text-amber-700",
-                                                        editingContext.level === 5 && "bg-green-100 text-green-700",
-                                                    )}
-                                                >
-                                                    {editingContext.priceLabel}
-                                                </Badge>
-                                            </div>
-
-                                            {/* Price Breakdown - Show hierarchy */}
-                                            {editItem && <PriceBreakdown />}
-
-                                            {/* Price Inputs */}
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <FormField
-                                                    control={form.control}
-                                                    name="price"
-                                                    render={({ field }: { field: any }) => (
-                                                        <FormItem>
-                                                            <FormLabel>{editingContext.priceLabel} *</FormLabel>
-                                                            <FormControl>
-                                                                <div className="relative">
-                                                                    <span className="absolute left-3 top-2.5 text-muted-foreground font-medium">$</span>
-                                                                    <Input
-                                                                        type="number"
-                                                                        step="0.01"
-                                                                        min="0"
-                                                                        className={cn(
-                                                                            "pl-7",
-                                                                            editingContext.level > 1 && "border-blue-300 focus:ring-blue-500"
-                                                                        )}
-                                                                        placeholder="0.00"
-                                                                        {...field}
-                                                                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                                                                    />
-                                                                </div>
-                                                            </FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-                                                <FormField
-                                                    control={form.control}
-                                                    name="cash_price"
-                                                    render={({ field }: { field: any }) => (
-                                                        <FormItem>
-                                                            <FormLabel>Cash Price</FormLabel>
-                                                            <FormControl>
-                                                                <div className="relative">
-                                                                    <span className="absolute left-3 top-2.5 text-muted-foreground font-medium">$</span>
-                                                                    <Input
-                                                                        type="number"
-                                                                        step="0.01"
-                                                                        min="0"
-                                                                        className="pl-7"
-                                                                        placeholder="Optional"
-                                                                        {...field}
-                                                                        value={field.value ?? ''}
-                                                                        onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
-                                                                    />
-                                                                </div>
-                                                            </FormControl>
-                                                            <FormDescription>Optional cash discount</FormDescription>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-                                            </div>
-
-                                            {/* Reset Button */}
-                                            {editItem && editingContext.resetLabel && (
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={handleReset}
-                                                    disabled={isResetting}
-                                                    className="w-full gap-2"
-                                                >
-                                                    <RotateCcw className={cn("h-4 w-4", isResetting && "animate-spin")} />
-                                                    {editingContext.resetLabel}
-                                                </Button>
-                                            )}
-
-                                            {/* Context explanation */}
-                                            {editItem && editingContext.level > 1 && (
-                                                <div className="text-xs text-muted-foreground flex items-start gap-2 p-2 bg-blue-50 rounded-md border border-blue-100">
-                                                    <Info className="h-3 w-3 text-blue-500 mt-0.5 flex-shrink-0" />
-                                                    <span>
-                                                        {editingContext.level === 2 && "This price will apply to ALL menus at this location, unless a more specific override exists."}
-                                                        {editingContext.level === 3 && "This price will apply to all locations using this menu, unless they have a location-specific override."}
-                                                        {editingContext.level === 4 && "This price only applies to this menu at this location."}
-                                                        {editingContext.level === 5 && "You have full control over pricing in your location's menu."}
-                                                    </span>
-                                                </div>
-                                            )}
-
-                                            {/* Stock Tracking Mode */}
-                                            <FormField
-                                                control={form.control}
-                                                name="stock_tracking_mode"
-                                                render={({ field }: { field: any }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Stock Tracking</FormLabel>
-                                                        <Select
-                                                            value={field.value}
-                                                            onValueChange={field.onChange}
-                                                            disabled={!editingContext.canEditBaseFields && !!editItem}
-                                                        >
-                                                            <FormControl>
-                                                                <SelectTrigger>
-                                                                    <SelectValue placeholder="Select tracking mode" />
-                                                                </SelectTrigger>
-                                                            </FormControl>
-                                                            <SelectContent>
-                                                                <SelectItem value="in_stock">In Stock</SelectItem>
-                                                                <SelectItem value="out_of_stock">Out of Stock</SelectItem>
-                                                                <SelectItem value="quantity">Track Quantity</SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
-                                                        <FormDescription>How to track inventory for this item</FormDescription>
-                                                        <FormMessage />
-                                                    </FormItem>
-                                                )}
-                                            />
-                                        </TabsContent>
-
-                                        {/* TAB 3: TAX & FEES */}
-                                        <TabsContent value="tax" className="space-y-4">
-                                            <div className="flex items-center gap-2 mb-4">
-                                                <DollarSign className="h-4 w-4 text-emerald-500" />
-                                                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                                                    Tax & Fees Configuration
-                                                </h3>
-                                                {!editingContext.canEditBaseFields && editItem && (
-                                                    <Badge variant="outline" className="text-xs">View Only</Badge>
-                                                )}
-                                            </div>
-
-                                            {/* Tax Exempt Switch */}
-                                            <FormField
-                                                control={form.control}
-                                                name="is_tax_exempt"
-                                                render={({ field }: { field: any }) => (
-                                                    <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                                                        <div className="space-y-0.5">
-                                                            <FormLabel className="text-base">Tax Exempt</FormLabel>
-                                                            <FormDescription>
-                                                                Mark this item as tax-exempt (no tax will be applied)
-                                                            </FormDescription>
-                                                        </div>
-                                                        <FormControl>
-                                                            <Switch
-                                                                checked={field.value}
-                                                                onCheckedChange={field.onChange}
-                                                                disabled={!editingContext.canEditBaseFields && !!editItem}
-                                                            />
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-
-                                            {/* Tax Category Select */}
-                                            <FormField
-                                                control={form.control}
-                                                name="tax_category"
-                                                render={({ field }: { field: any }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Tax Category</FormLabel>
-                                                        <Select
-                                                            value={field.value}
-                                                            onValueChange={field.onChange}
-                                                            disabled={(watchedValues.is_tax_exempt || (!editingContext.canEditBaseFields && !!editItem))}
-                                                        >
-                                                            <FormControl>
-                                                                <SelectTrigger>
-                                                                    <SelectValue placeholder="Select tax category" />
-                                                                </SelectTrigger>
-                                                            </FormControl>
-                                                            <SelectContent>
-                                                                {TAX_CATEGORIES.map((category) => (
-                                                                    <SelectItem key={category} value={category}>
-                                                                        {TAX_CATEGORY_LABELS[category]}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                        <FormDescription>
-                                                            {TAX_CATEGORY_DESCRIPTIONS[field.value as TaxCategory]}
-                                                        </FormDescription>
-                                                        <FormMessage />
-                                                    </FormItem>
-                                                )}
-                                            />
-
-                                            {/* Tax Rate Preview */}
-                                            {!isAllLocations && !watchedValues.is_tax_exempt && (
-                                                <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <Info className="h-4 w-4 text-muted-foreground" />
-                                                        <h4 className="text-sm font-medium">Tax Preview for {currentLocationName}</h4>
-                                                    </div>
-                                                    {(() => {
-                                                        const taxRate = taxRates.find(r => r.tax_category === watchedValues.tax_category)
-                                                        const itemPrice = watchedValues.price || 0
-                                                        const taxAmount = taxRate ? (itemPrice * taxRate.percentage / 100) : 0
-                                                        const totalWithTax = itemPrice + taxAmount
-
-                                                        return taxRate ? (
-                                                            <div className="space-y-2">
-                                                                <div className="flex justify-between text-sm">
-                                                                    <span className="text-muted-foreground">Tax Rate:</span>
-                                                                    <span className="font-medium">{taxRate.name} ({taxRate.percentage}%)</span>
-                                                                </div>
-                                                                <div className="flex justify-between text-sm">
-                                                                    <span className="text-muted-foreground">Item Price:</span>
-                                                                    <span className="font-medium">${itemPrice.toFixed(2)}</span>
-                                                                </div>
-                                                                <div className="flex justify-between text-sm">
-                                                                    <span className="text-muted-foreground">Tax Amount:</span>
-                                                                    <span className="font-medium text-emerald-600">${taxAmount.toFixed(2)}</span>
-                                                                </div>
-                                                                <div className="pt-2 border-t flex justify-between">
-                                                                    <span className="font-semibold">Total with Tax:</span>
-                                                                    <span className="font-bold text-lg">${totalWithTax.toFixed(2)}</span>
-                                                                </div>
-                                                            </div>
-                                                        ) : (
-                                                            <Alert>
-                                                                <AlertCircle className="h-4 w-4" />
-                                                                <AlertTitle>No Tax Rate Set</AlertTitle>
-                                                                <AlertDescription className="space-y-2">
-                                                                    <p>No tax rate is configured for "{TAX_CATEGORY_LABELS[watchedValues.tax_category as TaxCategory]}" at this location.</p>
-                                                                    <Link href="/dashboard/settings/taxes" className="text-primary hover:underline text-sm font-medium">
-                                                                        Configure tax rates →
-                                                                    </Link>
-                                                                </AlertDescription>
-                                                            </Alert>
-                                                        )
-                                                    })()}
-                                                </div>
-                                            )}
-
-                                            {isAllLocations && (
-                                                <Alert>
-                                                    <Info className="h-4 w-4" />
-                                                    <AlertTitle>Tax Preview Not Available</AlertTitle>
-                                                    <AlertDescription>
-                                                        Select a specific location to see tax rate preview and calculations.
-                                                    </AlertDescription>
-                                                </Alert>
-                                            )}
-                                        </TabsContent>
-
-                                        {/* TAB 4: AVAILABILITY */}
-                                        <TabsContent value="availability" className="space-y-4">
-                                            <div className="flex items-center gap-2 mb-4">
-                                                <CheckCircle2 className="h-4 w-4 text-blue-500" />
-                                                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                                                    Availability & Channels
-                                                </h3>
-                                            </div>
-
-                                            {/* General Availability Toggle */}
-                                            <FormField
-                                                control={form.control}
-                                                name="availability"
-                                                render={({ field }: { field: any }) => (
-                                                    <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                                                        <div className="space-y-0.5">
-                                                            <FormLabel className="text-base">
-                                                                {editingContext.level === 1 ? 'Available for Sale' :
-                                                                    editingContext.level === 2 ? 'Available at This Location' :
-                                                                        'Available on This Menu'}
-                                                            </FormLabel>
-                                                            <FormDescription>
-                                                                {editingContext.level === 1 && 'Master switch - affects all locations and menus'}
-                                                                {editingContext.level === 2 && 'Toggle availability at this location'}
-                                                                {editingContext.level >= 3 && 'Toggle availability on this category'}
-                                                            </FormDescription>
-                                                        </div>
-                                                        <FormControl>
-                                                            <Switch
-                                                                checked={field.value}
-                                                                onCheckedChange={field.onChange}
-                                                            />
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-
-                                            {/* Available Channels */}
-                                            <FormField
-                                                control={form.control}
-                                                name="available_channels"
-                                                render={() => (
-                                                    <FormItem>
-                                                        <FormLabel>Sales Channels</FormLabel>
-                                                        <FormDescription>Select where this item can be sold</FormDescription>
-                                                        <div className="space-y-2 mt-2">
-                                                            {AVAILABLE_CHANNELS.map((channel) => (
-                                                                <FormField
-                                                                    key={channel}
-                                                                    control={form.control}
-                                                                    name="available_channels"
-                                                                    render={({ field }: { field: any }) => (
-                                                                        <FormItem className="flex items-start space-x-3 space-y-0 rounded-lg border p-3">
-                                                                            <FormControl>
-                                                                                <Checkbox
-                                                                                    checked={field.value?.includes(channel)}
-                                                                                    onCheckedChange={(checked) => {
-                                                                                        const current = field.value || []
-                                                                                        if (checked) {
-                                                                                            field.onChange([...current, channel])
-                                                                                        } else {
-                                                                                            field.onChange(current.filter((c: string) => c !== channel))
-                                                                                        }
-                                                                                    }}
-                                                                                    disabled={!editingContext.canEditBaseFields && !!editItem}
-                                                                                />
-                                                                            </FormControl>
-                                                                            <div className="flex-1">
-                                                                                <FormLabel className="text-sm font-medium cursor-pointer">
-                                                                                    {CHANNEL_LABELS[channel]}
-                                                                                </FormLabel>
-                                                                                <FormDescription className="text-xs">
-                                                                                    {CHANNEL_DESCRIPTIONS[channel]}
-                                                                                </FormDescription>
-                                                                            </div>
-                                                                        </FormItem>
-                                                                    )}
-                                                                />
-                                                            ))}
-                                                        </div>
-                                                        <FormMessage />
-                                                    </FormItem>
-                                                )}
-                                            />
-
-                                            {/* Categories Section */}
-                                            <div className="space-y-3">
-                                                <div className="flex items-center gap-2">
-                                                    <Tag className="h-4 w-4 text-blue-500" />
-                                                    <FormLabel>Categories</FormLabel>
-                                                    {selectedCategories.length > 0 && (
-                                                        <Badge variant="secondary" className="text-xs">{selectedCategories.length}</Badge>
-                                                    )}
-                                                </div>
-                                                {/* Suggestion for new items */}
-                                                {!editItem && selectedCategories.length === 0 && categories.length > 0 && (
-                                                    <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
-                                                        <Info className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                                                        <div className="space-y-1">
-                                                            <p className="text-amber-800 font-medium">Select a category for your item</p>
-                                                            <p className="text-amber-700 text-xs">
-                                                                Categories help organize your menu. Items without a category will be placed in "Uncategorized".
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {categories.length === 0 ? (
-                                                    <div className="text-center py-6 text-muted-foreground text-sm border border-dashed rounded-lg">
-                                                        <Tag className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                                                        <p>No categories available</p>
-                                                        <p className="text-xs mt-1">Create categories first to organize your menu items.</p>
-                                                    </div>
-                                                ) : (
-                                                    <div className="space-y-3">
-                                                        {/* Category grid */}
-                                                        <div className="flex flex-wrap gap-2">
-                                                            {categories.map((category) => (
-                                                                <button
-                                                                    key={category.id}
-                                                                    type="button"
-                                                                    onClick={() => toggleCategory(category.id)}
-                                                                    disabled={!editingContext.canEditBaseFields && !!editItem}
-                                                                    className={cn(
-                                                                        "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
-                                                                        "border hover:scale-105 active:scale-95",
-                                                                        "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
-                                                                        selectedCategories.includes(category.id)
-                                                                            ? "bg-primary text-primary-foreground border-primary shadow-md"
-                                                                            : "bg-background border-border hover:border-primary/50"
-                                                                    )}
-                                                                >
-                                                                    {category.name}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-
-                                                        {/* Skip option for new items */}
-                                                        {!editItem && (
-                                                            <div className="pt-2 border-t">
-                                                                <button
-                                                                    type="button"
-                                                                    className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-                                                                    onClick={() => {
-                                                                        // Clear all categories - item will go to "Uncategorized"
-                                                                        setSelectedCategories([])
-                                                                    }}
-                                                                >
-                                                                    <X className="h-3 w-3" />
-                                                                    Skip - Add to "Uncategorized"
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Modifiers Section */}
-                                            <div className="space-y-4">
-                                                <div className="flex items-center gap-2">
-                                                    <Layers className="h-4 w-4 text-purple-500" />
-                                                    <FormLabel>Modifier Groups</FormLabel>
-                                                    {selectedModifiers.length > 0 && (
-                                                        <Badge variant="secondary" className="text-xs">{selectedModifiers.length}</Badge>
-                                                    )}
-                                                </div>
-                                                {(() => {
-                                                    // Get enriched selected groups from editItem (has location-specific overrides)
-                                                    // These contain the actual modifier items with their current prices/availability
-                                                    const itemModifierGroups = editItem?.menu_item_modifier_groups || []
-                                                    // Build selected groups with enriched data from editItem
-                                                    const selectedGroups = itemModifierGroups
-                                                        .map((assignment: { modifier_group_id?: string; modifier_groups?: { id: string; name: string }; id?: string; name?: string; description?: string | null; is_required?: boolean; min_selections?: number; max_selections?: number | null; is_active?: boolean; items?: ModifierItem[] }) => {
-                                                            // The assignment may have modifier_group nested or be the group itself
-                                                            const groupData = assignment as ModifierGroup
-                                                            const groupId = (assignment as any).modifier_group_id || assignment.id
-
-                                                            // Find the base group info from modifierGroups prop
-                                                            const baseGroup = modifierGroups.find(g => g.id === groupId)
-
-                                                            if (!baseGroup && !groupData.name) return null
-
-                                                            // Merge: use editItem data for modifier_group_items (has overrides),
-                                                            // fallback to base group for other properties
-                                                            return {
-                                                                id: groupId,
-                                                                name: groupData.name || baseGroup?.name || 'Unknown Group',
-                                                                description: groupData.description || baseGroup?.description,
-                                                                is_required: groupData.is_required ?? baseGroup?.is_required ?? false,
-                                                                min_selections: groupData.min_selections ?? baseGroup?.min_selections ?? 0,
-                                                                max_selections: groupData.max_selections ?? baseGroup?.max_selections,
-                                                                is_active: groupData.is_active ?? true,
-                                                                // Use modifier_group_items from editItem - this has location-specific data
-                                                                modifier_group_items: groupData.items || baseGroup?.modifier_group_items || [],
-                                                            }
-                                                        })
-                                                        .filter(Boolean)
-
-
-                                                    // Get IDs of selected groups
-                                                    const selectedGroupIds = selectedGroups.map((g: any) => g.id)
-
-                                                    // Available groups are ones not in selectedGroupIds
-                                                    const availableGroups = modifierGroups.filter(g => !selectedGroupIds.includes(g.id))
-
-                                                    return (
-                                                        <>
-                                                            {/* Selected Modifier Groups */}
-                                                            {selectedGroups.length === 0 ? (
-                                                                <div className="text-center py-6 text-muted-foreground">
-                                                                    <Layers className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                                                                    <p className="text-sm">No modifier groups assigned</p>
-                                                                    <p className="text-xs mt-1">Add modifier groups to let customers customize this item</p>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="space-y-2">
-                                                                    {selectedGroups.map((group: any, index: number) => {
-                                                                        const showItems = editingContext.level > 1
-
-                                                                        return (
-                                                                            <div
-                                                                                key={group.id}
-                                                                                className="rounded-lg border border-primary/30 bg-primary/5 overflow-hidden animate-in fade-in slide-in-from-top-2"
-                                                                                style={{ animationDelay: `${index * 50}ms` }}
-                                                                            >
-                                                                                <div className="p-3 flex items-center gap-3">
-                                                                                    {/* Drag Handle (visual only for now) */}
-                                                                                    <div className="text-muted-foreground/50">
-                                                                                        <Grip className="h-4 w-4" />
-                                                                                    </div>
-
-                                                                                    {/* Icon */}
-                                                                                    <div className="h-8 w-8 rounded-md bg-purple-100 flex items-center justify-center shrink-0">
-                                                                                        <Layers className="h-4 w-4 text-purple-600" />
-                                                                                    </div>
-
-                                                                                    {/* Info */}
-                                                                                    <div className="flex-1 min-w-0">
-                                                                                        <div className="font-medium text-sm flex items-center gap-2">
-                                                                                            {group.name}
-                                                                                            {group.is_required && (
-                                                                                                <Badge variant="destructive" className="text-[10px] h-4 px-1.5">
-                                                                                                    Required
-                                                                                                </Badge>
-                                                                                            )}
-                                                                                        </div>
-                                                                                        <div className="text-xs text-muted-foreground">
-                                                                                            {group.modifier_group_items?.length || 0} options •
-                                                                                            Min: {group.min_selections || 0} •
-                                                                                            Max: {group.max_selections || '∞'}
-                                                                                        </div>
-                                                                                    </div>
-
-                                                                                    {/* Remove Button (Level 1 only) */}
-                                                                                    {editingContext.level === 1 && (
-                                                                                        <Button
-                                                                                            type="button"
-                                                                                            variant="ghost"
-                                                                                            size="icon"
-                                                                                            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                                                                            onClick={() => toggleModifier(group.id)}
-                                                                                        >
-                                                                                            <X className="h-4 w-4" />
-                                                                                        </Button>
-                                                                                    )}
-                                                                                </div>
-
-                                                                                {/* Items List (Drill Down for Location Managers) */}
-                                                                                {showItems && group.modifier_group_items && group.modifier_group_items.length > 0 && (
-                                                                                    <div className="border-t bg-background/50 px-3 py-2 space-y-1">
-                                                                                        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">
-                                                                                            Manage Options ({currentLocationName})
-                                                                                        </div>
-                                                                                        {group.modifier_group_items.map((item: any) => {
-                                                                                            const draft = modifierEdits[item.id] || {}
-                                                                                            const price =
-                                                                                                draft.price !== undefined
-                                                                                                    ? draft.price
-                                                                                                    : item.location_override?.price_modifier ?? item.price_modifier ?? 0
-                                                                                            const isActive =
-                                                                                                draft.isActive !== undefined
-                                                                                                    ? draft.isActive
-                                                                                                    : (item.location_override?.is_active ?? item.is_active ?? true)
-                                                                                            const isSaving = draft.isSaving
-
-                                                                                            return (
-                                                                                                <div
-                                                                                                    key={item.id}
-                                                                                                    className="flex flex-col gap-2 rounded-lg border bg-white px-3 py-2"
-                                                                                                >
-                                                                                                    <div className="flex items-center justify-between gap-2">
-                                                                                                        <div>
-                                                                                                            <div className="font-medium text-sm">{item.name}</div>
-                                                                                                            {item.description && (
-                                                                                                                <div className="text-xs text-muted-foreground">{item.description}</div>
-                                                                                                            )}
-                                                                                                        </div>
-                                                                                                        <Badge variant="outline" className="text-[10px]">
-                                                                                                            {locationIdForEdits ? 'Location Override' : 'Global'}
-                                                                                                        </Badge>
-                                                                                                    </div>
-
-                                                                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
-                                                                                                        <div>
-                                                                                                            <label className="text-xs text-muted-foreground">Price Modifier</label>
-                                                                                                            <div className="relative">
-                                                                                                                <span className="absolute left-2 top-2 text-muted-foreground text-sm">$</span>
-                                                                                                                <Input
-                                                                                                                    className="pl-6 h-9"
-                                                                                                                    type="number"
-                                                                                                                    step="0.01"
-                                                                                                                    value={price ?? ''}
-                                                                                                                    onChange={(e) => {
-                                                                                                                        const val = e.target.value
-                                                                                                                        setModifierDraft(item.id, { price: val === '' ? null : parseFloat(val) })
-                                                                                                                    }}
-                                                                                                                />
-                                                                                                            </div>
-                                                                                                        </div>
-
-                                                                                                        <div className="flex items-center justify-between md:justify-start gap-2">
-                                                                                                            <div className="text-xs text-muted-foreground">Active</div>
-                                                                                                            <Switch
-                                                                                                                checked={!!isActive}
-                                                                                                                onCheckedChange={(checked) => setModifierDraft(item.id, { isActive: checked })}
-                                                                                                            />
-                                                                                                        </div>
-
-                                                                                                        <div className="flex justify-end">
-                                                                                                            <Button
-                                                                                                                size="sm"
-                                                                                                                onClick={() => handleSaveModifierItem(item)}
-                                                                                                                disabled={isSaving}
-                                                                                                                className="gap-1"
-                                                                                                            >
-                                                                                                                {isSaving ? (
-                                                                                                                    <>
-                                                                                                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                                                                                                        Saving...
-                                                                                                                    </>
-                                                                                                                ) : (
-                                                                                                                    <>
-                                                                                                                        <Sparkles className="h-4 w-4" />
-                                                                                                                        Save
-                                                                                                                    </>
-                                                                                                                )}
-                                                                                                            </Button>
-                                                                                                        </div>
-                                                                                                    </div>
-                                                                                                </div>
-                                                                                            )
-                                                                                        })}
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        )
-                                                                    })}
-                                                                </div>
-                                                            )}
-
-                                                            {/* Add Modifier Section (Level 1 only) */}
-                                                            {editingContext.level === 2 && availableGroups.length > 0 && (
-                                                                <div className="pt-2">
-                                                                    <Collapsible open={showAddModifier} onOpenChange={setShowAddModifier}>
-                                                                        <CollapsibleTrigger asChild>
-                                                                            <button
-                                                                                type="button"
-                                                                                className={cn(
-                                                                                    "w-full p-3 rounded-lg border-2 border-dashed transition-all flex items-center justify-center gap-2",
-                                                                                    showAddModifier
-                                                                                        ? "border-primary bg-primary/5 text-primary"
-                                                                                        : "border-muted-foreground/30 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5"
-                                                                                )}
-                                                                            >
-                                                                                <Plus className={cn(
-                                                                                    "h-4 w-4 transition-transform",
-                                                                                    showAddModifier && "rotate-45"
-                                                                                )} />
-                                                                                <span className="text-sm font-medium">
-                                                                                    {showAddModifier ? 'Cancel' : `Add Modifier Group (${availableGroups.length} available)`}
-                                                                                </span>
-                                                                            </button>
-                                                                        </CollapsibleTrigger>
-                                                                        <CollapsibleContent className="pt-3">
-                                                                            <ModifierGroupSearchList
-                                                                                availableGroups={availableGroups}
-                                                                                onSelect={(groupId) => {
-                                                                                    toggleModifier(groupId)
-                                                                                    if (availableGroups.length === 1) {
-                                                                                        setShowAddModifier(false)
-                                                                                    }
-                                                                                }}
-                                                                            />
-                                                                        </CollapsibleContent>
-                                                                    </Collapsible>
-                                                                </div>
-                                                            )}
-
-                                                            {/* No Available Modifiers Message */}
-                                                            {editingContext.level === 1 && availableGroups.length === 0 && modifierGroups.length > 0 && (
-                                                                <div className="text-center py-2 text-xs text-muted-foreground">
-                                                                    All modifier groups have been added
-                                                                </div>
-                                                            )}
-
-                                                            {/* No Modifiers at All */}
-                                                            {modifierGroups.length === 0 && (
-                                                                <div className="text-center py-4 text-muted-foreground text-sm">
-                                                                    No modifier groups available in your organization.
-                                                                </div>
-                                                            )}
-                                                        </>
-                                                    )
-                                                })()}
-                                            </div>
-
-                                        </TabsContent>
-                                    </Tabs>
-                                </form>
-                            </Form>
+                            return taxRate ? (
+                              <div className="space-y-2">
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">
+                                    Tax Rate:
+                                  </span>
+                                  <span className="font-medium">
+                                    {taxRate.name} ({taxRate.percentage}%)
+                                  </span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">
+                                    Item Price:
+                                  </span>
+                                  <span className="font-medium">
+                                    ${itemPrice.toFixed(2)}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">
+                                    Tax Amount:
+                                  </span>
+                                  <span className="font-medium text-emerald-600">
+                                    ${taxAmount.toFixed(2)}
+                                  </span>
+                                </div>
+                                <div className="pt-2 border-t flex justify-between">
+                                  <span className="font-semibold">
+                                    Total with Tax:
+                                  </span>
+                                  <span className="font-bold text-lg">
+                                    ${totalWithTax.toFixed(2)}
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <Alert>
+                                <AlertCircle className="h-4 w-4" />
+                                <AlertTitle>No Tax Rate Set</AlertTitle>
+                                <AlertDescription className="space-y-2">
+                                  <p>
+                                    No tax rate is configured for "
+                                    {
+                                      TAX_CATEGORY_LABELS[
+                                        watchedValues.tax_category as TaxCategory
+                                      ]
+                                    }
+                                    " at this location.
+                                  </p>
+                                  <Link
+                                    href="/dashboard/settings/taxes"
+                                    className="text-primary hover:underline text-sm font-medium"
+                                  >
+                                    Configure tax rates →
+                                  </Link>
+                                </AlertDescription>
+                              </Alert>
+                            );
+                          })()}
                         </div>
+                      )}
 
-                        {/* Preview Section */}
-                        <div className="w-full lg:w-1/3 bg-muted/30 p-6 border-t lg:border-t-0 lg:border-l flex flex-col items-center">
-                            {/* <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
+                      {isAllLocations && (
+                        <Alert>
+                          <Info className="h-4 w-4" />
+                          <AlertTitle>Tax Preview Not Available</AlertTitle>
+                          <AlertDescription>
+                            Select a specific location to see tax rate preview
+                            and calculations.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </TabsContent>
+
+                    {/* TAB 4: AVAILABILITY */}
+                    <TabsContent value="availability" className="space-y-4">
+                      <div className="flex items-center gap-2 mb-4">
+                        <CheckCircle2 className="h-4 w-4 text-blue-500" />
+                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                          Availability & Channels
+                        </h3>
+                      </div>
+
+                      {/* General Availability Toggle */}
+                      <FormField
+                        control={form.control}
+                        name="availability"
+                        render={({ field }: { field: any }) => (
+                          <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                            <div className="space-y-0.5">
+                              <FormLabel className="text-base">
+                                {editingContext.level === 1
+                                  ? "Available for Sale"
+                                  : editingContext.level === 2
+                                  ? "Available at This Location"
+                                  : "Available on This Menu"}
+                              </FormLabel>
+                              <FormDescription>
+                                {editingContext.level === 1 &&
+                                  "Master switch - affects all locations and menus"}
+                                {editingContext.level === 2 &&
+                                  "Toggle availability at this location"}
+                                {editingContext.level >= 3 &&
+                                  "Toggle availability on this category"}
+                              </FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* Available Channels */}
+                      <FormField
+                        control={form.control}
+                        name="available_channels"
+                        render={() => (
+                          <FormItem>
+                            <FormLabel>Sales Channels</FormLabel>
+                            <FormDescription>
+                              Select where this item can be sold
+                            </FormDescription>
+                            <div className="space-y-2 mt-2">
+                              {AVAILABLE_CHANNELS.map((channel) => (
+                                <FormField
+                                  key={channel}
+                                  control={form.control}
+                                  name="available_channels"
+                                  render={({ field }: { field: any }) => (
+                                    <FormItem className="flex items-start space-x-3 space-y-0 rounded-lg border p-3">
+                                      <FormControl>
+                                        <Checkbox
+                                          checked={field.value?.includes(
+                                            channel
+                                          )}
+                                          onCheckedChange={(checked) => {
+                                            const current = field.value || [];
+                                            if (checked) {
+                                              field.onChange([
+                                                ...current,
+                                                channel,
+                                              ]);
+                                            } else {
+                                              field.onChange(
+                                                current.filter(
+                                                  (c: string) => c !== channel
+                                                )
+                                              );
+                                            }
+                                          }}
+                                          disabled={
+                                            !editingContext.canEditBaseFields &&
+                                            !!editItem
+                                          }
+                                        />
+                                      </FormControl>
+                                      <div className="flex-1">
+                                        <FormLabel className="text-sm font-medium cursor-pointer">
+                                          {CHANNEL_LABELS[channel]}
+                                        </FormLabel>
+                                        <FormDescription className="text-xs">
+                                          {CHANNEL_DESCRIPTIONS[channel]}
+                                        </FormDescription>
+                                      </div>
+                                    </FormItem>
+                                  )}
+                                />
+                              ))}
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* Categories Section */}
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Tag className="h-4 w-4 text-blue-500" />
+                          <FormLabel>Categories</FormLabel>
+                          {selectedCategories.length > 0 && (
+                            <Badge variant="secondary" className="text-xs">
+                              {selectedCategories.length}
+                            </Badge>
+                          )}
+                        </div>
+                        {/* Suggestion for new items */}
+                        {!editItem &&
+                          selectedCategories.length === 0 &&
+                          categories.length > 0 && (
+                            <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
+                              <Info className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                              <div className="space-y-1">
+                                <p className="text-amber-800 font-medium">
+                                  Select a category for your item
+                                </p>
+                                <p className="text-amber-700 text-xs">
+                                  Categories help organize your menu. Items
+                                  without a category will be placed in
+                                  "Uncategorized".
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
+                        {categories.length === 0 ? (
+                          <div className="text-center py-6 text-muted-foreground text-sm border border-dashed rounded-lg">
+                            <Tag className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                            <p>No categories available</p>
+                            <p className="text-xs mt-1">
+                              Create categories first to organize your menu
+                              items.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {/* Category grid */}
+                            <div className="flex flex-wrap gap-2">
+                              {categories.map((category) => (
+                                <button
+                                  key={category.id}
+                                  type="button"
+                                  onClick={() => toggleCategory(category.id)}
+                                  disabled={
+                                    !editingContext.canEditBaseFields &&
+                                    !!editItem
+                                  }
+                                  className={cn(
+                                    "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
+                                    "border hover:scale-105 active:scale-95",
+                                    "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
+                                    selectedCategories.includes(category.id)
+                                      ? "bg-primary text-primary-foreground border-primary shadow-md"
+                                      : "bg-background border-border hover:border-primary/50"
+                                  )}
+                                >
+                                  {category.name}
+                                </button>
+                              ))}
+                            </div>
+
+                            {/* Skip option for new items */}
+                            {!editItem && (
+                              <div className="pt-2 border-t">
+                                <button
+                                  type="button"
+                                  className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                                  onClick={() => {
+                                    // Clear all categories - item will go to "Uncategorized"
+                                    setSelectedCategories([]);
+                                  }}
+                                >
+                                  <X className="h-3 w-3" />
+                                  Skip - Add to "Uncategorized"
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                </form>
+              </Form>
+            </div>
+
+            {/* Preview Section */}
+            <div className="w-full lg:w-1/3 bg-muted/30 p-6 border-t lg:border-t-0 lg:border-l flex flex-col items-center">
+              {/* <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
                                 <Sparkles className="h-4 w-4" />
                                 Live Preview
                             </h3> */}
-                            <div className="sticky w-[80%] top-4">
-                                <ItemPreviewCard
-                                    name={watchedValues.name}
-                                    description={watchedValues.description}
-                                    price={watchedValues.price || 0}
-                                    cashPrice={watchedValues.cash_price ?? undefined}
-                                    image={watchedValues.image_url ?? undefined}
-                                    categories={selectedCategories.map(id =>
-                                        categories.find(c => c.id === id)?.name || ''
-                                    ).filter(Boolean)}
-                                    availability={watchedValues.availability}
-                                    className="shadow-xl"
-                                />
+              <div className="sticky w-[80%] top-4">
+                <ItemPreviewCard
+                  name={watchedValues.name}
+                  description={watchedValues.description}
+                  price={watchedValues.price || 0}
+                  cashPrice={watchedValues.cash_price ?? undefined}
+                  image={watchedValues.image_url ?? undefined}
+                  categories={selectedCategories
+                    .map(
+                      (id) => categories.find((c) => c.id === id)?.name || ""
+                    )
+                    .filter(Boolean)}
+                  availability={watchedValues.availability}
+                  className="shadow-xl"
+                />
 
-                                {/* Summary info */}
-                                <div className="mt-6 space-y-2 text-sm">
-                                    {editItem && (
-                                        <EditingContextIndicator context={editingContext} />
-                                    )}
-                                    {selectedModifiers.length > 0 && (
-                                        <div className="flex items-center gap-2 text-muted-foreground">
-                                            <Layers className="h-4 w-4" />
-                                            {selectedModifiers.length} modifier group{selectedModifiers.length !== 1 ? 's' : ''}
-                                        </div>
-                                    )}
-                                    {watchedValues.allergens && watchedValues.allergens.length > 0 && (
-                                        <div className="flex items-center gap-2 text-muted-foreground">
-                                            <AlertCircle className="h-4 w-4 text-orange-500" />
-                                            Contains: {watchedValues.allergens.join(', ')}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
+                {/* Summary info */}
+                <div className="mt-6 space-y-2 text-sm">
+                  {editItem && (
+                    <EditingContextIndicator context={editingContext} />
+                  )}
+                  {selectedModifiers.length > 0 && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Layers className="h-4 w-4" />
+                      {selectedModifiers.length} modifier group
+                      {selectedModifiers.length !== 1 ? "s" : ""}
                     </div>
-                </BottomSheetBody>
+                  )}
+                  {watchedValues.allergens &&
+                    watchedValues.allergens.length > 0 && (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <AlertCircle className="h-4 w-4 text-orange-500" />
+                        Contains: {watchedValues.allergens.join(", ")}
+                      </div>
+                    )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </BottomSheetBody>
 
-                <BottomSheetFooter>
-                    <Button type="button" variant="outline" onClick={handleClose} className="flex-1 lg:flex-none">
-                        Cancel
-                    </Button>
-                    <Button
-                        type="submit"
-                        form="item-form"
-                        disabled={isSubmitting}
-                        className="flex-1 lg:flex-none lg:min-w-[150px]"
-                    >
-                        {isSubmitting ? (
-                            <>
-                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                </svg>
-                                Saving...
-                            </>
-                        ) : editItem ? (
-                            editingContext.level === 1 ? 'Save Changes' :
-                                editingContext.level === 2 ? 'Save  ' :
-                                    editingContext.level === 3 ? 'Save  ' :
-                                        editingContext.level === 4 ? 'Save Location Override' :
-                                            'Save'
-                        ) : 'Create Item'}
-                    </Button>
-                </BottomSheetFooter>
-            </BottomSheetContent>
-        </BottomSheet>
-    )
+        <BottomSheetFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleClose}
+            className="flex-1 lg:flex-none"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form="item-form"
+            disabled={isSubmitting}
+            className="flex-1 lg:flex-none lg:min-w-[150px]"
+          >
+            {isSubmitting ? (
+              <>
+                <svg
+                  className="animate-spin -ml-1 mr-2 h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+                Saving...
+              </>
+            ) : editItem ? (
+              editingContext.level === 1 ? (
+                "Save Changes"
+              ) : editingContext.level === 2 ? (
+                "Save  "
+              ) : editingContext.level === 3 ? (
+                "Save  "
+              ) : editingContext.level === 4 ? (
+                "Save Location Override"
+              ) : (
+                "Save"
+              )
+            ) : (
+              "Create Item"
+            )}
+          </Button>
+        </BottomSheetFooter>
+      </BottomSheetContent>
+    </BottomSheet>
+  );
 }
 
 // ============================================================================
@@ -2063,73 +2589,74 @@ export function NewEditItemFormSheet({
 // ============================================================================
 
 interface PriceLevelRowProps {
-    level: number
-    label: string
-    icon: React.ReactNode
-    price: number | null
-    cashPrice?: number | null
-    modifier?: number | null
-    modifierType?: 'add' | 'percent' | null
-    isCurrentLevel: boolean
-    isActive: boolean
-    isOverride?: boolean
+  level: number;
+  label: string;
+  icon: React.ReactNode;
+  price: number | null;
+  cashPrice?: number | null;
+  modifier?: number | null;
+  modifierType?: "add" | "percent" | null;
+  isCurrentLevel: boolean;
+  isActive: boolean;
+  isOverride?: boolean;
 }
 
 function PriceLevelRow({
-    level,
-    label,
-    icon,
-    price,
-    cashPrice,
-    modifier,
-    modifierType,
-    isCurrentLevel,
-    isActive,
-    isOverride,
+  level,
+  label,
+  icon,
+  price,
+  cashPrice,
+  modifier,
+  modifierType,
+  isCurrentLevel,
+  isActive,
+  isOverride,
 }: PriceLevelRowProps) {
-    return (
-        <div
-            className={cn(
-                "flex items-center justify-between py-1.5 px-2 rounded text-sm",
-                isCurrentLevel && "bg-blue-50 border border-blue-200",
-                !isActive && "opacity-50"
-            )}
+  return (
+    <div
+      className={cn(
+        "flex items-center justify-between py-1.5 px-2 rounded text-sm",
+        isCurrentLevel && "bg-blue-50 border border-blue-200",
+        !isActive && "opacity-50"
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <span
+          className={cn(
+            "w-5 h-5 rounded-full flex items-center justify-center text-xs",
+            isCurrentLevel ? "bg-blue-500 text-white" : "bg-muted"
+          )}
         >
-            <div className="flex items-center gap-2">
-                <span className={cn(
-                    "w-5 h-5 rounded-full flex items-center justify-center text-xs",
-                    isCurrentLevel ? "bg-blue-500 text-white" : "bg-muted"
-                )}>
-                    {level}
-                </span>
-                <span className="flex items-center gap-1">
-                    {icon}
-                    {label}
-                </span>
-                {isOverride && isActive && (
-                    <Badge variant="outline" className="text-xs h-4 px-1">
-                        Override
-                    </Badge>
-                )}
-            </div>
-            <div className="text-right">
-                {price !== null ? (
-                    <span className={cn(
-                        "font-medium",
-                        isCurrentLevel && "text-blue-600"
-                    )}>
-                        ${price.toFixed(2)}
-                    </span>
-                ) : modifier !== null ? (
-                    <span className="text-amber-600">
-                        {modifierType === 'add' ? '+' : ''}
-                        {modifier}
-                        {modifierType === 'percent' ? '%' : ''}
-                    </span>
-                ) : (
-                    <span className="text-muted-foreground">—</span>
-                )}
-            </div>
-        </div>
-    )
+          {level}
+        </span>
+        <span className="flex items-center gap-1">
+          {icon}
+          {label}
+        </span>
+        {isOverride && isActive && (
+          <Badge variant="outline" className="text-xs h-4 px-1">
+            Override
+          </Badge>
+        )}
+      </div>
+      <div className="text-right">
+        {price !== null ? (
+          <span
+            className={cn("font-medium", isCurrentLevel && "text-blue-600")}
+          >
+            ${price.toFixed(2)}
+          </span>
+        ) : modifier !== null ? (
+          <span className="text-amber-600">
+            {modifierType === "add" ? "+" : ""}
+            {modifier}
+            {modifierType === "percent" ? "%" : ""}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </div>
+    </div>
+  );
 }
