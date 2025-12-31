@@ -55,6 +55,7 @@ import {
   Layers,
   Tag,
   FileText,
+  MonitorSmartphone,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -158,6 +159,11 @@ const navMain = [
         title: "Reports",
         url: "/dashboard/reports",
         icon: BarChart3,
+      },
+      {
+        title: "Devices",
+        url: "/dashboard/devices",
+        icon: MonitorSmartphone,
       },
     ],
   },
