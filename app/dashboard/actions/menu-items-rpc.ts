@@ -162,7 +162,7 @@ export interface FlatItem {
         current_stock: number | null;
       } | null;
       effective_price: number;
-      effective_availability: boolean;
+      effective_is_active: boolean;
       has_location_override: boolean;
     }>;
   }>;

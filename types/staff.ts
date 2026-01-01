@@ -154,3 +154,13 @@ export interface GeneratedPIN {
 export interface ResetPINResult {
     pin: string  // The unhashed PIN to display to user
 }
+
+// ============================================================================
+// Upgrade Types
+// ============================================================================
+
+export interface UpgradePOSToClerkResult {
+    user_id: string
+    temp_password: string
+    email: string
+}

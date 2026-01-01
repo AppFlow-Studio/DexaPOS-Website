@@ -84,7 +84,7 @@ type ViewMode = 'grid' | 'list' | 'categories'
 
 function mapFlatItemToEditItem(item: FlatItem | null): EditItemWithOverrides | undefined {
     if (!item) return undefined
-
+    console.log("[MAP FLAT ITEM TO EDIT ITEM] item", item);
     return {
         id: item.id,
         name: item.name,
@@ -92,6 +92,7 @@ function mapFlatItemToEditItem(item: FlatItem | null): EditItemWithOverrides | u
         price: item.base_price,
         cash_price: item.base_cash_price,
         image: item.image ?? undefined,
+        location_id: item.location_id ?? null,
         availability: item.effective_availability,
         allergens: item.allergens ?? undefined,
         card_bg_color: item.card_bg_color ?? undefined,
@@ -114,6 +115,7 @@ function mapFlatItemToEditItem(item: FlatItem | null): EditItemWithOverrides | u
             level_5_location_menu_cash: null,
         },
         has_location_item_override: item.has_location_override,
+        menu_item_modifier_groups: item.modifier_groups,
     }
 }
 

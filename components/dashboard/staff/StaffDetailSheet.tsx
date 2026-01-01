@@ -15,7 +15,11 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
-import { UnifiedStaffMember } from '@/types/staff'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { UnifiedStaffMember, EmploymentType } from '@/types/staff'
+import { RolesModel } from '@/types/db-modles'
 import { cn } from '@/lib/utils'
 import {
     Mail,
@@ -27,13 +31,24 @@ import {
     UserCheck,
     KeyRound,
     Activity,
+    Edit,
+    Save,
+    X,
+    DollarSign,
+    ArrowUpCircle,
+    Info,
+    Loader2,
 } from 'lucide-react'
 import {
     useDeactivateStaff,
     useReactivateStaff,
     useResetStaffPIN,
+    useUpdateStaffAssignment,
+    useUpgradePOSToClerk,
 } from '@/app/dashboard/hooks/useStaff'
 import { toast } from 'sonner'
+import { GetMerchantRoles } from '@/app/dashboard/actions/staff-invite'
+import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
 
 interface StaffDetailSheetProps {
     staff: UnifiedStaffMember | null
@@ -45,6 +60,20 @@ export function StaffDetailSheet({ staff, open, onOpenChange }: StaffDetailSheet
     const deactivateStaff = useDeactivateStaff()
     const reactivateStaff = useReactivateStaff()
     const resetPIN = useResetStaffPIN()
+    const updateAssignment = useUpdateStaffAssignment()
+    const upgradePOSToClerk = useUpgradePOSToClerk()
+    const { data: userInfo } = useUserInfo()
+
+    // Edit mode state
+    const [isEditMode, setIsEditMode] = React.useState(false)
+    const [editedRole, setEditedRole] = React.useState<string>('')
+    const [editedEmploymentType, setEditedEmploymentType] = React.useState<EmploymentType | null>(null)
+    const [editedHourlyRate, setEditedHourlyRate] = React.useState<string>('')
+    const [roles, setRoles] = React.useState<RolesModel[]>([])
+
+    // Upgrade mode state
+    const [showUpgradeDialog, setShowUpgradeDialog] = React.useState(false)
+    const [upgradeEmail, setUpgradeEmail] = React.useState<string>('')
 
     if (!staff) return null
 
@@ -53,6 +82,15 @@ export function StaffDetailSheet({ staff, open, onOpenChange }: StaffDetailSheet
     const activeLocations = staff.location_assignments.filter(a => a.is_active)
     const primaryLocation = staff.location_assignments.find(a => a.is_primary)
     const hasPin = staff.location_assignments.some(a => a.has_pin)
+
+    // Get current user's role level for filtering assignable roles
+    const currentUserLevel = React.useMemo(() => {
+        if (!userInfo?.members?.[0]) return 100 // Fallback to high level
+        const member = userInfo.members[0]
+        const roleCode = member.role_code || member.role
+        const role = roles.find(r => r.code === roleCode)
+        return role?.level || 100
+    }, [userInfo, roles])
 
     const handleStatusToggle = () => {
         if (!primaryLocation) {
@@ -87,6 +125,105 @@ export function StaffDetailSheet({ staff, open, onOpenChange }: StaffDetailSheet
             memberId: staff.member_id,
             locationId: primaryLocation.location_id,
         })
+    }
+
+    // Load roles when edit mode is enabled
+    React.useEffect(() => {
+        if (open && isEditMode) {
+            GetMerchantRoles().then(rolesData => {
+                setRoles(rolesData)
+            })
+        }
+    }, [open, isEditMode])
+
+    // Reset edit state when staff changes
+    React.useEffect(() => {
+        if (staff && primaryLocation) {
+            setEditedRole(primaryLocation.role_code)
+            setEditedEmploymentType(primaryLocation.employment_type as EmploymentType | null)
+            setEditedHourlyRate(primaryLocation.hourly_rate?.toString() || '')
+        }
+        setIsEditMode(false)
+    }, [staff?.member_id])
+
+    const handleSaveChanges = () => {
+        if (!primaryLocation) {
+            toast.error('No primary location found')
+            return
+        }
+
+        const updates: any = {}
+
+        if (editedRole !== primaryLocation.role_code) {
+            updates.role_code = editedRole
+        }
+        if (editedEmploymentType !== primaryLocation.employment_type) {
+            updates.employment_type = editedEmploymentType
+        }
+        const newRate = editedHourlyRate ? parseFloat(editedHourlyRate) : null
+        if (newRate !== primaryLocation.hourly_rate) {
+            updates.hourly_rate = newRate
+        }
+
+        if (Object.keys(updates).length === 0) {
+            setIsEditMode(false)
+            toast.info('No changes to save')
+            return
+        }
+
+        updateAssignment.mutate(
+            {
+                memberId: staff.member_id,
+                locationId: primaryLocation.location_id,
+                updates
+            },
+            {
+                onSuccess: () => {
+                    setIsEditMode(false)
+                    toast.success('Assignment updated successfully')
+                }
+            }
+        )
+    }
+
+    const handleCancelEdit = () => {
+        if (primaryLocation) {
+            setEditedRole(primaryLocation.role_code)
+            setEditedEmploymentType(primaryLocation.employment_type as EmploymentType | null)
+            setEditedHourlyRate(primaryLocation.hourly_rate?.toString() || '')
+        }
+        setIsEditMode(false)
+    }
+
+    const handleUpgradeToClerk = () => {
+        if (!primaryLocation) {
+            toast.error('No primary location found')
+            return
+        }
+
+        if (!upgradeEmail || !upgradeEmail.includes('@')) {
+            toast.error('Please enter a valid email address')
+            return
+        }
+
+        upgradePOSToClerk.mutate(
+            {
+                memberId: staff.member_id,
+                locationId: primaryLocation.location_id,
+                email: upgradeEmail
+            },
+            {
+                onSuccess: () => {
+                    setShowUpgradeDialog(false)
+                    setUpgradeEmail('')
+                }
+            }
+        )
+    }
+
+    const handleCancelUpgrade = () => {
+        setShowUpgradeDialog(false)
+        setUpgradeEmail('')
     }
 
     return (
@@ -138,23 +275,164 @@ export function StaffDetailSheet({ staff, open, onOpenChange }: StaffDetailSheet
 
                             {/* Primary role & location */}
                             <div className="space-y-2">
-                                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                                    Primary assignment
+                                <div className="flex items-center justify-between">
+                                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                                        Primary assignment
+                                    </div>
+                                    {!isEditMode && primaryLocation && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 gap-1"
+                                            onClick={() => setIsEditMode(true)}
+                                        >
+                                            <Edit className="h-3 w-3" />
+                                            Edit
+                                        </Button>
+                                    )}
                                 </div>
+
                                 {primaryLocation ? (
-                                    <div className="space-y-1">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-sm font-medium">
-                                                {primaryLocation.role_name}
-                                            </span>
-                                            <Badge variant="outline" className="text-xs">
-                                                {primaryLocation.role_code}
-                                            </Badge>
+                                    <div className="space-y-3">
+                                        {/* Role Selection/Display */}
+                                        <div className="space-y-2">
+                                            <Label className="text-xs">Role</Label>
+                                            {isEditMode ? (
+                                                <Select
+                                                    value={editedRole}
+                                                    onValueChange={setEditedRole}
+                                                >
+                                                    <SelectTrigger className="h-9">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {roles
+                                                            .filter(r => r.level <= currentUserLevel)
+                                                            .map(role => (
+                                                                <SelectItem key={role.code} value={role.code}>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span>{role.name}</span>
+                                                                        <Badge variant="outline" className="text-xs">
+                                                                            {role.code}
+                                                                        </Badge>
+                                                                    </div>
+                                                                </SelectItem>
+                                                            ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            ) : (
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm font-medium">
+                                                        {primaryLocation.role_name}
+                                                    </span>
+                                                    <Badge variant="outline" className="text-xs">
+                                                        {primaryLocation.role_code}
+                                                    </Badge>
+                                                </div>
+                                            )}
                                         </div>
+
+                                        {/* Employment Type (POS-only staff) */}
+                                        {!staff.is_clerk_user && (
+                                            <div className="space-y-2">
+                                                <Label className="text-xs">Employment Type</Label>
+                                                {isEditMode ? (
+                                                    <Select
+                                                        value={editedEmploymentType || undefined}
+                                                        onValueChange={(value) => setEditedEmploymentType(value as EmploymentType)}
+                                                    >
+                                                        <SelectTrigger className="h-9">
+                                                            <SelectValue placeholder="Select type" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="full-time">Full-time</SelectItem>
+                                                            <SelectItem value="part-time">Part-time</SelectItem>
+                                                            <SelectItem value="contractor">Contractor</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                ) : (
+                                                    <div className="text-sm">
+                                                        {primaryLocation.employment_type ? (
+                                                            <Badge variant="outline" className="capitalize">
+                                                                {primaryLocation.employment_type.replace('-', ' ')}
+                                                            </Badge>
+                                                        ) : (
+                                                            <span className="text-muted-foreground">Not set</span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Hourly Rate (POS-only staff) */}
+                                        {!staff.is_clerk_user && (
+                                            <div className="space-y-2">
+                                                <Label className="text-xs">Hourly Rate</Label>
+                                                {isEditMode ? (
+                                                    <div className="relative">
+                                                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                                        <Input
+                                                            type="number"
+                                                            step="0.01"
+                                                            min="0"
+                                                            placeholder="0.00"
+                                                            value={editedHourlyRate}
+                                                            onChange={(e) => setEditedHourlyRate(e.target.value)}
+                                                            className="h-9 pl-9"
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-sm">
+                                                        {primaryLocation.hourly_rate ? (
+                                                            `$${primaryLocation.hourly_rate.toFixed(2)}/hour`
+                                                        ) : (
+                                                            <span className="text-muted-foreground">Not set</span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Location */}
                                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                             <MapPin className="h-3 w-3" />
                                             {primaryLocation.location_name}
                                         </div>
+
+                                        {/* Edit Mode Actions */}
+                                        {isEditMode && (
+                                            <div className="flex items-center gap-2 pt-2">
+                                                <Button
+                                                    variant="default"
+                                                    size="sm"
+                                                    className="flex-1 gap-1"
+                                                    onClick={handleSaveChanges}
+                                                    disabled={updateAssignment.isPending}
+                                                >
+                                                    {updateAssignment.isPending ? (
+                                                        <>
+                                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                                            Saving...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Save className="h-3 w-3" />
+                                                            Save Changes
+                                                        </>
+                                                    )}
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="flex-1 gap-1"
+                                                    onClick={handleCancelEdit}
+                                                    disabled={updateAssignment.isPending}
+                                                >
+                                                    <X className="h-3 w-3" />
+                                                    Cancel
+                                                </Button>
+                                            </div>
+                                        )}
                                     </div>
                                 ) : (
                                     <span className="text-sm text-muted-foreground">No primary location</span>
@@ -238,6 +516,76 @@ export function StaffDetailSheet({ staff, open, onOpenChange }: StaffDetailSheet
                                     </Button>
                                 </div>
                             </div>
+
+                            {/* Upgrade to Dashboard User */}
+                            {!staff.is_clerk_user && (
+                                <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
+                                    <div className="flex items-center gap-2">
+                                        <ArrowUpCircle className="h-4 w-4 text-muted-foreground" />
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-medium">Upgrade to Dashboard User</span>
+                                            <span className="text-xs text-muted-foreground">
+                                                Grant this staff member access to the web dashboard
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {!showUpgradeDialog ? (
+                                        <div className="pt-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="gap-1 w-full"
+                                                onClick={() => setShowUpgradeDialog(true)}
+                                                disabled={!primaryLocation}
+                                            >
+                                                <ArrowUpCircle className="h-3 w-3" />
+                                                Upgrade Account
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3 pt-2">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="upgrade-email" className="text-xs">
+                                                    Email Address
+                                                </Label>
+                                                <Input
+                                                    id="upgrade-email"
+                                                    type="email"
+                                                    placeholder="user@example.com"
+                                                    value={upgradeEmail}
+                                                    onChange={(e) => setUpgradeEmail(e.target.value)}
+                                                    className="h-9"
+                                                />
+                                                <p className="text-xs text-muted-foreground">
+                                                    A temporary password will be generated and displayed
+                                                </p>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    className="flex-1 gap-1"
+                                                    onClick={handleUpgradeToClerk}
+                                                    disabled={upgradePOSToClerk.isPending || !upgradeEmail}
+                                                >
+                                                    {upgradePOSToClerk.isPending && (
+                                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                                    )}
+                                                    Confirm Upgrade
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={handleCancelUpgrade}
+                                                    disabled={upgradePOSToClerk.isPending}
+                                                >
+                                                    Cancel
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             {/* Locations overview */}
                             <div className="rounded-xl border bg-muted/10 p-4 space-y-3">

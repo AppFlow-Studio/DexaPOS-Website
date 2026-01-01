@@ -32,7 +32,17 @@ export async function GetModifierGroups(clerkOrgId: string, locationId?: string 
         .select(`
             *,
             location_name:locations(name),
-            modifier_group_items(*),
+            modifier_group_items(
+                *,
+                location_override:location_modifier_item_overrides!left(
+                    id,
+                    price_modifier,
+                    is_active,
+                    location_id,
+                    stock_tracking_mode,
+                    current_stock
+                )
+            ),
             menu_item_modifier_groups(
                 id,
                 menu_item:menu_items(id, name, price)
@@ -51,6 +61,7 @@ export async function GetModifierGroups(clerkOrgId: string, locationId?: string 
         query = query.or(`location_id.is.null,location_id.eq.${locationId}`)
         // Also filter location_override to current location
         query = query.eq('location_modifier_group_overrides.location_id', locationId)
+        query = query.eq('modifier_group_items.location_modifier_item_overrides.location_id', locationId)
     }
 
     query = query

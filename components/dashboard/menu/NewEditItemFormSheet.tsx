@@ -105,8 +105,8 @@ import Link from "next/link";
 import {
   resetItemToLevel,
   updateItemOverride,
-  updateModifierItem,
   UpdateItemParams,
+  FlatItem,
 } from "@/app/dashboard/actions/menu-items-rpc";
 
 // ============================================================================
@@ -134,6 +134,7 @@ export interface EditItemWithOverrides {
   description?: string;
   price: number;
   cash_price?: number | null;
+  location_id?: string | null;
   image?: string;
   image_url?: string;
   availability: boolean;
@@ -149,20 +150,57 @@ export interface EditItemWithOverrides {
   // Support multiple formats: full category_items from DB, or simple { id, name } from RPC
   category_items?: Array<
     | {
-        category_id: string;
-        custom_price?: number | null;
-        category?: { id: string; name: string };
-      }
+      category_id: string;
+      custom_price?: number | null;
+      category?: { id: string; name: string };
+    }
     | { id: string; name: string }
   >;
   // Support multiple formats: junction table format or direct ModifierGroup[]
-  menu_item_modifier_groups?: Array<
-    | {
-        modifier_group_id: string;
-        modifier_groups?: { id: string; name: string };
-      }
-    | ModifierGroup
-  >;
+  menu_item_modifier_groups?: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    base_min_selections: number;
+    base_max_selections: number | null;
+    base_is_required: boolean;
+    base_is_active: boolean;
+    location_override: {
+      id: string;
+      custom_price: number | null;
+      custom_cash_price: number | null;
+      price_modifier: number | null;
+      price_modifier_type: string | null;
+      is_available: boolean;
+      stock_tracking_mode: string | null;
+      current_stock: number | null;
+      tax_category: string | null;
+      is_tax_exempt: boolean | null;
+      available_channels: string[] | null;
+    } | null;
+    effective_availability: boolean;
+    has_location_override: boolean;
+    items: Array<{
+      id: string;
+      name: string;
+      description: string | null;
+      base_price: number;
+      base_is_default: boolean;
+      base_is_active: boolean;
+      location_override: {
+        id: string;
+        custom_price: number | null;
+        price_modifier: number | null;
+        price_modifier_type: string | null;
+        is_available: boolean;
+        stock_tracking_mode: string | null;
+        current_stock: number | null;
+      } | null;
+      effective_price: number;
+      effective_is_active: boolean;
+      has_location_override: boolean;
+    }>;
+  }>;
 
   // Price level data (5-level cascade)
   price_levels?: PriceLevels;
@@ -530,12 +568,12 @@ function EditingContextIndicator({ context }: { context: EditingContext }) {
                         "flex items-center gap-1 px-2 py-1 rounded text-[10px]",
                         isCurrentLevel
                           ? cn(
-                              info.bgColor,
-                              info.borderColor,
-                              "border",
-                              info.color,
-                              "font-medium"
-                            )
+                            info.bgColor,
+                            info.borderColor,
+                            "border",
+                            info.color,
+                            "font-medium"
+                          )
                           : "bg-muted/30 text-muted-foreground"
                       )}
                     >
@@ -633,9 +671,8 @@ function ModifierGroupSearchList({
           <>
             <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-2">
               {searchQuery
-                ? `${filteredGroups.length} result${
-                    filteredGroups.length !== 1 ? "s" : ""
-                  }`
+                ? `${filteredGroups.length} result${filteredGroups.length !== 1 ? "s" : ""
+                }`
                 : "Available Modifier Groups"}
             </div>
             {filteredGroups.map((group) => (
@@ -692,12 +729,13 @@ export function NewEditItemFormSheet({
   menuName,
   isMenuLocationOwned = false,
 }: NewEditItemFormSheetProps) {
-  console.log("menuId", menuId);
   const queryClient = useQueryClient();
   const { selectedLocationId, locations } = useLocationStore();
   const isAllLocations = useIsAllLocations();
 
-  console.log(editItem);
+  if (editItem) {
+    console.log("[NEW EDIT ITEM FORM SHEET] editItem", editItem);
+  }
   // Tax rates for current location
   const { data: taxRatesData } = useLocationTaxRates();
   const taxRates = taxRatesData?.data || [];
@@ -719,13 +757,14 @@ export function NewEditItemFormSheet({
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isResetting, setIsResetting] = React.useState(false);
   const [showAddModifier, setShowAddModifier] = React.useState(false);
-  const [modifierEdits, setModifierEdits] = React.useState<
-    Record<
-      string,
-      { price?: number | null; isActive?: boolean; isSaving?: boolean }
-    >
-  >({});
   const locationIdForEdits = isAllLocations ? null : selectedLocationId;
+  
+  const isItemLocationOwned =
+    !!editItem?.location_id &&
+    !isAllLocations &&
+    editItem.location_id === selectedLocationId;
+  const canManageModifierLinks =
+    isAllLocations || isItemLocationOwned || !editItem;
 
   // Get editing context based on current state (includes category for 5-level cascade)
   const editingContext = React.useMemo(
@@ -918,65 +957,12 @@ export function NewEditItemFormSheet({
   };
 
   const toggleModifier = (modifierId: string) => {
+    if (!canManageModifierLinks) return;
     setSelectedModifiers((prev) =>
       prev.includes(modifierId)
         ? prev.filter((id) => id !== modifierId)
         : [...prev, modifierId]
     );
-  };
-
-  const setModifierDraft = (
-    id: string,
-    patch: Partial<{
-      price: number | null;
-      isActive: boolean;
-      isSaving: boolean;
-    }>
-  ) => {
-    setModifierEdits((prev) => ({
-      ...prev,
-      [id]: { ...prev[id], ...patch },
-    }));
-  };
-
-  const handleSaveModifierItem = async (item: any) => {
-    const draft = modifierEdits[item.id] || {};
-    const price =
-      draft.price !== undefined ? draft.price : item.price_modifier ?? null;
-    const isActive =
-      draft.isActive !== undefined
-        ? draft.isActive
-        : item.location_override?.is_active ?? item.is_active ?? true;
-
-    setModifierDraft(item.id, { isSaving: true });
-    try {
-      const result = await updateModifierItem({
-        modifierItemId: item.id,
-        priceModifier: price,
-        isActive,
-        locationId: locationIdForEdits || null,
-      });
-
-      if (!result.success) {
-        toast.error("Failed to update modifier", { description: result.error });
-        return;
-      }
-
-      toast.success("Modifier updated", {
-        description: locationIdForEdits
-          ? "Location override saved"
-          : "Global modifier updated",
-      });
-
-      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
-      queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
-    } catch (error) {
-      toast.error("Failed to update modifier", {
-        description: "Please try again.",
-      });
-    } finally {
-      setModifierDraft(item.id, { isSaving: false });
-    }
   };
 
   const toggleAllergen = (allergen: string) => {
@@ -1023,9 +1009,8 @@ export function NewEditItemFormSheet({
         5: "menu",
       };
       toast.success("Reset Successful", {
-        description: `Item now uses ${
-          levelLabels[editingContext.resetToLevel]
-        } pricing`,
+        description: `Item now uses ${levelLabels[editingContext.resetToLevel]
+          } pricing`,
       });
 
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
@@ -1087,8 +1072,10 @@ export function NewEditItemFormSheet({
           updateParams.availableChannels = values.available_channels;
         }
 
-        // Modifier groups are always global updates, even when editing at location level
-        updateParams.modifier_group_ids = selectedModifiers;
+        // Modifier groups are structure updates; only include when allowed
+        if (canManageModifierLinks) {
+          updateParams.modifier_group_ids = selectedModifiers;
+        }
         console.log("updateParams NEW EDIT ITEM FORM SHEET", updateParams);
 
         result = await updateItemOverride(updateParams);
@@ -1282,15 +1269,15 @@ export function NewEditItemFormSheet({
                   className={cn(
                     "gap-1",
                     editingContext.level === 1 &&
-                      "bg-gray-100 text-gray-700 border-gray-300",
+                    "bg-gray-100 text-gray-700 border-gray-300",
                     editingContext.level === 2 &&
-                      "bg-blue-100 text-blue-700 border-blue-300",
+                    "bg-blue-100 text-blue-700 border-blue-300",
                     editingContext.level === 3 &&
-                      "bg-purple-100 text-purple-700 border-purple-300",
+                    "bg-purple-100 text-purple-700 border-purple-300",
                     editingContext.level === 4 &&
-                      "bg-amber-100 text-amber-700 border-amber-300",
+                    "bg-amber-100 text-amber-700 border-amber-300",
                     editingContext.level === 5 &&
-                      "bg-green-100 text-green-700 border-green-300"
+                    "bg-green-100 text-green-700 border-green-300"
                   )}
                 >
                   {editingContext.level === 1 && <Globe className="h-3 w-3" />}
@@ -1565,13 +1552,13 @@ export function NewEditItemFormSheet({
                             "text-xs",
                             editingContext.level === 1 && "bg-gray-100",
                             editingContext.level === 2 &&
-                              "bg-blue-100 text-blue-700",
+                            "bg-blue-100 text-blue-700",
                             editingContext.level === 3 &&
-                              "bg-purple-100 text-purple-700",
+                            "bg-purple-100 text-purple-700",
                             editingContext.level === 4 &&
-                              "bg-amber-100 text-amber-700",
+                            "bg-amber-100 text-amber-700",
                             editingContext.level === 5 &&
-                              "bg-green-100 text-green-700"
+                            "bg-green-100 text-green-700"
                           )}
                         >
                           {editingContext.priceLabel}
@@ -1603,7 +1590,7 @@ export function NewEditItemFormSheet({
                                     className={cn(
                                       "pl-7",
                                       editingContext.level > 1 &&
-                                        "border-blue-300 focus:ring-blue-500"
+                                      "border-blue-300 focus:ring-blue-500"
                                     )}
                                     placeholder="0.00"
                                     {...field}
@@ -1742,8 +1729,38 @@ export function NewEditItemFormSheet({
                           Modifier Groups
                         </h3>
                       </div>
+
+                      {/* Informational Alert */}
+                      <Alert className="border-blue-200 bg-blue-50/50">
+                        <Info className="h-4 w-4 text-blue-600" />
+                        <AlertTitle className="text-blue-900">
+                          About Modifier Management
+                        </AlertTitle>
+                        <AlertDescription className="text-blue-800 text-sm space-y-2">
+                          <p>
+                            You can add or remove modifier groups here, but individual modifier items
+                            (prices, options) can only be edited in the dedicated{" "}
+                            <Link
+                              href="/dashboard/menu/modifiers"
+                              className="font-medium underline underline-offset-2 hover:text-blue-600"
+                            >
+                              Modifiers screen
+                            </Link>.
+                          </p>
+                          <p className="text-xs">
+                            This prevents unintended global changes, as modifier edits affect all items
+                            using that modifier group.
+                          </p>
+                        </AlertDescription>
+                      </Alert>
                       {(() => {
                         // Build selected groups with enriched data from editItem (has location-specific overrides)
+                        const isItemLocationOwned =
+                          !!editItem?.location_id &&
+                          !isAllLocations &&
+                          editItem.location_id === selectedLocationId;
+                        const canManageModifierLinks =
+                          isAllLocations || isItemLocationOwned || !editItem;
 
                         const selectedGroups = selectedModifiers
                           .map((id) => {
@@ -1825,7 +1842,15 @@ export function NewEditItemFormSheet({
                               <div className="space-y-2">
                                 {selectedGroups.map(
                                   (group: any, index: number) => {
-                                    const showItems = editingContext.level > 1;
+                                    const showItems = true;
+                                    const isGlobalGroup = !group.location_id;
+                                    const isLocationOwnedGroup =
+                                      !!group.location_id &&
+                                      group.location_id === selectedLocationId;
+                                    const isOverrideScope =
+                                      !isAllLocations &&
+                                      isGlobalGroup &&
+                                      !isLocationOwnedGroup;
 
                                     return (
                                       <div
@@ -1868,8 +1893,8 @@ export function NewEditItemFormSheet({
                                             </div>
                                           </div>
 
-                                          {/* Remove Button (All Levels) */}
-                                          {true && (
+                                          {/* Remove Button (respect permissions) */}
+                                          {canManageModifierLinks && (
                                             <Button
                                               type="button"
                                               variant="ghost"
@@ -1884,38 +1909,24 @@ export function NewEditItemFormSheet({
                                           )}
                                         </div>
 
-                                        {/* Items List (Drill Down for Location Managers) */}
+                                        {/* Items List (Read-only View) */}
                                         {showItems &&
                                           group.modifier_group_items &&
                                           group.modifier_group_items.length >
-                                            0 && (
+                                          0 && (
                                             <div className="border-t bg-background/50 px-3 py-2 space-y-1">
-                                              <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">
-                                                Manage Options (
-                                                {currentLocationName})
+                                              <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1 flex items-center gap-1.5">
+                                                <span>Options Preview</span>
+                                                <Badge variant="outline" className="text-[9px] h-3.5 px-1">
+                                                  Read-only
+                                                </Badge>
                                               </div>
                                               {group.modifier_group_items.map(
-                                                (item: any) => {
-                                                  const draft =
-                                                    modifierEdits[item.id] ||
-                                                    {};
-                                                  const price =
-                                                    draft.price !== undefined
-                                                      ? draft.price
-                                                      : item.location_override
-                                                          ?.price_modifier ??
-                                                        item.price_modifier ??
-                                                        0;
-                                                  const isActive =
-                                                    draft.isActive !== undefined
-                                                      ? draft.isActive
-                                                      : item.location_override
-                                                          ?.is_active ??
-                                                        item.is_active ??
-                                                        true;
-                                                  const isSaving =
-                                                    draft.isSaving;
-
+                                                (item: FlatItem['modifier_groups'][number]['items'][number]) => {
+                                                  const itemOverride = item.location_override;
+                                                  const price = itemOverride?.price_modifier ?? item.effective_price ?? 0;
+                                                  const isActive = item.effective_is_active ?? item.base_is_active ?? true;
+                                                  const canOverrideOnly = isOverrideScope;
                                                   return (
                                                     <div
                                                       key={item.id}
@@ -1936,91 +1947,36 @@ export function NewEditItemFormSheet({
                                                           variant="outline"
                                                           className="text-[10px]"
                                                         >
-                                                          {locationIdForEdits
+                                                          {canOverrideOnly
                                                             ? "Location Override"
                                                             : "Global"}
                                                         </Badge>
                                                       </div>
 
-                                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+                                                      {/* Read-only display of modifier items */}
+                                                      <div className="grid grid-cols-2 gap-3 items-center opacity-75">
                                                         <div>
                                                           <label className="text-xs text-muted-foreground">
-                                                            Price Modifier
+                                                            Price
                                                           </label>
-                                                          <div className="relative">
-                                                            <span className="absolute left-2 top-2 text-muted-foreground text-sm">
-                                                              $
+                                                          <div className="text-sm font-medium">
+                                                            ${(price ?? 0).toFixed(2)}
+                                                          </div>
+                                                        </div>
+
+                                                        <div>
+                                                          <label className="text-xs text-muted-foreground">
+                                                            Status
+                                                          </label>
+                                                          <div className="flex items-center gap-1.5">
+                                                            <div className={cn(
+                                                              "h-2 w-2 rounded-full",
+                                                              isActive ? "bg-green-500" : "bg-gray-300"
+                                                            )} />
+                                                            <span className="text-sm">
+                                                              {isActive ? "Active" : "Inactive"}
                                                             </span>
-                                                            <Input
-                                                              className="pl-6 h-9"
-                                                              type="number"
-                                                              step="0.01"
-                                                              value={
-                                                                price ?? ""
-                                                              }
-                                                              onChange={(e) => {
-                                                                const val =
-                                                                  e.target
-                                                                    .value;
-                                                                setModifierDraft(
-                                                                  item.id,
-                                                                  {
-                                                                    price:
-                                                                      val === ""
-                                                                        ? null
-                                                                        : parseFloat(
-                                                                            val
-                                                                          ),
-                                                                  }
-                                                                );
-                                                              }}
-                                                            />
                                                           </div>
-                                                        </div>
-
-                                                        <div className="flex items-center justify-between md:justify-start gap-2">
-                                                          <div className="text-xs text-muted-foreground">
-                                                            Active
-                                                          </div>
-                                                          <Switch
-                                                            checked={!!isActive}
-                                                            onCheckedChange={(
-                                                              checked
-                                                            ) =>
-                                                              setModifierDraft(
-                                                                item.id,
-                                                                {
-                                                                  isActive:
-                                                                    checked,
-                                                                }
-                                                              )
-                                                            }
-                                                          />
-                                                        </div>
-
-                                                        <div className="flex justify-end">
-                                                          <Button
-                                                            size="sm"
-                                                            onClick={() =>
-                                                              handleSaveModifierItem(
-                                                                item
-                                                              )
-                                                            }
-                                                            disabled={isSaving}
-                                                            className="gap-1"
-                                                          >
-                                                            {isSaving ? (
-                                                              <>
-                                                                <Loader2 className="h-4 w-4 animate-spin" />
-                                                                Saving...
-                                                              </>
-                                                            ) : (
-                                                              <>
-                                                                <Sparkles className="h-4 w-4" />
-                                                                Save
-                                                              </>
-                                                            )}
-                                                          </Button>
                                                         </div>
                                                       </div>
                                                     </div>
@@ -2037,55 +1993,57 @@ export function NewEditItemFormSheet({
                             )}
 
                             {/* Add Modifier Section (All Levels) */}
-                            {availableGroups.length > 0 && (
-                              <div className="pt-2">
-                                {/* Add Button / Collapsible Trigger */}
-                                <div className="pt-4 border-t">
-                                  <Collapsible
-                                    open={showAddModifier}
-                                    onOpenChange={setShowAddModifier}
-                                  >
-                                    <CollapsibleTrigger asChild>
-                                      <button
-                                        type="button"
-                                        className={cn(
-                                          "w-full p-3 rounded-lg border-2 border-dashed transition-all flex items-center justify-center gap-2",
-                                          showAddModifier
-                                            ? "border-primary bg-primary/5 text-primary"
-                                            : "border-muted-foreground/30 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5"
-                                        )}
-                                      >
-                                        <Plus
+                            {canManageModifierLinks &&
+                              availableGroups.length > 0 && (
+                                <div className="pt-2">
+                                  {/* Add Button / Collapsible Trigger */}
+                                  <div className="pt-4 border-t">
+                                    <Collapsible
+                                      open={showAddModifier}
+                                      onOpenChange={setShowAddModifier}
+                                    >
+                                      <CollapsibleTrigger asChild>
+                                        <button
+                                          type="button"
                                           className={cn(
-                                            "h-4 w-4 transition-transform",
-                                            showAddModifier && "rotate-45"
+                                            "w-full p-3 rounded-lg border-2 border-dashed transition-all flex items-center justify-center gap-2",
+                                            showAddModifier
+                                              ? "border-primary bg-primary/5 text-primary"
+                                              : "border-muted-foreground/30 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5"
                                           )}
+                                        >
+                                          <Plus
+                                            className={cn(
+                                              "h-4 w-4 transition-transform",
+                                              showAddModifier && "rotate-45"
+                                            )}
+                                          />
+                                          <span className="text-sm font-medium">
+                                            {showAddModifier
+                                              ? "Cancel"
+                                              : `Add Modifier Group (${availableGroups.length} available)`}
+                                          </span>
+                                        </button>
+                                      </CollapsibleTrigger>
+                                      <CollapsibleContent className="pt-3">
+                                        <ModifierGroupSearchList
+                                          availableGroups={availableGroups}
+                                          onSelect={(groupId) => {
+                                            toggleModifier(groupId);
+                                            if (availableGroups.length === 1) {
+                                              setShowAddModifier(false);
+                                            }
+                                          }}
                                         />
-                                        <span className="text-sm font-medium">
-                                          {showAddModifier
-                                            ? "Cancel"
-                                            : `Add Modifier Group (${availableGroups.length} available)`}
-                                        </span>
-                                      </button>
-                                    </CollapsibleTrigger>
-                                    <CollapsibleContent className="pt-3">
-                                      <ModifierGroupSearchList
-                                        availableGroups={availableGroups}
-                                        onSelect={(groupId) => {
-                                          toggleModifier(groupId);
-                                          if (availableGroups.length === 1) {
-                                            setShowAddModifier(false);
-                                          }
-                                        }}
-                                      />
-                                    </CollapsibleContent>
-                                  </Collapsible>
+                                      </CollapsibleContent>
+                                    </Collapsible>
+                                  </div>
                                 </div>
-                              </div>
-                            )}
+                              )}
 
                             {/* No Available Modifiers Message */}
-                            {availableGroups.length === 0 &&
+                            {canManageModifierLinks &&
+                              availableGroups.length === 0 &&
                               modifierGroups.length > 0 && (
                                 <div className="text-center py-2 text-xs text-muted-foreground">
                                   All modifier groups have been added
@@ -2097,6 +2055,14 @@ export function NewEditItemFormSheet({
                               <div className="text-center py-4 text-muted-foreground text-sm">
                                 No modifier groups available in your
                                 organization.
+                              </div>
+                            )}
+
+                            {!canManageModifierLinks && (
+                              <div className="text-xs text-muted-foreground bg-muted/40 border rounded-md p-2">
+                                Global item in location view: modifier links are
+                                read-only. You can override price/active for
+                                options above.
                               </div>
                             )}
                           </>
@@ -2179,7 +2145,7 @@ export function NewEditItemFormSheet({
                             <FormDescription>
                               {
                                 TAX_CATEGORY_DESCRIPTIONS[
-                                  field.value as TaxCategory
+                                field.value as TaxCategory
                                 ]
                               }
                             </FormDescription>
@@ -2252,7 +2218,7 @@ export function NewEditItemFormSheet({
                                     No tax rate is configured for "
                                     {
                                       TAX_CATEGORY_LABELS[
-                                        watchedValues.tax_category as TaxCategory
+                                      watchedValues.tax_category as TaxCategory
                                       ]
                                     }
                                     " at this location.
@@ -2302,8 +2268,8 @@ export function NewEditItemFormSheet({
                                 {editingContext.level === 1
                                   ? "Available for Sale"
                                   : editingContext.level === 2
-                                  ? "Available at This Location"
-                                  : "Available on This Menu"}
+                                    ? "Available at This Location"
+                                    : "Available on This Menu"}
                               </FormLabel>
                               <FormDescription>
                                 {editingContext.level === 1 &&

@@ -64,7 +64,7 @@ export function CustomerList({
             <TableHead>Total Spend</TableHead>
             <TableHead>Visits</TableHead>
             <TableHead>Last Visit</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead>Avg. Spend</TableHead>
             <TableHead className="w-[50px]"></TableHead>
           </TableRow>
         </TableHeader>
@@ -109,13 +109,9 @@ export function CustomerList({
               <TableCell>
                 <Badge
                   variant="outline"
-                  className={
-                    customer.status === "active"
-                      ? "border-green-500/50 text-green-700 bg-green-50 dark:bg-green-900/10 dark:text-green-400"
-                      : "border-muted text-muted-foreground"
-                  }
+                  
                 >
-                  {customer.status === "active" ? "Active" : "Inactive"}
+                  ${(customer.totalSpent / customer.visitCount)?.toFixed(2)}
                 </Badge>
               </TableCell>
               <TableCell>
