@@ -51,12 +51,14 @@ import { GetMerchantRoles } from '@/app/dashboard/actions/staff-invite'
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
 
 interface StaffDetailSheetProps {
-    staff: UnifiedStaffMember | null
+    staff: UnifiedStaffMember 
     open: boolean
     onOpenChange: (open: boolean) => void
 }
 
 export function StaffDetailSheet({ staff, open, onOpenChange }: StaffDetailSheetProps) {
+    if (!staff) return null
+
     const deactivateStaff = useDeactivateStaff()
     const reactivateStaff = useReactivateStaff()
     const resetPIN = useResetStaffPIN()
@@ -75,7 +77,6 @@ export function StaffDetailSheet({ staff, open, onOpenChange }: StaffDetailSheet
     const [showUpgradeDialog, setShowUpgradeDialog] = React.useState(false)
     const [upgradeEmail, setUpgradeEmail] = React.useState<string>('')
 
-    if (!staff) return null
 
     const initials = `${staff.first_name?.[0] || ''}${staff.last_name?.[0] || ''}`.toUpperCase()
 
