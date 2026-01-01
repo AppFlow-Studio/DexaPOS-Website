@@ -21,6 +21,9 @@ import {
   useDroppable,
   DragEndEvent,
   DragStartEvent,
+  useSensor,
+  useSensors,
+  PointerSensor,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { useUnifiedStaff } from "@/app/dashboard/hooks/useStaff";
@@ -31,6 +34,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ShiftCard } from "./ShiftCard";
+import { toast } from "sonner";
+import React from "react";
 
 interface WeeklyCalendarProps {
   currentDate: Date;
@@ -52,15 +57,15 @@ export function WeeklyCalendar({
   const shifts = schedule?.shifts || [];
   const { data: staffMembers = [] } = useUnifiedStaff();
 
-  const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
+  const weekStart = startOfDay(currentDate);
   const days = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
     [weekStart]
   );
 
   const weeklyShifts = useMemo(() => {
-    const start = startOfWeek(currentDate, { weekStartsOn: 1 });
-    const end = endOfWeek(currentDate, { weekStartsOn: 1 });
+    const start = startOfDay(currentDate);
+    const end = endOfDay(addDays(start, 6)); // Ensure we catch until end of the 6th day relative to start
     return shifts.filter((s) =>
       isWithinInterval(parseISO(s.start_time), { start, end })
     );
@@ -89,6 +94,15 @@ export function WeeklyCalendar({
   // DnD State
   const [activeDragShift, setActiveDragShift] = useState<Shift | null>(null);
   const moveShift = useScheduleStore((state) => state.moveShift);
+  const checkConflicts = useScheduleStore((state) => state.checkConflicts);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
 
   const handleDragStart = (event: DragStartEvent) => {
     const shiftId = event.active.id as string;
@@ -122,6 +136,21 @@ export function WeeklyCalendar({
 
       const newEnd = new Date(newStart.getTime() + duration);
 
+      // Check for conflicts
+      const potentialShift = {
+        ...shift,
+        start_time: newStart.toISOString(),
+        end_time: newEnd.toISOString(),
+        employee_id: employeeId,
+      };
+
+      if (checkConflicts(scheduleId, potentialShift, shift.id)) {
+        toast.error("Conflict detected", {
+          description: "This shift overlaps with another shift.",
+        });
+        return;
+      }
+
       moveShift(
         scheduleId,
         shiftId,
@@ -133,7 +162,11 @@ export function WeeklyCalendar({
   };
 
   return (
-    <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DndContext
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
       <div className="flex flex-col h-full">
         {/* Header Row */}
         <div className="flex border-b h-14 bg-muted/30">
@@ -299,6 +332,8 @@ function DayCell({
     );
   }
 
+  const hasShifts = React.Children.count(children) > 0;
+
   return (
     <div
       ref={setNodeRef}
@@ -307,12 +342,26 @@ function DayCell({
         isOver ? "bg-muted/50" : "hover:bg-muted/20"
       )}
     >
-      <button
-        onClick={onAdd}
-        className="absolute inset-0 w-full h-full opacity-0 group-hover:opacity-100 flex items-center justify-center z-0 cursor-pointer"
-      >
-        <Plus className="h-6 w-6 text-muted-foreground/30" />
-      </button>
+      {/* If empty, show persistent "Add" placeholder like App */}
+      {!hasShifts ? (
+        <button
+          onClick={onAdd}
+          className="w-full h-full min-h-[40px] flex items-center justify-center border-2 border-dashed border-muted-foreground/20 rounded-lg hover:border-muted-foreground/50 transition-colors"
+        >
+          <Plus className="h-4 w-4 text-muted-foreground/40" />
+        </button>
+      ) : (
+        /* If containing shifts, show hover overlay */
+        <button
+          onClick={onAdd}
+          className="absolute inset-0 w-full h-full opacity-0 group-hover:opacity-100 flex items-center justify-center z-0 cursor-pointer pointer-events-auto"
+        >
+          <div className="bg-background/80 p-1 rounded-full shadow-sm">
+            <Plus className="h-4 w-4 text-foreground" />
+          </div>
+        </button>
+      )}
+
       <div className="relative z-10 flex flex-col gap-2 min-h-full pb-6 pointer-events-none">
         {children}
       </div>

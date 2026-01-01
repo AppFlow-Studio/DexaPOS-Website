@@ -11,6 +11,7 @@ import {
   isAfter,
   isBefore,
   startOfDay,
+  addDays,
 } from "date-fns";
 import {
   ChevronLeft,
@@ -26,7 +27,6 @@ import { Badge } from "@/components/ui/badge";
 import { WeeklyCalendar } from "./WeeklyCalendar";
 import { TemplateDrawer } from "./templates/TemplateDrawer";
 import { ApplyTemplateDialog } from "./templates/ApplyTemplateDialog";
-import { SaveTemplateDialog } from "./templates/SaveTemplateDialog";
 import { ApplyMode, ScheduleTemplate } from "@/types/schedule";
 import { useScheduleTemplateStore } from "@/stores/useScheduleTemplateStore";
 
@@ -41,7 +41,6 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
   const { templates } = useScheduleTemplateStore();
 
   const [isApplyDialogOpen, setIsApplyDialogOpen] = useState(false);
-  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
     null
   );
@@ -70,8 +69,8 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
     [currentViewDate]
   );
 
-  const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
-  const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
+  const weekStart = startOfDay(currentDate);
+  const weekEnd = addDays(weekStart, 6);
 
   // Auto-initialize view to schedule start date
   useEffect(() => {
@@ -179,15 +178,6 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
             <CalendarIcon className="h-4 w-4" />
             Library
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-2"
-            onClick={() => setIsSaveDialogOpen(true)}
-          >
-            <Copy className="h-4 w-4" />
-            Save as Template
-          </Button>
           <Button size="sm" className="gap-2">
             <Plus className="h-4 w-4" />
             Publish
@@ -221,14 +211,6 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
           applyMode={applyMode}
           onApplyModeChange={setApplyMode}
           onApply={handleApplyTemplate}
-        />
-      )}
-
-      {schedule && (
-        <SaveTemplateDialog
-          isOpen={isSaveDialogOpen}
-          onClose={() => setIsSaveDialogOpen(false)}
-          shiftsToSave={schedule.shifts || []}
         />
       )}
     </div>

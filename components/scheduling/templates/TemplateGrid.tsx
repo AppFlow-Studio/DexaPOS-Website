@@ -147,7 +147,7 @@ const TemplateGrid: React.FC<TemplateGridProps> = ({
                     ) : (
                       <button
                         onClick={() => onAddShift(employee.id, dayOfWeek)}
-                        className="w-full h-full flex items-center justify-center rounded border border-dashed text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-all opacity-0 group-hover:opacity-100"
+                        className="w-full h-full flex items-center justify-center rounded border border-dashed text-muted-foreground/40 border-muted-foreground/20 hover:border-muted-foreground/50 hover:bg-muted/30 transition-all"
                       >
                         <Plus size={16} />
                       </button>

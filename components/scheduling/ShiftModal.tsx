@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -30,6 +31,7 @@ interface ShiftModalProps {
   onOpenChange: (open: boolean) => void;
   defaultDate?: Date;
   defaultEmployeeId?: string;
+  defaultRole?: Role;
   editShift?: Shift | TemplateShift | null; // Support both types
   scheduleId?: string; // Optional now
   isTemplateMode?: boolean;
@@ -55,6 +57,7 @@ export function ShiftModal({
   onOpenChange,
   defaultDate,
   defaultEmployeeId,
+  defaultRole,
   editShift,
   scheduleId,
   isTemplateMode = false,
@@ -73,7 +76,18 @@ export function ShiftModal({
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("17:00");
   const [notes, setNotes] = useState("");
+  const [breakMinutes, setBreakMinutes] = useState(30);
+  const [expectedPace, setExpectedPace] = useState<
+    "Moderate" | "Busy" | "Calm"
+  >("Moderate");
+  const [staffingLevel, setStaffingLevel] = useState<
+    "May need help" | "Fully staffed"
+  >("Fully staffed");
+  const [locked, setLocked] = useState(false);
+  const [allowOpenClaims, setAllowOpenClaims] = useState(true);
+
   const [error, setError] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -85,18 +99,26 @@ export function ShiftModal({
           ? (editShift as TemplateShift).employeeId
           : (editShift as Shift).employee_id;
         setEmployeeId(eId);
-        setRole(editShift.role);
+        setRole(editShift.role as Role);
 
         if (isTemplateMode || isTemplate) {
           const tShift = editShift as TemplateShift;
           setSelectedDayOfWeek(tShift.dayOfWeek);
           setStartTime(format(parseISO(tShift.startTime), "HH:mm"));
           setEndTime(format(parseISO(tShift.endTime), "HH:mm"));
+          setBreakMinutes(tShift.breakMinutes || 30);
+          setExpectedPace(tShift.expectedPace || "Moderate");
+          setStaffingLevel(tShift.staffingLevel || "Fully staffed");
         } else {
           const shift = editShift as Shift;
           setDate(format(new Date(shift.start_time), "yyyy-MM-dd"));
           setStartTime(format(new Date(shift.start_time), "HH:mm"));
           setEndTime(format(new Date(shift.end_time), "HH:mm"));
+          setBreakMinutes(shift.break_minutes || 30);
+          setExpectedPace(shift.expected_pace || "Moderate");
+          setStaffingLevel(shift.staffing_level || "Fully staffed");
+          setLocked(shift.locked || false);
+          setAllowOpenClaims(shift.allow_open_claims ?? true);
         }
         setNotes(editShift.notes || "");
       } else {
@@ -114,22 +136,35 @@ export function ShiftModal({
 
         setStartTime("09:00");
         setEndTime("17:00");
-        setRole("server");
+        setRole(defaultRole || "server");
         setNotes("");
+        setBreakMinutes(30);
+        setExpectedPace("Moderate");
+        setStaffingLevel("Fully staffed");
+        setLocked(false);
+        setAllowOpenClaims(true);
       }
       setError(null);
+      setShowDeleteConfirm(false);
     }
   }, [
     open,
     editShift,
     defaultDate,
     defaultEmployeeId,
+    defaultRole,
     isTemplateMode,
     dayOfWeek,
   ]);
 
   const handleSave = (force = false) => {
-    if (!employeeId || (!isTemplateMode && !date) || !startTime || !endTime) {
+    if (
+      !employeeId ||
+      (!isTemplateMode && !date) ||
+      !startTime ||
+      !endTime ||
+      !role
+    ) {
       setError("Please fill all required fields");
       return;
     }
@@ -151,6 +186,9 @@ export function ShiftModal({
         startTime: new Date(startDateTime).toISOString(),
         endTime: new Date(endDateTime).toISOString(),
         notes,
+        breakMinutes,
+        expectedPace,
+        staffingLevel,
       };
 
       if (onExternalSave) {
@@ -177,6 +215,11 @@ export function ShiftModal({
       start_time: new Date(startDateTime).toISOString(),
       end_time: new Date(endDateTime).toISOString(),
       notes,
+      break_minutes: breakMinutes,
+      expected_pace: expectedPace,
+      staffing_level: staffingLevel,
+      locked,
+      allow_open_claims: allowOpenClaims,
     };
 
     if (
@@ -206,6 +249,11 @@ export function ShiftModal({
   const handleDelete = () => {
     if (!editShift) return;
 
+    if (!showDeleteConfirm) {
+      setShowDeleteConfirm(true);
+      return;
+    }
+
     // External delete handler (for templates)
     if (onExternalDelete) {
       onExternalDelete();
@@ -215,15 +263,8 @@ export function ShiftModal({
 
     if (!scheduleId) return;
 
-    toast("Delete this shift?", {
-      action: {
-        label: "Confirm",
-        onClick: () => {
-          deleteShift(scheduleId, (editShift as Shift).id);
-          onOpenChange(false);
-        },
-      },
-    });
+    deleteShift(scheduleId, (editShift as Shift).id);
+    onOpenChange(false);
   };
 
   return (
@@ -268,8 +309,8 @@ export function ShiftModal({
             </Select>
           </div>
 
-          {/* Date OR Day of Week */}
-          {isTemplateMode ? (
+          {/* Date is hidden/implied as per user request */}
+          {isTemplateMode && (
             <div className="grid gap-2">
               <Label>Day of Week</Label>
               <Select
@@ -287,15 +328,6 @@ export function ShiftModal({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-          ) : (
-            <div className="grid gap-2">
-              <Label>Date</Label>
-              <Input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
             </div>
           )}
 
@@ -319,6 +351,77 @@ export function ShiftModal({
             </div>
           </div>
 
+          {/* New Fields: Break, Pace, Staffing */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label>Break (Minutes)</Label>
+              <Input
+                type="number"
+                value={breakMinutes}
+                onChange={(e) => setBreakMinutes(Number(e.target.value))}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Expected Pace</Label>
+              <Select
+                value={expectedPace}
+                onValueChange={(v: any) => setExpectedPace(v)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {["Moderate", "Busy", "Calm"].map((p) => (
+                    <SelectItem key={p} value={p}>
+                      {p}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid gap-2">
+            <Label>Staffing Level</Label>
+            <Select
+              value={staffingLevel}
+              onValueChange={(v: any) => setStaffingLevel(v)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {["May need help", "Fully staffed"].map((l) => (
+                  <SelectItem key={l} value={l}>
+                    {l}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Security Switches (Only for regular shifts) */}
+          {!isTemplateMode && (
+            <div className="grid gap-4 pt-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="locked">Lock assignment</Label>
+                <Switch
+                  id="locked"
+                  checked={locked}
+                  onCheckedChange={setLocked}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="open-claims">Allow open claims</Label>
+                <Switch
+                  id="open-claims"
+                  checked={allowOpenClaims}
+                  onCheckedChange={setAllowOpenClaims}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Notes */}
           <div className="grid gap-2">
             <Label>Notes (Optional)</Label>
@@ -331,14 +434,14 @@ export function ShiftModal({
           {error && <p className="text-sm text-red-500">{error}</p>}
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="gap-2">
           {editShift && (
             <Button
               variant="destructive"
               onClick={handleDelete}
               className="mr-auto"
             >
-              Delete
+              {showDeleteConfirm ? "Confirm Delete?" : "Delete"}
             </Button>
           )}
           <Button variant="outline" onClick={() => onOpenChange(false)}>

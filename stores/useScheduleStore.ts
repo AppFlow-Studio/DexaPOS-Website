@@ -15,6 +15,9 @@ import {
   endOfWeek,
   isWithinInterval,
   areIntervalsOverlapping,
+  getDay,
+  startOfDay,
+  isSameDay,
 } from "date-fns";
 
 interface ScheduleState {
@@ -331,7 +334,7 @@ export const useScheduleStore = create<ScheduleState>()(
         }),
       applyTemplate: (scheduleId, scheduleType, template, mode) => {
         try {
-          console.log("Applying template:", {
+          console.log("Applying template (Fixed):", {
             scheduleId,
             scheduleType,
             templateName: template.name,
@@ -354,99 +357,123 @@ export const useScheduleStore = create<ScheduleState>()(
               return {};
             }
 
-            console.log("Found target schedule:", targetSchedule.id);
-            const startDate = parseISO(targetSchedule.startDate);
-            console.log("Target start date:", startDate);
+            const scheduleStartDate = startOfDay(
+              parseISO(targetSchedule.startDate)
+            );
+            const scheduleEndDate = startOfDay(
+              parseISO(targetSchedule.endDate)
+            );
 
-            const templateShifts = template.shifts
-              .map((tShift) => {
-                // Calculate relative day/time from template shift
-                // For simplicity, assuming template shifts are stored with 2024-01-01 base
-                // Adjust to target schedule's start date + relative day index
+            const templateShiftsToApply: Shift[] = [];
+            let currentDate = scheduleStartDate;
 
-                // Use start_time as the reference for date, since 'date' property doesn't exist on Shift
-                if (!tShift.start_time) {
-                  console.error("Template shift missing start_time", tShift);
-                  return null;
+            // Iterate through each day of the schedule period
+            while (currentDate <= scheduleEndDate) {
+              const dayOfWeek = getDay(currentDate); // 0-6 (Sun-Sat)
+
+              template.shifts.forEach((tShift) => {
+                // Match template shift to current day
+                if (tShift.dayOfWeek === dayOfWeek) {
+                  const dateStr = format(currentDate, "yyyy-MM-dd");
+
+                  // Extract time parts from ISO template strings safely
+                  const startTimePart = tShift.startTime.includes("T")
+                    ? tShift.startTime.split("T")[1]
+                    : "09:00:00";
+                  const endTimePart = tShift.endTime.includes("T")
+                    ? tShift.endTime.split("T")[1]
+                    : "17:00:00";
+
+                  const newStartTime = `${dateStr}T${startTimePart}`;
+                  let newEndTime = `${dateStr}T${endTimePart}`;
+
+                  // Handle overnight shifts (if end time is earlier or equal to start time)
+                  if (newEndTime <= newStartTime) {
+                    const nextDayStr = format(
+                      addDays(currentDate, 1),
+                      "yyyy-MM-dd"
+                    );
+                    newEndTime = `${nextDayStr}T${endTimePart}`;
+                  }
+
+                  const newShift: Shift = {
+                    id: crypto.randomUUID(),
+                    employee_id: tShift.employeeId || "unassigned",
+                    employee_name: "Unassigned", // Placeholder
+                    start_time: newStartTime,
+                    end_time: newEndTime,
+                    role: tShift.role,
+                    location_id: "default",
+                    notes: tShift.notes,
+                    is_template: true,
+                    color: undefined,
+                  };
+                  templateShiftsToApply.push(newShift);
                 }
+              });
+              currentDate = addDays(currentDate, 1);
+            }
 
-                const tShiftDate = parseISO(tShift.start_time);
-                const dayIndex =
-                  (tShiftDate.getDay() - parseISO("2024-01-01").getDay() + 7) %
-                  7;
-                const targetShiftDate = addDays(startDate, dayIndex);
+            console.log("Processed shifts:", templateShiftsToApply.length);
 
-                // Construct new date object preserving time
-                const originalStart = parseISO(tShift.start_time);
-                const originalEnd = parseISO(tShift.end_time);
-
-                const newStart = new Date(targetShiftDate);
-                newStart.setHours(
-                  originalStart.getHours(),
-                  originalStart.getMinutes(),
-                  0,
-                  0
-                );
-
-                const newEnd = new Date(targetShiftDate);
-                newEnd.setHours(
-                  originalEnd.getHours(),
-                  originalEnd.getMinutes(),
-                  0,
-                  0
-                );
-                // Handle overnight shifts
-                if (newEnd <= newStart) {
-                  newEnd.setDate(newEnd.getDate() + 1);
-                }
-
-                const newShift = {
-                  ...tShift,
-                  id: crypto.randomUUID(),
-                  // date: format(targetShiftDate, "yyyy-MM-dd"), // Shift interface doesn't have date
-                  start_time: newStart.toISOString(),
-                  end_time: newEnd.toISOString(),
-                  status: "open", // Reset status for new shifts
-                  employee_id: "00000000-0000-0000-0000-000000000000", // Reset employee assignment (use empty UUID or specific unassigned logic)
-                  employee_name: "Unassigned",
-                } as Shift;
-
-                return newShift;
-              })
-              .filter(Boolean) as Shift[];
-
-            console.log("Processed shifts:", templateShifts.length);
+            const existingShifts = targetSchedule.shifts || [];
 
             if (mode === "replace-all") {
-              targetSchedule.shifts = templateShifts;
+              targetSchedule.shifts = templateShiftsToApply;
             } else if (mode === "merge") {
-              targetSchedule.shifts = [
-                ...(targetSchedule.shifts || []),
-                ...templateShifts,
-              ];
-            } else if (mode === "fill-gaps") {
-              // Only add if no shift exists for that role/time
-              const existingShifts = targetSchedule.shifts || [];
-              const nonConflictingShifts = templateShifts.filter((newShift) => {
+              // Delete existing shifts that overlap with new ones for the same employee
+              const shiftsToDelete = new Set<string>();
+
+              templateShiftsToApply.forEach((newShift) => {
                 const newInterval = {
                   start: parseISO(newShift.start_time),
                   end: parseISO(newShift.end_time),
                 };
-                return !existingShifts.some((existing) => {
-                  const existingInterval = {
+
+                existingShifts.forEach((existing) => {
+                  const existInterval = {
                     start: parseISO(existing.start_time),
                     end: parseISO(existing.end_time),
                   };
-                  return (
-                    existing.employee_id === newShift.employee_id && // Check per employee (or role if unassigned)
-                    areIntervalsOverlapping(newInterval, existingInterval)
-                  );
+
+                  // User request: "We check for that day" -> If same employee & same day, OVERWRITE.
+                  if (
+                    existing.employee_id === newShift.employee_id &&
+                    isSameDay(
+                      parseISO(existing.start_time),
+                      parseISO(newShift.start_time)
+                    )
+                  ) {
+                    shiftsToDelete.add(existing.id);
+                  }
                 });
               });
-              targetSchedule.shifts = [
-                ...existingShifts,
-                ...nonConflictingShifts,
-              ];
+
+              const keptShifts = existingShifts.filter(
+                (s) => !shiftsToDelete.has(s.id)
+              );
+              targetSchedule.shifts = [...keptShifts, ...templateShiftsToApply];
+            } else if (mode === "fill-gaps") {
+              // Only add new shifts if they DON'T overlap existing
+              const nonConflicting = templateShiftsToApply.filter(
+                (newShift) => {
+                  const newInterval = {
+                    start: parseISO(newShift.start_time),
+                    end: parseISO(newShift.end_time),
+                  };
+                  return !existingShifts.some((existing) => {
+                    const existInterval = {
+                      start: parseISO(existing.start_time),
+                      end: parseISO(existing.end_time),
+                    };
+                    return (
+                      existing.employee_id === newShift.employee_id &&
+                      areIntervalsOverlapping(newInterval, existInterval)
+                    );
+                  });
+                }
+              );
+              targetSchedule.shifts = [...existingShifts, ...nonConflicting];
             }
 
             console.log(

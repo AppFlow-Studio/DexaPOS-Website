@@ -26,14 +26,15 @@ const TAGS = [
 export default function EditTemplatePage({
   params,
 }: {
-  params: { templateId: string };
+  params: Promise<{ templateId: string }>;
 }) {
+  const { templateId } = React.use(params);
   const router = useRouter();
   const { templates, actions } = useScheduleTemplateStore();
   const { data: employees } = useUnifiedStaff();
 
   // Find template by ID
-  const existingTemplate = templates.find((t) => t.id === params.templateId);
+  const existingTemplate = templates.find((t) => t.id === templateId);
 
   const [template, setTemplate] = useState<Omit<
     ScheduleTemplate,
@@ -42,6 +43,11 @@ export default function EditTemplatePage({
   const [isShiftEditorOpen, setIsShiftEditorOpen] = useState(false);
   const [selectedShift, setSelectedShift] =
     useState<Partial<TemplateShift> | null>(null);
+  const [newShiftDefaults, setNewShiftDefaults] = useState<{
+    employeeId: string;
+    dayOfWeek: number;
+    role: any;
+  } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
@@ -103,14 +109,12 @@ export default function EditTemplatePage({
       employee.location_assignments[0]?.role_name ||
       "server";
 
-    setSelectedShift({
-      tempId: crypto.randomUUID(),
+    setNewShiftDefaults({
       employeeId,
-      dayOfWeek, // 0-6
-      role: roleName as any,
-      startTime: new Date().toISOString(),
-      endTime: new Date().toISOString(),
+      dayOfWeek,
+      role: "server",
     });
+    setSelectedShift(null);
     setIsShiftEditorOpen(true);
   };
 
@@ -284,17 +288,19 @@ export default function EditTemplatePage({
         </div>
       </div>
 
-      {isShiftEditorOpen && selectedShift && (
+      {isShiftEditorOpen && (
         <ShiftModal
           open={isShiftEditorOpen}
           onOpenChange={setIsShiftEditorOpen}
           editShift={selectedShift as any}
+          defaultEmployeeId={newShiftDefaults?.employeeId}
+          defaultRole={newShiftDefaults?.role}
           onSave={handleSaveShift}
           onDelete={() =>
-            selectedShift.tempId && handleDeleteShift(selectedShift.tempId)
+            selectedShift?.tempId && handleDeleteShift(selectedShift.tempId)
           }
           isTemplateMode={true}
-          dayOfWeek={selectedShift.dayOfWeek}
+          dayOfWeek={selectedShift?.dayOfWeek ?? newShiftDefaults?.dayOfWeek}
         />
       )}
     </div>

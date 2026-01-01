@@ -11,6 +11,12 @@ export interface Shift {
   notes?: string;
   is_template?: boolean;
   color?: string; // For UI customization
+  // New fields to match App
+  break_minutes?: number;
+  expected_pace?: "Moderate" | "Busy" | "Calm";
+  staffing_level?: "May need help" | "Fully staffed";
+  locked?: boolean;
+  allow_open_claims?: boolean;
 }
 
 // Template-specific shift (uses relative DayOfWeek instead of absolute date)
@@ -22,6 +28,10 @@ export interface TemplateShift {
   endTime: string; // ISO datetime string
   role: Role;
   notes?: string;
+  // New fields to match App
+  breakMinutes?: number;
+  expectedPace?: "Moderate" | "Busy" | "Calm";
+  staffingLevel?: "May need help" | "Fully staffed";
 }
 
 export interface ScheduleTemplate {
