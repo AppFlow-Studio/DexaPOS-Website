@@ -160,11 +160,6 @@ const navMain = [
         url: "/dashboard/reports",
         icon: BarChart3,
       },
-      {
-        title: "Devices",
-        url: "/dashboard/devices",
-        icon: MonitorSmartphone,
-      },
     ],
   },
   {
@@ -347,16 +342,62 @@ function MerchantSidebar() {
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
-          {navFooter.map((item) => (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton asChild>
-                <Link href={item.url}>
-                  <item.icon className="h-4 w-4" />
-                  <span>{item.title}</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
+          {/* Settings with Devices submenu */}
+          <SidebarMenuItem>
+            <Collapsible
+              defaultOpen={pathname.startsWith("/dashboard/settings")}
+            >
+              <CollapsibleTrigger asChild>
+                <SidebarMenuButton
+                  isActive={pathname.startsWith("/dashboard/settings")}
+                  className="w-full"
+                >
+                  <Settings className="h-4 w-4" />
+                  <span>Settings</span>
+                  <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+                </SidebarMenuButton>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={
+                        pathname === "/dashboard/settings" &&
+                        !pathname.includes("/devices")
+                      }
+                    >
+                      <Link href="/dashboard/settings">
+                        <span>General</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={pathname.startsWith(
+                        "/dashboard/settings/devices"
+                      )}
+                    >
+                      <Link href="/dashboard/settings/devices">
+                        <MonitorSmartphone className="h-3 w-3" />
+                        <span>Devices</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+              </CollapsibleContent>
+            </Collapsible>
+          </SidebarMenuItem>
+          {/* Get Help */}
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild>
+              <Link href="#">
+                <HelpCircle className="h-4 w-4" />
+                <span>Get Help</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         </SidebarMenu>
         <div className="flex items-center gap-2 p-2">
           {isLoading ? (
