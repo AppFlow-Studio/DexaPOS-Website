@@ -56,6 +56,7 @@ import {
   Tag,
   FileText,
   MonitorSmartphone,
+  Globe,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -144,6 +145,11 @@ const navMain = [
         title: "Schedules",
         url: "/dashboard/schedules",
         icon: Calendar,
+      },
+      {
+        title: "Online Ordering",
+        url: "/dashboard/online-ordering",
+        icon: Globe,
       },
       {
         title: "Customers",
