@@ -45,6 +45,8 @@ import { CreatePurchaseOrderDialog } from "./components/CreatePurchaseOrderDialo
 import { EditItemDialog } from "./components/EditItemDialog";
 import { EditVendorDialog } from "./components/EditVendorDialog";
 import { DeleteConfirmDialog } from "./components/DeleteConfirmDialog";
+import { VendorDetailSheet } from "./components/VendorDetailSheet";
+import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -337,6 +339,13 @@ export default function InventoryPage() {
   const [deleteVendorTarget, setDeleteVendorTarget] =
     useState<VendorWithStats | null>(null);
 
+  // Detail sheet state
+  const [selectedDetailVendor, setSelectedDetailVendor] =
+    useState<VendorWithStats | null>(null);
+  const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
+
+  const { data: userInfo } = useUserInfo();
+  const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
   const { selectedLocationId } = useLocationStore();
   const selectedLocation = useSelectedLocation();
   const isAllLocations = selectedLocationId === "all" || !selectedLocationId;
@@ -714,6 +723,10 @@ export default function InventoryPage() {
                     <Card
                       key={vendor.id}
                       className="group hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer border-muted"
+                      onClick={() => {
+                        setSelectedDetailVendor(vendor);
+                        setIsDetailSheetOpen(true);
+                      }}
                     >
                       <CardContent className="p-5">
                         <div className="flex items-start justify-between mb-4">
@@ -1050,6 +1063,13 @@ export default function InventoryPage() {
           }
         }}
         isLoading={deleteVendor.isPending}
+      />
+
+      <VendorDetailSheet
+        vendor={selectedDetailVendor}
+        open={isDetailSheetOpen}
+        onOpenChange={setIsDetailSheetOpen}
+        clerkOrgId={clerkOrgId || ""}
       />
     </div>
   );

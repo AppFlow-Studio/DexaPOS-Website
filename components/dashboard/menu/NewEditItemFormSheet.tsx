@@ -108,6 +108,7 @@ import {
   UpdateItemParams,
   FlatItem,
 } from "@/app/dashboard/actions/menu-items-rpc";
+import { RecipeManager } from "@/app/dashboard/menu/components/RecipeManager";
 
 // ============================================================================
 // TYPES
@@ -150,10 +151,10 @@ export interface EditItemWithOverrides {
   // Support multiple formats: full category_items from DB, or simple { id, name } from RPC
   category_items?: Array<
     | {
-      category_id: string;
-      custom_price?: number | null;
-      category?: { id: string; name: string };
-    }
+        category_id: string;
+        custom_price?: number | null;
+        category?: { id: string; name: string };
+      }
     | { id: string; name: string }
   >;
   // Support multiple formats: junction table format or direct ModifierGroup[]
@@ -568,12 +569,12 @@ function EditingContextIndicator({ context }: { context: EditingContext }) {
                         "flex items-center gap-1 px-2 py-1 rounded text-[10px]",
                         isCurrentLevel
                           ? cn(
-                            info.bgColor,
-                            info.borderColor,
-                            "border",
-                            info.color,
-                            "font-medium"
-                          )
+                              info.bgColor,
+                              info.borderColor,
+                              "border",
+                              info.color,
+                              "font-medium"
+                            )
                           : "bg-muted/30 text-muted-foreground"
                       )}
                     >
@@ -671,8 +672,9 @@ function ModifierGroupSearchList({
           <>
             <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-2">
               {searchQuery
-                ? `${filteredGroups.length} result${filteredGroups.length !== 1 ? "s" : ""
-                }`
+                ? `${filteredGroups.length} result${
+                    filteredGroups.length !== 1 ? "s" : ""
+                  }`
                 : "Available Modifier Groups"}
             </div>
             {filteredGroups.map((group) => (
@@ -758,7 +760,7 @@ export function NewEditItemFormSheet({
   const [isResetting, setIsResetting] = React.useState(false);
   const [showAddModifier, setShowAddModifier] = React.useState(false);
   const locationIdForEdits = isAllLocations ? null : selectedLocationId;
-  
+
   const isItemLocationOwned =
     !!editItem?.location_id &&
     !isAllLocations &&
@@ -1009,8 +1011,9 @@ export function NewEditItemFormSheet({
         5: "menu",
       };
       toast.success("Reset Successful", {
-        description: `Item now uses ${levelLabels[editingContext.resetToLevel]
-          } pricing`,
+        description: `Item now uses ${
+          levelLabels[editingContext.resetToLevel]
+        } pricing`,
       });
 
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
@@ -1269,15 +1272,15 @@ export function NewEditItemFormSheet({
                   className={cn(
                     "gap-1",
                     editingContext.level === 1 &&
-                    "bg-gray-100 text-gray-700 border-gray-300",
+                      "bg-gray-100 text-gray-700 border-gray-300",
                     editingContext.level === 2 &&
-                    "bg-blue-100 text-blue-700 border-blue-300",
+                      "bg-blue-100 text-blue-700 border-blue-300",
                     editingContext.level === 3 &&
-                    "bg-purple-100 text-purple-700 border-purple-300",
+                      "bg-purple-100 text-purple-700 border-purple-300",
                     editingContext.level === 4 &&
-                    "bg-amber-100 text-amber-700 border-amber-300",
+                      "bg-amber-100 text-amber-700 border-amber-300",
                     editingContext.level === 5 &&
-                    "bg-green-100 text-green-700 border-green-300"
+                      "bg-green-100 text-green-700 border-green-300"
                   )}
                 >
                   {editingContext.level === 1 && <Globe className="h-3 w-3" />}
@@ -1364,10 +1367,11 @@ export function NewEditItemFormSheet({
                     onValueChange={setActiveTab}
                     className="w-full"
                   >
-                    <TabsList className="grid w-full grid-cols-4 mb-6">
+                    <TabsList className="grid w-full grid-cols-6 mb-6">
                       <TabsTrigger value="general">General</TabsTrigger>
                       <TabsTrigger value="pricing">Pricing</TabsTrigger>
                       <TabsTrigger value="modifiers">Modifiers</TabsTrigger>
+                      <TabsTrigger value="recipe">Recipe</TabsTrigger>
                       <TabsTrigger value="tax">Tax & Fees</TabsTrigger>
                       <TabsTrigger value="availability">
                         Availability
@@ -1552,13 +1556,13 @@ export function NewEditItemFormSheet({
                             "text-xs",
                             editingContext.level === 1 && "bg-gray-100",
                             editingContext.level === 2 &&
-                            "bg-blue-100 text-blue-700",
+                              "bg-blue-100 text-blue-700",
                             editingContext.level === 3 &&
-                            "bg-purple-100 text-purple-700",
+                              "bg-purple-100 text-purple-700",
                             editingContext.level === 4 &&
-                            "bg-amber-100 text-amber-700",
+                              "bg-amber-100 text-amber-700",
                             editingContext.level === 5 &&
-                            "bg-green-100 text-green-700"
+                              "bg-green-100 text-green-700"
                           )}
                         >
                           {editingContext.priceLabel}
@@ -1590,7 +1594,7 @@ export function NewEditItemFormSheet({
                                     className={cn(
                                       "pl-7",
                                       editingContext.level > 1 &&
-                                      "border-blue-300 focus:ring-blue-500"
+                                        "border-blue-300 focus:ring-blue-500"
                                     )}
                                     placeholder="0.00"
                                     {...field}
@@ -1738,18 +1742,20 @@ export function NewEditItemFormSheet({
                         </AlertTitle>
                         <AlertDescription className="text-blue-800 text-sm space-y-2">
                           <p>
-                            You can add or remove modifier groups here, but individual modifier items
-                            (prices, options) can only be edited in the dedicated{" "}
+                            You can add or remove modifier groups here, but
+                            individual modifier items (prices, options) can only
+                            be edited in the dedicated{" "}
                             <Link
                               href="/dashboard/menu/modifiers"
                               className="font-medium underline underline-offset-2 hover:text-blue-600"
                             >
                               Modifiers screen
-                            </Link>.
+                            </Link>
+                            .
                           </p>
                           <p className="text-xs">
-                            This prevents unintended global changes, as modifier edits affect all items
-                            using that modifier group.
+                            This prevents unintended global changes, as modifier
+                            edits affect all items using that modifier group.
                           </p>
                         </AlertDescription>
                       </Alert>
@@ -1913,20 +1919,33 @@ export function NewEditItemFormSheet({
                                         {showItems &&
                                           group.modifier_group_items &&
                                           group.modifier_group_items.length >
-                                          0 && (
+                                            0 && (
                                             <div className="border-t bg-background/50 px-3 py-2 space-y-1">
                                               <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1 flex items-center gap-1.5">
                                                 <span>Options Preview</span>
-                                                <Badge variant="outline" className="text-[9px] h-3.5 px-1">
+                                                <Badge
+                                                  variant="outline"
+                                                  className="text-[9px] h-3.5 px-1"
+                                                >
                                                   Read-only
                                                 </Badge>
                                               </div>
                                               {group.modifier_group_items.map(
-                                                (item: FlatItem['modifier_groups'][number]['items'][number]) => {
-                                                  const itemOverride = item.location_override;
-                                                  const price = itemOverride?.price_modifier ?? item.effective_price ?? 0;
-                                                  const isActive = item.effective_is_active ?? item.base_is_active ?? true;
-                                                  const canOverrideOnly = isOverrideScope;
+                                                (
+                                                  item: FlatItem["modifier_groups"][number]["items"][number]
+                                                ) => {
+                                                  const itemOverride =
+                                                    item.location_override;
+                                                  const price =
+                                                    itemOverride?.price_modifier ??
+                                                    item.effective_price ??
+                                                    0;
+                                                  const isActive =
+                                                    item.effective_is_active ??
+                                                    item.base_is_active ??
+                                                    true;
+                                                  const canOverrideOnly =
+                                                    isOverrideScope;
                                                   return (
                                                     <div
                                                       key={item.id}
@@ -1960,7 +1979,10 @@ export function NewEditItemFormSheet({
                                                             Price
                                                           </label>
                                                           <div className="text-sm font-medium">
-                                                            ${(price ?? 0).toFixed(2)}
+                                                            $
+                                                            {(
+                                                              price ?? 0
+                                                            ).toFixed(2)}
                                                           </div>
                                                         </div>
 
@@ -1969,12 +1991,18 @@ export function NewEditItemFormSheet({
                                                             Status
                                                           </label>
                                                           <div className="flex items-center gap-1.5">
-                                                            <div className={cn(
-                                                              "h-2 w-2 rounded-full",
-                                                              isActive ? "bg-green-500" : "bg-gray-300"
-                                                            )} />
+                                                            <div
+                                                              className={cn(
+                                                                "h-2 w-2 rounded-full",
+                                                                isActive
+                                                                  ? "bg-green-500"
+                                                                  : "bg-gray-300"
+                                                              )}
+                                                            />
                                                             <span className="text-sm">
-                                                              {isActive ? "Active" : "Inactive"}
+                                                              {isActive
+                                                                ? "Active"
+                                                                : "Inactive"}
                                                             </span>
                                                           </div>
                                                         </div>
@@ -2145,7 +2173,7 @@ export function NewEditItemFormSheet({
                             <FormDescription>
                               {
                                 TAX_CATEGORY_DESCRIPTIONS[
-                                field.value as TaxCategory
+                                  field.value as TaxCategory
                                 ]
                               }
                             </FormDescription>
@@ -2218,7 +2246,7 @@ export function NewEditItemFormSheet({
                                     No tax rate is configured for "
                                     {
                                       TAX_CATEGORY_LABELS[
-                                      watchedValues.tax_category as TaxCategory
+                                        watchedValues.tax_category as TaxCategory
                                       ]
                                     }
                                     " at this location.
@@ -2268,8 +2296,8 @@ export function NewEditItemFormSheet({
                                 {editingContext.level === 1
                                   ? "Available for Sale"
                                   : editingContext.level === 2
-                                    ? "Available at This Location"
-                                    : "Available on This Menu"}
+                                  ? "Available at This Location"
+                                  : "Available on This Menu"}
                               </FormLabel>
                               <FormDescription>
                                 {editingContext.level === 1 &&
@@ -2437,6 +2465,41 @@ export function NewEditItemFormSheet({
                           </div>
                         )}
                       </div>
+                    </TabsContent>
+
+                    {/* TAB: RECIPE */}
+                    <TabsContent value="recipe" className="space-y-4">
+                      {editItem ? (
+                        <RecipeManager
+                          menuItemId={editItem.id}
+                          menuItemName={editItem.name}
+                          clerkOrgId={clerkOrgId || ""}
+                          locationId={
+                            isAllLocations ? null : selectedLocationId
+                          }
+                          isEditable={
+                            // Can edit recipe if:
+                            // 1. At Level 1 (Global) - can always edit
+                            // 2. Or, item is a local item AND we're at the location that owns it
+                            editingContext.canEditBaseFields ||
+                            (!!editItem.location_id &&
+                              editItem.location_id === selectedLocationId)
+                          }
+                        />
+                      ) : (
+                        <div className="text-center py-8">
+                          <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
+                            <Tag className="h-6 w-6 text-muted-foreground" />
+                          </div>
+                          <p className="text-sm font-medium mb-1">
+                            Create the item first
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            You can add recipe ingredients after creating the
+                            item
+                          </p>
+                        </div>
+                      )}
                     </TabsContent>
                   </Tabs>
                 </form>

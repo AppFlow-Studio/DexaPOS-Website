@@ -219,3 +219,88 @@ export interface MenuItemRecipe {
   quantity_used: number;
   created_at: string;
 }
+
+// ============================================================================
+// Phase 2: Vendor Items & Location Relationships
+// ============================================================================
+
+/**
+ * Vendor Item - What items a vendor sells
+ * Links vendors to inventory items with vendor-specific details
+ */
+export interface VendorItem {
+  id: string;
+  vendor_id: string;
+  inventory_item_id: string;
+  vendor_sku: string | null;
+  default_cost: number;
+  pack_size: string | null;
+  is_preferred: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * VendorItem with joined inventory item data
+ */
+export interface VendorItemWithDetails extends VendorItem {
+  inventory_item?: {
+    id: string;
+    name: string;
+    sku: string | null;
+    category: string | null;
+    unit_type: string;
+  } | null;
+}
+
+/**
+ * Location Vendor - Which vendors serve which locations
+ */
+export interface LocationVendor {
+  id: string;
+  location_id: string;
+  vendor_id: string;
+  is_preferred: boolean;
+  account_number: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+/**
+ * LocationVendor with joined vendor data
+ */
+export interface LocationVendorWithDetails extends LocationVendor {
+  vendor?: {
+    id: string;
+    name: string;
+    contact_name: string | null;
+    phone: string | null;
+    email: string | null;
+  } | null;
+  location?: {
+    id: string;
+    name: string;
+  } | null;
+}
+
+/**
+ * Location Vendor Pricing - Location-specific pricing for vendor items
+ */
+export interface LocationVendorPricing {
+  id: string;
+  location_id: string;
+  vendor_id: string;
+  inventory_item_id: string;
+  unit_cost: number;
+  last_updated: string;
+}
+
+/**
+ * Extended Vendor with Phase 2 stats
+ */
+export interface VendorWithRelations extends Vendor {
+  payment_terms?: string | null;
+  is_active?: boolean;
+  items_count?: number;
+  locations_served_count?: number;
+}
