@@ -84,29 +84,45 @@ export async function UpsertLocationPricing(params: {
 
   const supabase = createServerSupabaseClient();
 
-  const { data, error } = await supabase
-    .from("location_vendor_pricing")
-    .upsert(
-      {
-        vendor_id: vendorId,
-        location_id: locationId,
-        inventory_item_id: inventoryItemId,
-        unit_cost: unitCost,
-        last_updated: new Date().toISOString(),
-      },
-      {
-        onConflict: "location_id, vendor_id, inventory_item_id",
-      }
-    )
-    .select("*")
-    .single();
+  // Use the RPC which ensures the vendor link exists and sets the price safely
+  const { error } = await supabase.rpc("app_set_location_price", {
+    p_location_id: locationId,
+    p_vendor_id: vendorId,
+    p_inventory_item_id: inventoryItemId,
+    p_price: unitCost,
+  });
 
   if (error) {
-    console.error("Error upserting pricing:", error);
+    console.error("Error upserting pricing via RPC:", error);
     return { error: error.message };
   }
 
-  return { data: data as LocationVendorPricing };
+  // RPC returns void, but front-end expects the pricing record.
+  // We can fetch it back:
+  const { data: refreshedData, error: fetchError } = await supabase
+    .from("location_vendor_pricing")
+    .select("*")
+    .eq("location_id", locationId)
+    .eq("vendor_id", vendorId)
+    .eq("inventory_item_id", inventoryItemId)
+    .single();
+
+  if (fetchError) {
+    // If fetch fails but write succeeded, return a constructed object
+    // This is a safe fallback
+    return {
+      data: {
+        id: "temp_id", // We don't strictly need the ID for display updates usually
+        location_id: locationId,
+        vendor_id: vendorId,
+        inventory_item_id: inventoryItemId,
+        unit_cost: unitCost,
+        last_updated: new Date().toISOString(),
+      } as LocationVendorPricing,
+    };
+  }
+
+  return { data: refreshedData as LocationVendorPricing };
 }
 
 // ============================================================================

@@ -310,3 +310,33 @@ export async function GetInventoryItemsForRecipe(
 
   return { data: data || [] };
 }
+
+// ============================================================================
+// BULK UPDATE RECIPE (RPC)
+// Uses the atomic RPC to replace the entire recipe for a menu item
+// ============================================================================
+
+export async function UpdateMenuItemRecipe(
+  menuItemId: string,
+  locationId: string, // Requires location context
+  recipeItems: Array<{ inventoryItemId: string; quantity: number }>
+): Promise<{ success?: boolean; error?: string }> {
+  if (!menuItemId || !locationId) {
+    return { error: "Menu Item ID and Location ID are required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  const { error } = await supabase.rpc("upsert_menu_item_with_recipe", {
+    p_menu_item_id: menuItemId,
+    p_location_id: locationId,
+    p_recipe_items: recipeItems,
+  });
+
+  if (error) {
+    console.error("Error bulk updating recipe:", error);
+    return { error: error.message };
+  }
+
+  return { success: true };
+}
