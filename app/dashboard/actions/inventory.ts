@@ -400,11 +400,71 @@ export async function UpdateInventoryItem(
 /**
  * Delete an inventory item
  */
+/**
+ * Get usage of an inventory item in recipes
+ */
+export async function GetInventoryItemUsage(itemId: string) {
+  const supabase = createServerSupabaseClient();
+
+  // Check Menu Item recipes
+  const { data: menuRecipes } = await supabase
+    .from("menu_item_recipes")
+    .select("menu_item:menu_items(name)")
+    .eq("inventory_item_id", itemId);
+
+  // Check Modifier recipes
+  const { data: modRecipes } = await supabase
+    .from("modifier_group_item_recipes")
+    .select("modifier_item:modifier_group_items(name)")
+    .eq("inventory_item_id", itemId);
+
+  const menuItems =
+    menuRecipes
+      ?.map((r: any) => r.menu_item?.name)
+      .filter((n): n is string => !!n) || [];
+  const modifierItems =
+    modRecipes
+      ?.map((r: any) => r.modifier_item?.name)
+      .filter((n): n is string => !!n) || [];
+
+  return {
+    menuItems: [...new Set(menuItems)],
+    modifierItems: [...new Set(modifierItems)],
+  };
+}
+
+/**
+ * Delete an inventory item
+ * Safely removes from recipes first
+ */
 export async function DeleteInventoryItem(itemId: string) {
   if (!itemId) return { error: "Item ID is required" };
 
   const supabase = createServerSupabaseClient();
 
+  // 1. Remove from Menu Item Recipes
+  const { error: menuError } = await supabase
+    .from("menu_item_recipes")
+    .delete()
+    .eq("inventory_item_id", itemId);
+
+  if (menuError) {
+    console.error("Error removing from menu recipes:", menuError);
+    return { error: "Failed to remove item from menu recipes" };
+  }
+
+  // 2. Remove from Modifier Recipes
+  const { error: modError } = await supabase
+    .from("modifier_group_item_recipes")
+    .delete()
+    .eq("inventory_item_id", itemId);
+
+  if (modError) {
+    console.error("Error removing from modifier recipes:", modError);
+    return { error: "Failed to remove item from modifier recipes" };
+  }
+
+  // 3. Delete the item
   const { error } = await supabase
     .from("inventory_items")
     .delete()

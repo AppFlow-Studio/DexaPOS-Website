@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +40,7 @@ import {
   useDeleteInventoryItem,
   useDeleteVendor,
 } from "./hooks/useInventoryManagement";
+import { GetInventoryItemUsage } from "@/app/dashboard/actions/inventory";
 import { AddItemDialog } from "./components/AddItemDialog";
 import { AddVendorDialog } from "./components/AddVendorDialog";
 import { CreatePurchaseOrderDialog } from "./components/CreatePurchaseOrderDialog";
@@ -404,6 +405,13 @@ export default function InventoryPage() {
   const [isAddVendorOpen, setIsAddVendorOpen] = useState(false);
   const [isCreatePOOpen, setIsCreatePOOpen] = useState(false);
 
+  // Usage check state
+  const [usageData, setUsageData] = useState<{
+    menuItems: string[];
+    modifierItems: string[];
+  } | null>(null);
+  const [isLoadingUsage, setIsLoadingUsage] = useState(false);
+
   // Edit dialog state
   const [editingItem, setEditingItem] =
     useState<InventoryItemWithVendor | null>(null);
@@ -487,6 +495,67 @@ export default function InventoryPage() {
         return "Add";
     }
   };
+
+  // Fetch usage when delete target changes
+  useEffect(() => {
+    if (deleteItemTarget) {
+      setIsLoadingUsage(true);
+      GetInventoryItemUsage(deleteItemTarget.id)
+        .then((data) => setUsageData(data))
+        .catch((err) => console.error(err))
+        .finally(() => setIsLoadingUsage(false));
+    } else {
+      setUsageData(null);
+    }
+  }, [deleteItemTarget]);
+
+  const deleteDescription = useMemo(() => {
+    if (isLoadingUsage) return "Checking item usage...";
+
+    const menuCount = usageData?.menuItems.length || 0;
+    const modCount = usageData?.modifierItems.length || 0;
+    const totalCount = menuCount + modCount;
+
+    if (totalCount === 0) {
+      return "This action cannot be undone. This will permanently delete the item and remove it from our servers.";
+    }
+
+    const allItems = [
+      ...(usageData?.menuItems.map((n) => `${n} (Menu)`) || []),
+      ...(usageData?.modifierItems.map((n) => `${n} (Modifier)`) || []),
+    ];
+
+    const displayItems = allItems.slice(0, 5);
+    const remaining = totalCount - 5;
+
+    return (
+      <div className="space-y-3 text-sm">
+        <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 rounded-md border border-amber-200 dark:border-amber-900">
+          <AlertTriangle className="h-5 w-5 shrink-0" />
+          <p className="font-medium">
+            This item is used in {totalCount} recipe
+            {totalCount !== 1 ? "s" : ""}
+          </p>
+        </div>
+        <p className="text-muted-foreground">
+          Deleting it will remove it from the following recipes:
+        </p>
+        <ul className="list-disc pl-5 space-y-1 text-foreground font-medium">
+          {displayItems.map((name, i) => (
+            <li key={i}>{name}</li>
+          ))}
+          {remaining > 0 && (
+            <li className="text-muted-foreground italic">
+              ...and {remaining} more
+            </li>
+          )}
+        </ul>
+        <p className="text-destructive font-medium pt-2">
+          Are you sure you want to proceed?
+        </p>
+      </div>
+    );
+  }, [isLoadingUsage, usageData]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -1176,8 +1245,12 @@ export default function InventoryPage() {
       <DeleteConfirmDialog
         open={!!deleteItemTarget}
         onOpenChange={(open) => !open && setDeleteItemTarget(null)}
-        title="Delete Inventory Item"
-        description={`Are you sure you want to delete "${deleteItemTarget?.name}"? This action cannot be undone.`}
+        title={
+          deleteItemTarget
+            ? `Delete "${deleteItemTarget.name}"?`
+            : "Delete Item"
+        }
+        description={deleteDescription}
         onConfirm={() => {
           if (deleteItemTarget) {
             deleteItem.mutate(deleteItemTarget.id, {
@@ -1185,7 +1258,7 @@ export default function InventoryPage() {
             });
           }
         }}
-        isLoading={deleteItem.isPending}
+        isLoading={deleteItem.isPending || isLoadingUsage}
       />
       <DeleteConfirmDialog
         open={!!deleteVendorTarget}
