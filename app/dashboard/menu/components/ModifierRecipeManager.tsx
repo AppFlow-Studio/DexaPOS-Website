@@ -42,6 +42,8 @@ import {
   Check,
   ChevronsUpDown,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import {
   Command,
   CommandEmpty,
@@ -55,45 +57,45 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 import {
-  GetRecipesForMenuItem,
-  AddRecipeIngredient,
-  UpdateRecipeIngredient,
-  RemoveRecipeIngredient,
-  GetInventoryItemsForRecipe,
-  RecipeIngredient,
-} from "@/app/dashboard/actions/recipes";
+  GetRecipesForModifierItem,
+  AddModifierRecipeIngredient,
+  UpdateModifierRecipeIngredient,
+  RemoveModifierRecipeIngredient,
+  ModifierRecipeIngredient,
+} from "@/app/dashboard/actions/modifier-recipes";
+import { GetInventoryItemsForRecipe } from "@/app/dashboard/actions/recipes";
 
-interface RecipeManagerProps {
-  menuItemId: string;
-  menuItemName: string;
+interface ModifierRecipeManagerProps {
+  modifierItemId: string;
+  modifierItemName: string;
   clerkOrgId: string;
+  merchantId: string;
   locationId?: string | null;
-  isEditable?: boolean; // Only allow editing when in global view for global items
+  isEditable?: boolean;
 }
 
-export function RecipeManager({
-  menuItemId,
-  menuItemName,
+export function ModifierRecipeManager({
+  modifierItemId,
+  modifierItemName,
   clerkOrgId,
+  merchantId,
   locationId,
   isEditable = true,
-}: RecipeManagerProps) {
+}: ModifierRecipeManagerProps) {
   const queryClient = useQueryClient();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [openCombobox, setOpenCombobox] = useState(false);
   const [editingIngredient, setEditingIngredient] =
-    useState<RecipeIngredient | null>(null);
+    useState<ModifierRecipeIngredient | null>(null);
   const [selectedInventoryId, setSelectedInventoryId] = useState<string>("");
   const [quantity, setQuantity] = useState<string>("");
 
   // Fetch recipe
   const { data: recipeData, isLoading } = useQuery({
-    queryKey: ["menu-item-recipe", menuItemId],
-    queryFn: () => GetRecipesForMenuItem(menuItemId),
-    enabled: !!menuItemId,
+    queryKey: ["modifier-item-recipe", modifierItemId],
+    queryFn: () => GetRecipesForModifierItem(modifierItemId),
+    enabled: !!modifierItemId,
   });
 
   // Fetch available inventory items
@@ -120,14 +122,20 @@ export function RecipeManager({
     }: {
       inventoryItemId: string;
       qty: number;
-    }) => AddRecipeIngredient(menuItemId, inventoryItemId, qty),
+    }) =>
+      AddModifierRecipeIngredient(
+        modifierItemId,
+        inventoryItemId,
+        qty,
+        merchantId
+      ),
     onSuccess: (result) => {
       if (result.error) {
         toast.error(result.error);
       } else {
         toast.success("Ingredient added to recipe");
         queryClient.invalidateQueries({
-          queryKey: ["menu-item-recipe", menuItemId],
+          queryKey: ["modifier-item-recipe", modifierItemId],
         });
         setIsAddDialogOpen(false);
         setSelectedInventoryId("");
@@ -139,14 +147,14 @@ export function RecipeManager({
 
   const updateMutation = useMutation({
     mutationFn: ({ recipeId, qty }: { recipeId: string; qty: number }) =>
-      UpdateRecipeIngredient(recipeId, qty),
+      UpdateModifierRecipeIngredient(recipeId, qty),
     onSuccess: (result) => {
       if (result.error) {
         toast.error(result.error);
       } else {
         toast.success("Quantity updated");
         queryClient.invalidateQueries({
-          queryKey: ["menu-item-recipe", menuItemId],
+          queryKey: ["modifier-item-recipe", modifierItemId],
         });
         setEditingIngredient(null);
         setQuantity("");
@@ -156,14 +164,14 @@ export function RecipeManager({
   });
 
   const removeMutation = useMutation({
-    mutationFn: (recipeId: string) => RemoveRecipeIngredient(recipeId),
+    mutationFn: (recipeId: string) => RemoveModifierRecipeIngredient(recipeId),
     onSuccess: (result) => {
       if (result.error) {
         toast.error(result.error);
       } else {
         toast.success("Ingredient removed");
         queryClient.invalidateQueries({
-          queryKey: ["menu-item-recipe", menuItemId],
+          queryKey: ["modifier-item-recipe", modifierItemId],
         });
       }
     },
@@ -223,15 +231,15 @@ export function RecipeManager({
   return (
     <>
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="flex items-center gap-2">
-                <ChefHat className="h-5 w-5 text-orange-500" />
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ChefHat className="h-4 w-4 text-orange-500" />
                 Recipe / Ingredients
               </CardTitle>
-              <CardDescription>
-                Inventory items used to make this menu item
+              <CardDescription className="text-xs">
+                Link inventory items to this option
               </CardDescription>
             </div>
             {isEditable && (
@@ -239,38 +247,26 @@ export function RecipeManager({
                 type="button"
                 variant="outline"
                 size="sm"
+                className="h-8"
                 onClick={() => setIsAddDialogOpen(true)}
               >
-                <Plus className="h-4 w-4 mr-1" />
-                Add Ingredient
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                Add
               </Button>
             )}
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           {ingredients.length === 0 ? (
-            <div className="text-center py-8">
-              <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
-                <Package className="h-6 w-6 text-muted-foreground" />
-              </div>
-              <p className="text-sm font-medium mb-1">No ingredients added</p>
-              <p className="text-xs text-muted-foreground mb-4">
-                Link inventory items to track ingredient costs
+            <div className="text-center py-6 bg-muted/20 rounded-lg border border-dashed">
+              <Package className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-50" />
+              <p className="text-sm font-medium mb-1">No ingredients</p>
+              <p className="text-xs text-muted-foreground">
+                Track inventory usage for this option
               </p>
-              {isEditable && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsAddDialogOpen(true)}
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add First Ingredient
-                </Button>
-              )}
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {/* Ingredients List */}
               {ingredients.map((ing) => {
                 const item = ing.inventory_item;
@@ -279,67 +275,53 @@ export function RecipeManager({
                 return (
                   <div
                     key={ing.id}
-                    className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 group"
+                    className="flex items-center justify-between p-2.5 rounded-lg border bg-card text-card-foreground shadow-sm group"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-background border">
-                        <Package className="h-4 w-4 text-muted-foreground" />
+                      <div className="flex-shrink-0">
+                        <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center">
+                          <Package className="h-4 w-4 text-muted-foreground" />
+                        </div>
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-sm">
                             {item?.name || "Unknown Item"}
                           </span>
-                          {item?.location_id ? (
-                            <Badge variant="outline" className="text-xs gap-1">
-                              <MapPin className="h-2.5 w-2.5" />
-                              Local
-                            </Badge>
-                          ) : (
-                            <Badge
-                              variant="outline"
-                              className="text-xs gap-1 text-emerald-600 border-emerald-200 bg-emerald-50"
-                            >
-                              <Globe className="h-2.5 w-2.5" />
-                              Global
-                            </Badge>
-                          )}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {ing.quantity_used} {item?.unit_type} × $
-                          {item?.cost_per_unit?.toFixed(2) || "0.00"}/
-                          {item?.unit_type}
+                          {ing.quantity_used} {item?.unit_type}
                         </div>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-3">
                       <div className="text-right">
-                        <div className="font-semibold text-sm text-green-600">
+                        <div className="font-semibold text-xs text-green-600">
                           ${lineCost.toFixed(2)}
                         </div>
                       </div>
 
                       {isEditable && (
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center gap-1">
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8"
+                            className="h-6 w-6"
                             onClick={() => setEditingIngredient(ing)}
                           >
-                            <Edit2 className="h-3.5 w-3.5" />
+                            <Edit2 className="h-3 w-3" />
                           </Button>
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            className="h-6 w-6 text-destructive hover:bg-destructive/10"
                             onClick={() => removeMutation.mutate(ing.id)}
                             disabled={removeMutation.isPending}
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <Trash2 className="h-3 w-3" />
                           </Button>
                         </div>
                       )}
@@ -349,14 +331,13 @@ export function RecipeManager({
               })}
 
               {/* Total Cost */}
-              <div className="flex items-center justify-between pt-3 border-t">
-                <div className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-green-500" />
-                  <span className="font-medium text-sm">Estimated Cost</span>
-                </div>
-                <div className="text-xl font-bold text-green-600">
+              <div className="flex items-center justify-between pt-2 border-t mt-2">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Added Cost
+                </span>
+                <span className="text-sm font-bold text-green-600">
                   ${totalCost.toFixed(2)}
-                </div>
+                </span>
               </div>
             </div>
           )}
@@ -372,7 +353,7 @@ export function RecipeManager({
               Add Ingredient
             </DialogTitle>
             <DialogDescription>
-              Add an inventory item to the recipe for "{menuItemName}"
+              Add an inventory item to "{modifierItemName}"
             </DialogDescription>
           </DialogHeader>
 
@@ -381,8 +362,14 @@ export function RecipeManager({
               <div className="text-center py-4">
                 <AlertCircle className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">
-                  No more inventory items available to add.
+                  No more inventory items available to add at this location.
                 </p>
+                {/* Debug info if locationId is present */}
+                {locationId && locationId !== "all" && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Viewing items for location: {locationId}
+                  </p>
+                )}
               </div>
             ) : (
               <>
@@ -440,21 +427,12 @@ export function RecipeManager({
                                     (${item.cost_per_unit?.toFixed(2)}/
                                     {item.unit_type})
                                   </span>
-                                  {item.location_id ? (
+                                  {item.location_id && (
                                     <Badge
                                       variant="outline"
-                                      className="text-xs gap-1"
+                                      className="text-xs ml-1"
                                     >
-                                      <MapPin className="h-2.5 w-2.5" />
                                       Local
-                                    </Badge>
-                                  ) : (
-                                    <Badge
-                                      variant="outline"
-                                      className="text-xs gap-1 text-emerald-600 border-emerald-200 bg-emerald-50"
-                                    >
-                                      <Globe className="h-2.5 w-2.5" />
-                                      Global
                                     </Badge>
                                   )}
                                 </div>
@@ -474,7 +452,7 @@ export function RecipeManager({
                       type="number"
                       step="0.01"
                       min="0"
-                      placeholder="e.g., 2.5"
+                      placeholder="e.g., 1"
                       value={quantity}
                       onChange={(e) => setQuantity(e.target.value)}
                     />
@@ -529,7 +507,7 @@ export function RecipeManager({
               Edit Quantity
             </DialogTitle>
             <DialogDescription>
-              Update the quantity for {editingIngredient?.inventory_item?.name}
+              Update quantity for {editingIngredient?.inventory_item?.name}
             </DialogDescription>
           </DialogHeader>
 

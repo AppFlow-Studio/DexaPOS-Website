@@ -73,6 +73,7 @@ import {
 } from "@/app/dashboard/hooks/useLocationScopedModifiers";
 import { ModifierItemOverrideDialog } from "./ModifierItemOverrideDialog";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { ModifierRecipeManager } from "@/app/dashboard/menu/components/ModifierRecipeManager";
 
 // Form schema for modifier group
 const modifierGroupSchema = z.object({
@@ -592,7 +593,7 @@ export function ModifierGroupFormSheet({
                       <FormField
                         control={form.control}
                         name="name"
-                        render={({ field }) => (
+                        render={({ field }: { field: any }) => (
                           <FormItem>
                             <FormLabel>Group Name *</FormLabel>
                             <FormControl>
@@ -617,7 +618,7 @@ export function ModifierGroupFormSheet({
                       <FormField
                         control={form.control}
                         name="description"
-                        render={({ field }) => (
+                        render={({ field }: { field: any }) => (
                           <FormItem>
                             <FormLabel>Description</FormLabel>
                             <FormControl>
@@ -659,7 +660,7 @@ export function ModifierGroupFormSheet({
                         <FormField
                           control={form.control}
                           name="is_required"
-                          render={({ field }) => (
+                          render={({ field }: { field: any }) => (
                             <FormItem className="flex items-center justify-between rounded-lg border p-4">
                               <div className="space-y-0.5">
                                 <FormLabel className="text-base">
@@ -704,7 +705,7 @@ export function ModifierGroupFormSheet({
                           <FormField
                             control={form.control}
                             name="min_selections"
-                            render={({ field }) => (
+                            render={({ field }: { field: any }) => (
                               <FormItem>
                                 <FormLabel>Min Selections</FormLabel>
                                 <FormControl>
@@ -730,7 +731,7 @@ export function ModifierGroupFormSheet({
                           <FormField
                             control={form.control}
                             name="max_selections"
-                            render={({ field }) => (
+                            render={({ field }: { field: any }) => (
                               <FormItem>
                                 <FormLabel>Max Selections</FormLabel>
                                 <FormControl>
@@ -1145,7 +1146,7 @@ export function ModifierGroupFormSheet({
                 <FormField
                   control={optionForm.control}
                   name="name"
-                  render={({ field }) => (
+                  render={({ field }: { field: any }) => (
                     <FormItem>
                       <FormLabel>Option Name *</FormLabel>
                       <FormControl>
@@ -1163,7 +1164,7 @@ export function ModifierGroupFormSheet({
                 <FormField
                   control={optionForm.control}
                   name="description"
-                  render={({ field }) => (
+                  render={({ field }: { field: any }) => (
                     <FormItem>
                       <FormLabel>Description</FormLabel>
                       <FormControl>
@@ -1177,7 +1178,7 @@ export function ModifierGroupFormSheet({
                 <FormField
                   control={optionForm.control}
                   name="price_modifier"
-                  render={({ field }) => (
+                  render={({ field }: { field: any }) => (
                     <FormItem>
                       <FormLabel>Price Adjustment</FormLabel>
                       <FormControl>
@@ -1209,7 +1210,7 @@ export function ModifierGroupFormSheet({
                 <FormField
                   control={optionForm.control}
                   name="is_active"
-                  render={({ field }) => (
+                  render={({ field }: { field: any }) => (
                     <FormItem className="flex items-center justify-between rounded-lg border p-4">
                       <div className="space-y-0.5">
                         <FormLabel className="text-base">Active</FormLabel>
@@ -1245,7 +1246,7 @@ export function ModifierGroupFormSheet({
                   <FormField
                     control={optionForm.control}
                     name="is_default"
-                    render={({ field }) => (
+                    render={({ field }: { field: any }) => (
                       <FormItem className="flex items-center justify-between rounded-lg border p-4 bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800">
                         <div className="space-y-0.5">
                           <FormLabel className="text-base flex items-center gap-2">
@@ -1293,6 +1294,27 @@ export function ModifierGroupFormSheet({
                 )}
               </form>
             </Form>
+
+            {/* Recipe Manager Section */}
+            <div className="pt-4 mt-2 border-t">
+              {editingOption && !editingOption.isNew ? (
+                <ModifierRecipeManager
+                  modifierItemId={editingOption.id}
+                  modifierItemName={editingOption.name}
+                  clerkOrgId={clerkOrgId || ""}
+                  merchantId={merchantId}
+                  locationId={selectedLocation?.id}
+                  isEditable={canEditStructure}
+                />
+              ) : (
+                <div className="bg-muted/30 p-4 rounded-lg text-center border border-dashed">
+                  <p className="text-sm font-medium">Recipe Management</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Please save the option first to add recipe ingredients.
+                  </p>
+                </div>
+              )}
+            </div>
           </BottomSheetBody>
 
           <BottomSheetFooter>
