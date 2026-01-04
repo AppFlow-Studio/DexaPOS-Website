@@ -165,6 +165,44 @@ export function useUpdateItemStock() {
   });
 }
 
+/**
+ * Hook for updating location-specific stock (Phase 3)
+ * Uses the new SetLocationStock action that calls the RPC
+ */
+export function useSetLocationStock() {
+  const queryClient = useQueryClient();
+  const { locationId } = useOrgContext();
+
+  return useMutation({
+    mutationFn: async ({
+      itemId,
+      stock,
+    }: {
+      itemId: string;
+      stock: number;
+    }) => {
+      if (!locationId || locationId === "all") {
+        return { error: "Please select a location to update stock" };
+      }
+      // Import dynamically to avoid circular deps if needed
+      const { SetLocationStock } = await import("../../actions/location-stock");
+      return SetLocationStock(locationId, itemId, stock);
+    },
+    onSuccess: (result) => {
+      if (result.error) {
+        toast.error(result.error);
+      } else {
+        toast.success("Stock updated");
+        queryClient.invalidateQueries({ queryKey: ["inventory-items"] });
+        queryClient.invalidateQueries({ queryKey: ["inventory-stats"] });
+      }
+    },
+    onError: (error) => {
+      toast.error("Failed to update stock: " + error.message);
+    },
+  });
+}
+
 // ============================================================================
 // VENDORS
 // ============================================================================
@@ -323,8 +361,9 @@ export function useUpdatePurchaseOrderStatus() {
       if (result.error) {
         toast.error(result.error);
       } else {
-        toast.success("Purchase order updated");
+        toast.success("Order status updated");
         queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
+        queryClient.invalidateQueries({ queryKey: ["purchase-order-details"] });
         queryClient.invalidateQueries({ queryKey: ["inventory-items"] });
         queryClient.invalidateQueries({ queryKey: ["inventory-stats"] });
       }

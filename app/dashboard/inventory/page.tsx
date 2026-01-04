@@ -35,6 +35,7 @@ import {
   usePurchaseOrders,
   useInventoryStats,
   useUpdateItemStock,
+  useSetLocationStock,
   useUpdatePurchaseOrderStatus,
   useDeleteInventoryItem,
   useDeleteVendor,
@@ -46,6 +47,7 @@ import { EditItemDialog } from "./components/EditItemDialog";
 import { EditVendorDialog } from "./components/EditVendorDialog";
 import { DeleteConfirmDialog } from "./components/DeleteConfirmDialog";
 import { VendorDetailSheet } from "./components/VendorDetailSheet";
+import { PurchaseOrderDetailSheet } from "./components/PurchaseOrderDetailSheet";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import {
   DropdownMenu,
@@ -137,11 +139,66 @@ function StockStatusBadge({
   stockMode,
   currentStock,
   reorderPoint,
+  isGlobalView,
+  locationCount,
+  inStockLocations,
+  lowStockLocations,
+  outOfStockLocations,
 }: {
   stockMode: string;
   currentStock: number;
   reorderPoint: number;
+  isGlobalView?: boolean;
+  locationCount?: number;
+  inStockLocations?: number;
+  lowStockLocations?: number;
+  outOfStockLocations?: number;
 }) {
+  // ========================================================================
+  // GLOBAL VIEW: Show location breakdown
+  // ========================================================================
+  if (isGlobalView && locationCount !== undefined && locationCount > 0) {
+    const total = locationCount;
+    const outCount = outOfStockLocations ?? 0;
+    const lowCount = lowStockLocations ?? 0;
+    const inCount = inStockLocations ?? 0;
+
+    // Priority: Show worst status first
+    if (outCount > 0) {
+      return (
+        <Badge variant="destructive" className="gap-1 text-xs">
+          <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
+          {outCount}/{total} Out
+        </Badge>
+      );
+    }
+
+    if (lowCount > 0) {
+      return (
+        <Badge
+          variant="outline"
+          className="border-amber-500/50 text-amber-600 bg-amber-50 dark:bg-amber-950/30 gap-1 text-xs"
+        >
+          <AlertTriangle className="h-3 w-3" />
+          {lowCount}/{total} Low
+        </Badge>
+      );
+    }
+
+    // All locations in stock
+    return (
+      <Badge
+        variant="outline"
+        className="border-emerald-500/50 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 text-xs"
+      >
+        {inCount}/{total} In Stock
+      </Badge>
+    );
+  }
+
+  // ========================================================================
+  // LOCATION VIEW / FALLBACK: Show simple status
+  // ========================================================================
   if (stockMode === "out_of_stock") {
     return (
       <Badge variant="destructive" className="gap-1">
@@ -240,19 +297,23 @@ function StockEditCell({
   itemId,
   currentStock,
   unitType,
+  isGlobalView,
+  locationCount,
 }: {
   itemId: string;
   currentStock: number;
   unitType: string;
+  isGlobalView?: boolean;
+  locationCount?: number;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [value, setValue] = useState(currentStock.toString());
-  const updateStock = useUpdateItemStock();
+  const setLocationStock = useSetLocationStock();
 
   const handleSave = () => {
     const qty = parseFloat(value);
     if (!isNaN(qty)) {
-      updateStock.mutate({ itemId, stock: qty });
+      setLocationStock.mutate({ itemId, stock: qty });
       setIsEditing(false);
     }
   };
@@ -261,6 +322,23 @@ function StockEditCell({
     setValue(currentStock.toString());
     setIsEditing(false);
   };
+
+  // Global view: Show aggregate with indicator, not editable
+  if (isGlobalView) {
+    return (
+      <div className="flex flex-col">
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{currentStock}</span>
+          <span className="text-muted-foreground text-sm">{unitType}</span>
+        </div>
+        {locationCount !== undefined && locationCount > 0 && (
+          <span className="text-xs text-muted-foreground">
+            (across {locationCount} location{locationCount !== 1 ? "s" : ""})
+          </span>
+        )}
+      </div>
+    );
+  }
 
   if (isEditing) {
     return (
@@ -277,9 +355,9 @@ function StockEditCell({
           variant="ghost"
           className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
           onClick={handleSave}
-          disabled={updateStock.isPending}
+          disabled={setLocationStock.isPending}
         >
-          {updateStock.isPending ? (
+          {setLocationStock.isPending ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Check className="h-4 w-4" />
@@ -343,6 +421,10 @@ export default function InventoryPage() {
   const [selectedDetailVendor, setSelectedDetailVendor] =
     useState<VendorWithStats | null>(null);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
+
+  // PO Detail sheet state
+  const [selectedPOId, setSelectedPOId] = useState<string | null>(null);
+  const [isPODetailOpen, setIsPODetailOpen] = useState(false);
 
   const { data: userInfo } = useUserInfo();
   const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
@@ -442,14 +524,24 @@ export default function InventoryPage() {
         <StatCard
           title="Total Items"
           value={stats?.totalItems || 0}
-          subtitle={isAllLocations ? "Global catalog items" : "Available items"}
+          subtitle={
+            isAllLocations
+              ? "Global catalog items"
+              : "Available at this location"
+          }
           icon={Package}
           isLoading={isLoadingStats}
         />
         <StatCard
           title="Low Stock"
           value={stats?.lowStock || 0}
-          subtitle="Need reordering"
+          subtitle={
+            isAllLocations
+              ? `Location${
+                  (stats?.lowStock || 0) !== 1 ? "s" : ""
+                } with low stock`
+              : "Need reordering"
+          }
           icon={AlertTriangle}
           iconClassName="bg-amber-500"
           isLoading={isLoadingStats}
@@ -457,7 +549,13 @@ export default function InventoryPage() {
         <StatCard
           title="Out of Stock"
           value={stats?.outOfStock || 0}
-          subtitle="Immediate action needed"
+          subtitle={
+            isAllLocations
+              ? `Location${
+                  (stats?.outOfStock || 0) !== 1 ? "s" : ""
+                } with out of stock`
+              : "Immediate action needed"
+          }
           icon={TrendingDown}
           iconClassName="bg-rose-500"
           isLoading={isLoadingStats}
@@ -468,7 +566,11 @@ export default function InventoryPage() {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
           })}`}
-          subtitle="Current stock value"
+          subtitle={
+            isAllLocations
+              ? "Total across all locations"
+              : "Current location value"
+          }
           icon={DollarSign}
           iconClassName="bg-emerald-500"
           isLoading={isLoadingStats}
@@ -613,6 +715,8 @@ export default function InventoryPage() {
                             itemId={item.id}
                             currentStock={item.current_stock}
                             unitType={item.unit_type}
+                            isGlobalView={isAllLocations}
+                            locationCount={(item as any).location_count}
                           />
                         ) : (
                           <span className="text-muted-foreground text-sm italic">
@@ -624,11 +728,19 @@ export default function InventoryPage() {
                       </div>
 
                       <div className="col-span-2">
-                        <StockStatusBadge
-                          stockMode={item.stock_mode}
-                          currentStock={item.current_stock}
-                          reorderPoint={item.reorder_point}
-                        />
+                        {isAllLocations ? (
+                          <span className="text-muted-foreground text-sm">
+                            —
+                          </span>
+                        ) : (
+                          <StockStatusBadge
+                            stockMode={item.stock_mode}
+                            currentStock={item.current_stock}
+                            reorderPoint={
+                              item.reorder_threshold ?? item.reorder_point
+                            }
+                          />
+                        )}
                       </div>
 
                       <div className="col-span-2">
@@ -863,10 +975,21 @@ export default function InventoryPage() {
                 <div className="divide-y">
                   {/* Table Header */}
                   <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-muted/30 text-sm font-medium text-muted-foreground">
-                    <div className="col-span-3">PO Number</div>
+                    <div
+                      className={isAllLocations ? "col-span-2" : "col-span-3"}
+                    >
+                      PO Number
+                    </div>
+                    {isAllLocations && (
+                      <div className="col-span-2">Location</div>
+                    )}
                     <div className="col-span-3">Vendor</div>
                     <div className="col-span-2">Status</div>
-                    <div className="col-span-2">Items</div>
+                    <div
+                      className={isAllLocations ? "col-span-1" : "col-span-2"}
+                    >
+                      Items
+                    </div>
                     <div className="col-span-2">Total</div>
                   </div>
 
@@ -874,14 +997,28 @@ export default function InventoryPage() {
                   {filteredPOs.map((po) => (
                     <div
                       key={po.id}
-                      className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-muted/30 transition-colors group"
+                      className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-muted/30 transition-colors group cursor-pointer"
+                      onClick={() => {
+                        setSelectedPOId(po.id);
+                        setIsPODetailOpen(true);
+                      }}
                     >
-                      <div className="col-span-3">
+                      <div
+                        className={isAllLocations ? "col-span-2" : "col-span-3"}
+                      >
                         <p className="font-medium font-mono">{po.po_number}</p>
                         <p className="text-sm text-muted-foreground">
                           {new Date(po.created_at).toLocaleDateString()}
                         </p>
                       </div>
+
+                      {isAllLocations && (
+                        <div className="col-span-2">
+                          <p className="text-sm font-medium">
+                            {po.location?.name || "Unknown"}
+                          </p>
+                        </div>
+                      )}
 
                       <div className="col-span-3">
                         <p className="font-medium">
@@ -1070,6 +1207,12 @@ export default function InventoryPage() {
         open={isDetailSheetOpen}
         onOpenChange={setIsDetailSheetOpen}
         clerkOrgId={clerkOrgId || ""}
+      />
+
+      <PurchaseOrderDetailSheet
+        open={isPODetailOpen}
+        onOpenChange={setIsPODetailOpen}
+        purchaseOrderId={selectedPOId}
       />
     </div>
   );

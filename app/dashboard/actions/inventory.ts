@@ -71,8 +71,8 @@ export interface PurchaseOrderWithDetails {
 
 /**
  * Get all inventory items for a merchant
- * - All Locations view: returns only global items (location_id IS NULL)
- * - Specific Location view: returns global items + location-specific items
+ * - All Locations view: returns global items with AGGREGATE stock across all locations
+ * - Specific Location view: returns global items + local items with LOCATION-SPECIFIC stock
  */
 export async function GetInventoryItems(
   clerkOrgId: string,
@@ -94,6 +94,8 @@ export async function GetInventoryItems(
     return [];
   }
 
+  const isLocationView = locationId && locationId !== "all";
+
   let query = supabase
     .from("inventory_items")
     .select(
@@ -106,15 +108,14 @@ export async function GetInventoryItems(
     .order("name");
 
   // Apply location filter
-  if (locationId && locationId !== "all") {
+  if (isLocationView) {
     // Show global items (location_id IS NULL) + items for this location
     query = query.or(`location_id.is.null,location_id.eq.${locationId}`);
   } else {
-    // All Locations view - only show global items
-    query = query.is("location_id", null);
+    // All Locations view - show global items + ALL local items (HQ can see everything)
+    // No filter on location_id
   }
 
-  // ...
   const { data, error } = await query;
 
   if (error) {
@@ -122,57 +123,158 @@ export async function GetInventoryItems(
     return [];
   }
 
-  // If a specific location is selected, fetch effective costs
-  let effectiveCosts = new Map<string, number>();
+  if (!data || data.length === 0) {
+    return [];
+  }
 
-  if (locationId && locationId !== "all" && data && data.length > 0) {
-    // We can't batch call the scalar function easily in one go without a custom query/view
-    // For now, we'll fetch all items and then (optionally) we could fetch overrides
-    // BUT, a more performing way is to fetch the pricing overrides for this location in one query
-    const itemIds = data.map((i) => i.id);
+  const itemIds = data.map((i) => i.id);
 
-    // Get all overrides for this location
-    // check for preferred vendor + preferred pricing
-    // This logic is complex to replicate in JS.
-    // simpler: call the RPC for each item? No, too many requests.
-    // best: Create a temporary RPC or use a complex join.
+  // ========================================================================
+  // LOCATION VIEW: Fetch location-specific stock and cost overrides
+  // ========================================================================
+  if (isLocationView) {
+    // Get location stock
+    const { data: stockData } = await supabase
+      .from("location_inventory_stock")
+      .select("inventory_item_id, stock_quantity, reorder_threshold")
+      .eq("location_id", locationId)
+      .in("inventory_item_id", itemIds);
 
-    // Let's keep it simple for now:
-    // fetch `location_vendor_pricing` for this location
-    const { data: pricingData } = await supabase
+    const stockMap = new Map(
+      (stockData || []).map((s) => [s.inventory_item_id, s])
+    );
+
+    // Get location cost overrides (direct overrides, no vendor)
+    const { data: overrideData } = await supabase
+      .from("location_inventory_overrides")
+      .select("inventory_item_id, custom_cost, custom_reorder_threshold")
+      .eq("location_id", locationId)
+      .in("inventory_item_id", itemIds);
+
+    const overrideMap = new Map(
+      (overrideData || []).map((o) => [o.inventory_item_id, o])
+    );
+
+    // Get vendor pricing overrides
+    const { data: vendorPricingData } = await supabase
       .from("location_vendor_pricing")
       .select("inventory_item_id, unit_cost")
       .eq("location_id", locationId)
       .in("inventory_item_id", itemIds);
 
-    if (pricingData) {
-      pricingData.forEach((p) => {
-        effectiveCosts.set(p.inventory_item_id, p.unit_cost);
-      });
-    }
+    const vendorPricingMap = new Map(
+      (vendorPricingData || []).map((p) => [p.inventory_item_id, p.unit_cost])
+    );
 
-    // Also check for preferred vendor default cost if no specific price override
-    // Fetch location_vendors where is_preferred = true AND location_id = locationId
-    // Then fetch vendor_items for those vendors
-    // This is getting complicated.
-    // The "get_effective_item_cost" function was designed for single item lookup.
+    // Transform items with location context
+    return data.map((item) => {
+      const stock = stockMap.get(item.id);
+      const override = overrideMap.get(item.id);
+      const vendorPrice = vendorPricingMap.get(item.id);
 
-    // Let's trust the base implementation for now to correct the "Effective Price" by just checking overrides
+      // Effective cost priority: Direct override > Vendor pricing > Base cost
+      const effectiveCost =
+        override?.custom_cost ?? vendorPrice ?? item.cost_per_unit;
+
+      // Effective reorder threshold: Stock table > Override table > Base
+      const effectiveThreshold =
+        stock?.reorder_threshold ??
+        override?.custom_reorder_threshold ??
+        item.reorder_threshold;
+
+      return {
+        ...item,
+        // Location-specific stock
+        current_stock: stock?.stock_quantity ?? 0,
+        // Location-specific or effective values
+        cost_per_unit: effectiveCost,
+        reorder_threshold: effectiveThreshold,
+        // Metadata for UI
+        has_cost_override: !!(override?.custom_cost || vendorPrice),
+        vendor: Array.isArray(item.vendor)
+          ? item.vendor[0]
+          : item.vendor || null,
+      };
+    });
   }
 
-  // Transform to flatten vendor and apply effective cost
-  return (data || []).map((item) => {
-    // If we found a direct pricing override for this location, use it.
-    // otherwise use the item's base cost.
-    // Note: This logic is slightly simplified vs the full Phase 2 spec (doesn't check preferred vendor defaults),
-    // but it fixes the immediate user report of "Catalog $12 vs List $10" for explicit overrides.
-    const effectiveCost = effectiveCosts.has(item.id)
-      ? effectiveCosts.get(item.id)!
-      : item.cost_per_unit;
+  // ========================================================================
+  // GLOBAL VIEW: Fetch aggregate stock across all locations
+  // ========================================================================
+
+  // Get aggregate stock for all items
+  const { data: allStockData } = await supabase
+    .from("location_inventory_stock")
+    .select(
+      "inventory_item_id, stock_quantity, reorder_threshold, location_id"
+    );
+
+  // Get item reorder thresholds
+  const itemThresholdMap = new Map(
+    data.map((item) => [
+      item.id,
+      item.reorder_threshold ?? item.reorder_point ?? 0,
+    ])
+  );
+
+  // Aggregate by item - track status breakdown per location
+  const aggregateMap = new Map<
+    string,
+    {
+      total: number;
+      locations: Set<string>;
+      inStockCount: number;
+      lowStockCount: number;
+      outOfStockCount: number;
+    }
+  >();
+
+  for (const stock of allStockData || []) {
+    const existing = aggregateMap.get(stock.inventory_item_id) || {
+      total: 0,
+      locations: new Set<string>(),
+      inStockCount: 0,
+      lowStockCount: 0,
+      outOfStockCount: 0,
+    };
+
+    const qty = stock.stock_quantity || 0;
+    const threshold =
+      stock.reorder_threshold ??
+      itemThresholdMap.get(stock.inventory_item_id) ??
+      0;
+
+    existing.total += qty;
+    existing.locations.add(stock.location_id);
+
+    if (qty <= 0) {
+      existing.outOfStockCount++;
+    } else if (qty <= threshold) {
+      existing.lowStockCount++;
+    } else {
+      existing.inStockCount++;
+    }
+
+    aggregateMap.set(stock.inventory_item_id, existing);
+  }
+
+  // Transform items with global context
+  return data.map((item) => {
+    const aggregate = aggregateMap.get(item.id);
+    const locationCount = aggregate?.locations.size ?? 0;
 
     return {
       ...item,
-      cost_per_unit: effectiveCost, // DISPLAY the effective cost in the UI
+      // Aggregate stock across all locations
+      current_stock: aggregate?.total ?? item.current_stock ?? 0,
+      // Metadata for UI - Status breakdown
+      location_count: locationCount,
+      in_stock_locations: aggregate?.inStockCount ?? 0,
+      low_stock_locations: aggregate?.lowStockCount ?? 0,
+      out_of_stock_locations: aggregate?.outOfStockCount ?? 0,
+      is_aggregate: true, // Flag to indicate this is aggregated data
+      // Base cost (no location-specific override in global view)
+      cost_per_unit: item.cost_per_unit,
       vendor: Array.isArray(item.vendor) ? item.vendor[0] : item.vendor || null,
     };
   });
@@ -579,6 +681,10 @@ export async function GetPurchaseOrders(
                 quantity_received,
                 unit_cost,
                 line_total,
+                item_name,
+                item_sku,
+                item_unit_type,
+                item_category,
                 inventory_item:inventory_items(id, name, unit_type)
             )
         `
@@ -648,6 +754,15 @@ export async function CreatePurchaseOrder(
     return { error: "Merchant not found" };
   }
 
+  // Get inventory item details for snapshots
+  const itemIds = data.items.map((i) => i.inventory_item_id);
+  const { data: inventoryItems } = await supabase
+    .from("inventory_items")
+    .select("id, name, sku, unit_type, category")
+    .in("id", itemIds);
+
+  const itemMap = new Map((inventoryItems || []).map((i) => [i.id, i]));
+
   // Calculate total
   const total = data.items.reduce(
     (sum, item) => sum + item.quantity_ordered * item.unit_cost,
@@ -673,14 +788,22 @@ export async function CreatePurchaseOrder(
     return { error: poError?.message || "Failed to create purchase order" };
   }
 
-  // Insert line items
-  const itemsToInsert = data.items.map((item) => ({
-    purchase_order_id: po.id,
-    inventory_item_id: item.inventory_item_id,
-    quantity_ordered: item.quantity_ordered,
-    quantity_received: 0,
-    unit_cost: item.unit_cost,
-  }));
+  // Insert line items with snapshot columns
+  const itemsToInsert = data.items.map((item) => {
+    const invItem = itemMap.get(item.inventory_item_id);
+    return {
+      purchase_order_id: po.id,
+      inventory_item_id: item.inventory_item_id,
+      quantity_ordered: item.quantity_ordered,
+      quantity_received: 0,
+      unit_cost: item.unit_cost,
+      // Snapshot columns
+      item_name: invItem?.name || null,
+      item_sku: invItem?.sku || null,
+      item_unit_type: invItem?.unit_type || null,
+      item_category: invItem?.category || null,
+    };
+  });
 
   const { error: itemsError } = await supabase
     .from("purchase_order_items")
@@ -711,7 +834,7 @@ export async function UpdatePurchaseOrderStatus(
   // Get current PO
   const { data: po, error: fetchError } = await supabase
     .from("purchase_orders")
-    .select("status")
+    .select("status, location_id")
     .eq("id", poId)
     .single();
 
@@ -742,7 +865,7 @@ export async function UpdatePurchaseOrderStatus(
     }
   }
 
-  // Update PO status (triggers will handle stock update if 'received')
+  // Update PO status
   const updateData: Record<string, unknown> = {
     status: newStatus,
     updated_at: new Date().toISOString(),
@@ -750,6 +873,8 @@ export async function UpdatePurchaseOrderStatus(
 
   if (newStatus === "pending") {
     updateData.ordered_at = new Date().toISOString();
+  } else if (newStatus === "received") {
+    updateData.received_at = new Date().toISOString();
   } else if (newStatus === "paid") {
     updateData.paid_at = new Date().toISOString();
   }
@@ -764,6 +889,45 @@ export async function UpdatePurchaseOrderStatus(
   if (error) {
     console.error("Error updating PO status:", error);
     return { error: error.message };
+  }
+
+  // ========================================================================
+  // AUTO-INCREMENT LOCATION STOCK WHEN RECEIVING
+  // ========================================================================
+  if (newStatus === "received" && po.location_id) {
+    // Get PO items with received quantities
+    const { data: poItems } = await supabase
+      .from("purchase_order_items")
+      .select("inventory_item_id, quantity_received")
+      .eq("purchase_order_id", poId);
+
+    // Call increment_location_stock RPC for each item
+    for (const item of poItems || []) {
+      if (item.quantity_received && item.quantity_received > 0) {
+        const { error: stockError } = await supabase.rpc(
+          "increment_location_stock",
+          {
+            p_location_id: po.location_id,
+            p_inventory_item_id: item.inventory_item_id,
+            p_quantity: item.quantity_received,
+          }
+        );
+
+        if (stockError) {
+          console.error(
+            `Error incrementing stock for item ${item.inventory_item_id}:`,
+            stockError
+          );
+          // Continue with other items, don't fail the whole operation
+        }
+      }
+    }
+
+    console.log(
+      `✅ Auto-incremented stock for ${
+        poItems?.length || 0
+      } items at location ${po.location_id}`
+    );
   }
 
   return { data: updated };
@@ -822,63 +986,183 @@ export async function GetInventoryStats(
 
   if (!merchant) return null;
 
-  // Build base query for items
-  let itemQuery = supabase
+  const isLocationView = locationId && locationId !== "all";
+
+  // Get items for the merchant (current_stock and reorder_point for fallback calc)
+  const { data: items } = await supabase
     .from("inventory_items")
-    .select("id, current_stock, reorder_point, stock_mode, cost_per_unit")
+    .select("id, cost_per_unit, reorder_point, stock_mode, current_stock")
     .eq("merchant_id", merchant.id);
 
-  // Apply location filter
-  if (locationId && locationId !== "all") {
-    itemQuery = itemQuery.or(
-      `location_id.is.null,location_id.eq.${locationId}`
-    );
-  } else {
-    itemQuery = itemQuery.is("location_id", null);
+  if (!items || items.length === 0) {
+    return {
+      totalItems: 0,
+      totalVendors: 0,
+      lowStock: 0,
+      outOfStock: 0,
+      totalValue: 0,
+    };
   }
 
-  const { data: items } = await itemQuery;
+  const totalItems = items.length;
+  const itemIds = items.map((i) => i.id);
+  const itemMap = new Map(items.map((i) => [i.id, i]));
 
-  const totalItems = items?.length || 0;
+  // ========================================================================
+  // LOCATION VIEW: Get stats from location_inventory_stock
+  // ========================================================================
+  if (isLocationView) {
+    // Get stock records for this location (may not exist for all items)
+    const { data: stockData } = await supabase
+      .from("location_inventory_stock")
+      .select("inventory_item_id, stock_quantity, reorder_threshold")
+      .eq("location_id", locationId)
+      .in("inventory_item_id", itemIds);
 
-  const lowStock = (items || []).filter(
-    (s) =>
-      s.stock_mode === "stock_tracking" &&
-      s.current_stock > 0 &&
-      s.current_stock <= s.reorder_point
-  ).length;
+    // Build a map of item_id -> stock record
+    const stockMap = new Map(
+      (stockData || []).map((s) => [s.inventory_item_id, s])
+    );
 
-  const outOfStock = (items || []).filter(
-    (s) =>
-      s.stock_mode === "out_of_stock" ||
-      (s.stock_mode === "stock_tracking" && s.current_stock <= 0)
-  ).length;
+    // Get cost overrides for this location
+    const { data: overrides } = await supabase
+      .from("location_inventory_overrides")
+      .select("inventory_item_id, custom_cost")
+      .eq("location_id", locationId)
+      .in("inventory_item_id", itemIds);
 
-  const totalValue = (items || []).reduce((sum, s) => {
-    return sum + s.current_stock * (s.cost_per_unit || 0);
-  }, 0);
+    const overrideMap = new Map(
+      (overrides || []).map((o) => [o.inventory_item_id, o.custom_cost])
+    );
+
+    // Get vendor count
+    const { count: totalVendors } = await supabase
+      .from("vendors")
+      .select("id", { count: "exact", head: true })
+      .eq("merchant_id", merchant.id);
+
+    let lowStock = 0;
+    let outOfStock = 0;
+    let totalValue = 0;
+
+    // Iterate over ALL items, not just ones with stock records
+    for (const item of items) {
+      // Get stock from location_inventory_stock if exists, else default to 0
+      // This matches the table display logic exactly
+      const stockRecord = stockMap.get(item.id);
+      const qty = stockRecord?.stock_quantity ?? 0;
+      const threshold =
+        stockRecord?.reorder_threshold ?? item.reorder_point ?? 0;
+      const effectiveCost = overrideMap.get(item.id) ?? item.cost_per_unit ?? 0;
+
+      totalValue += qty * effectiveCost;
+
+      // Only count items that use stock_tracking mode
+      if (item.stock_mode === "stock_tracking") {
+        if (qty <= 0) {
+          outOfStock++;
+        } else if (qty <= threshold) {
+          lowStock++;
+        }
+      } else if (item.stock_mode === "out_of_stock") {
+        // Items explicitly marked as out of stock
+        outOfStock++;
+      }
+    }
+
+    return {
+      totalItems,
+      totalVendors: totalVendors || 0,
+      lowStock,
+      outOfStock,
+      totalValue,
+    };
+  }
+
+  // ========================================================================
+  // GLOBAL VIEW: Count LOCATIONS with issues
+  // ========================================================================
+  const { data: allStockData } = await supabase
+    .from("location_inventory_stock")
+    .select(
+      "inventory_item_id, stock_quantity, reorder_threshold, location_id"
+    );
+
+  // Get all locations for this merchant
+  const { data: allLocations } = await supabase
+    .from("locations")
+    .select("id")
+    .eq("merchant_id", merchant.id);
+
+  const locationIds = (allLocations || []).map((l) => l.id);
+
+  // Build a map of location_id -> item_id -> stock record
+  const stockByLocation = new Map<
+    string,
+    Map<string, { qty: number; threshold: number }>
+  >();
+
+  for (const loc of locationIds) {
+    stockByLocation.set(loc, new Map());
+  }
+
+  for (const stock of allStockData || []) {
+    const locMap = stockByLocation.get(stock.location_id);
+    if (locMap) {
+      const item = itemMap.get(stock.inventory_item_id);
+      locMap.set(stock.inventory_item_id, {
+        qty: stock.stock_quantity ?? 0,
+        threshold: stock.reorder_threshold ?? item?.reorder_point ?? 0,
+      });
+    }
+  }
+
+  // Count locations with issues
+  const locationsWithLowStock = new Set<string>();
+  const locationsWithOutOfStock = new Set<string>();
+  let totalValue = 0;
+
+  for (const [locationId, locStockMap] of stockByLocation) {
+    for (const item of items) {
+      if (item.stock_mode !== "stock_tracking") continue;
+
+      // Get stock for this item at this location (default to 0 if no record)
+      const stockRecord = locStockMap.get(item.id);
+      const qty = stockRecord?.qty ?? 0;
+      const threshold = stockRecord?.threshold ?? item.reorder_point ?? 0;
+
+      // Only add to total value once per item (not per location)
+      // We'll calculate value separately below
+
+      if (qty <= 0) {
+        locationsWithOutOfStock.add(locationId);
+      } else if (qty <= threshold) {
+        locationsWithLowStock.add(locationId);
+      }
+    }
+  }
+
+  // Calculate total inventory value (sum across all locations)
+  for (const stock of allStockData || []) {
+    const item = itemMap.get(stock.inventory_item_id);
+    if (item) {
+      totalValue += (stock.stock_quantity ?? 0) * (item.cost_per_unit ?? 0);
+    }
+  }
 
   // Get vendor count
-  let vendorQuery = supabase
+  const { count: totalVendors } = await supabase
     .from("vendors")
     .select("id", { count: "exact", head: true })
-    .eq("merchant_id", merchant.id);
-
-  if (locationId && locationId !== "all") {
-    vendorQuery = vendorQuery.or(
-      `location_id.is.null,location_id.eq.${locationId}`
-    );
-  } else {
-    vendorQuery = vendorQuery.is("location_id", null);
-  }
-
-  const { count: totalVendors } = await vendorQuery;
+    .eq("merchant_id", merchant.id)
+    .is("location_id", null);
 
   return {
     totalItems,
     totalVendors: totalVendors || 0,
-    lowStock,
-    outOfStock,
+    lowStock: locationsWithLowStock.size,
+    outOfStock: locationsWithOutOfStock.size,
     totalValue,
+    isLocationBased: true,
   };
 }

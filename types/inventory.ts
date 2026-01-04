@@ -170,6 +170,18 @@ export interface InventoryItemWithVendor extends InventoryItem {
     id: string;
     name: string;
   } | null;
+
+  // Phase 3: Location-aware stock fields
+  // Global view aggregates - Status breakdown
+  location_count?: number; // Number of locations with this item
+  in_stock_locations?: number; // Locations with healthy stock
+  low_stock_locations?: number; // Locations with low stock
+  out_of_stock_locations?: number; // Number of locations with 0 stock
+  is_aggregate?: boolean; // True when showing aggregated data (global view)
+
+  // Location view
+  has_cost_override?: boolean; // True if cost differs from base cost
+  reorder_threshold?: number; // Effective reorder threshold
 }
 
 // DEPRECATED: Stock is now directly on InventoryItem
@@ -199,17 +211,65 @@ export interface PurchaseOrder {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  // Delivery fields
+  delivered_by: string | null;
+  delivered_at: string | null;
+  delivery_logged_by_user_id: string | null;
+  delivery_logged_by_name: string | null;
+  delivery_notes: string | null;
 }
 
 export interface PurchaseOrderItem {
   id: string;
   purchase_order_id: string;
-  inventory_item_id: string;
+  inventory_item_id: string | null; // Nullable for deleted items
   quantity_ordered: number;
   quantity_received: number;
   unit_cost: number;
   line_total: number;
   created_at: string;
+  // Snapshot columns (preserved when item is deleted)
+  item_name: string | null;
+  item_sku: string | null;
+  item_unit_type: string | null;
+  item_category: string | null;
+}
+
+export interface PurchaseOrderPayment {
+  id: string;
+  purchase_order_id: string;
+  payment_method: "card" | "cash" | "check" | "bank_transfer";
+  card_last_four: string | null;
+  amount: number;
+  vendor_id: string | null;
+  vendor_name: string | null;
+  paid_to: string | null;
+  paid_by_user_id: string | null;
+  paid_by_name: string | null;
+  paid_at: string;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface DiscrepancyReportItem {
+  item_id: string;
+  inventory_item_id: string | null;
+  item_name: string | null;
+  item_sku: string | null;
+  item_unit_type: string | null;
+  quantity_ordered: number;
+  quantity_received: number;
+  unit_cost: number;
+  status: "missing" | "shorted" | "received";
+}
+
+export interface PurchaseOrderWithDetails extends PurchaseOrder {
+  vendor?: { id: string; name: string } | null;
+  location?: { id: string; name: string } | null;
+  items: (PurchaseOrderItem & {
+    inventory_item?: { id: string; name: string; unit_type: string } | null;
+  })[];
+  payments?: PurchaseOrderPayment[];
 }
 
 export interface MenuItemRecipe {
