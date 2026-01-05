@@ -64,6 +64,7 @@ import {
   RemoveRecipeIngredient,
   GetInventoryItemsForRecipe,
   RecipeIngredient,
+  UpdateMenuItemRecipe,
 } from "@/app/dashboard/actions/recipes";
 
 interface RecipeManagerProps {
@@ -112,15 +113,29 @@ export function RecipeManager({
     (item) => !ingredients.some((ing) => ing.inventory_item_id === item.id)
   );
 
-  // Mutations
+  // Mutations - All use the atomic RPC for consistency
   const addMutation = useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       inventoryItemId,
       qty,
     }: {
       inventoryItemId: string;
       qty: number;
-    }) => AddRecipeIngredient(menuItemId, inventoryItemId, qty),
+    }) => {
+      // Build new recipe array with added item
+      const newRecipeItems = [
+        ...ingredients.map((ing) => ({
+          inventoryItemId: ing.inventory_item_id,
+          quantity: ing.quantity_used,
+        })),
+        { inventoryItemId, quantity: qty },
+      ];
+      console.log(
+        "[RecipeManager] Adding ingredient, new list:",
+        newRecipeItems
+      );
+      return UpdateMenuItemRecipe(menuItemId, newRecipeItems, locationId);
+    },
     onSuccess: (result) => {
       if (result.error) {
         toast.error(result.error);
@@ -134,12 +149,31 @@ export function RecipeManager({
         setQuantity("");
       }
     },
-    onError: () => toast.error("Failed to add ingredient"),
+    onError: (err) => {
+      console.error("[RecipeManager] Add mutation error:", err);
+      toast.error("Failed to add ingredient");
+    },
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ recipeId, qty }: { recipeId: string; qty: number }) =>
-      UpdateRecipeIngredient(recipeId, qty),
+    mutationFn: async ({
+      recipeId,
+      qty,
+    }: {
+      recipeId: string;
+      qty: number;
+    }) => {
+      // Build recipe array with updated quantity
+      const newRecipeItems = ingredients.map((ing) => ({
+        inventoryItemId: ing.inventory_item_id,
+        quantity: ing.id === recipeId ? qty : ing.quantity_used,
+      }));
+      console.log(
+        "[RecipeManager] Updating ingredient, new list:",
+        newRecipeItems
+      );
+      return UpdateMenuItemRecipe(menuItemId, newRecipeItems, locationId);
+    },
     onSuccess: (result) => {
       if (result.error) {
         toast.error(result.error);
@@ -152,11 +186,27 @@ export function RecipeManager({
         setQuantity("");
       }
     },
-    onError: () => toast.error("Failed to update ingredient"),
+    onError: (err) => {
+      console.error("[RecipeManager] Update mutation error:", err);
+      toast.error("Failed to update ingredient");
+    },
   });
 
   const removeMutation = useMutation({
-    mutationFn: (recipeId: string) => RemoveRecipeIngredient(recipeId),
+    mutationFn: async (recipeId: string) => {
+      // Build recipe array without the removed item
+      const newRecipeItems = ingredients
+        .filter((ing) => ing.id !== recipeId)
+        .map((ing) => ({
+          inventoryItemId: ing.inventory_item_id,
+          quantity: ing.quantity_used,
+        }));
+      console.log(
+        "[RecipeManager] Removing ingredient, new list:",
+        newRecipeItems
+      );
+      return UpdateMenuItemRecipe(menuItemId, newRecipeItems, locationId);
+    },
     onSuccess: (result) => {
       if (result.error) {
         toast.error(result.error);
@@ -167,7 +217,10 @@ export function RecipeManager({
         });
       }
     },
-    onError: () => toast.error("Failed to remove ingredient"),
+    onError: (err) => {
+      console.error("[RecipeManager] Remove mutation error:", err);
+      toast.error("Failed to remove ingredient");
+    },
   });
 
   // Reset form when dialog opens

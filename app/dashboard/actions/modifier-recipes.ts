@@ -240,3 +240,38 @@ export async function RemoveModifierRecipeIngredient(
 
   return { success: true };
 }
+
+// ============================================================================
+// BULK UPDATE MODIFIER RECIPE (RPC)
+// Uses the atomic RPC to replace the entire recipe for a modifier item
+// ============================================================================
+
+export async function UpdateModifierItemRecipe(
+  modifierItemId: string,
+  recipeItems: Array<{ inventoryItemId: string; quantity: number }>
+): Promise<{ success?: boolean; error?: string }> {
+  if (!modifierItemId) {
+    return { error: "Modifier Item ID is required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  console.log("[UpdateModifierItemRecipe] Calling RPC with:", {
+    modifierItemId,
+    recipeItemsCount: recipeItems.length,
+    recipeItems,
+  });
+
+  const { error } = await supabase.rpc("upsert_modifier_item_with_recipe", {
+    p_modifier_item_id: modifierItemId,
+    p_recipe_items: recipeItems,
+  });
+
+  if (error) {
+    console.error("[UpdateModifierItemRecipe] RPC Error:", error);
+    return { error: error.message };
+  }
+
+  console.log("[UpdateModifierItemRecipe] Success");
+  return { success: true };
+}
