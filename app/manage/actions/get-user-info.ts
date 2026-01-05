@@ -5,6 +5,16 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { DebugUserRelationships } from '@/debug/debug-user'
 import type { UserWithAllMemberships } from '@/types/user'
 
+export interface UserInfo {
+    id: string
+    email: string
+    name: string
+    image: string
+    members: {
+        
+    }[]
+}
+
 export async function GetUserInfo() {
     const { userId } = await auth()
     // await DebugUserRelationships()
@@ -25,7 +35,7 @@ export async function GetUserInfo() {
         return new Error(error.message)
     }
 
-    return data
+    return data 
 }
 
 // app/dashboard/actions/user.ts

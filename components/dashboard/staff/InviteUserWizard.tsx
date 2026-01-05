@@ -90,6 +90,17 @@ export function InviteUserWizard({
     const { data: locationsData } = useLocations(clerkOrgId, userInfo?.id || '')
     const locations = locationsData || []
 
+    // Get current user's role and level for filtering
+    const currentUserRole = React.useMemo(() => {
+        if (!userInfo?.members?.[0]) return null
+        const member = userInfo.members[0]
+        // Find the role code from the member's organization
+        const roleCode = member.role_code || member.role
+        return roles.find(r => r.code === roleCode)
+    }, [userInfo, roles])
+
+    const currentUserLevel = currentUserRole?.level || 0
+
     // Mutations
     const createPOSStaff = useCreatePOSStaff()
     const inviteClerkStaff = useInviteClerkStaff()
@@ -256,16 +267,25 @@ export function InviteUserWizard({
         }
     }
 
-    // Filter roles based on staff type
+    // Filter roles based on staff type and current user's level
     const filteredRoles = React.useMemo(() => {
+        let baseFilteredRoles = []
+
         if (staffType === 'clerk') {
             // Dashboard users: admin and manager level roles
-            return roles.filter(r => r.level_type === 'admin' || r.level_type === 'manager')
+            baseFilteredRoles = roles.filter(r => r.level_type === 'admin' || r.level_type === 'manager')
         } else {
             // POS staff: member level roles
-            return roles.filter(r => r.level_type === 'member')
+            baseFilteredRoles = roles.filter(r => r.level_type === 'member')
         }
-    }, [roles, staffType])
+
+        // Filter by current user's level - can only assign roles with level <= their own
+        if (currentUserLevel > 0) {
+            baseFilteredRoles = baseFilteredRoles.filter(r => r.level <= currentUserLevel)
+        }
+
+        return baseFilteredRoles
+    }, [roles, staffType, currentUserLevel])
 
     // Auto-select first role when staffType changes or filtered roles change
     React.useEffect(() => {
@@ -559,6 +579,19 @@ export function InviteUserWizard({
                                             <div className="text-sm text-muted-foreground">
                                                 Select a role that matches the permissions this user needs.
                                             </div>
+
+                                            {/* Role restriction information */}
+                                            {currentUserLevel > 0 && currentUserRole && (
+                                                <div className="rounded-lg border bg-muted/30 p-3">
+                                                    <div className="flex items-start gap-2">
+                                                        <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                                                        <p className="text-xs text-muted-foreground">
+                                                            You can only assign roles up to your permission level <strong>(Level {currentUserLevel}: {currentUserRole.name})</strong>. Higher-level roles are filtered from this list.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             <RadioGroup value={selectedRoleCode} onValueChange={setSelectedRoleCode}>
                                                 <div className="space-y-3">
                                                     {filteredRoles.map((role) => (

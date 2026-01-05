@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata } from "next";
 import {
   ClerkProvider,
   SignInButton,
@@ -6,36 +6,40 @@ import {
   SignedIn,
   SignedOut,
   UserButton,
-} from '@clerk/nextjs'
-import { Geist, Geist_Mono } from 'next/font/google'
-import './globals.css'
-import TanstackProvider from '@/utils/tanstackquery'
-import { Toaster } from "@/components/ui/sonner"
+} from "@clerk/nextjs";
+import { Geist, Geist_Mono } from "next/font/google";
+import "./globals.css";
+import TanstackProvider from "@/utils/tanstackquery";
+import { Toaster } from "@/components/ui/sonner";
 
 const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-})
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
 
 const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-})
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
-  title: 'DexaPOS - Modern Point of Sale Solution',
-  description: 'Transform your business operations with DexaPOS - the modern point-of-sale solution with powerful analytics and seamless user experience.',
-}
+  title: "DexaPOS - Modern Point of Sale Solution",
+  description:
+    "Transform your business operations with DexaPOS - the modern point-of-sale solution with powerful analytics and seamless user experience.",
+};
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode
+  children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider signInForceRedirectUrl={'/manage'}>
+    <ClerkProvider signInForceRedirectUrl={"/manage"}>
       <html lang="en">
-        <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <body
+          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+          suppressHydrationWarning
+        >
           {/* <header className="flex justify-end items-center p-4 gap-4 h-16">
             <SignedOut>
               <SignInButton />
@@ -61,5 +65,5 @@ export default function RootLayout({
         </body>
       </html>
     </ClerkProvider>
-  )
+  );
 }

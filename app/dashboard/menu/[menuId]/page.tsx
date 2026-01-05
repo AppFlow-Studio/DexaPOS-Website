@@ -53,6 +53,7 @@ export default function MenuDetailPage() {
     const clerkOrgId = useClerkOrgId() || ''
     const menuId = params.menuId as string
     const { data: menu, isLoading, refetch: refetchMenu } = useMenuWithCategories(menuId)
+    console.log('menu', menu)
     const { selectedLocationId } = useLocationStore()
     const { data: userInfo } = useUserInfo()
     const isAllLocations = !selectedLocationId || selectedLocationId === 'all'
@@ -90,7 +91,7 @@ export default function MenuDetailPage() {
     const [reorderedCategories, setReorderedCategories] = useState<MenuCategory[]>([])
     const [hasCategoryOrderChanges, setHasCategoryOrderChanges] = useState(false)
     const [isSavingCategoryOrder, setIsSavingCategoryOrder] = useState(false)
-
+    
     // Initialize settings and expand all categories when menu loads
     useEffect(() => {
         if (menu) {

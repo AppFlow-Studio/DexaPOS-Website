@@ -6,7 +6,8 @@ import {
     InviteStaffFormData,
     UpdateStaffAssignmentData,
     StaffActionResponse,
-    ResetPINResult
+    ResetPINResult,
+    UpgradePOSToClerkResult
 } from '@/types/staff'
 import { clerkClient } from '@clerk/nextjs/server'
 import bcrypt from 'bcryptjs'
@@ -776,5 +777,218 @@ export async function ReactivateStaffMember(
     } catch (error) {
         console.error('[ReactivateStaffMember] Unexpected error:', error)
         return { error: 'An unexpected error occurred' }
+    }
+}
+
+// ============================================================================
+// UPGRADE OPERATIONS
+// ============================================================================
+
+/**
+ * Upgrade POS-only staff to Clerk dashboard user
+ * Creates a Clerk account for existing POS-only staff member
+ *
+ * @param memberId - UUID of the member to upgrade
+ * @param locationId - UUID of the primary location
+ * @param email - Email for the new Clerk account
+ * @returns Success response with Clerk user_id and temporary password or error
+ */
+export async function UpgradePOSStaffToClerk(
+    memberId: string,
+    locationId: string,
+    email: string
+): Promise<StaffActionResponse<UpgradePOSToClerkResult>> {
+    const supabase = createServerSupabaseClient()
+
+    try {
+        // 1. Get member with staff_profile to verify POS-only status
+        const { data: member, error: memberError } = await supabase
+            .from('members')
+            .select(`
+                id,
+                user_id,
+                staff_profile_id,
+                organization_id,
+                staff_profiles (
+                    id,
+                    merchant_id,
+                    first_name,
+                    last_name,
+                    phone,
+                    account_type
+                )
+            `)
+            .eq('id', memberId)
+            .single()
+
+        if (memberError || !member) {
+            console.error('[UpgradePOSStaffToClerk] Member not found:', memberError)
+            return { error: 'Member not found' }
+        }
+
+        // 2. Verify member is POS-only
+        const staffProfile = member.staff_profiles as any
+        if (!staffProfile) {
+            return { error: 'Staff profile not found' }
+        }
+
+        if (staffProfile.account_type !== 'pos_only') {
+            return { error: 'Staff member is not a POS-only account' }
+        }
+
+        if (member.user_id) {
+            return { error: 'Staff member already has a dashboard account' }
+        }
+
+        // 3. Validate email
+        if (!email || !email.includes('@')) {
+            return { error: 'Valid email is required' }
+        }
+
+        // 4. Get location assignment to retrieve role
+        const { data: locationAssignment, error: locationError } = await supabase
+            .from('location_members')
+            .select('role_code, pin_code, hourly_rate, employment_type')
+            .eq('staff_profile_id', staffProfile.id)
+            .eq('location_id', locationId)
+            .single()
+
+        if (locationError || !locationAssignment) {
+            console.error('[UpgradePOSStaffToClerk] Location assignment not found:', locationError)
+            return { error: 'Location assignment not found' }
+        }
+
+        // 5. Generate temporary password
+        const tempPassword = generateSecurePassword(12)
+
+        // 6. Create Clerk user
+        const clerk = await clerkClient()
+        let clerkUser
+        try {
+            clerkUser = await clerk.users.createUser({
+                emailAddress: [email],
+                password: tempPassword,
+                firstName: staffProfile.first_name,
+                lastName: staffProfile.last_name,
+                phoneNumber: staffProfile.phone ? [staffProfile.phone] : undefined,
+                publicMetadata: {
+                    creationType: 'upgrade',  // Mark as upgrade from POS
+                    organizationId: member.organization_id,
+                    merchantId: staffProfile.merchant_id,
+                    roleCode: locationAssignment.role_code,
+                    upgradedFromStaffProfileId: staffProfile.id,
+                    phone: staffProfile.phone,
+                },
+                skipPasswordRequirement: false,
+                skipPasswordChecks: false,
+            })
+
+            if (!clerkUser || !clerkUser.id) {
+                return { error: 'Failed to create Clerk user' }
+            }
+        } catch (clerkError: any) {
+            console.error('[UpgradePOSStaffToClerk] Clerk creation failed:', clerkError)
+            return { error: `Failed to create Clerk user: ${clerkError.errors?.[0]?.message || clerkError.message}` }
+        }
+
+        // 7. Add user to organization
+        try {
+            await clerk.organizations.createOrganizationMembership({
+                organizationId: member.organization_id,
+                userId: clerkUser.id,
+                role: 'org:member',
+            })
+        } catch (orgError: any) {
+            console.error('[UpgradePOSStaffToClerk] Failed to add to organization:', orgError)
+            // Rollback: Delete Clerk user
+            await clerk.users.deleteUser(clerkUser.id)
+            return { error: 'Failed to add user to organization' }
+        }
+
+        // 8. Update staff_profiles - change account type and add user_id
+        const { error: profileUpdateError } = await supabase
+            .from('staff_profiles')
+            .update({
+                account_type: 'clerk',
+                user_id: clerkUser.id,
+                email: email,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', staffProfile.id)
+
+        if (profileUpdateError) {
+            console.error('[UpgradePOSStaffToClerk] Failed to update staff profile:', profileUpdateError)
+            // Rollback: Delete Clerk user
+            await clerk.users.deleteUser(clerkUser.id)
+            return { error: 'Failed to update staff profile' }
+        }
+
+        // 9. Update members - set user_id
+        const { error: memberUpdateError } = await supabase
+            .from('members')
+            .update({
+                user_id: clerkUser.id,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', memberId)
+
+        if (memberUpdateError) {
+            console.error('[UpgradePOSStaffToClerk] Failed to update member:', memberUpdateError)
+            // Rollback: Revert staff_profiles and delete Clerk user
+            await supabase
+                .from('staff_profiles')
+                .update({
+                    account_type: 'pos_only',
+                    user_id: null,
+                    email: null
+                })
+                .eq('id', staffProfile.id)
+            await clerk.users.deleteUser(clerkUser.id)
+            return { error: 'Failed to update member record' }
+        }
+
+        // 10. Update location_members - CRITICAL: set user_id and clear staff_profile_id
+        // Database constraint requires EITHER user_id OR staff_profile_id, not both
+        const { error: locationUpdateError } = await supabase
+            .from('location_members')
+            .update({
+                user_id: clerkUser.id,
+                staff_profile_id: null,  // MUST clear this due to constraint
+                updated_at: new Date().toISOString()
+            })
+            .eq('staff_profile_id', staffProfile.id)
+
+        if (locationUpdateError) {
+            console.error('[UpgradePOSStaffToClerk] Failed to update location_members:', locationUpdateError)
+            // Rollback all changes
+            await supabase
+                .from('members')
+                .update({ user_id: null })
+                .eq('id', memberId)
+            await supabase
+                .from('staff_profiles')
+                .update({
+                    account_type: 'pos_only',
+                    user_id: null,
+                    email: null
+                })
+                .eq('id', staffProfile.id)
+            await clerk.users.deleteUser(clerkUser.id)
+            return { error: 'Failed to update location assignments' }
+        }
+
+        // 11. Success - revalidate and return credentials
+        revalidatePath('/dashboard/staff')
+
+        return {
+            data: {
+                user_id: clerkUser.id,
+                temp_password: tempPassword,
+                email: email
+            }
+        }
+    } catch (error) {
+        console.error('[UpgradePOSStaffToClerk] Unexpected error:', error)
+        return { error: 'An unexpected error occurred during upgrade' }
     }
 }

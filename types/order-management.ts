@@ -1,47 +1,47 @@
 // types/database.types.ts
 export type OrderStatus =
-  | 'draft'
-  | 'pending'
-  | 'preparing'
-  | 'ready'
-  | 'completed'
-  | 'cancelled'
-  | 'refunded'
-  | 'void';
+  | "draft"
+  | "pending"
+  | "preparing"
+  | "ready"
+  | "completed"
+  | "cancelled"
+  | "refunded"
+  | "void";
 
 export type OrderType =
-  | 'dine_in'
-  | 'takeout'
-  | 'delivery'
-  | 'online'
-  | 'catering';
+  | "dine_in"
+  | "takeout"
+  | "delivery"
+  | "online"
+  | "catering";
 
 export type PaymentMethod =
-  | 'cash'
-  | 'card_spinapi'
-  | 'card_dvpaylite'
-  | 'card_manual'
-  | 'gift_card'
-  | 'house_account'
-  | 'external';
+  | "cash"
+  | "card_spinapi"
+  | "card_dvpaylite"
+  | "card_manual"
+  | "gift_card"
+  | "house_account"
+  | "external";
 
 export type PaymentStatus =
-  | 'pending'
-  | 'processing'
-  | 'authorized'
-  | 'captured'
-  | 'failed'
-  | 'declined'
-  | 'refunded'
-  | 'partially_refunded'
-  | 'void'
-  | 'paid';
+  | "pending"
+  | "processing"
+  | "authorized"
+  | "captured"
+  | "failed"
+  | "declined"
+  | "refunded"
+  | "partially_refunded"
+  | "void"
+  | "paid";
 
 export type TerminalType =
-  | 'dejavoo_spinapi'
-  | 'dejavoo_p18'
-  | 'manual'
-  | 'none';
+  | "dejavoo_spinapi"
+  | "dejavoo_p18"
+  | "manual"
+  | "none";
 
 export interface Order {
   id: string;
@@ -69,6 +69,22 @@ export interface Order {
   sent_to_kitchen_at?: string;
   completed_at?: string;
   sync_version: number;
+  created_by_staff_id?: string;
+}
+
+export interface OrderFilters {
+  dateRange?: {
+    from: Date | null;
+    to: Date | null;
+  };
+  status?: OrderStatus[];
+  orderType?: OrderType[];
+  paymentMethod?: PaymentMethod[];
+  staffId?: string;
+  amountRange?: {
+    min?: number;
+    max?: number;
+  };
 }
 
 export interface OrderItem {

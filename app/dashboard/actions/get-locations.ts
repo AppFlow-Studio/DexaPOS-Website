@@ -77,7 +77,7 @@ export async function GetLocations(clerkOrgId: string, user_id: string) {
         return []
     }
 
-    console.log('[GetLocations] userLocations', userLocations)
+    // console.log('[GetLocations] userLocations', userLocations)
 
     const { data, error } = await supabase
         .from('locations')

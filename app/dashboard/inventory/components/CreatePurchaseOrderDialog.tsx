@@ -1,0 +1,393 @@
+"use client";
+
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import {
+  ShoppingCart,
+  Loader2,
+  Plus,
+  Trash2,
+  Package,
+  AlertCircle,
+} from "lucide-react";
+import {
+  useCreatePurchaseOrder,
+  useVendors,
+  useInventoryItems,
+} from "../hooks/useInventoryManagement";
+import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
+import { cn } from "@/lib/utils";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+
+interface POLineItem {
+  inventory_item_id: string;
+  name: string;
+  unit_type: string;
+  quantity_ordered: number;
+  unit_cost: number;
+}
+
+const formSchema = z.object({
+  vendor_id: z.string().min(1, "Please select a vendor"),
+});
+
+type FormValues = z.infer<typeof formSchema>;
+
+interface CreatePurchaseOrderDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export function CreatePurchaseOrderDialog({
+  open,
+  onOpenChange,
+}: CreatePurchaseOrderDialogProps) {
+  const createPO = useCreatePurchaseOrder();
+  const { data: vendors = [] } = useVendors();
+  const { data: items = [] } = useInventoryItems();
+  const selectedLocation = useSelectedLocation();
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = selectedLocationId === "all" || !selectedLocationId;
+
+  const [lineItems, setLineItems] = useState<POLineItem[]>([]);
+  const [selectedItemId, setSelectedItemId] = useState<string>("");
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      vendor_id: "",
+    },
+  });
+
+  const addLineItem = () => {
+    if (!selectedItemId) return;
+
+    const item = items.find((i) => i.id === selectedItemId);
+    if (!item) return;
+
+    // Check if already added
+    if (lineItems.some((li) => li.inventory_item_id === selectedItemId)) {
+      return;
+    }
+
+    setLineItems([
+      ...lineItems,
+      {
+        inventory_item_id: item.id,
+        name: item.name,
+        unit_type: item.unit_type,
+        quantity_ordered: 1,
+        unit_cost: item.cost_per_unit,
+      },
+    ]);
+    setSelectedItemId("");
+  };
+
+  const updateLineItem = (
+    index: number,
+    field: "quantity_ordered" | "unit_cost",
+    value: number
+  ) => {
+    const updated = [...lineItems];
+    updated[index] = { ...updated[index], [field]: value };
+    setLineItems(updated);
+  };
+
+  const removeLineItem = (index: number) => {
+    setLineItems(lineItems.filter((_, i) => i !== index));
+  };
+
+  const totalAmount = lineItems.reduce(
+    (sum, item) => sum + item.quantity_ordered * item.unit_cost,
+    0
+  );
+
+  const onSubmit = async (values: FormValues) => {
+    if (lineItems.length === 0) {
+      return;
+    }
+
+    await createPO.mutateAsync({
+      location_id: selectedLocationId as string,
+      vendor_id: values.vendor_id,
+      items: lineItems.map((item) => ({
+        inventory_item_id: item.inventory_item_id,
+        quantity_ordered: item.quantity_ordered,
+        unit_cost: item.unit_cost,
+      })),
+    });
+
+    if (!createPO.isError) {
+      form.reset();
+      setLineItems([]);
+      onOpenChange(false);
+    }
+  };
+
+  const handleClose = () => {
+    form.reset();
+    setLineItems([]);
+    setSelectedItemId("");
+    onOpenChange(false);
+  };
+
+  // Cannot create PO without selecting a specific location
+  if (isAllLocations) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/10">
+                <AlertCircle className="h-5 w-5 text-amber-500" />
+              </div>
+              <div>
+                <DialogTitle>Select a Location</DialogTitle>
+                <DialogDescription>
+                  You must select a specific location to create a purchase order
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <Alert variant="default" className="mt-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Purchase orders are created for a specific store location. Please
+              select a location from the header dropdown before creating an
+              order.
+            </AlertDescription>
+          </Alert>
+          <DialogFooter className="pt-4">
+            <Button onClick={() => onOpenChange(false)}>Got it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 border border-emerald-500/10">
+              <ShoppingCart className="h-5 w-5 text-emerald-500" />
+            </div>
+            <div>
+              <DialogTitle>Create Purchase Order</DialogTitle>
+              <DialogDescription>
+                Order inventory for {selectedLocation?.name || "this location"}
+              </DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 mt-4">
+          {/* Vendor Selection */}
+          <div className="space-y-2">
+            <Label htmlFor="vendor_id">Vendor *</Label>
+            <Select
+              value={form.watch("vendor_id")}
+              onValueChange={(value) => form.setValue("vendor_id", value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a vendor" />
+              </SelectTrigger>
+              <SelectContent>
+                {vendors.map((vendor) => (
+                  <SelectItem key={vendor.id} value={vendor.id}>
+                    {vendor.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {form.formState.errors.vendor_id && (
+              <p className="text-sm text-destructive">
+                {form.formState.errors.vendor_id.message}
+              </p>
+            )}
+          </div>
+
+          {/* Add Item Row */}
+          <div className="space-y-2">
+            <Label>Add Items</Label>
+            <div className="flex gap-2">
+              <Select value={selectedItemId} onValueChange={setSelectedItemId}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="Select an item to add" />
+                </SelectTrigger>
+                <SelectContent>
+                  {items
+                    .filter(
+                      (item) =>
+                        !lineItems.some(
+                          (li) => li.inventory_item_id === item.id
+                        )
+                    )
+                    .map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.name} ({item.unit_type})
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={addLineItem}
+                disabled={!selectedItemId}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Line Items */}
+          <div className="space-y-3">
+            <Label>Order Items</Label>
+
+            {lineItems.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 rounded-lg border border-dashed text-center">
+                <Package className="h-8 w-8 text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  No items added yet. Select items from the dropdown above.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-lg border divide-y">
+                {/* Header */}
+                <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-muted/50 text-sm font-medium text-muted-foreground">
+                  <div className="col-span-5">Item</div>
+                  <div className="col-span-2">Qty</div>
+                  <div className="col-span-2">Cost</div>
+                  <div className="col-span-2">Total</div>
+                  <div className="col-span-1"></div>
+                </div>
+
+                {/* Items */}
+                {lineItems.map((item, index) => (
+                  <div
+                    key={item.inventory_item_id}
+                    className="grid grid-cols-12 gap-2 px-4 py-3 items-center"
+                  >
+                    <div className="col-span-5">
+                      <p className="font-medium text-sm">{item.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.unit_type}
+                      </p>
+                    </div>
+                    <div className="col-span-2">
+                      <Input
+                        type="number"
+                        min="1"
+                        value={item.quantity_ordered}
+                        onChange={(e) =>
+                          updateLineItem(
+                            index,
+                            "quantity_ordered",
+                            parseFloat(e.target.value) || 0
+                          )
+                        }
+                        className="h-8"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <div className="flex items-center">
+                        <span className="text-muted-foreground mr-1">$</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={item.unit_cost}
+                          onChange={(e) =>
+                            updateLineItem(
+                              index,
+                              "unit_cost",
+                              parseFloat(e.target.value) || 0
+                            )
+                          }
+                          className="h-8"
+                        />
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="font-medium">
+                        ${(item.quantity_ordered * item.unit_cost).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="col-span-1 flex justify-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => removeLineItem(index)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Total */}
+                <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-muted/30">
+                  <div className="col-span-9 text-right font-medium">
+                    Order Total:
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-lg font-bold text-primary">
+                      ${totalAmount.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="col-span-1"></div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="pt-4">
+            <Button type="button" variant="outline" onClick={handleClose}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={createPO.isPending || lineItems.length === 0}
+              className="gap-2"
+            >
+              {createPO.isPending && (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              )}
+              Create Order
+              {lineItems.length > 0 && (
+                <Badge variant="secondary" className="ml-1">
+                  {lineItems.length} item{lineItems.length !== 1 ? "s" : ""}
+                </Badge>
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

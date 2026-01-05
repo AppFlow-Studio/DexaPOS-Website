@@ -12,7 +12,8 @@ import {
     UpdateStaffLocationAssignment,
     ResetStaffPIN,
     DeactivateStaffMember,
-    ReactivateStaffMember
+    ReactivateStaffMember,
+    UpgradePOSStaffToClerk
 } from '../actions/unified-staff'
 import { InviteStaffFormData, UnifiedStaffMember, UpdateStaffAssignmentData } from '@/types/staff'
 import { toast } from 'sonner'
@@ -339,6 +340,49 @@ export function useReactivateStaff() {
                 description: 'An unexpected error occurred'
             })
             console.error('Reactivate staff error:', error)
+        }
+    })
+}
+
+/**
+ * Upgrade POS-only staff to Clerk dashboard user
+ */
+export function useUpgradePOSToClerk() {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: ({
+            memberId,
+            locationId,
+            email
+        }: {
+            memberId: string
+            locationId: string
+            email: string
+        }) => UpgradePOSStaffToClerk(memberId, locationId, email),
+        onSuccess: (result) => {
+            if (result.error) {
+                toast.error('Upgrade failed', { description: result.error })
+                return
+            }
+
+            // Show credential toast with temporary password
+            if (result.data?.temp_password) {
+                showCredentialToast(undefined, result.data.temp_password)
+                toast.success('Successfully upgraded to Dashboard User', {
+                    description: `Account created with email: ${result.data.email}`
+                })
+            } else {
+                toast.success('Successfully upgraded to Dashboard User')
+            }
+
+            queryClient.invalidateQueries({ queryKey: ['unified-staff'] })
+        },
+        onError: (error) => {
+            toast.error('Upgrade failed', {
+                description: 'An unexpected error occurred'
+            })
+            console.error('Upgrade POS to Clerk error:', error)
         }
     })
 }

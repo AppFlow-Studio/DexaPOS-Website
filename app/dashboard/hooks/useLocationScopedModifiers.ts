@@ -31,6 +31,7 @@ function useClerkOrgId() {
 
 export function useMerchantId() {
     const { data: userInfo } = useUserInfo()
+    console.log('userInfo', userInfo?.members?.[0]?.organizations?.merchants?.id)
     return userInfo?.members?.[0]?.organizations?.merchants?.id || ''
 }
 
