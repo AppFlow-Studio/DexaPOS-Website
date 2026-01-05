@@ -23,9 +23,9 @@ import {
   DollarSign,
   Globe,
   MapPin,
-  Check,
-  X,
   Loader2,
+  Clock,
+  Receipt,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
@@ -34,11 +34,11 @@ import {
   useVendors,
   usePurchaseOrders,
   useInventoryStats,
-  useUpdateItemStock,
-  useSetLocationStock,
   useUpdatePurchaseOrderStatus,
   useDeleteInventoryItem,
   useDeleteVendor,
+  useUpdateStockWithReason,
+  useCreateAdhocExpense,
 } from "./hooks/useInventoryManagement";
 import { GetInventoryItemUsage } from "@/app/dashboard/actions/inventory";
 import { AddItemDialog } from "./components/AddItemDialog";
@@ -49,6 +49,9 @@ import { EditVendorDialog } from "./components/EditVendorDialog";
 import { DeleteConfirmDialog } from "./components/DeleteConfirmDialog";
 import { VendorDetailSheet } from "./components/VendorDetailSheet";
 import { PurchaseOrderDetailSheet } from "./components/PurchaseOrderDetailSheet";
+import { ActivityLogSheet } from "./components/ActivityLogSheet";
+import { StockUpdateDialog } from "./components/StockUpdateDialog";
+import { CreateExpenseDialog } from "./components/CreateExpenseDialog";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import {
   DropdownMenu,
@@ -295,35 +298,18 @@ function POStatusBadge({ status }: { status: string }) {
 }
 
 function StockEditCell({
-  itemId,
   currentStock,
   unitType,
   isGlobalView,
   locationCount,
+  onEdit,
 }: {
-  itemId: string;
   currentStock: number;
   unitType: string;
   isGlobalView?: boolean;
   locationCount?: number;
+  onEdit?: () => void;
 }) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [value, setValue] = useState(currentStock.toString());
-  const setLocationStock = useSetLocationStock();
-
-  const handleSave = () => {
-    const qty = parseFloat(value);
-    if (!isNaN(qty)) {
-      setLocationStock.mutate({ itemId, stock: qty });
-      setIsEditing(false);
-    }
-  };
-
-  const handleCancel = () => {
-    setValue(currentStock.toString());
-    setIsEditing(false);
-  };
-
   // Global view: Show aggregate with indicator, not editable
   if (isGlobalView) {
     return (
@@ -341,45 +327,10 @@ function StockEditCell({
     );
   }
 
-  if (isEditing) {
-    return (
-      <div className="flex items-center gap-1">
-        <Input
-          type="number"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          className="w-20 h-8"
-          min="0"
-        />
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
-          onClick={handleSave}
-          disabled={setLocationStock.isPending}
-        >
-          {setLocationStock.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Check className="h-4 w-4" />
-          )}
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8 text-destructive hover:bg-destructive/10"
-          onClick={handleCancel}
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
-    );
-  }
-
   return (
     <div
       className="flex items-center gap-2 cursor-pointer group"
-      onClick={() => setIsEditing(true)}
+      onClick={onEdit}
     >
       <span className="font-medium">{currentStock}</span>
       <span className="text-muted-foreground text-sm">{unitType}</span>
@@ -434,6 +385,16 @@ export default function InventoryPage() {
   const [selectedPOId, setSelectedPOId] = useState<string | null>(null);
   const [isPODetailOpen, setIsPODetailOpen] = useState(false);
 
+  // Activity Log sheet state
+  const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
+
+  // Stock Update dialog state
+  const [stockUpdateItem, setStockUpdateItem] =
+    useState<InventoryItemWithVendor | null>(null);
+
+  // Expense dialog state
+  const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
+
   const { data: userInfo } = useUserInfo();
   const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
   const { selectedLocationId } = useLocationStore();
@@ -451,6 +412,8 @@ export default function InventoryPage() {
   const deleteItem = useDeleteInventoryItem();
   const deleteVendor = useDeleteVendor();
   const updatePOStatus = useUpdatePurchaseOrderStatus();
+  const updateStockWithReason = useUpdateStockWithReason();
+  const createAdhocExpense = useCreateAdhocExpense();
 
   // Filter items
   const filteredItems = items.filter(
@@ -574,6 +537,26 @@ export default function InventoryPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => setIsActivityLogOpen(true)}
+          >
+            <Clock className="h-4 w-4" />
+            Activity Log
+          </Button>
+          {!isAllLocations && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => setIsExpenseDialogOpen(true)}
+            >
+              <Receipt className="h-4 w-4" />
+              Log Expense
+            </Button>
+          )}
           <Button variant="outline" size="sm" className="gap-2">
             <Download className="h-4 w-4" />
             Export
@@ -781,11 +764,11 @@ export default function InventoryPage() {
                       <div className="col-span-2">
                         {item.stock_mode === "stock_tracking" ? (
                           <StockEditCell
-                            itemId={item.id}
                             currentStock={item.current_stock}
                             unitType={item.unit_type}
                             isGlobalView={isAllLocations}
                             locationCount={(item as any).location_count}
+                            onEdit={() => setStockUpdateItem(item)}
                           />
                         ) : (
                           <span className="text-muted-foreground text-sm italic">
@@ -1286,6 +1269,43 @@ export default function InventoryPage() {
         open={isPODetailOpen}
         onOpenChange={setIsPODetailOpen}
         purchaseOrderId={selectedPOId}
+      />
+
+      {/* Activity Log Sheet */}
+      <ActivityLogSheet
+        open={isActivityLogOpen}
+        onOpenChange={setIsActivityLogOpen}
+      />
+
+      {/* Stock Update Dialog */}
+      <StockUpdateDialog
+        open={!!stockUpdateItem}
+        onOpenChange={(open) => !open && setStockUpdateItem(null)}
+        itemName={stockUpdateItem?.name || ""}
+        currentStock={stockUpdateItem?.current_stock || 0}
+        unitType={stockUpdateItem?.unit_type || "units"}
+        onConfirm={async (newStock, reason, source) => {
+          if (stockUpdateItem) {
+            await updateStockWithReason.mutateAsync({
+              itemId: stockUpdateItem.id,
+              newStock,
+              reason,
+              source: source as "manual" | "adjustment" | "waste" | "transfer",
+            });
+            setStockUpdateItem(null);
+          }
+        }}
+        isPending={updateStockWithReason.isPending}
+      />
+
+      {/* Create Expense Dialog */}
+      <CreateExpenseDialog
+        open={isExpenseDialogOpen}
+        onOpenChange={setIsExpenseDialogOpen}
+        onSubmit={async (expense) => {
+          await createAdhocExpense.mutateAsync(expense);
+        }}
+        isPending={createAdhocExpense.isPending}
       />
     </div>
   );
