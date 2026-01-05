@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Table,
   TableBody,
@@ -6,13 +8,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   MoreHorizontal,
   Calendar,
-  DollarSign,
   User as UserIcon,
 } from "lucide-react";
 import {
@@ -23,13 +24,39 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Customer } from "../hooks/useCustomers";
 import { format } from "date-fns";
+import type { CustomerListItem } from "@/types/customer";
+import { getCustomerDisplayName } from "@/types/customer";
 
 interface CustomerListProps {
-  customers: Customer[];
+  customers: CustomerListItem[];
   isLoading: boolean;
-  onViewProfile?: (customer: Customer) => void;
+  onViewProfile?: (customer: CustomerListItem) => void;
+}
+
+/**
+ * Get initials from customer name for avatar
+ */
+function getInitials(customer: CustomerListItem): string {
+  const displayName = getCustomerDisplayName(customer);
+  return displayName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .substring(0, 2)
+    .toUpperCase();
+}
+
+/**
+ * Format the last visit date safely
+ */
+function formatLastVisit(lastVisit: string | null): string {
+  if (!lastVisit) return "Never";
+  try {
+    return format(new Date(lastVisit), "MMM d, yyyy");
+  } catch {
+    return "Unknown";
+  }
 }
 
 export function CustomerList({
@@ -70,48 +97,69 @@ export function CustomerList({
         </TableHeader>
         <TableBody>
           {customers.map((customer) => (
-            <TableRow key={customer.id} className="group">
+            <TableRow
+              key={customer.id}
+              className="group cursor-pointer"
+              onClick={() => onViewProfile?.(customer)}
+            >
               <TableCell>
                 <div className="flex items-center gap-3">
                   <Avatar className="h-9 w-9">
                     <AvatarFallback className="bg-primary/10 text-primary">
-                      {customer.name
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")
-                        .substring(0, 2)}
+                      {getInitials(customer)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex flex-col">
-                    <span className="font-medium text-sm">{customer.name}</span>
+                    <span className="font-medium text-sm">
+                      {getCustomerDisplayName(customer)}
+                    </span>
                     <span className="text-xs text-muted-foreground">
-                      {customer.phone}
+                      {customer.phone || customer.email || "No contact info"}
                     </span>
                   </div>
+                  {customer.tags && customer.tags.length > 0 && (
+                    <div className="flex gap-1 ml-2">
+                      {customer.tags.slice(0, 2).map((tag) => (
+                        <Badge
+                          key={tag}
+                          variant="outline"
+                          className="text-[10px] px-1.5 py-0"
+                        >
+                          {tag}
+                        </Badge>
+                      ))}
+                      {customer.tags.length > 2 && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] px-1.5 py-0"
+                        >
+                          +{customer.tags.length - 2}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
                 </div>
               </TableCell>
               <TableCell>
                 <div className="font-medium">
-                  ${customer.totalSpent.toFixed(2)}
+                  ${(customer.lifetime_spend ?? 0).toFixed(2)}
                 </div>
               </TableCell>
               <TableCell>
                 <Badge variant="secondary" className="font-normal">
-                  {customer.visitCount} visits
+                  {customer.visits ?? 0} visits
                 </Badge>
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Calendar className="h-3.5 w-3.5" />
-                  {format(new Date(customer.lastVisit), "MMM d, yyyy")}
+                  {formatLastVisit(customer.last_visit)}
                 </div>
               </TableCell>
               <TableCell>
-                <Badge
-                  variant="outline"
-                  
-                >
-                  ${(customer.totalSpent / customer.visitCount)?.toFixed(2)}
+                <Badge variant="outline">
+                  $
+                  {(customer.avg_spend ?? 0).toFixed(2)}
                 </Badge>
               </TableCell>
               <TableCell>
@@ -120,6 +168,7 @@ export function CustomerList({
                     <Button
                       variant="ghost"
                       className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       <span className="sr-only">Open menu</span>
                       <MoreHorizontal className="h-4 w-4" />
@@ -127,7 +176,12 @@ export function CustomerList({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                    <DropdownMenuItem onClick={() => onViewProfile?.(customer)}>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onViewProfile?.(customer);
+                      }}
+                    >
                       View Profile
                     </DropdownMenuItem>
                     <DropdownMenuItem>View Orders</DropdownMenuItem>

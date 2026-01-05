@@ -1,28 +1,38 @@
 "use client";
 
-import { useCustomers, Customer } from "./hooks/useCustomers";
+import { useCustomers } from "./hooks/useCustomers";
 import { CustomerList } from "./components/CustomerList";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import { CustomerProfileSheet } from "./components/CustomerProfileSheet";
+import type { CustomerListItem } from "@/types/customer";
+import { getCustomerDisplayName } from "@/types/customer";
 
 export default function CustomersPage() {
-  const { data, isLoading } = useCustomers();
+  const { data: customers = [], isLoading } = useCustomers();
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
-    null
-  );
+  const [selectedCustomer, setSelectedCustomer] =
+    useState<CustomerListItem | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
-  const filteredData = data.filter(
-    (customer) =>
-      customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.phone.includes(searchTerm)
-  );
+  // Filter customers based on search term
+  const filteredData = useMemo(() => {
+    if (!searchTerm.trim()) return customers;
 
-  const handleViewProfile = (customer: Customer) => {
+    const term = searchTerm.toLowerCase();
+    return customers.filter((customer) => {
+      const name = getCustomerDisplayName(customer).toLowerCase();
+      const email = customer.email?.toLowerCase() || "";
+      const phone = customer.phone || "";
+
+      return (
+        name.includes(term) || email.includes(term) || phone.includes(term)
+      );
+    });
+  }, [customers, searchTerm]);
+
+  const handleViewProfile = (customer: CustomerListItem) => {
     setSelectedCustomer(customer);
     setIsProfileOpen(true);
   };

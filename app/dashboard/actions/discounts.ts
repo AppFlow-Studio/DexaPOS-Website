@@ -20,6 +20,7 @@ async function getMerchantIdFromSession() {
     }
 
     const user = await currentUser()
+    // console.log('user', user)
     const publicMetadata = (user?.publicMetadata || {}) as Record<string, unknown>
     const merchantId =
         (publicMetadata.merchantId as string | undefined) ||
@@ -330,11 +331,10 @@ export async function getDiscountUsage(discountId: string): Promise<MutationResu
     }
 }
 
-export async function listCategoriesForMerchant() {
+export async function listCategoriesForMerchant(merchantId: string) {
     try {
         const supabase = createServerSupabaseClient()
-        const merchantId = await getMerchantIdFromSession()
-
+        
         const { data, error } = await supabase
             .from('categories')
             .select('id, name')
@@ -350,14 +350,13 @@ export async function listCategoriesForMerchant() {
     }
 }
 
-export async function listMenuItemsForMerchant() {
+export async function listMenuItemsForMerchant(merchantId: string) {
     try {
         const supabase = createServerSupabaseClient()
-        const merchantId = await getMerchantIdFromSession()
 
         const { data, error } = await supabase
             .from('menu_items')
-            .select('id, name, category_id')
+            .select('id, name')
             .eq('merchant_id', merchantId)
             .order('name', { ascending: true })
 

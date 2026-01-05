@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Settings2, ArrowLeft } from "lucide-react";
 import { DiscountCard } from "@/components/discounts/discount-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,8 +21,10 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useDeleteDiscount, useDiscount, useDiscountUsage } from "@/hooks/use-discounts";
-import { Discount } from "@/types/discount";
+import { useDeleteDiscount, useDiscount, useDiscountUsage, useDiscountCategories, useDiscountMenuItems, useUpdateDiscount } from "@/hooks/use-discounts";
+import { Discount, DiscountFormInput } from "@/types/discount";
+import { TargetingSheet } from "@/components/discounts/targeting-sheet";
+import Link from "next/link";
 
 export default function DiscountDetailPage() {
     const params = useParams();
@@ -32,9 +34,22 @@ export default function DiscountDetailPage() {
 
     const { data, isLoading } = useDiscount(discountId);
     const { data: usageData, isLoading: usageLoading } = useDiscountUsage(discountId);
+    const { data: categoryData } = useDiscountCategories();
+    const { data: menuItemData } = useDiscountMenuItems();
     const deleteMutation = useDeleteDiscount();
+    const updateMutation = useUpdateDiscount(discountId || "");
 
     const [deleteMode, setDeleteMode] = useState<"soft" | "hard">("soft");
+    const [targetingSheetOpen, setTargetingSheetOpen] = useState(false);
+
+    const categories = useMemo(
+        () => (categoryData?.success ? categoryData.data : []),
+        [categoryData]
+    );
+    const menuItems = useMemo(
+        () => (menuItemData?.success ? menuItemData.data : []),
+        [menuItemData]
+    );
 
     const discount: Discount | null = useMemo(
         () => (data?.success && data.data ? (data.data as Discount) : null),
@@ -71,6 +86,9 @@ export default function DiscountDetailPage() {
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
+                <Link href="/dashboard/discounts">
+                    <ArrowLeft className="h-4 w-4" />
+                </Link>
                 <div>
                     <h1 className="text-2xl font-semibold">{discount.name}</h1>
                     <p className="text-sm text-muted-foreground">View discount configuration and usage.</p>
@@ -155,8 +173,21 @@ export default function DiscountDetailPage() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Targeting</CardTitle>
-                        <CardDescription>Scope, categories, and items</CardDescription>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle>Targeting</CardTitle>
+                                <CardDescription>Scope, categories, and items</CardDescription>
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setTargetingSheetOpen(true)}
+                                className="gap-2"
+                            >
+                                <Settings2 className="h-4 w-4" />
+                                Edit
+                            </Button>
+                        </div>
                     </CardHeader>
                     <CardContent className="space-y-2 text-sm">
                         <div className="flex justify-between">
@@ -181,11 +212,15 @@ export default function DiscountDetailPage() {
                         </div>
                         <div className="flex justify-between">
                             <span>Applies to categories</span>
-                            <span>{discount.applies_to_categories?.length ?? 0}</span>
+                            <span>{discount.applies_to_categories?.length ?? 0} selected</span>
                         </div>
                         <div className="flex justify-between">
                             <span>Exclude categories</span>
-                            <span>{discount.exclude_categories?.length ?? 0}</span>
+                            <span>{discount.exclude_categories?.length ?? 0} selected</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span>Menu items</span>
+                            <span>{discount.menu_item_ids?.length ?? 0} selected</span>
                         </div>
                     </CardContent>
                 </Card>
@@ -210,6 +245,37 @@ export default function DiscountDetailPage() {
                     )}
                 </CardContent>
             </Card>
+
+            {/* Targeting Bottom Sheet */}
+            {discount && (
+                <TargetingSheet
+                    open={targetingSheetOpen}
+                    onOpenChange={setTargetingSheetOpen}
+                    categories={categories}
+                    menuItems={menuItems}
+                    values={{
+                        scope: discount.scope,
+                        applies_to_categories: discount.applies_to_categories || [],
+                        exclude_categories: discount.exclude_categories || [],
+                        exclude_alcohol: discount.exclude_alcohol || false,
+                        menu_item_ids: discount.menu_item_ids || [],
+                    }}
+                    onChange={async (updates) => {
+                        if (!discountId) return;
+                        
+                        // Build update payload
+                        const updatePayload: Partial<DiscountFormInput> = {
+                            ...discount,
+                            ...updates,
+                        };
+
+                        const result = await updateMutation.mutateAsync(updatePayload as DiscountFormInput);
+                        if (result.success) {
+                            setTargetingSheetOpen(false);
+                        }
+                    }}
+                />
+            )}
         </div>
     );
 }

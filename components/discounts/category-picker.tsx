@@ -12,12 +12,15 @@ import {
     CommandList,
 } from '@/components/ui/command'
 import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover'
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
+} from '@/components/ui/sheet'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import { Check, X } from 'lucide-react'
 
 export interface CategoryOption {
     id: string
@@ -59,37 +62,88 @@ export function CategoryPicker({
     return (
         <div className="space-y-2">
             <Label>{label}</Label>
-            <Popover open={open} onOpenChange={setOpen}>
-                <PopoverTrigger asChild>
+            <Sheet open={open} onOpenChange={setOpen}>
+                <SheetTrigger asChild>
                     <Button variant="outline" className="w-full justify-between">
                         <span>
                             {selected.length > 0
                                 ? `${selected.length} selected`
                                 : placeholder}
                         </span>
+                        {selected.length > 0 && (
+                            <span className="ml-2 text-xs text-muted-foreground">
+                                ({selected.length})
+                            </span>
+                        )}
                     </Button>
-                </PopoverTrigger>
-                <PopoverContent className="p-0 w-64" align="start">
-                    <Command>
-                        <CommandInput placeholder="Search categories" />
-                        <CommandList>
-                            <CommandEmpty>{emptyLabel}</CommandEmpty>
-                            <CommandGroup>
-                                {options.map((opt) => (
-                                    <CommandItem
-                                        key={opt.id}
-                                        onSelect={() => toggleValue(opt.id)}
-                                        className="flex items-center gap-2"
-                                    >
-                                        <Checkbox checked={value.includes(opt.id)} />
-                                        <span>{opt.name}</span>
-                                    </CommandItem>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-full sm:max-w-md">
+                    <SheetHeader>
+                        <SheetTitle>{label}</SheetTitle>
+                    </SheetHeader>
+                    <div className="mt-6">
+                        <Command>
+                            <CommandInput placeholder="Search categories" />
+                            <CommandList className="max-h-screen">
+                                <CommandEmpty>{emptyLabel}</CommandEmpty>
+                                <CommandGroup>
+                                    {options.map((opt) => {
+                                        const isSelected = value.includes(opt.id)
+                                        return (
+                                            <CommandItem
+                                                key={opt.id}
+                                                onSelect={() => toggleValue(opt.id)}
+                                                className="flex items-center gap-3 cursor-pointer"
+                                            >
+                                                <Checkbox 
+                                                    checked={isSelected} 
+                                                    onCheckedChange={() => toggleValue(opt.id)}
+                                                />
+                                                <span className="flex-1">{opt.name}</span>
+                                                {isSelected && (
+                                                    <Check className="h-4 w-4 text-primary" />
+                                                )}
+                                            </CommandItem>
+                                        )
+                                    })}
+                                </CommandGroup>
+                            </CommandList>
+                        </Command>
+                    </div>
+                    {selected.length > 0 && (
+                        <div className="mt-4 pt-4 border-t">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-medium">Selected ({selected.length})</span>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => onChange([])}
+                                    className="h-7 text-xs"
+                                >
+                                    Clear all
+                                </Button>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {selected.map((opt) => (
+                                    <Badge key={opt.id} variant="secondary" className="gap-1 pr-1">
+                                        {opt.name}
+                                        <button
+                                            type="button"
+                                            className="ml-1 rounded-full hover:bg-muted p-0.5"
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                toggleValue(opt.id)
+                                            }}
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    </Badge>
                                 ))}
-                            </CommandGroup>
-                        </CommandList>
-                    </Command>
-                </PopoverContent>
-            </Popover>
+                            </div>
+                        </div>
+                    )}
+                </SheetContent>
+            </Sheet>
             {selected.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                     {selected.map((opt) => (
@@ -97,7 +151,7 @@ export function CategoryPicker({
                             {opt.name}
                             <button
                                 type="button"
-                                className="text-xs"
+                                className="text-xs hover:text-destructive"
                                 onClick={() => toggleValue(opt.id)}
                             >
                                 ×
@@ -109,4 +163,3 @@ export function CategoryPicker({
         </div>
     )
 }
-

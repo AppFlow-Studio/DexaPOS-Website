@@ -1,93 +1,214 @@
-import { useQuery } from "@tanstack/react-query";
-import { useSupabaseClient } from "@/hooks/useSupabaseClient";
-import { StaffShift } from "@/types/staff";
-import { DateRange } from "react-day-picker";
-import { startOfDay, endOfDay } from "date-fns";
+'use client'
+
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+    GetTimesheets,
+    GetTimesheetResources,
+    GetShiftById,
+    UpdateShiftStatus,
+    AdjustShiftTimes,
+    DeleteShift,
+    BulkApproveShifts,
+} from '@/app/dashboard/actions/timesheets'
+import { StaffShift } from '@/types/staff'
+import { DateRange } from 'react-day-picker'
+import { toast } from 'sonner'
+
+// ============================================================================
+// TYPES
+// ============================================================================
 
 interface TimesheetFilters {
-  dateRange: DateRange | undefined;
-  locationIds: string[];
-  employeeIds: string[];
+    dateRange: DateRange | undefined
+    locationIds: string[]
+    employeeIds: string[]
 }
 
-export const useTimesheets = (filters: TimesheetFilters) => {
-  const supabase = useSupabaseClient();
+// ============================================================================
+// GET TIMESHEETS
+// ============================================================================
 
-  return useQuery({
-    queryKey: ["timesheets", filters],
-    queryFn: async () => {
-      const from = filters.dateRange?.from
-        ? startOfDay(filters.dateRange.from).toISOString()
-        : null;
-      const to = filters.dateRange?.to
-        ? endOfDay(filters.dateRange.to).toISOString()
-        : filters.dateRange?.from
-        ? endOfDay(filters.dateRange.from).toISOString()
-        : null;
+export function useTimesheets(filters: TimesheetFilters) {
+    const hasDateRange = !!filters.dateRange?.from
 
-      if (!from || !to) return [];
+    return useQuery({
+        queryKey: ['timesheets', filters],
+        queryFn: async () => {
+            if (!filters.dateRange?.from) return []
 
-      let query = supabase
-        .from("staff_shifts")
-        .select(
-          `
-          id, 
-          status, 
-          clock_in_time, 
-          clock_out_time, 
-          break_logs, 
-          hourly_rate_snapshot, 
-          created_at,
-          merchant_id,
-          location_id,
-          staff_profile_id,
-          staff_profile:staff_profiles(first_name, last_name, avatar_url),
-          location:locations(name)
-          `
-        )
-        .gte("clock_in_time", from)
-        .lte("clock_in_time", to)
-        .order("clock_in_time", { ascending: false });
+            const dateFrom = filters.dateRange.from.toISOString()
+            const dateTo = filters.dateRange.to?.toISOString() || filters.dateRange.from.toISOString()
 
-      if (filters.locationIds.length > 0) {
-        query = query.in("location_id", filters.locationIds);
-      }
+            const result = await GetTimesheets({
+                dateFrom,
+                dateTo,
+                locationIds: filters.locationIds.length > 0 ? filters.locationIds : undefined,
+                employeeIds: filters.employeeIds.length > 0 ? filters.employeeIds : undefined,
+            })
 
-      if (filters.employeeIds.length > 0) {
-        query = query.in("staff_profile_id", filters.employeeIds);
-      }
+            if (!result.success) {
+                throw new Error(result.error)
+            }
 
-      const { data, error } = await query;
-      if (error) throw error;
+            return result.data
+        },
+        enabled: hasDateRange,
+    })
+}
 
-      // Cast to unkown first because of the joined fields structure
-      return data as unknown as StaffShift[];
-    },
-    enabled: !!filters.dateRange?.from,
-  });
-};
+// ============================================================================
+// GET TIMESHEET RESOURCES (for filters)
+// ============================================================================
 
-export const useTimesheetResources = () => {
-  const supabase = useSupabaseClient();
+export function useTimesheetResources() {
+    return useQuery({
+        queryKey: ['timesheet-resources'],
+        queryFn: async () => {
+            const result = await GetTimesheetResources()
 
-  return useQuery({
-    queryKey: ["timesheet-resources"],
-    queryFn: async () => {
-      // Fetch all accessible resources (RLS will filter by merchant)
-      const [staffRes, locRes] = await Promise.all([
-        supabase
-          .from("staff_profiles")
-          .select("id, first_name, last_name, avatar_url"),
-        supabase.from("locations").select("id, name"),
-      ]);
+            if (!result.success) {
+                throw new Error(result.error)
+            }
 
-      if (staffRes.error) throw staffRes.error;
-      if (locRes.error) throw locRes.error;
+            return result.data
+        },
+    })
+}
 
-      return {
-        staff: staffRes.data || [],
-        locations: locRes.data || [],
-      };
-    },
-  });
-};
+// ============================================================================
+// GET SINGLE SHIFT
+// ============================================================================
+
+export function useShift(shiftId: string | null) {
+    return useQuery({
+        queryKey: ['shift', shiftId],
+        queryFn: async () => {
+            if (!shiftId) return null
+
+            const result = await GetShiftById(shiftId)
+
+            if (!result.success) {
+                throw new Error(result.error)
+            }
+
+            return result.data
+        },
+        enabled: !!shiftId,
+    })
+}
+
+// ============================================================================
+// UPDATE SHIFT STATUS
+// ============================================================================
+
+export function useUpdateShiftStatus() {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: async ({ 
+            shiftId, 
+            status 
+        }: { 
+            shiftId: string
+            status: 'active' | 'completed' | 'approved' | 'rejected' 
+        }) => {
+            return UpdateShiftStatus(shiftId, status)
+        },
+        onSuccess: (result) => {
+            if (result.success) {
+                toast.success('Shift status updated')
+                queryClient.invalidateQueries({ queryKey: ['timesheets'] })
+                queryClient.invalidateQueries({ queryKey: ['shift', result.data.id] })
+            } else {
+                toast.error(result.error || 'Failed to update shift status')
+            }
+        },
+        onError: () => {
+            toast.error('Failed to update shift status')
+        },
+    })
+}
+
+// ============================================================================
+// ADJUST SHIFT TIMES
+// ============================================================================
+
+export function useAdjustShiftTimes() {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: async ({ 
+            shiftId, 
+            clockInTime, 
+            clockOutTime 
+        }: { 
+            shiftId: string
+            clockInTime: string
+            clockOutTime: string | null 
+        }) => {
+            return AdjustShiftTimes(shiftId, clockInTime, clockOutTime)
+        },
+        onSuccess: (result) => {
+            if (result.success) {
+                toast.success('Shift times adjusted')
+                queryClient.invalidateQueries({ queryKey: ['timesheets'] })
+                queryClient.invalidateQueries({ queryKey: ['shift', result.data.id] })
+            } else {
+                toast.error(result.error || 'Failed to adjust shift times')
+            }
+        },
+        onError: () => {
+            toast.error('Failed to adjust shift times')
+        },
+    })
+}
+
+// ============================================================================
+// DELETE SHIFT
+// ============================================================================
+
+export function useDeleteShift() {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: async (shiftId: string) => {
+            return DeleteShift(shiftId)
+        },
+        onSuccess: (result) => {
+            if (result.success) {
+                toast.success('Shift deleted')
+                queryClient.invalidateQueries({ queryKey: ['timesheets'] })
+            } else {
+                toast.error(result.error || 'Failed to delete shift')
+            }
+        },
+        onError: () => {
+            toast.error('Failed to delete shift')
+        },
+    })
+}
+
+// ============================================================================
+// BULK APPROVE SHIFTS
+// ============================================================================
+
+export function useBulkApproveShifts() {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: async (shiftIds: string[]) => {
+            return BulkApproveShifts(shiftIds)
+        },
+        onSuccess: (result) => {
+            if (result.success) {
+                toast.success(`${result.data} shift(s) approved`)
+                queryClient.invalidateQueries({ queryKey: ['timesheets'] })
+            } else {
+                toast.error(result.error || 'Failed to approve shifts')
+            }
+        },
+        onError: () => {
+            toast.error('Failed to approve shifts')
+        },
+    })
+}

@@ -38,8 +38,19 @@ export default function TimesheetsPage() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
 
-  // Fetch resources (staff)
+  // Fetch resources (staff) - must be called before any conditional returns
   const { data: resources } = useTimesheetResources();
+
+  // Prepare filters - use safe defaults if no location selected
+  const filters = {
+    dateRange,
+    locationIds: selectedLocation && !isAllLocations ? [selectedLocation.id] : [],
+    employeeIds: selectedEmployeeId !== "all" ? [selectedEmployeeId] : [],
+  };
+
+  // Hook handles fetching - must be called before any conditional returns
+  // The hook's enabled state will prevent fetching if dateRange is missing
+  const { data: shifts, isLoading } = useTimesheets(filters);
 
   // If global location is not specific, show empty state
   if (isAllLocations || !selectedLocation) {
@@ -60,16 +71,6 @@ export default function TimesheetsPage() {
       </div>
     );
   }
-
-  const filters = {
-    dateRange,
-    locationIds: [selectedLocation.id],
-    employeeIds: selectedEmployeeId !== "all" ? [selectedEmployeeId] : [],
-  };
-
-  // Hook handles fetching. Note: We use the hook's return for data.
-  // We assume the hook logic is correct based on filters.
-  const { data: shifts, isLoading } = useTimesheets(filters);
 
   // Aggregations
   // Filter locally by status? Or pass to hook?

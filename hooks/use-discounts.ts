@@ -16,6 +16,8 @@ import {
 } from '@/app/dashboard/actions/discounts'
 import { Discount, DiscountFormInput, DiscountListFilters } from '@/types/discount'
 import { toast } from 'sonner'
+import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
+import { useMerchantId } from '@/app/dashboard/hooks/useLocationScopedModifiers'
 
 export function useDiscounts(filters: DiscountListFilters) {
     return useQuery({
@@ -163,16 +165,20 @@ export function useBulkDelete() {
 }
 
 export function useDiscountCategories() {
+    const merchantId = useMerchantId()
+    console.log('merchantId', merchantId)
     return useQuery({
         queryKey: ['discount-categories'],
-        queryFn: () => listCategoriesForMerchant(),
+        queryFn: () => listCategoriesForMerchant(merchantId),
     })
 }
 
 export function useDiscountMenuItems() {
+    const merchantId = useMerchantId()
+    console.log('merchantId', merchantId)
     return useQuery({
         queryKey: ['discount-menu-items'],
-        queryFn: () => listMenuItemsForMerchant(),
+        queryFn: () => listMenuItemsForMerchant(merchantId),
     })
 }
 

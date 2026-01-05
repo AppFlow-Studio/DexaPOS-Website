@@ -102,11 +102,11 @@ export function DiscountFilters({ value, onChange, onCreate }: DiscountFiltersPr
                 <Button variant="outline" onClick={handleReset}>
                     Reset
                 </Button>
-                {onCreate && (
+                {/* {onCreate && (
                     <Button onClick={onCreate}>
                         New discount
                     </Button>
-                )}
+                )} */}
             </div>
         </div>
     )

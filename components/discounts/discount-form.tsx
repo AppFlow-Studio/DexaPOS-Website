@@ -34,8 +34,10 @@ import {
 import { Label } from '@/components/ui/label'
 import { DaySelector } from './day-selector'
 import { TimeWindowPicker } from './time-window-picker'
-import { CategoryOption, CategoryPicker } from './category-picker'
-import { MenuItemOption, MenuItemPicker } from './menu-item-picker'
+import { CategoryOption } from './category-picker'
+import { MenuItemOption } from './menu-item-picker'
+import { TargetingSheet } from './targeting-sheet'
+import { Settings2, X } from 'lucide-react'
 
 interface DiscountFormProps {
     defaultValues?: Partial<DiscountFormInput>
@@ -65,9 +67,9 @@ export function DiscountForm({
         basic: true,
         constraints: true,
         schedule: false,
-        targeting: false,
         approval: true,
     })
+    const [targetingSheetOpen, setTargetingSheetOpen] = useState(false)
 
     const resolvedDefaults: DiscountFormInput = useMemo(
         () => ({
@@ -343,41 +345,58 @@ export function DiscountForm({
                                 {renderSectionHeader('Schedule', 'Date, days, and hours', 'schedule')}
                             </div>
                             <CollapsibleContent className="space-y-4">
-                                <div className="grid gap-4 md:grid-cols-2">
-                                    <FormField
-                                        control={form.control}
-                                        name="start_date"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Start date</FormLabel>
-                                                <FormControl>
-                                                    <Input
-                                                        type="date"
-                                                        value={field.value ? format(field.value, 'yyyy-MM-dd') : ''}
-                                                        onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}
-                                                    />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
-                                    <FormField
-                                        control={form.control}
-                                        name="end_date"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>End date</FormLabel>
-                                                <FormControl>
-                                                    <Input
-                                                        type="date"
-                                                        value={field.value ? format(field.value, 'yyyy-MM-dd') : ''}
-                                                        onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}
-                                                    />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
+                                <div className="space-y-2">
+                                    <div className="grid gap-4 md:grid-cols-2">
+                                        <FormField
+                                            control={form.control}
+                                            name="start_date"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Start date</FormLabel>
+                                                    <FormControl>
+                                                        <Input
+                                                            type="date"
+                                                            value={field.value ? format(field.value, 'yyyy-MM-dd') : ''}
+                                                            onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}
+                                                        />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="end_date"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>End date</FormLabel>
+                                                    <FormControl>
+                                                        <Input
+                                                            type="date"
+                                                            value={field.value ? format(field.value, 'yyyy-MM-dd') : ''}
+                                                            onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}
+                                                        />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                    {(form.watch('start_date') || form.watch('end_date')) && (
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                                form.setValue('start_date', undefined)
+                                                form.setValue('end_date', undefined)
+                                            }}
+                                            className="h-7 text-xs text-muted-foreground"
+                                        >
+                                            <X className="h-3 w-3 mr-1" />
+                                            Clear date range
+                                        </Button>
+                                    )}
                                 </div>
                                 <FormField
                                     control={form.control}
@@ -415,118 +434,60 @@ export function DiscountForm({
                             </CollapsibleContent>
                         </Collapsible>
 
-                        <Collapsible
-                            open={openSections.targeting}
-                            onOpenChange={(val) => toggleSection('targeting', val)}
-                        >
-                            <div className="mb-3">
-                                {renderSectionHeader('Targeting', 'Scope, categories, and items', 'targeting')}
-                            </div>
-                            <CollapsibleContent className="space-y-4">
-                                <FormField
-                                    control={form.control}
-                                    name="scope"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Scope</FormLabel>
-                                            <FormControl>
-                                                <RadioGroup
-                                                    onValueChange={field.onChange}
-                                                    value={field.value}
-                                                    className="flex gap-4"
-                                                >
-                                                    <div className="flex items-center space-x-2">
-                                                        <RadioGroupItem value="dine_in" id="scope-dine-in" />
-                                                        <Label htmlFor="scope-dine-in">Dine-in</Label>
-                                                    </div>
-                                                    <div className="flex items-center space-x-2">
-                                                        <RadioGroupItem value="takeout" id="scope-takeout" />
-                                                        <Label htmlFor="scope-takeout">Takeout</Label>
-                                                    </div>
-                                                    <div className="flex items-center space-x-2">
-                                                        <RadioGroupItem value="both" id="scope-both" />
-                                                        <Label htmlFor="scope-both">Both</Label>
-                                                    </div>
-                                                </RadioGroup>
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <div className="grid gap-4 md:grid-cols-2">
-                                    <FormField
-                                        control={form.control}
-                                        name="applies_to_categories"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Applies to categories (optional)</FormLabel>
-                                                <FormControl>
-                                                    <CategoryPicker
-                                                        options={categories}
-                                                        value={field.value ?? []}
-                                                        onChange={field.onChange}
-                                                        placeholder="Select categories to include"
-                                                    />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
-                                    <FormField
-                                        control={form.control}
-                                        name="exclude_categories"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Exclude categories (optional)</FormLabel>
-                                                <FormControl>
-                                                    <CategoryPicker
-                                                        options={categories}
-                                                        value={field.value ?? []}
-                                                        onChange={field.onChange}
-                                                        placeholder="Select categories to exclude"
-                                                    />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
+                        {/* Targeting Section - Now using Bottom Sheet */}
+                        <Card className="border-dashed">
+                            <CardHeader>
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <CardTitle className="text-lg">Targeting</CardTitle>
+                                        <CardDescription>Scope, categories, and items</CardDescription>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => setTargetingSheetOpen(true)}
+                                        className="gap-2"
+                                    >
+                                        <Settings2 className="h-4 w-4" />
+                                        Configure Targeting
+                                    </Button>
                                 </div>
-                                <FormField
-                                    control={form.control}
-                                    name="exclude_alcohol"
-                                    render={({ field }) => (
-                                        <FormItem className="flex items-center justify-between rounded-md border p-3">
-                                            <div>
-                                                <FormLabel>Exclude alcohol</FormLabel>
-                                                <CardDescription>Automatically skip items flagged as alcohol</CardDescription>
-                                            </div>
-                                            <FormControl>
-                                                <Switch checked={field.value} onCheckedChange={field.onChange} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="menu_item_ids"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Item-specific (optional)</FormLabel>
-                                            <FormControl>
-                                                <MenuItemPicker
-                                                    options={menuItems}
-                                                    value={field.value ?? []}
-                                                    onChange={field.onChange}
-                                                    placeholder="Select menu items"
-                                                />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            </CollapsibleContent>
-                        </Collapsible>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Scope:</span>
+                                        <span className="font-medium capitalize">
+                                            {form.watch('scope')?.replace('_', ' ') || 'Both'}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Include categories:</span>
+                                        <span className="font-medium">
+                                            {form.watch('applies_to_categories')?.length || 0} selected
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Exclude categories:</span>
+                                        <span className="font-medium">
+                                            {form.watch('exclude_categories')?.length || 0} selected
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Menu items:</span>
+                                        <span className="font-medium">
+                                            {form.watch('menu_item_ids')?.length || 0} selected
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Exclude alcohol:</span>
+                                        <span className="font-medium">
+                                            {form.watch('exclude_alcohol') ? 'Yes' : 'No'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
 
                         <Collapsible
                             open={openSections.approval}
@@ -604,6 +565,26 @@ export function DiscountForm({
                     </Button>
                 </div>
             </form>
+
+            {/* Targeting Bottom Sheet */}
+            <TargetingSheet
+                open={targetingSheetOpen}
+                onOpenChange={setTargetingSheetOpen}
+                categories={categories}
+                menuItems={menuItems}
+                values={{
+                    scope: form.watch('scope'),
+                    applies_to_categories: form.watch('applies_to_categories'),
+                    exclude_categories: form.watch('exclude_categories'),
+                    exclude_alcohol: form.watch('exclude_alcohol'),
+                    menu_item_ids: form.watch('menu_item_ids'),
+                }}
+                onChange={(updates) => {
+                    Object.entries(updates).forEach(([key, value]) => {
+                        form.setValue(key as any, value as any)
+                    })
+                }}
+            />
         </Form>
     )
 }
