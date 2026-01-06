@@ -137,7 +137,13 @@ export async function GetOrderDetails(
                     *,
                     order_item_modifiers(*)
                 ),
-                order_payments(*),
+                order_payments(
+                    *,
+                    order_payment_items(
+                        *,
+                        order_items(id, item_name, quantity)
+                    )
+                ),
                 order_status_history(
                 *,
                 users(first_name, last_name),

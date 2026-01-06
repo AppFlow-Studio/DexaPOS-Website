@@ -70,6 +70,16 @@ export interface Order {
   completed_at?: string;
   sync_version: number;
   created_by_staff_id?: string;
+  // Cash/Card Dual Pricing
+  card_subtotal?: number;
+  card_tax_amount?: number;
+  card_total?: number;
+  cash_subtotal?: number;
+  cash_tax_amount?: number;
+  cash_total?: number;
+  payment_pricing_mode?: "card" | "cash" | "mixed";
+  cash_discount_applied?: boolean;
+  cash_discount_amount?: number;
 }
 
 export interface OrderFilters {
@@ -105,9 +115,23 @@ export interface OrderItem {
   size_price_modifier: number;
   item_status: string;
   is_voided: boolean;
+  void_reason?: string;
+  voided_at?: string;
+  voided_by?: string;
   special_instructions?: string;
   created_at: string;
   updated_at: string;
+  // Discount fields
+  discount_id?: string;
+  discount_name?: string;
+  discount_type?: "fixed_amount" | "percentage";
+  discount_value?: number;
+  discount_amount?: number;
+  discount_source?: "preset" | "manual" | "promo" | "cash_pricing";
+  discount_reason?: string;
+  discount_applied_by?: string;
+  discount_approved_by?: string;
+  pre_discount_subtotal?: number;
 }
 
 export interface OrderItemModifier {
@@ -120,6 +144,23 @@ export interface OrderItemModifier {
   price_modifier: number;
   quantity: number;
   total_price: number;
+}
+
+export interface OrderPaymentItem {
+  id: string;
+  order_payment_id: string;
+  order_item_id: string;
+  quantity_paid: number;
+  unit_price_paid: number;
+  subtotal_paid: number;
+  tax_paid: number;
+  created_at: string;
+  // Joined data for display
+  order_items?: {
+    id: string;
+    item_name: string;
+    quantity: number;
+  };
 }
 
 export interface OrderPayment {
@@ -138,6 +179,8 @@ export interface OrderPayment {
   card_last_four?: string;
   initiated_at: string;
   captured_at?: string;
+  // Junction table items
+  order_payment_items?: OrderPaymentItem[];
 }
 
 export interface CreateOrderParams {
@@ -232,6 +275,16 @@ export interface OrderResponse {
   order_payments: OrderPayment[];
   order_status_history: OrderStatusHistory[];
   table_sessions: TableSessionWithEvents[];
+  // Cash/Card Dual Pricing
+  card_subtotal?: number;
+  card_tax_amount?: number;
+  card_total?: number;
+  cash_subtotal?: number;
+  cash_tax_amount?: number;
+  cash_total?: number;
+  payment_pricing_mode?: "card" | "cash" | "mixed";
+  cash_discount_applied?: boolean;
+  cash_discount_amount?: number;
 }
 
 export interface TableSessionWithEvents {

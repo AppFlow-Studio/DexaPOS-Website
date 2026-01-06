@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import {
   useOnlineOrderingSettings,
   OnlineOrderingSettings,
@@ -54,8 +55,17 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
 
 export default function OnlineOrderingPage() {
-  const { settings, updateSettings, createSettings } =
-    useOnlineOrderingSettings();
+  const {
+    settings,
+    updateSettings,
+    saveSettings,
+    discardChanges,
+    isDirty,
+    isSaving,
+    createSettings,
+    loadSettings,
+    isLoading,
+  } = useOnlineOrderingSettings();
   const [mounted, setMounted] = useState(false);
   const [isHoursModalOpen, setIsHoursModalOpen] = useState(false);
   const [hoursModalType, setHoursModalType] = useState<
@@ -75,6 +85,13 @@ export default function OnlineOrderingPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Fetch settings when location changes
+  useEffect(() => {
+    if (selectedLocationId && selectedLocationId !== "all") {
+      loadSettings(selectedLocationId);
+    }
+  }, [selectedLocationId, loadSettings]);
 
   // Get settings for the currently selected location
   const currentSettings = !isAllLocations
@@ -148,7 +165,7 @@ export default function OnlineOrderingPage() {
     setIsHoursModalOpen(true);
   };
 
-  if (!mounted) {
+  if (!mounted || (isLoading && !isAllLocations)) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -231,16 +248,41 @@ export default function OnlineOrderingPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {isDirty(selectedLocationId) && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => discardChanges(selectedLocationId)}
+                disabled={isSaving}
+              >
+                <X className="h-4 w-4 mr-2" />
+                Discard
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => saveSettings(selectedLocationId)}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                ) : (
+                  <Check className="h-4 w-4 mr-2" />
+                )}
+                Save Changes
+              </Button>
+            </>
+          )}
           {currentSettings.enabled && (
             <Button variant="outline" size="sm" asChild>
-              <a
-                href={`https://order.dexapos.com/${currentSettings.storeSlug}`}
+              <Link
+                href={`/sites/${currentSettings.locationId}`}
                 target="_blank"
                 rel="noopener noreferrer"
               >
                 <ExternalLink className="h-4 w-4 mr-2" />
                 Preview Store
-              </a>
+              </Link>
             </Button>
           )}
         </div>
@@ -333,7 +375,7 @@ export default function OnlineOrderingPage() {
                   <Label htmlFor="storeSlug">Store URL Slug</Label>
                   <div className="flex">
                     <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-sm text-muted-foreground">
-                      order.dexapos.com/
+                      /sites/
                     </span>
                     <Input
                       id="storeSlug"
@@ -715,58 +757,18 @@ export default function OnlineOrderingPage() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid gap-6 sm:grid-cols-2">
-                <div className="space-y-3">
-                  <Label>Primary Color</Label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={currentSettings.primaryColor}
-                      onChange={(e) =>
-                        handleUpdate({ primaryColor: e.target.value })
-                      }
-                      className="h-10 w-16 rounded-lg border cursor-pointer"
-                    />
-                    <Input
-                      value={currentSettings.primaryColor}
-                      onChange={(e) =>
-                        handleUpdate({ primaryColor: e.target.value })
-                      }
-                      className="w-28 font-mono text-sm"
-                      placeholder="#3b82f6"
-                    />
-                    <div
-                      className="h-10 flex-1 rounded-lg border"
-                      style={{ backgroundColor: currentSettings.primaryColor }}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <Label>Secondary Color</Label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={currentSettings.secondaryColor}
-                      onChange={(e) =>
-                        handleUpdate({ secondaryColor: e.target.value })
-                      }
-                      className="h-10 w-16 rounded-lg border cursor-pointer"
-                    />
-                    <Input
-                      value={currentSettings.secondaryColor}
-                      onChange={(e) =>
-                        handleUpdate({ secondaryColor: e.target.value })
-                      }
-                      className="w-28 font-mono text-sm"
-                      placeholder="#10b981"
-                    />
-                    <div
-                      className="h-10 flex-1 rounded-lg border"
-                      style={{
-                        backgroundColor: currentSettings.secondaryColor,
-                      }}
-                    />
-                  </div>
-                </div>
+                <DebouncedColorInput
+                  label="Primary Color"
+                  value={currentSettings.primaryColor}
+                  onChange={(val) => handleUpdate({ primaryColor: val })}
+                  placeholder="#3b82f6"
+                />
+                <DebouncedColorInput
+                  label="Secondary Color"
+                  value={currentSettings.secondaryColor}
+                  onChange={(val) => handleUpdate({ secondaryColor: val })}
+                  placeholder="#10b981"
+                />
               </div>
 
               {/* Color Preview */}
@@ -1343,6 +1345,62 @@ export default function OnlineOrderingPage() {
           }
         }}
       />
+    </div>
+  );
+}
+
+function DebouncedColorInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+}) {
+  const [localValue, setLocalValue] = useState(value);
+
+  // Sync local state when external value changes
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  // Debounce updates
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      // Only fire update if the local value is different from the prop value
+      // This prevents loop if the prop update eventually triggers this effect
+      if (localValue !== value) {
+        onChange(localValue);
+      }
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(handler);
+  }, [localValue, onChange, value]);
+
+  return (
+    <div className="space-y-3">
+      <Label>{label}</Label>
+      <div className="flex items-center gap-3">
+        <input
+          type="color"
+          value={localValue}
+          onChange={(e) => setLocalValue(e.target.value)}
+          className="h-10 w-16 rounded-lg border cursor-pointer"
+        />
+        <Input
+          value={localValue}
+          onChange={(e) => setLocalValue(e.target.value)}
+          className="w-28 font-mono text-sm"
+          placeholder={placeholder}
+        />
+        <div
+          className="h-10 flex-1 rounded-lg border"
+          style={{ backgroundColor: localValue }}
+        />
+      </div>
     </div>
   );
 }

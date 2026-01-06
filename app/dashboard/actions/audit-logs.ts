@@ -1,0 +1,367 @@
+"use server";
+
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { currentUser } from "@clerk/nextjs/server";
+import {
+  AuditLog,
+  AuditLogWithLocation,
+  AuditLogFilters,
+  AdhocExpenseInput,
+} from "@/types/audit-log";
+
+// ============================================================================
+// GET AUDIT LOGS
+// ============================================================================
+
+/**
+ * Get audit logs for a merchant with optional filters
+ * - Global users see all logs
+ * - Location admins see only their location's logs
+ */
+export async function GetAuditLogs(
+  clerkOrgId: string,
+  filters?: AuditLogFilters,
+  limit: number = 50,
+  offset: number = 0
+): Promise<{ data?: AuditLogWithLocation[]; total?: number; error?: string }> {
+  if (!clerkOrgId) {
+    return { error: "Organization ID is required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  // Get merchant
+  const { data: merchant, error: merchantError } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("clerk_org_id", clerkOrgId)
+    .single();
+
+  if (merchantError || !merchant) {
+    return { error: "Merchant not found" };
+  }
+
+  // Build query
+  let query = supabase
+    .from("audit_logs")
+    .select(
+      `
+      *,
+      location:locations(id, name)
+    `,
+      { count: "exact" }
+    )
+    .eq("merchant_id", merchant.id)
+    .order("created_at", { ascending: false });
+
+  // Apply filters
+  if (filters?.location_id && filters.location_id !== "all") {
+    query = query.eq("location_id", filters.location_id);
+  }
+
+  if (filters?.action_category) {
+    query = query.eq("action_category", filters.action_category);
+  }
+
+  if (filters?.severity) {
+    query = query.eq("severity", filters.severity);
+  }
+
+  if (filters?.resource_type) {
+    query = query.eq("resource_type", filters.resource_type);
+  }
+
+  if (filters?.actor_user_id) {
+    query = query.eq("actor_user_id", filters.actor_user_id);
+  }
+
+  if (filters?.date_from) {
+    query = query.gte("created_at", filters.date_from);
+  }
+
+  if (filters?.date_to) {
+    query = query.lte("created_at", filters.date_to);
+  }
+
+  if (filters?.search) {
+    query = query.or(
+      `resource_name.ilike.%${filters.search}%,actor_name.ilike.%${filters.search}%,action.ilike.%${filters.search}%`
+    );
+  }
+
+  // Pagination
+  query = query.range(offset, offset + limit - 1);
+
+  const { data, error, count } = await query;
+
+  if (error) {
+    console.error("Error fetching audit logs:", error);
+    return { error: error.message };
+  }
+
+  // Transform data
+  const logs: AuditLogWithLocation[] = (data || []).map((log) => ({
+    ...log,
+    location: Array.isArray(log.location) ? log.location[0] : log.location,
+  }));
+
+  return { data: logs, total: count || 0 };
+}
+
+// ============================================================================
+// LOG AUDIT EVENT (Manual logging from server actions)
+// ============================================================================
+
+interface LogAuditEventParams {
+  clerkOrgId: string;
+  locationId?: string | null;
+  action: string;
+  actionCategory: string;
+  severity?: "info" | "warning" | "critical";
+  resourceType?: string;
+  resourceId?: string;
+  resourceName?: string;
+  changes?: {
+    before?: Record<string, unknown>;
+    after?: Record<string, unknown>;
+    reason?: string;
+  };
+  metadata?: Record<string, unknown>;
+}
+
+export async function LogAuditEvent(
+  params: LogAuditEventParams
+): Promise<{ success?: boolean; logId?: string; error?: string }> {
+  const supabase = createServerSupabaseClient();
+
+  // Get current user
+  const user = await currentUser();
+  const userId = user?.id || null;
+  const userName = user?.fullName || user?.firstName || "System";
+
+  // Get merchant
+  const { data: merchant, error: merchantError } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("clerk_org_id", params.clerkOrgId)
+    .single();
+
+  if (merchantError || !merchant) {
+    return { error: "Merchant not found" };
+  }
+
+  // Call RPC
+  const { data, error } = await supabase.rpc("log_audit_event", {
+    p_merchant_id: merchant.id,
+    p_location_id: params.locationId || null,
+    p_actor_user_id: userId,
+    p_actor_name: userName,
+    p_actor_role: null, // Could fetch from member info if needed
+    p_action: params.action,
+    p_action_category: params.actionCategory,
+    p_severity: params.severity || "info",
+    p_resource_type: params.resourceType || null,
+    p_resource_id: params.resourceId || null,
+    p_resource_name: params.resourceName || null,
+    p_changes: params.changes || null,
+    p_metadata: params.metadata || null,
+  });
+
+  if (error) {
+    console.error("Error logging audit event:", error);
+    return { error: error.message };
+  }
+
+  return { success: true, logId: data };
+}
+
+// ============================================================================
+// UPDATE STOCK WITH REASON (Audited)
+// ============================================================================
+
+interface UpdateStockWithReasonParams {
+  locationId: string;
+  inventoryItemId: string;
+  newStock: number;
+  reason: string;
+  source?: "manual" | "adjustment" | "waste" | "transfer";
+}
+
+export async function UpdateStockWithReason(
+  params: UpdateStockWithReasonParams
+): Promise<{
+  success?: boolean;
+  previousStock?: number;
+  newStock?: number;
+  error?: string;
+}> {
+  const supabase = createServerSupabaseClient();
+
+  // Get current user
+  const user = await currentUser();
+  const userId = user?.id || null;
+  const userName = user?.fullName || user?.firstName || "Unknown User";
+
+  // Call RPC
+  const { data, error } = await supabase.rpc("log_stock_update_with_audit", {
+    p_location_id: params.locationId,
+    p_inventory_item_id: params.inventoryItemId,
+    p_new_stock: params.newStock,
+    p_update_reason: params.reason,
+    p_update_source: params.source || "manual",
+    p_user_id: userId,
+    p_user_name: userName,
+  });
+
+  if (error) {
+    console.error("Error updating stock:", error);
+    return { error: error.message };
+  }
+
+  return {
+    success: data?.success,
+    previousStock: data?.previous_stock,
+    newStock: data?.new_stock,
+  };
+}
+
+// ============================================================================
+// CREATE ADHOC EXPENSE (Non-vendor purchase)
+// ============================================================================
+
+export async function CreateAdhocExpense(
+  clerkOrgId: string,
+  locationId: string,
+  expense: AdhocExpenseInput
+): Promise<{
+  success?: boolean;
+  purchaseOrderId?: string;
+  poNumber?: string;
+  error?: string;
+}> {
+  if (!clerkOrgId) {
+    return { error: "Organization ID is required" };
+  }
+
+  if (!locationId || locationId === "all") {
+    return { error: "A specific location must be selected" };
+  }
+
+  if (!expense.expense_vendor_name) {
+    return { error: "Vendor/Store name is required" };
+  }
+
+  if (expense.items.length === 0) {
+    return { error: "At least one item is required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  // Get current user
+  const user = await currentUser();
+  const userId = user?.id || null;
+  const userName = user?.fullName || user?.firstName || "Unknown User";
+
+  // Get merchant
+  const { data: merchant, error: merchantError } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("clerk_org_id", clerkOrgId)
+    .single();
+
+  if (merchantError || !merchant) {
+    return { error: "Merchant not found" };
+  }
+
+  // Transform items for RPC
+  const rpcItems = expense.items.map((item) => ({
+    inventory_item_id: item.inventory_item_id || "",
+    name: item.name,
+    quantity: item.quantity,
+    unit_cost: item.unit_cost,
+  }));
+
+  // Call RPC
+  const { data, error } = await supabase.rpc("create_adhoc_expense", {
+    p_merchant_id: merchant.id,
+    p_location_id: locationId,
+    p_expense_vendor_name: expense.expense_vendor_name,
+    p_expense_category: expense.expense_category || null,
+    p_expense_notes: expense.expense_notes || null,
+    p_payment_method: expense.payment_method,
+    p_card_last_four: expense.card_last_four || null,
+    p_total_amount: expense.total_amount,
+    p_user_id: userId,
+    p_user_name: userName,
+    p_items: rpcItems,
+  });
+
+  if (error) {
+    console.error("Error creating adhoc expense:", error);
+    return { error: error.message };
+  }
+
+  return {
+    success: data?.success,
+    purchaseOrderId: data?.purchase_order_id,
+    poNumber: data?.po_number,
+  };
+}
+
+// ============================================================================
+// GET STOCK UPDATE HISTORY
+// ============================================================================
+
+export async function GetStockUpdateHistory(
+  clerkOrgId: string,
+  inventoryItemId?: string,
+  locationId?: string,
+  limit: number = 20
+): Promise<{ data?: any[]; error?: string }> {
+  if (!clerkOrgId) {
+    return { error: "Organization ID is required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  // Get merchant
+  const { data: merchant, error: merchantError } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("clerk_org_id", clerkOrgId)
+    .single();
+
+  if (merchantError || !merchant) {
+    return { error: "Merchant not found" };
+  }
+
+  let query = supabase
+    .from("stock_update_log")
+    .select(
+      `
+      *,
+      inventory_item:inventory_items(id, name, unit_type),
+      location:locations(id, name)
+    `
+    )
+    .eq("merchant_id", merchant.id)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (inventoryItemId) {
+    query = query.eq("inventory_item_id", inventoryItemId);
+  }
+
+  if (locationId && locationId !== "all") {
+    query = query.eq("location_id", locationId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("Error fetching stock history:", error);
+    return { error: error.message };
+  }
+
+  return { data: data || [] };
+}

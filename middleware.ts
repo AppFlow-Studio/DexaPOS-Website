@@ -2,12 +2,16 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
 const isInternalTeamRoutes = createRouteMatcher(['/manage(.*)'])
 const isMerchantRoutes = createRouteMatcher(['/dashboard(.*)'])
-
+const isStorefrontRoutes = createRouteMatcher(['/sites(.*)'])
 export default clerkMiddleware(async (auth, req) => {
   // If the user is not signed in, let Clerk handle the redirect to sign-in page
   const UserSession = await auth()
   if (!UserSession.userId) {
     return NextResponse.next(); // Or auth().redirectToSignIn() if you want to force sign-in on all routes
+  }
+
+  if(isStorefrontRoutes(req)) {
+    return NextResponse.next();
   }
 
   if (isInternalTeamRoutes(req)) {

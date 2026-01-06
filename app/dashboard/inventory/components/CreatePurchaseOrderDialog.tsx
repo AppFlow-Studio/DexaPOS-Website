@@ -15,14 +15,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   ShoppingCart,
   Loader2,
@@ -30,6 +36,9 @@ import {
   Trash2,
   Package,
   AlertCircle,
+  Check,
+  ChevronsUpDown,
+  Truck,
 } from "lucide-react";
 import {
   useCreatePurchaseOrder,
@@ -72,6 +81,8 @@ export function CreatePurchaseOrderDialog({
 
   const [lineItems, setLineItems] = useState<POLineItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string>("");
+  const [openVendorCombobox, setOpenVendorCombobox] = useState(false);
+  const [openItemCombobox, setOpenItemCombobox] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -207,21 +218,69 @@ export function CreatePurchaseOrderDialog({
           {/* Vendor Selection */}
           <div className="space-y-2">
             <Label htmlFor="vendor_id">Vendor *</Label>
-            <Select
-              value={form.watch("vendor_id")}
-              onValueChange={(value) => form.setValue("vendor_id", value)}
+            <Popover
+              open={openVendorCombobox}
+              onOpenChange={setOpenVendorCombobox}
+              modal={true}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a vendor" />
-              </SelectTrigger>
-              <SelectContent>
-                {vendors.map((vendor) => (
-                  <SelectItem key={vendor.id} value={vendor.id}>
-                    {vendor.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openVendorCombobox}
+                  className="w-full justify-between"
+                >
+                  {form.watch("vendor_id")
+                    ? vendors.find((v) => v.id === form.watch("vendor_id"))
+                        ?.name
+                    : "Select a vendor..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[400px] p-0 z-[100]">
+                <Command>
+                  <CommandInput placeholder="Search vendors..." />
+                  <CommandList>
+                    <CommandEmpty>
+                      <div className="py-6 text-center">
+                        <Truck className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">
+                          No vendors found.
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Add vendors first.
+                        </p>
+                      </div>
+                    </CommandEmpty>
+                    <CommandGroup>
+                      {vendors.map((vendor) => (
+                        <CommandItem
+                          key={vendor.id}
+                          value={`${vendor.name}-${vendor.id}`}
+                          className="data-[disabled]:opacity-100 data-[disabled]:pointer-events-auto cursor-pointer"
+                          onSelect={() => {
+                            form.setValue("vendor_id", vendor.id);
+                            setOpenVendorCombobox(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              form.watch("vendor_id") === vendor.id
+                                ? "opacity-100"
+                                : "opacity-0"
+                            )}
+                          />
+                          <span className="font-medium text-gray-700 dark:text-gray-200">
+                            {vendor.name}
+                          </span>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
             {form.formState.errors.vendor_id && (
               <p className="text-sm text-destructive">
                 {form.formState.errors.vendor_id.message}
@@ -233,25 +292,81 @@ export function CreatePurchaseOrderDialog({
           <div className="space-y-2">
             <Label>Add Items</Label>
             <div className="flex gap-2">
-              <Select value={selectedItemId} onValueChange={setSelectedItemId}>
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="Select an item to add" />
-                </SelectTrigger>
-                <SelectContent>
-                  {items
-                    .filter(
-                      (item) =>
-                        !lineItems.some(
-                          (li) => li.inventory_item_id === item.id
-                        )
-                    )
-                    .map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.name} ({item.unit_type})
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+              <Popover
+                open={openItemCombobox}
+                onOpenChange={setOpenItemCombobox}
+                modal={true}
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openItemCombobox}
+                    className="flex-1 justify-between"
+                  >
+                    {selectedItemId
+                      ? items.find((item) => item.id === selectedItemId)?.name
+                      : "Select an item to add..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[500px] p-0 z-[100]">
+                  <Command>
+                    <CommandInput placeholder="Search items..." />
+                    <CommandList>
+                      <CommandEmpty>
+                        <div className="py-6 text-center">
+                          <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                          <p className="text-sm text-muted-foreground">
+                            No items found.
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Add items in the Inventory catalog first.
+                          </p>
+                        </div>
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {items
+                          .filter(
+                            (item) =>
+                              !lineItems.some(
+                                (li) => li.inventory_item_id === item.id
+                              )
+                          )
+                          .map((item) => (
+                            <CommandItem
+                              key={item.id}
+                              value={`${item.name}-${item.id}`}
+                              className="data-[disabled]:opacity-100 data-[disabled]:pointer-events-auto cursor-pointer"
+                              onSelect={() => {
+                                setSelectedItemId(item.id);
+                                setOpenItemCombobox(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  selectedItemId === item.id
+                                    ? "opacity-100"
+                                    : "opacity-0"
+                                )}
+                              />
+                              <div className="flex items-center gap-2 flex-1">
+                                <span className="font-medium text-gray-700 dark:text-gray-200">
+                                  {item.name}
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                  (${item.cost_per_unit?.toFixed(2)}/
+                                  {item.unit_type})
+                                </span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
               <Button
                 type="button"
                 variant="secondary"

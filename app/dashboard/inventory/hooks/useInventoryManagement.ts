@@ -407,5 +407,102 @@ export function useInventoryStats() {
   });
 }
 
+// ============================================================================
+// AUDIT / STOCK UPDATE WITH REASON
+// ============================================================================
+
+/**
+ * Hook for updating stock with a reason (audited)
+ * Records the change in the audit log for tracking
+ */
+export function useUpdateStockWithReason() {
+  const queryClient = useQueryClient();
+  const { locationId } = useOrgContext();
+
+  return useMutation({
+    mutationFn: async ({
+      itemId,
+      newStock,
+      reason,
+      source = "manual",
+    }: {
+      itemId: string;
+      newStock: number;
+      reason: string;
+      source?: "manual" | "adjustment" | "waste" | "transfer";
+    }) => {
+      if (!locationId || locationId === "all") {
+        return { error: "Please select a location to update stock" };
+      }
+      const { UpdateStockWithReason } = await import(
+        "../../actions/audit-logs"
+      );
+      return UpdateStockWithReason({
+        locationId,
+        inventoryItemId: itemId,
+        newStock,
+        reason,
+        source,
+      });
+    },
+    onSuccess: (result) => {
+      if (result.error) {
+        toast.error(result.error);
+      } else {
+        toast.success("Stock updated and logged");
+        queryClient.invalidateQueries({ queryKey: ["inventory-items"] });
+        queryClient.invalidateQueries({ queryKey: ["inventory-stats"] });
+        queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
+      }
+    },
+    onError: (error) => {
+      toast.error("Failed to update stock: " + error.message);
+    },
+  });
+}
+
+/**
+ * Hook for creating adhoc expenses (non-vendor purchases)
+ */
+export function useCreateAdhocExpense() {
+  const queryClient = useQueryClient();
+  const { clerkOrgId, locationId } = useOrgContext();
+
+  return useMutation({
+    mutationFn: async (expense: {
+      expense_vendor_name: string;
+      expense_category?: string;
+      expense_notes?: string;
+      payment_method: "card" | "cash";
+      card_last_four?: string;
+      total_amount: number;
+      items: Array<{
+        inventory_item_id?: string;
+        name: string;
+        quantity: number;
+        unit_cost: number;
+      }>;
+    }) => {
+      if (!locationId || locationId === "all") {
+        return { error: "Please select a location to log an expense" };
+      }
+      const { CreateAdhocExpense } = await import("../../actions/audit-logs");
+      return CreateAdhocExpense(clerkOrgId, locationId, expense);
+    },
+    onSuccess: (result) => {
+      if (result.error) {
+        toast.error(result.error);
+      } else {
+        toast.success(`Expense logged: ${result.poNumber}`);
+        queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
+        queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
+      }
+    },
+    onError: (error) => {
+      toast.error("Failed to log expense: " + error.message);
+    },
+  });
+}
+
 // Re-export types for convenience
 export type { VendorWithStats, PurchaseOrderWithDetails };
