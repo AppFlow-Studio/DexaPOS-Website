@@ -520,186 +520,361 @@ export function OrderDetailSheet({
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold">Pricing Breakdown</h3>
                 {(() => {
-                  // Check if this order has dual pricing (cash differs from card)
+                  // Get pricing values
                   const cardSubtotal =
                     Number(displayOrder.card_subtotal) || displayOrder.subtotal;
                   const cashSubtotal =
                     Number(displayOrder.cash_subtotal) || displayOrder.subtotal;
+                  const cardTax =
+                    Number(displayOrder.card_tax_amount) ||
+                    Number(displayOrder.tax_amount) ||
+                    0;
+                  const cashTax =
+                    Number(displayOrder.cash_tax_amount) ||
+                    Number(displayOrder.tax_amount) ||
+                    0;
                   const cardTotal =
                     Number(displayOrder.card_total) ||
                     displayOrder.total_amount;
                   const cashTotal =
                     Number(displayOrder.cash_total) ||
                     displayOrder.total_amount;
+
                   const hasDualPricing = cardSubtotal !== cashSubtotal;
-                  const cashSavings = hasDualPricing
-                    ? cardSubtotal - cashSubtotal
+                  const totalSavings = hasDualPricing
+                    ? cardTotal - cashTotal
                     : 0;
                   const isMixedPayment =
                     displayOrder.payment_pricing_mode === "mixed";
 
-                  // Calculate actual amount paid from successful payments
-                  const calculatedAmountPaid = payments
-                    .filter(
-                      (p) => p.status === "paid" || p.status === "captured"
-                    )
+                  // Calculate actual payments by method
+                  const paidPayments = payments.filter(
+                    (p) => p.status === "paid" || p.status === "captured"
+                  );
+                  const cashPayments = paidPayments
+                    .filter((p) => p.payment_method === "cash")
                     .reduce((sum, p) => sum + Number(p.total_amount), 0);
+                  const cardPayments = paidPayments
+                    .filter((p) => p.payment_method !== "cash")
+                    .reduce((sum, p) => sum + Number(p.total_amount), 0);
+                  const totalPaid = cashPayments + cardPayments;
 
                   return (
-                    <div className="space-y-1.5 text-sm">
-                      {/* Dual Pricing Display */}
-                      {hasDualPricing ? (
+                    <div className="space-y-3 text-sm">
+                      {/* Mixed Payment Mode - Show Payment Breakdown */}
+                      {isMixedPayment ? (
                         <>
-                          {/* Card Subtotal */}
+                          {/* Explanation Badge */}
+                          <div className="flex items-center gap-2 p-2 bg-amber-50 dark:bg-amber-950/30 rounded-md border border-amber-200 dark:border-amber-800">
+                            <DollarSign className="h-4 w-4 text-amber-600" />
+                            <span className="text-xs text-amber-700 dark:text-amber-400">
+                              Mixed Payment: Paid with both cash and card
+                            </span>
+                          </div>
+
+                          {/* Side by Side Comparison - only if prices differ */}
+                          {hasDualPricing && (
+                            <div className="grid grid-cols-2 gap-3">
+                              {/* Card Pricing Column */}
+                              <div className="p-2 rounded-md bg-muted/50 border">
+                                <p className="text-xs font-medium text-muted-foreground mb-2">
+                                  If All Card
+                                </p>
+                                <div className="space-y-1">
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-muted-foreground">
+                                      Subtotal
+                                    </span>
+                                    <span>{formatCurrency(cardSubtotal)}</span>
+                                  </div>
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-muted-foreground">
+                                      Tax
+                                    </span>
+                                    <span>{formatCurrency(cardTax)}</span>
+                                  </div>
+                                  <div className="flex justify-between text-xs font-medium border-t pt-1 mt-1">
+                                    <span>Total</span>
+                                    <span>{formatCurrency(cardTotal)}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Cash Pricing Column */}
+                              <div className="p-2 rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
+                                <p className="text-xs font-medium text-green-700 dark:text-green-400 mb-2">
+                                  If All Cash
+                                </p>
+                                <div className="space-y-1">
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-muted-foreground">
+                                      Subtotal
+                                    </span>
+                                    <span>{formatCurrency(cashSubtotal)}</span>
+                                  </div>
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-muted-foreground">
+                                      Tax
+                                    </span>
+                                    <span>{formatCurrency(cashTax)}</span>
+                                  </div>
+                                  <div className="flex justify-between text-xs font-medium text-green-700 dark:text-green-400 border-t pt-1 mt-1">
+                                    <span>Total</span>
+                                    <span>{formatCurrency(cashTotal)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Savings Highlight - only if prices differ */}
+                          {totalSavings > 0 && (
+                            <div className="flex justify-between items-center p-2 bg-green-100 dark:bg-green-900/30 rounded-md">
+                              <span className="text-xs font-medium text-green-700 dark:text-green-400">
+                                💰 Cash Discount Available
+                              </span>
+                              <span className="text-sm font-bold text-green-700 dark:text-green-400">
+                                -{formatCurrency(totalSavings)}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Standard pricing info when no dual pricing */}
+                          {!hasDualPricing && (
+                            <>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">
+                                  Subtotal
+                                </span>
+                                <span>
+                                  {formatCurrency(displayOrder.subtotal)}
+                                </span>
+                              </div>
+                              {Number(displayOrder.tax_amount) > 0 && (
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">
+                                    Tax
+                                  </span>
+                                  <span>
+                                    {formatCurrency(
+                                      Number(displayOrder.tax_amount)
+                                    )}
+                                  </span>
+                                </div>
+                              )}
+                            </>
+                          )}
+
+                          <Separator />
+
+                          {/* Actual Payments Made */}
+                          <div className="space-y-1.5">
+                            <p className="text-xs font-medium text-muted-foreground">
+                              Actual Payments
+                            </p>
+                            {cashPayments > 0 && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">
+                                  Cash
+                                  {hasDualPricing ? " (discounted rate)" : ""}
+                                </span>
+                                <span
+                                  className={
+                                    hasDualPricing
+                                      ? "text-green-600 dark:text-green-400 font-medium"
+                                      : ""
+                                  }
+                                >
+                                  {formatCurrency(cashPayments)}
+                                </span>
+                              </div>
+                            )}
+                            {cardPayments > 0 && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">
+                                  Card{hasDualPricing ? " (full rate)" : ""}
+                                </span>
+                                <span>{formatCurrency(cardPayments)}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <Separator />
+
+                          {/* Final Total */}
+                          <div className="flex justify-between font-semibold text-base">
+                            <span>Total Paid</span>
+                            <span>{formatCurrency(totalPaid)}</span>
+                          </div>
+                        </>
+                      ) : hasDualPricing ? (
+                        /* Single Payment Method with Dual Pricing Available */
+                        <>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">
                               Card Subtotal
                             </span>
-                            <span
-                              className={
-                                isMixedPayment
-                                  ? ""
-                                  : "text-muted-foreground line-through"
-                              }
-                            >
+                            <span className="text-muted-foreground line-through">
                               {formatCurrency(cardSubtotal)}
                             </span>
                           </div>
-                          {/* Cash Subtotal */}
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">
                               Cash Subtotal
                             </span>
                             <span>{formatCurrency(cashSubtotal)}</span>
                           </div>
-                          {/* Cash Savings */}
-                          {cashSavings > 0 && (
+                          {totalSavings > 0 && (
                             <div className="flex justify-between">
                               <span className="text-green-600 dark:text-green-400 font-medium">
                                 Cash Savings
                               </span>
                               <span className="text-green-600 dark:text-green-400 font-medium">
-                                -{formatCurrency(cashSavings)}
+                                -{formatCurrency(totalSavings)}
                               </span>
                             </div>
                           )}
-                        </>
-                      ) : (
-                        /* Standard Subtotal */
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">
-                            Subtotal
-                          </span>
-                          <span>{formatCurrency(displayOrder.subtotal)}</span>
-                        </div>
-                      )}
-
-                      {/* Tax */}
-                      {Number(displayOrder.tax_amount) > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Tax</span>
-                          <span>
-                            {formatCurrency(
-                              Number(displayOrder.tax_amount) || 0
-                            )}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Tip */}
-                      {Number(displayOrder.tip_amount) > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Tip</span>
-                          <span>
-                            {formatCurrency(
-                              Number(displayOrder.tip_amount) || 0
-                            )}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Discount */}
-                      {Number(displayOrder.discount_amount) > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">
-                            Discount
-                          </span>
-                          <span className="text-green-600">
-                            -
-                            {formatCurrency(
-                              Number(displayOrder.discount_amount) || 0
-                            )}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Service Charge */}
-                      {Number(displayOrder.service_charge) > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">
-                            Service Charge
-                          </span>
-                          <span>
-                            {formatCurrency(
-                              Number(displayOrder.service_charge) || 0
-                            )}
-                          </span>
-                        </div>
-                      )}
-
-                      <Separator />
-
-                      {/* Total Display for Dual Pricing */}
-                      {hasDualPricing ? (
-                        <>
+                          {Number(displayOrder.tax_amount) > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Tax</span>
+                              <span>
+                                {formatCurrency(
+                                  Number(displayOrder.tax_amount)
+                                )}
+                              </span>
+                            </div>
+                          )}
+                          {Number(displayOrder.tip_amount) > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Tip</span>
+                              <span>
+                                {formatCurrency(
+                                  Number(displayOrder.tip_amount)
+                                )}
+                              </span>
+                            </div>
+                          )}
+                          {Number(displayOrder.discount_amount) > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">
+                                Discount
+                              </span>
+                              <span className="text-green-600">
+                                -
+                                {formatCurrency(
+                                  Number(displayOrder.discount_amount)
+                                )}
+                              </span>
+                            </div>
+                          )}
+                          <Separator />
                           <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">
-                              Total (Card Pricing)
+                              Total (Card)
                             </span>
                             <span className="text-muted-foreground line-through">
                               {formatCurrency(cardTotal)}
                             </span>
                           </div>
                           <div className="flex justify-between font-semibold text-base">
-                            <span>Total (With Cash Savings)</span>
+                            <span>Total (Cash)</span>
                             <span>{formatCurrency(cashTotal)}</span>
                           </div>
+                          {totalPaid > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">
+                                Amount Paid
+                              </span>
+                              <span className="text-green-600">
+                                {formatCurrency(totalPaid)}
+                              </span>
+                            </div>
+                          )}
                         </>
                       ) : (
-                        <div className="flex justify-between font-semibold text-base">
-                          <span>Total</span>
-                          <span>
-                            {formatCurrency(
-                              Number(displayOrder.total_amount) || 0
-                            )}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Amount Paid */}
-                      {calculatedAmountPaid > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            Amount Paid
-                          </span>
-                          <span className="text-green-600">
-                            {formatCurrency(calculatedAmountPaid)}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Amount Due */}
-                      {Number(displayOrder.amount_due) > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            Amount Due
-                          </span>
-                          <span className="text-amber-600">
-                            {formatCurrency(
-                              Number(displayOrder.amount_due) || 0
-                            )}
-                          </span>
-                        </div>
+                        /* Standard Pricing (No Dual Pricing) */
+                        <>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">
+                              Subtotal
+                            </span>
+                            <span>{formatCurrency(displayOrder.subtotal)}</span>
+                          </div>
+                          {Number(displayOrder.tax_amount) > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Tax</span>
+                              <span>
+                                {formatCurrency(
+                                  Number(displayOrder.tax_amount)
+                                )}
+                              </span>
+                            </div>
+                          )}
+                          {Number(displayOrder.tip_amount) > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Tip</span>
+                              <span>
+                                {formatCurrency(
+                                  Number(displayOrder.tip_amount)
+                                )}
+                              </span>
+                            </div>
+                          )}
+                          {Number(displayOrder.discount_amount) > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">
+                                Discount
+                              </span>
+                              <span className="text-green-600">
+                                -
+                                {formatCurrency(
+                                  Number(displayOrder.discount_amount)
+                                )}
+                              </span>
+                            </div>
+                          )}
+                          {Number(displayOrder.service_charge) > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">
+                                Service Charge
+                              </span>
+                              <span>
+                                {formatCurrency(
+                                  Number(displayOrder.service_charge)
+                                )}
+                              </span>
+                            </div>
+                          )}
+                          <Separator />
+                          <div className="flex justify-between font-semibold text-base">
+                            <span>Total</span>
+                            <span>
+                              {formatCurrency(displayOrder.total_amount)}
+                            </span>
+                          </div>
+                          {totalPaid > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">
+                                Amount Paid
+                              </span>
+                              <span className="text-green-600">
+                                {formatCurrency(totalPaid)}
+                              </span>
+                            </div>
+                          )}
+                          {Number(displayOrder.amount_due) > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">
+                                Amount Due
+                              </span>
+                              <span className="text-amber-600">
+                                {formatCurrency(
+                                  Number(displayOrder.amount_due)
+                                )}
+                              </span>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   );
