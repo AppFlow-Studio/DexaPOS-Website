@@ -318,25 +318,33 @@ export async function GetInventoryItemsForRecipe(
 
 export async function UpdateMenuItemRecipe(
   menuItemId: string,
-  locationId: string, // Requires location context
-  recipeItems: Array<{ inventoryItemId: string; quantity: number }>
+  recipeItems: Array<{ inventoryItemId: string; quantity: number }>,
+  locationId?: string | null // Optional - location context
 ): Promise<{ success?: boolean; error?: string }> {
-  if (!menuItemId || !locationId) {
-    return { error: "Menu Item ID and Location ID are required" };
+  if (!menuItemId) {
+    return { error: "Menu Item ID is required" };
   }
 
   const supabase = createServerSupabaseClient();
 
+  console.log("[UpdateMenuItemRecipe] Calling RPC with:", {
+    menuItemId,
+    recipeItemsCount: recipeItems.length,
+    recipeItems,
+    locationId,
+  });
+
   const { error } = await supabase.rpc("upsert_menu_item_with_recipe", {
     p_menu_item_id: menuItemId,
-    p_location_id: locationId,
-    p_recipe_items: recipeItems,
+    p_ingredients: recipeItems, // Use p_ingredients to match RPC
+    p_location_id: locationId || null,
   });
 
   if (error) {
-    console.error("Error bulk updating recipe:", error);
+    console.error("[UpdateMenuItemRecipe] RPC Error:", error);
     return { error: error.message };
   }
 
+  console.log("[UpdateMenuItemRecipe] Success");
   return { success: true };
 }

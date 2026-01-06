@@ -29,7 +29,6 @@ import { Package, Loader2, Globe, MapPin, Trash2, Info } from "lucide-react";
 import {
   useUpdateInventoryItem,
   useVendors,
-  useSetLocationStock,
 } from "../hooks/useInventoryManagement";
 import { useLocationStore } from "@/stores/location-store";
 import {
@@ -41,6 +40,7 @@ import {
 import { cn } from "@/lib/utils";
 import { InventoryItemWithVendor, StockMode } from "@/types/inventory";
 import { toast } from "sonner";
+import { UpdateStockWithReason } from "../../actions/audit-logs";
 
 const UNIT_TYPES = [
   { value: "pcs", label: "Pieces" },
@@ -104,6 +104,7 @@ const globalFormSchema = z.object({
 // Schema for location-specific edit (limited fields)
 const locationFormSchema = z.object({
   current_stock: z.coerce.number().min(0, "Stock must be 0 or greater"),
+  stock_update_reason: z.string().optional(),
   reorder_threshold_override: z.coerce.number().min(0).optional().nullable(),
   cost_override: z.coerce.number().min(0).optional().nullable(),
 });
@@ -124,11 +125,11 @@ export function EditItemDialog({
 }: EditItemDialogProps) {
   const queryClient = useQueryClient();
   const updateItem = useUpdateInventoryItem();
-  const setLocationStock = useSetLocationStock();
   const { data: vendors = [] } = useVendors();
   const { selectedLocationId } = useLocationStore();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [initialStock, setInitialStock] = useState<number>(0);
   const [existingOverride, setExistingOverride] = useState<{
     custom_cost: number | null;
     custom_reorder_threshold: number | null;
@@ -159,6 +160,7 @@ export function EditItemDialog({
     resolver: zodResolver(locationFormSchema),
     defaultValues: {
       current_stock: 0,
+      stock_update_reason: "",
       reorder_threshold_override: null,
       cost_override: null,
     },
@@ -182,8 +184,11 @@ export function EditItemDialog({
 
       // If editing global item in location view, load location-specific data
       if (isEditingGlobalInLocation && selectedLocationId) {
+        const stockValue = item.current_stock || 0;
+        setInitialStock(stockValue);
         locationForm.reset({
-          current_stock: item.current_stock, // This comes from GetInventoryItems with location stock
+          current_stock: stockValue, // This comes from GetInventoryItems with location stock
+          stock_update_reason: "",
           reorder_threshold_override: null,
           cost_override: null,
         });
@@ -248,16 +253,42 @@ export function EditItemDialog({
     setIsSubmitting(true);
 
     try {
-      // Update stock and reorder threshold together in location_inventory_stock
-      const stockResult = await SetLocationStockWithThreshold(
-        selectedLocationId,
-        item.id,
-        values.current_stock,
-        values.reorder_threshold_override || null // null means use default
-      );
-      if (stockResult.error) {
-        toast.error(stockResult.error);
-        return;
+      const stockChanged = values.current_stock !== initialStock;
+
+      // If stock changed, require a reason and use audited update
+      if (stockChanged) {
+        if (!values.stock_update_reason?.trim()) {
+          toast.error("Please provide a reason for the stock change");
+          setIsSubmitting(false);
+          return;
+        }
+
+        const stockResult = await UpdateStockWithReason({
+          locationId: selectedLocationId,
+          inventoryItemId: item.id,
+          newStock: values.current_stock,
+          reason: values.stock_update_reason,
+          source: "adjustment",
+        });
+
+        if (!stockResult.success) {
+          toast.error(stockResult.error || "Failed to update stock");
+          return;
+        }
+      }
+
+      // Update reorder threshold if changed
+      if (values.reorder_threshold_override !== null) {
+        const thresholdResult = await SetLocationStockWithThreshold(
+          selectedLocationId,
+          item.id,
+          values.current_stock,
+          values.reorder_threshold_override
+        );
+        if (thresholdResult.error) {
+          toast.error(thresholdResult.error);
+          return;
+        }
       }
 
       // Update cost override separately in location_inventory_overrides
@@ -394,6 +425,24 @@ export function EditItemDialog({
                   </p>
                 </div>
               </div>
+
+              {/* Reason for stock change */}
+              {locationForm.watch("current_stock") !== initialStock && (
+                <div className="col-span-2 space-y-2">
+                  <Label htmlFor="stock_update_reason">
+                    Reason for Change{" "}
+                    <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="stock_update_reason"
+                    placeholder="e.g., Inventory count adjustment, received delivery..."
+                    {...locationForm.register("stock_update_reason")}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    This will be recorded in the activity log
+                  </p>
+                </div>
+              )}
             </div>
 
             <Separator />
