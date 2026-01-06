@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { MenuBrowser } from "../components/MenuBrowser";
 import { StorefrontHeader } from "../components/StorefrontHeader";
 import { CartSidebar } from "../components/CartSidebar";
+import { FloatingCartBar } from "../components/FloatingCartBar";
 
 interface PageProps {
   params: Promise<{
@@ -37,6 +38,7 @@ export default async function StorefrontPage({ params }: PageProps) {
       </main>
 
       <CartSidebar />
+      <FloatingCartBar />
     </div>
   );
 }
