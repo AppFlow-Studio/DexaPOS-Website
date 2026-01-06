@@ -57,6 +57,7 @@ const timeOptions = generateTimeOptions();
 
 // Format time for display
 const formatTime12h = (time: string): string => {
+  if (!time) return "00:00 AM";
   const [hours, minutes] = time.split(":").map(Number);
   const period = hours >= 12 ? "PM" : "AM";
   const displayHours = hours % 12 || 12;

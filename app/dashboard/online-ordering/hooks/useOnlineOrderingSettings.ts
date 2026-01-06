@@ -1,7 +1,11 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import {
+  getOnlineOrderingSettings,
+  saveOnlineOrderingSettings,
+} from "../actions";
+import { toast } from "sonner";
 
 // Types
 export interface DaySchedule {
@@ -39,7 +43,7 @@ export interface DeliveryZone {
 }
 
 export interface OnlineOrderingSettings {
-  id: string;
+  id: string; // This might be site ID or generated
   locationId: string;
 
   // General Settings
@@ -128,11 +132,35 @@ const createDefaultWeeklySchedule = (): WeeklySchedule => ({
   sunday: createDefaultDaySchedule(false),
 });
 
+const sanitizeSchedule = (schedule: any): WeeklySchedule => {
+  if (!schedule) return createDefaultWeeklySchedule();
+
+  const defaultSchedule = createDefaultWeeklySchedule();
+  const sanitized: any = {};
+
+  for (const day of dayOrder) {
+    // If the day exists in the incoming schedule, merge it with defaults
+    // Otherwise use default
+    if (schedule[day]) {
+      sanitized[day] = {
+        enabled: schedule[day].enabled ?? false, // Default to disabled if missing
+        from: schedule[day].from || "09:00",
+        to: schedule[day].to || "21:00",
+        is24Hours: schedule[day].is24Hours ?? false,
+      };
+    } else {
+      sanitized[day] = defaultSchedule[day];
+    }
+  }
+
+  return sanitized as WeeklySchedule;
+};
+
 const createDefaultSettings = (
   locationId: string,
   locationName: string
 ): OnlineOrderingSettings => ({
-  id: `oo_${locationId}`,
+  id: `temp_${locationId}`,
   locationId,
 
   // General
@@ -210,211 +238,150 @@ const createDefaultSettings = (
   convenienceFeeFlat: 0,
 });
 
-// Mock data for demo
-const mockSettings: OnlineOrderingSettings[] = [
-  {
-    ...createDefaultSettings(
-      "8835e749-9bbf-4405-b4a4-7f28a56f990a",
-      "Main Street Location"
-    ),
-    id: "oo_loc_1",
-    enabled: true,
-    storeName: "Dexa Café - Main Street",
-    storeSlug: "dexa-cafe-main",
-    phone: "(555) 123-4567",
-    email: "orders@dexacafe.com",
-    address: "123 Main Street, Downtown, NY 10001",
-    logoUrl: null,
-    heroImageUrl: null,
-    primaryColor: "#f97316",
-    secondaryColor: "#0ea5e9",
-    pickupEnabled: true,
-    deliveryEnabled: true,
-    preparationLeadTime: 20,
-    baseDeliveryFee: 4.99,
-    freeDeliveryThreshold: 50,
-    sendEmailOnNewOrder: true,
-    notificationEmail: "manager@dexacafe.com",
-    autoAcceptOrders: true,
-  },
-  {
-    ...createDefaultSettings(
-      "657a703d-37ef-423e-a72b-a8766f67941a",
-      "Airport Terminal"
-    ),
-    id: "oo_loc_2",
-    enabled: true,
-    storeName: "Dexa Express - Airport",
-    storeSlug: "dexa-express-airport",
-    phone: "(555) 987-6543",
-    email: "airport@dexacafe.com",
-    address: "Terminal 3, Gate B12, JFK Airport",
-    primaryColor: "#8b5cf6",
-    secondaryColor: "#ec4899",
-    pickupEnabled: true,
-    deliveryEnabled: false,
-    preparationLeadTime: 10,
-    operatingHours: {
-      ...createDefaultWeeklySchedule(),
-      monday: { enabled: true, from: "05:00", to: "23:00", is24Hours: false },
-      tuesday: { enabled: true, from: "05:00", to: "23:00", is24Hours: false },
-      wednesday: {
-        enabled: true,
-        from: "05:00",
-        to: "23:00",
-        is24Hours: false,
-      },
-      thursday: { enabled: true, from: "05:00", to: "23:00", is24Hours: false },
-      friday: { enabled: true, from: "05:00", to: "23:00", is24Hours: false },
-      saturday: { enabled: true, from: "05:00", to: "23:00", is24Hours: false },
-      sunday: { enabled: true, from: "05:00", to: "23:00", is24Hours: false },
-    },
-  },
-];
-
 interface OnlineOrderingStore {
   settings: OnlineOrderingSettings[];
+  isLoading: boolean;
+  isSaving: boolean;
+  dirtyLocations: Set<string>;
 
   // Actions
-  getSettingsForLocation: (
-    locationId: string
-  ) => OnlineOrderingSettings | undefined;
+  loadSettings: (locationId: string) => Promise<void>;
   updateSettings: (
     locationId: string,
     updates: Partial<OnlineOrderingSettings>
-  ) => void;
+  ) => void; // Now synchronous, local only
+  saveSettings: (locationId: string) => Promise<void>; // Network call
+  discardChanges: (locationId: string) => Promise<void>; // Reload from DB
   createSettings: (
     locationId: string,
     locationName: string
-  ) => OnlineOrderingSettings;
-  toggleEnabled: (locationId: string) => void;
-  updateOperatingHours: (locationId: string, hours: WeeklySchedule) => void;
-  updateDeliveryHours: (locationId: string, hours: WeeklySchedule) => void;
-  updateBranding: (
-    locationId: string,
-    branding: {
-      logoUrl?: string | null;
-      heroImageUrl?: string | null;
-      faviconUrl?: string | null;
-      primaryColor?: string;
-      secondaryColor?: string;
-    }
-  ) => void;
-  addDeliveryZone: (locationId: string, zone: Omit<DeliveryZone, "id">) => void;
-  removeDeliveryZone: (locationId: string, zoneId: string) => void;
-  updateDeliveryZone: (
-    locationId: string,
-    zoneId: string,
-    updates: Partial<DeliveryZone>
-  ) => void;
+  ) => Promise<OnlineOrderingSettings>;
+  isDirty: (locationId: string) => boolean;
 }
 
-export const useOnlineOrderingSettings = create<OnlineOrderingStore>()(
-  persist(
-    (set, get) => ({
-      settings: mockSettings,
+export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
+  (set, get) => ({
+    settings: [],
+    isLoading: false,
+    isSaving: false,
+    dirtyLocations: new Set<string>(),
 
-      getSettingsForLocation: (locationId: string) => {
-        return get().settings.find((s) => s.locationId === locationId);
-      },
+    loadSettings: async (locationId: string) => {
+      set({ isLoading: true });
+      try {
+        const data = await getOnlineOrderingSettings(locationId);
+        if (data) {
+          // Sanitize operating hours if present
+          if (data.operatingHours) {
+            data.operatingHours = sanitizeSchedule(data.operatingHours);
+          }
+          if (data.deliveryHours) {
+            data.deliveryHours = sanitizeSchedule(data.deliveryHours);
+          }
 
-      updateSettings: (
-        locationId: string,
-        updates: Partial<OnlineOrderingSettings>
-      ) => {
-        set((state) => ({
+          // Merge with default to ensure full shape
+          const mergedSettings = {
+            ...createDefaultSettings(locationId, data.storeName || ""),
+            ...data,
+          };
+
+          set((state) => {
+            // Remove existing if present to replace
+            const filtered = state.settings.filter(
+              (s) => s.locationId !== locationId
+            );
+            // Clear dirty flag since we just loaded fresh data
+            const newDirty = new Set(state.dirtyLocations);
+            newDirty.delete(locationId);
+            return {
+              settings: [...filtered, mergedSettings],
+              dirtyLocations: newDirty,
+            };
+          });
+        }
+      } catch (error) {
+        console.error("Failed to load settings:", error);
+        toast.error("Failed to load online ordering settings");
+      } finally {
+        set({ isLoading: false });
+      }
+    },
+
+    // Local-only update (no network call)
+    updateSettings: (
+      locationId: string,
+      updates: Partial<OnlineOrderingSettings>
+    ) => {
+      set((state) => {
+        const newDirty = new Set(state.dirtyLocations);
+        newDirty.add(locationId);
+        return {
           settings: state.settings.map((s) =>
             s.locationId === locationId ? { ...s, ...updates } : s
           ),
-        }));
-      },
-
-      createSettings: (locationId: string, locationName: string) => {
-        const newSettings = createDefaultSettings(locationId, locationName);
-        set((state) => ({
-          settings: [...state.settings, newSettings],
-        }));
-        return newSettings;
-      },
-
-      toggleEnabled: (locationId: string) => {
-        set((state) => ({
-          settings: state.settings.map((s) =>
-            s.locationId === locationId ? { ...s, enabled: !s.enabled } : s
-          ),
-        }));
-      },
-
-      updateOperatingHours: (locationId: string, hours: WeeklySchedule) => {
-        set((state) => ({
-          settings: state.settings.map((s) =>
-            s.locationId === locationId ? { ...s, operatingHours: hours } : s
-          ),
-        }));
-      },
-
-      updateDeliveryHours: (locationId: string, hours: WeeklySchedule) => {
-        set((state) => ({
-          settings: state.settings.map((s) =>
-            s.locationId === locationId ? { ...s, deliveryHours: hours } : s
-          ),
-        }));
-      },
-
-      updateBranding: (locationId: string, branding) => {
-        set((state) => ({
-          settings: state.settings.map((s) =>
-            s.locationId === locationId ? { ...s, ...branding } : s
-          ),
-        }));
-      },
-
-      addDeliveryZone: (locationId: string, zone) => {
-        const newZone: DeliveryZone = {
-          ...zone,
-          id: `zone_${Date.now()}`,
+          dirtyLocations: newDirty,
         };
-        set((state) => ({
-          settings: state.settings.map((s) =>
-            s.locationId === locationId
-              ? { ...s, deliveryZones: [...s.deliveryZones, newZone] }
-              : s
-          ),
-        }));
-      },
+      });
+    },
 
-      removeDeliveryZone: (locationId: string, zoneId: string) => {
-        set((state) => ({
-          settings: state.settings.map((s) =>
-            s.locationId === locationId
-              ? {
-                  ...s,
-                  deliveryZones: s.deliveryZones.filter((z) => z.id !== zoneId),
-                }
-              : s
-          ),
-        }));
-      },
+    // Save to database
+    saveSettings: async (locationId: string) => {
+      const currentSettings = get().settings.find(
+        (s) => s.locationId === locationId
+      );
+      if (!currentSettings) {
+        toast.error("No settings to save");
+        return;
+      }
 
-      updateDeliveryZone: (locationId: string, zoneId: string, updates) => {
-        set((state) => ({
-          settings: state.settings.map((s) =>
-            s.locationId === locationId
-              ? {
-                  ...s,
-                  deliveryZones: s.deliveryZones.map((z) =>
-                    z.id === zoneId ? { ...z, ...updates } : z
-                  ),
-                }
-              : s
-          ),
-        }));
-      },
-    }),
-    {
-      name: "dexa-online-ordering-settings",
-    }
-  )
+      set({ isSaving: true });
+      try {
+        await saveOnlineOrderingSettings(locationId, currentSettings);
+        // Clear dirty flag on success
+        set((state) => {
+          const newDirty = new Set(state.dirtyLocations);
+          newDirty.delete(locationId);
+          return { dirtyLocations: newDirty };
+        });
+        toast.success("Settings saved");
+      } catch (error) {
+        console.error("Failed to save settings:", error);
+        toast.error("Failed to save settings");
+      } finally {
+        set({ isSaving: false });
+      }
+    },
+
+    // Discard changes by reloading from DB
+    discardChanges: async (locationId: string) => {
+      await get().loadSettings(locationId);
+      toast.info("Changes discarded");
+    },
+
+    createSettings: async (locationId: string, locationName: string) => {
+      const newSettings = createDefaultSettings(locationId, locationName);
+
+      // Add to local state first
+      set((state) => ({
+        settings: [...state.settings, newSettings],
+      }));
+
+      // Start persisting (this will create the site entry)
+      try {
+        await saveOnlineOrderingSettings(locationId, newSettings);
+      } catch (error) {
+        console.error("Failed to create settings:", error);
+        toast.error("Failed to initialize settings");
+      }
+
+      return newSettings;
+    },
+
+    // Check if location has unsaved changes
+    isDirty: (locationId: string) => {
+      return get().dirtyLocations.has(locationId);
+    },
+  })
 );
 
 // Helper function to format hours for display
