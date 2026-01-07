@@ -22,7 +22,7 @@ export function FloatingCartBar() {
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 100, opacity: 0 }}
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
-        className="fixed bottom-0 left-0 right-0 z-50 p-4 pb-safe"
+        className="fixed bottom-0 left-0 right-0 z-50 p-4 pb-safe lg:pb-4 mb-[72px] lg:mb-0"
       >
         <motion.div
           key={itemCount}

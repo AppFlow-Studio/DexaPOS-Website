@@ -16,6 +16,7 @@ function mapSiteToSettings(site: Site): Partial<OnlineOrderingSettings> {
     storeName: site.title ?? "",
     storeSlug: site.subdomain ?? "",
     logoUrl: site.logo_url,
+    bannerText: site.banner_text,
     // Extract theme config
     primaryColor: site.theme_config?.primaryColor ?? "#3b82f6",
     secondaryColor: site.theme_config?.secondaryColor ?? "#10b981",
@@ -45,6 +46,7 @@ export async function getOnlineOrderingSettings(
   }
 
   // 2. Fetch Site Data (Branding, Enabled)
+  // 2. Fetch Site Data (Branding, Config)
   const { data: site, error: siteError } = await supabase
     .from("sites")
     .select("*")
@@ -64,12 +66,48 @@ export async function getOnlineOrderingSettings(
     phone: location.phone ?? "",
     email: location.email ?? "",
     address: `${location.address_line1}, ${location.city}, ${location.state} ${location.postal_code}`,
-    operatingHours: location.business_hours as WeeklySchedule, // Assuming matching shape
+    operatingHours: location.business_hours as WeeklySchedule, // Default fallback
   };
 
   // Merge Site data if it exists
   if (site) {
     const siteSettings = mapSiteToSettings(site);
+
+    // Merge online_ordering_config fields if present
+    if (site.online_ordering_config) {
+      const config: any = site.online_ordering_config;
+
+      // Prioritize config hours if they exist and are valid
+      if (config.operatingHours) {
+        settings.operatingHours = config.operatingHours;
+      }
+
+      // Merge other config fields
+      Object.assign(settings, {
+        useCustomDeliveryHours: config.useCustomDeliveryHours,
+        deliveryHours: config.deliveryHours,
+        pickupEnabled: config.pickupEnabled,
+        deliveryEnabled: config.deliveryEnabled,
+        preparationLeadTime: config.preparationLeadTime,
+        acceptFutureOrdersOnly: config.acceptFutureOrdersOnly,
+        futureOrderMinDays: config.futureOrderMinDays,
+        futureOrderMaxDays: config.futureOrderMaxDays,
+        minimumOrderAmount: config.minimumOrderAmount,
+        tippingEnabled: config.tippingEnabled,
+        tipConfig: config.tipConfig,
+        baseDeliveryFee: config.baseDeliveryFee,
+        freeDeliveryThreshold: config.freeDeliveryThreshold,
+        deliveryZones: config.deliveryZones,
+        acceptOnlinePayments: config.acceptOnlinePayments,
+        acceptCashOnDelivery: config.acceptCashOnDelivery,
+        acceptCardOnDelivery: config.acceptCardOnDelivery,
+        sendEmailOnNewOrder: config.sendEmailOnNewOrder,
+        notificationEmail: config.notificationEmail,
+        autoAcceptOrders: config.autoAcceptOrders,
+        autoClosePaidOrders: config.autoClosePaidOrders,
+      });
+    }
+
     Object.assign(settings, siteSettings);
   }
 
@@ -105,11 +143,14 @@ export async function saveOnlineOrderingSettings(
   // First, check if site exists to get ID and current config
   const { data: existingSite } = await supabase
     .from("sites")
-    .select("id, theme_config, title, subdomain, logo_url, is_active")
+    .select(
+      "id, theme_config, online_ordering_config, title, subdomain, logo_url, is_active"
+    )
     .eq("location_id", locationId)
     .single();
 
   const currentTheme: any = existingSite?.theme_config || {};
+  const currentOnlineConfig: any = existingSite?.online_ordering_config || {};
 
   const themeConfig: SiteThemeConfig = {
     primaryColor:
@@ -118,6 +159,66 @@ export async function saveOnlineOrderingSettings(
       settings.secondaryColor ?? currentTheme.secondaryColor ?? "#10b981",
     heroImageUrl: settings.heroImageUrl ?? currentTheme.heroImageUrl,
     faviconUrl: settings.faviconUrl ?? currentTheme.faviconUrl,
+    headerStyle: settings.headerStyle ?? currentTheme.headerStyle, // Save headerStyle
+  };
+
+  // Construct OnlineOrderingConfig
+  const onlineOrderingConfig: any = {
+    ...currentOnlineConfig,
+    // Hours
+    operatingHours:
+      settings.operatingHours ?? currentOnlineConfig.operatingHours,
+    useCustomDeliveryHours:
+      settings.useCustomDeliveryHours ??
+      currentOnlineConfig.useCustomDeliveryHours,
+    deliveryHours: settings.deliveryHours ?? currentOnlineConfig.deliveryHours,
+
+    // Pickup & Delivery
+    pickupEnabled: settings.pickupEnabled ?? currentOnlineConfig.pickupEnabled,
+    deliveryEnabled:
+      settings.deliveryEnabled ?? currentOnlineConfig.deliveryEnabled,
+    preparationLeadTime:
+      settings.preparationLeadTime ?? currentOnlineConfig.preparationLeadTime,
+    acceptFutureOrdersOnly:
+      settings.acceptFutureOrdersOnly ??
+      currentOnlineConfig.acceptFutureOrdersOnly,
+    futureOrderMinDays:
+      settings.futureOrderMinDays ?? currentOnlineConfig.futureOrderMinDays,
+    futureOrderMaxDays:
+      settings.futureOrderMaxDays ?? currentOnlineConfig.futureOrderMaxDays,
+    minimumOrderAmount:
+      settings.minimumOrderAmount ?? currentOnlineConfig.minimumOrderAmount,
+
+    // Tipping
+    tippingEnabled:
+      settings.tippingEnabled ?? currentOnlineConfig.tippingEnabled,
+    tipConfig: settings.tipConfig ?? currentOnlineConfig.tipConfig,
+
+    // Delivery Settings
+    baseDeliveryFee:
+      settings.baseDeliveryFee ?? currentOnlineConfig.baseDeliveryFee,
+    freeDeliveryThreshold:
+      settings.freeDeliveryThreshold ??
+      currentOnlineConfig.freeDeliveryThreshold,
+    deliveryZones: settings.deliveryZones ?? currentOnlineConfig.deliveryZones,
+
+    // Payment
+    acceptOnlinePayments:
+      settings.acceptOnlinePayments ?? currentOnlineConfig.acceptOnlinePayments,
+    acceptCashOnDelivery:
+      settings.acceptCashOnDelivery ?? currentOnlineConfig.acceptCashOnDelivery,
+    acceptCardOnDelivery:
+      settings.acceptCardOnDelivery ?? currentOnlineConfig.acceptCardOnDelivery,
+
+    // Notifications & Automation
+    sendEmailOnNewOrder:
+      settings.sendEmailOnNewOrder ?? currentOnlineConfig.sendEmailOnNewOrder,
+    notificationEmail:
+      settings.notificationEmail ?? currentOnlineConfig.notificationEmail,
+    autoAcceptOrders:
+      settings.autoAcceptOrders ?? currentOnlineConfig.autoAcceptOrders,
+    autoClosePaidOrders:
+      settings.autoClosePaidOrders ?? currentOnlineConfig.autoClosePaidOrders,
   };
 
   // Build siteData dynamically, only including defined values
@@ -125,6 +226,7 @@ export async function saveOnlineOrderingSettings(
   const siteData: Record<string, any> = {
     location_id: locationId,
     theme_config: themeConfig,
+    online_ordering_config: onlineOrderingConfig,
   };
 
   // Only include fields if they have actual values
@@ -138,6 +240,9 @@ export async function saveOnlineOrderingSettings(
   }
 
   if (settings.logoUrl !== undefined) siteData.logo_url = settings.logoUrl;
+
+  if (settings.bannerText !== undefined)
+    siteData.banner_text = settings.bannerText;
 
   if (settings.enabled !== undefined) siteData.is_active = settings.enabled;
   else if (existingSite?.is_active !== undefined)

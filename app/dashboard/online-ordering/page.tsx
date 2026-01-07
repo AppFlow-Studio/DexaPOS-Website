@@ -10,6 +10,7 @@ import {
   getDayLabel,
 } from "./hooks/useOnlineOrderingSettings";
 import { HoursConfigModal } from "./components/HoursConfigModal";
+import { uploadStoreImage, deleteStoreImage } from "@/lib/storage/actions";
 import {
   Card,
   CardContent,
@@ -48,6 +49,7 @@ import {
   X,
   Building2,
   MapPin,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -71,6 +73,7 @@ export default function OnlineOrderingPage() {
   const [hoursModalType, setHoursModalType] = useState<
     "operating" | "delivery"
   >("operating");
+  const [isUploading, setIsUploading] = useState(false);
 
   // Global location state
   const { selectedLocationId } = useLocationStore();
@@ -110,8 +113,8 @@ export default function OnlineOrderingPage() {
     toast.success("Online ordering settings created!");
   };
 
-  // File upload handler
-  const handleFileUpload = (
+  // File upload handler - uploads to Supabase Storage
+  const handleFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
     type: "logo" | "hero" | "favicon"
   ) => {
@@ -124,38 +127,89 @@ export default function OnlineOrderingPage() {
       return;
     }
 
-    // Create object URL for preview
-    const url = URL.createObjectURL(file);
-
-    switch (type) {
-      case "logo":
-        handleUpdate({ logoUrl: url });
-        break;
-      case "hero":
-        handleUpdate({ heroImageUrl: url });
-        break;
-      case "favicon":
-        handleUpdate({ faviconUrl: url });
-        break;
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File too large. Maximum size: 5MB");
+      return;
     }
 
-    toast.success(
-      `${type.charAt(0).toUpperCase() + type.slice(1)} uploaded successfully`
-    );
+    setIsUploading(true);
+
+    try {
+      // Create FormData for upload
+      const formData = new FormData();
+      formData.append("file", file);
+
+      // Determine folder based on type
+      const folder =
+        type === "logo" ? "logos" : type === "hero" ? "banners" : "favicons";
+
+      // Upload to Supabase Storage
+      const result = await uploadStoreImage(
+        formData,
+        `${selectedLocationId}/${folder}`
+      );
+
+      if (!result.success || !result.url) {
+        toast.error(result.error || "Upload failed");
+        return;
+      }
+
+      // Update settings with the new URL
+      switch (type) {
+        case "logo":
+          handleUpdate({ logoUrl: result.url });
+          break;
+        case "hero":
+          handleUpdate({ heroImageUrl: result.url });
+          break;
+        case "favicon":
+          handleUpdate({ faviconUrl: result.url });
+          break;
+      }
+
+      // Auto-save the new image URL to database
+      await saveSettings(selectedLocationId);
+
+      toast.success(
+        `${type.charAt(0).toUpperCase() + type.slice(1)} uploaded successfully`
+      );
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast.error("Failed to upload image");
+    } finally {
+      setIsUploading(false);
+      // Reset input
+      e.target.value = "";
+    }
   };
 
-  const removeImage = (type: "logo" | "hero" | "favicon") => {
+  const removeImage = async (type: "logo" | "hero" | "favicon") => {
+    // Get the current URL to delete from storage
+    let currentUrl: string | null = null;
     switch (type) {
       case "logo":
+        currentUrl = currentSettings?.logoUrl || null;
         handleUpdate({ logoUrl: null });
         break;
       case "hero":
+        currentUrl = currentSettings?.heroImageUrl || null;
         handleUpdate({ heroImageUrl: null });
         break;
       case "favicon":
+        currentUrl = currentSettings?.faviconUrl || null;
         handleUpdate({ faviconUrl: null });
         break;
     }
+
+    // Try to delete from storage (don't block on failure)
+    if (currentUrl && currentUrl.includes("supabase")) {
+      deleteStoreImage(currentUrl).catch(console.error);
+    }
+
+    // Auto-save the removal to database
+    await saveSettings(selectedLocationId);
+
     toast.success("Image removed");
   };
 
@@ -663,8 +717,18 @@ export default function OnlineOrderingPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => logoInputRef.current?.click()}
+                        disabled={isUploading}
                       >
-                        {currentSettings.logoUrl ? "Change" : "Upload"}
+                        {isUploading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Uploading...
+                          </>
+                        ) : currentSettings.logoUrl ? (
+                          "Change"
+                        ) : (
+                          "Upload"
+                        )}
                       </Button>
                       {currentSettings.logoUrl && (
                         <Button
@@ -729,8 +793,18 @@ export default function OnlineOrderingPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => heroInputRef.current?.click()}
+                      disabled={isUploading}
                     >
-                      {currentSettings.heroImageUrl ? "Change" : "Upload"}
+                      {isUploading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : currentSettings.heroImageUrl ? (
+                        "Change"
+                      ) : (
+                        "Upload"
+                      )}
                     </Button>
                     {currentSettings.heroImageUrl && (
                       <Button
@@ -744,6 +818,24 @@ export default function OnlineOrderingPage() {
                     )}
                   </div>
                 </div>
+              </div>
+
+              <Separator />
+
+              {/* Banner Text */}
+              <div className="space-y-3">
+                <Label htmlFor="bannerText">Banner Promotional Text</Label>
+                <Input
+                  id="bannerText"
+                  value={currentSettings.bannerText || ""}
+                  onChange={(e) =>
+                    handleUpdate({ bannerText: e.target.value || null })
+                  }
+                  placeholder="Say what you want in this banner!"
+                />
+                <p className="text-sm text-muted-foreground">
+                  This text appears above your store name on the hero banner
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -986,6 +1078,41 @@ export default function OnlineOrderingPage() {
                   }
                 />
               </div>
+
+              <div className="grid gap-6 sm:grid-cols-2 pt-4">
+                <div className="space-y-2">
+                  <Label>Min Days in Future</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={currentSettings.futureOrderMinDays}
+                    onChange={(e) =>
+                      handleUpdate({
+                        futureOrderMinDays: parseInt(e.target.value) || 0,
+                      })
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Minimum days in advance (e.g. 1 = tomorrow)
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Max Days in Future</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={currentSettings.futureOrderMaxDays}
+                    onChange={(e) =>
+                      handleUpdate({
+                        futureOrderMaxDays: parseInt(e.target.value) || 7,
+                      })
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    How far in advance can customers order
+                  </p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1146,6 +1273,89 @@ export default function OnlineOrderingPage() {
                     )}
                   </div>
                 </div>
+
+                <Separator />
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Smart Tipping</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Show fixed dollar amounts for small orders (e.g. $1, $2,
+                      $3)
+                    </p>
+                  </div>
+                  <Switch
+                    checked={currentSettings.tipConfig.smartTipEnabled}
+                    onCheckedChange={(smartTipEnabled) =>
+                      handleUpdate({
+                        tipConfig: {
+                          ...currentSettings.tipConfig,
+                          smartTipEnabled,
+                        },
+                      })
+                    }
+                  />
+                </div>
+
+                {currentSettings.tipConfig.smartTipEnabled && (
+                  <div className="space-y-4 pl-4 border-l-2 ml-2">
+                    <div className="space-y-2">
+                      <Label>Order Threshold</Label>
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          type="number"
+                          value={currentSettings.tipConfig.smartTipThreshold}
+                          onChange={(e) =>
+                            handleUpdate({
+                              tipConfig: {
+                                ...currentSettings.tipConfig,
+                                smartTipThreshold:
+                                  parseFloat(e.target.value) || 0,
+                              },
+                            })
+                          }
+                          className="pl-10 w-32"
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Orders below this amount will show fixed tips
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Fixed Tip Amounts</Label>
+                      <div className="flex gap-2">
+                        {currentSettings.tipConfig.smartTipAmounts.map(
+                          (amount, index) => (
+                            <div key={index} className="relative">
+                              <DollarSign className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                              <Input
+                                type="number"
+                                value={amount}
+                                onChange={(e) => {
+                                  const newAmounts = [
+                                    ...currentSettings.tipConfig
+                                      .smartTipAmounts,
+                                  ];
+                                  newAmounts[index] =
+                                    parseFloat(e.target.value) || 0;
+                                  handleUpdate({
+                                    tipConfig: {
+                                      ...currentSettings.tipConfig,
+                                      smartTipAmounts: newAmounts,
+                                    },
+                                  });
+                                }}
+                                className="w-20 pl-8"
+                              />
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between">
                   <div>

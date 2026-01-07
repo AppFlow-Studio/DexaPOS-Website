@@ -76,8 +76,10 @@ export interface OnlineOrderingSettings {
   logoUrl: string | null;
   heroImageUrl: string | null;
   faviconUrl: string | null;
+  bannerText: string | null;
   primaryColor: string;
   secondaryColor: string;
+  headerStyle: "primary" | "dark" | "light";
 
   // Pickup & Delivery
   pickupEnabled: boolean;
@@ -193,8 +195,10 @@ const createDefaultSettings = (
   logoUrl: null,
   heroImageUrl: null,
   faviconUrl: null,
+  bannerText: null,
   primaryColor: "#3b82f6",
   secondaryColor: "#10b981",
+  headerStyle: "primary",
 
   // Pickup & Delivery
   pickupEnabled: true,
