@@ -1,9 +1,8 @@
 import { getStorefrontData } from "../actions";
 import { notFound } from "next/navigation";
-import { MenuBrowser } from "../components/MenuBrowser";
-import { StorefrontHeader } from "../components/StorefrontHeader";
 import { CartSidebar } from "../components/CartSidebar";
 import { FloatingCartBar } from "../components/FloatingCartBar";
+import { StorefrontLayout } from "../components/StorefrontLayout";
 
 interface PageProps {
   params: Promise<{
@@ -30,14 +29,13 @@ export default async function StorefrontPage({ params }: PageProps) {
   } as React.CSSProperties;
 
   return (
-    <div className="min-h-screen bg-gray-50" style={themeStyle}>
-      <StorefrontHeader site={site} location={location} />
+    <div
+      className="min-h-screen bg-gray-50 overflow-x-hidden"
+      style={themeStyle}
+    >
+      <StorefrontLayout site={site} location={location} menus={menus} />
 
-      <main className="container mx-auto p-4 py-8">
-        <MenuBrowser menus={menus} />
-      </main>
-
-      <CartSidebar />
+      <CartSidebar config={site?.online_ordering_config || undefined} />
       <FloatingCartBar />
     </div>
   );
