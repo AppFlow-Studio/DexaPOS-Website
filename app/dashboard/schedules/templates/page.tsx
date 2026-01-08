@@ -11,6 +11,7 @@ import {
   Trash2,
   Edit,
   CheckCircle2,
+  ChevronLeft,
 } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { useScheduleTemplateStore } from "@/stores/useScheduleTemplateStore";
+import { TemplateVisualPreview } from "@/components/scheduling/templates/TemplateVisualPreview";
 
 export default function TemplateLibraryPage() {
   const router = useRouter();
@@ -110,15 +112,20 @@ export default function TemplateLibraryPage() {
     <div className="flex flex-col h-[calc(100vh-6rem)] p-8 space-y-8 bg-background overflow-y-auto w-full">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground mb-2">
-            Schedule Templates
-          </h1>
-          <p className="text-muted-foreground">
-            {isSelectionMode
-              ? `Select up to 3 templates (${selectedActiveIds.length}/3 selected)`
-              : "Manage and organize your weekly schedule templates."}
-          </p>
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+            <ChevronLeft className="w-5 h-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">
+              Schedule Templates
+            </h1>
+            <p className="text-muted-foreground">
+              {isSelectionMode
+                ? `Select up to 3 templates (${selectedActiveIds.length}/3 selected)`
+                : "Manage and organize your weekly schedule templates."}
+            </p>
+          </div>
         </div>
 
         {!isSelectionMode && (
@@ -221,9 +228,13 @@ export default function TemplateLibraryPage() {
                     ? "ring-2 ring-primary border-primary bg-primary/5"
                     : ""
                 }`}
-                onClick={() =>
-                  isSelectionMode && handleToggleSelection(template.id)
-                }
+                onClick={() => {
+                  if (isSelectionMode) {
+                    handleToggleSelection(template.id);
+                  } else {
+                    handleEdit(template.id);
+                  }
+                }}
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
@@ -256,26 +267,36 @@ export default function TemplateLibraryPage() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            onClick={(e) => e.stopPropagation()}
                           >
                             <MoreVertical className="w-4 h-4" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-40">
                           <DropdownMenuItem
-                            onClick={() => handleEdit(template.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEdit(template.id);
+                            }}
                             className="cursor-pointer"
                           >
                             <Edit className="w-4 h-4 mr-2" /> Edit
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => handleDuplicate(template.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDuplicate(template.id);
+                            }}
                             className="cursor-pointer"
                           >
                             <Copy className="w-4 h-4 mr-2" /> Duplicate
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            onClick={() => handleDelete(template.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(template.id);
+                            }}
                             className="cursor-pointer text-destructive focus:text-destructive"
                           >
                             <Trash2 className="w-4 h-4 mr-2" /> Delete
@@ -300,9 +321,12 @@ export default function TemplateLibraryPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <CardDescription className="line-clamp-2 min-h-[40px]">
+                  <CardDescription className="line-clamp-2 min-h-[40px] mb-4">
                     {template.description || "No description provided."}
                   </CardDescription>
+
+                  <TemplateVisualPreview shifts={template.shifts} />
+
                   <div className="mt-4 pt-4 border-t flex justify-between text-xs text-muted-foreground">
                     <span>{template.shifts.length} shifts</span>
                     <span>

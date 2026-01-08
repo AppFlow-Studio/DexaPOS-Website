@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle, RefreshCcw } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import Link from "next/link";
 
 export default function VoidsReportPage() {
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
@@ -163,7 +164,14 @@ export default function VoidsReportPage() {
                           <span>{item.item_name}</span>
                         </div>
                       </TableCell>
-                      <TableCell>#{item.order_number}</TableCell>
+                      <TableCell>
+                        <Link
+                          href={`/dashboard/orders/${item.order_id}`}
+                          className="text-primary underline hover:text-primary/80 transition-colors"
+                        >
+                          #{item.order_number}
+                        </Link>
+                      </TableCell>
                       <TableCell
                         className="max-w-[200px] truncate"
                         title={item.reason}
@@ -235,7 +243,14 @@ export default function VoidsReportPage() {
                       <TableCell className="font-medium">
                         {format(new Date(item.refunded_at), "MMM d, h:mm a")}
                       </TableCell>
-                      <TableCell>#{item.order_number}</TableCell>
+                      <TableCell>
+                        <Link
+                          href={`/dashboard/orders/${item.order_id}`}
+                          className="text-primary underline hover:text-primary/80 transition-colors"
+                        >
+                          #{item.order_number}
+                        </Link>
+                      </TableCell>
                       <TableCell
                         className="max-w-[200px] truncate"
                         title={item.reason}
