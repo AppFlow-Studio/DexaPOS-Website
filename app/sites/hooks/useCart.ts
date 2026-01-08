@@ -11,8 +11,10 @@ export interface CartItem extends StorefrontItem {
 }
 
 interface CartStore {
+  // State
   items: CartItem[];
   isOpen: boolean;
+  goGreen: boolean;
 
   // Actions
   addItem: (
@@ -26,6 +28,7 @@ interface CartStore {
   clearCart: () => void;
   toggleCart: () => void;
   setOpen: (isOpen: boolean) => void;
+  setGoGreen: (goGreen: boolean) => void;
 
   // Getters
   getSubtotal: () => number;
@@ -37,6 +40,7 @@ export const useCart = create<CartStore>()(
     (set, get) => ({
       items: [],
       isOpen: false,
+      goGreen: false,
 
       addItem: (item, quantity = 1, modifiers = [], notes = "") => {
         set((state) => {
@@ -119,6 +123,10 @@ export const useCart = create<CartStore>()(
 
       setOpen: (isOpen) => {
         set({ isOpen });
+      },
+
+      setGoGreen: (goGreen) => {
+        set({ goGreen });
       },
 
       getSubtotal: () => {

@@ -171,6 +171,28 @@ const navMain = [
         title: "Reports",
         url: "/dashboard/reports",
         icon: BarChart3,
+        items: [
+          {
+            title: "Financial Information",
+            url: "/dashboard/reports/financials",
+          },
+          {
+            title: "Orders",
+            url: "/dashboard/orders/reports",
+          },
+          {
+            title: "Sales By Items",
+            url: "/dashboard/reports/sales-by-items",
+          },
+          {
+            title: "Cash Management",
+            url: "/dashboard/reports/cash-management",
+          },
+          {
+            title: "Voids & Refunds",
+            url: "/dashboard/reports/voids",
+          },
+        ],
       },
     ],
   },
@@ -319,6 +341,50 @@ function MerchantSidebar() {
                                         </Link>
                                       </SidebarMenuSubButton>
                                     </SidebarMenuSubItem>
+                                  </SidebarMenuSub>
+                                </CollapsibleContent>
+                              </Collapsible>
+                            </SidebarMenuItem>
+                          );
+                        }
+
+                        // Check if this is the Reports item that needs sub-menu
+                        if (menuItem.title === "Reports") {
+                          const isReportsActive =
+                            pathname === "/dashboard/reports" ||
+                            pathname.startsWith("/dashboard/reports/");
+                          const isReportsOpen =
+                            pathname.startsWith("/dashboard/reports");
+
+                          return (
+                            <SidebarMenuItem key={menuItem.title}>
+                              <Collapsible defaultOpen={isReportsOpen}>
+                                <CollapsibleTrigger asChild>
+                                  <SidebarMenuButton
+                                    isActive={isReportsActive}
+                                    className="w-full"
+                                  >
+                                    <menuItem.icon className="h-4 w-4" />
+                                    <span>{menuItem.title}</span>
+                                    <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+                                  </SidebarMenuButton>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent>
+                                  <SidebarMenuSub>
+                                    {/* @ts-ignore */}
+                                    {menuItem.items &&
+                                      menuItem.items.map((subItem) => (
+                                        <SidebarMenuSubItem key={subItem.title}>
+                                          <SidebarMenuSubButton
+                                            asChild
+                                            isActive={pathname === subItem.url}
+                                          >
+                                            <Link href={subItem.url}>
+                                              <span>{subItem.title}</span>
+                                            </Link>
+                                          </SidebarMenuSubButton>
+                                        </SidebarMenuSubItem>
+                                      ))}
                                   </SidebarMenuSub>
                                 </CollapsibleContent>
                               </Collapsible>

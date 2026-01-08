@@ -1,8 +1,15 @@
 "use client";
 
+import { useState } from "react";
+import { CheckoutDialog } from "./CheckoutDialog";
+
 import { useCart } from "../hooks/useCart";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import {
   Sheet,
   SheetContent,
@@ -10,12 +17,31 @@ import {
   SheetTitle,
   SheetFooter,
 } from "@/components/ui/sheet";
-import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
+import { Minus, Plus, ShoppingBag, Trash2, Leaf } from "lucide-react";
 
-export function CartSidebar() {
-  const { items, isOpen, setOpen, updateQuantity, removeItem, getSubtotal } =
-    useCart();
+import { OnlineOrderingConfig } from "@/types/site";
+
+interface CartSidebarProps {
+  config?: Partial<OnlineOrderingConfig>;
+}
+
+export function CartSidebar({ config }: CartSidebarProps) {
+  const {
+    items,
+    isOpen,
+    setOpen,
+    updateQuantity,
+    removeItem,
+    getSubtotal,
+    goGreen,
+    setGoGreen,
+  } = useCart();
+
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const subtotal = getSubtotal();
+  const taxRate = 0.08; // Fixed 8% tax for now
+  const tax = subtotal * taxRate;
+  const total = subtotal + tax;
 
   return (
     <Sheet open={isOpen} onOpenChange={setOpen}>
@@ -104,19 +130,68 @@ export function CartSidebar() {
           )}
         </ScrollArea>
 
-        <div className="p-6 border-t bg-muted/50 space-y-4">
-          <div className="flex justify-between items-center text-lg font-bold">
-            <span>Subtotal</span>
-            <span>${subtotal.toFixed(2)}</span>
+        <div className="p-6 border-t bg-muted/30 space-y-4">
+          {/* Go Green Option */}
+          <div className="flex items-center justify-between py-2">
+            <div className="flex items-center gap-2">
+              <Leaf
+                className={cn(
+                  "h-4 w-4",
+                  goGreen ? "text-green-600" : "text-gray-400"
+                )}
+              />
+              <div>
+                <Label htmlFor="go-green" className="font-medium">
+                  Go Green
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Opt out of plastic cutlery
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="go-green"
+              checked={goGreen}
+              onCheckedChange={setGoGreen}
+            />
           </div>
+
+          <Separator />
+
+          {/* Price Breakdown */}
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span>${subtotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Tax (8%)</span>
+              <span>${tax.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between items-center text-lg font-bold pt-2">
+              <span>Total</span>
+              <span>${total.toFixed(2)}</span>
+            </div>
+          </div>
+
           <Button
-            className="w-full bg-[var(--primary)] text-white hover:opacity-90 h-12 text-lg"
+            className="w-full bg-[var(--primary)] text-white hover:opacity-90 h-12 text-lg font-bold shadow-lg shadow-blue-500/20"
             disabled={items.length === 0}
+            onClick={() => setIsCheckoutOpen(true)}
           >
             Checkout
           </Button>
         </div>
       </SheetContent>
+
+      <CheckoutDialog
+        isOpen={isCheckoutOpen}
+        onOpenChange={setIsCheckoutOpen}
+        subtotal={subtotal}
+        tax={tax}
+        total={total}
+        config={config}
+      />
     </Sheet>
   );
 }
