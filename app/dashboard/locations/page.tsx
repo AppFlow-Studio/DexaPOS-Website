@@ -34,6 +34,10 @@ export default function LocationsPage() {
     const router = useRouter()
     const queryClient = useQueryClient()
 
+    // Check if user can create locations (only merchant.admin or merchant.owner)
+    const userRole = userInfo?.members?.[0]?.role as string | undefined
+    const canCreateLocation = userRole === 'merchant.admin' || userRole === 'merchant.owner'
+
     // Zustand store
     const { selectedLocationId, setSelectedLocation } = useLocationStore()
 
@@ -128,10 +132,12 @@ export default function LocationsPage() {
                         Manage all your business locations and franchises
                     </p>
                 </div>
-                <Button onClick={() => router.push('/dashboard/locations/new')} className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Add Location
-                </Button>
+                {canCreateLocation && (
+                    <Button onClick={() => router.push('/dashboard/locations/new')} className="gap-2">
+                        <Plus className="h-4 w-4" />
+                        Add Location
+                    </Button>
+                )}
             </div>
 
             {/* Stats Overview */}
@@ -239,11 +245,13 @@ export default function LocationsPage() {
                             title={locationsList.length === 0 ? "No locations yet" : "No locations found"}
                             description={
                                 locationsList.length === 0
-                                    ? "Get started by adding your first business location"
+                                    ? canCreateLocation 
+                                        ? "Get started by adding your first business location"
+                                        : "Contact your admin to add a location"
                                     : "Try adjusting your search terms"
                             }
                             action={
-                                locationsList.length === 0 ? (
+                                locationsList.length === 0 && canCreateLocation ? (
                                     <Button onClick={() => router.push('/dashboard/locations/new')}>
                                         <Plus className="h-4 w-4 mr-2" />
                                         Add Location
@@ -299,17 +307,19 @@ export default function LocationsPage() {
                                                     >
                                                         <Edit className="h-4 w-4" />
                                                     </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-8 w-8 text-destructive hover:text-destructive"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            setDeletingLocation(location)
-                                                        }}
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
+                                                    {canCreateLocation && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 text-destructive hover:text-destructive"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                setDeletingLocation(location)
+                                                            }}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
