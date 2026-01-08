@@ -529,10 +529,12 @@ export interface VoidItem {
   voided_at: string;
   voided_by: string;
   order_number: string;
+  order_id: string;
 }
 
 export interface RefundItem {
   order_number: string;
+  order_id: string;
   amount: number;
   reason: string;
   refunded_at: string;
@@ -554,6 +556,7 @@ export interface SalesByItemReportItem {
 
 export interface CashFlowReportItem {
   order_number: string;
+  order_id: string;
   amount_collected: number;
   tip_amount: number;
   total_amount: number;

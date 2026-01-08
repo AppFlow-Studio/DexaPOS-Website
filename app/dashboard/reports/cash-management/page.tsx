@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DollarSign } from "lucide-react";
+import Link from "next/link";
 
 export default function CashFlowReportPage() {
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
@@ -38,8 +39,7 @@ export default function CashFlowReportPage() {
   };
 
   const totalCashCollected =
-    cashTransactions?.reduce((sum, item) => sum + item.amount_collected, 0) ||
-    0;
+    cashTransactions?.reduce((sum, item) => sum + item.total_amount, 0) || 0;
   // Note: Change Given is not yet tracked in DB, so we focus on collected for now until full integration.
   // const totalChangeGiven = 0;
   // const netCash = totalCashCollected - totalChangeGiven;
@@ -138,7 +138,14 @@ export default function CashFlowReportPage() {
                     <TableCell className="font-medium">
                       {format(new Date(item.created_at), "MMM d, h:mm a")}
                     </TableCell>
-                    <TableCell>#{item.order_number}</TableCell>
+                    <TableCell>
+                      <Link
+                        href={`/dashboard/orders/${item.order_id}`}
+                        className="text-primary underline hover:text-primary/80 transition-colors"
+                      >
+                        #{item.order_number}
+                      </Link>
+                    </TableCell>
                     <TableCell>{item.staff_name || "Unknown"}</TableCell>
                     <TableCell className="text-right text-muted-foreground">
                       ${(item.total_amount - item.tip_amount).toFixed(2)}
@@ -149,7 +156,7 @@ export default function CashFlowReportPage() {
                         : "-"}
                     </TableCell>
                     <TableCell className="text-right font-bold text-green-600 dark:text-green-400">
-                      ${item.amount_collected.toFixed(2)}
+                      ${item.total_amount.toFixed(2)}
                     </TableCell>
                   </TableRow>
                 ))
