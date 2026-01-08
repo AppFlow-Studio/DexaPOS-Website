@@ -6,6 +6,7 @@ import { Sparkles, Settings, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useScheduleTemplateStore } from "@/stores/useScheduleTemplateStore";
+import { TemplateVisualPreview } from "./TemplateVisualPreview";
 
 interface TemplateDrawerProps {
   onApplyTemplate: (templateId: string) => void;
@@ -52,10 +53,17 @@ export const TemplateDrawer: React.FC<TemplateDrawerProps> = ({
                 <div className="text-xs text-muted-foreground line-clamp-2 mb-2">
                   {template.description || "No description"}
                 </div>
+
+                <TemplateVisualPreview
+                  shifts={template.shifts}
+                  className="mb-2"
+                  compact
+                />
+
                 <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                   <span>{template.shifts.length} shifts</span>
                   <span className="text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-                    Apply
+                    Preview
                   </span>
                 </div>
               </div>

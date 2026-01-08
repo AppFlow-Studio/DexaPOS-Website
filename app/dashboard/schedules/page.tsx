@@ -3,6 +3,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScheduleDashboard } from "@/components/scheduling/dashboard/Dashboard";
 import { MenuSchedulesView } from "@/components/scheduling/dashboard/MenuSchedulesView";
+import { ScheduleReports } from "@/components/scheduling/reports/ScheduleReports";
 
 export default function SchedulesPage() {
   return (
@@ -14,11 +15,16 @@ export default function SchedulesPage() {
       <Tabs defaultValue="staff" className="space-y-4">
         <TabsList>
           <TabsTrigger value="staff">Staff Shifts</TabsTrigger>
+          <TabsTrigger value="reports">Reports</TabsTrigger>
           <TabsTrigger value="menu">Menu Availability</TabsTrigger>
         </TabsList>
 
         <TabsContent value="staff" className="space-y-4">
           <ScheduleDashboard />
+        </TabsContent>
+
+        <TabsContent value="reports" className="space-y-4">
+          <ScheduleReports />
         </TabsContent>
 
         <TabsContent value="menu" className="space-y-4">

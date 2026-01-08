@@ -155,6 +155,28 @@ export default function EditTemplatePage({
     setSelectedShift(null);
   };
 
+  const handleMoveShift = (
+    tempId: string,
+    targetEmployeeId: string,
+    targetDayOfWeek: number
+  ) => {
+    setTemplate((prev) => {
+      if (!prev) return null;
+      const shifts = [...prev.shifts];
+      const shiftIndex = shifts.findIndex((s) => s.tempId === tempId);
+      if (shiftIndex === -1) return prev;
+
+      // Update the shift
+      shifts[shiftIndex] = {
+        ...shifts[shiftIndex],
+        employeeId: targetEmployeeId,
+        dayOfWeek: targetDayOfWeek,
+      };
+
+      return { ...prev, shifts };
+    });
+  };
+
   const handleSave = () => {
     if (!template || !template.name.trim()) {
       toast("Name Required", {
@@ -283,6 +305,7 @@ export default function EditTemplatePage({
               }
               onShiftPress={handleShiftPress}
               onAddShift={handleAddShift}
+              onMoveShift={handleMoveShift}
             />
           </div>
         </div>

@@ -99,7 +99,8 @@ export function ShiftModal({
           ? (editShift as TemplateShift).employeeId
           : (editShift as Shift).employee_id;
         setEmployeeId(eId);
-        setRole(editShift.role as Role);
+        const initialRole = editShift.role as Role;
+        setRole(roles.includes(initialRole) ? initialRole : "server");
 
         if (isTemplateMode || isTemplate) {
           const tShift = editShift as TemplateShift;
@@ -136,7 +137,10 @@ export function ShiftModal({
 
         setStartTime("09:00");
         setEndTime("17:00");
-        setRole(defaultRole || "server");
+        const initialDefaultRole = defaultRole || "server";
+        setRole(
+          roles.includes(initialDefaultRole) ? initialDefaultRole : "server"
+        );
         setNotes("");
         setBreakMinutes(30);
         setExpectedPace("Moderate");
