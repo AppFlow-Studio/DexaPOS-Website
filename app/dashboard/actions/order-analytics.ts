@@ -90,7 +90,7 @@ export async function GetOrderAnalytics(
     .from("orders")
     .select("*, order_items(*)")
     .eq("merchant_id", merchantId)
-    .eq("status", "completed")
+    .not("status", "in", '("draft", "cancelled", "void")')
     .gte("created_at", dateFrom.toISOString())
     .lte("created_at", dateTo.toISOString());
 
@@ -265,7 +265,7 @@ export async function GetSalesByDateRange(
     .from("orders")
     .select("created_at, total_amount")
     .eq("merchant_id", merchantId)
-    .eq("status", "completed")
+    .not("status", "in", '("draft", "cancelled", "void")')
     .gte("created_at", dateFrom.toISOString())
     .lte("created_at", dateTo.toISOString());
 
@@ -326,7 +326,7 @@ export async function GetBestSellingItems(
     .from("orders")
     .select("order_items(item_name, quantity, subtotal)")
     .eq("merchant_id", merchantId)
-    .eq("status", "completed")
+    .not("status", "in", '("draft", "cancelled", "void")')
     .gte("created_at", dateFrom.toISOString())
     .lte("created_at", dateTo.toISOString());
 
@@ -398,7 +398,7 @@ export async function GetOrderTypeBreakdown(
     .from("orders")
     .select("order_type")
     .eq("merchant_id", merchantId)
-    .eq("status", "completed")
+    .not("status", "in", '("draft", "cancelled", "void")')
     .gte("created_at", dateFrom.toISOString())
     .lte("created_at", dateTo.toISOString());
 

@@ -58,6 +58,7 @@ import {
   FileText,
   MonitorSmartphone,
   Globe,
+  GitCompare,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -175,6 +176,10 @@ const navMain = [
           {
             title: "Financial Information",
             url: "/dashboard/reports/financials",
+          },
+          {
+            title: "Compare Locations",
+            url: "/dashboard/reports/comparison",
           },
           {
             title: "Orders",
@@ -596,8 +601,8 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
             {isAllLocations
               ? "All Locations"
               : selectedLocation?.name ||
-              locations.find((l) => l.id === selectedLocationId)?.name ||
-              "Select Location"}
+                locations.find((l) => l.id === selectedLocationId)?.name ||
+                "Select Location"}
           </span>
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
         </button>

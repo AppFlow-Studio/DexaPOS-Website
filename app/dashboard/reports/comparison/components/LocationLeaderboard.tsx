@@ -1,0 +1,209 @@
+"use client";
+
+import { LocationRanking } from "@/app/dashboard/actions/location-analytics";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+import { useLocationStore } from "@/stores/location-store";
+import {
+  ArrowDownRight,
+  ArrowRight,
+  ArrowUpRight,
+  ExternalLink,
+  Minus,
+  Trophy,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+
+interface LocationLeaderboardProps {
+  rankings: LocationRanking[];
+  isLoading: boolean;
+}
+
+export function LocationLeaderboard({
+  rankings,
+  isLoading,
+}: LocationLeaderboardProps) {
+  const router = useRouter();
+  const { setSelectedLocation } = useLocationStore();
+
+  const handleDrillDown = (locationId: string) => {
+    setSelectedLocation(locationId);
+    router.push("/dashboard");
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const formatPercent = (val: number) => {
+    const sign = val > 0 ? "+" : "";
+    return `${sign}${val.toFixed(1)}%`;
+  };
+
+  if (isLoading) {
+    return (
+      <Card className="border-none shadow-sm bg-card/30 backdrop-blur-md ring-1 ring-white/5">
+        <CardHeader className="pb-2">
+          <Skeleton className="h-6 w-48" />
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="border-none shadow-sm bg-card/30 backdrop-blur-md ring-1 ring-white/5">
+      <CardHeader className="flex flex-row items-center justify-between pb-4">
+        <CardTitle className="text-base font-semibold">
+          Location Rankings by Gross Sales
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent border-white/5">
+              <TableHead className="w-[80px] pl-6 text-xs font-bold tracking-wider uppercase text-muted-foreground">
+                Rank
+              </TableHead>
+              <TableHead className="text-xs font-bold tracking-wider uppercase text-muted-foreground">
+                Location
+              </TableHead>
+              <TableHead className="text-right text-xs font-bold tracking-wider uppercase text-muted-foreground">
+                Gross Sales
+              </TableHead>
+              <TableHead className="text-right text-xs font-bold tracking-wider uppercase text-muted-foreground">
+                Vs Avg
+              </TableHead>
+              <TableHead className="text-right text-xs font-bold tracking-wider uppercase text-muted-foreground">
+                Trend
+              </TableHead>
+              <TableHead className="w-[100px] text-right text-xs font-bold tracking-wider uppercase text-muted-foreground pr-6">
+                Actions
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rankings.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={6}
+                  className="h-24 text-center text-muted-foreground"
+                >
+                  No ranking data available
+                </TableCell>
+              </TableRow>
+            ) : (
+              rankings.map((location) => (
+                <TableRow
+                  key={location.location_id}
+                  className="hover:bg-white/5 border-white/5 transition-colors group"
+                >
+                  <TableCell className="pl-6 font-medium">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          "text-sm",
+                          location.rank === 1
+                            ? "font-bold text-amber-500"
+                            : "text-muted-foreground"
+                        )}
+                      >
+                        #{location.rank}
+                      </span>
+                      {location.rank === 1 && (
+                        <Trophy className="h-4 w-4 text-amber-500 fill-amber-500/20" />
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <span className="font-medium">
+                        {location.location_name}
+                      </span>
+                      {location.rank === 1 && (
+                        <span className="text-[10px] text-muted-foreground">
+                          Top performer
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right font-bold tabular-nums">
+                    {formatCurrency(location.metric_value)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Badge
+                      variant="secondary"
+                      className={cn(
+                        "font-mono text-[10px] tabular-nums",
+                        location.metric_vs_avg_pct > 0
+                          ? "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
+                          : location.metric_vs_avg_pct < 0
+                          ? "bg-rose-500/10 text-rose-500 hover:bg-rose-500/20"
+                          : "bg-muted text-muted-foreground"
+                      )}
+                    >
+                      {formatPercent(location.metric_vs_avg_pct)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div
+                      className={cn(
+                        "flex items-center justify-end gap-1 text-xs font-medium tabular-nums",
+                        location.trend_pct > 0
+                          ? "text-emerald-500"
+                          : location.trend_pct < 0
+                          ? "text-rose-500"
+                          : "text-muted-foreground"
+                      )}
+                    >
+                      {location.trend_pct > 0 ? (
+                        <ArrowUpRight className="h-3 w-3" />
+                      ) : location.trend_pct < 0 ? (
+                        <ArrowDownRight className="h-3 w-3" />
+                      ) : (
+                        <Minus className="h-3 w-3" />
+                      )}
+                      {Math.abs(location.trend_pct).toFixed(1)}%
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right pr-6">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => handleDrillDown(location.location_id)}
+                    >
+                      View
+                      <ExternalLink className="ml-2 h-3 w-3" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}

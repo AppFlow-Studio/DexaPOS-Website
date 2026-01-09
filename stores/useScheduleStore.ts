@@ -6,6 +6,11 @@ import {
   WeeklySchedule,
   SchedulePeriod,
   ApplyMode,
+  DropRequest,
+  SwapRequest,
+  PTORequest,
+  ChangeSummary,
+  ShiftConflict,
 } from "@/types/schedule";
 import {
   addDays,
@@ -21,12 +26,19 @@ import {
 } from "date-fns";
 
 interface ScheduleState {
-  // shifts: Shift[]; // Logic moved to nested schedules
-  // templates: ScheduleTemplate[]; // Removing templates for now as per user instruction to focus on core logic
   currentViewDate: string; // ISO date string
   viewUnsaved: boolean;
 
-  // Actions
+  // Schedules
+  schedulePeriods: SchedulePeriod[];
+  weeklySchedules: WeeklySchedule[];
+
+  // Requests (Mock Data)
+  dropRequests: DropRequest[];
+  swapRequests: SwapRequest[];
+  ptoRequests: PTORequest[];
+
+  // Shift Actions
   addShift: (scheduleId: string, shift: Omit<Shift, "id">) => void;
   updateShift: (
     scheduleId: string,
@@ -40,7 +52,8 @@ interface ScheduleState {
     newStartTime: string,
     newEndTime: string,
     newEmployeeId?: string
-  ) => void; // Updated for Drag-n-Drop
+  ) => void;
+
   // Templates
   applyTemplate: (
     scheduleId: string,
@@ -48,6 +61,7 @@ interface ScheduleState {
     template: ScheduleTemplate,
     mode: ApplyMode
   ) => void;
+
   // View
   setCurrentViewDate: (date: Date) => void;
 
@@ -59,32 +73,80 @@ interface ScheduleState {
     employeeId: string,
     weekStart: Date
   ) => number;
-  // Dashboard Actions
-  schedulePeriods: SchedulePeriod[];
-  weeklySchedules: WeeklySchedule[];
 
+  // Schedule CRUD
   addSchedulePeriod: (period: Omit<SchedulePeriod, "id">) => void;
   updateSchedulePeriod: (id: string, updates: Partial<SchedulePeriod>) => void;
-  addWeeklySchedule: (schedule: Omit<WeeklySchedule, "id">) => string; // Return new ID
+  addWeeklySchedule: (schedule: Omit<WeeklySchedule, "id">) => string;
   updateWeeklySchedule: (id: string, updates: Partial<WeeklySchedule>) => void;
   deleteSchedule: (id: string, type: "period" | "weekly") => void;
 
+  // Conflict Detection
   checkConflicts: (
     scheduleId: string,
     shift: Omit<Shift, "id">,
     excludeShiftId?: string
   ) => boolean;
+  checkShiftConflicts: (
+    scheduleId: string,
+    scheduleType: "period" | "weekly"
+  ) => ShiftConflict[];
+
+  // Draft-Edit Workflow
+  findOrCreateDraft: (originalId: string, type: "period" | "weekly") => string;
+  compareSchedules: (originalId: string, draftId: string) => ChangeSummary;
+  discardDraft: (draftId: string, type: "period" | "weekly") => void;
+
+  // Publish
+  publishSchedule: (scheduleId: string, type: "period" | "weekly") => void;
+
+  // Request Actions
+  approveDropRequest: (requestId: string, approvedBy: string) => void;
+  denyDropRequest: (
+    requestId: string,
+    deniedBy: string,
+    reason: string
+  ) => void;
+  revertDropRequestApproval: (requestId: string) => void;
+  approveSwap: (requestId: string) => void;
+  denySwap: (requestId: string) => void;
+  revertSwapApproval: (requestId: string) => void;
+  approvePTORequest: (requestId: string, approvedBy: string) => void;
+  denyPTORequest: (requestId: string, deniedBy: string, reason: string) => void;
+  revertPTORequestApproval: (requestId: string) => void;
+
+  // Open Shifts
+  getOpenShifts: (scheduleId: string) => Shift[];
+  assignOpenShift: (
+    scheduleId: string,
+    shiftId: string,
+    employeeId: string,
+    employeeName: string
+  ) => void;
 }
 
 export const useScheduleStore = create<ScheduleState>()(
   persist(
     (set, get) => ({
-      // shifts: [],
-      templates: [],
       schedulePeriods: [],
       weeklySchedules: [],
       currentViewDate: new Date().toISOString(),
       viewUnsaved: false,
+
+      // Mock Request Data
+      dropRequests: [],
+      swapRequests: [],
+      ptoRequests: [
+        {
+          id: "pto-1",
+          employeeId: "emp-1",
+          startDate: "2026-01-15",
+          endDate: "2026-01-17",
+          note: "Family vacation",
+          status: "pending",
+          submittedAt: new Date().toISOString(),
+        },
+      ] as any[],
 
       addShift: (scheduleId, shiftData) =>
         set((state) => ({
@@ -499,6 +561,364 @@ export const useScheduleStore = create<ScheduleState>()(
         } catch (e) {
           console.error("Error in applyTemplate:", e);
         }
+      },
+
+      // --- New Actions ---
+
+      checkShiftConflicts: (scheduleId, scheduleType) => {
+        const state = get();
+        const schedule =
+          scheduleType === "weekly"
+            ? state.weeklySchedules.find((s) => s.id === scheduleId)
+            : state.schedulePeriods.find((s) => s.id === scheduleId);
+
+        if (!schedule) return [];
+
+        const conflicts: ShiftConflict[] = [];
+        const shifts = schedule.shifts || [];
+
+        // Group shifts by employee
+        const shiftsByEmployee = shifts.reduce((acc, shift) => {
+          if (!shift.employee_id) return acc;
+          if (!acc[shift.employee_id]) acc[shift.employee_id] = [];
+          acc[shift.employee_id].push(shift);
+          return acc;
+        }, {} as Record<string, Shift[]>);
+
+        // Check for overlaps per employee
+        Object.entries(shiftsByEmployee).forEach(([empId, empShifts]) => {
+          for (let i = 0; i < empShifts.length; i++) {
+            for (let j = i + 1; j < empShifts.length; j++) {
+              const a = empShifts[i];
+              const b = empShifts[j];
+              if (
+                areIntervalsOverlapping(
+                  { start: parseISO(a.start_time), end: parseISO(a.end_time) },
+                  { start: parseISO(b.start_time), end: parseISO(b.end_time) }
+                )
+              ) {
+                conflicts.push({
+                  employeeName: a.employee_name,
+                  date: format(parseISO(a.start_time), "MMM d"),
+                  shiftId: a.id,
+                });
+              }
+            }
+          }
+        });
+
+        return conflicts;
+      },
+
+      findOrCreateDraft: (originalId, type) => {
+        const state = get();
+        const schedules =
+          type === "weekly" ? state.weeklySchedules : state.schedulePeriods;
+
+        // Check if a draft-edit already exists
+        const existingDraft = schedules.find(
+          (s) =>
+            s.originalScheduleId === originalId && s.status === "draft-edit"
+        );
+        if (existingDraft) return existingDraft.id;
+
+        // Find original
+        const original = schedules.find((s) => s.id === originalId);
+        if (!original) return originalId;
+
+        // Create draft copy
+        const draftId = crypto.randomUUID();
+        const draft = {
+          ...original,
+          id: draftId,
+          status: "draft-edit" as const,
+          originalScheduleId: originalId,
+          shifts: [...(original.shifts || [])],
+        };
+
+        if (type === "weekly") {
+          set({
+            weeklySchedules: [
+              ...state.weeklySchedules,
+              draft as WeeklySchedule,
+            ],
+          });
+        } else {
+          set({
+            schedulePeriods: [
+              ...state.schedulePeriods,
+              draft as SchedulePeriod,
+            ],
+          });
+        }
+
+        return draftId;
+      },
+
+      compareSchedules: (originalId, draftId) => {
+        const state = get();
+        const allSchedules = [
+          ...state.weeklySchedules,
+          ...state.schedulePeriods,
+        ];
+
+        const original = allSchedules.find((s) => s.id === originalId);
+        const draft = allSchedules.find((s) => s.id === draftId);
+
+        if (!original || !draft) {
+          return { added: 0, updated: 0, removed: 0 };
+        }
+
+        const originalShiftIds = new Set(
+          (original.shifts || []).map((s) => s.id)
+        );
+        const draftShiftIds = new Set((draft.shifts || []).map((s) => s.id));
+
+        const added = (draft.shifts || []).filter(
+          (s) => !originalShiftIds.has(s.id)
+        ).length;
+        const removed = (original.shifts || []).filter(
+          (s) => !draftShiftIds.has(s.id)
+        ).length;
+        const updated = (draft.shifts || []).filter((s) => {
+          if (!originalShiftIds.has(s.id)) return false;
+          const orig = (original.shifts || []).find((os) => os.id === s.id);
+          return orig && JSON.stringify(orig) !== JSON.stringify(s);
+        }).length;
+
+        return { added, updated, removed };
+      },
+
+      discardDraft: (draftId, type) => {
+        set((state) => ({
+          weeklySchedules:
+            type === "weekly"
+              ? state.weeklySchedules.filter((s) => s.id !== draftId)
+              : state.weeklySchedules,
+          schedulePeriods:
+            type === "period"
+              ? state.schedulePeriods.filter((s) => s.id !== draftId)
+              : state.schedulePeriods,
+        }));
+      },
+
+      publishSchedule: (scheduleId, type) => {
+        set((state) => {
+          if (type === "weekly") {
+            const schedule = state.weeklySchedules.find(
+              (s) => s.id === scheduleId
+            );
+            if (!schedule) return state;
+
+            // If it's a draft-edit, merge into original and delete draft
+            if (
+              schedule.status === "draft-edit" &&
+              schedule.originalScheduleId
+            ) {
+              return {
+                weeklySchedules: state.weeklySchedules
+                  .filter((s) => s.id !== scheduleId)
+                  .map((s) =>
+                    s.id === schedule.originalScheduleId
+                      ? {
+                          ...s,
+                          shifts: schedule.shifts,
+                          status: "published" as const,
+                        }
+                      : s
+                  ),
+              };
+            }
+
+            // Otherwise just publish
+            return {
+              weeklySchedules: state.weeklySchedules.map((s) =>
+                s.id === scheduleId ? { ...s, status: "published" as const } : s
+              ),
+            };
+          } else {
+            const schedule = state.schedulePeriods.find(
+              (s) => s.id === scheduleId
+            );
+            if (!schedule) return state;
+
+            if (
+              schedule.status === "draft-edit" &&
+              schedule.originalScheduleId
+            ) {
+              return {
+                schedulePeriods: state.schedulePeriods
+                  .filter((s) => s.id !== scheduleId)
+                  .map((s) =>
+                    s.id === schedule.originalScheduleId
+                      ? {
+                          ...s,
+                          shifts: schedule.shifts,
+                          status: "active" as const,
+                        }
+                      : s
+                  ),
+              };
+            }
+
+            return {
+              schedulePeriods: state.schedulePeriods.map((s) =>
+                s.id === scheduleId ? { ...s, status: "active" as const } : s
+              ),
+            };
+          }
+        });
+      },
+
+      // --- Request Actions ---
+
+      approveDropRequest: (requestId, approvedBy) => {
+        set((state) => ({
+          dropRequests: state.dropRequests.map((r) =>
+            r.id === requestId
+              ? { ...r, status: "approved" as const, approvedBy }
+              : r
+          ),
+        }));
+      },
+
+      denyDropRequest: (requestId, deniedBy, reason) => {
+        set((state) => ({
+          dropRequests: state.dropRequests.map((r) =>
+            r.id === requestId
+              ? {
+                  ...r,
+                  status: "denied" as const,
+                  deniedBy,
+                  denyReason: reason,
+                }
+              : r
+          ),
+        }));
+      },
+
+      revertDropRequestApproval: (requestId) => {
+        set((state) => ({
+          dropRequests: state.dropRequests.map((r) =>
+            r.id === requestId
+              ? { ...r, status: "pending" as const, approvedBy: undefined }
+              : r
+          ),
+        }));
+      },
+
+      approveSwap: (requestId) => {
+        set((state) => ({
+          swapRequests: state.swapRequests.map((r) =>
+            r.id === requestId ? { ...r, status: "approved" as const } : r
+          ),
+        }));
+      },
+
+      denySwap: (requestId) => {
+        set((state) => ({
+          swapRequests: state.swapRequests.map((r) =>
+            r.id === requestId ? { ...r, status: "denied" as const } : r
+          ),
+        }));
+      },
+
+      revertSwapApproval: (requestId) => {
+        set((state) => ({
+          swapRequests: state.swapRequests.map((r) =>
+            r.id === requestId
+              ? { ...r, status: "pending-manager" as const }
+              : r
+          ),
+        }));
+      },
+
+      approvePTORequest: (requestId, approvedBy) => {
+        set((state) => ({
+          ptoRequests: state.ptoRequests.map((r) =>
+            r.id === requestId
+              ? { ...r, status: "approved" as const, approvedBy }
+              : r
+          ),
+        }));
+      },
+
+      denyPTORequest: (requestId, deniedBy, reason) => {
+        set((state) => ({
+          ptoRequests: state.ptoRequests.map((r) =>
+            r.id === requestId
+              ? {
+                  ...r,
+                  status: "denied" as const,
+                  deniedBy,
+                  denyReason: reason,
+                }
+              : r
+          ),
+        }));
+      },
+
+      revertPTORequestApproval: (requestId) => {
+        set((state) => ({
+          ptoRequests: state.ptoRequests.map((r) =>
+            r.id === requestId
+              ? { ...r, status: "pending" as const, approvedBy: undefined }
+              : r
+          ),
+        }));
+      },
+
+      // --- Open Shifts ---
+
+      getOpenShifts: (scheduleId) => {
+        const state = get();
+        const schedule =
+          state.weeklySchedules.find((s) => s.id === scheduleId) ||
+          state.schedulePeriods.find((s) => s.id === scheduleId);
+
+        if (!schedule) return [];
+        return (schedule.shifts || []).filter(
+          (s) => s.status === "open" || s.employee_id === null
+        );
+      },
+
+      assignOpenShift: (scheduleId, shiftId, employeeId, employeeName) => {
+        set((state) => ({
+          weeklySchedules: state.weeklySchedules.map((s) =>
+            s.id === scheduleId
+              ? {
+                  ...s,
+                  shifts: (s.shifts || []).map((shift) =>
+                    shift.id === shiftId
+                      ? {
+                          ...shift,
+                          employee_id: employeeId,
+                          employee_name: employeeName,
+                          status: "scheduled" as const,
+                        }
+                      : shift
+                  ),
+                }
+              : s
+          ),
+          schedulePeriods: state.schedulePeriods.map((s) =>
+            s.id === scheduleId
+              ? {
+                  ...s,
+                  shifts: (s.shifts || []).map((shift) =>
+                    shift.id === shiftId
+                      ? {
+                          ...shift,
+                          employee_id: employeeId,
+                          employee_name: employeeName,
+                          status: "scheduled" as const,
+                        }
+                      : shift
+                  ),
+                }
+              : s
+          ),
+        }));
       },
     }),
     {
