@@ -1,6 +1,6 @@
-'use server'
+"use server";
 
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 // ============================================================================
 // ITEM-CATEGORY ASSIGNMENTS (Using new category_items table)
@@ -10,183 +10,206 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
  * Add an item to a category using the RPC function
  */
 export async function AddItemToCategory(
-    categoryId: string,
-    menuItemId: string,
-    merchantId: string,
-    displayOrder?: number,
-    customPrice?: number,
-    isFeatured?: boolean,
+  categoryId: string,
+  menuItemId: string,
+  merchantId: string,
+  displayOrder?: number,
+  customPrice?: number,
+  isFeatured?: boolean
 ) {
-    if (!categoryId || !menuItemId) {
-        return { error: 'Category ID and Menu Item ID are required' }
-    }
+  if (!categoryId || !menuItemId) {
+    return { error: "Category ID and Menu Item ID are required" };
+  }
 
-    const supabase = createServerSupabaseClient()
+  const supabase = createServerSupabaseClient();
 
-    const { data, error } = await supabase.from('category_items').insert({
-        category_id: categoryId,
-        menu_item_id: menuItemId,
-        display_order: displayOrder ?? 0,
-        custom_price: customPrice || null,
-        is_featured: isFeatured ?? false,
-        merchant_id: merchantId,
-    })
+  const { data, error } = await supabase.from("category_items").insert({
+    category_id: categoryId,
+    menu_item_id: menuItemId,
+    display_order: displayOrder ?? 0,
+    custom_price: customPrice || null,
+    is_featured: isFeatured ?? false,
+    merchant_id: merchantId,
+  });
 
-    if (error) {
-        console.error('Error adding item to category:', error)
-        return { error: error.message }
-    }
+  if (error) {
+    console.error("Error adding item to category:", error);
+    return { error: error.message };
+  }
 
-    return { success: true, data }
+  return { success: true, data };
 }
 
 /**
  * Remove an item from a category using the RPC function
  */
-export async function RemoveItemFromCategory(categoryId: string, menuItemId: string) {
-    if (!menuItemId || !categoryId) {
-        return { error: 'Menu Item ID and Category ID are required' }
-    }
+export async function RemoveItemFromCategory(
+  categoryId: string,
+  menuItemId: string
+) {
+  if (!menuItemId || !categoryId) {
+    return { error: "Menu Item ID and Category ID are required" };
+  }
 
-    const supabase = createServerSupabaseClient()
+  const supabase = createServerSupabaseClient();
 
-    const { data, error } = await supabase.rpc('remove_item_from_category', {
-        p_category_id: categoryId,
-        p_menu_item_id: menuItemId
-    })
+  const { data, error } = await supabase.rpc("remove_item_from_category", {
+    p_category_id: categoryId,
+    p_menu_item_id: menuItemId,
+  });
 
-    if (error) {
-        console.error('Error removing item from category:', error)
-        return { error: error.message }
-    }
+  if (error) {
+    console.error("Error removing item from category:", error);
+    return { error: error.message };
+  }
 
-    return { success: true, data }
+  return { success: true, data };
 }
 
 /**
  * @deprecated Use AddItemToCategory instead
  */
-export async function AssignItemToCategory(menuItemId: string, categoryId: string, merchantId: string) {
-    return AddItemToCategory(categoryId, menuItemId, merchantId)
+export async function AssignItemToCategory(
+  menuItemId: string,
+  categoryId: string,
+  merchantId: string
+) {
+  return AddItemToCategory(categoryId, menuItemId, merchantId);
 }
 
 /**
  * Update category item settings (display order, featured, category price)
  */
 export async function UpdateCategoryItem(
-    categoryId: string,
-    menuItemId: string,
-    data: {
-        displayOrder?: number
-        customPrice?: number | null
-        customCashPrice?: number | null
-        isFeatured?: boolean
-        isAvailable?: boolean
-    }
+  categoryId: string,
+  menuItemId: string,
+  data: {
+    displayOrder?: number;
+    customPrice?: number | null;
+    customCashPrice?: number | null;
+    isFeatured?: boolean;
+    isAvailable?: boolean;
+  }
 ) {
-    if (!menuItemId || !categoryId) {
-        return { error: 'Menu Item ID and Category ID are required' }
-    }
+  if (!menuItemId || !categoryId) {
+    return { error: "Menu Item ID and Category ID are required" };
+  }
 
-    const supabase = createServerSupabaseClient()
+  const supabase = createServerSupabaseClient();
 
-    const updateData: Record<string, unknown> = { updated_at: new Date().toISOString() }
-    if (data.displayOrder !== undefined) updateData.display_order = data.displayOrder
-    if (data.customPrice !== undefined) updateData.custom_price = data.customPrice
-    if (data.customCashPrice !== undefined) updateData.custom_cash_price = data.customCashPrice
-    if (data.isFeatured !== undefined) updateData.is_featured = data.isFeatured
-    if (data.isAvailable !== undefined) updateData.is_available = data.isAvailable
+  const updateData: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+  if (data.displayOrder !== undefined)
+    updateData.display_order = data.displayOrder;
+  if (data.customPrice !== undefined)
+    updateData.custom_price = data.customPrice;
+  if (data.customCashPrice !== undefined)
+    updateData.custom_cash_price = data.customCashPrice;
+  if (data.isFeatured !== undefined) updateData.is_featured = data.isFeatured;
+  if (data.isAvailable !== undefined)
+    updateData.is_available = data.isAvailable;
 
-    const { error } = await supabase
-        .from('category_items')
-        .update(updateData)
-        .eq('category_id', categoryId)
-        .eq('menu_item_id', menuItemId)
+  const { error } = await supabase
+    .from("category_items")
+    .update(updateData)
+    .eq("category_id", categoryId)
+    .eq("menu_item_id", menuItemId);
 
-    if (error) {
-        console.error('Error updating category item:', error)
-        return { error: error.message }
-    }
+  if (error) {
+    console.error("Error updating category item:", error);
+    return { error: error.message };
+  }
 
-    return { success: true }
+  return { success: true };
 }
 
 /**
  * Bulk update category items (for reordering)
  */
 export async function UpdateCategoryItemsOrder(
-    categoryId: string,
-    itemOrders: Array<{ menuItemId: string; displayOrder: number }>
+  categoryId: string,
+  itemOrders: Array<{ menuItemId: string; displayOrder: number }>
 ) {
-    if (!categoryId || !itemOrders?.length) {
-        return { error: 'Category ID and item orders are required' }
-    }
+  if (!categoryId || !itemOrders?.length) {
+    return { error: "Category ID and item orders are required" };
+  }
 
-    const supabase = createServerSupabaseClient()
+  const supabase = createServerSupabaseClient();
 
-    // Update each item's display order
-    const updates = itemOrders.map(({ menuItemId, displayOrder }) =>
-        supabase
-            .from('category_items')
-            .update({ display_order: displayOrder, updated_at: new Date().toISOString() })
-            .eq('category_id', categoryId)
-            .eq('menu_item_id', menuItemId)
-    )
+  // Update each item's display order
+  const updates = itemOrders.map(({ menuItemId, displayOrder }) =>
+    supabase
+      .from("category_items")
+      .update({
+        display_order: displayOrder,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("category_id", categoryId)
+      .eq("menu_item_id", menuItemId)
+  );
 
-    const results = await Promise.all(updates)
-    const errors = results.filter(r => r.error)
+  const results = await Promise.all(updates);
+  const errors = results.filter((r) => r.error);
 
-    if (errors.length > 0) {
-        console.error('Error updating category item orders:', errors)
-        return { error: 'Failed to update some item orders' }
-    }
+  if (errors.length > 0) {
+    console.error("Error updating category item orders:", errors);
+    return { error: "Failed to update some item orders" };
+  }
 
-    return { success: true }
+  return { success: true };
 }
 
 /**
  * Batch update display order for multiple menu categories
  */
 export async function UpdateMenuCategoriesOrder(
-    menuId: string,
-    categoryOrders: Array<{ categoryId: string; displayOrder: number }>
+  menuId: string,
+  categoryOrders: Array<{ categoryId: string; displayOrder: number }>
 ) {
-    if (!menuId || !categoryOrders || categoryOrders.length === 0) {
-        return { error: 'Menu ID and category orders are required' }
-    }
+  if (!menuId || !categoryOrders || categoryOrders.length === 0) {
+    return { error: "Menu ID and category orders are required" };
+  }
 
-    const supabase = createServerSupabaseClient()
+  const supabase = createServerSupabaseClient();
 
-    // Validate all categories belong to the menu
-    const categoryIds = categoryOrders.map(co => co.categoryId)
-    const { data: menuCategories, error: fetchError } = await supabase
-        .from('menu_categories')
-        .select('id, category_id')
-        .eq('menu_id', menuId)
-        .in('category_id', categoryIds)
+  // Validate all categories belong to the menu
+  const categoryIds = categoryOrders.map((co) => co.categoryId);
+  const { data: menuCategories, error: fetchError } = await supabase
+    .from("menu_categories")
+    .select("id, category_id")
+    .eq("menu_id", menuId)
+    .in("category_id", categoryIds);
 
-    if (fetchError || !menuCategories || menuCategories.length !== categoryIds.length) {
-        return { error: 'One or more categories not found in this menu' }
-    }
+  if (
+    fetchError ||
+    !menuCategories ||
+    menuCategories.length !== categoryIds.length
+  ) {
+    return { error: "One or more categories not found in this menu" };
+  }
 
-    // Batch update display_order
-    const updates = categoryOrders.map(({ categoryId, displayOrder }) =>
-        supabase
-            .from('menu_categories')
-            .update({ display_order: displayOrder, updated_at: new Date().toISOString() })
-            .eq('menu_id', menuId)
-            .eq('category_id', categoryId)
-    )
+  // Batch update display_order
+  const updates = categoryOrders.map(({ categoryId, displayOrder }) =>
+    supabase
+      .from("menu_categories")
+      .update({
+        display_order: displayOrder,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("menu_id", menuId)
+      .eq("category_id", categoryId)
+  );
 
-    const results = await Promise.all(updates)
-    const errors = results.filter(r => r.error)
+  const results = await Promise.all(updates);
+  const errors = results.filter((r) => r.error);
 
-    if (errors.length > 0) {
-        console.error('Error updating menu category orders:', errors)
-        return { error: 'Failed to update some category orders' }
-    }
+  if (errors.length > 0) {
+    console.error("Error updating menu category orders:", errors);
+    return { error: "Failed to update some category orders" };
+  }
 
-    return { success: true }
+  return { success: true };
 }
 
 // ============================================================================
@@ -197,166 +220,181 @@ export async function UpdateMenuCategoriesOrder(
  * Add a category to a menu using the RPC function
  */
 export async function AddCategoryToMenu(
-    menuId: string,
-    categoryId: string,
-    displayOrder?: number,
-    customTitle?: string
+  menuId: string,
+  categoryId: string,
+  displayOrder?: number,
+  customTitle?: string
 ) {
-    if (!categoryId || !menuId) {
-        return { error: 'Category ID and Menu ID are required' }
-    }
+  if (!categoryId || !menuId) {
+    return { error: "Category ID and Menu ID are required" };
+  }
 
-    const supabase = createServerSupabaseClient()
+  const supabase = createServerSupabaseClient();
 
-    const { data, error } = await supabase.rpc('add_category_to_menu', {
-        p_menu_id: menuId,
-        p_category_id: categoryId,
-        p_display_order: displayOrder ?? 0,
-        p_custom_title: customTitle || null
-    })
+  const { data, error } = await supabase.rpc("add_category_to_menu", {
+    p_menu_id: menuId,
+    p_category_id: categoryId,
+    p_display_order: displayOrder ?? 0,
+    p_custom_title: customTitle || null,
+  });
 
-    if (error) {
-        console.error('Error adding category to menu:', error)
-        return { error: error.message }
-    }
+  if (error) {
+    console.error("Error adding category to menu:", error);
+    return { error: error.message };
+  }
 
-    return { success: true, data }
+  return { success: true, data };
 }
 
 /**
  * Remove a category from a menu using the RPC function
  */
-export async function RemoveCategoryFromMenu(menuId: string, categoryId: string) {
-    if (!categoryId || !menuId) {
-        return { error: 'Category ID and Menu ID are required' }
-    }
+export async function RemoveCategoryFromMenu(
+  menuId: string,
+  categoryId: string
+) {
+  if (!categoryId || !menuId) {
+    return { error: "Category ID and Menu ID are required" };
+  }
 
-    const supabase = createServerSupabaseClient()
+  const supabase = createServerSupabaseClient();
 
-    const { data, error } = await supabase.rpc('remove_category_from_menu', {
-        p_menu_id: menuId,
-        p_category_id: categoryId
-    })
+  const { data, error } = await supabase.rpc("remove_category_from_menu", {
+    p_menu_id: menuId,
+    p_category_id: categoryId,
+  });
 
-    if (error) {
-        console.error('Error removing category from menu:', error)
-        return { error: error.message }
-    }
+  if (error) {
+    console.error("Error removing category from menu:", error);
+    return { error: error.message };
+  }
 
-    return { success: true, data }
+  return { success: true, data };
 }
 
 /**
  * Update menu category settings
  */
 export async function UpdateMenuCategory(
-    menuId: string,
-    categoryId: string,
-    data: {
-        displayOrder?: number
-        isActive?: boolean
-        customTitle?: string
-        customImage?: string
-    }
+  menuId: string,
+  categoryId: string,
+  data: {
+    displayOrder?: number;
+    isActive?: boolean;
+    customTitle?: string;
+    customImage?: string;
+  }
 ) {
-    if (!categoryId || !menuId) {
-        return { error: 'Category ID and Menu ID are required' }
-    }
+  if (!categoryId || !menuId) {
+    return { error: "Category ID and Menu ID are required" };
+  }
 
-    const supabase = createServerSupabaseClient()
+  const supabase = createServerSupabaseClient();
 
-    const updateData: Record<string, unknown> = { updated_at: new Date().toISOString() }
-    if (data.displayOrder !== undefined) updateData.display_order = data.displayOrder
-    if (data.isActive !== undefined) updateData.is_active = data.isActive
-    if (data.customTitle !== undefined) updateData.custom_title = data.customTitle
-    if (data.customImage !== undefined) updateData.custom_image = data.customImage
+  const updateData: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+  if (data.displayOrder !== undefined)
+    updateData.display_order = data.displayOrder;
+  if (data.isActive !== undefined) updateData.is_active = data.isActive;
+  if (data.customTitle !== undefined)
+    updateData.custom_title = data.customTitle;
+  if (data.customImage !== undefined)
+    updateData.custom_image = data.customImage;
 
-    const { error } = await supabase
-        .from('menu_categories')
-        .update(updateData)
-        .eq('menu_id', menuId)
-        .eq('category_id', categoryId)
+  const { error } = await supabase
+    .from("menu_categories")
+    .update(updateData)
+    .eq("menu_id", menuId)
+    .eq("category_id", categoryId);
 
-    if (error) {
-        console.error('Error updating menu category:', error)
-        return { error: error.message }
-    }
+  if (error) {
+    console.error("Error updating menu category:", error);
+    return { error: error.message };
+  }
 
-    return { success: true }
+  return { success: true };
 }
 
 // ============================================================================
 // ITEM-MODIFIER GROUP ASSIGNMENTS
 // ============================================================================
 
-export async function AssignModifierToItem(menuItemId: string, modifierGroupId: string, displayOrder?: number) {
-    if (!menuItemId || !modifierGroupId) {
-        return { error: 'Menu Item ID and Modifier Group ID are required' }
+export async function AssignModifierToItem(
+  menuItemId: string,
+  modifierGroupId: string,
+  displayOrder?: number
+) {
+  if (!menuItemId || !modifierGroupId) {
+    return { error: "Menu Item ID and Modifier Group ID are required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  // Check if assignment already exists
+  const { data: existing } = await supabase
+    .from("menu_item_modifier_groups")
+    .select("id")
+    .eq("menu_item_id", menuItemId)
+    .eq("modifier_group_id", modifierGroupId)
+    .single();
+
+  if (existing) {
+    // Update display order if provided
+    if (displayOrder !== undefined) {
+      const { error } = await supabase
+        .from("menu_item_modifier_groups")
+        .update({ display_order: displayOrder })
+        .eq("id", existing.id);
+
+      if (error) {
+        return { error: error.message };
+      }
     }
+    return { success: true, data: existing };
+  }
 
-    const supabase = createServerSupabaseClient()
+  // Create new assignment
+  const { data, error } = await supabase
+    .from("menu_item_modifier_groups")
+    .insert({
+      menu_item_id: menuItemId,
+      modifier_group_id: modifierGroupId,
+      display_order: displayOrder || null,
+    })
+    .select()
+    .single();
 
-    // Check if assignment already exists
-    const { data: existing } = await supabase
-        .from('menu_item_modifier_groups')
-        .select('id')
-        .eq('menu_item_id', menuItemId)
-        .eq('modifier_group_id', modifierGroupId)
-        .single()
+  if (error) {
+    console.error("Error assigning modifier to item:", error);
+    return { error: error.message };
+  }
 
-    if (existing) {
-        // Update display order if provided
-        if (displayOrder !== undefined) {
-            const { error } = await supabase
-                .from('menu_item_modifier_groups')
-                .update({ display_order: displayOrder })
-                .eq('id', existing.id)
-
-            if (error) {
-                return { error: error.message }
-            }
-        }
-        return { success: true, data: existing }
-    }
-
-    // Create new assignment
-    const { data, error } = await supabase
-        .from('menu_item_modifier_groups')
-        .insert({
-            menu_item_id: menuItemId,
-            modifier_group_id: modifierGroupId,
-            display_order: displayOrder || null,
-        })
-        .select()
-        .single()
-
-    if (error) {
-        console.error('Error assigning modifier to item:', error)
-        return { error: error.message }
-    }
-
-    return { success: true, data }
+  return { success: true, data };
 }
 
-export async function RemoveModifierFromItem(menuItemId: string, modifierGroupId: string) {
-    if (!menuItemId || !modifierGroupId) {
-        return { error: 'Menu Item ID and Modifier Group ID are required' }
-    }
+export async function RemoveModifierFromItem(
+  menuItemId: string,
+  modifierGroupId: string
+) {
+  if (!menuItemId || !modifierGroupId) {
+    return { error: "Menu Item ID and Modifier Group ID are required" };
+  }
 
-    const supabase = createServerSupabaseClient()
+  const supabase = createServerSupabaseClient();
 
-    const { error } = await supabase
-        .from('menu_item_modifier_groups')
-        .delete()
-        .eq('menu_item_id', menuItemId)
-        .eq('modifier_group_id', modifierGroupId)
+  const { error } = await supabase
+    .from("menu_item_modifier_groups")
+    .delete()
+    .eq("menu_item_id", menuItemId)
+    .eq("modifier_group_id", modifierGroupId);
 
-    if (error) {
-        console.error('Error removing modifier from item:', error)
-        return { error: error.message }
-    }
+  if (error) {
+    console.error("Error removing modifier from item:", error);
+    return { error: error.message };
+  }
 
-    return { success: true }
+  return { success: true };
 }
 
 // ============================================================================
@@ -366,105 +404,262 @@ export async function RemoveModifierFromItem(menuItemId: string, modifierGroupId
 /**
  * Creates a new menu item and immediately assigns it to a category.
  * This enforces the hierarchical structure where items must belong to categories.
- * 
+ *
  * @param locationId - Optional location ID. If provided, creates a location-specific item.
  *                     If null/undefined, creates a global item (location_id = null).
  */
 export async function CreateItemInCategory(
-    clerkOrgId: string,
-    categoryId: string,
-    item: {
-        name: string
-        description?: string
-        price: number
-        cashPrice?: number
-        image?: string
-        availability?: boolean
-        allergens?: string[]
-        cardBgColor?: string
-        stockTrackingMode?: string
-        mealTypes?: string[]
-    },
-    options?: {
-        displayOrder?: number
-        customPrice?: number
-        isFeatured?: boolean
-        locationId?: string | null
-    }
+  clerkOrgId: string,
+  categoryId: string,
+  item: {
+    name: string;
+    description?: string;
+    price: number;
+    cashPrice?: number;
+    image?: string;
+    availability?: boolean;
+    allergens?: string[];
+    cardBgColor?: string;
+    stockTrackingMode?: string;
+    mealTypes?: string[];
+  },
+  options?: {
+    displayOrder?: number;
+    customPrice?: number;
+    isFeatured?: boolean;
+    locationId?: string | null;
+  }
 ) {
-    if (!clerkOrgId) {
-        return { error: 'Organization ID is required' }
-    }
+  if (!clerkOrgId) {
+    return { error: "Organization ID is required" };
+  }
 
-    if (!categoryId) {
-        return { error: 'Category ID is required' }
-    }
+  if (!categoryId) {
+    return { error: "Category ID is required" };
+  }
 
-    const supabase = createServerSupabaseClient()
+  const supabase = createServerSupabaseClient();
 
-    // Get merchant ID from clerk org
-    const { data: merchant, error: merchantError } = await supabase
-        .from('merchants')
-        .select('id')
-        .eq('clerk_org_id', clerkOrgId)
-        .single()
+  // Get merchant ID from clerk org
+  const { data: merchant, error: merchantError } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("clerk_org_id", clerkOrgId)
+    .single();
 
-    if (merchantError || !merchant) {
-        console.error('Error getting merchant:', merchantError)
-        return { error: 'Merchant not found' }
-    }
+  if (merchantError || !merchant) {
+    console.error("Error getting merchant:", merchantError);
+    return { error: "Merchant not found" };
+  }
 
-    // Step 1: Create the menu item
-    const { data: createdItem, error: createError } = await supabase
-        .from('menu_items')
-        .insert({
-            merchant_id: merchant.id,
-            location_id: options?.locationId || null,
-            name: item.name,
-            description: item.description,
-            price: item.price,
-            cash_price: item.cashPrice,
-            image: item.image,
-            availability: item.availability ?? true,
-            allergens: item.allergens ?? [],
-            card_bg_color: item.cardBgColor,
-            stock_tracking_mode: item.stockTrackingMode ?? 'in_stock',
-            meal_types: item.mealTypes ?? []
-        })
-        .select()
-        .single()
+  // Step 1: Create the menu item
+  const { data: createdItem, error: createError } = await supabase
+    .from("menu_items")
+    .insert({
+      merchant_id: merchant.id,
+      location_id: options?.locationId || null,
+      name: item.name,
+      description: item.description,
+      price: item.price,
+      cash_price: item.cashPrice,
+      image: item.image,
+      availability: item.availability ?? true,
+      allergens: item.allergens ?? [],
+      card_bg_color: item.cardBgColor,
+      stock_tracking_mode: item.stockTrackingMode ?? "in_stock",
+      meal_types: item.mealTypes ?? [],
+    })
+    .select()
+    .single();
 
-    if (createError || !createdItem) {
-        console.error('Error creating menu item:', createError)
-        return { error: createError?.message || 'Failed to create item' }
-    }
+  if (createError || !createdItem) {
+    console.error("Error creating menu item:", createError);
+    return { error: createError?.message || "Failed to create item" };
+  }
 
-    // Step 2: Add the item to the category using direct insert/upsert
-    const { data: assignmentData, error: assignmentError } = await supabase
-        .from('category_items')
-        .upsert({
-            category_id: categoryId,
-            menu_item_id: createdItem.id,
-            merchant_id: merchant.id,
-            display_order: options?.displayOrder ?? 0,
-            custom_price: options?.customPrice || null,
-            is_featured: options?.isFeatured ?? false,
-            is_available: true,
-            updated_at: new Date().toISOString()
-        }, {
-            onConflict: 'category_id,menu_item_id'
-        })
-        .select()
-        .single()
+  // Step 2: Add the item to the category using direct insert/upsert
+  const { data: assignmentData, error: assignmentError } = await supabase
+    .from("category_items")
+    .upsert(
+      {
+        category_id: categoryId,
+        menu_item_id: createdItem.id,
+        merchant_id: merchant.id,
+        display_order: options?.displayOrder ?? 0,
+        custom_price: options?.customPrice || null,
+        is_featured: options?.isFeatured ?? false,
+        is_available: true,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: "category_id,menu_item_id",
+      }
+    )
+    .select()
+    .single();
 
-    if (assignmentError) {
-        // Item was created but assignment failed - log but don't fail completely
-        console.error('Error assigning item to category:', assignmentError)
-        return {
-            data: createdItem,
-            warning: 'Item created but failed to assign to category: ' + assignmentError.message
-        }
-    }
+  if (assignmentError) {
+    // Item was created but assignment failed - log but don't fail completely
+    console.error("Error assigning item to category:", assignmentError);
+    return {
+      data: createdItem,
+      warning:
+        "Item created but failed to assign to category: " +
+        assignmentError.message,
+    };
+  }
 
-    return { success: true, data: createdItem }
+  return { success: true, data: createdItem };
+}
+
+// ============================================================================
+// LOCATION-BASED ORDERING (Per-Location Display Order Overrides)
+// ============================================================================
+
+/**
+ * Update category display order for a specific location.
+ * Uses location_menu_category_overrides table for location-specific ordering.
+ * Falls back to global menu_categories ordering when locationId is null/'all'.
+ */
+export async function UpdateLocationMenuCategoriesOrder(
+  locationId: string | null,
+  menuId: string,
+  categoryOrders: Array<{ categoryId: string; displayOrder: number }>
+) {
+  if (!menuId || !categoryOrders || categoryOrders.length === 0) {
+    return { error: "Menu ID and category orders are required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  // If no location specified or 'all', update global menu_categories order
+  if (!locationId || locationId === "all") {
+    return UpdateMenuCategoriesOrder(menuId, categoryOrders);
+  }
+
+  // Update location-specific order using upsert
+  const upserts = categoryOrders.map(({ categoryId, displayOrder }) => ({
+    location_id: locationId,
+    menu_id: menuId,
+    category_id: categoryId,
+    display_order: displayOrder,
+    updated_at: new Date().toISOString(),
+  }));
+
+  const { error } = await supabase
+    .from("location_menu_category_overrides")
+    .upsert(upserts, {
+      onConflict: "location_id,menu_id,category_id",
+    });
+
+  if (error) {
+    console.error("Error updating location category orders:", error);
+    return { error: error.message };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Update item display order within a category for a specific location.
+ * Uses location_category_item_overrides table for location-specific ordering.
+ * Falls back to global category_items ordering when locationId is null/'all'.
+ */
+export async function UpdateLocationCategoryItemsOrder(
+  locationId: string | null,
+  menuId: string,
+  categoryId: string,
+  itemOrders: Array<{ menuItemId: string; displayOrder: number }>
+) {
+  if (!categoryId || !itemOrders || itemOrders.length === 0) {
+    return { error: "Category ID and item orders are required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  // If no location specified or 'all', update global category_items order
+  if (!locationId || locationId === "all") {
+    return UpdateCategoryItemsOrder(categoryId, itemOrders);
+  }
+
+  // Update location-specific order using upsert
+  const upserts = itemOrders.map(({ menuItemId, displayOrder }) => ({
+    location_id: locationId,
+    category_id: categoryId,
+    menu_item_id: menuItemId,
+    display_order: displayOrder,
+    updated_at: new Date().toISOString(),
+  }));
+
+  const { error } = await supabase
+    .from("location_category_item_overrides")
+    .upsert(upserts, {
+      onConflict: "location_id,category_id,menu_item_id",
+    });
+
+  if (error) {
+    console.error("Error updating location item orders:", error);
+    return { error: error.message };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Reset location-specific category order to use global defaults.
+ * Removes all display_order overrides for categories in a menu at a location.
+ */
+export async function ResetLocationCategoryOrder(
+  locationId: string,
+  menuId: string
+) {
+  if (!locationId || !menuId) {
+    return { error: "Location ID and Menu ID are required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  // Only delete the display_order, not the entire override
+  // We'll update display_order to null to indicate "use global"
+  const { error } = await supabase
+    .from("location_menu_category_overrides")
+    .update({ display_order: null, updated_at: new Date().toISOString() })
+    .eq("location_id", locationId)
+    .eq("menu_id", menuId);
+
+  if (error) {
+    console.error("Error resetting location category order:", error);
+    return { error: error.message };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Reset location-specific item order within a category to use global defaults.
+ * Removes all display_order overrides for items in a category at a location.
+ */
+export async function ResetLocationItemOrder(
+  locationId: string,
+  categoryId: string
+) {
+  if (!locationId || !categoryId) {
+    return { error: "Location ID and Category ID are required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  // Update display_order to null to indicate "use global"
+  const { error } = await supabase
+    .from("location_category_item_overrides")
+    .update({ display_order: null, updated_at: new Date().toISOString() })
+    .eq("location_id", locationId)
+    .eq("category_id", categoryId);
+
+  if (error) {
+    console.error("Error resetting location item order:", error);
+    return { error: error.message };
+  }
+
+  return { success: true };
 }
