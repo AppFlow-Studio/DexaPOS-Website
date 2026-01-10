@@ -567,7 +567,7 @@ export async function UpdateLocationMenuCategoriesOrder(
  */
 export async function UpdateLocationCategoryItemsOrder(
   locationId: string | null,
-  menuId: string,
+  menuId: string | null,
   categoryId: string,
   itemOrders: Array<{ menuItemId: string; displayOrder: number }>
 ) {
