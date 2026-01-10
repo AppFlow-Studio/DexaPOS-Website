@@ -717,11 +717,19 @@ export default function MenuDetailPage() {
             : "Category display order has been updated globally.",
       });
 
-      setHasCategoryOrderChanges(false);
-      queryClient.invalidateQueries({
+      await queryClient.invalidateQueries({
         queryKey: ["menu-with-categories", menuId],
       });
-      refetchMenu();
+      await refetchMenu();
+
+      // Update the reordered state to reflect the saved order as the "new baseline"
+      const updatedCategories = reorderedCategories.map((cat, index) => ({
+        ...cat,
+        display_order: index + 1,
+      }));
+      setReorderedCategories(updatedCategories);
+
+      setHasCategoryOrderChanges(false);
     } catch (error) {
       toast.error("Save Failed", {
         description: "Unable to save category order. Please try again.",
@@ -800,22 +808,32 @@ export default function MenuDetailPage() {
             : "Item display order has been updated globally.",
       });
 
+      await queryClient.invalidateQueries({
+        queryKey: ["menu-with-categories", menuId],
+      });
+      await refetchMenu();
+
+      // Update local state to reflect saved changes
+      setReorderedItemsMap((prev) => {
+        const newMap = new Map(prev);
+        const savedItems = newMap.get(categoryId);
+        if (savedItems) {
+          const updatedItems = savedItems.map((item, idx) => ({
+            ...item,
+            display_order: idx + 1,
+          }));
+          newMap.set(categoryId, updatedItems);
+        }
+        return newMap;
+      });
+
       // Clear changes for this category
       setItemOrderChanges((prev) => {
         const newMap = new Map(prev);
         newMap.delete(categoryId);
         return newMap;
       });
-      setReorderedItemsMap((prev) => {
-        const newMap = new Map(prev);
-        newMap.delete(categoryId);
-        return newMap;
-      });
-
-      queryClient.invalidateQueries({
-        queryKey: ["menu-with-categories", menuId],
-      });
-      refetchMenu();
+      // We do NOT delete from reorderedItemsMap because we want to keep showing the new order
     } catch (error) {
       toast.error("Save Failed", {
         description: "Unable to save item order. Please try again.",
