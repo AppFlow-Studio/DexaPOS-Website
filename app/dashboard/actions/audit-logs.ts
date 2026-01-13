@@ -71,8 +71,21 @@ export async function GetAuditLogs(
     query = query.eq("resource_type", filters.resource_type);
   }
 
-  if (filters?.actor_user_id) {
-    query = query.eq("actor_user_id", filters.actor_user_id);
+  // Filter by Actor OR Staff Profile
+  if (filters?.actor_user_id && filters?.staff_profile_id) {
+    query = query.or(
+      `actor_user_id.eq.${filters.actor_user_id},metadata->>staff_profile_id.eq.${filters.staff_profile_id}`
+    );
+  } else {
+    if (filters?.actor_user_id) {
+      query = query.eq("actor_user_id", filters.actor_user_id);
+    }
+    // Filter by Staff Profile ID (stored in metadata)
+    if (filters?.staff_profile_id) {
+      query = query.contains("metadata", {
+        staff_profile_id: filters.staff_profile_id,
+      });
+    }
   }
 
   if (filters?.date_from) {

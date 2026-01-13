@@ -22,6 +22,7 @@ export interface UnifiedStaffMember {
   member_id: string;
   user_id: string | null; // null for POS-only users
   clerk_user_id: string | null;
+  staff_profile_id?: string | null; // Added for log filtering
   email: string | null;
   first_name: string;
   last_name: string;

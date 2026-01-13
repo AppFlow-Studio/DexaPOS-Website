@@ -12,6 +12,7 @@ export const AUDIT_CATEGORIES = [
   "menu",
   "settings",
   "authentication",
+  "order",
 ] as const;
 
 export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
@@ -29,6 +30,7 @@ export const AUDIT_RESOURCE_TYPES = [
   "menu_item",
   "staff_member",
   "location",
+  "order",
 ] as const;
 
 export type AuditResourceType = (typeof AUDIT_RESOURCE_TYPES)[number];
@@ -54,6 +56,12 @@ export const AUDIT_ACTIONS = {
   "staff.added": "Staff Added",
   "staff.removed": "Staff Removed",
   "staff.role_changed": "Role Changed",
+  "staff.pin_reset": "PIN Reset",
+  "staff.clock_in": "Clocked In",
+  "staff.clock_out": "Clocked Out",
+
+  // Orders
+  "order.created": "Order Created",
 } as const;
 
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
@@ -150,6 +158,7 @@ export interface AuditLogFilters {
   severity?: AuditSeverity;
   resource_type?: string;
   actor_user_id?: string;
+  staff_profile_id?: string; // NEW FILTER
   date_from?: string;
   date_to?: string;
   search?: string;
@@ -164,6 +173,7 @@ export const CATEGORY_LABELS: Record<AuditCategory, string> = {
   menu: "Menu",
   settings: "Settings",
   authentication: "Authentication",
+  order: "Orders",
 };
 
 export const CATEGORY_COLORS: Record<AuditCategory, string> = {
@@ -179,6 +189,8 @@ export const CATEGORY_COLORS: Record<AuditCategory, string> = {
   settings: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400",
   authentication:
     "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400",
+  order:
+    "bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-400",
 };
 
 export const SEVERITY_COLORS: Record<AuditSeverity, string> = {
