@@ -36,6 +36,7 @@ import {
     DollarSign,
     UserCheck,
     Briefcase,
+    Info,
 } from 'lucide-react'
 import { GetMerchantRoles } from '@/app/dashboard/actions/staff-invite'
 import { RolesModel, LocationsModel } from '@/types/db-modles'

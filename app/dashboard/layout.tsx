@@ -59,6 +59,7 @@ import {
   MonitorSmartphone,
   Globe,
   GitCompare,
+  Monitor,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -447,7 +448,8 @@ function MerchantSidebar() {
                       asChild
                       isActive={
                         pathname === "/dashboard/settings" &&
-                        !pathname.includes("/devices")
+                        !pathname.includes("/devices") &&
+                        !pathname.includes("/stations")
                       }
                     >
                       <Link href="/dashboard/settings">
@@ -465,6 +467,19 @@ function MerchantSidebar() {
                       <Link href="/dashboard/settings/devices">
                         <MonitorSmartphone className="h-3 w-3" />
                         <span>Devices</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={pathname.startsWith(
+                        "/dashboard/settings/stations"
+                      )}
+                    >
+                      <Link href="/dashboard/settings/stations">
+                        <Monitor className="h-3 w-3" />
+                        <span>Stations</span>
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
