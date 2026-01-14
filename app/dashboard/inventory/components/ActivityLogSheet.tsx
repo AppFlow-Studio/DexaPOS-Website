@@ -41,6 +41,8 @@ import {
   Tag,
   FileText,
   CheckCircle,
+  Receipt,
+  RotateCcw,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { GetAuditLogs } from "@/app/dashboard/actions/audit-logs";
@@ -72,6 +74,10 @@ const ACTION_ICONS: Record<string, React.ElementType> = {
   "purchase_order.received": ShoppingCart,
   "purchase_order.paid": DollarSign,
   "expense.logged": DollarSign,
+  "staff.clock_in": Clock,
+  "staff.clock_out": Clock,
+  "staff.pin_reset": RotateCcw,
+  "order.created": Receipt,
 };
 
 // Format action for display

@@ -314,67 +314,61 @@ function ItemCard({
       viewport={{ once: true, margin: "-50px" }}
       transition={{ duration: 0.3 }}
       onClick={onClick}
-      className="group bg-white dark:bg-zinc-900 rounded-xl border border-gray-100 dark:border-zinc-800 shadow-sm hover:shadow-lg hover:border-[var(--primary)]/30 transition-all duration-300 overflow-hidden flex flex-row cursor-pointer h-32"
+      className="group bg-white rounded-2xl border border-gray-100 hover:border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden flex flex-row cursor-pointer min-h-[140px]"
     >
-      {/* Content Side */}
+      {/* Content Side - Left */}
       <div className="flex-1 p-4 flex flex-col justify-between min-w-0">
         <div>
-          <h4 className="font-bold text-gray-900 dark:text-gray-100 text-base mb-1 group-hover:text-[var(--primary)] transition-colors line-clamp-1 uppercase tracking-wide">
+          <h4 className="font-bold text-gray-900 text-base mb-1.5 group-hover:text-[var(--primary)] transition-colors line-clamp-2 leading-tight">
             {item.name}
           </h4>
-          <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">
-            {item.description}
-          </p>
+          {item.description && (
+            <p className="text-sm text-gray-500 line-clamp-2 leading-relaxed">
+              {item.description}
+            </p>
+          )}
         </div>
 
-        {/* Price shown only if no image (price badge on image otherwise) */}
-        {!item.image && (
-          <div className="flex items-center justify-between mt-2">
-            <span className="font-bold text-[var(--primary)] text-lg">
-              ${item.price.toFixed(2)}
-            </span>
-            <Button
-              size="sm"
-              className="rounded-full w-8 h-8 p-0 bg-[var(--primary)] hover:bg-[var(--primary)]/90 text-white shadow-md"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-
-        {/* Add button only if image exists (price is on image badge) */}
-        {item.image && (
-          <div className="flex items-center justify-end mt-2">
-            <Button
-              size="sm"
-              className="rounded-full w-8 h-8 p-0 bg-[var(--primary)] hover:bg-[var(--primary)]/90 text-white shadow-md group-hover:scale-110 transition-transform"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
+        {/* Price - Bottom Left */}
+        <div className="mt-3">
+          <span className="font-bold text-gray-900 text-base">
+            ${item.price.toFixed(2)}
+          </span>
+        </div>
       </div>
 
-      {/* Image Side with Price Badge */}
-      <div className="w-32 h-full shrink-0 relative">
+      {/* Image Side - Right */}
+      <div className="w-32 sm:w-36 shrink-0 relative">
         {item.image ? (
           <div className="h-full w-full bg-gray-100 relative overflow-hidden">
             <img
               src={item.image}
               alt={item.name}
-              className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+              className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               loading="lazy"
             />
-            {/* Price Badge Overlay */}
-            <div className="absolute top-2 right-2 bg-[var(--primary)] text-white text-sm font-bold px-2.5 py-1 rounded-lg shadow-lg">
-              ${item.price.toFixed(2)}
+            {/* Add Button Overlay */}
+            <div className="absolute bottom-2 right-2">
+              <Button
+                size="sm"
+                className="rounded-full w-8 h-8 p-0 bg-white hover:bg-gray-100 text-gray-900 shadow-lg border border-gray-200 group-hover:scale-110 transition-transform"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
             </div>
-            {/* Subtle gradient overlay for depth */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
         ) : (
-          <div className="h-full w-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-zinc-800 dark:to-zinc-700 flex items-center justify-center">
-            <ImageIcon className="h-8 w-8 text-gray-300 dark:text-zinc-500" />
+          <div className="h-full w-full bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center relative">
+            <ImageIcon className="h-8 w-8 text-gray-300" />
+            {/* Add Button for no-image items */}
+            <div className="absolute bottom-2 right-2">
+              <Button
+                size="sm"
+                className="rounded-full w-8 h-8 p-0 bg-[var(--primary)] hover:bg-[var(--primary)]/90 text-white shadow-md"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         )}
       </div>

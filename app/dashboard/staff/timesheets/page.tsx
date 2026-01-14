@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { startOfWeek, endOfWeek } from "date-fns";
 import { useTimesheets, useTimesheetResources } from "@/hooks/useTimesheets";
+import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import {
   useIsAllLocations,
   useSelectedLocation,
@@ -30,6 +31,10 @@ export default function TimesheetsPage() {
   const isAllLocations = useIsAllLocations();
   const selectedLocation = useSelectedLocation();
 
+  // Get organization ID for API calls
+  const { data: userInfo } = useUserInfo();
+  const clerkOrgId = userInfo?.members?.[0]?.organizations?.id || "";
+
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfWeek(new Date()),
     to: endOfWeek(new Date()),
@@ -39,12 +44,14 @@ export default function TimesheetsPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
 
   // Fetch resources (staff) - must be called before any conditional returns
-  const { data: resources } = useTimesheetResources();
+  const { data: resources } = useTimesheetResources(clerkOrgId);
 
   // Prepare filters - use safe defaults if no location selected
   const filters = {
+    clerkOrgId,
     dateRange,
-    locationIds: selectedLocation && !isAllLocations ? [selectedLocation.id] : [],
+    locationIds:
+      selectedLocation && !isAllLocations ? [selectedLocation.id] : [],
     employeeIds: selectedEmployeeId !== "all" ? [selectedEmployeeId] : [],
   };
 

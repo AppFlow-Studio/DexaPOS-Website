@@ -15,9 +15,8 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
-  SheetFooter,
 } from "@/components/ui/sheet";
-import { Minus, Plus, ShoppingBag, Trash2, Leaf } from "lucide-react";
+import { Minus, Plus, X, Leaf, ShoppingBag } from "lucide-react";
 
 import { OnlineOrderingConfig } from "@/types/site";
 
@@ -45,83 +44,110 @@ export function CartSidebar({ config }: CartSidebarProps) {
 
   return (
     <Sheet open={isOpen} onOpenChange={setOpen}>
-      <SheetContent className="w-full sm:max-w-md flex flex-col p-0">
-        <SheetHeader className="p-6 border-b">
-          <SheetTitle className="flex items-center gap-2">
-            <ShoppingBag className="h-5 w-5" />
-            Your Order
-          </SheetTitle>
+      <SheetContent className="w-full sm:max-w-md flex flex-col p-0 gap-0">
+        {/* Header */}
+        <SheetHeader className="p-4 border-b bg-white shrink-0">
+          <div className="flex items-center justify-between">
+            <SheetTitle className="text-lg font-bold">Your Order</SheetTitle>
+            <button
+              onClick={() => setOpen(false)}
+              className="p-1.5 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <X className="h-5 w-5 text-gray-500" />
+            </button>
+          </div>
         </SheetHeader>
 
-        <ScrollArea className="flex-1 p-6">
+        {/* Cart Items */}
+        <ScrollArea className="flex-1">
           {items.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center space-y-4 opacity-50 mt-12">
-              <ShoppingBag className="h-12 w-12" />
-              <p>Your cart is empty</p>
+            <div className="flex flex-col items-center justify-center h-[300px] text-center px-6">
+              <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                <ShoppingBag className="h-8 w-8 text-gray-400" />
+              </div>
+              <p className="font-medium text-gray-900 mb-1">
+                Your cart is empty
+              </p>
+              <p className="text-sm text-gray-500">Add items to get started</p>
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="divide-y divide-gray-100">
               {items.map((item) => (
-                <div key={item.cartItemId} className="flex gap-4">
-                  {item.image && (
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      className="h-16 w-16 rounded-md object-cover bg-gray-100"
-                    />
-                  )}
-                  <div className="flex-1">
-                    <div className="flex justify-between items-start mb-1">
-                      <h4 className="font-medium line-clamp-2">{item.name}</h4>
-                      {item.selectedModifiers &&
-                        item.selectedModifiers.length > 0 && (
-                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                            {item.selectedModifiers
-                              .map((m) => m.name)
-                              .join(", ")}
-                          </p>
-                        )}
-                      {item.notes && (
-                        <p className="text-xs text-muted-foreground italic mt-0.5 line-clamp-1">
-                          "{item.notes}"
-                        </p>
-                      )}
-                      <div className="flex justify-between items-center mt-1">
-                        <span className="font-semibold text-sm">
+                <div
+                  key={item.cartItemId}
+                  className="p-4 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex gap-3">
+                    {/* Item Image */}
+                    {item.image && (
+                      <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 shrink-0">
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+
+                    {/* Item Details */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="min-w-0">
+                          <h4 className="font-medium text-gray-900 line-clamp-1">
+                            {item.name}
+                          </h4>
+                          {item.selectedModifiers &&
+                            item.selectedModifiers.length > 0 && (
+                              <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">
+                                {item.selectedModifiers
+                                  .map((m) => m.name)
+                                  .join(", ")}
+                              </p>
+                            )}
+                          {item.notes && (
+                            <p className="text-xs text-gray-400 italic mt-0.5 line-clamp-1">
+                              "{item.notes}"
+                            </p>
+                          )}
+                        </div>
+                        <span className="font-semibold text-gray-900 shrink-0">
                           ${(item.totalPrice * item.quantity).toFixed(2)}
                         </span>
                       </div>
-                    </div>
-                    <div className="flex items-center justify-between mt-2">
-                      <div className="flex items-center border rounded-md h-8">
-                        <button
-                          className="px-2 h-full hover:bg-muted transition-colors"
-                          onClick={() =>
-                            updateQuantity(item.cartItemId, item.quantity - 1)
-                          }
-                        >
-                          <Minus className="h-3 w-3" />
-                        </button>
-                        <span className="px-2 text-sm font-medium w-8 text-center">
-                          {item.quantity}
-                        </span>
-                        <button
-                          className="px-2 h-full hover:bg-muted transition-colors"
-                          onClick={() =>
-                            updateQuantity(item.cartItemId, item.quantity + 1)
-                          }
-                        >
-                          <Plus className="h-3 w-3" />
-                        </button>
+
+                      {/* Quantity Controls */}
+                      <div className="flex items-center justify-between mt-3">
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => removeItem(item.cartItemId)}
+                            className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                            aria-label="Remove item"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <div className="flex items-center border border-gray-200 rounded-full h-8">
+                          <button
+                            className="w-8 h-full flex items-center justify-center hover:bg-gray-100 rounded-l-full transition-colors"
+                            onClick={() =>
+                              updateQuantity(item.cartItemId, item.quantity - 1)
+                            }
+                          >
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <span className="w-8 text-center text-sm font-medium">
+                            {item.quantity}
+                          </span>
+                          <button
+                            className="w-8 h-full flex items-center justify-center hover:bg-gray-100 rounded-r-full transition-colors"
+                            onClick={() =>
+                              updateQuantity(item.cartItemId, item.quantity + 1)
+                            }
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={() => removeItem(item.cartItemId)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
                     </div>
                   </div>
                 </div>
@@ -130,9 +156,10 @@ export function CartSidebar({ config }: CartSidebarProps) {
           )}
         </ScrollArea>
 
-        <div className="p-6 border-t bg-muted/30 space-y-4">
+        {/* Footer - Sticky */}
+        <div className="border-t bg-white shrink-0">
           {/* Go Green Option */}
-          <div className="flex items-center justify-between py-2">
+          <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100">
             <div className="flex items-center gap-2">
               <Leaf
                 className={cn(
@@ -141,11 +168,14 @@ export function CartSidebar({ config }: CartSidebarProps) {
                 )}
               />
               <div>
-                <Label htmlFor="go-green" className="font-medium">
+                <Label
+                  htmlFor="go-green"
+                  className="text-sm font-medium cursor-pointer"
+                >
                   Go Green
                 </Label>
-                <p className="text-xs text-muted-foreground">
-                  Opt out of plastic cutlery
+                <p className="text-xs text-gray-500">
+                  Skip the plastic cutlery
                 </p>
               </div>
             </div>
@@ -156,31 +186,29 @@ export function CartSidebar({ config }: CartSidebarProps) {
             />
           </div>
 
-          <Separator />
-
-          {/* Price Breakdown */}
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Subtotal</span>
+          {/* Price Summary */}
+          <div className="px-4 py-3 space-y-1.5 text-sm">
+            <div className="flex justify-between text-gray-600">
+              <span>Subtotal</span>
               <span>${subtotal.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Tax (8%)</span>
+            <div className="flex justify-between text-gray-600">
+              <span>Tax (8%)</span>
               <span>${tax.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between items-center text-lg font-bold pt-2">
-              <span>Total</span>
-              <span>${total.toFixed(2)}</span>
             </div>
           </div>
 
-          <Button
-            className="w-full bg-[var(--primary)] text-white hover:opacity-90 h-12 text-lg font-bold shadow-lg shadow-blue-500/20"
-            disabled={items.length === 0}
-            onClick={() => setIsCheckoutOpen(true)}
-          >
-            Checkout
-          </Button>
+          {/* Checkout Button */}
+          <div className="p-4 pt-0">
+            <Button
+              className="w-full h-12 bg-gray-900 hover:bg-gray-800 text-white font-semibold text-base rounded-lg shadow-sm"
+              disabled={items.length === 0}
+              onClick={() => setIsCheckoutOpen(true)}
+            >
+              <span>Checkout</span>
+              <span className="ml-auto">${total.toFixed(2)}</span>
+            </Button>
+          </div>
         </div>
       </SheetContent>
 

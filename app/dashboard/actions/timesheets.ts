@@ -1,67 +1,79 @@
-'use server'
+"use server";
 
-import { auth, currentUser } from '@clerk/nextjs/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { StaffShift } from '@/types/staff'
-import { startOfDay, endOfDay } from 'date-fns'
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { StaffShift } from "@/types/staff";
+import { startOfDay, endOfDay } from "date-fns";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-type MutationResult<T> = { success: true; data: T } | { success: false; error: string }
+type MutationResult<T> =
+  | { success: true; data: T }
+  | { success: false; error: string };
 
 interface TimesheetFilters {
-    dateFrom: string // ISO date string
-    dateTo: string // ISO date string
-    locationIds?: string[]
-    employeeIds?: string[]
+  dateFrom: string; // ISO date string
+  dateTo: string; // ISO date string
+  locationIds?: string[];
+  employeeIds?: string[];
 }
 
 interface TimesheetResources {
-    staff: { id: string; first_name: string; last_name: string; avatar_url: string | null }[]
-    locations: { id: string; name: string }[]
+  staff: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    avatar_url: string | null;
+  }[];
+  locations: { id: string; name: string }[];
 }
 
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
-async function getMerchantIdFromSession() {
-    const { userId, sessionClaims } = await auth()
-    if (!userId) {
-        throw new Error('Unauthorized')
-    }
+async function getMerchantIdFromClerkOrg(clerkOrgId: string): Promise<string> {
+  if (!clerkOrgId) {
+    throw new Error("Organization ID is required");
+  }
 
-    const user = await currentUser()
-    const publicMetadata = (user?.publicMetadata || {}) as Record<string, unknown>
-    const merchantId =
-        (publicMetadata.merchantId as string | undefined) ||
-        ((sessionClaims as Record<string, any> | null)?.merchantId as string | undefined) ||
-        ((sessionClaims as Record<string, any> | null)?.metadata?.merchantId as string | undefined)
+  const supabase = createServerSupabaseClient();
 
-    if (!merchantId) {
-        throw new Error('Missing merchant_id on session')
-    }
+  const { data: merchant, error } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("clerk_org_id", clerkOrgId)
+    .single();
 
-    return merchantId
+  if (error || !merchant) {
+    throw new Error("Merchant not found");
+  }
+
+  return merchant.id;
 }
 
 // ============================================================================
 // GET TIMESHEETS
 // ============================================================================
 
-export async function GetTimesheets(filters: TimesheetFilters): Promise<MutationResult<StaffShift[]>> {
-    try {
-        const supabase = createServerSupabaseClient()
-        const merchantId = await getMerchantIdFromSession()
+export async function GetTimesheets(
+  clerkOrgId: string,
+  filters: TimesheetFilters
+): Promise<MutationResult<StaffShift[]>> {
+  try {
+    const supabase = createServiceRoleClient();
 
-        const from = startOfDay(new Date(filters.dateFrom)).toISOString()
-        const to = endOfDay(new Date(filters.dateTo)).toISOString()
+    const merchantId = await getMerchantIdFromClerkOrg(clerkOrgId);
 
-        let query = supabase
-            .from('staff_shifts')
-            .select(`
+    const from = startOfDay(new Date(filters.dateFrom)).toISOString();
+    const to = endOfDay(new Date(filters.dateTo)).toISOString();
+
+    let query = supabase
+      .from("staff_shifts")
+      .select(
+        `
                 id, 
                 status, 
                 clock_in_time, 
@@ -74,83 +86,98 @@ export async function GetTimesheets(filters: TimesheetFilters): Promise<Mutation
                 staff_profile_id,
                 staff_profile:staff_profiles(first_name, last_name, avatar_url),
                 location:locations(name)
-            `)
-            .eq('merchant_id', merchantId)
-            .gte('clock_in_time', from)
-            .lte('clock_in_time', to)
-            .order('clock_in_time', { ascending: false })
+            `
+      )
+      .eq("merchant_id", merchantId)
+      .gte("clock_in_time", from)
+      .lte("clock_in_time", to)
+      .order("clock_in_time", { ascending: false });
 
-        if (filters.locationIds && filters.locationIds.length > 0) {
-            query = query.in('location_id', filters.locationIds)
-        }
-
-        if (filters.employeeIds && filters.employeeIds.length > 0) {
-            query = query.in('staff_profile_id', filters.employeeIds)
-        }
-
-        const { data, error } = await query
-
-        if (error) {
-            throw error
-        }
-
-        return { success: true, data: (data || []) as unknown as StaffShift[] }
-    } catch (error) {
-        console.error('[GetTimesheets] error', error)
-        return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch timesheets' }
+    if (filters.locationIds && filters.locationIds.length > 0) {
+      query = query.in("location_id", filters.locationIds);
     }
+
+    if (filters.employeeIds && filters.employeeIds.length > 0) {
+      query = query.in("staff_profile_id", filters.employeeIds);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw error;
+    }
+
+    return { success: true, data: (data || []) as unknown as StaffShift[] };
+  } catch (error) {
+    console.error("[GetTimesheets] error", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to fetch timesheets",
+    };
+  }
 }
 
 // ============================================================================
 // GET TIMESHEET RESOURCES (staff and locations for filters)
 // ============================================================================
 
-export async function GetTimesheetResources(): Promise<MutationResult<TimesheetResources>> {
-    try {
-        const supabase = createServerSupabaseClient()
-        const merchantId = await getMerchantIdFromSession()
+export async function GetTimesheetResources(
+  clerkOrgId: string
+): Promise<MutationResult<TimesheetResources>> {
+  try {
+    const supabase = createServerSupabaseClient();
+    const merchantId = await getMerchantIdFromClerkOrg(clerkOrgId);
 
-        const [staffRes, locRes] = await Promise.all([
-            supabase
-                .from('staff_profiles')
-                .select('id, first_name, last_name, avatar_url')
-                .eq('merchant_id', merchantId)
-                .order('first_name', { ascending: true }),
-            supabase
-                .from('locations')
-                .select('id, name')
-                .eq('merchant_id', merchantId)
-                .order('name', { ascending: true }),
-        ])
+    const [staffRes, locRes] = await Promise.all([
+      supabase
+        .from("staff_profiles")
+        .select("id, first_name, last_name, avatar_url")
+        .eq("merchant_id", merchantId)
+        .order("first_name", { ascending: true }),
+      supabase
+        .from("locations")
+        .select("id, name")
+        .eq("merchant_id", merchantId)
+        .order("name", { ascending: true }),
+    ]);
 
-        if (staffRes.error) throw staffRes.error
-        if (locRes.error) throw locRes.error
+    if (staffRes.error) throw staffRes.error;
+    if (locRes.error) throw locRes.error;
 
-        return {
-            success: true,
-            data: {
-                staff: staffRes.data || [],
-                locations: locRes.data || [],
-            },
-        }
-    } catch (error) {
-        console.error('[GetTimesheetResources] error', error)
-        return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch resources' }
-    }
+    return {
+      success: true,
+      data: {
+        staff: staffRes.data || [],
+        locations: locRes.data || [],
+      },
+    };
+  } catch (error) {
+    console.error("[GetTimesheetResources] error", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to fetch resources",
+    };
+  }
 }
 
 // ============================================================================
 // GET SINGLE SHIFT
 // ============================================================================
 
-export async function GetShiftById(shiftId: string): Promise<MutationResult<StaffShift>> {
-    try {
-        const supabase = createServerSupabaseClient()
-        const merchantId = await getMerchantIdFromSession()
+export async function GetShiftById(
+  clerkOrgId: string,
+  shiftId: string
+): Promise<MutationResult<StaffShift>> {
+  try {
+    const supabase = createServiceRoleClient();
+    const merchantId = await getMerchantIdFromClerkOrg(clerkOrgId);
 
-        const { data, error } = await supabase
-            .from('staff_shifts')
-            .select(`
+    const { data, error } = await supabase
+      .from("staff_shifts")
+      .select(
+        `
                 id, 
                 status, 
                 clock_in_time, 
@@ -166,20 +193,24 @@ export async function GetShiftById(shiftId: string): Promise<MutationResult<Staf
                 staff_profile_id,
                 staff_profile:staff_profiles(first_name, last_name, avatar_url),
                 location:locations(name)
-            `)
-            .eq('id', shiftId)
-            .eq('merchant_id', merchantId)
-            .single()
+            `
+      )
+      .eq("id", shiftId)
+      .eq("merchant_id", merchantId)
+      .single();
 
-        if (error || !data) {
-            throw error || new Error('Shift not found')
-        }
-
-        return { success: true, data: data as unknown as StaffShift }
-    } catch (error) {
-        console.error('[GetShiftById] error', error)
-        return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch shift' }
+    if (error || !data) {
+      throw error || new Error("Shift not found");
     }
+
+    return { success: true, data: data as unknown as StaffShift };
+  } catch (error) {
+    console.error("[GetShiftById] error", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to fetch shift",
+    };
+  }
 }
 
 // ============================================================================
@@ -187,23 +218,25 @@ export async function GetShiftById(shiftId: string): Promise<MutationResult<Staf
 // ============================================================================
 
 export async function UpdateShiftStatus(
-    shiftId: string,
-    status: 'active' | 'completed' | 'approved' | 'rejected'
+  clerkOrgId: string,
+  shiftId: string,
+  status: "active" | "completed" | "approved" | "rejected"
 ): Promise<MutationResult<StaffShift>> {
-    try {
-        const supabase = createServerSupabaseClient()
-        const merchantId = await getMerchantIdFromSession()
+  try {
+    const supabase = createServiceRoleClient();
+    const merchantId = await getMerchantIdFromClerkOrg(clerkOrgId);
 
-        const { data, error } = await supabase
-            .from('staff_shifts')
-            .update({ 
-                status, 
-                updated_at: new Date().toISOString(),
-                is_verified: status === 'approved' ? true : undefined 
-            })
-            .eq('id', shiftId)
-            .eq('merchant_id', merchantId)
-            .select(`
+    const { data, error } = await supabase
+      .from("staff_shifts")
+      .update({
+        status,
+        updated_at: new Date().toISOString(),
+        is_verified: status === "approved" ? true : undefined,
+      })
+      .eq("id", shiftId)
+      .eq("merchant_id", merchantId)
+      .select(
+        `
                 id, 
                 status, 
                 clock_in_time, 
@@ -216,18 +249,25 @@ export async function UpdateShiftStatus(
                 staff_profile_id,
                 staff_profile:staff_profiles(first_name, last_name, avatar_url),
                 location:locations(name)
-            `)
-            .single()
+            `
+      )
+      .single();
 
-        if (error || !data) {
-            throw error || new Error('Failed to update shift')
-        }
-
-        return { success: true, data: data as unknown as StaffShift }
-    } catch (error) {
-        console.error('[UpdateShiftStatus] error', error)
-        return { success: false, error: error instanceof Error ? error.message : 'Failed to update shift status' }
+    if (error || !data) {
+      throw error || new Error("Failed to update shift");
     }
+
+    return { success: true, data: data as unknown as StaffShift };
+  } catch (error) {
+    console.error("[UpdateShiftStatus] error", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to update shift status",
+    };
+  }
 }
 
 // ============================================================================
@@ -235,24 +275,26 @@ export async function UpdateShiftStatus(
 // ============================================================================
 
 export async function AdjustShiftTimes(
-    shiftId: string,
-    clockInTime: string,
-    clockOutTime: string | null
+  clerkOrgId: string,
+  shiftId: string,
+  clockInTime: string,
+  clockOutTime: string | null
 ): Promise<MutationResult<StaffShift>> {
-    try {
-        const supabase = createServerSupabaseClient()
-        const merchantId = await getMerchantIdFromSession()
+  try {
+    const supabase = createServiceRoleClient();
+    const merchantId = await getMerchantIdFromClerkOrg(clerkOrgId);
 
-        const { data, error } = await supabase
-            .from('staff_shifts')
-            .update({ 
-                clock_in_time: clockInTime,
-                clock_out_time: clockOutTime,
-                updated_at: new Date().toISOString() 
-            })
-            .eq('id', shiftId)
-            .eq('merchant_id', merchantId)
-            .select(`
+    const { data, error } = await supabase
+      .from("staff_shifts")
+      .update({
+        clock_in_time: clockInTime,
+        clock_out_time: clockOutTime,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", shiftId)
+      .eq("merchant_id", merchantId)
+      .select(
+        `
                 id, 
                 status, 
                 clock_in_time, 
@@ -265,72 +307,89 @@ export async function AdjustShiftTimes(
                 staff_profile_id,
                 staff_profile:staff_profiles(first_name, last_name, avatar_url),
                 location:locations(name)
-            `)
-            .single()
+            `
+      )
+      .single();
 
-        if (error || !data) {
-            throw error || new Error('Failed to adjust shift times')
-        }
-
-        return { success: true, data: data as unknown as StaffShift }
-    } catch (error) {
-        console.error('[AdjustShiftTimes] error', error)
-        return { success: false, error: error instanceof Error ? error.message : 'Failed to adjust shift times' }
+    if (error || !data) {
+      throw error || new Error("Failed to adjust shift times");
     }
+
+    return { success: true, data: data as unknown as StaffShift };
+  } catch (error) {
+    console.error("[AdjustShiftTimes] error", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to adjust shift times",
+    };
+  }
 }
 
 // ============================================================================
 // DELETE SHIFT
 // ============================================================================
 
-export async function DeleteShift(shiftId: string): Promise<MutationResult<null>> {
-    try {
-        const supabase = createServerSupabaseClient()
-        const merchantId = await getMerchantIdFromSession()
+export async function DeleteShift(
+  clerkOrgId: string,
+  shiftId: string
+): Promise<MutationResult<null>> {
+  try {
+    const supabase = createServiceRoleClient();
+    const merchantId = await getMerchantIdFromClerkOrg(clerkOrgId);
 
-        const { error } = await supabase
-            .from('staff_shifts')
-            .delete()
-            .eq('id', shiftId)
-            .eq('merchant_id', merchantId)
+    const { error } = await supabase
+      .from("staff_shifts")
+      .delete()
+      .eq("id", shiftId)
+      .eq("merchant_id", merchantId);
 
-        if (error) throw error
+    if (error) throw error;
 
-        return { success: true, data: null }
-    } catch (error) {
-        console.error('[DeleteShift] error', error)
-        return { success: false, error: error instanceof Error ? error.message : 'Failed to delete shift' }
-    }
+    return { success: true, data: null };
+  } catch (error) {
+    console.error("[DeleteShift] error", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to delete shift",
+    };
+  }
 }
 
 // ============================================================================
 // BULK APPROVE SHIFTS
 // ============================================================================
 
-export async function BulkApproveShifts(shiftIds: string[]): Promise<MutationResult<number>> {
-    try {
-        if (!shiftIds.length) return { success: true, data: 0 }
+export async function BulkApproveShifts(
+  clerkOrgId: string,
+  shiftIds: string[]
+): Promise<MutationResult<number>> {
+  try {
+    if (!shiftIds.length) return { success: true, data: 0 };
 
-        const supabase = createServerSupabaseClient()
-        const merchantId = await getMerchantIdFromSession()
+    const supabase = createServiceRoleClient();
+    const merchantId = await getMerchantIdFromClerkOrg(clerkOrgId);
 
-        const { error, count } = await supabase
-            .from('staff_shifts')
-            .update({ 
-                status: 'approved', 
-                is_verified: true,
-                updated_at: new Date().toISOString() 
-            })
-            .in('id', shiftIds)
-            .eq('merchant_id', merchantId)
-            .select('*', { count: 'exact', head: true })
+    const { error, count } = await supabase
+      .from("staff_shifts")
+      .update({
+        status: "approved",
+        is_verified: true,
+        updated_at: new Date().toISOString(),
+      })
+      .in("id", shiftIds)
+      .eq("merchant_id", merchantId)
+      .select("*", { count: "exact", head: true });
 
-        if (error) throw error
+    if (error) throw error;
 
-        return { success: true, data: count || 0 }
-    } catch (error) {
-        console.error('[BulkApproveShifts] error', error)
-        return { success: false, error: error instanceof Error ? error.message : 'Failed to approve shifts' }
-    }
+    return { success: true, data: count || 0 };
+  } catch (error) {
+    console.error("[BulkApproveShifts] error", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to approve shifts",
+    };
+  }
 }
-

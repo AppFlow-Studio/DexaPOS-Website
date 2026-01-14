@@ -11,6 +11,7 @@ import { InfoSheet } from "./InfoSheet";
 import { OrdersSheet } from "./OrdersSheet";
 import { StorefrontHeader } from "./StorefrontHeader";
 import { HeroBanner } from "./HeroBanner";
+import { StoreInfoBar } from "./StoreInfoBar";
 import { useCart } from "../hooks/useCart";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -85,6 +86,8 @@ export function StorefrontLayout({
             transition={{ duration: 0.3 }}
           >
             <HeroBanner site={site} storeName={storeName} />
+            {/* Store Info Bar - below hero */}
+            <StoreInfoBar site={site} location={location} />
           </motion.div>
         )}
       </AnimatePresence>

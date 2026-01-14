@@ -7,7 +7,6 @@ import {
   Phone,
   Mail,
   Clock,
-  Store,
   ExternalLink,
   ChevronRight,
 } from "lucide-react";
@@ -54,7 +53,7 @@ function parseBusinessHours(
           ? "Closed"
           : item.hours ||
             (item.open && item.close
-              ? `${item.open} - ${item.close}`
+              ? formatTimeRange(item.open, item.close)
               : "Closed"),
       }))
       .filter((item) => item.day);
@@ -81,20 +80,25 @@ function parseBusinessHours(
 
         // Check for WeeklySchedule format { enabled: boolean, from: string, to: string, ... }
         if (typeof value === "object" && "enabled" in value) {
-          if (!value.enabled) return { day, hours: "Closed" };
-          if (value.is24Hours) return { day, hours: "Open 24 Hours" };
-          return { day, hours: `${value.from} - ${value.to}` };
+          if (!value.enabled)
+            return { day: capitalizeDay(day), hours: "Closed" };
+          if (value.is24Hours)
+            return { day: capitalizeDay(day), hours: "Open 24 Hours" };
+          return {
+            day: capitalizeDay(day),
+            hours: formatTimeRange(value.from, value.to),
+          };
         }
 
         // Legacy format
         return {
-          day,
+          day: capitalizeDay(day),
           hours: value?.closed
             ? "Closed"
             : typeof value === "string"
             ? value
             : value?.open && value?.close
-            ? `${value.open} - ${value.close}`
+            ? formatTimeRange(value.open, value.close)
             : "Closed",
         };
       })
@@ -104,18 +108,36 @@ function parseBusinessHours(
   return [];
 }
 
+// Helper to capitalize day name
+function capitalizeDay(day: string): string {
+  return day.charAt(0).toUpperCase() + day.slice(1);
+}
+
+// Helper to format time range in 12-hour format
+function formatTimeRange(from: string, to: string): string {
+  const formatTime = (time: string): string => {
+    if (!time) return "";
+    const [hours, minutes] = time.split(":").map(Number);
+    const period = hours >= 12 ? "PM" : "AM";
+    const displayHours = hours % 12 || 12;
+    const displayMinutes = (minutes || 0).toString().padStart(2, "0");
+    return `${displayHours}:${displayMinutes} ${period}`;
+  };
+  return `${formatTime(from)} - ${formatTime(to)}`;
+}
+
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.1,
+      staggerChildren: 0.08,
     },
   },
 };
 
 const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
+  hidden: { opacity: 0, y: 15 },
   visible: { opacity: 1, y: 0 },
 };
 
@@ -138,41 +160,44 @@ export function InfoPanel({ site, location }: InfoPanelProps) {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="space-y-6 pb-8 overflow-hidden"
+      className="space-y-4 pb-8 overflow-hidden max-w-2xl mx-auto"
     >
-      {/* Hero Section - Responsive for very narrow screens */}
+      {/* Store Header Card */}
       <motion.div
         variants={itemVariants}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-4 sm:p-6 text-white shadow-xl"
+        className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm"
       >
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMiIvPjwvZz48L2c+PC9zdmc+')] opacity-50" />
-
-        <div className="relative flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
+        <div className="flex items-start gap-4">
           {site?.logo_url ? (
-            <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl bg-white p-2 shadow-lg shrink-0">
+            <div className="h-16 w-16 rounded-xl overflow-hidden shadow-sm border border-gray-100 shrink-0">
               <img
                 src={site.logo_url}
                 alt={storeName}
-                className="h-full w-full object-contain"
+                className="h-full w-full object-cover"
               />
             </div>
           ) : (
-            <div className="flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-sm shrink-0">
-              <Store className="h-8 w-8 sm:h-10 sm:w-10 text-white/80" />
+            <div
+              className="flex h-16 w-16 items-center justify-center rounded-xl text-white font-bold text-xl shrink-0"
+              style={{
+                backgroundColor: site?.theme_config?.primaryColor || "#3b82f6",
+              }}
+            >
+              {storeName.charAt(0).toUpperCase()}
             </div>
           )}
 
-          <div className="flex-1 min-w-0 text-center sm:text-left">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight truncate">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl font-bold text-gray-900 truncate">
               {storeName}
             </h1>
             {description && (
-              <p className="mt-1 text-xs sm:text-sm text-white/70 line-clamp-2">
+              <p className="mt-1 text-sm text-gray-600 line-clamp-2">
                 {description}
               </p>
             )}
             {/* Open/Closed Status */}
-            <div className="mt-3 flex justify-center sm:justify-start">
+            <div className="mt-3">
               <OpenClosedIndicator
                 businessHours={rawBusinessHours}
                 showSchedule={true}
@@ -180,136 +205,135 @@ export function InfoPanel({ site, location }: InfoPanelProps) {
             </div>
           </div>
         </div>
-
-        {/* Decorative gradient orbs */}
-        <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-[var(--primary)]/20 blur-3xl" />
-        <div className="absolute -bottom-10 -left-10 h-32 w-32 rounded-full bg-[var(--secondary)]/20 blur-3xl" />
       </motion.div>
 
-      {/* Contact Cards - Responsive for narrow screens */}
-      <div className="grid gap-3 sm:gap-4 overflow-hidden">
-        {/* Address Card */}
+      {/* Contact Information */}
+      <div className="space-y-2">
+        {/* Address */}
         <motion.a
           variants={itemVariants}
           href={mapsUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="group flex items-center gap-3 sm:gap-4 rounded-xl bg-white p-3 sm:p-4 shadow-sm border border-gray-100 hover:shadow-md hover:border-[var(--primary)]/20 transition-all duration-300"
+          className="group flex items-center gap-4 bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:border-gray-300 hover:shadow-md transition-all duration-200"
         >
-          <div className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25">
-            <MapPin className="h-5 w-5 sm:h-6 sm:w-6" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">
+            <MapPin className="h-5 w-5" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs sm:text-sm font-medium text-gray-500">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
               Address
             </p>
-            <p className="text-sm sm:text-base text-gray-900 font-medium truncate">
+            <p className="text-sm text-gray-900 font-medium truncate mt-0.5">
               {location.address_line1}
             </p>
-            <p className="text-xs sm:text-sm text-gray-600 truncate">
+            <p className="text-sm text-gray-600 truncate">
               {location.city}, {location.state} {location.postal_code}
             </p>
           </div>
-          <div className="hidden sm:flex items-center gap-1 text-sm font-medium text-[var(--primary)] opacity-0 group-hover:opacity-100 transition-opacity">
-            <span>Directions</span>
+          <div className="flex items-center gap-1 text-sm text-gray-400 group-hover:text-gray-600 transition-colors">
             <ExternalLink className="h-4 w-4" />
           </div>
         </motion.a>
 
-        {/* Phone Card */}
+        {/* Phone */}
         {location.phone && (
           <motion.a
             variants={itemVariants}
             href={`tel:${location.phone}`}
-            className="group flex items-center gap-3 sm:gap-4 rounded-xl bg-white p-3 sm:p-4 shadow-sm border border-gray-100 hover:shadow-md hover:border-[var(--primary)]/20 transition-all duration-300"
+            className="group flex items-center gap-4 bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:border-gray-300 hover:shadow-md transition-all duration-200"
           >
-            <div className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/25">
-              <Phone className="h-5 w-5 sm:h-6 sm:w-6" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">
+              <Phone className="h-5 w-5" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs sm:text-sm font-medium text-gray-500">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                 Phone
               </p>
-              <p className="text-sm sm:text-base text-gray-900 font-medium truncate">
+              <p className="text-sm text-gray-900 font-medium truncate mt-0.5">
                 {location.phone}
               </p>
             </div>
-            <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-[var(--primary)] transition-colors" />
+            <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-gray-600 transition-colors" />
           </motion.a>
         )}
 
-        {/* Email Card */}
+        {/* Email */}
         {location.email && (
           <motion.a
             variants={itemVariants}
             href={`mailto:${location.email}`}
-            className="group flex items-center gap-3 sm:gap-4 rounded-xl bg-white p-3 sm:p-4 shadow-sm border border-gray-100 hover:shadow-md hover:border-[var(--primary)]/20 transition-all duration-300 overflow-hidden"
+            className="group flex items-center gap-4 bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:border-gray-300 hover:shadow-md transition-all duration-200"
           >
-            <div className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/25">
-              <Mail className="h-5 w-5 sm:h-6 sm:w-6" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">
+              <Mail className="h-5 w-5" />
             </div>
-            <div className="flex-1 min-w-0 overflow-hidden">
-              <p className="text-xs sm:text-sm font-medium text-gray-500">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                 Email
               </p>
-              <p className="text-sm sm:text-base text-gray-900 font-medium truncate break-all">
+              <p className="text-sm text-gray-900 font-medium truncate mt-0.5">
                 {location.email}
               </p>
             </div>
-            <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-[var(--primary)] transition-colors" />
+            <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-gray-600 transition-colors" />
           </motion.a>
         )}
       </div>
 
-      {/* Business Hours - Responsive for very narrow screens */}
+      {/* Business Hours */}
       {businessHours.length > 0 && (
         <motion.div
           variants={itemVariants}
-          className="rounded-xl bg-white p-3 sm:p-5 shadow-sm border border-gray-100"
+          className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm"
         >
-          <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-            <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/25">
-              <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-600">
+              <Clock className="h-5 w-5" />
             </div>
-            <h3 className="text-base sm:text-lg font-bold text-gray-900">
-              Business Hours
-            </h3>
+            <h3 className="text-base font-bold text-gray-900">Store Hours</h3>
           </div>
 
-          <div className="space-y-1 sm:space-y-2">
+          <div className="space-y-0">
             {businessHours.map((item, index) => {
               const isToday =
                 new Date()
                   .toLocaleDateString("en-US", { weekday: "long" })
                   .toLowerCase() === item.day.toLowerCase();
+              const isClosed = item.hours.toLowerCase() === "closed";
+
               return (
                 <div
                   key={index}
                   className={cn(
-                    "flex items-center justify-between py-1.5 sm:py-2 px-2 sm:px-3 rounded-lg transition-colors gap-2",
+                    "flex items-center justify-between py-2.5 px-3 rounded-lg transition-colors",
                     isToday
-                      ? "bg-[var(--primary)]/10 border border-[var(--primary)]/20"
+                      ? "bg-gray-50 border border-gray-200"
                       : "hover:bg-gray-50"
                   )}
                 >
-                  <span
-                    className={cn(
-                      "text-sm sm:text-base font-medium truncate",
-                      isToday ? "text-[var(--primary)]" : "text-gray-700"
-                    )}
-                  >
-                    {item.day}
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={cn(
+                        "text-sm font-medium",
+                        isToday ? "text-gray-900" : "text-gray-700"
+                      )}
+                    >
+                      {item.day}
+                    </span>
                     {isToday && (
-                      <span className="ml-1 sm:ml-2 text-[10px] sm:text-xs bg-[var(--primary)] text-white px-1.5 sm:px-2 py-0.5 rounded-full">
-                        Today
+                      <span className="text-[10px] font-semibold bg-gray-900 text-white px-1.5 py-0.5 rounded">
+                        TODAY
                       </span>
                     )}
-                  </span>
+                  </div>
                   <span
                     className={cn(
-                      "text-xs sm:text-sm whitespace-nowrap shrink-0",
-                      item.hours.toLowerCase() === "closed"
-                        ? "text-red-500 font-medium"
+                      "text-sm",
+                      isClosed
+                        ? "text-gray-400"
+                        : isToday
+                        ? "text-gray-900 font-medium"
                         : "text-gray-600"
                     )}
                   >
@@ -326,10 +350,12 @@ export function InfoPanel({ site, location }: InfoPanelProps) {
       {businessHours.length === 0 && (
         <motion.div
           variants={itemVariants}
-          className="rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 p-6 text-center"
+          className="bg-white rounded-xl border border-gray-200 p-6 text-center shadow-sm"
         >
-          <Clock className="h-10 w-10 text-gray-400 mx-auto mb-3" />
-          <p className="text-gray-600 font-medium">Hours not available</p>
+          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100 text-gray-400 mx-auto mb-3">
+            <Clock className="h-6 w-6" />
+          </div>
+          <p className="text-gray-900 font-medium">Hours not available</p>
           <p className="text-sm text-gray-500 mt-1">
             Contact the store for operating hours
           </p>
