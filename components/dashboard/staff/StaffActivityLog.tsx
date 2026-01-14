@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { GetAuditLogs } from "@/app/dashboard/actions/audit-logs";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import {
@@ -27,6 +28,7 @@ import {
   TrendingDown,
   Receipt,
   RotateCcw,
+  ExternalLink,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -119,8 +121,11 @@ function ActivityLogItem({ log }: { log: AuditLogWithLocation }) {
     ACTION_ICONS[log.action] ||
     (log.action_category === "order" ? Receipt : Info);
 
-  const isOrder = log.action === "order.created";
+  const isOrder =
+    log.action === "order.created" || log.action === "order_created";
   const orderAmount = log.metadata?.total_amount as number | undefined;
+  const orderId =
+    log.resource_id || (log.metadata?.order_id as string | undefined);
 
   return (
     <div
@@ -159,15 +164,6 @@ function ActivityLogItem({ log }: { log: AuditLogWithLocation }) {
                 <MapPin className="h-3 w-3" /> {log.location.name}
               </span>
             )}
-            {isOrder && orderAmount !== undefined && (
-              <Badge
-                variant="outline"
-                className="h-5 px-1.5 text-[10px] gap-1 border-muted-foreground/30"
-              >
-                <DollarSign className="h-2.5 w-2.5" />
-                {orderAmount.toFixed(2)}
-              </Badge>
-            )}
           </div>
         </div>
       </div>
@@ -198,7 +194,17 @@ function ActivityLogItem({ log }: { log: AuditLogWithLocation }) {
               <span className="text-foreground">{log.resource_name}</span>
             </p>
           )}
-          {isOrder && (
+          {isOrder && orderId && (
+            <Link
+              href={`/dashboard/orders/${orderId}`}
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1.5 text-primary hover:underline font-medium"
+            >
+              <span>View Order: {log.resource_name}</span>
+              <ExternalLink className="h-3 w-3" />
+            </Link>
+          )}
+          {isOrder && !orderId && log.resource_name && (
             <p>
               Order #:{" "}
               <span className="text-foreground">{log.resource_name}</span>
