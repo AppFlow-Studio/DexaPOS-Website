@@ -29,10 +29,7 @@ export default async function StorefrontPage({ params }: PageProps) {
   } as React.CSSProperties;
 
   return (
-    <div
-      className="min-h-screen bg-gray-50 overflow-x-hidden"
-      style={themeStyle}
-    >
+    <div className="min-h-screen bg-white overflow-x-hidden" style={themeStyle}>
       <StorefrontLayout site={site} location={location} menus={menus} />
 
       <CartSidebar config={site?.online_ordering_config || undefined} />

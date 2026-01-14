@@ -21,6 +21,8 @@ import {
   Copy,
   Plus,
   CheckCircle2,
+  Users,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -34,6 +36,22 @@ import { ConflictResolutionModal } from "./templates/ConflictResolutionModal";
 import { ApplyMode, ScheduleTemplate } from "@/types/schedule";
 import { useScheduleTemplateStore } from "@/stores/useScheduleTemplateStore";
 import { detectTemplateConflicts } from "@/lib/scheduling-rules";
+import { PublishModal } from "./PublishModal";
+import { OpenShiftsSheet } from "./OpenShiftsSheet";
+import { FiltersPanel } from "./FiltersPanel";
+import { DollarSign, Trash2 } from "lucide-react";
+import { Role } from "@/types/schedule";
+import { useUnifiedStaff } from "@/app/dashboard/hooks/useStaff";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
   const {
@@ -42,6 +60,8 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
     weeklySchedules,
     schedulePeriods,
     applyTemplate,
+    discardDraft,
+    compareSchedules,
   } = useScheduleStore();
   const { templates } = useScheduleTemplateStore();
 
@@ -52,6 +72,24 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
   const [applyMode, setApplyMode] = useState<ApplyMode>("merge");
   const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
 
+  // New modal states
+  const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+  const [isOpenShiftsSheetOpen, setIsOpenShiftsSheetOpen] = useState(false);
+  const [isDiscardDialogOpen, setIsDiscardDialogOpen] = useState(false);
+
+  // Filters State
+  const [filters, setFilters] = useState<{
+    roles: Role[];
+    employees: string[];
+    shiftStatus: ("scheduled" | "open" | "filled" | "cancelled")[];
+  }>({
+    roles: [],
+    employees: [],
+    shiftStatus: [],
+  });
+
+  const { data: staffMembers = [] } = useUnifiedStaff();
+
   // Fetch the current schedule to get its bounds
   const schedule = useMemo(() => {
     return (
@@ -59,6 +97,18 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
       schedulePeriods.find((s) => s.id === scheduleId)
     );
   }, [scheduleId, weeklySchedules, schedulePeriods]);
+
+  // Check if draft has actual changes compared to original
+  const hasChanges = useMemo(() => {
+    if (schedule?.status !== "draft-edit" || !schedule.originalScheduleId) {
+      return false;
+    }
+    const changes = compareSchedules(schedule.originalScheduleId, scheduleId);
+    return changes.added > 0 || changes.updated > 0 || changes.removed > 0;
+  }, [schedule, scheduleId, compareSchedules]);
+
+  // Note: Auto-cleanup of unchanged drafts is handled by the dashboard's
+  // filtering logic which hides drafts that are identical to their originals
 
   const scheduleStart = useMemo(
     () => (schedule ? parseISO(schedule.startDate) : null),
@@ -264,13 +314,89 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
               </Button>
             )}
           </div>
+
+          {/* Compact Labor Cost Badge */}
+          {schedule && schedule.shifts && schedule.shifts.length > 0 && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-md border">
+              <DollarSign className="h-4 w-4 text-primary" />
+              <div className="text-sm">
+                <span className="text-muted-foreground">Labor:</span>{" "}
+                <span className="font-semibold">
+                  $
+                  {(() => {
+                    const totalMinutes = schedule.shifts.reduce(
+                      (acc, shift) => {
+                        const start = new Date(shift.start_time).getTime();
+                        const end = new Date(shift.end_time).getTime();
+                        return acc + (end - start) / (1000 * 60);
+                      },
+                      0
+                    );
+                    return Math.round(
+                      (totalMinutes / 60) * 18.5
+                    ).toLocaleString();
+                  })()}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="h-8 gap-1">
-            <CalendarIcon className="h-3 w-3" />
-            Draft Mode
-          </Badge>
+          {/* Filters */}
+          <FiltersPanel
+            employees={staffMembers.map((s) => ({
+              id: s.member_id,
+              name: s.display_name,
+            }))}
+            selectedFilters={filters}
+            onFiltersChange={setFilters}
+          />
+
+          {schedule?.status === "draft-edit" ? (
+            hasChanges ? (
+              <Badge
+                variant="outline"
+                className="h-8 gap-1 border-yellow-500 text-yellow-600 bg-yellow-500/10"
+              >
+                <CalendarIcon className="h-3 w-3" />
+                Unsaved Changes
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="h-8 gap-1">
+                <CalendarIcon className="h-3 w-3" />
+                Viewing Published
+              </Badge>
+            )
+          ) : (
+            <Badge variant="outline" className="h-8 gap-1">
+              <CalendarIcon className="h-3 w-3" />
+              {schedule?.status === "published" ? "Published" : "Draft Mode"}
+            </Badge>
+          )}
+
+          {/* Discard Changes button - only show when there are actual changes */}
+          {schedule?.status === "draft-edit" &&
+            schedule.originalScheduleId &&
+            hasChanges && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-2 text-destructive hover:text-destructive"
+                onClick={() => setIsDiscardDialogOpen(true)}
+              >
+                Discard Changes
+              </Button>
+            )}
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-2"
+            onClick={() => setIsOpenShiftsSheetOpen(true)}
+          >
+            <Users className="h-4 w-4" />
+            Open Shifts
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -282,8 +408,12 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
             <CalendarIcon className="h-4 w-4" />
             Library
           </Button>
-          <Button size="sm" className="gap-2">
-            <Plus className="h-4 w-4" />
+          <Button
+            size="sm"
+            className="gap-2"
+            onClick={() => setIsPublishModalOpen(true)}
+          >
+            <Send className="h-4 w-4" />
             Publish
           </Button>
         </div>
@@ -338,6 +468,74 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
       {/* {selectedTemplate && (
         <ApplyTemplateDialog ... />
       )} */}
+
+      {/* Publish Modal */}
+      <PublishModal
+        open={isPublishModalOpen}
+        onOpenChange={setIsPublishModalOpen}
+        scheduleId={scheduleId}
+        scheduleType={schedule?.type || "weekly"}
+        originalScheduleId={schedule?.originalScheduleId}
+        onPublished={() => {
+          // Could navigate back or refresh
+        }}
+      />
+
+      {/* Open Shifts Sheet */}
+      <OpenShiftsSheet
+        open={isOpenShiftsSheetOpen}
+        onOpenChange={setIsOpenShiftsSheetOpen}
+        scheduleId={scheduleId}
+        scheduleType={schedule?.type || "weekly"}
+        onAddOpenShift={() => {
+          // Could open shift modal with employee_id = null
+        }}
+      />
+
+      {/* Discard Changes Confirmation Dialog */}
+      <AlertDialog
+        open={isDiscardDialogOpen}
+        onOpenChange={setIsDiscardDialogOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+                <Trash2 className="h-6 w-6 text-destructive" />
+              </div>
+              <div>
+                <AlertDialogTitle>Discard Changes?</AlertDialogTitle>
+                <AlertDialogDescription className="mt-1">
+                  This will permanently delete all unsaved changes.
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <div className="p-4 bg-muted/50 rounded-lg border my-2">
+            <p className="text-sm text-muted-foreground">
+              Your edits to this schedule will be lost and you will be reverted
+              to the last published version. This action cannot be undone.
+            </p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Editing</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              onClick={() => {
+                if (schedule?.originalScheduleId) {
+                  discardDraft(
+                    scheduleId,
+                    schedule.type as "period" | "weekly"
+                  );
+                  window.location.href = "/dashboard/schedules";
+                }
+              }}
+            >
+              Discard Changes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

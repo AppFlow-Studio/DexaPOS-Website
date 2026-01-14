@@ -71,8 +71,29 @@ export async function GetAuditLogs(
     query = query.eq("resource_type", filters.resource_type);
   }
 
-  if (filters?.actor_user_id) {
-    query = query.eq("actor_user_id", filters.actor_user_id);
+  // Filter by Staff Profile or Actor
+  // PRIORITY: If metadata.staff_profile_id exists, it takes precedence over actor_user_id
+  // This ensures orders created by staff via PIN only appear in THEIR activity log,
+  // not the device owner's (Clerk user) activity log
+  if (filters?.actor_user_id && filters?.staff_profile_id) {
+    // For users with both a Clerk user_id AND a staff_profile_id:
+    // - Match logs where metadata.staff_profile_id equals their staff_profile_id
+    // - OR match logs where actor_user_id matches AND there's NO staff_profile_id in metadata
+    //   (backward compatibility for old logs that don't have staff_profile_id)
+    query = query.or(
+      `metadata->>staff_profile_id.eq.${filters.staff_profile_id},and(actor_user_id.eq.${filters.actor_user_id},metadata->>staff_profile_id.is.null)`
+    );
+  } else if (filters?.staff_profile_id) {
+    // For POS-only users (no Clerk user_id): filter by staff_profile_id in metadata
+    query = query.contains("metadata", {
+      staff_profile_id: filters.staff_profile_id,
+    });
+  } else if (filters?.actor_user_id) {
+    // For users with only actor_user_id (no staff_profile_id):
+    // Match actor_user_id where there's no staff_profile_id in metadata
+    query = query.or(
+      `and(actor_user_id.eq.${filters.actor_user_id},metadata->>staff_profile_id.is.null),metadata->>staff_profile_id.eq.${filters.actor_user_id}`
+    );
   }
 
   if (filters?.date_from) {

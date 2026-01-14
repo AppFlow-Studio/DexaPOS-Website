@@ -58,6 +58,8 @@ import {
   FileText,
   MonitorSmartphone,
   Globe,
+  GitCompare,
+  Monitor,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -175,6 +177,10 @@ const navMain = [
           {
             title: "Financial Information",
             url: "/dashboard/reports/financials",
+          },
+          {
+            title: "Compare Locations",
+            url: "/dashboard/reports/comparison",
           },
           {
             title: "Orders",
@@ -442,7 +448,8 @@ function MerchantSidebar() {
                       asChild
                       isActive={
                         pathname === "/dashboard/settings" &&
-                        !pathname.includes("/devices")
+                        !pathname.includes("/devices") &&
+                        !pathname.includes("/stations")
                       }
                     >
                       <Link href="/dashboard/settings">
@@ -460,6 +467,19 @@ function MerchantSidebar() {
                       <Link href="/dashboard/settings/devices">
                         <MonitorSmartphone className="h-3 w-3" />
                         <span>Devices</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={pathname.startsWith(
+                        "/dashboard/settings/stations"
+                      )}
+                    >
+                      <Link href="/dashboard/settings/stations">
+                        <Monitor className="h-3 w-3" />
+                        <span>Stations</span>
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
@@ -596,8 +616,8 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
             {isAllLocations
               ? "All Locations"
               : selectedLocation?.name ||
-              locations.find((l) => l.id === selectedLocationId)?.name ||
-              "Select Location"}
+                locations.find((l) => l.id === selectedLocationId)?.name ||
+                "Select Location"}
           </span>
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
         </button>
