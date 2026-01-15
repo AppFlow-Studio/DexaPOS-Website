@@ -1,6 +1,7 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { LogAuditEvent } from "./audit-logs";
 
 // ============================================================================
 // ITEM-CATEGORY ASSIGNMENTS (Using new category_items table)
@@ -36,6 +37,16 @@ export async function AddItemToCategory(
     console.error("Error adding item to category:", error);
     return { error: error.message };
   }
+
+  // Log Audit Event
+  await LogAuditEvent({
+    merchantId,
+    action: `Added Item to Category`,
+    actionCategory: "menu",
+    resourceType: "category_item",
+    resourceId: menuItemId,
+    metadata: { categoryId, menuItemId, displayOrder, customPrice, isFeatured },
+  });
 
   return { success: true, data };
 }
@@ -120,6 +131,15 @@ export async function UpdateCategoryItem(
     console.error("Error updating category item:", error);
     return { error: error.message };
   }
+
+  // Log Audit Event
+  await LogAuditEvent({
+    action: `Updated Category Item`,
+    actionCategory: "menu",
+    resourceType: "category_item",
+    resourceId: menuItemId,
+    metadata: { categoryId, menuItemId, ...data },
+  });
 
   return { success: true };
 }
@@ -370,6 +390,26 @@ export async function AssignModifierToItem(
     return { error: error.message };
   }
 
+  // Fetch item details for auditing
+  const { data: item } = await supabase
+    .from("menu_items")
+    .select("merchant_id, name")
+    .eq("id", menuItemId)
+    .single();
+
+  // Log Audit Event
+  if (item) {
+    await LogAuditEvent({
+      merchantId: item.merchant_id,
+      action: `Assigned Modifier Group to Item`,
+      actionCategory: "menu",
+      resourceType: "menu_item",
+      resourceId: menuItemId,
+      resourceName: item.name,
+      metadata: { modifierGroupId, displayOrder },
+    });
+  }
+
   return { success: true, data };
 }
 
@@ -383,6 +423,13 @@ export async function RemoveModifierFromItem(
 
   const supabase = createServerSupabaseClient();
 
+  // Fetch item details for auditing BEFORE deleting (in case verification needed)
+  const { data: item } = await supabase
+    .from("menu_items")
+    .select("merchant_id, name")
+    .eq("id", menuItemId)
+    .single();
+
   const { error } = await supabase
     .from("menu_item_modifier_groups")
     .delete()
@@ -392,6 +439,19 @@ export async function RemoveModifierFromItem(
   if (error) {
     console.error("Error removing modifier from item:", error);
     return { error: error.message };
+  }
+
+  // Log Audit Event
+  if (item) {
+    await LogAuditEvent({
+      merchantId: item.merchant_id,
+      action: `Removed Modifier Group from Item`,
+      actionCategory: "menu",
+      resourceType: "menu_item",
+      resourceId: menuItemId,
+      resourceName: item.name,
+      metadata: { modifierGroupId },
+    });
   }
 
   return { success: true };
@@ -508,6 +568,20 @@ export async function CreateItemInCategory(
         assignmentError.message,
     };
   }
+  console.log("Item assigned to category:", assignmentData);
+
+  // Log Audit Event for created item
+  const logResult = await LogAuditEvent({
+    merchantId: merchant.id,
+    action: `Created Menu Item in Category: ${item.name}`,
+    actionCategory: "menu",
+    resourceType: "menu_item",
+    resourceId: createdItem.id,
+    resourceName: item.name,
+    locationId: options?.locationId || undefined,
+    changes: { after: item as Record<string, unknown> },
+    metadata: { categoryId, locationId: options?.locationId },
+  });
 
   return { success: true, data: createdItem };
 }
