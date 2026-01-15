@@ -7,7 +7,10 @@ import {
   AuditLogWithLocation,
   AuditLogFilters,
   AdhocExpenseInput,
+  AuditCategory,
+  AuditSeverity,
 } from "@/types/audit-log";
+import { auth } from "@clerk/nextjs/server";
 
 // ============================================================================
 // GET AUDIT LOGS
@@ -56,7 +59,10 @@ export async function GetAuditLogs(
 
   // Apply filters
   if (filters?.location_id && filters.location_id !== "all") {
-    query = query.eq("location_id", filters.location_id);
+    // Show logs for specific location OR global logs (null location)
+    query = query.or(
+      `location_id.eq.${filters.location_id},location_id.is.null`
+    );
   }
 
   if (filters?.action_category) {
@@ -134,7 +140,8 @@ export async function GetAuditLogs(
 // ============================================================================
 
 interface LogAuditEventParams {
-  clerkOrgId: string;
+  clerkOrgId?: string;
+  merchantId?: string; // Allow passing merchantId directly
   locationId?: string | null;
   action: string;
   actionCategory: string;
@@ -154,26 +161,38 @@ export async function LogAuditEvent(
   params: LogAuditEventParams
 ): Promise<{ success?: boolean; logId?: string; error?: string }> {
   const supabase = createServerSupabaseClient();
+  let merchantId = params.merchantId;
+
+  // If merchantId is not provided, look it up via Clerk Org ID
+  if (!merchantId) {
+    const { orgId: dynamicOrgId } = await auth();
+    const activeOrgId = params.clerkOrgId || dynamicOrgId;
+
+    if (!activeOrgId) {
+      return { error: "Organization ID is required" };
+    }
+
+    const { data: merchant, error: merchantError } = await supabase
+      .from("merchants")
+      .select("id")
+      .eq("clerk_org_id", activeOrgId)
+      .single();
+
+    if (merchantError || !merchant) {
+      return { error: "Merchant not found" };
+    }
+
+    merchantId = merchant.id;
+  }
 
   // Get current user
   const user = await currentUser();
   const userId = user?.id || null;
   const userName = user?.fullName || user?.firstName || "System";
 
-  // Get merchant
-  const { data: merchant, error: merchantError } = await supabase
-    .from("merchants")
-    .select("id")
-    .eq("clerk_org_id", params.clerkOrgId)
-    .single();
-
-  if (merchantError || !merchant) {
-    return { error: "Merchant not found" };
-  }
-
   // Call RPC
   const { data, error } = await supabase.rpc("log_audit_event", {
-    p_merchant_id: merchant.id,
+    p_merchant_id: merchantId,
     p_location_id: params.locationId || null,
     p_actor_user_id: userId,
     p_actor_name: userName,

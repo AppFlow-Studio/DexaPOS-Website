@@ -33,7 +33,11 @@ import {
   useLocationScopedSchedules,
 } from "./hooks/useLocationScoped";
 import { useOrders } from "./hooks/useOrder";
-import { useOrderAnalytics, useOrderStats } from "./hooks/useOrderAnalytics";
+import {
+  useOrderAnalytics,
+  useOrderStats,
+  useFinancialKPIs,
+} from "./hooks/useOrderAnalytics";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -44,7 +48,17 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid } from "recharts";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Area,
+  AreaChart,
+  ResponsiveContainer,
+  Tooltip,
+} from "recharts";
 import { useUnifiedStaff } from "./hooks/useStaff";
 
 export default function MerchantDashboardPage() {
@@ -91,6 +105,16 @@ export default function MerchantDashboardPage() {
   const { data: stats7Days } = useOrderStats(last7Days, now);
   const { data: stats30Days } = useOrderStats(last30Days, now);
 
+  // NEW: Use Financial KPIs RPC for more accurate aggregated data
+  const { data: kpis7Days, isLoading: kpisLoading7Days } = useFinancialKPIs(
+    last7Days,
+    now
+  );
+  const { data: kpis30Days, isLoading: kpisLoading30Days } = useFinancialKPIs(
+    last30Days,
+    now
+  );
+
   const menusList = Array.isArray(menus) ? menus : [];
   const itemsList = Array.isArray(menuItems) ? menuItems : [];
   const schedulesList = Array.isArray(schedules) ? schedules : [];
@@ -102,8 +126,21 @@ export default function MerchantDashboardPage() {
     (l) => l.is_accepting_orders
   ).length;
 
-  // Calculate today's stats
+  // Calculate today's stats - use KPIs if available for consistency
   const todayStats = useMemo(() => {
+    if (kpis7Days?.daily_stats) {
+      const todayStr = today.toISOString().split("T")[0];
+      const todayMatch = kpis7Days.daily_stats.find((d) =>
+        d.date.startsWith(todayStr)
+      );
+
+      return {
+        revenue: todayMatch?.net_sales || 0,
+        orders: todayMatch?.order_count || 0,
+        completed: todayMatch?.order_count || 0,
+      };
+    }
+
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayEnd = new Date();
@@ -126,50 +163,48 @@ export default function MerchantDashboardPage() {
       orders: ordersToday,
       completed: completedToday.length,
     };
-  }, [ordersList]);
+  }, [ordersList, kpis7Days, today]);
 
   // Calculate growth (comparing last 7 days to previous 7 days)
   const growth = useMemo(() => {
-    if (!analytics7Days || !analytics30Days) return 0;
+    // Current period revenue
+    const currentPeriod = kpis7Days?.summary?.net_sales || 0;
 
-    const currentPeriod = analytics7Days.salesByDate.reduce(
-      (sum, item) => sum + item.sales,
-      0
-    );
-    const previousPeriodStart = new Date(last7Days);
-    previousPeriodStart.setDate(previousPeriodStart.getDate() - 7);
-    const previousPeriodEnd = last7Days;
+    // We already have 7-day KPIs. For growth, we ideally want the 7 days before those.
+    // But since we have 30 days, we can extract the previous period from there.
+    if (!kpis30Days?.daily_stats) return 0;
 
-    // For simplicity, we'll calculate growth from 30-day data
-    const last14Days = analytics30Days.salesByDate.slice(-14);
+    const last14Days = kpis30Days.daily_stats.slice(-14);
     const last7DaysSales = last14Days
       .slice(-7)
-      .reduce((sum, item) => sum + item.sales, 0);
+      .reduce((sum, item) => sum + item.net_sales, 0);
     const previous7DaysSales = last14Days
       .slice(0, 7)
-      .reduce((sum, item) => sum + item.sales, 0);
+      .reduce((sum, item) => sum + item.net_sales, 0);
 
-    if (previous7DaysSales === 0) return currentPeriod > 0 ? 100 : 0;
+    if (previous7DaysSales === 0) return last7DaysSales > 0 ? 100 : 0;
     return ((last7DaysSales - previous7DaysSales) / previous7DaysSales) * 100;
-  }, [analytics7Days, analytics30Days, last7Days]);
+  }, [kpis7Days, kpis30Days]);
 
   // Prepare chart data for revenue trend
   const revenueChartData = useMemo(() => {
-    if (!analytics7Days?.salesByDate) return [];
-    return analytics7Days.salesByDate.map((item) => ({
+    const data = kpis7Days?.daily_stats || [];
+    if (data.length === 0) return [];
+
+    return data.map((item) => ({
       date: new Date(item.date).toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
       }),
-      sales: item.sales,
+      sales: item.net_sales,
     }));
-  }, [analytics7Days]);
+  }, [kpis7Days]);
 
   // Chart configuration
   const chartConfig = {
     sales: {
-      label: "Sales",
-      color: "var(--chart-1)",
+      label: "Revenue",
+      color: "#3b82f6",
     },
   } satisfies ChartConfig;
 
@@ -254,115 +289,145 @@ export default function MerchantDashboardPage() {
       {/* Stats Overview */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card
-          className="transition-all hover:shadow-md animate-in fade-in slide-in-from-bottom-4 duration-300"
+          className="relative overflow-hidden border-none shadow-lg transition-all hover:shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-300"
           style={{ animationDelay: "0ms" }}
         >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 via-transparent to-transparent opacity-50" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+              Total Revenue
+            </CardTitle>
+            <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+              <DollarSign className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            </div>
           </CardHeader>
-          <CardContent>
-            {analyticsLoading7Days ? (
-              <Skeleton className="h-8 w-20" />
+          <CardContent className="relative z-10">
+            {kpisLoading7Days ? (
+              <Skeleton className="h-8 w-24" />
             ) : (
-              <div className="text-2xl font-bold">
-                {formatCurrency(
-                  analytics7Days?.salesByDate?.reduce(
-                    (sum, item) => sum + item.sales,
-                    0
-                  ) || 0
-                )}
+              <div className="text-3xl font-bold tracking-tight">
+                {formatCurrency(kpis7Days?.summary?.net_sales || 0)}
               </div>
             )}
-            <p className="text-xs text-muted-foreground mt-1">Last 7 days</p>
-            {analytics7Days?.salesByDate && revenueChartData.length > 0 && (
-              <div className="mt-3 ">
-                <ChartContainer config={chartConfig}>
-                  <LineChart
-                    accessibilityLayer
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-xs text-muted-foreground">Last 7 days</p>
+              {growth !== 0 && (
+                <Badge
+                  variant={growth > 0 ? "default" : "destructive"}
+                  className={cn(
+                    "text-[10px] h-4 px-1 leading-none",
+                    growth > 0 && "bg-emerald-500 hover:bg-emerald-600"
+                  )}
+                >
+                  {growth > 0 ? "+" : ""}
+                  {growth.toFixed(1)}%
+                </Badge>
+              )}
+            </div>
+
+            {revenueChartData.length > 0 && (
+              <div className="mt-4 h-[60px] w-full overflow-hidden">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
                     data={revenueChartData}
-                    margin={{
-                      left: 0,
-                      right: 0,
-                      top: 0,
-                      bottom: 0,
-                    }}
+                    margin={{ left: 0, right: 0, top: 5, bottom: 0 }}
                   >
-                    <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="date"
-                      tickLine={false}
-                      axisLine={false}
-                      tickMargin={4}
-                      tick={{ fontSize: 10 }}
-                    />
+                    <defs>
+                      <linearGradient
+                        id="colorSales"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor="#3b82f6"
+                          stopOpacity={0.3}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="#3b82f6"
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                    </defs>
                     <YAxis
-                      tickLine={false}
-                      axisLine={false}
-                      tickMargin={4}
-                      tick={{ fontSize: 10 }}
-                      tickFormatter={(value) => `$${value.toFixed(0)}`}
-                      width={35}
+                      hide
+                      domain={[0, "auto"]}
+                      padding={{ top: 10, bottom: 10 }}
                     />
-                    <ChartTooltip
-                      cursor={false}
-                      content={<ChartTooltipContent hideLabel />}
-                    />
-                    <Line
+                    <Area
+                      type="monotone"
                       dataKey="sales"
-                      type="natural"
-                      stroke="var(--color-sales)"
+                      stroke="#3b82f6"
                       strokeWidth={2}
-                      dot={false}
+                      fillOpacity={1}
+                      fill="url(#colorSales)"
+                      baseValue={0}
+                      isAnimationActive={false}
                     />
-                  </LineChart>
-                </ChartContainer>
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
             )}
           </CardContent>
         </Card>
         <Card
-          className="transition-all hover:shadow-md animate-in fade-in slide-in-from-bottom-4 duration-300"
+          className="relative overflow-hidden border-none shadow-lg transition-all hover:shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-300"
           style={{ animationDelay: "50ms" }}
         >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Orders Today</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-600/10 via-transparent to-transparent opacity-50" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+              Orders Today
+            </CardTitle>
+            <div className="h-8 w-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+              <ShoppingCart className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="relative z-10">
             {ordersLoading ? (
               <Skeleton className="h-8 w-16" />
             ) : (
-              <div className="text-2xl font-bold">{todayStats.orders}</div>
+              <div className="text-3xl font-bold tracking-tight">
+                {todayStats.orders}
+              </div>
             )}
             <p className="text-xs text-muted-foreground mt-1">
-              {todayStats.completed} completed
+              <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                {todayStats.completed}
+              </span>{" "}
+              completed
             </p>
           </CardContent>
         </Card>
         <Card
-          className="transition-all hover:shadow-md animate-in fade-in slide-in-from-bottom-4 duration-300"
+          className="relative overflow-hidden border-none shadow-lg transition-all hover:shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-300"
           style={{ animationDelay: "100ms" }}
         >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-600/10 via-transparent to-transparent opacity-50" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
               {isAllLocations ? "Active Locations" : "Team Members"}
             </CardTitle>
-            {isAllLocations ? (
-              <MapPin className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <Users className="h-4 w-4 text-muted-foreground" />
-            )}
+            <div className="h-8 w-8 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+              {isAllLocations ? (
+                <MapPin className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+              ) : (
+                <Users className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+              )}
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="relative z-10">
             {staffLoading ? (
               <Skeleton className="h-8 w-16" />
             ) : (
-              <div className="text-2xl font-bold">
+              <div className="text-3xl font-bold tracking-tight">
                 {isAllLocations ? activeLocations : staffMembers?.length}
               </div>
             )}
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground mt-1">
               {isAllLocations
                 ? `${acceptingOrdersCount} accepting orders`
                 : staffMembers?.length
@@ -372,24 +437,29 @@ export default function MerchantDashboardPage() {
           </CardContent>
         </Card>
         <Card
-          className="transition-all hover:shadow-md animate-in fade-in slide-in-from-bottom-4 duration-300"
+          className="relative overflow-hidden border-none shadow-lg transition-all hover:shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-300"
           style={{ animationDelay: "150ms" }}
         >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Growth</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          <div className="absolute inset-0 bg-gradient-to-br from-orange-600/10 via-transparent to-transparent opacity-50" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+              Growth
+            </CardTitle>
+            <div className="h-8 w-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+              <TrendingUp className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+            </div>
           </CardHeader>
-          <CardContent>
-            {analyticsLoading7Days ? (
+          <CardContent className="relative z-10">
+            {kpisLoading7Days ? (
               <Skeleton className="h-8 w-16" />
             ) : (
               <div
                 className={cn(
-                  "text-2xl font-bold",
+                  "text-3xl font-bold tracking-tight",
                   growth > 0
-                    ? "text-green-600"
+                    ? "text-emerald-600"
                     : growth < 0
-                    ? "text-red-600"
+                    ? "text-rose-600"
                     : "text-muted-foreground"
                 )}
               >
@@ -397,7 +467,7 @@ export default function MerchantDashboardPage() {
                 {growth.toFixed(1)}%
               </div>
             )}
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground mt-1">
               Last 7 days vs previous
             </p>
           </CardContent>
@@ -637,6 +707,7 @@ export default function MerchantDashboardPage() {
                         tickMargin={8}
                         tick={{ fontSize: 12 }}
                         tickFormatter={(value) => `$${value.toFixed(0)}`}
+                        domain={[0, "auto"]}
                       />
                       <ChartTooltip
                         cursor={false}
@@ -644,7 +715,7 @@ export default function MerchantDashboardPage() {
                       />
                       <Line
                         dataKey="sales"
-                        type="natural"
+                        type="monotone"
                         stroke="var(--color-sales)"
                         strokeWidth={2}
                         dot={false}

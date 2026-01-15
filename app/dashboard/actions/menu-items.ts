@@ -8,6 +8,8 @@ import {
   OverrideData,
 } from "./location-menu-overrides";
 import { LocationLibraryItem } from "@/types/menu";
+import { LogAuditEvent } from "./audit-logs";
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -428,6 +430,17 @@ export async function CreateMenuItem(
       // We don't fail the whole request, but we log it
     }
   }
+  console.log("Created menu item:", item);
+
+  // Log Audit Event
+  LogAuditEvent({
+    action: `Created Menu Item: ${data.name}`,
+    actionCategory: "menu",
+    resourceType: "menu_item",
+    resourceId: item.id,
+    resourceName: data.name,
+    changes: { after: data as any },
+  });
 
   return { data: item as MenuItemsModel };
 }
@@ -544,6 +557,19 @@ export async function UpdateMenuItem(
         itemId,
         locationId
       );
+
+      // Log Audit Event for location-only update
+      await LogAuditEvent({
+        merchantId: updatedItem?.merchant_id,
+        action: `Updated Menu Item (Location Override)`,
+        actionCategory: "menu",
+        resourceType: "menu_item",
+        resourceId: itemId,
+        resourceName: updatedItem?.name,
+        locationId: locationId,
+        changes: { after: overrideData as Record<string, unknown> },
+      });
+
       return {
         data: updatedItem,
         location_override: overrideResult.data,
@@ -588,8 +614,11 @@ export async function UpdateMenuItem(
       updateData.card_bg_color = data.card_bg_color;
   }
 
+  let hasModifiersUpdated = false;
+
   // Handle Modifier Group assignments (Global Only)
   if (!isLocationScoped && data.modifier_group_ids !== undefined) {
+    hasModifiersUpdated = true;
     // First delete existing assignments
     const { error: deleteError } = await supabase
       .from("menu_item_modifier_groups")
@@ -623,23 +652,44 @@ export async function UpdateMenuItem(
   }
 
   console.log("UpdateMenuItem updateData", updateData);
-  // If nothing to update in global table, return early
-  if (Object.keys(updateData).length === 0) {
+
+  // If nothing to update in global table AND no modifiers updated, return early
+  if (Object.keys(updateData).length === 0 && !hasModifiersUpdated) {
     const item = await GetMenuItemWithLocationContext(itemId, locationId);
     return { data: item };
   }
 
-  const { data: item, error } = await supabase
-    .from("menu_items")
-    .update(updateData)
-    .eq("id", itemId)
-    .select()
-    .single();
+  let item: MenuItemsModel | null = null;
 
-  if (error) {
-    console.error("Error updating menu item:", error);
-    return { error: error.message };
+  // If we have table updates, perform them
+  if (Object.keys(updateData).length > 0) {
+    const { data: updatedItem, error } = await supabase
+      .from("menu_items")
+      .update(updateData)
+      .eq("id", itemId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error updating menu item:", error);
+      return { error: error.message };
+    }
+    item = updatedItem;
+  } else {
+    // Just modifiers updated, fetch the current item state
+    const { data: currentItem, error } = await supabase
+      .from("menu_items")
+      .select("*")
+      .eq("id", itemId)
+      .single();
+
+    if (error) {
+      return { error: error.message };
+    }
+    item = currentItem as MenuItemsModel;
   }
+
+  if (!item) return { error: "Failed to retrieve item" };
 
   // Return with location context if applicable
   if (isLocationScoped) {
@@ -647,8 +697,32 @@ export async function UpdateMenuItem(
       itemId,
       locationId
     );
+
+    // Log Audit Event for location-scoped update
+    await LogAuditEvent({
+      merchantId: contextItem?.merchant_id,
+      action: `Updated Menu Item (Location Override)`,
+      actionCategory: "menu",
+      resourceType: "menu_item",
+      resourceId: itemId,
+      resourceName: item.name,
+      locationId: locationId,
+      changes: { after: data as Record<string, unknown> },
+    });
+
     return { data: contextItem };
   }
+
+  // Log Audit Event for global update
+  await LogAuditEvent({
+    merchantId: item.merchant_id,
+    action: `Updated Menu Item: ${item.name}`,
+    actionCategory: "menu",
+    resourceType: "menu_item",
+    resourceId: itemId,
+    resourceName: item.name,
+    changes: { after: data as Record<string, unknown> },
+  });
 
   return { data: item as MenuItemsModel };
 }
@@ -679,6 +753,17 @@ export async function ResetMenuItemToGlobal(
 
   // Return the item with updated context
   const item = await GetMenuItemWithLocationContext(itemId, locationId);
+
+  // Log Audit Event
+  await LogAuditEvent({
+    merchantId: item?.merchant_id,
+    action: `Reset Item to Global`,
+    actionCategory: "menu",
+    resourceType: "menu_item",
+    resourceId: itemId,
+    resourceName: item?.name,
+    locationId: locationId,
+  });
   return { data: item };
 }
 
@@ -693,11 +778,31 @@ export async function DeleteMenuItem(itemId: string) {
 
   const supabase = createServerSupabaseClient();
 
+  // Get item details before deleting (for audit log)
+  const { data: item } = await supabase
+    .from("menu_items")
+    .select("merchant_id, name")
+    .eq("id", itemId)
+    .single();
+
   const { error } = await supabase.from("menu_items").delete().eq("id", itemId);
   //TODO: Add rls policy to delete menu items based on location access
   if (error) {
     console.error("Error deleting menu item:", error);
     return { error: error.message };
+  }
+
+  // Log Audit Event
+  if (item) {
+    await LogAuditEvent({
+      merchantId: item.merchant_id,
+      action: `Deleted Menu Item: ${item.name}`,
+      actionCategory: "menu",
+      resourceType: "menu_item",
+      resourceId: itemId,
+      resourceName: item.name,
+      severity: "warning",
+    });
   }
 
   return { success: true };
