@@ -90,7 +90,7 @@ export async function GetOrderAnalytics(
     .from("orders")
     .select("*, order_items(*)")
     .eq("merchant_id", merchantId)
-    .not("status", "in", '("draft", "cancelled", "void")')
+    .not("status", "in", "(draft,cancelled,void)")
     .gte("created_at", dateFrom.toISOString())
     .lte("created_at", dateTo.toISOString());
 
@@ -685,6 +685,11 @@ export interface FinancialKPIs {
   best_sellers: Array<{
     item_name: string;
     quantity: number;
+    revenue: number;
+  }>;
+  order_types: Array<{
+    type: string;
+    count: number;
     revenue: number;
   }>;
 }

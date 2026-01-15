@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { MenuWithCategories, CategoryWithItems } from "@/types/menu";
 import { auth } from "@clerk/nextjs/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { LogAuditEvent } from "./audit-logs";
 
 // ============================================================================
 // GET ITEMS (for Items Library view)
@@ -244,6 +245,17 @@ export async function updateModifierGroup(params: UpdateModifierGroupParams) {
     .eq("id", modifierGroupId);
 
   if (error) return { success: false, error: error.message };
+
+  // Log Audit Event
+  LogAuditEvent({
+    action: `Updated Modifier Group`,
+    actionCategory: "menu",
+    resourceType: "modifier_group",
+    resourceId: modifierGroupId,
+    locationId: locationId || null,
+    changes: { after: updateData },
+  });
+
   return { success: true, level: "global" };
 }
 
@@ -297,6 +309,17 @@ export async function updateModifierItem(params: UpdateModifierItemParams) {
     .eq("id", modifierItemId);
 
   if (error) return { success: false, error: error.message };
+
+  // Log Audit Event
+  LogAuditEvent({
+    action: `Updated Modifier Item`,
+    actionCategory: "menu",
+    resourceType: "modifier_item",
+    resourceId: modifierItemId,
+    locationId: locationId || null,
+    changes: { after: updateData },
+  });
+
   return { success: true, level: "global" };
 }
 
@@ -478,6 +501,23 @@ export async function upsertModifierOverride(
   if (error) {
     return { success: false, error: error.message };
   }
+
+  // Log Audit Event
+  LogAuditEvent({
+    action: `Updated Modifier Override`,
+    actionCategory: "menu",
+    resourceType: "modifier_item",
+    resourceId: modifierId,
+    locationId: locationId,
+    changes: {
+      after: {
+        price,
+        isActive,
+        stockMode,
+        currentStock,
+      },
+    },
+  });
 
   return { success: true, data: data };
 }
@@ -666,7 +706,30 @@ export async function updateItemOverride(
       return { success: false, error: error.message };
     }
 
-    return data as UpdateResult;
+    const result = data as UpdateResult;
+
+    // Log Audit Event
+    if (result.success) {
+      // Background logging
+      supabase
+        .from("menu_items")
+        .select("name")
+        .eq("id", params.menuItemId)
+        .single()
+        .then(({ data: item }) => {
+          LogAuditEvent({
+            action: `Updated Item: ${item?.name || "Unknown"}`,
+            actionCategory: "menu",
+            resourceType: "menu_item",
+            resourceId: params.menuItemId,
+            resourceName: item?.name,
+            locationId: locationId,
+            changes: { after: params as any },
+          });
+        });
+    }
+
+    return result;
   }
 
   return { success: true, level: 1, table: "menu_items", action: "updated" };
@@ -835,6 +898,16 @@ export async function createMenuItem(
   if (error) {
     return { success: false, error: error.message };
   }
+
+  // Log Audit Event
+  await LogAuditEvent({
+    action: `Created Menu Item: ${item.name}`,
+    actionCategory: "menu",
+    resourceType: "menu_item",
+    resourceId: data.id,
+    resourceName: item.name,
+    changes: { after: item as Record<string, unknown> },
+  });
 
   return { success: true, data };
 }
