@@ -1,17 +1,17 @@
 "use client";
 
 import {
-  useDevices,
-  Device,
-  DeviceType,
-  getDeviceTypeLabel,
-  getDeviceTypeIcon,
-} from "./hooks/useDevices";
-import { DevicesTable } from "./components/DevicesTable";
-import { DeviceCard } from "./components/DeviceCard";
-import { AddDeviceDialog } from "./components/AddDeviceDialog";
-import { DeviceSearchDialog } from "./components/DeviceSearchDialog";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Empty } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -21,28 +21,27 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogFooter,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogAction,
-  AlertDialogCancel,
-} from "@/components/ui/alert-dialog";
-import { Empty } from "@/components/ui/empty";
-import {
-  Plus,
-  Search,
-  MonitorSmartphone,
   AlertTriangle,
-  Trash2,
   ChevronLeft,
   ChevronRight,
   Loader2,
+  MonitorSmartphone,
+  Plus,
+  Search,
+  Trash2,
 } from "lucide-react";
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { AddDeviceDialog } from "./components/AddDeviceDialog";
+import { DeviceCard } from "./components/DeviceCard";
+import { DeviceSearchDialog } from "./components/DeviceSearchDialog";
+import { DevicesTable } from "./components/DevicesTable";
+import {
+  Device,
+  getDeviceTypeIcon,
+  getDeviceTypeLabel,
+  useDevices,
+} from "./hooks/useDevices";
 
 type SortColumn = "name" | "status" | "alerts" | "lastSeen";
 type SortDirection = "asc" | "desc";
@@ -115,6 +114,23 @@ export default function DevicesPage() {
     setCurrentPage(1);
   }, [searchTerm, typeFilter, statusFilter]);
 
+  // Automated connection check every 3 minutes
+  const { performAutomatedCheck } = useDevices();
+  useEffect(() => {
+    // Initial check
+    performAutomatedCheck();
+
+    // Set up interval for every 3 minutes
+    const interval = setInterval(
+      () => {
+        performAutomatedCheck();
+      },
+      3 * 60 * 1000,
+    );
+
+    return () => clearInterval(interval);
+  }, [performAutomatedCheck]);
+
   // Clear selection when page changes
   useEffect(() => {
     // Don't clear selection on page change - only clear when filters change
@@ -130,7 +146,7 @@ export default function DevicesPage() {
       result = result.filter(
         (device) =>
           device.name.toLowerCase().includes(term) ||
-          device.serialNumber?.toLowerCase().includes(term)
+          device.serialNumber?.toLowerCase().includes(term),
       );
     }
 
@@ -236,7 +252,7 @@ export default function DevicesPage() {
 
     // Remove from selection if selected
     setSelectedDeviceIds((prev) =>
-      prev.filter((id) => id !== deviceToDelete.id)
+      prev.filter((id) => id !== deviceToDelete.id),
     );
   };
 
@@ -249,7 +265,7 @@ export default function DevicesPage() {
   // Selection handlers
   const handleSelectDevice = (deviceId: string, selected: boolean) => {
     setSelectedDeviceIds((prev) =>
-      selected ? [...prev, deviceId] : prev.filter((id) => id !== deviceId)
+      selected ? [...prev, deviceId] : prev.filter((id) => id !== deviceId),
     );
   };
 
@@ -501,7 +517,7 @@ export default function DevicesPage() {
       {/* Single Delete Confirmation Dialog */}
       <AlertDialog
         open={isDeleteDialogOpen}
-        onOpenChange={(open) => {
+        onOpenChange={(open: boolean) => {
           if (!isDeleting) setIsDeleteDialogOpen(open);
         }}
       >
@@ -564,7 +580,7 @@ export default function DevicesPage() {
       {/* Bulk Delete Confirmation Dialog */}
       <AlertDialog
         open={isBulkDeleteDialogOpen}
-        onOpenChange={(open) => {
+        onOpenChange={(open: boolean) => {
           if (!isBulkDeleting) setIsBulkDeleteDialogOpen(open);
         }}
       >

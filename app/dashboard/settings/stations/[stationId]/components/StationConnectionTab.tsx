@@ -1,6 +1,12 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Station } from "@/app/dashboard/actions/stations";
@@ -41,7 +47,7 @@ function SignalStrength({ strength }: { strength?: number }) {
             bar === 1 && "h-1.5",
             bar === 2 && "h-2.5",
             bar === 3 && "h-3.5",
-            bar === 4 && "h-5"
+            bar === 4 && "h-5",
           )}
         />
       ))}
@@ -60,7 +66,7 @@ export function StationConnectionTab({ station }: StationConnectionTabProps) {
     await new Promise((resolve) => setTimeout(resolve, 1500));
     const success = Math.random() > 0.2;
     toast[success ? "success" : "error"](
-      success ? "Connection test successful!" : "Connection test failed"
+      success ? "Connection test successful!" : "Connection test failed",
     );
     setIsTesting(false);
   };
@@ -88,7 +94,7 @@ export function StationConnectionTab({ station }: StationConnectionTabProps) {
             <div
               className={cn(
                 "h-14 w-14 rounded-full flex items-center justify-center",
-                isOnline ? "bg-green-500/20" : "bg-gray-200"
+                isOnline ? "bg-green-500/20" : "bg-gray-200",
               )}
             >
               <Circle
@@ -96,7 +102,7 @@ export function StationConnectionTab({ station }: StationConnectionTabProps) {
                   "h-6 w-6",
                   isOnline
                     ? "fill-green-500 text-green-500"
-                    : "fill-gray-400 text-gray-400"
+                    : "fill-gray-400 text-gray-400",
                 )}
               />
             </div>
@@ -108,8 +114,8 @@ export function StationConnectionTab({ station }: StationConnectionTabProps) {
                 {isOnline && station.last_heartbeat_at
                   ? `Online for ${formatDistanceToNow(new Date(station.last_heartbeat_at))}`
                   : station.last_heartbeat_at
-                  ? `Offline for ${formatDistanceToNow(new Date(station.last_heartbeat_at))}`
-                  : "Status unknown"}
+                    ? `Offline for ${formatDistanceToNow(new Date(station.last_heartbeat_at))}`
+                    : "Status unknown"}
               </p>
             </div>
           </div>
@@ -177,7 +183,10 @@ export function StationConnectionTab({ station }: StationConnectionTabProps) {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Device ID</p>
-              <p className="font-mono text-xs truncate" title={station.device_id || undefined}>
+              <p
+                className="font-mono text-xs truncate"
+                title={station.device_id || undefined}
+              >
                 {station.device_id || "—"}
               </p>
             </div>
@@ -185,8 +194,8 @@ export function StationConnectionTab({ station }: StationConnectionTabProps) {
 
           <div className="rounded-lg border p-4 bg-muted/30">
             <p className="text-sm text-muted-foreground mb-3">
-              Network information will be automatically populated when the POS app connects
-              to this station.
+              Network information will be automatically populated when the POS
+              app connects to this station.
             </p>
             {!station.device_id && (
               <Badge variant="secondary">Awaiting device registration</Badge>
@@ -208,7 +217,9 @@ export function StationConnectionTab({ station }: StationConnectionTabProps) {
             <div>
               <p className="text-sm text-muted-foreground">Sync Role</p>
               <Badge
-                variant={station.sync_role === "leader" ? "default" : "secondary"}
+                variant={
+                  station.sync_role === "leader" ? "default" : "secondary"
+                }
               >
                 {getSyncRoleLabel(station.sync_role)}
               </Badge>
@@ -243,8 +254,8 @@ export function StationConnectionTab({ station }: StationConnectionTabProps) {
           {station.sync_role === "leader" && (
             <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-900 p-3">
               <p className="text-sm text-blue-700 dark:text-blue-400">
-                As a leader station, this device syncs data to other stations at this
-                location.
+                As a leader station, this device syncs data to other stations at
+                this location.
               </p>
             </div>
           )}
