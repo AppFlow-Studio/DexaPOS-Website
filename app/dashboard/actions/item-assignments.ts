@@ -38,14 +38,30 @@ export async function AddItemToCategory(
     return { error: error.message };
   }
 
-  // Log Audit Event
+  // Fetch category and item names for user-friendly audit log
+  const [categoryResult, itemResult] = await Promise.all([
+    supabase.from("categories").select("name").eq("id", categoryId).single(),
+    supabase.from("menu_items").select("name").eq("id", menuItemId).single(),
+  ]);
+
+  const categoryName = categoryResult.data?.name || "Unknown Category";
+  const itemName = itemResult.data?.name || "Unknown Item";
+
+  // Log Audit Event with human-readable names
   await LogAuditEvent({
     merchantId,
-    action: `Added Item to Category`,
+    action: `Added "${itemName}" to Category: ${categoryName}`,
     actionCategory: "menu",
     resourceType: "category_item",
     resourceId: menuItemId,
-    metadata: { categoryId, menuItemId, displayOrder, customPrice, isFeatured },
+    resourceName: itemName,
+    metadata: {
+      category_name: categoryName,
+      item_name: itemName,
+      display_order: displayOrder,
+      custom_price: customPrice,
+      is_featured: isFeatured,
+    },
   });
 
   return { success: true, data };
@@ -132,13 +148,45 @@ export async function UpdateCategoryItem(
     return { error: error.message };
   }
 
-  // Log Audit Event
+  // Fetch category and item names for user-friendly audit log
+  const [categoryResult, itemResult] = await Promise.all([
+    supabase.from("categories").select("name").eq("id", categoryId).single(),
+    supabase
+      .from("menu_items")
+      .select("name, merchant_id")
+      .eq("id", menuItemId)
+      .single(),
+  ]);
+
+  const categoryName = categoryResult.data?.name || "Unknown Category";
+  const itemName = itemResult.data?.name || "Unknown Item";
+
+  // Build user-friendly changes object
+  const userFriendlyChanges: Record<string, unknown> = {};
+  if (data.displayOrder !== undefined)
+    userFriendlyChanges.display_order = data.displayOrder;
+  if (data.customPrice !== undefined)
+    userFriendlyChanges.custom_price = data.customPrice;
+  if (data.customCashPrice !== undefined)
+    userFriendlyChanges.custom_cash_price = data.customCashPrice;
+  if (data.isFeatured !== undefined)
+    userFriendlyChanges.is_featured = data.isFeatured;
+  if (data.isAvailable !== undefined)
+    userFriendlyChanges.is_available = data.isAvailable;
+
+  // Log Audit Event with human-readable names
   await LogAuditEvent({
-    action: `Updated Category Item`,
+    merchantId: itemResult.data?.merchant_id,
+    action: `Updated "${itemName}" in Category: ${categoryName}`,
     actionCategory: "menu",
     resourceType: "category_item",
     resourceId: menuItemId,
-    metadata: { categoryId, menuItemId, ...data },
+    resourceName: itemName,
+    metadata: {
+      category_name: categoryName,
+      item_name: itemName,
+    },
+    changes: { after: userFriendlyChanges },
   });
 
   return { success: true };
@@ -390,23 +438,37 @@ export async function AssignModifierToItem(
     return { error: error.message };
   }
 
-  // Fetch item details for auditing
-  const { data: item } = await supabase
-    .from("menu_items")
-    .select("merchant_id, name")
-    .eq("id", menuItemId)
-    .single();
+  // Fetch item and modifier group details for auditing
+  const [itemResult, modifierResult] = await Promise.all([
+    supabase
+      .from("menu_items")
+      .select("merchant_id, name")
+      .eq("id", menuItemId)
+      .single(),
+    supabase
+      .from("modifier_groups")
+      .select("name")
+      .eq("id", modifierGroupId)
+      .single(),
+  ]);
 
-  // Log Audit Event
-  if (item) {
+  const itemName = itemResult.data?.name || "Unknown Item";
+  const modifierGroupName =
+    modifierResult.data?.name || "Unknown Modifier Group";
+
+  // Log Audit Event with human-readable names
+  if (itemResult.data) {
     await LogAuditEvent({
-      merchantId: item.merchant_id,
-      action: `Assigned Modifier Group to Item`,
+      merchantId: itemResult.data.merchant_id,
+      action: `Assigned "${modifierGroupName}" to Item: ${itemName}`,
       actionCategory: "menu",
       resourceType: "menu_item",
       resourceId: menuItemId,
-      resourceName: item.name,
-      metadata: { modifierGroupId, displayOrder },
+      resourceName: itemName,
+      metadata: {
+        modifier_group_name: modifierGroupName,
+        display_order: displayOrder,
+      },
     });
   }
 
@@ -423,12 +485,23 @@ export async function RemoveModifierFromItem(
 
   const supabase = createServerSupabaseClient();
 
-  // Fetch item details for auditing BEFORE deleting (in case verification needed)
-  const { data: item } = await supabase
-    .from("menu_items")
-    .select("merchant_id, name")
-    .eq("id", menuItemId)
-    .single();
+  // Fetch item and modifier group details for auditing BEFORE deleting
+  const [itemResult, modifierResult] = await Promise.all([
+    supabase
+      .from("menu_items")
+      .select("merchant_id, name")
+      .eq("id", menuItemId)
+      .single(),
+    supabase
+      .from("modifier_groups")
+      .select("name")
+      .eq("id", modifierGroupId)
+      .single(),
+  ]);
+
+  const itemName = itemResult.data?.name || "Unknown Item";
+  const modifierGroupName =
+    modifierResult.data?.name || "Unknown Modifier Group";
 
   const { error } = await supabase
     .from("menu_item_modifier_groups")
@@ -441,16 +514,18 @@ export async function RemoveModifierFromItem(
     return { error: error.message };
   }
 
-  // Log Audit Event
-  if (item) {
+  // Log Audit Event with human-readable names
+  if (itemResult.data) {
     await LogAuditEvent({
-      merchantId: item.merchant_id,
-      action: `Removed Modifier Group from Item`,
+      merchantId: itemResult.data.merchant_id,
+      action: `Removed "${modifierGroupName}" from Item: ${itemName}`,
       actionCategory: "menu",
       resourceType: "menu_item",
       resourceId: menuItemId,
-      resourceName: item.name,
-      metadata: { modifierGroupId },
+      resourceName: itemName,
+      metadata: {
+        modifier_group_name: modifierGroupName,
+      },
     });
   }
 
@@ -570,17 +645,29 @@ export async function CreateItemInCategory(
   }
   console.log("Item assigned to category:", assignmentData);
 
-  // Log Audit Event for created item
+  // Fetch category name for user-friendly audit log
+  const { data: category } = await supabase
+    .from("categories")
+    .select("name")
+    .eq("id", categoryId)
+    .single();
+
+  const categoryName = category?.name || "Unknown Category";
+
+  // Log Audit Event for created item with human-readable names
   const logResult = await LogAuditEvent({
     merchantId: merchant.id,
-    action: `Created Menu Item in Category: ${item.name}`,
+    action: `Created "${item.name}" in Category: ${categoryName}`,
     actionCategory: "menu",
     resourceType: "menu_item",
     resourceId: createdItem.id,
     resourceName: item.name,
     locationId: options?.locationId || undefined,
     changes: { after: item as Record<string, unknown> },
-    metadata: { categoryId, locationId: options?.locationId },
+    metadata: {
+      category_name: categoryName,
+      location_id: options?.locationId,
+    },
   });
 
   return { success: true, data: createdItem };
