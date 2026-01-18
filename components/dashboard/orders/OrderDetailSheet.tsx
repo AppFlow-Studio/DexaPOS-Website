@@ -714,7 +714,7 @@ export function OrderDetailSheet({
                             <span className="text-muted-foreground">
                               Card Subtotal
                             </span>
-                            <span className="text-muted-foreground line-through">
+                            <span className="text-muted-foreground ">
                               {formatCurrency(cardSubtotal)}
                             </span>
                           </div>

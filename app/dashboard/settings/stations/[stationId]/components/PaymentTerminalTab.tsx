@@ -63,6 +63,7 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { cn } from "@/lib/utils";
+import Image from "next/image";
 
 interface PaymentTerminalTabProps {
   station: Station;
@@ -91,7 +92,7 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
   const [isUnlinkDialogOpen, setIsUnlinkDialogOpen] = useState(false);
   const [selectedTerminalId, setSelectedTerminalId] = useState<string>("");
   const [isTestingConnection, setIsTestingConnection] = useState(false);
-
+ 
   // Create terminal form state
   const [terminalName, setTerminalName] = useState("");
   const [terminalType, setTerminalType] = useState<TerminalType>("dejavoo");
@@ -99,6 +100,7 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
   const [authKey, setAuthKey] = useState("");
   const [apiEnvironment, setApiEnvironment] = useState<ApiEnvironment>("sandbox");
   const [signatureThreshold, setSignatureThreshold] = useState("25.00");
+  const [registerId, setRegisterId] = useState("");
 
   const { data: terminal, isLoading: isLoadingTerminal } = useStationTerminal(station.id);
   const { data: availableTerminals } = useAvailableTerminals(station.location_id);
@@ -115,6 +117,7 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
     setAuthKey("");
     setApiEnvironment("sandbox");
     setSignatureThreshold("25.00");
+    setRegisterId("");
   };
 
   const handleLinkTerminal = async () => {
@@ -152,6 +155,7 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
           terminal_name: terminalName || "Payment Terminal",
           terminal_type: terminalType,
           tpn,
+          register_id: registerId,
           auth_key: authKey,
           api_environment: apiEnvironment,
           signature_threshold: parseFloat(signatureThreshold) || 25.0,
@@ -235,7 +239,7 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
             {!hasTerminal ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted mb-4">
-                  <CreditCard className="h-8 w-8 text-muted-foreground" />
+                  {<CreditCard className="h-8 w-8 text-muted-foreground" />}
                 </div>
                 <h3 className="text-lg font-semibold">No terminal assigned</h3>
                 <p className="text-sm text-muted-foreground max-w-sm mt-2">
@@ -258,8 +262,8 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
               <div className="space-y-6">
                 {/* Terminal Info */}
                 <div className="flex items-center gap-4 p-4 rounded-lg bg-muted/50 border">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-green-500/10">
-                    <CreditCard className="h-7 w-7 text-green-600" />
+                  <div className="flex h-14 w-14 items-center justify-center rounded-xl ">
+                  {terminal.terminal_type == 'dejavoo' ? <Image src="/dejavoo.png" alt="Dejavoo" width={32} height={32} /> : <CreditCard className="h-8 w-8 text-muted-foreground" />}
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
@@ -506,6 +510,16 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                 id="tpn"
                 value={tpn}
                 onChange={(e) => setTpn(e.target.value)}
+                placeholder="10-12 digit number"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="registerId">Register ID</Label>
+              <Input
+                id="registerId"
+                value={registerId}
+                onChange={(e) => setRegisterId(e.target.value)}
                 placeholder="10-12 digit number"
               />
             </div>

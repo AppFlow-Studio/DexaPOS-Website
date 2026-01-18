@@ -66,7 +66,7 @@ export async function GetUnifiedStaffView(
       );
       return [];
     }
-    console.log("[GetUnifiedStaffView] Unified staff data:", data);
+    // console.log("[GetUnifiedStaffView] Unified staff data:", data);
 
     return (data as UnifiedStaffMember[]) || [];
   } catch (error) {
