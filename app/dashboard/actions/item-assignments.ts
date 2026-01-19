@@ -16,7 +16,8 @@ export async function AddItemToCategory(
   merchantId: string,
   displayOrder?: number,
   customPrice?: number,
-  isFeatured?: boolean
+  isFeatured?: boolean,
+  locationId?: string | null,
 ) {
   if (!categoryId || !menuItemId) {
     return { error: "Category ID and Menu Item ID are required" };
@@ -50,11 +51,12 @@ export async function AddItemToCategory(
   // Log Audit Event with human-readable names
   await LogAuditEvent({
     merchantId,
-    action: `Added "${itemName}" to Category: ${categoryName}`,
+    action: `Assigned Item "${itemName}" to Category: ${categoryName}`,
     actionCategory: "menu",
     resourceType: "category_item",
     resourceId: menuItemId,
     resourceName: itemName,
+    locationId: locationId,
     metadata: {
       category_name: categoryName,
       item_name: itemName,
@@ -72,7 +74,8 @@ export async function AddItemToCategory(
  */
 export async function RemoveItemFromCategory(
   categoryId: string,
-  menuItemId: string
+  menuItemId: string,
+  locationId?: string | null,
 ) {
   if (!menuItemId || !categoryId) {
     return { error: "Menu Item ID and Category ID are required" };
@@ -90,6 +93,37 @@ export async function RemoveItemFromCategory(
     return { error: error.message };
   }
 
+  // Fetch category and item names for user-friendly audit log
+  // Ideally we should do this before deleting, or fetched from DB if soft deleted,
+  // but RPC deletes the association. The item and category still exist.
+  const [categoryResult, itemResult] = await Promise.all([
+    supabase.from("categories").select("name").eq("id", categoryId).single(),
+    supabase
+      .from("menu_items")
+      .select("name, merchant_id")
+      .eq("id", menuItemId)
+      .single(),
+  ]);
+
+  const categoryName = categoryResult.data?.name || "Unknown Category";
+  const itemName = itemResult.data?.name || "Unknown Item";
+
+  if (itemResult.data) {
+    await LogAuditEvent({
+      merchantId: itemResult.data.merchant_id,
+      action: `Removed Item "${itemName}" from Category: ${categoryName}`,
+      actionCategory: "menu",
+      resourceType: "category_item",
+      resourceId: menuItemId,
+      resourceName: itemName,
+      locationId: locationId,
+      metadata: {
+        category_name: categoryName,
+        item_name: itemName,
+      },
+    });
+  }
+
   return { success: true, data };
 }
 
@@ -99,7 +133,7 @@ export async function RemoveItemFromCategory(
 export async function AssignItemToCategory(
   menuItemId: string,
   categoryId: string,
-  merchantId: string
+  merchantId: string,
 ) {
   return AddItemToCategory(categoryId, menuItemId, merchantId);
 }
@@ -116,7 +150,8 @@ export async function UpdateCategoryItem(
     customCashPrice?: number | null;
     isFeatured?: boolean;
     isAvailable?: boolean;
-  }
+  },
+  locationId?: string | null,
 ) {
   if (!menuItemId || !categoryId) {
     return { error: "Menu Item ID and Category ID are required" };
@@ -177,11 +212,12 @@ export async function UpdateCategoryItem(
   // Log Audit Event with human-readable names
   await LogAuditEvent({
     merchantId: itemResult.data?.merchant_id,
-    action: `Updated "${itemName}" in Category: ${categoryName}`,
+    action: `Updated Item Settings for "${itemName}" in Category: ${categoryName}`,
     actionCategory: "menu",
     resourceType: "category_item",
     resourceId: menuItemId,
     resourceName: itemName,
+    locationId: locationId,
     metadata: {
       category_name: categoryName,
       item_name: itemName,
@@ -197,7 +233,8 @@ export async function UpdateCategoryItem(
  */
 export async function UpdateCategoryItemsOrder(
   categoryId: string,
-  itemOrders: Array<{ menuItemId: string; displayOrder: number }>
+  itemOrders: Array<{ menuItemId: string; displayOrder: number }>,
+  locationId?: string | null,
 ) {
   if (!categoryId || !itemOrders?.length) {
     return { error: "Category ID and item orders are required" };
@@ -214,7 +251,7 @@ export async function UpdateCategoryItemsOrder(
         updated_at: new Date().toISOString(),
       })
       .eq("category_id", categoryId)
-      .eq("menu_item_id", menuItemId)
+      .eq("menu_item_id", menuItemId),
   );
 
   const results = await Promise.all(updates);
@@ -225,6 +262,39 @@ export async function UpdateCategoryItemsOrder(
     return { error: "Failed to update some item orders" };
   }
 
+  // Fetch category name and item names for human-readable logging
+  const [{ data: category }, { data: items }] = await Promise.all([
+    supabase
+      .from("categories")
+      .select("name, merchant_id")
+      .eq("id", categoryId)
+      .single(),
+    supabase
+      .from("menu_items")
+      .select("name")
+      .in(
+        "id",
+        itemOrders.map((io) => io.menuItemId),
+      ),
+  ]);
+
+  if (category) {
+    const itemNames = items?.map((i) => i.name) || [];
+    await LogAuditEvent({
+      merchantId: category.merchant_id,
+      action: `Updated Item Order in ${category.name}`,
+      actionCategory: "menu",
+      resourceType: "menu_category",
+      resourceId: categoryId,
+      resourceName: category.name,
+      locationId: locationId,
+      metadata: {
+        count: itemOrders.length,
+        item_names: itemNames,
+      },
+    });
+  }
+
   return { success: true };
 }
 
@@ -233,7 +303,8 @@ export async function UpdateCategoryItemsOrder(
  */
 export async function UpdateMenuCategoriesOrder(
   menuId: string,
-  categoryOrders: Array<{ categoryId: string; displayOrder: number }>
+  categoryOrders: Array<{ categoryId: string; displayOrder: number }>,
+  locationId?: string | null,
 ) {
   if (!menuId || !categoryOrders || categoryOrders.length === 0) {
     return { error: "Menu ID and category orders are required" };
@@ -266,7 +337,7 @@ export async function UpdateMenuCategoriesOrder(
         updated_at: new Date().toISOString(),
       })
       .eq("menu_id", menuId)
-      .eq("category_id", categoryId)
+      .eq("category_id", categoryId),
   );
 
   const results = await Promise.all(updates);
@@ -275,6 +346,33 @@ export async function UpdateMenuCategoriesOrder(
   if (errors.length > 0) {
     console.error("Error updating menu category orders:", errors);
     return { error: "Failed to update some category orders" };
+  }
+
+  // Fetch menu name and category names for human-readable logging
+  const [{ data: menu }, { data: categories }] = await Promise.all([
+    supabase
+      .from("menus")
+      .select("name, merchant_id")
+      .eq("id", menuId)
+      .single(),
+    supabase.from("categories").select("name").in("id", categoryIds),
+  ]);
+
+  if (menu) {
+    const categoryNames = categories?.map((c) => c.name) || [];
+    await LogAuditEvent({
+      merchantId: menu.merchant_id,
+      action: `Updated Category Order in ${menu.name}`,
+      actionCategory: "menu",
+      resourceType: "menu",
+      resourceId: menuId,
+      resourceName: menu.name,
+      locationId: locationId,
+      metadata: {
+        count: categoryOrders.length,
+        category_names: categoryNames,
+      },
+    });
   }
 
   return { success: true };
@@ -291,7 +389,8 @@ export async function AddCategoryToMenu(
   menuId: string,
   categoryId: string,
   displayOrder?: number,
-  customTitle?: string
+  customTitle?: string,
+  locationId?: string | null,
 ) {
   if (!categoryId || !menuId) {
     return { error: "Category ID and Menu ID are required" };
@@ -311,6 +410,34 @@ export async function AddCategoryToMenu(
     return { error: error.message };
   }
 
+  // Fetch names for audit log
+  const [menuResult, categoryResult] = await Promise.all([
+    supabase
+      .from("menus")
+      .select("name, merchant_id")
+      .eq("id", menuId)
+      .single(),
+    supabase.from("categories").select("name").eq("id", categoryId).single(),
+  ]);
+
+  if (menuResult.data) {
+    await LogAuditEvent({
+      merchantId: menuResult.data.merchant_id,
+      action: `Assigned Category "${categoryResult.data?.name || "Unknown"}" to Menu: ${menuResult.data.name}`,
+      actionCategory: "menu",
+      resourceType: "menu_category",
+      resourceId: categoryId,
+      resourceName: categoryResult.data?.name,
+      locationId: locationId,
+      metadata: {
+        menu_name: menuResult.data.name,
+        menu_id: menuId,
+        display_order: displayOrder,
+        custom_title: customTitle,
+      },
+    });
+  }
+
   return { success: true, data };
 }
 
@@ -319,7 +446,8 @@ export async function AddCategoryToMenu(
  */
 export async function RemoveCategoryFromMenu(
   menuId: string,
-  categoryId: string
+  categoryId: string,
+  locationId?: string | null,
 ) {
   if (!categoryId || !menuId) {
     return { error: "Category ID and Menu ID are required" };
@@ -337,6 +465,32 @@ export async function RemoveCategoryFromMenu(
     return { error: error.message };
   }
 
+  // Fetch names for audit log
+  const [menuResult, categoryResult] = await Promise.all([
+    supabase
+      .from("menus")
+      .select("name, merchant_id")
+      .eq("id", menuId)
+      .single(),
+    supabase.from("categories").select("name").eq("id", categoryId).single(),
+  ]);
+
+  if (menuResult.data) {
+    await LogAuditEvent({
+      merchantId: menuResult.data.merchant_id,
+      action: `Removed Category "${categoryResult.data?.name || "Unknown"}" from Menu: ${menuResult.data.name}`,
+      actionCategory: "menu",
+      resourceType: "menu_category",
+      resourceId: categoryId,
+      resourceName: categoryResult.data?.name,
+      locationId: locationId,
+      metadata: {
+        menu_name: menuResult.data.name,
+        menu_id: menuId,
+      },
+    });
+  }
+
   return { success: true, data };
 }
 
@@ -351,7 +505,8 @@ export async function UpdateMenuCategory(
     isActive?: boolean;
     customTitle?: string;
     customImage?: string;
-  }
+  },
+  locationId?: string | null,
 ) {
   if (!categoryId || !menuId) {
     return { error: "Category ID and Menu ID are required" };
@@ -381,6 +536,33 @@ export async function UpdateMenuCategory(
     return { error: error.message };
   }
 
+  // Fetch names for audit log
+  const [menuResult, categoryResult] = await Promise.all([
+    supabase
+      .from("menus")
+      .select("name, merchant_id")
+      .eq("id", menuId)
+      .single(),
+    supabase.from("categories").select("name").eq("id", categoryId).single(),
+  ]);
+
+  if (menuResult.data) {
+    await LogAuditEvent({
+      merchantId: menuResult.data.merchant_id,
+      action: `Updated Category Settings for "${categoryResult.data?.name || "Unknown"}" in Menu: ${menuResult.data.name}`,
+      actionCategory: "menu",
+      resourceType: "menu_category",
+      resourceId: categoryId,
+      resourceName: categoryResult.data?.name,
+      locationId: locationId,
+      metadata: {
+        menu_name: menuResult.data.name,
+        menu_id: menuId,
+      },
+      changes: { after: updateData },
+    });
+  }
+
   return { success: true };
 }
 
@@ -391,7 +573,7 @@ export async function UpdateMenuCategory(
 export async function AssignModifierToItem(
   menuItemId: string,
   modifierGroupId: string,
-  displayOrder?: number
+  displayOrder?: number,
 ) {
   if (!menuItemId || !modifierGroupId) {
     return { error: "Menu Item ID and Modifier Group ID are required" };
@@ -477,7 +659,7 @@ export async function AssignModifierToItem(
 
 export async function RemoveModifierFromItem(
   menuItemId: string,
-  modifierGroupId: string
+  modifierGroupId: string,
 ) {
   if (!menuItemId || !modifierGroupId) {
     return { error: "Menu Item ID and Modifier Group ID are required" };
@@ -563,7 +745,7 @@ export async function CreateItemInCategory(
     customPrice?: number;
     isFeatured?: boolean;
     locationId?: string | null;
-  }
+  },
 ) {
   if (!clerkOrgId) {
     return { error: "Organization ID is required" };
@@ -628,7 +810,7 @@ export async function CreateItemInCategory(
       },
       {
         onConflict: "category_id,menu_item_id",
-      }
+      },
     )
     .select()
     .single();
@@ -657,7 +839,7 @@ export async function CreateItemInCategory(
   // Log Audit Event for created item with human-readable names
   const logResult = await LogAuditEvent({
     merchantId: merchant.id,
-    action: `Created "${item.name}" in Category: ${categoryName}`,
+    action: `Created Item "${item.name}" in Category: ${categoryName}`,
     actionCategory: "menu",
     resourceType: "menu_item",
     resourceId: createdItem.id,
@@ -685,7 +867,7 @@ export async function CreateItemInCategory(
 export async function UpdateLocationMenuCategoriesOrder(
   locationId: string | null,
   menuId: string,
-  categoryOrders: Array<{ categoryId: string; displayOrder: number }>
+  categoryOrders: Array<{ categoryId: string; displayOrder: number }>,
 ) {
   if (!menuId || !categoryOrders || categoryOrders.length === 0) {
     return { error: "Menu ID and category orders are required" };
@@ -718,6 +900,41 @@ export async function UpdateLocationMenuCategoriesOrder(
     return { error: error.message };
   }
 
+  // Fetch menu, location, and category names for human-readable logging
+  const [menuResult, locationResult, categoriesResult] = await Promise.all([
+    supabase
+      .from("menus")
+      .select("name, merchant_id")
+      .eq("id", menuId)
+      .single(),
+    supabase.from("locations").select("name").eq("id", locationId).single(),
+    supabase
+      .from("categories")
+      .select("name")
+      .in(
+        "id",
+        categoryOrders.map((co) => co.categoryId),
+      ),
+  ]);
+
+  if (menuResult.data && locationResult.data) {
+    const categoryNames = categoriesResult.data?.map((c) => c.name) || [];
+    await LogAuditEvent({
+      merchantId: menuResult.data.merchant_id,
+      action: `Updated Category Order (Location Override) in ${menuResult.data.name}`,
+      actionCategory: "menu",
+      resourceType: "menu",
+      resourceId: menuId,
+      resourceName: menuResult.data.name,
+      locationId: locationId!,
+      metadata: {
+        count: categoryOrders.length,
+        location_name: locationResult.data.name,
+        category_names: categoryNames,
+      },
+    });
+  }
+
   return { success: true };
 }
 
@@ -730,7 +947,7 @@ export async function UpdateLocationCategoryItemsOrder(
   locationId: string | null,
   menuId: string | null,
   categoryId: string,
-  itemOrders: Array<{ menuItemId: string; displayOrder: number }>
+  itemOrders: Array<{ menuItemId: string; displayOrder: number }>,
 ) {
   if (!categoryId || !itemOrders || itemOrders.length === 0) {
     return { error: "Category ID and item orders are required" };
@@ -740,7 +957,7 @@ export async function UpdateLocationCategoryItemsOrder(
 
   // If no location specified or 'all', update global category_items order
   if (!locationId || locationId === "all") {
-    return UpdateCategoryItemsOrder(categoryId, itemOrders);
+    return UpdateCategoryItemsOrder(categoryId, itemOrders, locationId);
   }
 
   // Update location-specific order using upsert
@@ -763,6 +980,41 @@ export async function UpdateLocationCategoryItemsOrder(
     return { error: error.message };
   }
 
+  // Fetch category, location, and item names for human-readable logging
+  const [categoryResult, locationResult, itemsResult] = await Promise.all([
+    supabase
+      .from("categories")
+      .select("name, merchant_id")
+      .eq("id", categoryId)
+      .single(),
+    supabase.from("locations").select("name").eq("id", locationId).single(),
+    supabase
+      .from("menu_items")
+      .select("name")
+      .in(
+        "id",
+        itemOrders.map((io) => io.menuItemId),
+      ),
+  ]);
+
+  if (categoryResult.data && locationResult.data) {
+    const itemNames = itemsResult.data?.map((i) => i.name) || [];
+    await LogAuditEvent({
+      merchantId: categoryResult.data.merchant_id,
+      action: `Updated Item Order (Location Override) in ${categoryResult.data.name}`,
+      actionCategory: "menu",
+      resourceType: "menu_category",
+      resourceId: categoryId,
+      resourceName: categoryResult.data.name,
+      locationId: locationId!,
+      metadata: {
+        count: itemOrders.length,
+        location_name: locationResult.data.name,
+        item_names: itemNames,
+      },
+    });
+  }
+
   return { success: true };
 }
 
@@ -772,7 +1024,7 @@ export async function UpdateLocationCategoryItemsOrder(
  */
 export async function ResetLocationCategoryOrder(
   locationId: string,
-  menuId: string
+  menuId: string,
 ) {
   if (!locationId || !menuId) {
     return { error: "Location ID and Menu ID are required" };
@@ -793,6 +1045,29 @@ export async function ResetLocationCategoryOrder(
     return { error: error.message };
   }
 
+  // Fetch menu and location names
+  const [menuResult, locationResult] = await Promise.all([
+    supabase
+      .from("menus")
+      .select("name, merchant_id")
+      .eq("id", menuId)
+      .single(),
+    supabase.from("locations").select("name").eq("id", locationId).single(),
+  ]);
+
+  if (menuResult.data && locationResult.data) {
+    await LogAuditEvent({
+      merchantId: menuResult.data.merchant_id,
+      action: `Reset Category Order (Location Override) for Menu: ${menuResult.data.name}`,
+      actionCategory: "menu",
+      resourceType: "menu",
+      resourceId: menuId,
+      resourceName: menuResult.data.name,
+      locationId: locationId,
+      metadata: { location_name: locationResult.data.name },
+    });
+  }
+
   return { success: true };
 }
 
@@ -802,7 +1077,7 @@ export async function ResetLocationCategoryOrder(
  */
 export async function ResetLocationItemOrder(
   locationId: string,
-  categoryId: string
+  categoryId: string,
 ) {
   if (!locationId || !categoryId) {
     return { error: "Location ID and Category ID are required" };
@@ -820,6 +1095,29 @@ export async function ResetLocationItemOrder(
   if (error) {
     console.error("Error resetting location item order:", error);
     return { error: error.message };
+  }
+
+  // Fetch category and location names
+  const [categoryResult, locationResult] = await Promise.all([
+    supabase
+      .from("categories")
+      .select("name, merchant_id")
+      .eq("id", categoryId)
+      .single(),
+    supabase.from("locations").select("name").eq("id", locationId).single(),
+  ]);
+
+  if (categoryResult.data && locationResult.data) {
+    await LogAuditEvent({
+      merchantId: categoryResult.data.merchant_id,
+      action: `Reset Item Order (Location Override) for Category: ${categoryResult.data.name}`,
+      actionCategory: "menu",
+      resourceType: "menu_category",
+      resourceId: categoryId,
+      resourceName: categoryResult.data.name,
+      locationId: locationId,
+      metadata: { location_name: locationResult.data.name },
+    });
   }
 
   return { success: true };

@@ -64,7 +64,7 @@ export function CreateItemWizard({
   // Filter categories based on location context
   const accessibleCategories = React.useMemo(() => {
     return categoriesList.filter((c) =>
-      isAllLocations ? c.is_global : c.location_id === selectedLocationId
+      isAllLocations ? c.is_global : c.location_id === selectedLocationId,
     );
   }, [categoriesList, isAllLocations, selectedLocationId]);
 
@@ -154,14 +154,14 @@ export function CreateItemWizard({
           },
           {
             locationId: isAllLocations ? null : selectedLocationId,
-          }
+          },
         );
 
         if (result.error) {
           errorCount++;
           console.error(
             `Failed to create item in category ${categoryId}:`,
-            result.error
+            result.error,
           );
         } else {
           successCount++;
@@ -175,7 +175,11 @@ export function CreateItemWizard({
           const addResult = await AddItemToCategory(
             categoryId,
             createdItemId,
-            merchantId
+            merchantId,
+            undefined,
+            undefined,
+            undefined,
+            isAllLocations ? null : selectedLocationId,
           );
           if (addResult.error) {
             errorCount++;
@@ -197,7 +201,7 @@ export function CreateItemWizard({
                     errorCount !== 1 ? "s" : ""
                   } failed`
                 : undefined,
-          }
+          },
         );
       } else {
         toast.error("Failed to create item", {
@@ -364,7 +368,7 @@ export function CreateItemWizard({
                           "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all",
                           isSelected
                             ? "border-primary bg-primary/5 ring-1 ring-primary"
-                            : "border-border hover:border-primary/30 hover:bg-muted/30"
+                            : "border-border hover:border-primary/30 hover:bg-muted/30",
                         )}
                       >
                         <Checkbox

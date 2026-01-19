@@ -95,11 +95,11 @@ export function AddItemToCategoryWizard({
   const merchantId = userInfo?.members?.[0]?.organizations?.merchants?.id || "";
   // State
   const [activeTab, setActiveTab] = React.useState<"existing" | "create">(
-    "existing"
+    "existing",
   );
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedItems, setSelectedItems] = React.useState<Set<string>>(
-    new Set()
+    new Set(),
   );
   const [isSaving, setIsSaving] = React.useState(false);
   const [allItems, setAllItems] = React.useState<MenuItemsModel[]>([]);
@@ -148,7 +148,7 @@ export function AddItemToCategoryWizard({
     return availableItems.filter(
       (item) =>
         item.name.toLowerCase().includes(query) ||
-        item.description?.toLowerCase().includes(query)
+        item.description?.toLowerCase().includes(query),
     );
   }, [availableItems, searchQuery]);
 
@@ -200,7 +200,15 @@ export function AddItemToCategoryWizard({
       let errorCount = 0;
 
       for (const itemId of itemIds) {
-        const result = await AddItemToCategory(categoryId, itemId, merchantId);
+        const result = await AddItemToCategory(
+          categoryId,
+          itemId,
+          merchantId,
+          undefined,
+          undefined,
+          undefined,
+          selectedLocationId,
+        );
         if (result.error) {
           errorCount++;
           console.error(`Failed to add item ${itemId}:`, result.error);
@@ -217,7 +225,7 @@ export function AddItemToCategoryWizard({
           {
             description:
               errorCount > 0 ? `${errorCount} failed to add` : undefined,
-          }
+          },
         );
       }
 
@@ -263,7 +271,7 @@ export function AddItemToCategoryWizard({
         },
         {
           locationId: isAllLocations ? null : selectedLocationId,
-        }
+        },
       );
 
       if (result.error) {
@@ -413,7 +421,7 @@ export function AddItemToCategoryWizard({
                           "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all",
                           isSelected
                             ? "border-primary bg-primary/5 ring-1 ring-primary"
-                            : "border-border hover:border-primary/30 hover:bg-muted/30"
+                            : "border-border hover:border-primary/30 hover:bg-muted/30",
                         )}
                         onClick={() => handleToggleItem(item.id)}
                       >

@@ -761,21 +761,26 @@ export default function AuditLogsPage() {
                                           </div>
                                         </div>
                                       )}
-                                      {(log.changes as any).before && (
-                                        <div className="space-y-2">
-                                          <div className="flex items-center gap-2">
-                                            <div className="h-2 w-2 rounded-full bg-amber-500" />
-                                            <h5 className="text-[10px] uppercase font-bold text-muted-foreground">
-                                              Previous Values
-                                            </h5>
+                                      {(log.changes as any).before &&
+                                        Object.keys(
+                                          (log.changes as any).before || {},
+                                        ).length > 0 && (
+                                          <div className="space-y-2">
+                                            <div className="flex items-center gap-2">
+                                              <div className="h-2 w-2 rounded-full bg-amber-500" />
+                                              <h5 className="text-[10px] uppercase font-bold text-muted-foreground">
+                                                Previous Values
+                                              </h5>
+                                            </div>
+                                            <div className="bg-amber-500/5 p-4 rounded-lg border border-amber-500/10 opacity-75">
+                                              <RenderObject
+                                                data={
+                                                  (log.changes as any).before
+                                                }
+                                              />
+                                            </div>
                                           </div>
-                                          <div className="bg-amber-500/5 p-4 rounded-lg border border-amber-500/10 opacity-75">
-                                            <RenderObject
-                                              data={(log.changes as any).before}
-                                            />
-                                          </div>
-                                        </div>
-                                      )}
+                                        )}
                                     </div>
                                   ) : (
                                     <RenderObject data={log.changes} />

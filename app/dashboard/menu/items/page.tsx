@@ -128,7 +128,7 @@ type ViewMode = "grid" | "list" | "categories";
 // ============================================================================
 
 function mapFlatItemToEditItem(
-  item: FlatItem | null
+  item: FlatItem | null,
 ): EditItemWithOverrides | undefined {
   if (!item) return undefined;
   console.log("[MAP FLAT ITEM TO EDIT ITEM] item", item);
@@ -226,7 +226,7 @@ function ItemCard({
 
   // Tax info
   const taxRate = taxRates.find(
-    (r) => r.tax_category === item.effective_tax_category
+    (r) => r.tax_category === item.effective_tax_category,
   );
   const taxAmount =
     taxRate && !item.effective_is_tax_exempt
@@ -243,7 +243,7 @@ function ItemCard({
           "overflow-hidden transition-all duration-300 h-full",
           "hover:shadow-lg hover:scale-[1.02] hover:border-primary/50",
           hasOverride && "ring-1 ring-amber-200",
-          !item.effective_availability && "opacity-70"
+          !item.effective_availability && "opacity-70",
         )}
       >
         {/* Image Section */}
@@ -270,7 +270,7 @@ function ItemCard({
                   "text-[10px] px-1.5 py-0.5 gap-1",
                   priceColors.bg,
                   priceColors.text,
-                  priceColors.border
+                  priceColors.border,
                 )}
               >
                 {item.price_source === "location_item" && (
@@ -308,7 +308,7 @@ function ItemCard({
                     "text-[10px] px-1.5 py-0 bg-background/90 backdrop-blur-sm",
                     cat.is_global
                       ? "border-emerald-200 text-emerald-700"
-                      : "border-purple-200 text-purple-700"
+                      : "border-purple-200 text-purple-700",
                   )}
                 >
                   {cat.is_global ? (
@@ -401,7 +401,7 @@ function ItemCard({
                         "text-[10px] px-1.5 py-0.5 cursor-help",
                         item.effective_is_tax_exempt
                           ? "bg-amber-50 text-amber-700 border-amber-200"
-                          : "bg-blue-50 text-blue-700 border-blue-200"
+                          : "bg-blue-50 text-blue-700 border-blue-200",
                       )}
                     >
                       {item.effective_is_tax_exempt ? (
@@ -514,7 +514,7 @@ function ItemRow({
 
   // Tax info
   const taxRate = taxRates.find(
-    (r) => r.tax_category === item.effective_tax_category
+    (r) => r.tax_category === item.effective_tax_category,
   );
   const taxAmount =
     taxRate && !item.effective_is_tax_exempt
@@ -531,7 +531,7 @@ function ItemRow({
           "flex items-center gap-4 p-4 rounded-xl border bg-card transition-all duration-200",
           "hover:shadow-md hover:border-primary/30",
           hasOverride && "ring-1 ring-amber-200",
-          !item.effective_availability && "opacity-70"
+          !item.effective_availability && "opacity-70",
         )}
       >
         {/* Image */}
@@ -570,7 +570,7 @@ function ItemRow({
                       "text-[10px] px-1.5 py-0",
                       cat.is_global
                         ? "border-emerald-200 text-emerald-700"
-                        : "border-purple-200 text-purple-700"
+                        : "border-purple-200 text-purple-700",
                     )}
                   >
                     {cat.is_global ? (
@@ -597,7 +597,7 @@ function ItemRow({
                           "text-[10px] px-1.5 py-0 cursor-help",
                           item.effective_is_tax_exempt
                             ? "bg-amber-50 text-amber-700 border-amber-200"
-                            : "bg-blue-50 text-blue-700 border-blue-200"
+                            : "bg-blue-50 text-blue-700 border-blue-200",
                         )}
                       >
                         {item.effective_is_tax_exempt ? (
@@ -673,7 +673,7 @@ function ItemRow({
                     "text-[10px] px-1.5",
                     priceColors.bg,
                     priceColors.text,
-                    priceColors.border
+                    priceColors.border,
                   )}
                 >
                   {item.price_source === "location_item" && (
@@ -917,7 +917,7 @@ export default function MenuItemsPage() {
   // Get categories for filtering
   const { data: categoriesData } = useCategoriesWithItems(
     clerkOrgId || "",
-    selectedLocationId
+    selectedLocationId,
   );
   const { data: modifierGroups } = useModifierGroups(clerkOrgId);
 
@@ -927,11 +927,11 @@ export default function MenuItemsPage() {
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<FlatItem | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
-    null
+    null,
   );
   const [showCategoryFilter, setShowCategoryFilter] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
   const [deletingItem, setDeletingItem] = useState<FlatItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -968,7 +968,7 @@ export default function MenuItemsPage() {
         (item) =>
           item.name.toLowerCase().includes(query) ||
           item.description?.toLowerCase().includes(query) ||
-          item.categories.some((c) => c.name.toLowerCase().includes(query))
+          item.categories.some((c) => c.name.toLowerCase().includes(query)),
       );
     }
 
@@ -978,7 +978,7 @@ export default function MenuItemsPage() {
         filtered = filtered.filter((item) => item.categories.length === 0);
       } else {
         filtered = filtered.filter((item) =>
-          item.categories.some((c) => c.id === selectedCategoryId)
+          item.categories.some((c) => c.id === selectedCategoryId),
         );
       }
     }
@@ -1013,7 +1013,7 @@ export default function MenuItemsPage() {
 
     // Add uncategorized items
     const uncategorizedItems = filteredItems.filter(
-      (item) => item.categories.length === 0
+      (item) => item.categories.length === 0,
     );
     if (uncategorizedItems.length > 0) {
       groups.set("uncategorized", {
@@ -1060,7 +1060,7 @@ export default function MenuItemsPage() {
           : 0,
       uncategorized: itemsList.filter((i) => i.categories.length === 0).length,
     }),
-    [itemsList]
+    [itemsList],
   );
 
   // Category counts for filter
@@ -1158,7 +1158,10 @@ export default function MenuItemsPage() {
 
     setIsDeleting(true);
     try {
-      const result = await DeleteMenuItem(deletingItem.id);
+      const result = await DeleteMenuItem(
+        deletingItem.id,
+        selectedLocationId === "all" ? null : selectedLocationId,
+      );
 
       if (result.error) {
         toast.error("Delete Failed", {
@@ -1219,7 +1222,7 @@ export default function MenuItemsPage() {
   }
 
   const selectedCategory = categoriesList.find(
-    (c) => c.id === selectedCategoryId
+    (c) => c.id === selectedCategoryId,
   );
 
   return (
@@ -1234,7 +1237,7 @@ export default function MenuItemsPage() {
               className={cn(
                 "gap-1.5 animate-in fade-in slide-in-from-left-2 duration-300",
                 !isAllLocations &&
-                  "bg-blue-500/10 text-blue-600 border-blue-200"
+                  "bg-blue-500/10 text-blue-600 border-blue-200",
               )}
             >
               {isAllLocations ? (
@@ -1329,7 +1332,7 @@ export default function MenuItemsPage() {
                 "text-2xl font-bold",
                 stats.uncategorized > 0
                   ? "text-amber-600"
-                  : "text-muted-foreground"
+                  : "text-muted-foreground",
               )}
             >
               {stats.uncategorized}
@@ -1382,7 +1385,7 @@ export default function MenuItemsPage() {
                     "gap-1.5",
                     selectedCategoryId &&
                       !showCategoryFilter &&
-                      "border-primary text-primary"
+                      "border-primary text-primary",
                   )}
                 >
                   <Filter className="h-4 w-4" />
@@ -1460,7 +1463,7 @@ export default function MenuItemsPage() {
                       onClick={() => setSelectedCategoryId(category.id)}
                       className={cn(
                         "h-7 text-xs gap-1",
-                        count === 0 && "opacity-50"
+                        count === 0 && "opacity-50",
                       )}
                     >
                       {category.is_global ? (
@@ -1561,15 +1564,15 @@ export default function MenuItemsPage() {
                 itemsList.length === 0
                   ? "No items yet"
                   : selectedCategoryId
-                  ? "No items in this category"
-                  : "No items found"
+                    ? "No items in this category"
+                    : "No items found"
               }
               description={
                 itemsList.length === 0
                   ? "Items live within categories. Create categories first, then add items."
                   : selectedCategoryId
-                  ? "Try selecting a different category or clear the filter"
-                  : "Try adjusting your search terms"
+                    ? "Try selecting a different category or clear the filter"
+                    : "Try adjusting your search terms"
               }
               action={
                 itemsList.length === 0 ? (
@@ -1598,7 +1601,7 @@ export default function MenuItemsPage() {
                 const canDelete =
                   isAllLocations ||
                   group.items.some(
-                    (item) => item.location_id === selectedLocationId
+                    (item) => item.location_id === selectedLocationId,
                   );
                 return (
                   <CategoryGroup

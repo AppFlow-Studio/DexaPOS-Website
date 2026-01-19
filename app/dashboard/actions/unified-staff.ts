@@ -261,6 +261,29 @@ export async function CreatePOSStaff(
     // Revalidate staff page
     revalidatePath("/dashboard/staff");
 
+    // Fetch location names for audit log
+    const { data: locationData } = await supabase
+      .from("locations")
+      .select("name")
+      .in("id", formData.location_ids);
+
+    const locationNames = locationData?.map((l) => l.name) || [];
+
+    // Log audit event
+    await LogAuditEvent({
+      merchantId: merchant.id,
+      action: `Created POS Staff: ${formData.first_name} ${formData.last_name}`,
+      actionCategory: "staff",
+      resourceType: "staff_profile",
+      resourceId: staffProfile.id,
+      resourceName: `${formData.first_name} ${formData.last_name}`,
+      metadata: {
+        role_code: formData.role_code,
+        locations: locationNames,
+        location_ids: formData.location_ids,
+      },
+    });
+
     return {
       data: {
         member_id: member.id,
@@ -433,6 +456,22 @@ export async function CreateClerkUserDirectly(
 
     revalidatePath("/dashboard/staff");
 
+    // Log audit event
+    await LogAuditEvent({
+      merchantId: merchantId,
+      action: `Created Staff (Clerk): ${formData.first_name} ${formData.last_name}`,
+      actionCategory: "staff",
+      resourceType: "user",
+      resourceId: clerkUser.id,
+      resourceName: `${formData.first_name} ${formData.last_name}`,
+      metadata: {
+        email: formData.email,
+        role_code: formData.role_code,
+        locations: formData.location_ids,
+        creation_type: "direct",
+      },
+    });
+
     return {
       data: {
         member_id: member?.id || "",
@@ -555,6 +594,21 @@ export async function InviteClerkStaff(
 
     revalidatePath("/dashboard/staff");
 
+    // Log audit event
+    await LogAuditEvent({
+      merchantId: merchantId,
+      action: `Invited Staff (Clerk): ${formData.first_name} ${formData.last_name}`,
+      actionCategory: "staff",
+      resourceType: "staff_invite",
+      resourceId: invitation.id,
+      resourceName: `${formData.first_name} ${formData.last_name}`,
+      metadata: {
+        email: formData.email,
+        role_code: formData.role_code,
+        locations: formData.location_ids,
+      },
+    });
+
     return {
       data: {
         invite_id: invitation.id,
@@ -588,7 +642,7 @@ export async function UpdateStaffLocationAssignment(
   try {
     const { data: member } = await supabase
       .from("members")
-      .select("user_id, staff_profile_id")
+      .select("user_id, staff_profile_id, organization_id")
       .eq("id", memberId)
       .single();
 
@@ -609,6 +663,18 @@ export async function UpdateStaffLocationAssignment(
       return { error: "Invalid member record: no ID found" };
     }
 
+    // Fetch current state before update for audit logging
+    const { data: beforeState } = await supabase
+      .from("location_members")
+      .select("*")
+      .eq("location_id", locationId)
+      .match(
+        member.user_id
+          ? { user_id: member.user_id }
+          : { staff_profile_id: member.staff_profile_id },
+      )
+      .single();
+
     const { error } = await query;
 
     if (error) {
@@ -617,6 +683,56 @@ export async function UpdateStaffLocationAssignment(
     }
 
     revalidatePath("/dashboard/staff");
+
+    // Fetch details for audit logging
+    if (member.organization_id) {
+      // Fetch staff name
+      let staffName = "Unknown Staff";
+      if (member.staff_profile_id) {
+        const { data: sp } = await supabase
+          .from("staff_profiles")
+          .select("display_name, first_name, last_name")
+          .eq("id", member.staff_profile_id)
+          .single();
+        if (sp)
+          staffName = sp.display_name || `${sp.first_name} ${sp.last_name}`;
+      }
+
+      // Detect action type
+      let actionDescription = `Updated Staff Assignment: ${staffName}`;
+      if (updates.is_active === true)
+        actionDescription = `Reactivated Staff Access: ${staffName}`;
+      if (updates.is_active === false)
+        actionDescription = `Deactivated Staff Access: ${staffName}`;
+
+      const changes = {
+        after: updates as any,
+        before: beforeState
+          ? {
+              role_code: beforeState.role_code,
+              hourly_rate: beforeState.hourly_rate,
+              employment_type: beforeState.employment_type,
+              is_active: beforeState.is_active,
+              // Add other relevant fields if necessary
+            }
+          : {},
+      };
+
+      await LogAuditEvent({
+        clerkOrgId: member.organization_id,
+        locationId,
+        action: actionDescription,
+        actionCategory: "staff",
+        resourceType: "staff_member",
+        resourceId: member.staff_profile_id || member.user_id || memberId,
+        resourceName: staffName,
+        changes: changes,
+        metadata: {
+          staff_name: staffName,
+          updated_fields: Object.keys(updates),
+        },
+      });
+    }
 
     return { data: { success: true } };
   } catch (error) {
@@ -695,7 +811,7 @@ export async function ResetStaffPIN(
       await LogAuditEvent({
         clerkOrgId: member.organization_id,
         locationId,
-        action: "staff.pin_reset",
+        action: `Staff PIN Reset: ${staffName}`,
         actionCategory: "staff",
         resourceType: "staff_member",
         resourceId: member.staff_profile_id || member.user_id || memberId,
@@ -738,7 +854,7 @@ export async function DeactivateStaffMember(
   try {
     const { data: member } = await supabase
       .from("members")
-      .select("user_id, staff_profile_id")
+      .select("user_id, staff_profile_id, organization_id")
       .eq("id", memberId)
       .single();
 
@@ -769,6 +885,46 @@ export async function DeactivateStaffMember(
 
     revalidatePath("/dashboard/staff");
 
+    // Log audit event
+    if (member) {
+      const { data: staffData } = await supabase
+        .rpc("get_unified_staff_view", {
+          p_merchant_id: (member as any).organization_id || "",
+          p_location_id: null,
+        })
+        .eq("member_id", memberId)
+        .single(); // Attempt to get name but use memberId if fails
+
+      // Fallback to basic fetch if RPC fails or not simple
+      let resourceName = "Staff Member";
+      if (member.staff_profile_id) {
+        const { data: sp } = await supabase
+          .from("staff_profiles")
+          .select("display_name, first_name, last_name")
+          .eq("id", member.staff_profile_id)
+          .single();
+        if (sp)
+          resourceName = sp.display_name || `${sp.first_name} ${sp.last_name}`;
+      }
+
+      // We need merchant ID. Assuming member has org_id which maps to merchant in LogAuditEvent hook or we fetch it.
+      // Actually DeactivateStaffMember doesn't seem to have merchant context easily available unless we fetch it.
+      // The member record has organization_id (clerk). LogAuditEvent can take that.
+      const orgId = (member as any).organization_id;
+
+      if (orgId) {
+        await LogAuditEvent({
+          clerkOrgId: orgId,
+          action: `Deactivated Staff Member: ${resourceName}`,
+          actionCategory: "staff",
+          resourceType: "staff_member",
+          resourceId: memberId,
+          resourceName: resourceName,
+          locationId: locationId,
+        });
+      }
+    }
+
     return { data: { success: true } };
   } catch (error) {
     console.error("[DeactivateStaffMember] Unexpected error:", error);
@@ -792,7 +948,7 @@ export async function ReactivateStaffMember(
   try {
     const { data: member } = await supabase
       .from("members")
-      .select("user_id, staff_profile_id")
+      .select("user_id, staff_profile_id, organization_id")
       .eq("id", memberId)
       .single();
 
@@ -822,6 +978,34 @@ export async function ReactivateStaffMember(
     }
 
     revalidatePath("/dashboard/staff");
+
+    // Log audit event
+    if (member) {
+      let resourceName = "Staff Member";
+      if (member.staff_profile_id) {
+        const { data: sp } = await supabase
+          .from("staff_profiles")
+          .select("display_name, first_name, last_name")
+          .eq("id", member.staff_profile_id)
+          .single();
+        if (sp)
+          resourceName = sp.display_name || `${sp.first_name} ${sp.last_name}`;
+      }
+
+      const orgId = (member as any).organization_id;
+
+      if (orgId) {
+        await LogAuditEvent({
+          clerkOrgId: orgId,
+          action: `Reactivated Staff Member: ${resourceName}`,
+          actionCategory: "staff",
+          resourceType: "staff_member",
+          resourceId: memberId,
+          resourceName: resourceName,
+          locationId: locationId,
+        });
+      }
+    }
 
     return { data: { success: true } };
   } catch (error) {
@@ -1053,6 +1237,21 @@ export async function UpgradePOSStaffToClerk(
 
     // 11. Success - revalidate and return credentials
     revalidatePath("/dashboard/staff");
+
+    // Log audit event
+    await LogAuditEvent({
+      merchantId: staffProfile.merchant_id,
+      action: `Upgraded POS Staff to Clerk: ${staffProfile.first_name} ${staffProfile.last_name}`,
+      actionCategory: "staff",
+      resourceType: "staff_profile",
+      resourceId: staffProfile.id,
+      resourceName: `${staffProfile.first_name} ${staffProfile.last_name}`,
+      metadata: {
+        new_user_id: clerkUser.id,
+        email: email,
+        role_code: locationAssignment.role_code,
+      },
+    });
 
     return {
       data: {

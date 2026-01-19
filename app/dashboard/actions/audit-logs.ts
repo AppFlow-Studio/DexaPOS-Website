@@ -11,6 +11,7 @@ import {
   AuditSeverity,
 } from "@/types/audit-log";
 import { auth } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
 
 // ============================================================================
 // GET AUDIT LOGS
@@ -161,11 +162,60 @@ interface LogAuditEventParams {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * Helper to compute shallow diff between two objects
+ * Returns objects containing only the keys that have changed
+ */
+function computeDiff(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+) {
+  const diffBefore: Record<string, unknown> = {};
+  const diffAfter: Record<string, unknown> = {};
+
+  const allKeys = new Set([
+    ...Object.keys(before || {}),
+    ...Object.keys(after || {}),
+  ]);
+
+  for (const key of Array.from(allKeys)) {
+    const valBefore = before?.[key];
+    const valAfter = after?.[key];
+
+    // Skip ignored keys
+    if (["updated_at", "created_at"].includes(key)) continue;
+
+    // Simple comparison using JSON stringify for basic equality
+    // This handles dates (ISO strings) and simple objects reasonably well
+    if (JSON.stringify(valBefore) !== JSON.stringify(valAfter)) {
+      if (valBefore !== undefined) diffBefore[key] = valBefore;
+      if (valAfter !== undefined) diffAfter[key] = valAfter;
+    }
+  }
+
+  return { before: diffBefore, after: diffAfter };
+}
+
 export async function LogAuditEvent(
   params: LogAuditEventParams,
 ): Promise<{ success?: boolean; logId?: string; error?: string }> {
   const supabase = createServerSupabaseClient();
   let merchantId = params.merchantId;
+  let locationId = params.locationId;
+
+  // If locationId is not provided, try to get it from cookies
+  if (locationId === undefined || locationId === null) {
+    const cookieStore = await cookies();
+    const cookieLocationId = cookieStore.get("x-location-id")?.value;
+    if (cookieLocationId && cookieLocationId !== "all") {
+      locationId = cookieLocationId;
+    }
+  }
+
+  // Final validation for locationId: "all" should be treated as null (global)
+  if (locationId === "all") {
+    locationId = null;
+  }
 
   // If merchantId is not provided, look it up via Clerk Org ID
   if (!merchantId) {
@@ -194,10 +244,78 @@ export async function LogAuditEvent(
   const userId = user?.id || null;
   const userName = user?.fullName || user?.firstName || "System";
 
+  /**
+   * Remove internal IDs and technical fields from the log for a cleaner Manager view.
+   */
+  const sanitizeRecord = (obj: Record<string, unknown> | undefined) => {
+    if (!obj) return undefined;
+    const sanitized = { ...obj };
+    const technicalKeys = [
+      "id",
+      "merchant_id",
+      "location_id",
+      "clerk_org_id",
+      "organization_id",
+      "org_id",
+      "created_at",
+      "updated_at",
+      "deleted_at",
+      "clerkorgid",
+    ];
+
+    const isUuid = (val: unknown): boolean =>
+      typeof val === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        val,
+      );
+
+    Object.keys(sanitized).forEach((key) => {
+      const lowerKey = key.toLowerCase();
+      const value = sanitized[key];
+
+      const isTechnicalKey = technicalKeys.some(
+        (tk) => tk.toLowerCase() === lowerKey,
+      );
+      const isIdKey =
+        lowerKey.endsWith("_id") || key.endsWith("Id") || lowerKey === "id";
+      const hasUuidValue = isUuid(value);
+
+      if (isTechnicalKey || isIdKey || hasUuidValue) {
+        delete sanitized[key];
+      }
+    });
+    return sanitized;
+  };
+
+  // Compute diffs if both before and after are provided to save storage space
+  let finalChanges = params.changes;
+
+  if (params.changes?.before || params.changes?.after) {
+    const beforeRaw = params.changes.before || {};
+    const afterRaw = params.changes.after || {};
+
+    // Compute diff if both exist, otherwise take the one provided (e.g. for Created/Deleted)
+    let processedBefore = params.changes.before;
+    let processedAfter = params.changes.after;
+
+    if (params.changes.before && params.changes.after) {
+      const diff = computeDiff(params.changes.before, params.changes.after);
+      processedBefore = diff.before;
+      processedAfter = diff.after;
+    }
+
+    // Sanitize the result so Managers don't see UUIDs
+    finalChanges = {
+      ...params.changes,
+      before: sanitizeRecord(processedBefore as Record<string, unknown>),
+      after: sanitizeRecord(processedAfter as Record<string, unknown>),
+    };
+  }
+
   // Call RPC
   const { data, error } = await supabase.rpc("log_audit_event", {
     p_merchant_id: merchantId,
-    p_location_id: params.locationId || null,
+    p_location_id: locationId || null,
     p_actor_user_id: userId,
     p_actor_name: userName,
     p_actor_role: null, // Could fetch from member info if needed
@@ -207,8 +325,9 @@ export async function LogAuditEvent(
     p_resource_type: params.resourceType || null,
     p_resource_id: params.resourceId || null,
     p_resource_name: params.resourceName || null,
-    p_changes: params.changes || null,
-    p_metadata: params.metadata || null,
+    p_changes: finalChanges || null,
+    p_metadata:
+      sanitizeRecord(params.metadata as Record<string, unknown>) || null,
   });
 
   if (error) {

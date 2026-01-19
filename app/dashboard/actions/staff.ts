@@ -6,6 +6,7 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { LogAuditEvent } from "./audit-logs";
 
 // ============================================================================
 // TYPES
@@ -64,7 +65,7 @@ export interface CreateCustomRoleParams {
 
 export async function inviteStaffMember(
   params: InviteStaffParams,
-  clerkOrgId: string
+  clerkOrgId: string,
 ) {
   const { userId } = await auth();
   if (!userId) {
@@ -113,10 +114,10 @@ export async function inviteStaffMember(
                 is_primary_location: location.isPrimary,
                 hourly_rate: location.hourlyRate,
                 pin_code: location.pinCode,
-              })
+              }),
             ),
           },
-        }
+        },
       );
       console.log("Clerk invitation:", invitation);
 
@@ -147,6 +148,21 @@ export async function inviteStaffMember(
           inviteType: "clerk",
           invitationId: invitation.id,
         };
+
+        // Log audit event
+        await LogAuditEvent({
+          merchantId: params.merchantId,
+          action: `Invited Staff Member (Clerk): ${params.email}`,
+          actionCategory: "staff",
+          resourceType: "staff_invite",
+          resourceId: invitation.id,
+          resourceName: `${params.firstName} ${params.lastName}`,
+          metadata: {
+            email: params.email,
+            role_code: params.roleCode,
+            locations: params.locationAssignments.map((l) => l.locationId),
+          },
+        });
       } else {
         return {
           success: false,
@@ -200,6 +216,22 @@ export async function inviteStaffMember(
         inviteId: invite.id,
         setupUrl: `${process.env.NEXT_PUBLIC_APP_URL}/setup/${inviteToken}`,
       };
+
+      // Log audit event
+      await LogAuditEvent({
+        merchantId: params.merchantId,
+        action: `Invited Staff Member (POS): ${params.firstName} ${params.lastName}`,
+        actionCategory: "staff",
+        resourceType: "staff_invite",
+        resourceId: invite.id,
+        resourceName: `${params.firstName} ${params.lastName}`,
+        metadata: {
+          email: params.email,
+          phone: params.phone,
+          role_code: params.roleCode,
+          locations: params.locationAssignments.map((l: any) => l.locationId),
+        },
+      });
     }
   } catch (error: any) {
     console.error("Invite error:", error);
@@ -257,6 +289,22 @@ export async function quickAddStaff(params: QuickAddStaffParams) {
       staffId: staff.id,
       displayName: staff.display_name,
     };
+
+    // Log audit event
+    await LogAuditEvent({
+      merchantId: params.merchantId,
+      action: `Quick Added Staff: ${displayName}`,
+      actionCategory: "staff",
+      resourceType: "staff_profile",
+      resourceId: staff.id,
+      resourceName: displayName,
+      locationId: params.locationId,
+      metadata: {
+        role_code: params.roleCode,
+        employment_type: params.employmentType,
+      },
+      changes: { after: staff as unknown as Record<string, unknown> },
+    });
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -333,6 +381,19 @@ export async function acceptPosInvite(token: string, pin: string) {
       })
       .eq("id", invite.id);
 
+    // Log audit event
+    await LogAuditEvent({
+      merchantId: invite.merchant_id,
+      action: `Staff Accepted Invite: ${displayName}`,
+      actionCategory: "staff",
+      resourceType: "staff_profile",
+      resourceId: staff.id,
+      resourceName: displayName,
+      metadata: {
+        invite_type: "pos_only",
+      },
+    });
+
     return { success: true, staffId: staff.id };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -407,7 +468,7 @@ export async function createCustomRole(params: CreateCustomRoleParams) {
         basePermissions.map((p) => ({
           role_code: roleCode,
           permission_id: p.permission_id,
-        }))
+        })),
       );
     }
 
@@ -447,6 +508,22 @@ export async function createCustomRole(params: CreateCustomRoleParams) {
       }
     }
 
+    // Log audit event
+    await LogAuditEvent({
+      merchantId: params.merchantId,
+      action: `Created Custom Role: ${params.name}`,
+      actionCategory: "staff",
+      resourceType: "role",
+      resourceId: role.id,
+      resourceName: params.name,
+      metadata: {
+        role_code: roleCode,
+        base_role_code: params.baseRoleCode,
+        base_role_name: baseRole.name, // Include human readable name
+      },
+      changes: { after: role as unknown as Record<string, unknown> },
+    });
+
     return { success: true, role };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -460,7 +537,7 @@ export async function createCustomRole(params: CreateCustomRoleParams) {
 export async function verifyStaffPin(
   merchantId: string,
   locationId: string,
-  pin: string
+  pin: string,
 ) {
   const supabase = await createServerSupabaseClient();
 
@@ -483,7 +560,7 @@ export async function verifyStaffPin(
                 is_active,
                 avatar_url
             )
-        `
+        `,
     )
     .eq("location_id", locationId)
     .eq("is_active", true)
@@ -509,6 +586,20 @@ export async function verifyStaffPin(
         .from("roles_permissions")
         .select("permissions(code, name)")
         .eq("role_code", effectiveRole);
+
+      // Log audit event
+      await LogAuditEvent({
+        merchantId: merchantId,
+        action: `Staff Logged In: ${staff.display_name}`,
+        actionCategory: "access_control",
+        resourceType: "staff_profile",
+        resourceId: staff.id,
+        resourceName: staff.display_name,
+        locationId: locationId,
+        metadata: {
+          role_code: effectiveRole,
+        },
+      });
 
       return {
         success: true,
@@ -566,7 +657,7 @@ export async function getStaffForLocation(locationId: string) {
                 color,
                 icon
             )
-        `
+        `,
     )
     .eq("location_id", locationId)
     .eq("is_active", true)

@@ -5,9 +5,10 @@
 // Description: CRUD operations for payment terminals (Dejavoo, PAX)
 // ============================================================================
 
-import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { maskAuthKey } from '@/app/dashboard/settings/stations/utils/terminal-helpers'
-import bcrypt from 'bcryptjs'
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { maskAuthKey } from "@/app/dashboard/settings/stations/utils/terminal-helpers";
+import bcrypt from "bcryptjs";
+import { LogAuditEvent } from "./audit-logs";
 
 // ============================================================================
 // Types
@@ -340,8 +341,8 @@ export async function createPaymentTerminal(
         register_id: input.register_id || null,
         tpn_encrypted: bcrypt.hashSync(input.tpn) || null,
         auth_key_encrypted: bcrypt.hashSync(input.auth_key) || null,
-        api_environment: input.api_environment || 'sandbox',
-        connection_type: input.connection_type || 'cloud',
+        api_environment: input.api_environment || "sandbox",
+        connection_type: input.connection_type || "cloud",
         local_ip_address: input.local_ip_address || null,
         local_port: input.local_port || null,
         signature_threshold: input.signature_threshold ?? 25.0,
@@ -374,6 +375,18 @@ export async function createPaymentTerminal(
       ...data,
       auth_key: maskAuthKey(data.auth_key),
     };
+
+    // Log audit event
+    await LogAuditEvent({
+      merchantId: merchant.id,
+      action: `Created Payment Terminal: ${input.terminal_name}`,
+      actionCategory: "settings",
+      resourceType: "payment_terminal",
+      resourceId: data.id,
+      resourceName: input.terminal_name,
+      locationId: input.location_id,
+      metadata: { tpn: input.tpn },
+    });
 
     return { success: true, data: maskedData as PaymentTerminal, error: null };
   } catch (error) {
@@ -468,6 +481,18 @@ export async function updatePaymentTerminal(
       auth_key: maskAuthKey(data.auth_key),
     };
 
+    // Log audit event
+    await LogAuditEvent({
+      merchantId: data.merchant_id,
+      action: `Updated Payment Terminal: ${data.terminal_name}`,
+      actionCategory: "settings",
+      resourceType: "payment_terminal",
+      resourceId: terminalId,
+      resourceName: data.terminal_name,
+      locationId: data.location_id,
+      changes: { after: updateData },
+    });
+
     return { success: true, data: maskedData as PaymentTerminal, error: null };
   } catch (error) {
     console.error("[updatePaymentTerminal] Exception:", error);
@@ -525,6 +550,25 @@ export async function linkTerminalToStation(
       auth_key: maskAuthKey(data.auth_key),
     };
 
+    // Log audit event
+    // Fetch station name for better context
+    const { data: station } = await supabase
+      .from("stations")
+      .select("name")
+      .eq("id", stationId)
+      .single();
+
+    await LogAuditEvent({
+      merchantId: data.merchant_id,
+      action: `Linked Terminal ${data.terminal_name} to Station ${station?.name || "Unknown"}`,
+      actionCategory: "settings",
+      resourceType: "payment_terminal",
+      resourceId: terminalId,
+      resourceName: data.terminal_name,
+      locationId: data.location_id,
+      metadata: { station_id: stationId, station_name: station?.name },
+    });
+
     return { success: true, data: maskedData as PaymentTerminal, error: null };
   } catch (error) {
     console.error("[linkTerminalToStation] Exception:", error);
@@ -564,6 +608,17 @@ export async function unlinkTerminalFromStation(terminalId: string) {
       auth_key: maskAuthKey(data.auth_key),
     };
 
+    // Log audit event
+    await LogAuditEvent({
+      merchantId: data.merchant_id,
+      action: `Unlinked Terminal ${data.terminal_name} from Station`,
+      actionCategory: "settings",
+      resourceType: "payment_terminal",
+      resourceId: terminalId,
+      resourceName: data.terminal_name,
+      locationId: data.location_id,
+    });
+
     return { success: true, data: maskedData as PaymentTerminal, error: null };
   } catch (error) {
     console.error("[unlinkTerminalFromStation] Exception:", error);
@@ -586,6 +641,13 @@ export async function deletePaymentTerminal(terminalId: string) {
   try {
     const supabase = createServerSupabaseClient();
 
+    // Fetch details before delete
+    const { data: terminal } = await supabase
+      .from("payment_terminals")
+      .select("terminal_name, merchant_id, location_id, tpn")
+      .eq("id", terminalId)
+      .single();
+
     const { error } = await supabase
       .from("payment_terminals")
       .delete()
@@ -594,6 +656,20 @@ export async function deletePaymentTerminal(terminalId: string) {
     if (error) {
       console.error("[deletePaymentTerminal] Error:", error);
       return { success: false, error: error.message };
+    }
+
+    // Log audit event
+    if (terminal) {
+      await LogAuditEvent({
+        merchantId: terminal.merchant_id,
+        action: `Deleted Terminal: ${terminal.terminal_name}`,
+        actionCategory: "settings",
+        resourceType: "payment_terminal",
+        resourceId: terminalId,
+        resourceName: terminal.terminal_name,
+        locationId: terminal.location_id,
+        metadata: { tpn: terminal.tpn },
+      });
     }
 
     return { success: true, error: null };
@@ -611,7 +687,7 @@ export async function deletePaymentTerminal(terminalId: string) {
 // ============================================================================
 
 /**
- * Test terminal connection 
+ * Test terminal connection
  */
 export async function testTerminalConnection(terminalId: string) {
   try {
@@ -640,12 +716,12 @@ export async function testTerminalConnection(terminalId: string) {
     myHeaders.append("Content-Type", "application/json");
 
     var requestOptions = {
-      method: 'GET',
+      method: "GET",
       headers: myHeaders,
-      redirect: 'follow'
+      redirect: "follow",
     };
     let isOnline = false;
-    let status = 'Offline';
+    let status = "Offline";
     // await new Promise((resolve) => setTimeout(resolve, 1500));
 
     // // 85% success rate for demo
@@ -671,22 +747,23 @@ export async function testTerminalConnection(terminalId: string) {
       online_since: onlineSince,
     };
 
-     const response = await fetch(`${process.env.NEXT_PUBLIC_DEJAVOO_SPIN_API}/v2/Common/TerminalStatus?request.tpn=${terminal.tpn}&request.registerId=${terminal.register_id}&request.authkey=${terminal.auth_key}`, requestOptions as RequestInit)
-      .then(response => response.json())
-      .then(result => {
-        console.log(result)
-         if( result.TerminalStatus == 'Online') {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_DEJAVOO_SPIN_API}/v2/Common/TerminalStatus?request.tpn=${terminal.tpn}&request.registerId=${terminal.register_id}&request.authkey=${terminal.auth_key}`,
+      requestOptions as RequestInit,
+    )
+      .then((response) => response.json())
+      .then((result) => {
+        console.log(result);
+        if (result.TerminalStatus == "Online") {
           isOnline = true;
-          status = 'Online';
-         } else {
+          status = "Online";
+        } else {
           isOnline = false;
-          status = 'Offline';
-         }
+          status = "Offline";
+        }
       })
-      .catch(error => console.log('error', error));
-     
-   
-   
+      .catch((error) => console.log("error", error));
+
     // Update terminal status
     await supabase
       .from("payment_terminals")

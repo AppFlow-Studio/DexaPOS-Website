@@ -91,7 +91,7 @@ export default function MenuPage() {
 
   const { data: locations } = useLocations(
     clerkOrgId || "",
-    userInfo?.id || ""
+    userInfo?.id || "",
   );
   const currentLocation = locations?.find((l) => l.id === selectedLocationId);
 
@@ -126,7 +126,7 @@ export default function MenuPage() {
   const filteredMenus = displayMenus.filter(
     (menu) =>
       menu.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      menu.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      menu.description?.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const activeMenus = menusList.filter((m) => m.is_active).length;
@@ -164,8 +164,8 @@ export default function MenuPage() {
         isAllLocations && values.menu_type === "global"
           ? null
           : selectedLocationId === "all"
-          ? null
-          : selectedLocationId;
+            ? null
+            : selectedLocationId;
 
       const result = await CreateMenu(clerkOrgId || "", {
         name: values.name,
@@ -202,7 +202,10 @@ export default function MenuPage() {
 
   const handleToggleActive = async (menuId: string) => {
     try {
-      const result = await ToggleMenuActive(menuId);
+      const result = await ToggleMenuActive(
+        menuId,
+        selectedLocationId || undefined,
+      );
       if (result.error) {
         toast.error("Update Failed", {
           description: result.error,
@@ -224,13 +227,13 @@ export default function MenuPage() {
   const handleDelete = async (menuId: string) => {
     if (
       !confirm(
-        "Are you sure you want to delete this menu? This action cannot be undone."
+        "Are you sure you want to delete this menu? This action cannot be undone.",
       )
     ) {
       return;
     }
     try {
-      const result = await DeleteMenu(menuId);
+      const result = await DeleteMenu(menuId, selectedLocationId || undefined);
       if (result.error) {
         toast.error("Delete Failed", {
           description: result.error,
@@ -261,7 +264,7 @@ export default function MenuPage() {
 
   const handleDuplicate = async (
     menuId: string,
-    targetLocationId: string | null
+    targetLocationId: string | null,
   ) => {
     // Get Menu Info with all the items and categories and modifiers and set settings
     const menu = await GetMenuWithCategories(menuId);
@@ -340,7 +343,10 @@ export default function MenuPage() {
         displayOrder: index + 1,
       }));
 
-      const result = await UpdateMenusOrder(menuOrders);
+      const result = await UpdateMenusOrder(
+        menuOrders,
+        selectedLocationId || undefined,
+      );
 
       if (result.error) {
         toast.error("Save Failed", {
@@ -398,7 +404,7 @@ export default function MenuPage() {
               // When opening, ensure menu_type matches location scope
               form.setValue(
                 "menu_type",
-                isAllLocations ? "global" : "location"
+                isAllLocations ? "global" : "location",
               );
             }
           }}
@@ -445,7 +451,7 @@ export default function MenuPage() {
                                 htmlFor="global"
                                 className={cn(
                                   "flex flex-col items-center justify-between rounded-lg border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground cursor-pointer transition-all",
-                                  "peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                                  "peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary",
                                 )}
                               >
                                 <Globe className="h-6 w-6 mb-2 text-emerald-500" />
@@ -496,7 +502,7 @@ export default function MenuPage() {
                     "flex items-center gap-3 px-4 py-3 rounded-lg border text-sm",
                     isAllLocations && menuType === "global"
                       ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950 dark:border-emerald-800"
-                      : "bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800"
+                      : "bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800",
                   )}
                 >
                   <Info
@@ -504,7 +510,7 @@ export default function MenuPage() {
                       "h-4 w-4",
                       isAllLocations && menuType === "global"
                         ? "text-emerald-600"
-                        : "text-blue-600"
+                        : "text-blue-600",
                     )}
                   />
                   <span className="text-muted-foreground">

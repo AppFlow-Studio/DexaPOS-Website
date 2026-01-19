@@ -12,7 +12,7 @@ import { LogAuditEvent } from "./audit-logs";
 
 export async function getItemsForLocation(
   merchantId: string,
-  locationId?: string | null
+  locationId?: string | null,
 ) {
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase.rpc("get_categories_for_location", {
@@ -33,7 +33,7 @@ export async function getItemsForLocation(
 
 export async function getCategoriesForLocation(
   merchantId: string,
-  locationId?: string | null
+  locationId?: string | null,
 ) {
   const supabase = createServerSupabaseClient();
   const location_Id = locationId == "all" ? null : locationId;
@@ -225,7 +225,7 @@ export async function updateModifierGroup(params: UpdateModifierGroupParams) {
           display_order: displayOrder,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "location_id,modifier_group_id" }
+        { onConflict: "location_id,modifier_group_id" },
       );
 
     if (error) return { success: false, error: error.message };
@@ -325,7 +325,7 @@ export async function updateModifierItem(params: UpdateModifierItemParams) {
 
 export async function getItemsForLocationFlat(
   merchantId: string,
-  locationId?: string | null
+  locationId?: string | null,
 ) {
   const supabase = createServerSupabaseClient();
 
@@ -410,7 +410,7 @@ export async function getItemsForLocationFlat(
 
 export async function getMenuWithCategories(
   menuId: string,
-  locationId?: string | null
+  locationId?: string | null,
 ) {
   const supabase = createServerSupabaseClient();
   const location_Id = locationId == "all" ? null : locationId;
@@ -486,7 +486,7 @@ export async function upsertModifierOverride(
   price: number,
   isActive: boolean,
   stockMode: "quantity" | "in_stock" | "out_of_stock",
-  currentStock: number | null
+  currentStock: number | null,
 ) {
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase.rpc("upsert_modifier_override", {
@@ -527,7 +527,7 @@ export async function upsertModifierOverride(
  * Uses the new upsert_category_item_override RPC
  */
 export async function updateItemOverride(
-  params: UpdateItemParams
+  params: UpdateItemParams,
 ): Promise<UpdateResult> {
   const { userId } = await auth();
   if (!userId) {
@@ -550,7 +550,7 @@ export async function updateItemOverride(
       .eq("menu_item_id", params.menuItemId);
 
     const oldModifierGroupIds = (existingAssignments || []).map(
-      (a) => a.modifier_group_id
+      (a) => a.modifier_group_id,
     );
 
     // Fetch menu item details for audit log (name and merchant_id)
@@ -569,7 +569,7 @@ export async function updateItemOverride(
     if (deleteError) {
       console.error(
         "Error deleting existing modifier assignments:",
-        deleteError
+        deleteError,
       );
     }
 
@@ -578,7 +578,7 @@ export async function updateItemOverride(
       if (!menuItemDetails) {
         console.error(
           "Error fetching menu item for modifier update:",
-          menuItemError
+          menuItemError,
         );
         return { success: false, error: "Could not retrieve item details" };
       }
@@ -602,10 +602,10 @@ export async function updateItemOverride(
     if (menuItemDetails) {
       // Determine what changed
       const addedGroupIds = params.modifier_group_ids.filter(
-        (id) => !oldModifierGroupIds.includes(id)
+        (id) => !oldModifierGroupIds.includes(id),
       );
       const removedGroupIds = oldModifierGroupIds.filter(
-        (id) => !params.modifier_group_ids!.includes(id)
+        (id) => !params.modifier_group_ids!.includes(id),
       );
 
       // Only log if there was an actual change
@@ -624,21 +624,21 @@ export async function updateItemOverride(
           .in("id", allGroupIds);
 
         const groupNameMap = new Map(
-          (modifierGroups || []).map((g) => [g.id, g.name])
+          (modifierGroups || []).map((g) => [g.id, g.name]),
         );
 
         // Get human-readable names
         const addedGroupNames = addedGroupIds.map(
-          (id) => groupNameMap.get(id) || "Unknown Group"
+          (id) => groupNameMap.get(id) || "Unknown Group",
         );
         const removedGroupNames = removedGroupIds.map(
-          (id) => groupNameMap.get(id) || "Unknown Group"
+          (id) => groupNameMap.get(id) || "Unknown Group",
         );
         const newGroupNames = params.modifier_group_ids.map(
-          (id) => groupNameMap.get(id) || "Unknown Group"
+          (id) => groupNameMap.get(id) || "Unknown Group",
         );
         const oldGroupNames = oldModifierGroupIds.map(
-          (id) => groupNameMap.get(id) || "Unknown Group"
+          (id) => groupNameMap.get(id) || "Unknown Group",
         );
 
         await LogAuditEvent({
@@ -735,7 +735,7 @@ export async function updateItemOverride(
           },
           {
             onConflict: "location_id,menu_item_id",
-          }
+          },
         );
 
         if (error) {
@@ -772,7 +772,7 @@ export async function updateItemOverride(
         p_is_featured: params.isFeatured,
         p_stock_tracking_mode: params.stockTrackingMode,
         p_current_stock: params.currentStock,
-      }
+      },
     );
 
     if (error) {
@@ -866,7 +866,7 @@ export async function updateItemBasePrice(
   menuItemId: string,
   price: number | null,
   cashPrice?: number | null,
-  locationId?: string | null
+  locationId?: string | null,
 ) {
   return updateItemOverride({
     menuItemId,
@@ -888,7 +888,7 @@ export async function updateCategoryItemPrice(
   categoryId: string,
   price: number | null,
   cashPrice?: number | null,
-  locationId?: string | null
+  locationId?: string | null,
 ) {
   return updateItemOverride({
     menuItemId,
@@ -911,7 +911,7 @@ export async function updateMenuItemPrice(
   categoryId: string,
   price: number | null,
   cashPrice?: number | null,
-  locationId?: string | null
+  locationId?: string | null,
 ) {
   return updateItemOverride({
     menuItemId,
@@ -930,7 +930,7 @@ export async function setLocationPriceModifier(
   menuItemId: string,
   locationId: string,
   modifier: number,
-  type: "add" | "percent"
+  type: "add" | "percent",
 ) {
   return updateItemOverride({
     menuItemId,
@@ -952,7 +952,7 @@ export async function setItemAvailability(
     categoryId?: string | null;
     menuId?: string | null;
     locationId?: string | null;
-  }
+  },
 ) {
   return updateItemOverride({
     menuItemId,
@@ -980,7 +980,7 @@ export async function createMenuItem(
     cardBgColor?: string;
     stockTrackingMode?: string;
     mealTypes?: string[];
-  }
+  },
 ) {
   const supabase = await createServerSupabaseClient();
 
@@ -1041,7 +1041,7 @@ export async function resetItemToLevel(
     categoryId?: string | null;
     menuId?: string | null;
     locationId?: string | null;
-  }
+  },
 ): Promise<UpdateResult> {
   const supabase = await createServerSupabaseClient();
 
@@ -1058,7 +1058,63 @@ export async function resetItemToLevel(
     return { success: false, error: error.message };
   }
 
-  return data as UpdateResult;
+  const result = data as UpdateResult;
+
+  if (result.success) {
+    // Fetch names for audit log
+    const [itemResult, locResult, catResult] = await Promise.all([
+      supabase
+        .from("menu_items")
+        .select("name, merchant_id")
+        .eq("id", menuItemId)
+        .single(),
+      options?.locationId && options.locationId !== "all"
+        ? supabase
+            .from("locations")
+            .select("name")
+            .eq("id", options.locationId)
+            .single()
+        : Promise.resolve({ data: null }),
+      options?.categoryId
+        ? supabase
+            .from("categories")
+            .select("name")
+            .eq("id", options.categoryId)
+            .single()
+        : Promise.resolve({ data: null }),
+    ]);
+
+    const levelLabels: Record<number, string> = {
+      1: "Global Base",
+      2: "Location Base",
+      3: "Category",
+      4: "Location Category",
+      5: "Location Menu",
+    };
+
+    const itemName = itemResult.data?.name || "Unknown Item";
+    const locationName = locResult.data?.name;
+    const categoryName = catResult.data?.name;
+
+    await LogAuditEvent({
+      merchantId: itemResult.data?.merchant_id,
+      action: `Reset Item Pricing: ${itemName}`,
+      actionCategory: "menu",
+      resourceType: "menu_item",
+      resourceId: menuItemId,
+      resourceName: itemName,
+      locationId:
+        options?.locationId === "all" ? null : options?.locationId || null,
+      metadata: {
+        target_level: targetLevel,
+        target_level_name: levelLabels[targetLevel],
+        location_name: locationName,
+        category_name: categoryName,
+      },
+    });
+  }
+
+  return result;
 }
 
 // ============================================================================
@@ -1071,7 +1127,7 @@ export async function getItemWithPriceLevels(
     categoryId?: string | null;
     menuId?: string | null;
     locationId?: string | null;
-  }
+  },
 ) {
   const supabase = await createServerSupabaseClient();
   const locationId = options?.locationId === "all" ? null : options?.locationId;
@@ -1096,7 +1152,7 @@ export async function getItemWithPriceLevels(
                 modifier_group_id,
                 modifier_groups(id, name)
             )
-        `
+        `,
     )
     .eq("id", menuItemId)
     .single();
@@ -1252,7 +1308,7 @@ export async function updateBaseItem(
     cardBgColor?: string;
     stockTrackingMode?: string;
     mealTypes?: string[];
-  }
+  },
 ): Promise<UpdateResult> {
   return updateItemOverride({
     menuItemId,
@@ -1287,7 +1343,7 @@ export async function updateLocationItemOverride(
     isAvailable?: boolean;
     stockTrackingMode?: string;
     currentStock?: number | null;
-  }
+  },
 ): Promise<UpdateResult> {
   return updateItemOverride({
     menuItemId,
@@ -1318,7 +1374,7 @@ export async function updateCategoryItemFull(
     isAvailable?: boolean;
     isFeatured?: boolean;
     displayOrder?: number;
-  }
+  },
 ): Promise<UpdateResult> {
   return updateItemOverride({
     menuItemId,
@@ -1348,7 +1404,7 @@ export async function updateLocationCategoryItemOverride(
     isAvailable?: boolean;
     displayOrder?: number;
     isFeatured?: boolean;
-  }
+  },
 ): Promise<UpdateResult> {
   return updateItemOverride({
     menuItemId,
@@ -1378,7 +1434,7 @@ export async function updateLocationMenuCategoryItemOverride(
     customCashPrice?: number | null;
     isAvailable?: boolean;
     displayOrder?: number;
-  }
+  },
 ): Promise<UpdateResult> {
   return updateItemOverride({
     menuItemId,
@@ -1409,7 +1465,7 @@ export async function batchUpdateItems(
     cashPrice?: number | null;
     availability?: boolean;
     displayOrder?: number;
-  }>
+  }>,
 ): Promise<{ success: boolean; results: UpdateResult[]; errors: string[] }> {
   const results: UpdateResult[] = [];
   const errors: string[] = [];
@@ -1435,7 +1491,7 @@ export async function batchUpdateItems(
       errors.push(
         `Item ${update.menuItemId}: ${
           err instanceof Error ? err.message : "Unknown error"
-        }`
+        }`,
       );
     }
   }
@@ -1458,7 +1514,7 @@ export async function toggleItemAvailabilityInCategory(
   options?: {
     menuId?: string | null;
     locationId?: string | null;
-  }
+  },
 ): Promise<UpdateResult> {
   return updateItemOverride({
     menuItemId,
@@ -1481,7 +1537,7 @@ export async function addItemToCategoryWithPrice(
     displayOrder?: number;
     isFeatured?: boolean;
     merchant_id: string;
-  }
+  },
 ): Promise<UpdateResult> {
   const supabase = await createServerSupabaseClient();
 

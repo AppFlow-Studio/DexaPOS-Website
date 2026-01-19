@@ -5,6 +5,7 @@ import {
   ModifierGroupsModel,
   ModifierGroupItemsModel,
 } from "@/types/db-modles";
+import { LogAuditEvent } from "./audit-logs";
 
 // ============================================================================
 // GET OPERATIONS - MODIFIER GROUPS
@@ -12,7 +13,7 @@ import {
 
 export async function GetModifierGroups(
   clerkOrgId: string,
-  locationId?: string | null
+  locationId?: string | null,
 ) {
   if (!clerkOrgId) {
     return [];
@@ -59,7 +60,7 @@ export async function GetModifierGroups(
                 is_active,
                 location_id
             )
-        `
+        `,
     )
     .eq("merchant_id", merchant.id);
 
@@ -70,11 +71,11 @@ export async function GetModifierGroups(
     // Also filter location_override to current location
     query = query.eq(
       "location_modifier_group_overrides.location_id",
-      locationId
+      locationId,
     );
     query = query.eq(
       "modifier_group_items.location_modifier_item_overrides.location_id",
-      locationId
+      locationId,
     );
   }
 
@@ -123,7 +124,7 @@ export async function GetModifierGroup(modifierGroupId: string) {
       `
             *,
             modifier_group_items(*)
-        `
+        `,
     )
     .eq("id", modifierGroupId)
     .single();
@@ -161,7 +162,7 @@ export async function CreateModifierGroup(
       is_default?: boolean;
       merchant_id: string;
     }>;
-  }
+  },
 ) {
   if (!clerkOrgId) {
     return { error: "Organization ID is required" };
@@ -217,7 +218,7 @@ export async function CreateModifierGroup(
         defaultOptions.length > 0
           ? opt === defaultOptions[0] ||
             (opt.id && opt.id === defaultOptions[0]?.id)
-          : opt.is_default ?? false,
+          : (opt.is_default ?? false),
       merchant_id: opt.merchant_id,
     }));
 
@@ -233,6 +234,22 @@ export async function CreateModifierGroup(
       };
     }
   }
+
+  // Log audit event
+  await LogAuditEvent({
+    merchantId: merchant.id,
+    action: `Created Modifier Group: ${data.name}`,
+    actionCategory: "menu",
+    resourceType: "modifier_group",
+    resourceId: modifierGroup.id,
+    resourceName: data.name,
+    locationId: data.location_id || undefined,
+    metadata: {
+      is_required: data.is_required,
+      options_count: data.options?.length || 0,
+    },
+    changes: { after: data as Record<string, unknown> },
+  });
 
   return { data: modifierGroup as ModifierGroupsModel };
 }
@@ -251,7 +268,8 @@ export async function UpdateModifierGroup(
     max_selections?: number | null;
     display_order?: number;
     location_id?: string | null;
-  }
+  },
+  locationId?: string | null,
 ) {
   if (!modifierGroupId) {
     return { error: "Modifier Group ID is required" };
@@ -283,6 +301,20 @@ export async function UpdateModifierGroup(
     return { error: error.message };
   }
 
+  // Fetch current details for better log context might be expensive, but we have partial data.
+  // We'll rely on updateData.
+
+  await LogAuditEvent({
+    merchantId: modifierGroup.merchant_id,
+    action: `Updated Modifier Group: ${modifierGroup.name}`,
+    actionCategory: "menu",
+    resourceType: "modifier_group",
+    resourceId: modifierGroupId,
+    resourceName: modifierGroup.name,
+    locationId: locationId || modifierGroup.location_id,
+    changes: { after: updateData },
+  });
+
   return { data: modifierGroup as ModifierGroupsModel };
 }
 
@@ -290,7 +322,10 @@ export async function UpdateModifierGroup(
 // DELETE OPERATIONS - MODIFIER GROUPS
 // ============================================================================
 
-export async function DeleteModifierGroup(modifierGroupId: string) {
+export async function DeleteModifierGroup(
+  modifierGroupId: string,
+  locationId?: string | null,
+) {
   if (!modifierGroupId) {
     return { error: "Modifier Group ID is required" };
   }
@@ -300,16 +335,18 @@ export async function DeleteModifierGroup(modifierGroupId: string) {
   // Check if this is a location-specific group and if it's in use
   const { data: group } = await supabase
     .from("modifier_groups")
-    .select("location_id")
+    .select("location_id, name, merchant_id")
     .eq("id", modifierGroupId)
     .single();
 
   // If location-specific, check usage count
   if (group?.location_id) {
-    const { count } = await supabase
+    const { data: usage } = await supabase
       .from("menu_item_modifier_groups")
-      .select("*", { count: "exact", head: true })
+      .select("id")
       .eq("modifier_group_id", modifierGroupId);
+
+    const count = usage?.length || 0;
 
     if (count && count > 0) {
       return {
@@ -329,6 +366,20 @@ export async function DeleteModifierGroup(modifierGroupId: string) {
     return { error: error.message };
   }
 
+  // Fetch details for audit log before deletion (group is already fetched above but let's be safe if logic changes)
+  // We used 'group' variable earlier for check.
+  if (group) {
+    await LogAuditEvent({
+      merchantId: group.merchant_id,
+      action: `Deleted Modifier Group: ${group.name}`,
+      actionCategory: "menu",
+      resourceType: "modifier_group",
+      resourceId: modifierGroupId,
+      resourceName: group.name,
+      locationId: locationId || group.location_id,
+    });
+  }
+
   return { success: true };
 }
 
@@ -346,7 +397,8 @@ export async function CreateModifierGroupItem(
     is_active?: boolean;
     is_default?: boolean;
     merchant_id: string;
-  }
+  },
+  locationId?: string | null,
 ) {
   if (!modifierGroupId) {
     return { error: "Modifier Group ID is required" };
@@ -387,6 +439,21 @@ export async function CreateModifierGroupItem(
     return { error: error.message };
   }
 
+  // Log audit event
+  await LogAuditEvent({
+    merchantId: data.merchant_id,
+    action: `Created Modifier Option: ${data.name}`,
+    actionCategory: "menu",
+    resourceType: "modifier_group",
+    resourceId: modifierGroupId,
+    resourceName: data.name,
+    locationId: locationId,
+    metadata: {
+      option_id: item.id,
+      price_modifier: data.price_modifier,
+    },
+  });
+
   return { data: item as ModifierGroupItemsModel };
 }
 
@@ -403,7 +470,8 @@ export async function UpdateModifierGroupItem(
     display_order?: number;
     is_active?: boolean;
     is_default?: boolean;
-  }
+  },
+  locationId?: string | null,
 ) {
   if (!itemId) {
     return { error: "Item ID is required" };
@@ -455,6 +523,20 @@ export async function UpdateModifierGroupItem(
     return { error: error.message };
   }
 
+  await LogAuditEvent({
+    merchantId: item.merchant_id,
+    action: `Updated Modifier Option: ${item.name}`,
+    actionCategory: "menu",
+    resourceType: "modifier_group",
+    resourceId: item.modifier_group_id,
+    resourceName: item.name,
+    locationId: locationId,
+    metadata: {
+      option_id: itemId,
+    },
+    changes: { after: updateData },
+  });
+
   return { data: item as ModifierGroupItemsModel };
 }
 
@@ -467,18 +549,23 @@ export async function UpdateModifierGroupItem(
  * We use soft delete because modifier items may be referenced by historical orders
  * in the order_item_modifiers table, and hard deleting would violate foreign key constraints.
  */
-export async function DeleteModifierGroupItem(itemId: string) {
+export async function DeleteModifierGroupItem(
+  itemId: string,
+  locationId?: string | null,
+) {
   if (!itemId) {
     return { error: "Item ID is required" };
   }
 
   const supabase = createServerSupabaseClient();
 
-  // First, check if this item is referenced in any orders
-  const { count: orderReferenceCount } = await supabase
+  // First, check if this is referenced in any orders
+  const { data: refs } = await supabase
     .from("order_item_modifiers")
-    .select("*", { count: "exact", head: true })
+    .select("id")
     .eq("modifier_item_id", itemId);
+
+  const orderReferenceCount = refs?.length || 0;
 
   // If referenced in orders, we MUST soft delete
   if (orderReferenceCount && orderReferenceCount > 0) {
@@ -498,6 +585,24 @@ export async function DeleteModifierGroupItem(itemId: string) {
       return { error: error.message };
     }
 
+    // Log audit event (Soft Delete)
+    if (item) {
+      await LogAuditEvent({
+        merchantId: item.merchant_id,
+        action: `Deactivated Modifier Option (In Use): ${item.name}`,
+        actionCategory: "menu",
+        resourceType: "modifier_group",
+        resourceId: item.modifier_group_id,
+        resourceName: item.name,
+        locationId: locationId,
+        metadata: {
+          option_id: itemId,
+          soft_deleted: true,
+          order_reference_count: orderReferenceCount,
+        },
+      });
+    }
+
     return {
       success: true,
       softDeleted: true,
@@ -505,6 +610,13 @@ export async function DeleteModifierGroupItem(itemId: string) {
       data: item,
     };
   }
+
+  // Fetch item details before hard delete for context
+  const { data: itemToDelete } = await supabase
+    .from("modifier_group_items")
+    .select("name, merchant_id, modifier_group_id")
+    .eq("id", itemId)
+    .single();
 
   // No order references - safe to hard delete
   const { error } = await supabase
@@ -530,6 +642,24 @@ export async function DeleteModifierGroupItem(itemId: string) {
         return { error: softError.message };
       }
 
+      // Log audit event (Fallback Soft Delete)
+      if (item) {
+        await LogAuditEvent({
+          merchantId: item.merchant_id,
+          action: `Deactivated Modifier Option (Fallback): ${item.name}`,
+          actionCategory: "menu",
+          resourceType: "modifier_group",
+          resourceId: item.modifier_group_id,
+          resourceName: item.name,
+          locationId: locationId,
+          metadata: {
+            option_id: itemId,
+            soft_deleted: true,
+            reason: "foreign_key_violation",
+          },
+        });
+      }
+
       return {
         success: true,
         softDeleted: true,
@@ -538,6 +668,22 @@ export async function DeleteModifierGroupItem(itemId: string) {
       };
     }
     return { error: error.message };
+  }
+
+  // Log audit event (Hard Delete)
+  if (itemToDelete) {
+    await LogAuditEvent({
+      merchantId: itemToDelete.merchant_id,
+      action: `Deleted Modifier Option: ${itemToDelete.name}`,
+      actionCategory: "menu",
+      resourceType: "modifier_group",
+      resourceId: itemToDelete.modifier_group_id,
+      resourceName: itemToDelete.name,
+      locationId: locationId,
+      metadata: {
+        option_id: itemId,
+      },
+    });
   }
 
   return { success: true, softDeleted: false };

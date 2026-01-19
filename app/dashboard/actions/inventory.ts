@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { InventoryItemWithVendor, StockMode } from "@/types/inventory";
+import { LogAuditEvent } from "./audit-logs";
 
 // ============================================================================
 // TYPES
@@ -76,7 +77,7 @@ export interface PurchaseOrderWithDetails {
  */
 export async function GetInventoryItems(
   clerkOrgId: string,
-  locationId?: string | null
+  locationId?: string | null,
 ): Promise<InventoryItemWithVendor[]> {
   if (!clerkOrgId) return [];
 
@@ -102,7 +103,7 @@ export async function GetInventoryItems(
       `
             *,
             vendor:vendors!vendor_id(id, name)
-        `
+        `,
     )
     .eq("merchant_id", merchant.id)
     .order("name");
@@ -141,7 +142,7 @@ export async function GetInventoryItems(
       .in("inventory_item_id", itemIds);
 
     const stockMap = new Map(
-      (stockData || []).map((s) => [s.inventory_item_id, s])
+      (stockData || []).map((s) => [s.inventory_item_id, s]),
     );
 
     // Get location cost overrides (direct overrides, no vendor)
@@ -152,7 +153,7 @@ export async function GetInventoryItems(
       .in("inventory_item_id", itemIds);
 
     const overrideMap = new Map(
-      (overrideData || []).map((o) => [o.inventory_item_id, o])
+      (overrideData || []).map((o) => [o.inventory_item_id, o]),
     );
 
     // Get vendor pricing overrides
@@ -163,7 +164,7 @@ export async function GetInventoryItems(
       .in("inventory_item_id", itemIds);
 
     const vendorPricingMap = new Map(
-      (vendorPricingData || []).map((p) => [p.inventory_item_id, p.unit_cost])
+      (vendorPricingData || []).map((p) => [p.inventory_item_id, p.unit_cost]),
     );
 
     // Transform items with location context
@@ -206,7 +207,7 @@ export async function GetInventoryItems(
   const { data: allStockData } = await supabase
     .from("location_inventory_stock")
     .select(
-      "inventory_item_id, stock_quantity, reorder_threshold, location_id"
+      "inventory_item_id, stock_quantity, reorder_threshold, location_id",
     );
 
   // Get item reorder thresholds
@@ -214,7 +215,7 @@ export async function GetInventoryItems(
     data.map((item) => [
       item.id,
       item.reorder_threshold ?? item.reorder_point ?? 0,
-    ])
+    ]),
   );
 
   // Aggregate by item - track status breakdown per location
@@ -298,7 +299,7 @@ export async function CreateInventoryItem(
     cost_per_unit?: number;
     vendor_id?: string;
     location_id?: string | null;
-  }
+  },
 ) {
   if (!clerkOrgId) return { error: "Organization ID is required" };
 
@@ -342,6 +343,18 @@ export async function CreateInventoryItem(
     return { error: error.message };
   }
 
+  // Log audit event
+  await LogAuditEvent({
+    merchantId: merchant.id,
+    action: `Created Inventory Item: ${data.name}`,
+    actionCategory: "inventory",
+    resourceType: "inventory_item",
+    resourceId: item.id,
+    resourceName: data.name,
+    locationId: locationId || undefined,
+    changes: { after: data as any },
+  });
+
   return { data: item };
 }
 
@@ -360,7 +373,7 @@ export async function UpdateInventoryItem(
     reorder_point?: number;
     cost_per_unit?: number;
     vendor_id?: string | null;
-  }
+  },
 ) {
   if (!itemId) return { error: "Item ID is required" };
 
@@ -393,6 +406,29 @@ export async function UpdateInventoryItem(
     console.error("Error updating inventory item:", error);
     return { error: error.message };
   }
+
+  // Log audit event
+  // Fetch item name if not provided (for resourceName)
+  let itemName = data.name;
+  if (!itemName) {
+    const { data: currentItem } = await supabase
+      .from("inventory_items")
+      .select("name")
+      .eq("id", itemId)
+      .single();
+    itemName = currentItem?.name;
+  }
+
+  await LogAuditEvent({
+    merchantId: item.merchant_id,
+    action: `Updated Inventory Item: ${itemName || "Item"}`,
+    actionCategory: "inventory",
+    resourceType: "inventory_item",
+    resourceId: itemId,
+    resourceName: itemName || "Unknown Item",
+    locationId: item.location_id,
+    changes: { after: updateData },
+  });
 
   return { data: item };
 }
@@ -464,6 +500,13 @@ export async function DeleteInventoryItem(itemId: string) {
     return { error: "Failed to remove item from modifier recipes" };
   }
 
+  // Fetch item details before hard delete for context
+  const { data: itemToDelete } = await supabase
+    .from("inventory_items")
+    .select("name, merchant_id, location_id")
+    .eq("id", itemId)
+    .single();
+
   // 3. Delete the item
   const { error } = await supabase
     .from("inventory_items")
@@ -473,6 +516,19 @@ export async function DeleteInventoryItem(itemId: string) {
   if (error) {
     console.error("Error deleting inventory item:", error);
     return { error: error.message };
+  }
+
+  // Log audit event
+  if (itemToDelete) {
+    await LogAuditEvent({
+      merchantId: itemToDelete.merchant_id,
+      action: `Deleted Inventory Item: ${itemToDelete.name}`,
+      actionCategory: "inventory",
+      resourceType: "inventory_item",
+      resourceId: itemId,
+      resourceName: itemToDelete.name,
+      locationId: itemToDelete.location_id,
+    });
   }
 
   return { success: true };
@@ -501,6 +557,22 @@ export async function UpdateItemStock(itemId: string, currentStock: number) {
     return { error: error.message };
   }
 
+  // Log audit event
+  if (item) {
+    await LogAuditEvent({
+      merchantId: item.merchant_id,
+      action: `Updated Stock for: ${item.name} -> ${currentStock}`,
+      actionCategory: "inventory",
+      resourceType: "inventory_item",
+      resourceId: itemId,
+      resourceName: item.name,
+      locationId: item.location_id,
+      changes: {
+        after: { current_stock: currentStock },
+      },
+    });
+  }
+
   return { data: item };
 }
 
@@ -515,7 +587,7 @@ export async function UpdateItemStock(itemId: string, currentStock: number) {
  */
 export async function GetVendors(
   clerkOrgId: string,
-  locationId?: string | null
+  locationId?: string | null,
 ): Promise<VendorWithStats[]> {
   if (!clerkOrgId) return [];
 
@@ -601,7 +673,7 @@ export async function CreateVendor(
     state?: string;
     zip_code?: string;
     location_id?: string | null;
-  }
+  },
 ) {
   if (!clerkOrgId) return { error: "Organization ID is required" };
 
@@ -644,6 +716,18 @@ export async function CreateVendor(
     return { error: error.message };
   }
 
+  // Log audit event
+  await LogAuditEvent({
+    merchantId: merchant.id,
+    action: `Created Vendor: ${data.name}`,
+    actionCategory: "inventory",
+    resourceType: "vendor",
+    resourceId: vendor.id,
+    resourceName: data.name,
+    locationId: locationId || undefined,
+    changes: { after: data as Record<string, unknown> },
+  });
+
   return { data: vendor };
 }
 
@@ -661,7 +745,7 @@ export async function UpdateVendor(
     city?: string;
     state?: string;
     zip_code?: string;
-  }
+  },
 ) {
   if (!vendorId) return { error: "Vendor ID is required" };
 
@@ -674,10 +758,17 @@ export async function UpdateVendor(
     .select()
     .single();
 
-  if (error) {
-    console.error("Error updating vendor:", error);
-    return { error: error.message };
-  }
+  // Log audit event
+  await LogAuditEvent({
+    merchantId: vendor.merchant_id,
+    action: `Updated Vendor: ${vendor.name}`,
+    actionCategory: "inventory",
+    resourceType: "vendor",
+    resourceId: vendorId,
+    resourceName: vendor.name,
+    locationId: vendor.location_id,
+    changes: { after: data as Record<string, unknown> },
+  });
 
   return { data: vendor };
 }
@@ -690,11 +781,31 @@ export async function DeleteVendor(vendorId: string) {
 
   const supabase = createServerSupabaseClient();
 
+  // Fetch vendor details before delete
+  const { data: vendorToDelete } = await supabase
+    .from("vendors")
+    .select("name, merchant_id, location_id")
+    .eq("id", vendorId)
+    .single();
+
   const { error } = await supabase.from("vendors").delete().eq("id", vendorId);
 
   if (error) {
     console.error("Error deleting vendor:", error);
     return { error: error.message };
+  }
+
+  // Log audit event
+  if (vendorToDelete) {
+    await LogAuditEvent({
+      merchantId: vendorToDelete.merchant_id,
+      action: `Deleted Vendor: ${vendorToDelete.name}`,
+      actionCategory: "inventory",
+      resourceType: "vendor",
+      resourceId: vendorId,
+      resourceName: vendorToDelete.name,
+      locationId: vendorToDelete.location_id,
+    });
   }
 
   return { success: true };
@@ -709,7 +820,7 @@ export async function DeleteVendor(vendorId: string) {
  */
 export async function GetPurchaseOrders(
   clerkOrgId: string,
-  locationId?: string | null
+  locationId?: string | null,
 ): Promise<PurchaseOrderWithDetails[]> {
   if (!clerkOrgId) return [];
 
@@ -747,7 +858,7 @@ export async function GetPurchaseOrders(
                 item_category,
                 inventory_item:inventory_items(id, name, unit_type)
             )
-        `
+        `,
     )
     .eq("merchant_id", merchant.id)
     .order("created_at", { ascending: false });
@@ -774,7 +885,7 @@ export async function GetPurchaseOrders(
         inventory_item: Array.isArray(item.inventory_item)
           ? item.inventory_item[0]
           : item.inventory_item,
-      })
+      }),
     ),
   }));
 }
@@ -792,7 +903,7 @@ export async function CreatePurchaseOrder(
       quantity_ordered: number;
       unit_cost: number;
     }>;
-  }
+  },
 ) {
   if (!clerkOrgId) return { error: "Organization ID is required" };
   if (!data.location_id || data.location_id === "all") {
@@ -826,7 +937,7 @@ export async function CreatePurchaseOrder(
   // Calculate total
   const total = data.items.reduce(
     (sum, item) => sum + item.quantity_ordered * item.unit_cost,
-    0
+    0,
   );
 
   // Create PO (po_number is auto-generated by trigger)
@@ -876,6 +987,45 @@ export async function CreatePurchaseOrder(
     return { error: itemsError.message };
   }
 
+  // Fetch vendor and location names for audit log
+  let vendorName = "Unknown";
+  let locationName = "Unknown";
+
+  if (data.vendor_id) {
+    const { data: v } = await supabase
+      .from("vendors")
+      .select("name")
+      .eq("id", data.vendor_id)
+      .single();
+    if (v) vendorName = v.name;
+  }
+  if (data.location_id) {
+    const { data: l } = await supabase
+      .from("locations")
+      .select("name")
+      .eq("id", data.location_id)
+      .single();
+    if (l) locationName = l.name;
+  }
+
+  // Log audit event
+  await LogAuditEvent({
+    merchantId: merchant.id,
+    action: `Created Purchase Order for ${vendorName}`,
+    actionCategory: "inventory",
+    resourceType: "purchase_order",
+    resourceId: po.id,
+    resourceName: `PO-${po.po_number || "Draft"}`,
+    locationId: data.location_id,
+    metadata: {
+      vendor_name: vendorName,
+      location_name: locationName,
+      total_amount: total,
+      item_count: data.items.length,
+    },
+    changes: { after: { itemsToInsert, ...data } },
+  });
+
   return { data: po };
 }
 
@@ -885,7 +1035,7 @@ export async function CreatePurchaseOrder(
 export async function UpdatePurchaseOrderStatus(
   poId: string,
   newStatus: "pending" | "received" | "paid" | "cancelled",
-  receivedQuantities?: Record<string, number>
+  receivedQuantities?: Record<string, number>,
 ) {
   if (!poId) return { error: "PO ID is required" };
 
@@ -894,7 +1044,7 @@ export async function UpdatePurchaseOrderStatus(
   // Get current PO
   const { data: po, error: fetchError } = await supabase
     .from("purchase_orders")
-    .select("status, location_id")
+    .select("status, location_id, vendor_id, merchant_id")
     .eq("id", poId)
     .single();
 
@@ -970,13 +1120,13 @@ export async function UpdatePurchaseOrderStatus(
             p_location_id: po.location_id,
             p_inventory_item_id: item.inventory_item_id,
             p_quantity: item.quantity_received,
-          }
+          },
         );
 
         if (stockError) {
           console.error(
             `Error incrementing stock for item ${item.inventory_item_id}:`,
-            stockError
+            stockError,
           );
           // Continue with other items, don't fail the whole operation
         }
@@ -986,9 +1136,34 @@ export async function UpdatePurchaseOrderStatus(
     console.log(
       `✅ Auto-incremented stock for ${
         poItems?.length || 0
-      } items at location ${po.location_id}`
+      } items at location ${po.location_id}`,
     );
   }
+
+  // Log audit event
+  const { data: vendor } = await supabase
+    .from("vendors")
+    .select("name")
+    .eq("id", po.vendor_id || "") // Handle null vendor_id safely
+    .single();
+
+  await LogAuditEvent({
+    merchantId: updated.merchant_id,
+    action: `Updated PO Status: ${po.status} -> ${newStatus}`,
+    actionCategory: "inventory",
+    resourceType: "purchase_order",
+    resourceId: poId,
+    resourceName: `PO-${updated.po_number || "Draft"}`,
+    locationId: updated.location_id,
+    metadata: {
+      vendor_name: vendor?.name || "Unknown",
+      new_status: newStatus,
+    },
+    changes: {
+      before: { status: po.status },
+      after: { status: newStatus },
+    },
+  });
 
   return { data: updated };
 }
@@ -1004,7 +1179,7 @@ export async function DeletePurchaseOrder(poId: string) {
   // Check status
   const { data: po } = await supabase
     .from("purchase_orders")
-    .select("status")
+    .select("status, merchant_id, location_id")
     .eq("id", poId)
     .single();
 
@@ -1022,6 +1197,18 @@ export async function DeletePurchaseOrder(poId: string) {
     return { error: error.message };
   }
 
+  // Log audit event
+  if (po) {
+    await LogAuditEvent({
+      merchantId: po.merchant_id,
+      action: `Deleted Draft PO`, // Only drafts can be deleted
+      actionCategory: "inventory",
+      resourceType: "purchase_order",
+      resourceId: poId,
+      locationId: po.location_id,
+    });
+  }
+
   return { success: true };
 }
 
@@ -1031,7 +1218,7 @@ export async function DeletePurchaseOrder(poId: string) {
 
 export async function GetInventoryStats(
   clerkOrgId: string,
-  locationId?: string | null
+  locationId?: string | null,
 ) {
   if (!clerkOrgId) return null;
 
@@ -1081,7 +1268,7 @@ export async function GetInventoryStats(
 
     // Build a map of item_id -> stock record
     const stockMap = new Map(
-      (stockData || []).map((s) => [s.inventory_item_id, s])
+      (stockData || []).map((s) => [s.inventory_item_id, s]),
     );
 
     // Get cost overrides for this location
@@ -1092,7 +1279,7 @@ export async function GetInventoryStats(
       .in("inventory_item_id", itemIds);
 
     const overrideMap = new Map(
-      (overrides || []).map((o) => [o.inventory_item_id, o.custom_cost])
+      (overrides || []).map((o) => [o.inventory_item_id, o.custom_cost]),
     );
 
     // Get vendor count
@@ -1145,7 +1332,7 @@ export async function GetInventoryStats(
   const { data: allStockData } = await supabase
     .from("location_inventory_stock")
     .select(
-      "inventory_item_id, stock_quantity, reorder_threshold, location_id"
+      "inventory_item_id, stock_quantity, reorder_threshold, location_id",
     );
 
   // Get all locations for this merchant

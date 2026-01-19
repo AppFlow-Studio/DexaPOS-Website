@@ -325,7 +325,7 @@ function getEditingContext(
   isAllLocations: boolean,
   menuId: string | null | undefined,
   categoryId: string | null | undefined,
-  isMenuLocationOwned: boolean | undefined
+  isMenuLocationOwned: boolean | undefined,
 ): EditingContext {
   // Items Library + All Locations + No Category = Level 1 (Global Base)
   if (!menuId && !categoryId && isAllLocations) {
@@ -502,7 +502,7 @@ function EditingContextIndicator({ context }: { context: EditingContext }) {
           "flex items-center gap-2 px-3 py-2 rounded-lg border transition-all cursor-help hover:shadow-sm",
           levelInfo.bgColor,
           levelInfo.borderColor,
-          levelInfo.color
+          levelInfo.color,
         )}
         onMouseEnter={() => setIsOpen(true)}
         onMouseLeave={() => setIsOpen(false)}
@@ -525,7 +525,7 @@ function EditingContextIndicator({ context }: { context: EditingContext }) {
               <div
                 className={cn(
                   "h-9 w-9 rounded-lg flex items-center justify-center shrink-0",
-                  levelInfo.bgColor
+                  levelInfo.bgColor,
                 )}
               >
                 <Icon className={cn("h-4 w-4", levelInfo.color)} />
@@ -573,9 +573,9 @@ function EditingContextIndicator({ context }: { context: EditingContext }) {
                               info.borderColor,
                               "border",
                               info.color,
-                              "font-medium"
+                              "font-medium",
                             )
-                          : "bg-muted/30 text-muted-foreground"
+                          : "bg-muted/30 text-muted-foreground",
                       )}
                     >
                       <LevelIcon className="h-3 w-3" />
@@ -626,7 +626,7 @@ function ModifierGroupSearchList({
     return availableGroups.filter(
       (group) =>
         group.name.toLowerCase().includes(query) ||
-        group.description?.toLowerCase().includes(query)
+        group.description?.toLowerCase().includes(query),
     );
   }, [availableGroups, searchQuery]);
 
@@ -743,10 +743,10 @@ export function NewEditItemFormSheet({
   const taxRates = taxRatesData?.data || [];
 
   const [selectedCategories, setSelectedCategories] = React.useState<string[]>(
-    []
+    [],
   );
   const [selectedModifiers, setSelectedModifiers] = React.useState<string[]>(
-    []
+    [],
   );
   const [activeTab, setActiveTab] = React.useState("general");
   const [expandedSections, setExpandedSections] = React.useState({
@@ -775,9 +775,9 @@ export function NewEditItemFormSheet({
         isAllLocations,
         menuId,
         categoryId,
-        isMenuLocationOwned
+        isMenuLocationOwned,
       ),
-    [isAllLocations, menuId, categoryId, isMenuLocationOwned]
+    [isAllLocations, menuId, categoryId, isMenuLocationOwned],
   );
 
   // Get current location name
@@ -911,7 +911,7 @@ export function NewEditItemFormSheet({
         setSelectedCategories(
           categoryData
             .map((c: any) => c.category_id || c.category?.id)
-            .filter(Boolean)
+            .filter(Boolean),
         );
       }
       if (editItem.menu_item_modifier_groups) {
@@ -924,7 +924,7 @@ export function NewEditItemFormSheet({
               // 3. { id: "xxx", name: "..." } - the group itself
               return m.modifier_group_id || m.modifier_group?.id || m.id;
             })
-            .filter(Boolean)
+            .filter(Boolean),
         );
       }
     } else {
@@ -954,7 +954,7 @@ export function NewEditItemFormSheet({
     setSelectedCategories((prev) =>
       prev.includes(categoryId)
         ? prev.filter((id) => id !== categoryId)
-        : [...prev, categoryId]
+        : [...prev, categoryId],
     );
   };
 
@@ -963,7 +963,7 @@ export function NewEditItemFormSheet({
     setSelectedModifiers((prev) =>
       prev.includes(modifierId)
         ? prev.filter((id) => id !== modifierId)
-        : [...prev, modifierId]
+        : [...prev, modifierId],
     );
   };
 
@@ -972,7 +972,7 @@ export function NewEditItemFormSheet({
     if (current.includes(allergen)) {
       form.setValue(
         "allergens",
-        current.filter((a) => a !== allergen)
+        current.filter((a) => a !== allergen),
       );
     } else {
       form.setValue("allergens", [...current, allergen]);
@@ -995,7 +995,7 @@ export function NewEditItemFormSheet({
           categoryId: categoryId || null,
           menuId: menuId || null,
           locationId: isAllLocations ? null : selectedLocationId,
-        }
+        },
       );
 
       if (!result.success) {
@@ -1084,22 +1084,26 @@ export function NewEditItemFormSheet({
         result = await updateItemOverride(updateParams);
       } else {
         // Create new item (always Level 1 - global)
-        result = await CreateMenuItem(clerkOrgId, {
-          name: values.name,
-          description: values.description,
-          price: values.price,
-          cash_price: values.cash_price ?? undefined,
-          image: values.image_url ?? undefined,
-          availability: values.availability,
-          allergens: values.allergens,
-          card_bg_color: values.card_bg_color ?? undefined,
-          modifier_group_ids: selectedModifiers,
-          stock_tracking_mode: values.stock_tracking_mode,
-          // Tax & Inventory Control fields (migration 014)
-          tax_category: values.tax_category,
-          is_tax_exempt: values.is_tax_exempt,
-          available_channels: values.available_channels,
-        });
+        result = await CreateMenuItem(
+          clerkOrgId,
+          {
+            name: values.name,
+            description: values.description,
+            price: values.price,
+            cash_price: values.cash_price ?? undefined,
+            image: values.image_url ?? undefined,
+            availability: values.availability,
+            allergens: values.allergens,
+            card_bg_color: values.card_bg_color ?? undefined,
+            modifier_group_ids: selectedModifiers,
+            stock_tracking_mode: values.stock_tracking_mode,
+            // Tax & Inventory Control fields (migration 014)
+            tax_category: values.tax_category,
+            is_tax_exempt: values.is_tax_exempt,
+            available_channels: values.available_channels,
+          },
+          selectedLocationId,
+        );
       }
 
       if (result.error) {
@@ -1280,7 +1284,7 @@ export function NewEditItemFormSheet({
                     editingContext.level === 4 &&
                       "bg-amber-100 text-amber-700 border-amber-300",
                     editingContext.level === 5 &&
-                      "bg-green-100 text-green-700 border-green-300"
+                      "bg-green-100 text-green-700 border-green-300",
                   )}
                 >
                   {editingContext.level === 1 && <Globe className="h-3 w-3" />}
@@ -1493,7 +1497,7 @@ export function NewEditItemFormSheet({
                                     "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
                                     watchedValues.allergens?.includes(allergen)
                                       ? "bg-orange-500 text-white border-orange-500 shadow-md"
-                                      : "bg-background border-border hover:border-orange-500/50"
+                                      : "bg-background border-border hover:border-orange-500/50",
                                   )}
                                 >
                                   {allergen}
@@ -1562,7 +1566,7 @@ export function NewEditItemFormSheet({
                             editingContext.level === 4 &&
                               "bg-amber-100 text-amber-700",
                             editingContext.level === 5 &&
-                              "bg-green-100 text-green-700"
+                              "bg-green-100 text-green-700",
                           )}
                         >
                           {editingContext.priceLabel}
@@ -1594,13 +1598,13 @@ export function NewEditItemFormSheet({
                                     className={cn(
                                       "pl-7",
                                       editingContext.level > 1 &&
-                                        "border-blue-300 focus:ring-blue-500"
+                                        "border-blue-300 focus:ring-blue-500",
                                     )}
                                     placeholder="0.00"
                                     {...field}
                                     onChange={(e) =>
                                       field.onChange(
-                                        parseFloat(e.target.value) || 0
+                                        parseFloat(e.target.value) || 0,
                                       )
                                     }
                                   />
@@ -1633,7 +1637,7 @@ export function NewEditItemFormSheet({
                                       field.onChange(
                                         e.target.value
                                           ? parseFloat(e.target.value)
-                                          : null
+                                          : null,
                                       )
                                     }
                                   />
@@ -1661,7 +1665,7 @@ export function NewEditItemFormSheet({
                           <RotateCcw
                             className={cn(
                               "h-4 w-4",
-                              isResetting && "animate-spin"
+                              isResetting && "animate-spin",
                             )}
                           />
                           {editingContext.resetLabel}
@@ -1774,12 +1778,12 @@ export function NewEditItemFormSheet({
                             const existingAssignment =
                               editItem?.menu_item_modifier_groups?.find(
                                 (g: any) =>
-                                  g.modifier_group_id === id || g.id === id
+                                  g.modifier_group_id === id || g.id === id,
                               );
 
                             // 2. Find base group data from global list
                             const baseGroup = modifierGroups.find(
-                              (g) => g.id === id
+                              (g) => g.id === id,
                             );
 
                             if (!baseGroup && !existingAssignment) return null;
@@ -1822,12 +1826,12 @@ export function NewEditItemFormSheet({
 
                         // Get IDs of selected groups
                         const selectedGroupIds = selectedGroups.map(
-                          (g: any) => g.id
+                          (g: any) => g.id,
                         );
 
                         // Available groups are ones not in selectedGroupIds
                         const availableGroups = modifierGroups.filter(
-                          (g) => !selectedGroupIds.includes(g.id)
+                          (g) => !selectedGroupIds.includes(g.id),
                         );
 
                         return (
@@ -1932,7 +1936,7 @@ export function NewEditItemFormSheet({
                                               </div>
                                               {group.modifier_group_items.map(
                                                 (
-                                                  item: FlatItem["modifier_groups"][number]["items"][number]
+                                                  item: FlatItem["modifier_groups"][number]["items"][number],
                                                 ) => {
                                                   const itemOverride =
                                                     item.location_override;
@@ -1996,7 +2000,7 @@ export function NewEditItemFormSheet({
                                                                 "h-2 w-2 rounded-full",
                                                                 isActive
                                                                   ? "bg-green-500"
-                                                                  : "bg-gray-300"
+                                                                  : "bg-gray-300",
                                                               )}
                                                             />
                                                             <span className="text-sm">
@@ -2009,13 +2013,13 @@ export function NewEditItemFormSheet({
                                                       </div>
                                                     </div>
                                                   );
-                                                }
+                                                },
                                               )}
                                             </div>
                                           )}
                                       </div>
                                     );
-                                  }
+                                  },
                                 )}
                               </div>
                             )}
@@ -2037,13 +2041,13 @@ export function NewEditItemFormSheet({
                                             "w-full p-3 rounded-lg border-2 border-dashed transition-all flex items-center justify-center gap-2",
                                             showAddModifier
                                               ? "border-primary bg-primary/5 text-primary"
-                                              : "border-muted-foreground/30 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5"
+                                              : "border-muted-foreground/30 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5",
                                           )}
                                         >
                                           <Plus
                                             className={cn(
                                               "h-4 w-4 transition-transform",
-                                              showAddModifier && "rotate-45"
+                                              showAddModifier && "rotate-45",
                                             )}
                                           />
                                           <span className="text-sm font-medium">
@@ -2194,7 +2198,7 @@ export function NewEditItemFormSheet({
                           {(() => {
                             const taxRate = taxRates.find(
                               (r) =>
-                                r.tax_category === watchedValues.tax_category
+                                r.tax_category === watchedValues.tax_category,
                             );
                             const itemPrice = watchedValues.price || 0;
                             const taxAmount = taxRate
@@ -2296,8 +2300,8 @@ export function NewEditItemFormSheet({
                                 {editingContext.level === 1
                                   ? "Available for Sale"
                                   : editingContext.level === 2
-                                  ? "Available at This Location"
-                                  : "Available on This Menu"}
+                                    ? "Available at This Location"
+                                    : "Available on This Menu"}
                               </FormLabel>
                               <FormDescription>
                                 {editingContext.level === 1 &&
@@ -2339,7 +2343,7 @@ export function NewEditItemFormSheet({
                                       <FormControl>
                                         <Checkbox
                                           checked={field.value?.includes(
-                                            channel
+                                            channel,
                                           )}
                                           onCheckedChange={(checked) => {
                                             const current = field.value || [];
@@ -2351,8 +2355,8 @@ export function NewEditItemFormSheet({
                                             } else {
                                               field.onChange(
                                                 current.filter(
-                                                  (c: string) => c !== channel
-                                                )
+                                                  (c: string) => c !== channel,
+                                                ),
                                               );
                                             }
                                           }}
@@ -2438,7 +2442,7 @@ export function NewEditItemFormSheet({
                                     "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
                                     selectedCategories.includes(category.id)
                                       ? "bg-primary text-primary-foreground border-primary shadow-md"
-                                      : "bg-background border-border hover:border-primary/50"
+                                      : "bg-background border-border hover:border-primary/50",
                                   )}
                                 >
                                   {category.name}
@@ -2521,7 +2525,7 @@ export function NewEditItemFormSheet({
                   image={watchedValues.image_url ?? undefined}
                   categories={selectedCategories
                     .map(
-                      (id) => categories.find((c) => c.id === id)?.name || ""
+                      (id) => categories.find((c) => c.id === id)?.name || "",
                     )
                     .filter(Boolean)}
                   availability={watchedValues.availability}
@@ -2647,14 +2651,14 @@ function PriceLevelRow({
       className={cn(
         "flex items-center justify-between py-1.5 px-2 rounded text-sm",
         isCurrentLevel && "bg-blue-50 border border-blue-200",
-        !isActive && "opacity-50"
+        !isActive && "opacity-50",
       )}
     >
       <div className="flex items-center gap-2">
         <span
           className={cn(
             "w-5 h-5 rounded-full flex items-center justify-center text-xs",
-            isCurrentLevel ? "bg-blue-500 text-white" : "bg-muted"
+            isCurrentLevel ? "bg-blue-500 text-white" : "bg-muted",
           )}
         >
           {level}

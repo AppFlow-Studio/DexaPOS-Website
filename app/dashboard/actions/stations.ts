@@ -6,6 +6,7 @@
 // ============================================================================
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { LogAuditEvent } from "./audit-logs";
 
 // ============================================================================
 // Types
@@ -337,6 +338,29 @@ export async function createStation(
       return { success: false, error: error.message, data: null };
     }
 
+    // Fetch location name for audit log
+    const { data: location } = await supabase
+      .from("locations")
+      .select("name")
+      .eq("id", input.location_id)
+      .single();
+
+    // Log audit event
+    await LogAuditEvent({
+      merchantId: merchant.id,
+      action: `Created Station: ${input.station_name}`,
+      actionCategory: "settings",
+      resourceType: "station",
+      resourceId: data.id,
+      resourceName: input.station_name,
+      locationId: input.location_id,
+      metadata: {
+        location_name: location?.name,
+        station_type: input.station_type,
+        station_number: input.station_number,
+      },
+    });
+
     return { success: true, data: data as Station, error: null };
   } catch (error) {
     console.error("[createStation] Exception:", error);
@@ -462,6 +486,18 @@ export async function updateStation(
       return { success: false, error: error.message, data: null };
     }
 
+    // Log audit event
+    await LogAuditEvent({
+      merchantId: data.merchant_id,
+      action: `Updated Station: ${data.station_name}`,
+      actionCategory: "settings",
+      resourceType: "station",
+      resourceId: stationId,
+      resourceName: data.station_name,
+      locationId: data.location_id,
+      changes: { after: input as Record<string, unknown> },
+    });
+
     return { success: true, data: data as Station, error: null };
   } catch (error) {
     console.error("[updateStation] Exception:", error);
@@ -502,6 +538,17 @@ export async function deactivateStation(
       return { success: false, error: error.message, data: null };
     }
 
+    // Log audit event
+    await LogAuditEvent({
+      merchantId: data.merchant_id,
+      action: `Deactivated Station: ${data.station_name}`,
+      actionCategory: "settings",
+      resourceType: "station",
+      resourceId: stationId,
+      resourceName: data.station_name,
+      locationId: data.location_id,
+    });
+
     return { success: true, data: data as Station, error: null };
   } catch (error) {
     console.error("[deactivateStation] Exception:", error);
@@ -537,6 +584,17 @@ export async function reactivateStation(stationId: string) {
       return { success: false, error: error.message, data: null };
     }
 
+    // Log audit event
+    await LogAuditEvent({
+      merchantId: data.merchant_id,
+      action: `Reactivated Station: ${data.station_name}`,
+      actionCategory: "settings",
+      resourceType: "station",
+      resourceId: stationId,
+      resourceName: data.station_name,
+      locationId: data.location_id,
+    });
+
     return { success: true, data: data as Station, error: null };
   } catch (error) {
     console.error("[reactivateStation] Exception:", error);
@@ -559,6 +617,13 @@ export async function deleteStation(stationId: string) {
   try {
     const supabase = createServerSupabaseClient();
 
+    // Fetch station details before deletion for audit log
+    const { data: stationToDelete } = await supabase
+      .from("stations")
+      .select("station_name, merchant_id, location_id")
+      .eq("id", stationId)
+      .single();
+
     const { error } = await supabase
       .from("stations")
       .delete()
@@ -567,6 +632,19 @@ export async function deleteStation(stationId: string) {
     if (error) {
       console.error("[deleteStation] Error:", error);
       return { success: false, error: error.message };
+    }
+
+    // Log audit event
+    if (stationToDelete) {
+      await LogAuditEvent({
+        merchantId: stationToDelete.merchant_id,
+        action: `Deleted Station: ${stationToDelete.station_name}`,
+        actionCategory: "settings",
+        resourceType: "station",
+        resourceId: stationId,
+        resourceName: stationToDelete.station_name,
+        locationId: stationToDelete.location_id,
+      });
     }
 
     return { success: true, error: null };
@@ -586,6 +664,12 @@ export async function deleteMultipleStations(stationIds: string[]) {
   try {
     const supabase = createServerSupabaseClient();
 
+    // Fetch stations before delete
+    const { data: stationsToDelete } = await supabase
+      .from("stations")
+      .select("id, station_name, merchant_id, location_id")
+      .in("id", stationIds);
+
     const { error } = await supabase
       .from("stations")
       .delete()
@@ -594,6 +678,28 @@ export async function deleteMultipleStations(stationIds: string[]) {
     if (error) {
       console.error("[deleteMultipleStations] Error:", error);
       return { success: false, error: error.message };
+    }
+
+    // Log audit events
+    if (stationsToDelete && stationsToDelete.length > 0) {
+      // Log a single bulk event or individual?
+      // Let's log a bulk event for less noise, or individual for precision.
+      // Individual is safer for history tracking per resource.
+      const merchantId = stationsToDelete[0].merchant_id;
+      const locationId = stationsToDelete[0].location_id; // Assuming same location for batch usually
+
+      await LogAuditEvent({
+        merchantId: merchantId,
+        action: `Bulk Deleted ${stationsToDelete.length} Stations`,
+        actionCategory: "settings",
+        resourceType: "station",
+        resourceId: undefined,
+        locationId: locationId, // Use first one
+        metadata: {
+          station_names: stationsToDelete.map((s) => s.station_name),
+          station_ids: stationIds,
+        },
+      });
     }
 
     return { success: true, error: null };

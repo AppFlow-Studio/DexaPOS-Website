@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { auth, currentUser } from "@clerk/nextjs/server";
+import { LogAuditEvent } from "./audit-logs";
 import {
   PurchaseOrderPayment,
   DiscrepancyReportItem,
@@ -36,7 +37,7 @@ interface LogDeliveryResult {
  * - Calculates discrepancy report
  */
 export async function LogPurchaseOrderDelivery(
-  params: LogDeliveryParams
+  params: LogDeliveryParams,
 ): Promise<LogDeliveryResult> {
   const { purchaseOrderId, deliveredBy, deliveryNotes, receivedItems } = params;
 
@@ -49,6 +50,15 @@ export async function LogPurchaseOrderDelivery(
   }
 
   const supabase = createServerSupabaseClient();
+
+  // Fetch PO for info
+  const { data: po } = await supabase
+    .from("purchase_orders")
+    .select("merchant_id, po_number, location_id")
+    .eq("id", purchaseOrderId)
+    .single();
+
+  if (!po) return { error: "Purchase Order not found" };
 
   // Get current user info
   const user = await currentUser();
@@ -69,6 +79,22 @@ export async function LogPurchaseOrderDelivery(
     console.error("Error logging delivery:", error);
     return { error: error.message };
   }
+
+  // Log audit event
+  await LogAuditEvent({
+    merchantId: po.merchant_id,
+    action: `Received Delivery for PO #${po.po_number}`,
+    actionCategory: "inventory",
+    resourceType: "purchase_order",
+    resourceId: purchaseOrderId,
+    resourceName: `PO #${po.po_number}`,
+    locationId: po.location_id,
+    metadata: {
+      received_items_count: receivedItems.length,
+      delivered_by: deliveredBy,
+      delivery_notes: deliveryNotes,
+    },
+  });
 
   return {
     success: true,
@@ -103,7 +129,7 @@ interface LogPaymentResult {
  * - Updates PO status to "paid"
  */
 export async function LogPurchaseOrderPayment(
-  params: LogPaymentParams
+  params: LogPaymentParams,
 ): Promise<LogPaymentResult> {
   const {
     purchaseOrderId,
@@ -132,6 +158,15 @@ export async function LogPurchaseOrderPayment(
 
   const supabase = createServerSupabaseClient();
 
+  // Fetch PO for info
+  const { data: po } = await supabase
+    .from("purchase_orders")
+    .select("merchant_id, po_number, location_id")
+    .eq("id", purchaseOrderId)
+    .single();
+
+  if (!po) return { error: "Purchase Order not found" };
+
   // Get current user info
   const user = await currentUser();
   const userId = user?.id || null;
@@ -154,6 +189,23 @@ export async function LogPurchaseOrderPayment(
     return { error: error.message };
   }
 
+  await LogAuditEvent({
+    merchantId: po.merchant_id,
+    action: `Recorded Payment for PO #${po.po_number}`,
+    actionCategory: "inventory",
+    resourceType: "purchase_order",
+    resourceId: purchaseOrderId,
+    resourceName: `PO #${po.po_number}`,
+    locationId: po.location_id,
+    changes: {
+      after: {
+        amount,
+        payment_method: paymentMethod,
+        paid_to: paidTo,
+      },
+    },
+  });
+
   return {
     success: true,
     paymentId: data as string,
@@ -169,7 +221,7 @@ export async function LogPurchaseOrderPayment(
  * Shows ordered vs received quantities and status for each item
  */
 export async function GetDiscrepancyReport(
-  purchaseOrderId: string
+  purchaseOrderId: string,
 ): Promise<{ data?: DiscrepancyReportItem[]; error?: string }> {
   if (!purchaseOrderId) {
     return { error: "Purchase order ID is required" };
@@ -197,7 +249,7 @@ export async function GetDiscrepancyReport(
  * Get all payments for a purchase order
  */
 export async function GetPurchaseOrderPayments(
-  purchaseOrderId: string
+  purchaseOrderId: string,
 ): Promise<{ data?: PurchaseOrderPayment[]; error?: string }> {
   if (!purchaseOrderId) {
     return { error: "Purchase order ID is required" };
@@ -227,7 +279,7 @@ export async function GetPurchaseOrderPayments(
  * Get full purchase order details including items, payments, and delivery info
  */
 export async function GetPurchaseOrderDetails(
-  purchaseOrderId: string
+  purchaseOrderId: string,
 ): Promise<{ data?: PurchaseOrderWithDetails; error?: string }> {
   if (!purchaseOrderId) {
     return { error: "Purchase order ID is required" };
@@ -256,7 +308,7 @@ export async function GetPurchaseOrderDetails(
         item_category,
         inventory_item:inventory_items(id, name, unit_type)
       )
-    `
+    `,
     )
     .eq("id", purchaseOrderId)
     .single();
@@ -284,7 +336,7 @@ export async function GetPurchaseOrderDetails(
         inventory_item: Array.isArray(item.inventory_item)
           ? item.inventory_item[0]
           : item.inventory_item || null,
-      })
+      }),
     ),
     payments: payments || [],
   };

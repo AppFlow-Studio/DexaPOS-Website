@@ -6,6 +6,7 @@ import type {
   CustomerProfile,
   CustomerListItem,
 } from "@/types/customer";
+import { LogAuditEvent } from "./audit-logs";
 
 // =============================================================================
 // Helper Functions
@@ -44,7 +45,7 @@ export async function GetCustomers(
     offset?: number;
     orderBy?: "last_order_date" | "lifetime_spend" | "visits" | "created_at";
     ascending?: boolean;
-  }
+  },
 ): Promise<CustomerListItem[]> {
   if (!clerkOrgId) {
     return [];
@@ -75,7 +76,7 @@ export async function GetCustomers(
       total_orders,
       avg_spend,
       tags
-    `
+    `,
     )
     .eq("merchant_id", merchantId)
     .order(orderBy, { ascending, nullsFirst: false })
@@ -95,7 +96,7 @@ export async function GetCustomers(
 export async function SearchCustomers(
   clerkOrgId: string,
   query: string,
-  limit: number = 20
+  limit: number = 20,
 ): Promise<CustomerListItem[]> {
   if (!clerkOrgId || !query.trim()) {
     return [];
@@ -123,11 +124,11 @@ export async function SearchCustomers(
       total_orders,
       avg_spend,
       tags
-    `
+    `,
     )
     .eq("merchant_id", merchantId)
     .or(
-      `name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`
+      `name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`,
     )
     .order("last_order_date", { ascending: false, nullsFirst: false })
     .limit(limit);
@@ -149,7 +150,7 @@ export async function SearchCustomers(
  * Returns customer data, order channels, most ordered items, and recent activity
  */
 export async function GetCustomerProfile(
-  customerId: string
+  customerId: string,
 ): Promise<CustomerProfile | null> {
   if (!customerId) {
     return null;
@@ -173,7 +174,7 @@ export async function GetCustomerProfile(
  * Get customer by ID (base data only)
  */
 export async function GetCustomerById(
-  customerId: string
+  customerId: string,
 ): Promise<Customer | null> {
   if (!customerId) {
     return null;
@@ -206,7 +207,7 @@ export async function UpdateCustomer(
   customerId: string,
   updates: Partial<
     Pick<Customer, "name" | "phone" | "email" | "address" | "notes" | "tags">
-  >
+  >,
 ): Promise<{ success: boolean; error?: string; data?: Customer }> {
   if (!customerId) {
     return { success: false, error: "Customer ID is required" };
@@ -229,6 +230,21 @@ export async function UpdateCustomer(
     return { success: false, error: error.message };
   }
 
+  // Log audit event
+  await LogAuditEvent({
+    merchantId: data.merchant_id,
+    action: `Updated Customer: ${data.name}`,
+    actionCategory: "customer",
+    resourceType: "customer",
+    resourceId: customerId,
+    resourceName: data.name,
+    changes: { after: updates },
+    metadata: {
+      email: data.email,
+      phone: data.phone,
+    },
+  });
+
   return { success: true, data: data as Customer };
 }
 
@@ -237,7 +253,7 @@ export async function UpdateCustomer(
  */
 export async function AddCustomerTag(
   customerId: string,
-  tag: string
+  tag: string,
 ): Promise<{ success: boolean; error?: string; tags?: string[] }> {
   if (!customerId || !tag.trim()) {
     return { success: false, error: "Customer ID and tag are required" };
@@ -248,7 +264,7 @@ export async function AddCustomerTag(
   // First get current tags
   const { data: customer, error: fetchError } = await supabase
     .from("customers")
-    .select("tags")
+    .select("tags, merchant_id, name")
     .eq("id", customerId)
     .single();
 
@@ -282,6 +298,20 @@ export async function AddCustomerTag(
     return { success: false, error: updateError.message };
   }
 
+  // Log audit event
+  await LogAuditEvent({
+    merchantId: customer.merchant_id, // Fetch merchant_id if needed, but likely we need to select it above
+    action: `Added Tag to Customer`,
+    actionCategory: "customer",
+    resourceType: "customer",
+    resourceId: customerId,
+    resourceName: customer.name || "Unknown Customer",
+    metadata: {
+      tag: normalizedTag,
+      new_tags: newTags,
+    },
+  });
+
   return { success: true, tags: data?.tags || newTags };
 }
 
@@ -290,7 +320,7 @@ export async function AddCustomerTag(
  */
 export async function RemoveCustomerTag(
   customerId: string,
-  tag: string
+  tag: string,
 ): Promise<{ success: boolean; error?: string; tags?: string[] }> {
   if (!customerId || !tag.trim()) {
     return { success: false, error: "Customer ID and tag are required" };
@@ -301,7 +331,7 @@ export async function RemoveCustomerTag(
   // First get current tags
   const { data: customer, error: fetchError } = await supabase
     .from("customers")
-    .select("tags")
+    .select("tags, merchant_id, name")
     .eq("id", customerId)
     .single();
 
@@ -329,6 +359,20 @@ export async function RemoveCustomerTag(
     return { success: false, error: updateError.message };
   }
 
+  // Log audit event
+  await LogAuditEvent({
+    merchantId: customer.merchant_id,
+    action: `Removed Tag from Customer`,
+    actionCategory: "customer",
+    resourceType: "customer",
+    resourceId: customerId,
+    resourceName: customer.name || "Unknown Customer",
+    metadata: {
+      tag: normalizedTag,
+      remaining_tags: newTags,
+    },
+  });
+
   return { success: true, tags: data?.tags || newTags };
 }
 
@@ -337,7 +381,7 @@ export async function RemoveCustomerTag(
  */
 export async function UpdateCustomerNotes(
   customerId: string,
-  notes: string
+  notes: string,
 ): Promise<{ success: boolean; error?: string }> {
   if (!customerId) {
     return { success: false, error: "Customer ID is required" };
@@ -356,6 +400,25 @@ export async function UpdateCustomerNotes(
   if (error) {
     console.error("[UpdateCustomerNotes] Error updating notes:", error);
     return { success: false, error: error.message };
+  }
+
+  // Get customer details for log
+  const { data: customer } = await supabase
+    .from("customers")
+    .select("merchant_id, name")
+    .eq("id", customerId)
+    .single();
+
+  if (customer) {
+    await LogAuditEvent({
+      merchantId: customer.merchant_id,
+      action: `Updated Customer Notes`,
+      actionCategory: "customer",
+      resourceType: "customer",
+      resourceId: customerId,
+      resourceName: customer.name,
+      changes: { after: { notes } },
+    });
   }
 
   return { success: true };
@@ -380,10 +443,12 @@ export async function GetCustomerCount(clerkOrgId: string): Promise<number> {
 
   const supabase = createServerSupabaseClient();
 
-  const { count, error } = await supabase
+  const { data, error } = await supabase
     .from("customers")
-    .select("*", { count: "exact", head: true })
+    .select("id")
     .eq("merchant_id", merchantId);
+
+  const count = data?.length || 0;
 
   if (error) {
     console.error("[GetCustomerCount] Error counting customers:", error);
@@ -392,4 +457,3 @@ export async function GetCustomerCount(clerkOrgId: string): Promise<number> {
 
   return count || 0;
 }
-
