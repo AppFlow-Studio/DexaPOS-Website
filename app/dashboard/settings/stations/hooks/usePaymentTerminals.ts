@@ -265,22 +265,32 @@ export function useTestTerminalConnection() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (terminalId: string) => {
+    mutationFn: async ({
+      terminalId,
+      silent,
+    }: {
+      terminalId: string;
+      silent?: boolean;
+    }) => {
       const result = await testTerminalConnection(terminalId);
       if (!result.success) {
         throw new Error(result.error || "Failed to test connection");
       }
       return result;
     },
-    onSuccess: (result) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ["paymentTerminals"] });
+
+      if (variables.silent) return;
+
       if (result.status === "Online") {
         toast.success("Terminal online and ready");
       } else {
         toast.warning(result.error || "Terminal is not responding");
       }
     },
-    onError: (error: Error) => {
+    onError: (error: Error, variables) => {
+      if (variables.silent) return;
       toast.error(error.message || "Connection test failed");
     },
   });

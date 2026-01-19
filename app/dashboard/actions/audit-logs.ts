@@ -25,7 +25,7 @@ export async function GetAuditLogs(
   clerkOrgId: string,
   filters?: AuditLogFilters,
   limit: number = 50,
-  offset: number = 0
+  offset: number = 0,
 ): Promise<{ data?: AuditLogWithLocation[]; total?: number; error?: string }> {
   if (!clerkOrgId) {
     return { error: "Organization ID is required" };
@@ -52,7 +52,7 @@ export async function GetAuditLogs(
       *,
       location:locations(id, name)
     `,
-      { count: "exact" }
+      { count: "exact" },
     )
     .eq("merchant_id", merchant.id)
     .order("created_at", { ascending: false });
@@ -61,7 +61,7 @@ export async function GetAuditLogs(
   if (filters?.location_id && filters.location_id !== "all") {
     // Show logs for specific location OR global logs (null location)
     query = query.or(
-      `location_id.eq.${filters.location_id},location_id.is.null`
+      `location_id.eq.${filters.location_id},location_id.is.null`,
     );
   }
 
@@ -87,7 +87,7 @@ export async function GetAuditLogs(
     // - OR match logs where actor_user_id matches AND there's NO staff_profile_id in metadata
     //   (backward compatibility for old logs that don't have staff_profile_id)
     query = query.or(
-      `metadata->>staff_profile_id.eq.${filters.staff_profile_id},and(actor_user_id.eq.${filters.actor_user_id},metadata->>staff_profile_id.is.null)`
+      `metadata->>staff_profile_id.eq.${filters.staff_profile_id},and(actor_user_id.eq.${filters.actor_user_id},metadata->>staff_profile_id.is.null)`,
     );
   } else if (filters?.staff_profile_id) {
     // For POS-only users (no Clerk user_id): filter by staff_profile_id in metadata
@@ -98,7 +98,7 @@ export async function GetAuditLogs(
     // For users with only actor_user_id (no staff_profile_id):
     // Match actor_user_id where there's no staff_profile_id in metadata
     query = query.or(
-      `and(actor_user_id.eq.${filters.actor_user_id},metadata->>staff_profile_id.is.null),metadata->>staff_profile_id.eq.${filters.actor_user_id}`
+      `and(actor_user_id.eq.${filters.actor_user_id},metadata->>staff_profile_id.is.null),metadata->>staff_profile_id.eq.${filters.actor_user_id}`,
     );
   }
 
@@ -112,8 +112,12 @@ export async function GetAuditLogs(
 
   if (filters?.search) {
     query = query.or(
-      `resource_name.ilike.%${filters.search}%,actor_name.ilike.%${filters.search}%,action.ilike.%${filters.search}%`
+      `resource_name.ilike.%${filters.search}%,actor_name.ilike.%${filters.search}%,action.ilike.%${filters.search}%`,
     );
+  }
+
+  if (filters?.station_id) {
+    query = query.contains("metadata", { station_id: filters.station_id });
   }
 
   // Pagination
@@ -158,7 +162,7 @@ interface LogAuditEventParams {
 }
 
 export async function LogAuditEvent(
-  params: LogAuditEventParams
+  params: LogAuditEventParams,
 ): Promise<{ success?: boolean; logId?: string; error?: string }> {
   const supabase = createServerSupabaseClient();
   let merchantId = params.merchantId;
@@ -228,7 +232,7 @@ interface UpdateStockWithReasonParams {
 }
 
 export async function UpdateStockWithReason(
-  params: UpdateStockWithReasonParams
+  params: UpdateStockWithReasonParams,
 ): Promise<{
   success?: boolean;
   previousStock?: number;
@@ -272,7 +276,7 @@ export async function UpdateStockWithReason(
 export async function CreateAdhocExpense(
   clerkOrgId: string,
   locationId: string,
-  expense: AdhocExpenseInput
+  expense: AdhocExpenseInput,
 ): Promise<{
   success?: boolean;
   purchaseOrderId?: string;
@@ -356,7 +360,7 @@ export async function GetStockUpdateHistory(
   clerkOrgId: string,
   inventoryItemId?: string,
   locationId?: string,
-  limit: number = 20
+  limit: number = 20,
 ): Promise<{ data?: any[]; error?: string }> {
   if (!clerkOrgId) {
     return { error: "Organization ID is required" };
@@ -382,7 +386,7 @@ export async function GetStockUpdateHistory(
       *,
       inventory_item:inventory_items(id, name, unit_type),
       location:locations(id, name)
-    `
+    `,
     )
     .eq("merchant_id", merchant.id)
     .order("created_at", { ascending: false })

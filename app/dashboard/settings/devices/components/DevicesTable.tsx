@@ -1,14 +1,5 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -21,23 +12,32 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Device,
-  getDeviceTypeLabel,
-  getDeviceTypeIcon,
-} from "../hooks/useDevices";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+import { format, formatDistanceToNow } from "date-fns";
 import {
-  MoreHorizontal,
-  Eye,
-  Edit,
-  Trash2,
-  Circle,
   AlertTriangle,
   ArrowUpDown,
+  Circle,
+  Edit,
+  Eye,
+  MoreHorizontal,
+  Trash2,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatDistanceToNow, format } from "date-fns";
+import { useCallback, useRef, useState } from "react";
+import {
+  Device,
+  getDeviceTypeIcon,
+  getDeviceTypeLabel,
+} from "../hooks/useDevices";
 
 interface DevicesTableProps {
   devices: Device[];
@@ -57,20 +57,28 @@ interface DevicesTableProps {
 function StatusBadge({ device }: { device: Device }) {
   const isOnline = device.status === "online";
 
-  // Calculate offline duration
-  let offlineDuration = "";
-  let ariaLabel = "Online";
+  // Calculate durations
+  let durationText = "";
+  let ariaLabel = isOnline ? "Online" : "Offline";
 
-  if (!isOnline && device.offlineSince) {
-    offlineDuration = `For ${formatDistanceToNow(
-      new Date(device.offlineSince),
-      { addSuffix: false }
+  if (isOnline && device.connectedSince) {
+    durationText = `Since ${formatDistanceToNow(
+      new Date(device.connectedSince),
+      {
+        addSuffix: false,
+      },
     )}`;
+    ariaLabel = `Online since ${format(
+      new Date(device.connectedSince),
+      "MMM d, h:mm a",
+    )}`;
+  } else if (!isOnline && device.offlineSince) {
+    durationText = `For ${formatDistanceToNow(new Date(device.offlineSince), {
+      addSuffix: false,
+    })}`;
     ariaLabel = `Offline for ${formatDistanceToNow(
-      new Date(device.offlineSince)
+      new Date(device.offlineSince),
     )}`;
-  } else if (!isOnline) {
-    ariaLabel = "Offline";
   }
 
   return (
@@ -81,7 +89,7 @@ function StatusBadge({ device }: { device: Device }) {
           "gap-1.5 w-fit transition-all duration-200",
           isOnline
             ? "border-green-500/50 bg-green-500/10 text-green-600 dark:text-green-400"
-            : "border-gray-400/50 bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+            : "border-gray-400/50 bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
         )}
       >
         <Circle
@@ -89,15 +97,18 @@ function StatusBadge({ device }: { device: Device }) {
             "h-2 w-2 transition-colors duration-200",
             isOnline
               ? "fill-green-500 text-green-500"
-              : "fill-gray-400 text-gray-400"
+              : "fill-gray-400 text-gray-400",
           )}
           aria-hidden="true"
         />
         <span aria-hidden="true">{isOnline ? "ONLINE" : "OFFLINE"}</span>
       </Badge>
-      {!isOnline && offlineDuration && (
-        <span className="text-xs text-muted-foreground" aria-hidden="true">
-          {offlineDuration}
+      {durationText && (
+        <span
+          className="text-[10px] uppercase font-bold text-muted-foreground/70 ml-1"
+          aria-hidden="true"
+        >
+          {durationText}
         </span>
       )}
     </div>
@@ -168,7 +179,7 @@ function SortableHeader({
       onClick={() => onSort(column)}
       className={cn(
         "h-8 px-2 -ml-2 font-medium hover:bg-transparent focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
-        isActive && "text-primary"
+        isActive && "text-primary",
       )}
       aria-sort={ariaSort}
     >
@@ -176,7 +187,7 @@ function SortableHeader({
       <ArrowUpDown
         className={cn(
           "ml-1 h-3.5 w-3.5 transition-transform duration-200",
-          isActive && sortDirection === "desc" && "rotate-180"
+          isActive && sortDirection === "desc" && "rotate-180",
         )}
         aria-hidden="true"
       />
@@ -199,7 +210,7 @@ function DeviceIcon({
     <div
       className={cn(
         "flex items-center justify-center rounded-lg bg-muted text-lg",
-        className
+        className,
       )}
       role="img"
       aria-label={label}
@@ -260,7 +271,7 @@ export function DevicesTable({
           break;
       }
     },
-    [devices.length, router, onSelectDevice, selectedDeviceIds]
+    [devices.length, router, onSelectDevice, selectedDeviceIds],
   );
 
   return (
@@ -273,7 +284,9 @@ export function DevicesTable({
                 checked={
                   allSelected ? true : someSelected ? "indeterminate" : false
                 }
-                onCheckedChange={(checked) => onSelectAll(!!checked)}
+                onCheckedChange={(checked: boolean | "indeterminate") =>
+                  onSelectAll(!!checked)
+                }
                 aria-label="Select all devices"
               />
             </TableHead>
@@ -344,13 +357,13 @@ export function DevicesTable({
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
                   isOffline && "opacity-60",
                   isSelected && "bg-muted/30",
-                  isFocused && "bg-muted/40"
+                  isFocused && "bg-muted/40",
                 )}
               >
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   <Checkbox
                     checked={isSelected}
-                    onCheckedChange={(checked) =>
+                    onCheckedChange={(checked: boolean | "indeterminate") =>
                       onSelectDevice(device.id, !!checked)
                     }
                     aria-label={`Select ${device.name}`}
@@ -423,7 +436,8 @@ export function DevicesTable({
                           View details
                         </Link>
                       </DropdownMenuItem>
-                      {device.type === "external_terminal" && (
+                      {(device.type === "external_terminal" ||
+                        device.type === "tablet") && (
                         <DropdownMenuItem onClick={() => onEdit(device)}>
                           <Edit className="mr-2 h-4 w-4" aria-hidden="true" />
                           Edit

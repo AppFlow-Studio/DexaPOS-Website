@@ -543,6 +543,23 @@ export async function updateItemOverride(
     // This allows location managers to link global modifiers to items effectively
     const adminSupabase = createServiceRoleClient();
 
+    // Fetch existing modifier group assignments BEFORE deletion (for audit log)
+    const { data: existingAssignments } = await adminSupabase
+      .from("menu_item_modifier_groups")
+      .select("modifier_group_id")
+      .eq("menu_item_id", params.menuItemId);
+
+    const oldModifierGroupIds = (existingAssignments || []).map(
+      (a) => a.modifier_group_id
+    );
+
+    // Fetch menu item details for audit log (name and merchant_id)
+    const { data: menuItemDetails, error: menuItemError } = await supabase
+      .from("menu_items")
+      .select("name, merchant_id")
+      .eq("id", params.menuItemId)
+      .single();
+
     // First delete existing assignments
     const { error: deleteError } = await adminSupabase
       .from("menu_item_modifier_groups")
@@ -558,17 +575,10 @@ export async function updateItemOverride(
 
     // Insert new assignments if any
     if (params.modifier_group_ids.length > 0) {
-      // Fetch merchant_id from the menu item
-      const { data: menuItem, error: fetchError } = await supabase
-        .from("menu_items")
-        .select("merchant_id")
-        .eq("id", params.menuItemId)
-        .single();
-
-      if (fetchError || !menuItem) {
+      if (!menuItemDetails) {
         console.error(
           "Error fetching menu item for modifier update:",
-          fetchError
+          menuItemError
         );
         return { success: false, error: "Could not retrieve item details" };
       }
@@ -576,7 +586,7 @@ export async function updateItemOverride(
       const modifierInserts = params.modifier_group_ids.map((groupId) => ({
         menu_item_id: params.menuItemId,
         modifier_group_id: groupId,
-        merchant_id: menuItem.merchant_id,
+        merchant_id: menuItemDetails.merchant_id,
       }));
 
       const { error: insertError } = await adminSupabase
@@ -585,6 +595,69 @@ export async function updateItemOverride(
 
       if (insertError) {
         console.error("Error inserting modifier assignments:", insertError);
+      }
+    }
+
+    // Log Audit Event for modifier group updates
+    if (menuItemDetails) {
+      // Determine what changed
+      const addedGroupIds = params.modifier_group_ids.filter(
+        (id) => !oldModifierGroupIds.includes(id)
+      );
+      const removedGroupIds = oldModifierGroupIds.filter(
+        (id) => !params.modifier_group_ids!.includes(id)
+      );
+
+      // Only log if there was an actual change
+      if (addedGroupIds.length > 0 || removedGroupIds.length > 0) {
+        // Fetch modifier group names for user-friendly display
+        const allGroupIds = [
+          ...new Set([
+            ...addedGroupIds,
+            ...removedGroupIds,
+            ...params.modifier_group_ids,
+          ]),
+        ];
+        const { data: modifierGroups } = await supabase
+          .from("modifier_groups")
+          .select("id, name")
+          .in("id", allGroupIds);
+
+        const groupNameMap = new Map(
+          (modifierGroups || []).map((g) => [g.id, g.name])
+        );
+
+        // Get human-readable names
+        const addedGroupNames = addedGroupIds.map(
+          (id) => groupNameMap.get(id) || "Unknown Group"
+        );
+        const removedGroupNames = removedGroupIds.map(
+          (id) => groupNameMap.get(id) || "Unknown Group"
+        );
+        const newGroupNames = params.modifier_group_ids.map(
+          (id) => groupNameMap.get(id) || "Unknown Group"
+        );
+        const oldGroupNames = oldModifierGroupIds.map(
+          (id) => groupNameMap.get(id) || "Unknown Group"
+        );
+
+        await LogAuditEvent({
+          merchantId: menuItemDetails.merchant_id,
+          action: `Updated Modifiers for Item: ${menuItemDetails.name}`,
+          actionCategory: "menu",
+          resourceType: "menu_item",
+          resourceId: params.menuItemId,
+          resourceName: menuItemDetails.name,
+          locationId: locationId,
+          changes: {
+            before: { modifier_groups: oldGroupNames },
+            after: { modifier_groups: newGroupNames },
+          },
+          metadata: {
+            added_modifier_groups: addedGroupNames,
+            removed_modifier_groups: removedGroupNames,
+          },
+        });
       }
     }
   }
@@ -710,23 +783,68 @@ export async function updateItemOverride(
 
     // Log Audit Event
     if (result.success) {
-      // Background logging
-      supabase
-        .from("menu_items")
-        .select("name")
-        .eq("id", params.menuItemId)
-        .single()
-        .then(({ data: item }) => {
-          LogAuditEvent({
-            action: `Updated Item: ${item?.name || "Unknown"}`,
-            actionCategory: "menu",
-            resourceType: "menu_item",
-            resourceId: params.menuItemId,
-            resourceName: item?.name,
-            locationId: locationId,
-            changes: { after: params as any },
-          });
-        });
+      // Fetch item details and related names for user-friendly audit log
+      const [itemResult, categoryResult, menuResult] = await Promise.all([
+        supabase
+          .from("menu_items")
+          .select("name, merchant_id")
+          .eq("id", params.menuItemId)
+          .single(),
+        params.categoryId
+          ? supabase
+              .from("categories")
+              .select("name")
+              .eq("id", params.categoryId)
+              .single()
+          : Promise.resolve({ data: null }),
+        params.menuId
+          ? supabase
+              .from("menus")
+              .select("name")
+              .eq("id", params.menuId)
+              .single()
+          : Promise.resolve({ data: null }),
+      ]);
+
+      const itemName = itemResult.data?.name || "Unknown Item";
+      const categoryName = categoryResult.data?.name;
+      const menuName = menuResult.data?.name;
+
+      // Build user-friendly changes object (exclude raw IDs)
+      const userFriendlyChanges: Record<string, unknown> = {};
+      if (params.price !== undefined) userFriendlyChanges.price = params.price;
+      if (params.cashPrice !== undefined)
+        userFriendlyChanges.cash_price = params.cashPrice;
+      if (params.availability !== undefined)
+        userFriendlyChanges.availability = params.availability;
+      if (params.priceModifier !== undefined)
+        userFriendlyChanges.price_modifier = params.priceModifier;
+      if (params.displayOrder !== undefined)
+        userFriendlyChanges.display_order = params.displayOrder;
+      if (params.isFeatured !== undefined)
+        userFriendlyChanges.is_featured = params.isFeatured;
+      if (params.stockTrackingMode !== undefined)
+        userFriendlyChanges.stock_tracking_mode = params.stockTrackingMode;
+
+      // Build user-friendly metadata
+      const userFriendlyMetadata: Record<string, unknown> = {};
+      if (categoryName) userFriendlyMetadata.category_name = categoryName;
+      if (menuName) userFriendlyMetadata.menu_name = menuName;
+
+      await LogAuditEvent({
+        merchantId: itemResult.data?.merchant_id,
+        action: `Updated Item: ${itemName}`,
+        actionCategory: "menu",
+        resourceType: "menu_item",
+        resourceId: params.menuItemId,
+        resourceName: itemName,
+        locationId: locationId,
+        changes: { after: userFriendlyChanges },
+        metadata:
+          Object.keys(userFriendlyMetadata).length > 0
+            ? userFriendlyMetadata
+            : undefined,
+      });
     }
 
     return result;

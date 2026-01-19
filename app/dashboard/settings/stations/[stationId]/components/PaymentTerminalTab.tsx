@@ -1,8 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -69,17 +75,27 @@ interface PaymentTerminalTabProps {
   station: Station;
 }
 
-function CapabilityBadge({ label, enabled }: { label: string; enabled: boolean }) {
+function CapabilityBadge({
+  label,
+  enabled,
+}: {
+  label: string;
+  enabled: boolean;
+}) {
   return (
     <Badge
       variant="outline"
       className={cn(
         enabled
           ? "border-green-500/50 bg-green-500/10 text-green-600"
-          : "border-gray-400/50 text-gray-500"
+          : "border-gray-400/50 text-gray-500",
       )}
     >
-      {enabled ? <CheckCircle className="mr-1 h-3 w-3" /> : <XCircle className="mr-1 h-3 w-3" />}
+      {enabled ? (
+        <CheckCircle className="mr-1 h-3 w-3" />
+      ) : (
+        <XCircle className="mr-1 h-3 w-3" />
+      )}
       {label}
     </Badge>
   );
@@ -98,12 +114,17 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
   const [terminalType, setTerminalType] = useState<TerminalType>("dejavoo");
   const [tpn, setTpn] = useState("");
   const [authKey, setAuthKey] = useState("");
-  const [apiEnvironment, setApiEnvironment] = useState<ApiEnvironment>("sandbox");
+  const [apiEnvironment, setApiEnvironment] =
+    useState<ApiEnvironment>("sandbox");
   const [signatureThreshold, setSignatureThreshold] = useState("25.00");
   const [registerId, setRegisterId] = useState("");
 
-  const { data: terminal, isLoading: isLoadingTerminal } = useStationTerminal(station.id);
-  const { data: availableTerminals } = useAvailableTerminals(station.location_id);
+  const { data: terminal, isLoading: isLoadingTerminal } = useStationTerminal(
+    station.id,
+  );
+  const { data: availableTerminals } = useAvailableTerminals(
+    station.location_id,
+  );
 
   const linkMutation = useLinkTerminalToStation();
   const unlinkMutation = useUnlinkTerminalFromStation();
@@ -172,11 +193,41 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
     if (!terminal) return;
     setIsTestingConnection(true);
     try {
-      await testConnectionMutation.mutateAsync(terminal.id);
+      await testConnectionMutation.mutateAsync({
+        terminalId: terminal.id,
+        silent: false,
+      });
     } finally {
       setIsTestingConnection(false);
     }
   };
+
+  // Automatic connection test every 4 minutes
+  useEffect(() => {
+    if (!terminal?.id) return;
+
+    // Initial check if needed (silent)
+    if (
+      terminal.last_connection_test_at &&
+      Date.now() - new Date(terminal.last_connection_test_at).getTime() >
+        3 * 60 * 1000
+    ) {
+      // Using mutate instead of mutateAsync to avoid unhandled promise in effect
+      testConnectionMutation.mutate({ terminalId: terminal.id, silent: true });
+    }
+
+    const interval = setInterval(
+      () => {
+        testConnectionMutation.mutate({
+          terminalId: terminal.id,
+          silent: true,
+        });
+      },
+      3 * 60 * 1000,
+    ); // 4 minutes
+
+    return () => clearInterval(interval);
+  }, [terminal?.id]); // Removed testConnectionMutation from dependency array to prevent re-runs
 
   if (isLoadingTerminal) {
     return (
@@ -191,7 +242,8 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
   }
 
   const hasTerminal = !!terminal;
-  const hasAvailableTerminals = availableTerminals && availableTerminals.length > 0;
+  const hasAvailableTerminals =
+    availableTerminals && availableTerminals.length > 0;
 
   return (
     <>
@@ -243,11 +295,15 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                 </div>
                 <h3 className="text-lg font-semibold">No terminal assigned</h3>
                 <p className="text-sm text-muted-foreground max-w-sm mt-2">
-                  Link an existing terminal or create a new one for this station.
+                  Link an existing terminal or create a new one for this
+                  station.
                 </p>
                 <div className="flex gap-3 mt-6">
                   {hasAvailableTerminals && (
-                    <Button variant="outline" onClick={() => setIsLinkDialogOpen(true)}>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsLinkDialogOpen(true)}
+                    >
                       <LinkIcon className="mr-2 h-4 w-4" />
                       Link Existing
                     </Button>
@@ -267,13 +323,15 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold text-lg">{terminal.terminal_name}</p>
+                      <p className="font-semibold text-lg">
+                        {terminal.terminal_name}
+                      </p>
                       <Badge
                         variant="outline"
                         className={cn(
                           terminal.is_connected
                             ? "border-green-500/50 bg-green-500/10 text-green-600"
-                            : "border-gray-400/50 text-gray-500"
+                            : "border-gray-400/50 text-gray-500",
                         )}
                       >
                         <Circle
@@ -281,7 +339,7 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                             "mr-1 h-2 w-2",
                             terminal.is_connected
                               ? "fill-green-500 text-green-500"
-                              : "fill-gray-400 text-gray-400"
+                              : "fill-gray-400 text-gray-400",
                           )}
                         />
                         {terminal.is_connected ? "Online" : "Offline"}
@@ -289,11 +347,16 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {getTerminalTypeLabel(terminal.terminal_type)}
-                      {terminal.terminal_model && ` - ${terminal.terminal_model}`}
+                      {terminal.terminal_model &&
+                        ` - ${terminal.terminal_model}`}
                     </p>
                   </div>
                   <Badge
-                    variant={terminal.api_environment === "production" ? "default" : "secondary"}
+                    variant={
+                      terminal.api_environment === "production"
+                        ? "default"
+                        : "secondary"
+                    }
                   >
                     {getApiEnvironmentLabel(terminal.api_environment)}
                   </Badge>
@@ -331,21 +394,31 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                     </h4>
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
-                        <p className="text-muted-foreground">Signature Threshold</p>
-                        <p className="font-medium">${terminal.signature_threshold.toFixed(2)}</p>
+                        <p className="text-muted-foreground">
+                          Signature Threshold
+                        </p>
+                        <p className="font-medium">
+                          ${terminal.signature_threshold.toFixed(2)}
+                        </p>
                       </div>
                       <div>
                         <p className="text-muted-foreground">Timeout</p>
-                        <p className="font-medium">{terminal.spin_proxy_timeout}s</p>
+                        <p className="font-medium">
+                          {terminal.spin_proxy_timeout}s
+                        </p>
                       </div>
                       <div>
-                        <p className="text-muted-foreground">Merchant Receipt</p>
+                        <p className="text-muted-foreground">
+                          Merchant Receipt
+                        </p>
                         <p className="font-medium">
                           {terminal.print_merchant_receipt ? "Print" : "Skip"}
                         </p>
                       </div>
                       <div>
-                        <p className="text-muted-foreground">Customer Receipt</p>
+                        <p className="text-muted-foreground">
+                          Customer Receipt
+                        </p>
                         <p className="font-medium">
                           {terminal.print_customer_receipt ? "Print" : "Skip"}
                         </p>
@@ -358,42 +431,84 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                 <div className="space-y-3">
                   <h4 className="font-medium">Capabilities</h4>
                   <div className="flex flex-wrap gap-2">
-                    <CapabilityBadge label="Contactless" enabled={terminal.supports_contactless} />
-                    <CapabilityBadge label="EMV Chip" enabled={terminal.supports_emv} />
-                    <CapabilityBadge label="Manual Entry" enabled={terminal.supports_manual_entry} />
-                    <CapabilityBadge label="Debit" enabled={terminal.supports_debit} />
-                    <CapabilityBadge label="EBT" enabled={terminal.supports_ebt} />
-                    <CapabilityBadge label="Tip Adjust" enabled={terminal.supports_tip_adjust} />
+                    <CapabilityBadge
+                      label="Contactless"
+                      enabled={terminal.supports_contactless}
+                    />
+                    <CapabilityBadge
+                      label="EMV Chip"
+                      enabled={terminal.supports_emv}
+                    />
+                    <CapabilityBadge
+                      label="Manual Entry"
+                      enabled={terminal.supports_manual_entry}
+                    />
+                    <CapabilityBadge
+                      label="Debit"
+                      enabled={terminal.supports_debit}
+                    />
+                    <CapabilityBadge
+                      label="EBT"
+                      enabled={terminal.supports_ebt}
+                    />
+                    <CapabilityBadge
+                      label="Tip Adjust"
+                      enabled={terminal.supports_tip_adjust}
+                    />
                   </div>
                 </div>
 
                 {/* Connection Status */}
                 <div className="rounded-lg border p-4 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Last Connection Test</span>
+                    <span className="text-sm text-muted-foreground">
+                      Status
+                    </span>
+                    <Badge
+                      variant={
+                        terminal.last_connection_status === "Online"
+                          ? "default"
+                          : "secondary"
+                      }
+                    >
+                      {terminal.last_connection_status}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">
+                      {terminal.last_connection_status === "Online"
+                        ? "Online Since"
+                        : "Last Verified"}
+                    </span>
                     <span className="text-sm font-medium">
-                      {terminal.last_connection_test_at
-                        ? formatDistanceToNow(new Date(terminal.last_connection_test_at), {
-                            addSuffix: true,
-                          })
-                        : "Never"}
+                      {terminal.last_connection_status === "Online" &&
+                      (terminal.metadata as any)?.online_since
+                        ? formatDistanceToNow(
+                            new Date((terminal.metadata as any).online_since),
+                            {
+                              addSuffix: true,
+                            },
+                          )
+                        : terminal.last_connection_test_at
+                          ? formatDistanceToNow(
+                              new Date(terminal.last_connection_test_at),
+                              {
+                                addSuffix: true,
+                              },
+                            )
+                          : "Never"}
                     </span>
                   </div>
-                  {terminal.last_connection_status && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Status</span>
-                      <Badge
-                        variant={terminal.last_connection_status === "Online" ? "default" : "secondary"}
-                      >
-                        {terminal.last_connection_status}
-                      </Badge>
-                    </div>
-                  )}
                   {terminal.last_transaction_at && (
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Last Transaction</span>
+                      <span className="text-sm text-muted-foreground">
+                        Last Transaction
+                      </span>
                       <span className="text-sm font-medium">
-                        {format(new Date(terminal.last_transaction_at), "MMM d, yyyy h:mm a")}
+                        {format(
+                          new Date(terminal.last_transaction_at),
+                          "MMM d, yyyy h:mm a",
+                        )}
                       </span>
                     </div>
                   )}
@@ -414,7 +529,10 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <Select value={selectedTerminalId} onValueChange={setSelectedTerminalId}>
+            <Select
+              value={selectedTerminalId}
+              onValueChange={setSelectedTerminalId}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select a terminal..." />
               </SelectTrigger>
@@ -428,7 +546,10 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
             </Select>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsLinkDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setIsLinkDialogOpen(false)}
+            >
               Cancel
             </Button>
             <Button
@@ -536,7 +657,9 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="signatureThreshold">Signature Threshold ($)</Label>
+              <Label htmlFor="signatureThreshold">
+                Signature Threshold ($)
+              </Label>
               <Input
                 id="signatureThreshold"
                 type="number"
@@ -581,7 +704,10 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
       </Dialog>
 
       {/* Unlink Confirmation Dialog */}
-      <AlertDialog open={isUnlinkDialogOpen} onOpenChange={setIsUnlinkDialogOpen}>
+      <AlertDialog
+        open={isUnlinkDialogOpen}
+        onOpenChange={setIsUnlinkDialogOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <div className="flex items-center gap-3">
@@ -595,8 +721,8 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
               <span className="font-semibold text-foreground">
                 {terminal?.terminal_name}
               </span>{" "}
-              from this station? The terminal will still exist and can be linked to another
-              station.
+              from this station? The terminal will still exist and can be linked
+              to another station.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
