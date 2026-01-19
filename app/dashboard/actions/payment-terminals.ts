@@ -5,8 +5,9 @@
 // Description: CRUD operations for payment terminals (Dejavoo, PAX)
 // ============================================================================
 
-import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { maskAuthKey } from "@/app/dashboard/settings/stations/utils/terminal-helpers";
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { maskAuthKey } from '@/app/dashboard/settings/stations/utils/terminal-helpers'
+import bcrypt from 'bcryptjs'
 
 // ============================================================================
 // Types
@@ -337,8 +338,10 @@ export async function createPaymentTerminal(
         tpn: input.tpn,
         auth_key: input.auth_key,
         register_id: input.register_id || null,
-        api_environment: input.api_environment || "sandbox",
-        connection_type: input.connection_type || "cloud",
+        tpn_encrypted: bcrypt.hashSync(input.tpn) || null,
+        auth_key_encrypted: bcrypt.hashSync(input.auth_key) || null,
+        api_environment: input.api_environment || 'sandbox',
+        connection_type: input.connection_type || 'cloud',
         local_ip_address: input.local_ip_address || null,
         local_port: input.local_port || null,
         signature_threshold: input.signature_threshold ?? 25.0,
@@ -608,7 +611,7 @@ export async function deletePaymentTerminal(terminalId: string) {
 // ============================================================================
 
 /**
- * Test terminal connection (SPIN API ping simulation)
+ * Test terminal connection 
  */
 export async function testTerminalConnection(terminalId: string) {
   try {
@@ -631,11 +634,23 @@ export async function testTerminalConnection(terminalId: string) {
 
     // Simulate SPIN API connection test
     // In production, this would call the actual Dejavoo/PAX SPIN API
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    // await new Promise(resolve => setTimeout(resolve, 1500))
+    // NEXT_PUBLIC_DEJAVOO_SPIN_API/v2/Common/TerminalStatus
+    var myHeaders = new Headers();
+    myHeaders.append("Content-Type", "application/json");
 
-    // 85% success rate for demo
-    const isOnline = Math.random() > 0.15;
-    const status = isOnline ? "Online" : "Offline";
+    var requestOptions = {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow'
+    };
+    let isOnline = false;
+    let status = 'Offline';
+    // await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    // // 85% success rate for demo
+    // const isOnline = Math.random() > 0.15;
+    // const status = isOnline ? "Online" : "Offline";
 
     // Determine online_since
     let onlineSince = (terminal.metadata as any)?.online_since;
@@ -656,6 +671,22 @@ export async function testTerminalConnection(terminalId: string) {
       online_since: onlineSince,
     };
 
+     const response = await fetch(`${process.env.NEXT_PUBLIC_DEJAVOO_SPIN_API}/v2/Common/TerminalStatus?request.tpn=${terminal.tpn}&request.registerId=${terminal.register_id}&request.authkey=${terminal.auth_key}`, requestOptions as RequestInit)
+      .then(response => response.json())
+      .then(result => {
+        console.log(result)
+         if( result.TerminalStatus == 'Online') {
+          isOnline = true;
+          status = 'Online';
+         } else {
+          isOnline = false;
+          status = 'Offline';
+         }
+      })
+      .catch(error => console.log('error', error));
+     
+   
+   
     // Update terminal status
     await supabase
       .from("payment_terminals")
