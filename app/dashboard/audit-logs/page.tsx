@@ -88,7 +88,7 @@ const RenderObject = ({
       className={cn(
         "grid gap-4 grid-cols-1",
         Object.keys(data).length > 1 && "sm:grid-cols-2",
-        className
+        className,
       )}
     >
       {Object.entries(data).map(([key, value]) => {
@@ -269,7 +269,7 @@ export default function AuditLogsPage() {
                     variant="outline"
                     className={cn(
                       "h-11 justify-start text-left font-normal bg-background/50",
-                      !dateRange && "text-muted-foreground"
+                      !dateRange && "text-muted-foreground",
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
@@ -357,7 +357,7 @@ export default function AuditLogsPage() {
                 onValueChange={(val) =>
                   handleFilterChange(
                     "action_category",
-                    val === "all_categories" ? "" : val
+                    val === "all_categories" ? "" : val,
                   )
                 }
               >
@@ -388,7 +388,7 @@ export default function AuditLogsPage() {
                 onValueChange={(val) =>
                   handleFilterChange(
                     "severity",
-                    val === "all_severities" ? "" : val
+                    val === "all_severities" ? "" : val,
                   )
                 }
               >
@@ -427,7 +427,7 @@ export default function AuditLogsPage() {
                 onValueChange={(val) =>
                   handleFilterChange(
                     "actor_user_id",
-                    val === "all_actors" ? "" : val
+                    val === "all_actors" ? "" : val,
                   )
                 }
               >
@@ -592,7 +592,7 @@ export default function AuditLogsPage() {
                   <TableRow
                     className={cn(
                       "group cursor-pointer hover:bg-muted/30 transition-colors",
-                      expandedRow === log.id && "bg-muted/40"
+                      expandedRow === log.id && "bg-muted/40",
                     )}
                     onClick={() =>
                       setExpandedRow(expandedRow === log.id ? null : log.id)
@@ -625,7 +625,7 @@ export default function AuditLogsPage() {
                         variant="secondary"
                         className={cn(
                           "text-[10px] h-6 px-2 gap-1.5 border-none capitalize",
-                          CATEGORY_COLORS[log.action_category] || "bg-gray-100"
+                          CATEGORY_COLORS[log.action_category] || "bg-gray-100",
                         )}
                       >
                         {CATEGORY_ICONS[log.action_category]}
@@ -660,7 +660,7 @@ export default function AuditLogsPage() {
                           "text-[10px] h-6 px-2 gap-1.5 border-none",
                           SEVERITY_COLORS[
                             log.severity as keyof typeof SEVERITY_COLORS
-                          ]
+                          ],
                         )}
                       >
                         {
@@ -716,16 +716,7 @@ export default function AuditLogsPage() {
                                   </Badge>
                                 </div>
                               </div>
-                              {log.resource_id && (
-                                <div>
-                                  <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">
-                                    Resource ID
-                                  </p>
-                                  <code className="text-xs bg-muted px-2 py-1 rounded-md font-mono">
-                                    {log.resource_id}
-                                  </code>
-                                </div>
-                              )}
+                              {/* Resource ID hidden - managers don't need to see raw UUIDs */}
                               {log.metadata &&
                                 Object.keys(log.metadata).length > 0 && (
                                   <div>

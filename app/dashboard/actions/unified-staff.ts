@@ -28,7 +28,7 @@ import { revalidatePath } from "next/cache";
  */
 export async function GetUnifiedStaffView(
   clerkOrgId: string,
-  locationId?: string | null
+  locationId?: string | null,
 ): Promise<UnifiedStaffMember[]> {
   if (!clerkOrgId) {
     console.error("[GetUnifiedStaffView] Missing clerkOrgId");
@@ -48,7 +48,7 @@ export async function GetUnifiedStaffView(
     if (merchantError || !merchant) {
       console.error(
         "[GetUnifiedStaffView] Error getting merchant:",
-        merchantError
+        merchantError,
       );
       return [];
     }
@@ -62,7 +62,7 @@ export async function GetUnifiedStaffView(
     if (error) {
       console.error(
         "[GetUnifiedStaffView] Error fetching unified staff:",
-        error
+        error,
       );
       return [];
     }
@@ -82,7 +82,7 @@ export async function GetUnifiedStaffView(
  * @returns Single unified staff member or null
  */
 export async function GetStaffMember(
-  memberId: string
+  memberId: string,
 ): Promise<UnifiedStaffMember | null> {
   if (!memberId) {
     console.error("[GetStaffMember] Missing memberId");
@@ -102,7 +102,7 @@ export async function GetStaffMember(
     if (memberError || !memberBasic) {
       console.error(
         "[GetStaffMember] Error fetching member organization:",
-        memberError
+        memberError,
       );
       return null;
     }
@@ -156,7 +156,7 @@ export async function GetStaffMember(
  */
 export async function CreatePOSStaff(
   clerkOrgId: string,
-  formData: InviteStaffFormData
+  formData: InviteStaffFormData,
 ): Promise<StaffActionResponse<{ member_id: string; generated_pin?: string }>> {
   if (!clerkOrgId) {
     return { error: "Missing organization ID" };
@@ -206,7 +206,7 @@ export async function CreatePOSStaff(
     if (profileError || !staffProfile) {
       console.error(
         "[CreatePOSStaff] Failed to create staff profile:",
-        profileError
+        profileError,
       );
       return { error: "Failed to create staff profile" };
     }
@@ -250,7 +250,7 @@ export async function CreatePOSStaff(
     if (assignmentError) {
       console.error(
         "[CreatePOSStaff] Failed to create assignments:",
-        assignmentError
+        assignmentError,
       );
       // Rollback
       await supabase.from("members").delete().eq("id", member.id);
@@ -295,7 +295,7 @@ function generateSecurePassword(length: number = 12): string {
  */
 export async function CreateClerkUserDirectly(
   clerkOrgId: string,
-  formData: InviteStaffFormData
+  formData: InviteStaffFormData,
 ): Promise<
   StaffActionResponse<{
     member_id: string;
@@ -426,7 +426,7 @@ export async function CreateClerkUserDirectly(
 
     if (!member) {
       console.warn(
-        "[CreateClerkUserDirectly] Member not created yet by webhook"
+        "[CreateClerkUserDirectly] Member not created yet by webhook",
       );
       // Don't fail - webhook might still be processing
     }
@@ -445,7 +445,7 @@ export async function CreateClerkUserDirectly(
     console.error("[CreateClerkUserDirectly] Unexpected error:", error);
     console.error(
       "[CreateClerkUserDirectly] Failed to create Clerk user:",
-      (error as any)?.errors
+      (error as any)?.errors,
     );
 
     return { error: "An unexpected error occurred" };
@@ -462,7 +462,7 @@ export async function CreateClerkUserDirectly(
 export async function InviteClerkStaff(
   userId: string,
   clerkOrgId: string,
-  formData: InviteStaffFormData
+  formData: InviteStaffFormData,
 ): Promise<StaffActionResponse<{ invite_id: string | null }>> {
   const supabase = createServerSupabaseClient();
 
@@ -581,7 +581,7 @@ export async function InviteClerkStaff(
 export async function UpdateStaffLocationAssignment(
   memberId: string,
   locationId: string,
-  updates: UpdateStaffAssignmentData
+  updates: UpdateStaffAssignmentData,
 ): Promise<StaffActionResponse<{ success: boolean }>> {
   const supabase = createServerSupabaseClient();
 
@@ -636,7 +636,7 @@ export async function UpdateStaffLocationAssignment(
 export async function ResetStaffPIN(
   memberId: string,
   locationId: string,
-  newPin?: string
+  newPin?: string,
 ): Promise<StaffActionResponse<ResetPINResult>> {
   const supabase = createServerSupabaseClient();
 
@@ -675,8 +675,23 @@ export async function ResetStaffPIN(
       return { error: error.message };
     }
 
-    // Log this action
+    // Log this action with human-readable names
     if (member.organization_id) {
+      // Fetch staff name for user-friendly audit log
+      let staffName = "Unknown Staff";
+      if (member.staff_profile_id) {
+        const { data: staffProfile } = await supabase
+          .from("staff_profiles")
+          .select("first_name, last_name, display_name")
+          .eq("id", member.staff_profile_id)
+          .single();
+        if (staffProfile) {
+          staffName =
+            staffProfile.display_name ||
+            `${staffProfile.first_name} ${staffProfile.last_name}`;
+        }
+      }
+
       await LogAuditEvent({
         clerkOrgId: member.organization_id,
         locationId,
@@ -684,12 +699,12 @@ export async function ResetStaffPIN(
         actionCategory: "staff",
         resourceType: "staff_member",
         resourceId: member.staff_profile_id || member.user_id || memberId,
+        resourceName: staffName,
         changes: {
           reason: "Manual Reset via Dashboard",
         },
         metadata: {
-          target_member_id: memberId,
-          staff_profile_id: member.staff_profile_id,
+          staff_name: staffName,
         },
       });
     }
@@ -716,7 +731,7 @@ export async function ResetStaffPIN(
  */
 export async function DeactivateStaffMember(
   memberId: string,
-  locationId?: string
+  locationId?: string,
 ): Promise<StaffActionResponse<{ success: boolean }>> {
   const supabase = createServerSupabaseClient();
 
@@ -770,7 +785,7 @@ export async function DeactivateStaffMember(
  */
 export async function ReactivateStaffMember(
   memberId: string,
-  locationId?: string
+  locationId?: string,
 ): Promise<StaffActionResponse<{ success: boolean }>> {
   const supabase = createServerSupabaseClient();
 
@@ -831,7 +846,7 @@ export async function ReactivateStaffMember(
 export async function UpgradePOSStaffToClerk(
   memberId: string,
   locationId: string,
-  email: string
+  email: string,
 ): Promise<StaffActionResponse<UpgradePOSToClerkResult>> {
   const supabase = createServerSupabaseClient();
 
@@ -853,7 +868,7 @@ export async function UpgradePOSStaffToClerk(
                     phone,
                     account_type
                 )
-            `
+            `,
       )
       .eq("id", memberId)
       .single();
@@ -893,7 +908,7 @@ export async function UpgradePOSStaffToClerk(
     if (locationError || !locationAssignment) {
       console.error(
         "[UpgradePOSStaffToClerk] Location assignment not found:",
-        locationError
+        locationError,
       );
       return { error: "Location assignment not found" };
     }
@@ -929,7 +944,7 @@ export async function UpgradePOSStaffToClerk(
     } catch (clerkError: any) {
       console.error(
         "[UpgradePOSStaffToClerk] Clerk creation failed:",
-        clerkError
+        clerkError,
       );
       return {
         error: `Failed to create Clerk user: ${
@@ -948,7 +963,7 @@ export async function UpgradePOSStaffToClerk(
     } catch (orgError: any) {
       console.error(
         "[UpgradePOSStaffToClerk] Failed to add to organization:",
-        orgError
+        orgError,
       );
       // Rollback: Delete Clerk user
       await clerk.users.deleteUser(clerkUser.id);
@@ -969,7 +984,7 @@ export async function UpgradePOSStaffToClerk(
     if (profileUpdateError) {
       console.error(
         "[UpgradePOSStaffToClerk] Failed to update staff profile:",
-        profileUpdateError
+        profileUpdateError,
       );
       // Rollback: Delete Clerk user
       await clerk.users.deleteUser(clerkUser.id);
@@ -988,7 +1003,7 @@ export async function UpgradePOSStaffToClerk(
     if (memberUpdateError) {
       console.error(
         "[UpgradePOSStaffToClerk] Failed to update member:",
-        memberUpdateError
+        memberUpdateError,
       );
       // Rollback: Revert staff_profiles and delete Clerk user
       await supabase
@@ -1017,7 +1032,7 @@ export async function UpgradePOSStaffToClerk(
     if (locationUpdateError) {
       console.error(
         "[UpgradePOSStaffToClerk] Failed to update location_members:",
-        locationUpdateError
+        locationUpdateError,
       );
       // Rollback all changes
       await supabase
