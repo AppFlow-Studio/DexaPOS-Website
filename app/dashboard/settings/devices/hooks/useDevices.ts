@@ -3,6 +3,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { LogAuditEvent } from "@/app/dashboard/actions/audit-logs";
 
 export type DeviceType = "external_terminal" | "tablet" | "printer";
 export type ConnectionType = "bluetooth" | "usb" | "wifi" | "wired" | "builtin";
@@ -567,35 +568,124 @@ export const useDevices = create<DevicesState>()(
           isAssigned: false,
         },
       ],
-      addDevice: (newDevice) =>
+      addDevice: (newDevice) => {
+        const deviceId = uuidv4();
+        const device = {
+          ...newDevice,
+          id: deviceId,
+          status: "offline" as const,
+          lastSeen: new Date().toISOString(),
+          alerts: 0,
+          issues: [],
+          activityLogs: [],
+        };
+
         set((state) => ({
-          devices: [
-            ...state.devices,
-            {
-              ...newDevice,
-              id: uuidv4(),
-              status: "offline",
-              lastSeen: new Date().toISOString(),
-              alerts: 0,
-              issues: [],
-              activityLogs: [],
-            },
-          ],
-        })),
-      updateDevice: (id, updates) =>
+          devices: [...state.devices, device],
+        }));
+
+        // Log audit event (fire and forget)
+        LogAuditEvent({
+          action: `Added Device: ${newDevice.name} (${getDeviceTypeLabel(newDevice.type)})`,
+          actionCategory: "settings",
+          resourceType: "device",
+          resourceId: deviceId,
+          resourceName: newDevice.name,
+          metadata: {
+            device_type: newDevice.type,
+            device_model: newDevice.model,
+            serial_number: newDevice.serialNumber,
+            connection_type: newDevice.connectionType,
+          },
+        }).catch(console.error);
+      },
+      updateDevice: (id, updates) => {
+        const state = get();
+        const existingDevice = state.devices.find((d) => d.id === id);
+
         set((state) => ({
           devices: state.devices.map((dev) =>
             dev.id === id ? { ...dev, ...updates } : dev,
           ),
-        })),
-      removeDevice: (id) =>
+        }));
+
+        // Log audit event if device found (fire and forget)
+        if (existingDevice) {
+          const changedFields = Object.keys(updates).filter(
+            (key) => (existingDevice as any)[key] !== (updates as any)[key],
+          );
+
+          if (changedFields.length > 0) {
+            const beforeLog: Record<string, unknown> = {};
+            const afterLog: Record<string, unknown> = {};
+            changedFields.forEach((key) => {
+              beforeLog[key] = (existingDevice as any)[key];
+              afterLog[key] = (updates as any)[key];
+            });
+
+            LogAuditEvent({
+              action: `Updated Device: ${existingDevice.name}`,
+              actionCategory: "settings",
+              resourceType: "device",
+              resourceId: id,
+              resourceName: existingDevice.name,
+              metadata: {
+                device_type: existingDevice.type,
+              },
+              changes: { before: beforeLog, after: afterLog },
+            }).catch(console.error);
+          }
+        }
+      },
+      removeDevice: (id) => {
+        const state = get();
+        const device = state.devices.find((d) => d.id === id);
+
         set((state) => ({
           devices: state.devices.filter((dev) => dev.id !== id),
-        })),
-      removeMultipleDevices: (ids) =>
+        }));
+
+        // Log audit event if device found (fire and forget)
+        if (device) {
+          LogAuditEvent({
+            action: `Deleted Device: ${device.name} (${getDeviceTypeLabel(device.type)})`,
+            actionCategory: "settings",
+            resourceType: "device",
+            resourceId: id,
+            resourceName: device.name,
+            metadata: {
+              device_type: device.type,
+              device_model: device.model,
+              serial_number: device.serialNumber,
+            },
+          }).catch(console.error);
+        }
+      },
+      removeMultipleDevices: (ids) => {
+        const state = get();
+        const devicesToRemove = state.devices.filter((d) => ids.includes(d.id));
+
         set((state) => ({
           devices: state.devices.filter((dev) => !ids.includes(dev.id)),
-        })),
+        }));
+
+        // Log audit event for each deleted device (fire and forget)
+        devicesToRemove.forEach((device) => {
+          LogAuditEvent({
+            action: `Deleted Device: ${device.name} (${getDeviceTypeLabel(device.type)})`,
+            actionCategory: "settings",
+            resourceType: "device",
+            resourceId: device.id,
+            resourceName: device.name,
+            metadata: {
+              device_type: device.type,
+              device_model: device.model,
+              serial_number: device.serialNumber,
+              bulk_delete: true,
+            },
+          }).catch(console.error);
+        });
+      },
       dismissIssue: (deviceId, issueId) =>
         set((state) => ({
           devices: state.devices.map((dev) =>
@@ -608,39 +698,55 @@ export const useDevices = create<DevicesState>()(
               : dev,
           ),
         })),
-      assignPrinter: (printerId, config) =>
-        set((state) => {
-          const printer = state.detectedPrinters.find(
-            (p) => p.id === printerId,
-          );
-          if (!printer) return state;
+      assignPrinter: (printerId, config) => {
+        const state = get();
+        const printer = state.detectedPrinters.find((p) => p.id === printerId);
+        if (!printer) return;
 
-          return {
-            devices: [
-              ...state.devices,
-              {
-                id: uuidv4(),
-                name: config.name,
-                type: "printer" as DeviceType,
-                status: "online",
-                lastSeen: new Date().toISOString(),
-                connectedSince: new Date().toISOString(),
-                serialNumber: printer.serialNumber,
-                alerts: 0,
-                model: printer.model,
-                printerType: config.printerType,
-                prepStation: config.prepStation,
-                alwaysPrint: config.alwaysPrint,
-                sendToExpediter: config.sendToExpediter,
-                issues: [],
-                activityLogs: [],
-              },
-            ],
-            detectedPrinters: state.detectedPrinters.map((p) =>
-              p.id === printerId ? { ...p, isAssigned: true } : p,
-            ),
-          };
-        }),
+        const deviceId = uuidv4();
+        const newDevice = {
+          id: deviceId,
+          name: config.name,
+          type: "printer" as DeviceType,
+          status: "online" as const,
+          lastSeen: new Date().toISOString(),
+          connectedSince: new Date().toISOString(),
+          serialNumber: printer.serialNumber,
+          alerts: 0,
+          model: printer.model,
+          printerType: config.printerType,
+          prepStation: config.prepStation,
+          alwaysPrint: config.alwaysPrint,
+          sendToExpediter: config.sendToExpediter,
+          issues: [],
+          activityLogs: [],
+        };
+
+        set((state) => ({
+          devices: [...state.devices, newDevice],
+          detectedPrinters: state.detectedPrinters.map((p) =>
+            p.id === printerId ? { ...p, isAssigned: true } : p,
+          ),
+        }));
+
+        // Log audit event (fire and forget)
+        LogAuditEvent({
+          action: `Assigned Printer: ${config.name} (${config.printerType})`,
+          actionCategory: "settings",
+          resourceType: "device",
+          resourceId: deviceId,
+          resourceName: config.name,
+          metadata: {
+            device_type: "printer",
+            printer_type: config.printerType,
+            prep_station: config.prepStation,
+            device_model: printer.model,
+            serial_number: printer.serialNumber,
+            always_print: config.alwaysPrint,
+            send_to_expediter: config.sendToExpediter,
+          },
+        }).catch(console.error);
+      },
       simulateConnection: async (id) => {
         const device = get().devices.find((d) => d.id === id);
         if (!device) return false;

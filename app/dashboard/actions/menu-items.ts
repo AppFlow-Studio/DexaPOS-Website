@@ -808,7 +808,7 @@ export async function DeleteMenuItem(
       resourceId: itemId,
       resourceName: item.name,
       locationId: locationId,
-      severity: "warning",
+      severity: "info",
     });
   }
 

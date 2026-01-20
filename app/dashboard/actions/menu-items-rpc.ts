@@ -662,6 +662,89 @@ export async function updateItemOverride(
     }
   }
 
+  // 1. Fetch "Before" state for Audit Log (Base Fields & Simple Price Overrides)
+  const beforeLog: Record<string, unknown> = {};
+
+  // Fetch Base Item
+  const { data: beforeItem } = await supabase
+    .from("menu_items")
+    .select("*")
+    .eq("id", params.menuItemId)
+    .single();
+
+  if (beforeItem) {
+    if (params.name !== undefined) beforeLog.name = beforeItem.name;
+    if (params.description !== undefined)
+      beforeLog.description = beforeItem.description;
+    if (params.image !== undefined) beforeLog.image = beforeItem.image;
+    if (params.allergens !== undefined)
+      beforeLog.allergens = beforeItem.allergens;
+    if (params.cardBgColor !== undefined)
+      beforeLog.card_bg_color = beforeItem.card_bg_color;
+    if (params.mealTypes !== undefined)
+      beforeLog.meal_types = beforeItem.meal_types;
+    if (params.stockTrackingMode !== undefined && !locationId)
+      beforeLog.stock_tracking_mode = beforeItem.stock_tracking_mode;
+
+    if (params.taxCategory !== undefined && !locationId)
+      beforeLog.tax_category = beforeItem.tax_category;
+    if (params.isTaxExempt !== undefined && !locationId)
+      beforeLog.is_tax_exempt = beforeItem.is_tax_exempt;
+    if (params.availableChannels !== undefined && !locationId)
+      beforeLog.available_channels = beforeItem.available_channels;
+
+    // Base Price (Global)
+    if (!locationId && params.price !== undefined)
+      beforeLog.price = beforeItem.price;
+    if (!locationId && params.cashPrice !== undefined)
+      beforeLog.cash_price = beforeItem.cash_price;
+    if (!locationId && params.availability !== undefined)
+      beforeLog.availability = beforeItem.availability ?? true;
+  }
+
+  // Fetch Location Override (if L2)
+  if (locationId && !params.menuId && !params.categoryId) {
+    const { data: beforeOverride } = await supabase
+      .from("location_item_overrides")
+      .select("*")
+      .eq("location_id", locationId)
+      .eq("menu_item_id", params.menuItemId)
+      .single();
+
+    if (beforeOverride) {
+      // Existing override
+      if (params.price !== undefined)
+        beforeLog.price = beforeOverride.custom_price ?? beforeItem?.price;
+      if (params.cashPrice !== undefined)
+        beforeLog.cash_price =
+          beforeOverride.custom_cash_price ?? beforeItem?.cash_price;
+      if (params.taxCategory !== undefined)
+        beforeLog.tax_category =
+          beforeOverride.tax_category ?? beforeItem?.tax_category;
+      if (params.isTaxExempt !== undefined)
+        beforeLog.is_tax_exempt =
+          beforeOverride.is_tax_exempt ?? beforeItem?.is_tax_exempt;
+      if (params.availableChannels !== undefined)
+        beforeLog.available_channels =
+          beforeOverride.available_channels ?? beforeItem?.available_channels;
+    } else if (beforeItem) {
+      // No existing override, inheriting base
+      if (params.price !== undefined) beforeLog.price = beforeItem.price;
+      if (params.cashPrice !== undefined)
+        beforeLog.cash_price = beforeItem.cash_price;
+      // ... stock tracking mode, etc. if needed
+    }
+  }
+
+  // Track changes for audit log (After state)
+  const changesLog: Record<string, unknown> = {};
+  let finalUpdateResult: UpdateResult = {
+    success: true,
+    level: 1,
+    table: "menu_items",
+    action: "updated",
+  };
+
   // If updating base item fields (name, description, etc.) - these are always global
   if (
     params.name !== undefined ||
@@ -680,26 +763,48 @@ export async function updateItemOverride(
       const updateData: Record<string, unknown> = {
         updated_at: new Date().toISOString(),
       };
-      if (params.name !== undefined) updateData.name = params.name;
-      if (params.description !== undefined)
+      if (params.name !== undefined) {
+        updateData.name = params.name;
+        changesLog.name = params.name;
+      }
+      if (params.description !== undefined) {
         updateData.description = params.description;
-      if (params.image !== undefined) updateData.image = params.image;
-      if (params.allergens !== undefined)
+        changesLog.description = params.description;
+      }
+      if (params.image !== undefined) {
+        updateData.image = params.image;
+        changesLog.image = params.image;
+      }
+      if (params.allergens !== undefined) {
         updateData.allergens = params.allergens;
-      if (params.cardBgColor !== undefined)
+        changesLog.allergens = params.allergens;
+      }
+      if (params.cardBgColor !== undefined) {
         updateData.card_bg_color = params.cardBgColor;
-      if (params.mealTypes !== undefined)
+        changesLog.card_bg_color = params.cardBgColor;
+      }
+      if (params.mealTypes !== undefined) {
         updateData.meal_types = params.mealTypes;
-      if (params.stockTrackingMode !== undefined)
+        changesLog.meal_types = params.mealTypes;
+      }
+      if (params.stockTrackingMode !== undefined) {
         updateData.stock_tracking_mode = params.stockTrackingMode;
+        // Don't log here if it's handled in override block
+      }
 
       // Tax & Inventory Control fields (migration 014)
-      if (params.taxCategory !== undefined)
+      if (params.taxCategory !== undefined) {
         updateData.tax_category = params.taxCategory;
-      if (params.isTaxExempt !== undefined)
+        changesLog.tax_category = params.taxCategory;
+      }
+      if (params.isTaxExempt !== undefined) {
         updateData.is_tax_exempt = params.isTaxExempt;
-      if (params.availableChannels !== undefined)
+        changesLog.is_tax_exempt = params.isTaxExempt;
+      }
+      if (params.availableChannels !== undefined) {
         updateData.available_channels = params.availableChannels;
+        changesLog.available_channels = params.availableChannels;
+      }
 
       const { error } = await supabase
         .from("menu_items")
@@ -717,12 +822,18 @@ export async function updateItemOverride(
       };
 
       // Tax & Inventory Control overrides (migration 014)
-      if (params.taxCategory !== undefined)
+      if (params.taxCategory !== undefined) {
         overrideData.tax_category = params.taxCategory;
-      if (params.isTaxExempt !== undefined)
+        changesLog.tax_category = params.taxCategory;
+      }
+      if (params.isTaxExempt !== undefined) {
         overrideData.is_tax_exempt = params.isTaxExempt;
-      if (params.availableChannels !== undefined)
+        changesLog.is_tax_exempt = params.isTaxExempt;
+      }
+      if (params.availableChannels !== undefined) {
         overrideData.available_channels = params.availableChannels;
+        changesLog.available_channels = params.availableChannels;
+      }
 
       // Only upsert if we have tax/channel fields to update
       if (Object.keys(overrideData).length > 1) {
@@ -779,10 +890,43 @@ export async function updateItemOverride(
       return { success: false, error: error.message };
     }
 
-    const result = data as UpdateResult;
+    finalUpdateResult = data as UpdateResult;
 
-    // Log Audit Event
-    if (result.success) {
+    if (finalUpdateResult.success) {
+      if (params.price !== undefined) changesLog.price = params.price;
+      if (params.cashPrice !== undefined)
+        changesLog.cash_price = params.cashPrice;
+      if (params.availability !== undefined)
+        changesLog.availability = params.availability;
+      if (params.priceModifier !== undefined)
+        changesLog.price_modifier = params.priceModifier;
+      if (params.displayOrder !== undefined)
+        changesLog.display_order = params.displayOrder;
+      if (params.isFeatured !== undefined)
+        changesLog.is_featured = params.isFeatured;
+      if (params.stockTrackingMode !== undefined)
+        changesLog.stock_tracking_mode = params.stockTrackingMode;
+    }
+  }
+
+  // Final Audit Log - Only log if there are ACTUAL changes
+  if (Object.keys(changesLog).length > 0) {
+    // Check if any values actually changed
+    let hasRealChanges = false;
+    for (const key of Object.keys(changesLog)) {
+      // Compare before and after values
+      const beforeValue = beforeLog[key];
+      const afterValue = changesLog[key];
+
+      // Use JSON.stringify for deep comparison (handles arrays, objects, etc.)
+      if (JSON.stringify(beforeValue) !== JSON.stringify(afterValue)) {
+        hasRealChanges = true;
+        break;
+      }
+    }
+
+    // Only proceed with logging if there are actual changes
+    if (hasRealChanges) {
       // Fetch item details and related names for user-friendly audit log
       const [itemResult, categoryResult, menuResult] = await Promise.all([
         supabase
@@ -810,22 +954,6 @@ export async function updateItemOverride(
       const categoryName = categoryResult.data?.name;
       const menuName = menuResult.data?.name;
 
-      // Build user-friendly changes object (exclude raw IDs)
-      const userFriendlyChanges: Record<string, unknown> = {};
-      if (params.price !== undefined) userFriendlyChanges.price = params.price;
-      if (params.cashPrice !== undefined)
-        userFriendlyChanges.cash_price = params.cashPrice;
-      if (params.availability !== undefined)
-        userFriendlyChanges.availability = params.availability;
-      if (params.priceModifier !== undefined)
-        userFriendlyChanges.price_modifier = params.priceModifier;
-      if (params.displayOrder !== undefined)
-        userFriendlyChanges.display_order = params.displayOrder;
-      if (params.isFeatured !== undefined)
-        userFriendlyChanges.is_featured = params.isFeatured;
-      if (params.stockTrackingMode !== undefined)
-        userFriendlyChanges.stock_tracking_mode = params.stockTrackingMode;
-
       // Build user-friendly metadata
       const userFriendlyMetadata: Record<string, unknown> = {};
       if (categoryName) userFriendlyMetadata.category_name = categoryName;
@@ -839,18 +967,19 @@ export async function updateItemOverride(
         resourceId: params.menuItemId,
         resourceName: itemName,
         locationId: locationId,
-        changes: { after: userFriendlyChanges },
+        changes: {
+          before: beforeLog,
+          after: changesLog,
+        },
         metadata:
           Object.keys(userFriendlyMetadata).length > 0
             ? userFriendlyMetadata
             : undefined,
       });
     }
-
-    return result;
   }
 
-  return { success: true, level: 1, table: "menu_items", action: "updated" };
+  return finalUpdateResult;
 }
 
 // ============================================================================

@@ -197,26 +197,29 @@ export async function UpdateLocation(
   if (data.public_metadata !== undefined)
     updateData.public_metadata = data.public_metadata;
 
+  // Fetch current location data for audit log diff
+  const { data: currentLocation, error: fetchError } = await supabase
+    .from("locations")
+    .select("*")
+    .eq("id", locationId)
+    .single();
+
+  if (fetchError || !currentLocation) {
+    return { error: "Location not found" };
+  }
+
   // Check for duplicate code if being updated
   if (data.code) {
-    const { data: currentLocation } = await supabase
+    const { data: existingLocation } = await supabase
       .from("locations")
-      .select("merchant_id")
-      .eq("id", locationId)
+      .select("id")
+      .eq("merchant_id", currentLocation.merchant_id)
+      .eq("code", data.code)
+      .neq("id", locationId)
       .single();
 
-    if (currentLocation) {
-      const { data: existingLocation } = await supabase
-        .from("locations")
-        .select("id")
-        .eq("merchant_id", currentLocation.merchant_id)
-        .eq("code", data.code)
-        .neq("id", locationId)
-        .single();
-
-      if (existingLocation) {
-        return { error: "A location with this code already exists" };
-      }
+    if (existingLocation) {
+      return { error: "A location with this code already exists" };
     }
   }
 
@@ -232,17 +235,38 @@ export async function UpdateLocation(
     return { error: error.message };
   }
 
-  // Log audit event
-  await LogAuditEvent({
-    merchantId: location.merchant_id,
-    action: `Updated Location: ${location.name}`,
-    actionCategory: "settings",
-    resourceType: "location",
-    resourceId: locationId,
-    resourceName: location.name,
-    locationId: locationId,
-    changes: { after: data as Record<string, unknown> },
+  // Calculate changes for audit log
+  const changedFields: string[] = [];
+  const beforeLog: Record<string, unknown> = {};
+  const afterLog: Record<string, unknown> = {};
+
+  Object.keys(updateData).forEach((key) => {
+    // Skip updated_at
+    if (key === "updated_at") return;
+
+    const newValue = updateData[key];
+    const oldValue = currentLocation[key as keyof typeof currentLocation];
+
+    if (JSON.stringify(newValue) !== JSON.stringify(oldValue)) {
+      changedFields.push(key);
+      beforeLog[key] = oldValue;
+      afterLog[key] = newValue;
+    }
   });
+
+  // Log audit event
+  if (changedFields.length > 0) {
+    await LogAuditEvent({
+      merchantId: location.merchant_id,
+      action: `Updated Location: ${location.name}`,
+      actionCategory: "settings",
+      resourceType: "location",
+      resourceId: locationId,
+      resourceName: location.name,
+      locationId: locationId,
+      changes: { before: beforeLog, after: afterLog },
+    });
+  }
 
   return { data: location as Location };
 }

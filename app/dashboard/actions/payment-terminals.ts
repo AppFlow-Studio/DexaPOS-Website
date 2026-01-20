@@ -463,6 +463,17 @@ export async function updatePaymentTerminal(
       updateData.supports_tip_adjust = input.supports_tip_adjust;
     if (input.is_active !== undefined) updateData.is_active = input.is_active;
 
+    // Fetch current terminal data for audit log diff
+    const { data: currentTerminal, error: fetchError } = await supabase
+      .from("payment_terminals")
+      .select("*")
+      .eq("id", terminalId)
+      .single();
+
+    if (fetchError || !currentTerminal) {
+      return { success: false, error: "Terminal not found", data: null };
+    }
+
     const { data, error } = await supabase
       .from("payment_terminals")
       .update(updateData)
@@ -481,17 +492,51 @@ export async function updatePaymentTerminal(
       auth_key: maskAuthKey(data.auth_key),
     };
 
-    // Log audit event
-    await LogAuditEvent({
-      merchantId: data.merchant_id,
-      action: `Updated Payment Terminal: ${data.terminal_name}`,
-      actionCategory: "settings",
-      resourceType: "payment_terminal",
-      resourceId: terminalId,
-      resourceName: data.terminal_name,
-      locationId: data.location_id,
-      changes: { after: updateData },
+    // Calculate changes for audit log
+    const changedFields: string[] = [];
+    const beforeLog: Record<string, unknown> = {};
+    const afterLog: Record<string, unknown> = {};
+
+    Object.keys(updateData).forEach((key) => {
+      // Skip updated_at
+      if (key === "updated_at") return;
+
+      const newValue = updateData[key];
+      const oldValue = currentTerminal[key as keyof typeof currentTerminal];
+
+      // Handle masking for sensitive fields in logs if necessary (auth_key)
+      // For now, tracking them as changed is okay, but maybe don't log the actual key if it's sensitive
+      // The updateInput has auth_key unmasked usually.
+      // Let's mask auth_key in logs if it changes
+      if (key === "auth_key" || key === "tpn") {
+        if (newValue !== oldValue) {
+          changedFields.push(key);
+          beforeLog[key] = "***"; // Mask in log
+          afterLog[key] = "***"; // Mask in log
+        }
+        return;
+      }
+
+      if (JSON.stringify(newValue) !== JSON.stringify(oldValue)) {
+        changedFields.push(key);
+        beforeLog[key] = oldValue;
+        afterLog[key] = newValue;
+      }
     });
+
+    // Log audit event
+    if (changedFields.length > 0) {
+      await LogAuditEvent({
+        merchantId: data.merchant_id,
+        action: `Updated Payment Terminal: ${data.terminal_name}`,
+        actionCategory: "settings",
+        resourceType: "payment_terminal",
+        resourceId: terminalId,
+        resourceName: data.terminal_name,
+        locationId: data.location_id,
+        changes: { before: beforeLog, after: afterLog },
+      });
+    }
 
     return { success: true, data: maskedData as PaymentTerminal, error: null };
   } catch (error) {

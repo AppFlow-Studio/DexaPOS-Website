@@ -288,6 +288,18 @@ export async function updateDiscount(
     const merchantId = await getMerchantIdFromSession();
     const payload = buildPayload(input, merchantId);
 
+    // Fetch existing discount for audit log diff
+    const { data: existingDiscount, error: fetchError } = await supabase
+      .from("discounts")
+      .select("*")
+      .eq("id", discountId)
+      .eq("merchant_id", merchantId)
+      .single();
+
+    if (fetchError || !existingDiscount) {
+      throw fetchError || new Error("Discount not found");
+    }
+
     const { data, error } = await supabase
       .from("discounts")
       .update(payload)
@@ -302,16 +314,75 @@ export async function updateDiscount(
 
     await upsertMenuItemLinks(discountId, merchantId, input.menu_item_ids);
 
-    // Log audit event
-    await LogAuditEvent({
-      merchantId,
-      action: `Updated Discount: ${data.name}`,
-      actionCategory: "settings",
-      resourceType: "discount",
-      resourceId: discountId,
-      resourceName: data.name,
-      changes: { after: input as unknown as Record<string, unknown> },
+    // Calculate changes for audit log
+    const changedFields: string[] = [];
+    const beforeLog: Record<string, unknown> = {};
+    const afterLog: Record<string, unknown> = {};
+
+    Object.keys(payload).forEach((key) => {
+      // Skip updated_at as it always changes
+      if (key === "updated_at") return;
+
+      const payloadValue = payload[key as keyof typeof payload];
+      const existingValue =
+        existingDiscount[key as keyof typeof existingDiscount];
+
+      // Compare values (handling JSON arrays like applicable_days differently if needed)
+      // JSON.stringify helps with array/object comparison
+      if (JSON.stringify(payloadValue) !== JSON.stringify(existingValue)) {
+        changedFields.push(key);
+        beforeLog[key] = existingValue;
+        afterLog[key] = payloadValue;
+      }
     });
+
+    // Resolve Category Names for Audit Log using helper logic
+    const categoryKeys = ["applies_to_categories", "exclude_categories"];
+    const categoryIds = new Set<string>();
+
+    categoryKeys.forEach((key) => {
+      if (beforeLog[key]) {
+        (beforeLog[key] as string[]).forEach((id) => categoryIds.add(id));
+      }
+      if (afterLog[key]) {
+        (afterLog[key] as string[]).forEach((id) => categoryIds.add(id));
+      }
+    });
+
+    if (categoryIds.size > 0) {
+      const { data: categories } = await supabase
+        .from("categories")
+        .select("id, name")
+        .in("id", Array.from(categoryIds));
+
+      const idToName = new Map(categories?.map((c) => [c.id, c.name]) || []);
+
+      categoryKeys.forEach((key) => {
+        if (beforeLog[key]) {
+          beforeLog[key] = (beforeLog[key] as string[]).map(
+            (id) => idToName.get(id) || id,
+          );
+        }
+        if (afterLog[key]) {
+          afterLog[key] = (afterLog[key] as string[]).map(
+            (id) => idToName.get(id) || id,
+          );
+        }
+      });
+    }
+
+    // Log audit event only if there are changes
+    if (changedFields.length > 0) {
+      await LogAuditEvent({
+        merchantId,
+        action: `Updated Discount: ${data.name}`,
+        actionCategory: "settings",
+        resourceType: "discount",
+        resourceId: discountId,
+        resourceName: data.name,
+        changes: { before: beforeLog, after: afterLog },
+      });
+    }
 
     return { success: true, data: data as Discount };
   } catch (error) {

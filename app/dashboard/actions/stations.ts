@@ -386,10 +386,10 @@ export async function updateStation(
   try {
     const supabase = createServerSupabaseClient();
 
-    // Get current station to check location
+    // Get current station to check location and create audit log diff
     const { data: currentStation, error: fetchError } = await supabase
       .from("stations")
-      .select("location_id, station_number, station_code")
+      .select("*")
       .eq("id", stationId)
       .single();
 
@@ -486,17 +486,50 @@ export async function updateStation(
       return { success: false, error: error.message, data: null };
     }
 
-    // Log audit event
-    await LogAuditEvent({
-      merchantId: data.merchant_id,
-      action: `Updated Station: ${data.station_name}`,
-      actionCategory: "settings",
-      resourceType: "station",
-      resourceId: stationId,
-      resourceName: data.station_name,
-      locationId: data.location_id,
-      changes: { after: input as Record<string, unknown> },
+    // Calculate changes for audit log
+    const changedFields: string[] = [];
+    const beforeLog: Record<string, unknown> = {};
+    const afterLog: Record<string, unknown> = {};
+
+    Object.keys(input).forEach((key) => {
+      const inputKey = key as keyof UpdateStationInput;
+      // Map input keys to station keys if they differ, but here they mostly match
+      // station_code, station_name, etc default match.
+      // input properties DO need to be compared against currentStation properties.
+      // Note: currentStation properties might be null, input might be undefined for others.
+
+      if (input[inputKey] !== undefined) {
+        // Strict equality check might fail for null/undefined vs optional, but let's be safe
+        // Also need to handle type mismatch if any (e.g. number vs string), but TypeScript helps.
+        // We cast to any to compare values loosely or strictly.
+        if (
+          (currentStation as any)[inputKey] !== (input as any)[inputKey] &&
+          // Handle null vs undefined vs empty string potentially
+          !(
+            (currentStation as any)[inputKey] === null &&
+            (input as any)[inputKey] === null
+          )
+        ) {
+          changedFields.push(inputKey);
+          beforeLog[inputKey] = (currentStation as any)[inputKey];
+          afterLog[inputKey] = (input as any)[inputKey];
+        }
+      }
     });
+
+    // Log audit event only if there are changes
+    if (changedFields.length > 0) {
+      await LogAuditEvent({
+        merchantId: data.merchant_id,
+        action: `Updated Station: ${data.station_name}`,
+        actionCategory: "settings",
+        resourceType: "station",
+        resourceId: stationId,
+        resourceName: data.station_name,
+        locationId: data.location_id,
+        changes: { before: beforeLog, after: afterLog },
+      });
+    }
 
     return { success: true, data: data as Station, error: null };
   } catch (error) {

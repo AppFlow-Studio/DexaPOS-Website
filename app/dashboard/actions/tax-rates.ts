@@ -211,6 +211,28 @@ export async function deactivateTaxRate(taxRateId: string) {
   try {
     const supabase = createServerSupabaseClient();
 
+    // Fetch details BEFORE deactivating (RLS might block access after is_active = false)
+    const { data: taxRate } = await supabase
+      .from("tax_rates")
+      .select("name, location_id, tax_category")
+      .eq("id", taxRateId)
+      .single();
+
+    // Get Location Name and Merchant ID (tax_rates doesn't have merchant_id directly)
+    let merchantId = "";
+    let locationName = "";
+    if (taxRate?.location_id) {
+      const { data: loc } = await supabase
+        .from("locations")
+        .select("name, merchant_id")
+        .eq("id", taxRate.location_id)
+        .single();
+      if (loc) {
+        merchantId = loc.merchant_id;
+        locationName = loc.name;
+      }
+    }
+
     const { error } = await supabase
       .from("tax_rates")
       .update({
@@ -224,28 +246,10 @@ export async function deactivateTaxRate(taxRateId: string) {
       return { success: false, error: error.message };
     }
 
-    // Fetch details for audit log
-    const { data: taxRate } = await supabase
-      .from("tax_rates")
-      .select("name, location_id, merchant_id, tax_category")
-      .eq("id", taxRateId)
-      .single();
-
+    // Log audit event (using details fetched before deactivation)
     if (taxRate) {
-      // Location Name
-      const { data: loc } = await supabase
-        .from("locations")
-        .select("name")
-        .eq("id", taxRate.location_id)
-        .single();
-
       await LogAuditEvent({
-        merchantId: (taxRate as any).merchant_id || "",
-        // Note: tax_rates table might not have merchant_id directly if it's tied to location.
-        // Let's check db schema from other files... `tax_rates` table schema is not fully visible, but usually it should have merchant_id unless purely location child.
-        // Assuming it has merchant_id as it is standard. If not, we get it from location.
-        // Actually `upsertTaxRate` doesn't insert merchant_id. It inserts location_id.
-        // So likely we need to get merchant_id via location.
+        merchantId: merchantId,
         action: `Deactivated Tax Rate: ${taxRate.name}`,
         actionCategory: "settings",
         resourceType: "tax_rate",
@@ -253,7 +257,7 @@ export async function deactivateTaxRate(taxRateId: string) {
         resourceName: taxRate.name,
         locationId: taxRate.location_id,
         metadata: {
-          location_name: loc?.name,
+          location_name: locationName,
           tax_category: taxRate.tax_category,
         },
       });
