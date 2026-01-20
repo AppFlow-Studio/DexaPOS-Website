@@ -143,7 +143,7 @@ export function ModifierGroupFormSheet({
   const [options, setOptions] = React.useState<TempOption[]>([]);
   const [isAddOptionSheetOpen, setIsAddOptionSheetOpen] = React.useState(false);
   const [editingOption, setEditingOption] = React.useState<TempOption | null>(
-    null
+    null,
   );
   const [expandedSections, setExpandedSections] = React.useState({
     selection: true,
@@ -213,7 +213,7 @@ export function ModifierGroupFormSheet({
             is_active: item.is_active ?? true,
             is_default: (item as any).is_default ?? false,
             isNew: false,
-          }))
+          })),
         );
       }
       // Initialize location status
@@ -260,8 +260,8 @@ export function ModifierGroupFormSheet({
                 is_active: values.is_active,
                 is_default: values.is_default,
               }
-            : opt
-        )
+            : opt,
+        ),
       );
       setEditingOption(null);
     } else {
@@ -346,14 +346,18 @@ export function ModifierGroupFormSheet({
       if (editGroup) {
         // Update existing group (only if allowed to edit structure)
         if (canEditStructure) {
-          const updateResult = await UpdateModifierGroup(editGroup.id, {
-            name: values.name,
-            description: values.description,
-            is_required: values.is_required,
-            min_selections: values.min_selections,
-            max_selections: values.max_selections,
-            display_order: values.display_order ?? undefined,
-          });
+          const updateResult = await UpdateModifierGroup(
+            editGroup.id,
+            {
+              name: values.name,
+              description: values.description,
+              is_required: values.is_required,
+              min_selections: values.min_selections,
+              max_selections: values.max_selections,
+              display_order: values.display_order ?? undefined,
+            },
+            selectedLocation?.id,
+          );
 
           if (updateResult.error) {
             toast.error("Update Failed", {
@@ -372,32 +376,40 @@ export function ModifierGroupFormSheet({
               prev.map((opt) => ({
                 ...opt,
                 is_default: opt.id === firstDefault.id,
-              }))
+              })),
             );
           }
 
           for (const option of options) {
             if (option.isNew) {
               // Create new option
-              await CreateModifierGroupItem(editGroup.id, {
-                name: option.name,
-                description: option.description,
-                price_modifier: option.price_modifier,
-                display_order: option.display_order ?? undefined,
-                is_active: option.is_active,
-                is_default: option.is_default,
-                merchant_id: merchantId,
-              });
+              await CreateModifierGroupItem(
+                editGroup.id,
+                {
+                  name: option.name,
+                  description: option.description,
+                  price_modifier: option.price_modifier,
+                  display_order: option.display_order ?? undefined,
+                  is_active: option.is_active,
+                  is_default: option.is_default,
+                  merchant_id: merchantId,
+                },
+                selectedLocation?.id,
+              );
             } else {
               // Update existing option
-              await UpdateModifierGroupItem(option.id, {
-                name: option.name,
-                description: option.description,
-                price_modifier: option.price_modifier,
-                display_order: option.display_order ?? undefined,
-                is_active: option.is_active,
-                is_default: option.is_default,
-              });
+              await UpdateModifierGroupItem(
+                option.id,
+                {
+                  name: option.name,
+                  description: option.description,
+                  price_modifier: option.price_modifier,
+                  display_order: option.display_order ?? undefined,
+                  is_active: option.is_active,
+                  is_default: option.is_default,
+                },
+                selectedLocation?.id,
+              );
             }
           }
 
@@ -408,11 +420,11 @@ export function ModifierGroupFormSheet({
           const originalOptionIds =
             editGroup.modifier_group_items?.map((o) => o.id) || [];
           const deletedOptionIds = originalOptionIds.filter(
-            (id) => !currentOptionIds.includes(id)
+            (id) => !currentOptionIds.includes(id),
           );
 
           for (const id of deletedOptionIds) {
-            await DeleteModifierGroupItem(id);
+            await DeleteModifierGroupItem(id, selectedLocation?.id);
           }
 
           toast.success("Modifier Group Updated", {
@@ -552,7 +564,7 @@ export function ModifierGroupFormSheet({
                               selectedLocation.id,
                               editGroup.id,
                               merchantId,
-                              { is_active: checked }
+                              { is_active: checked },
                             );
                             toast.success(
                               checked ? "Group Enabled" : "Group Disabled",
@@ -560,7 +572,7 @@ export function ModifierGroupFormSheet({
                                 description: `Modifier group is now ${
                                   checked ? "active" : "inactive"
                                 } at this location.`,
-                              }
+                              },
                             );
                             queryClient.invalidateQueries({
                               queryKey: ["modifier-groups"],
@@ -684,7 +696,7 @@ export function ModifierGroupFormSheet({
                                     "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
                                     field.value ? "bg-primary" : "bg-muted",
                                     !canEditStructure &&
-                                      "opacity-50 cursor-not-allowed"
+                                      "opacity-50 cursor-not-allowed",
                                   )}
                                 >
                                   <span
@@ -692,7 +704,7 @@ export function ModifierGroupFormSheet({
                                       "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
                                       field.value
                                         ? "translate-x-6"
-                                        : "translate-x-1"
+                                        : "translate-x-1",
                                     )}
                                   />
                                 </button>
@@ -716,7 +728,7 @@ export function ModifierGroupFormSheet({
                                     {...field}
                                     onChange={(e) =>
                                       field.onChange(
-                                        parseInt(e.target.value) || 0
+                                        parseInt(e.target.value) || 0,
                                       )
                                     }
                                   />
@@ -746,7 +758,7 @@ export function ModifierGroupFormSheet({
                                       field.onChange(
                                         e.target.value
                                           ? parseInt(e.target.value)
-                                          : null
+                                          : null,
                                       )
                                     }
                                   />
@@ -820,7 +832,7 @@ export function ModifierGroupFormSheet({
                                 "hover:shadow-md group animate-in fade-in slide-in-from-left-4",
                                 option.is_active
                                   ? "bg-card"
-                                  : "bg-muted/50 opacity-60"
+                                  : "bg-muted/50 opacity-60",
                               )}
                               style={{ animationDelay: `${index * 50}ms` }}
                             >
@@ -870,8 +882,8 @@ export function ModifierGroupFormSheet({
                                     option.price_modifier > 0
                                       ? "text-green-600"
                                       : option.price_modifier < 0
-                                      ? "text-red-500"
-                                      : "text-muted-foreground"
+                                        ? "text-red-500"
+                                        : "text-muted-foreground",
                                   )}
                                 >
                                   {option.price_modifier > 0 ? "+" : ""}$
@@ -899,7 +911,7 @@ export function ModifierGroupFormSheet({
                                             }
                                             className={cn(
                                               option.is_default &&
-                                                "bg-yellow-500 hover:bg-yellow-600"
+                                                "bg-yellow-500 hover:bg-yellow-600",
                                             )}
                                           >
                                             <Sparkles className="h-4 w-4" />
@@ -976,7 +988,7 @@ export function ModifierGroupFormSheet({
                           "text-lg font-semibold transition-colors duration-200",
                           watchedValues.name
                             ? "text-foreground"
-                            : "text-muted-foreground/50"
+                            : "text-muted-foreground/50",
                         )}
                       >
                         {watchedValues.name || "Group Name"}
@@ -1005,8 +1017,8 @@ export function ModifierGroupFormSheet({
                     {watchedValues.max_selections
                       ? ` to ${watchedValues.max_selections}`
                       : watchedValues.min_selections > 0
-                      ? " or more"
-                      : ""}
+                        ? " or more"
+                        : ""}
                   </div>
 
                   {/* Options preview */}
@@ -1017,7 +1029,7 @@ export function ModifierGroupFormSheet({
                           key={option.id}
                           className={cn(
                             "flex items-center justify-between py-1",
-                            !option.is_active && "opacity-50"
+                            !option.is_active && "opacity-50",
                           )}
                         >
                           <div className="flex items-center gap-2">
@@ -1037,8 +1049,8 @@ export function ModifierGroupFormSheet({
                               option.price_modifier > 0
                                 ? "text-green-600"
                                 : option.price_modifier < 0
-                                ? "text-red-500"
-                                : "text-muted-foreground"
+                                  ? "text-red-500"
+                                  : "text-muted-foreground",
                             )}
                           >
                             {option.price_modifier !== 0 && (
@@ -1226,13 +1238,13 @@ export function ModifierGroupFormSheet({
                           onClick={() => field.onChange(!field.value)}
                           className={cn(
                             "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                            field.value ? "bg-primary" : "bg-muted"
+                            field.value ? "bg-primary" : "bg-muted",
                           )}
                         >
                           <span
                             className={cn(
                               "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                              field.value ? "translate-x-6" : "translate-x-1"
+                              field.value ? "translate-x-6" : "translate-x-1",
                             )}
                           />
                         </button>
@@ -1270,20 +1282,20 @@ export function ModifierGroupFormSheet({
                                   prev.map((opt) => ({
                                     ...opt,
                                     is_default: false,
-                                  }))
+                                  })),
                                 );
                               }
                               field.onChange(!field.value);
                             }}
                             className={cn(
                               "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                              field.value ? "bg-yellow-500" : "bg-muted"
+                              field.value ? "bg-yellow-500" : "bg-muted",
                             )}
                           >
                             <span
                               className={cn(
                                 "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                                field.value ? "translate-x-6" : "translate-x-1"
+                                field.value ? "translate-x-6" : "translate-x-1",
                               )}
                             />
                           </button>

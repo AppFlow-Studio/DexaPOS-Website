@@ -23,7 +23,7 @@ export async function InitializeFloorPlan(locationId: string) {
     "get_location_floor_plans",
     {
       p_location_id: locationId,
-    }
+    },
   );
 
   if (fpError) {
@@ -54,7 +54,7 @@ export async function LoadFloorPlanStatus(floorPlanId: string) {
 export async function CreateFloorPlanAction(
   locationId: string,
   name: string,
-  description?: string
+  description?: string,
 ) {
   const supabase = createServerSupabaseClient();
 
@@ -69,6 +69,17 @@ export async function CreateFloorPlanAction(
   // Reload floor plans
   const { data: floorPlans } = await supabase.rpc("get_location_floor_plans", {
     p_location_id: locationId,
+  });
+
+  // Log Audit Event
+  await LogAuditEvent({
+    action: `Created Floor Plan: ${name}`,
+    actionCategory: "settings",
+    resourceType: "floor_plan",
+    resourceId: data.floor_plan_id,
+    resourceName: name,
+    locationId: locationId,
+    changes: { after: { name, description } },
   });
 
   return {
@@ -89,7 +100,7 @@ export async function AddTableAction(
     capacity?: number | null;
     width?: number | null;
     height?: number | null;
-  }
+  },
 ) {
   const supabase = createServerSupabaseClient();
 
@@ -125,7 +136,7 @@ export async function UpdateTablePositionAction(
   tableId: string,
   x: number,
   y: number,
-  rotation?: number
+  rotation?: number,
 ) {
   const supabase = createServerSupabaseClient();
 
@@ -140,7 +151,7 @@ export async function UpdateTablePositionAction(
 }
 
 export async function UpdateTablePositionsBatchAction(
-  updates: Array<{ id: string; x: number; y: number; rotation?: number }>
+  updates: Array<{ id: string; x: number; y: number; rotation?: number }>,
 ) {
   const supabase = createServerSupabaseClient();
   console.log("[UpdateTablePositionsBatchAction] updates", updates);
@@ -155,6 +166,12 @@ export async function UpdateTablePositionsBatchAction(
 export async function RemoveTableAction(tableId: string) {
   const supabase = createServerSupabaseClient();
 
+  const { data: tableToDelete } = await supabase
+    .from("floor_plan_objects")
+    .select("name, floor_plan:floor_plans(location_id, merchant_id)")
+    .eq("id", tableId)
+    .single();
+
   const { error } = await supabase
     .from("floor_plan_objects")
     .delete()
@@ -163,18 +180,27 @@ export async function RemoveTableAction(tableId: string) {
   if (error) throw error;
 
   // Log Audit Event
-  LogAuditEvent({
-    action: `Removed Table`,
-    actionCategory: "settings",
-    resourceType: "table",
-    resourceId: tableId,
-    severity: "warning",
-  });
+  if (tableToDelete) {
+    // Cast because joined relationship might not be typed fully
+    const locationId = (tableToDelete as any).floor_plan?.location_id;
+    const merchantId = (tableToDelete as any).floor_plan?.merchant_id;
+
+    await LogAuditEvent({
+      merchantId: merchantId,
+      action: `Removed Table: ${tableToDelete.name}`,
+      actionCategory: "settings",
+      resourceType: "table",
+      resourceId: tableId,
+      resourceName: tableToDelete.name,
+      locationId: locationId,
+      severity: "warning",
+    });
+  }
 }
 
 export async function UpdateTableRotationAction(
   tableId: string,
-  rotation: number
+  rotation: number,
 ) {
   const supabase = createServerSupabaseClient();
 
@@ -189,17 +215,43 @@ export async function UpdateTableRotationAction(
 export async function UpdateTableNameAction(tableId: string, name: string) {
   const supabase = createServerSupabaseClient();
 
+  // Fetch table for context
+  const { data: table } = await supabase
+    .from("floor_plan_objects")
+    .select("name, floor_plan:floor_plans(location_id, merchant_id)")
+    .eq("id", tableId)
+    .single();
+
   const { error } = await supabase
     .from("floor_plan_objects")
     .update({ name })
     .eq("id", tableId);
 
   if (error) throw error;
+
+  if (table) {
+    const locationId = (table as any).floor_plan?.location_id;
+    const merchantId = (table as any).floor_plan?.merchant_id;
+
+    await LogAuditEvent({
+      merchantId: merchantId,
+      action: `Renamed Table: ${table.name} -> ${name}`,
+      actionCategory: "settings",
+      resourceType: "table",
+      resourceId: tableId,
+      resourceName: name,
+      locationId: locationId,
+      changes: {
+        before: { name: table.name },
+        after: { name },
+      },
+    });
+  }
 }
 
 export async function MergeTablesAction(
   tableIds: string[],
-  primaryTableId: string
+  primaryTableId: string,
 ) {
   // Note: Merging is a design-time feature for grouping tables visually.
   // Since the database schema doesn't have merged_with/is_primary columns in floor_plan_objects,
@@ -239,7 +291,7 @@ export async function LoadWaitlistAction(locationId: string) {
 
 export async function LoadReservationsAction(
   locationId: string,
-  date?: string
+  date?: string,
 ) {
   const supabase = createServerSupabaseClient();
 
@@ -262,7 +314,7 @@ export async function AddToWaitlistAction(
     notes?: string;
     preferredSection?: string;
     quotedWaitMinutes?: number;
-  }
+  },
 ) {
   const supabase = createServerSupabaseClient();
 
@@ -278,9 +330,27 @@ export async function AddToWaitlistAction(
 
   if (error) throw error;
 
+  // Log Audit Event
+  await LogAuditEvent({
+    action: `Added to Waitlist: ${params.partyName}`,
+    actionCategory: "waitlist",
+    resourceType: "waitlist_entry",
+    resourceId: data.waitlist_id,
+    resourceName: params.partyName,
+    locationId: locationId,
+    metadata: {
+      party_size: params.partySize,
+      phone: params.phone,
+      quoted_wait: params.quotedWaitMinutes,
+      preferred_section: params.preferredSection,
+    },
+    changes: { after: params as unknown as Record<string, unknown> },
+  });
+
   return {
     waitlistId: data.waitlist_id,
     position: data.position,
     quotedWait: data.quoted_wait_minutes,
+    success: true,
   };
 }

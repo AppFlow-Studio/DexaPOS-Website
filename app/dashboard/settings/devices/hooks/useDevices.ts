@@ -1,8 +1,8 @@
 "use client";
 
+import { v4 as uuidv4 } from "uuid";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { v4 as uuidv4 } from "uuid";
 
 export type DeviceType = "external_terminal" | "tablet" | "printer";
 export type ConnectionType = "bluetooth" | "usb" | "wifi" | "wired" | "builtin";
@@ -95,7 +95,7 @@ interface DevicesState {
   devices: Device[];
   detectedPrinters: DetectedPrinter[];
   addDevice: (
-    device: Omit<Device, "id" | "status" | "lastSeen" | "alerts">
+    device: Omit<Device, "id" | "status" | "lastSeen" | "alerts">,
   ) => void;
   updateDevice: (id: string, updates: Partial<Device>) => void;
   removeDevice: (id: string) => void;
@@ -109,13 +109,18 @@ interface DevicesState {
       prepStation?: string;
       alwaysPrint: boolean;
       sendToExpediter: boolean;
-    }
+    },
   ) => void;
   simulateConnection: (id: string) => Promise<boolean>;
   simulatePairing: (
-    tpn: string
+    tpn: string,
   ) => Promise<{ success: boolean; error?: string }>;
   checkForUpdates: (id: string) => Promise<boolean>;
+  addActivityLog: (
+    deviceId: string,
+    log: Omit<ActivityLog, "id" | "timestamp">,
+  ) => void;
+  performAutomatedCheck: () => Promise<void>;
 }
 
 // Helper to format device type for display
@@ -190,7 +195,7 @@ const generateMockActivityLogs = (deviceType: DeviceType): ActivityLog[] => {
         action: "Connection established",
         timestamp: new Date(now - 7200000).toISOString(),
         type: "connection",
-      }
+      },
     );
   } else if (deviceType === "external_terminal") {
     logs.push(
@@ -213,7 +218,7 @@ const generateMockActivityLogs = (deviceType: DeviceType): ActivityLog[] => {
         action: "Connection refreshed",
         timestamp: new Date(now - 5400000).toISOString(),
         type: "connection",
-      }
+      },
     );
   } else {
     logs.push(
@@ -237,7 +242,7 @@ const generateMockActivityLogs = (deviceType: DeviceType): ActivityLog[] => {
         details: "John Smith",
         timestamp: new Date(now - 14400000).toISOString(),
         type: "system",
-      }
+      },
     );
   }
 
@@ -255,7 +260,7 @@ export const useDevices = create<DevicesState>()(
           status: "online",
           lastSeen: new Date().toISOString(),
           connectedSince: new Date(
-            Date.now() - 3 * 24 * 60 * 60 * 1000 - 14 * 60 * 60 * 1000
+            Date.now() - 3 * 24 * 60 * 60 * 1000 - 14 * 60 * 60 * 1000,
           ).toISOString(), // 3 days 14 hours ago
           serialNumber: "LS7222CE40847",
           alerts: 0,
@@ -278,7 +283,7 @@ export const useDevices = create<DevicesState>()(
           status: "online",
           lastSeen: new Date().toISOString(),
           connectedSince: new Date(
-            Date.now() - 12 * 60 * 60 * 1000
+            Date.now() - 12 * 60 * 60 * 1000,
           ).toISOString(), // 12 hours ago
           serialNumber: "LS72227A40835",
           alerts: 1,
@@ -296,7 +301,7 @@ export const useDevices = create<DevicesState>()(
               severity: "info",
               message: "Firmware update available (v02.14B)",
               timestamp: new Date(
-                Date.now() - 24 * 60 * 60 * 1000
+                Date.now() - 24 * 60 * 60 * 1000,
               ).toISOString(),
               dismissible: true,
             },
@@ -339,7 +344,7 @@ export const useDevices = create<DevicesState>()(
           status: "online",
           lastSeen: new Date().toISOString(),
           connectedSince: new Date(
-            Date.now() - 7 * 24 * 60 * 60 * 1000
+            Date.now() - 7 * 24 * 60 * 60 * 1000,
           ).toISOString(), // 7 days ago
           serialNumber: "X855049243",
           alerts: 0,
@@ -364,7 +369,7 @@ export const useDevices = create<DevicesState>()(
           status: "online",
           lastSeen: new Date().toISOString(),
           connectedSince: new Date(
-            Date.now() - 5 * 24 * 60 * 60 * 1000
+            Date.now() - 5 * 24 * 60 * 60 * 1000,
           ).toISOString(),
           serialNumber: "LS7222CE40901",
           alerts: 0,
@@ -398,7 +403,7 @@ export const useDevices = create<DevicesState>()(
               severity: "warning",
               message: "Device has been offline for 2 hours",
               timestamp: new Date(
-                Date.now() - 2 * 60 * 60 * 1000
+                Date.now() - 2 * 60 * 60 * 1000,
               ).toISOString(),
               dismissible: false,
             },
@@ -412,7 +417,7 @@ export const useDevices = create<DevicesState>()(
           status: "online",
           lastSeen: new Date().toISOString(),
           connectedSince: new Date(
-            Date.now() - 8 * 60 * 60 * 1000
+            Date.now() - 8 * 60 * 60 * 1000,
           ).toISOString(),
           serialNumber: "TKE34932600",
           alerts: 0,
@@ -432,7 +437,7 @@ export const useDevices = create<DevicesState>()(
           status: "online",
           lastSeen: new Date().toISOString(),
           connectedSince: new Date(
-            Date.now() - 14 * 24 * 60 * 60 * 1000
+            Date.now() - 14 * 24 * 60 * 60 * 1000,
           ).toISOString(),
           serialNumber: "EP9912856",
           alerts: 0,
@@ -456,7 +461,7 @@ export const useDevices = create<DevicesState>()(
           status: "online",
           lastSeen: new Date().toISOString(),
           connectedSince: new Date(
-            Date.now() - 30 * 24 * 60 * 60 * 1000
+            Date.now() - 30 * 24 * 60 * 60 * 1000,
           ).toISOString(),
           serialNumber: "SM8834799",
           alerts: 0,
@@ -477,7 +482,7 @@ export const useDevices = create<DevicesState>()(
           status: "online",
           lastSeen: new Date().toISOString(),
           connectedSince: new Date(
-            Date.now() - 2 * 24 * 60 * 60 * 1000
+            Date.now() - 2 * 24 * 60 * 60 * 1000,
           ).toISOString(),
           serialNumber: "TKE34932700",
           alerts: 0,
@@ -497,7 +502,7 @@ export const useDevices = create<DevicesState>()(
           status: "offline",
           lastSeen: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
           offlineSince: new Date(
-            Date.now() - 48 * 60 * 60 * 1000
+            Date.now() - 48 * 60 * 60 * 1000,
           ).toISOString(),
           serialNumber: "LS7222CE40999",
           alerts: 1,
@@ -513,7 +518,7 @@ export const useDevices = create<DevicesState>()(
               severity: "critical",
               message: "Device has been offline for 2 days",
               timestamp: new Date(
-                Date.now() - 48 * 60 * 60 * 1000
+                Date.now() - 48 * 60 * 60 * 1000,
               ).toISOString(),
               dismissible: false,
             },
@@ -527,7 +532,7 @@ export const useDevices = create<DevicesState>()(
           status: "online",
           lastSeen: new Date().toISOString(),
           connectedSince: new Date(
-            Date.now() - 10 * 24 * 60 * 60 * 1000
+            Date.now() - 10 * 24 * 60 * 60 * 1000,
           ).toISOString(),
           serialNumber: "EP9912900",
           alerts: 0,
@@ -580,7 +585,7 @@ export const useDevices = create<DevicesState>()(
       updateDevice: (id, updates) =>
         set((state) => ({
           devices: state.devices.map((dev) =>
-            dev.id === id ? { ...dev, ...updates } : dev
+            dev.id === id ? { ...dev, ...updates } : dev,
           ),
         })),
       removeDevice: (id) =>
@@ -600,13 +605,13 @@ export const useDevices = create<DevicesState>()(
                   issues: dev.issues?.filter((i) => i.id !== issueId) || [],
                   alerts: Math.max(0, dev.alerts - 1),
                 }
-              : dev
+              : dev,
           ),
         })),
       assignPrinter: (printerId, config) =>
         set((state) => {
           const printer = state.detectedPrinters.find(
-            (p) => p.id === printerId
+            (p) => p.id === printerId,
           );
           if (!printer) return state;
 
@@ -632,20 +637,23 @@ export const useDevices = create<DevicesState>()(
               },
             ],
             detectedPrinters: state.detectedPrinters.map((p) =>
-              p.id === printerId ? { ...p, isAssigned: true } : p
+              p.id === printerId ? { ...p, isAssigned: true } : p,
             ),
           };
         }),
       simulateConnection: async (id) => {
+        const device = get().devices.find((d) => d.id === id);
+        if (!device) return false;
+
         set((state) => ({
           devices: state.devices.map((dev) =>
-            dev.id === id ? { ...dev, status: "offline" } : dev
+            dev.id === id ? { ...dev, status: "offline" } : dev,
           ),
         }));
 
         await new Promise((resolve) => setTimeout(resolve, 1500));
 
-        const success = Math.random() > 0.1;
+        const success = Math.random() > 0.05; // 95% success rate for simulation
 
         set((state) => ({
           devices: state.devices.map((dev) =>
@@ -654,6 +662,11 @@ export const useDevices = create<DevicesState>()(
                   ...dev,
                   status: success ? "online" : "offline",
                   lastSeen: success ? new Date().toISOString() : dev.lastSeen,
+                  ipAddress:
+                    dev.ipAddress ||
+                    (success
+                      ? `192.168.1.${Math.floor(Math.random() * 254) + 1}`
+                      : dev.ipAddress),
                   connectedSince: success
                     ? dev.connectedSince || new Date().toISOString()
                     : undefined,
@@ -661,11 +674,51 @@ export const useDevices = create<DevicesState>()(
                     ? undefined
                     : dev.offlineSince || new Date().toISOString(),
                 }
-              : dev
+              : dev,
           ),
         }));
 
+        // Add activity log
+        get().addActivityLog(id, {
+          action: success ? "Connection successful" : "Connection failed",
+          type: success ? "connection" : "error",
+          details: success
+            ? `Device verified at ${new Date().toLocaleTimeString()}`
+            : "Device timed out during automated check",
+        });
+
         return success;
+      },
+      addActivityLog: (deviceId, log) =>
+        set((state) => ({
+          devices: state.devices.map((dev) =>
+            dev.id === deviceId
+              ? {
+                  ...dev,
+                  activityLogs: [
+                    {
+                      ...log,
+                      id: uuidv4(),
+                      timestamp: new Date().toISOString(),
+                    },
+                    ...(dev.activityLogs || []),
+                  ].slice(0, 50), // Keep last 50 logs
+                }
+              : dev,
+          ),
+        })),
+      performAutomatedCheck: async () => {
+        const { devices, simulateConnection } = get();
+        // Only check terminals and tablets that are supposed to be online
+        const devicesToCheck = devices.filter(
+          (d) => d.type === "external_terminal" || d.type === "tablet",
+        );
+
+        for (const device of devicesToCheck) {
+          // In a real app, this would be an actual API call
+          // For the mock, we just run the simulation
+          await simulateConnection(device.id);
+        }
       },
       simulatePairing: async (tpn: string) => {
         await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -695,6 +748,6 @@ export const useDevices = create<DevicesState>()(
     }),
     {
       name: "dexapos-devices-storage",
-    }
-  )
+    },
+  ),
 );

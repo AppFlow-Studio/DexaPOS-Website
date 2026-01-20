@@ -63,7 +63,7 @@ interface CategorySectionProps {
   onEditItem: (
     item: MenuCategoryItem,
     category: MenuCategory,
-    menuId: string
+    menuId: string,
   ) => void;
   onCategoryRemoved?: () => void;
   // Item ordering props
@@ -138,7 +138,11 @@ export function CategorySection({
   const handleRemoveCategory = async () => {
     setIsDeleting(true);
     try {
-      const result = await RemoveCategoryFromMenu(menuId, category.category_id);
+      const result = await RemoveCategoryFromMenu(
+        menuId,
+        category.category_id,
+        locationId,
+      );
 
       if (result.error) {
         toast.error("Failed to remove category", {
@@ -172,7 +176,7 @@ export function CategorySection({
       <Card
         className={cn(
           "overflow-hidden transition-all",
-          !category.is_active && "opacity-60"
+          !category.is_active && "opacity-60",
         )}
       >
         <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">

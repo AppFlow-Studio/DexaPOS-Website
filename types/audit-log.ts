@@ -162,6 +162,7 @@ export interface AuditLogFilters {
   date_from?: string;
   date_to?: string;
   search?: string;
+  station_id?: string; // Filter by station_id in metadata
 }
 
 // Category display configuration

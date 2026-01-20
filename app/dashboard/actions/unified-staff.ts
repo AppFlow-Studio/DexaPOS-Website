@@ -28,7 +28,7 @@ import { revalidatePath } from "next/cache";
  */
 export async function GetUnifiedStaffView(
   clerkOrgId: string,
-  locationId?: string | null
+  locationId?: string | null,
 ): Promise<UnifiedStaffMember[]> {
   if (!clerkOrgId) {
     console.error("[GetUnifiedStaffView] Missing clerkOrgId");
@@ -48,7 +48,7 @@ export async function GetUnifiedStaffView(
     if (merchantError || !merchant) {
       console.error(
         "[GetUnifiedStaffView] Error getting merchant:",
-        merchantError
+        merchantError,
       );
       return [];
     }
@@ -62,11 +62,11 @@ export async function GetUnifiedStaffView(
     if (error) {
       console.error(
         "[GetUnifiedStaffView] Error fetching unified staff:",
-        error
+        error,
       );
       return [];
     }
-    console.log("[GetUnifiedStaffView] Unified staff data:", data);
+    // console.log("[GetUnifiedStaffView] Unified staff data:", data);
 
     return (data as UnifiedStaffMember[]) || [];
   } catch (error) {
@@ -82,7 +82,7 @@ export async function GetUnifiedStaffView(
  * @returns Single unified staff member or null
  */
 export async function GetStaffMember(
-  memberId: string
+  memberId: string,
 ): Promise<UnifiedStaffMember | null> {
   if (!memberId) {
     console.error("[GetStaffMember] Missing memberId");
@@ -102,7 +102,7 @@ export async function GetStaffMember(
     if (memberError || !memberBasic) {
       console.error(
         "[GetStaffMember] Error fetching member organization:",
-        memberError
+        memberError,
       );
       return null;
     }
@@ -156,7 +156,7 @@ export async function GetStaffMember(
  */
 export async function CreatePOSStaff(
   clerkOrgId: string,
-  formData: InviteStaffFormData
+  formData: InviteStaffFormData,
 ): Promise<StaffActionResponse<{ member_id: string; generated_pin?: string }>> {
   if (!clerkOrgId) {
     return { error: "Missing organization ID" };
@@ -206,7 +206,7 @@ export async function CreatePOSStaff(
     if (profileError || !staffProfile) {
       console.error(
         "[CreatePOSStaff] Failed to create staff profile:",
-        profileError
+        profileError,
       );
       return { error: "Failed to create staff profile" };
     }
@@ -250,7 +250,7 @@ export async function CreatePOSStaff(
     if (assignmentError) {
       console.error(
         "[CreatePOSStaff] Failed to create assignments:",
-        assignmentError
+        assignmentError,
       );
       // Rollback
       await supabase.from("members").delete().eq("id", member.id);
@@ -260,6 +260,29 @@ export async function CreatePOSStaff(
 
     // Revalidate staff page
     revalidatePath("/dashboard/staff");
+
+    // Fetch location names for audit log
+    const { data: locationData } = await supabase
+      .from("locations")
+      .select("name")
+      .in("id", formData.location_ids);
+
+    const locationNames = locationData?.map((l) => l.name) || [];
+
+    // Log audit event
+    await LogAuditEvent({
+      merchantId: merchant.id,
+      action: `Created POS Staff: ${formData.first_name} ${formData.last_name}`,
+      actionCategory: "staff",
+      resourceType: "staff_profile",
+      resourceId: staffProfile.id,
+      resourceName: `${formData.first_name} ${formData.last_name}`,
+      metadata: {
+        role_code: formData.role_code,
+        locations: locationNames,
+        location_ids: formData.location_ids,
+      },
+    });
 
     return {
       data: {
@@ -295,7 +318,7 @@ function generateSecurePassword(length: number = 12): string {
  */
 export async function CreateClerkUserDirectly(
   clerkOrgId: string,
-  formData: InviteStaffFormData
+  formData: InviteStaffFormData,
 ): Promise<
   StaffActionResponse<{
     member_id: string;
@@ -426,12 +449,28 @@ export async function CreateClerkUserDirectly(
 
     if (!member) {
       console.warn(
-        "[CreateClerkUserDirectly] Member not created yet by webhook"
+        "[CreateClerkUserDirectly] Member not created yet by webhook",
       );
       // Don't fail - webhook might still be processing
     }
 
     revalidatePath("/dashboard/staff");
+
+    // Log audit event
+    await LogAuditEvent({
+      merchantId: merchantId,
+      action: `Created Staff (Clerk): ${formData.first_name} ${formData.last_name}`,
+      actionCategory: "staff",
+      resourceType: "user",
+      resourceId: clerkUser.id,
+      resourceName: `${formData.first_name} ${formData.last_name}`,
+      metadata: {
+        email: formData.email,
+        role_code: formData.role_code,
+        locations: formData.location_ids,
+        creation_type: "direct",
+      },
+    });
 
     return {
       data: {
@@ -445,7 +484,7 @@ export async function CreateClerkUserDirectly(
     console.error("[CreateClerkUserDirectly] Unexpected error:", error);
     console.error(
       "[CreateClerkUserDirectly] Failed to create Clerk user:",
-      (error as any)?.errors
+      (error as any)?.errors,
     );
 
     return { error: "An unexpected error occurred" };
@@ -462,7 +501,7 @@ export async function CreateClerkUserDirectly(
 export async function InviteClerkStaff(
   userId: string,
   clerkOrgId: string,
-  formData: InviteStaffFormData
+  formData: InviteStaffFormData,
 ): Promise<StaffActionResponse<{ invite_id: string | null }>> {
   const supabase = createServerSupabaseClient();
 
@@ -555,6 +594,21 @@ export async function InviteClerkStaff(
 
     revalidatePath("/dashboard/staff");
 
+    // Log audit event
+    await LogAuditEvent({
+      merchantId: merchantId,
+      action: `Invited Staff (Clerk): ${formData.first_name} ${formData.last_name}`,
+      actionCategory: "staff",
+      resourceType: "staff_invite",
+      resourceId: invitation.id,
+      resourceName: `${formData.first_name} ${formData.last_name}`,
+      metadata: {
+        email: formData.email,
+        role_code: formData.role_code,
+        locations: formData.location_ids,
+      },
+    });
+
     return {
       data: {
         invite_id: invitation.id,
@@ -581,14 +635,14 @@ export async function InviteClerkStaff(
 export async function UpdateStaffLocationAssignment(
   memberId: string,
   locationId: string,
-  updates: UpdateStaffAssignmentData
+  updates: UpdateStaffAssignmentData,
 ): Promise<StaffActionResponse<{ success: boolean }>> {
   const supabase = createServerSupabaseClient();
 
   try {
     const { data: member } = await supabase
       .from("members")
-      .select("user_id, staff_profile_id")
+      .select("user_id, staff_profile_id, organization_id")
       .eq("id", memberId)
       .single();
 
@@ -609,6 +663,18 @@ export async function UpdateStaffLocationAssignment(
       return { error: "Invalid member record: no ID found" };
     }
 
+    // Fetch current state before update for audit logging
+    const { data: beforeState } = await supabase
+      .from("location_members")
+      .select("*")
+      .eq("location_id", locationId)
+      .match(
+        member.user_id
+          ? { user_id: member.user_id }
+          : { staff_profile_id: member.staff_profile_id },
+      )
+      .single();
+
     const { error } = await query;
 
     if (error) {
@@ -617,6 +683,56 @@ export async function UpdateStaffLocationAssignment(
     }
 
     revalidatePath("/dashboard/staff");
+
+    // Fetch details for audit logging
+    if (member.organization_id) {
+      // Fetch staff name
+      let staffName = "Unknown Staff";
+      if (member.staff_profile_id) {
+        const { data: sp } = await supabase
+          .from("staff_profiles")
+          .select("display_name, first_name, last_name")
+          .eq("id", member.staff_profile_id)
+          .single();
+        if (sp)
+          staffName = sp.display_name || `${sp.first_name} ${sp.last_name}`;
+      }
+
+      // Detect action type
+      let actionDescription = `Updated Staff Assignment: ${staffName}`;
+      if (updates.is_active === true)
+        actionDescription = `Reactivated Staff Access: ${staffName}`;
+      if (updates.is_active === false)
+        actionDescription = `Deactivated Staff Access: ${staffName}`;
+
+      const changes = {
+        after: updates as any,
+        before: beforeState
+          ? {
+              role_code: beforeState.role_code,
+              hourly_rate: beforeState.hourly_rate,
+              employment_type: beforeState.employment_type,
+              is_active: beforeState.is_active,
+              // Add other relevant fields if necessary
+            }
+          : {},
+      };
+
+      await LogAuditEvent({
+        clerkOrgId: member.organization_id,
+        locationId,
+        action: actionDescription,
+        actionCategory: "staff",
+        resourceType: "staff_member",
+        resourceId: member.staff_profile_id || member.user_id || memberId,
+        resourceName: staffName,
+        changes: changes,
+        metadata: {
+          staff_name: staffName,
+          updated_fields: Object.keys(updates),
+        },
+      });
+    }
 
     return { data: { success: true } };
   } catch (error) {
@@ -636,7 +752,7 @@ export async function UpdateStaffLocationAssignment(
 export async function ResetStaffPIN(
   memberId: string,
   locationId: string,
-  newPin?: string
+  newPin?: string,
 ): Promise<StaffActionResponse<ResetPINResult>> {
   const supabase = createServerSupabaseClient();
 
@@ -675,21 +791,36 @@ export async function ResetStaffPIN(
       return { error: error.message };
     }
 
-    // Log this action
+    // Log this action with human-readable names
     if (member.organization_id) {
+      // Fetch staff name for user-friendly audit log
+      let staffName = "Unknown Staff";
+      if (member.staff_profile_id) {
+        const { data: staffProfile } = await supabase
+          .from("staff_profiles")
+          .select("first_name, last_name, display_name")
+          .eq("id", member.staff_profile_id)
+          .single();
+        if (staffProfile) {
+          staffName =
+            staffProfile.display_name ||
+            `${staffProfile.first_name} ${staffProfile.last_name}`;
+        }
+      }
+
       await LogAuditEvent({
         clerkOrgId: member.organization_id,
         locationId,
-        action: "staff.pin_reset",
+        action: `Staff PIN Reset: ${staffName}`,
         actionCategory: "staff",
         resourceType: "staff_member",
         resourceId: member.staff_profile_id || member.user_id || memberId,
+        resourceName: staffName,
         changes: {
           reason: "Manual Reset via Dashboard",
         },
         metadata: {
-          target_member_id: memberId,
-          staff_profile_id: member.staff_profile_id,
+          staff_name: staffName,
         },
       });
     }
@@ -716,14 +847,14 @@ export async function ResetStaffPIN(
  */
 export async function DeactivateStaffMember(
   memberId: string,
-  locationId?: string
+  locationId?: string,
 ): Promise<StaffActionResponse<{ success: boolean }>> {
   const supabase = createServerSupabaseClient();
 
   try {
     const { data: member } = await supabase
       .from("members")
-      .select("user_id, staff_profile_id")
+      .select("user_id, staff_profile_id, organization_id")
       .eq("id", memberId)
       .single();
 
@@ -754,6 +885,46 @@ export async function DeactivateStaffMember(
 
     revalidatePath("/dashboard/staff");
 
+    // Log audit event
+    if (member) {
+      const { data: staffData } = await supabase
+        .rpc("get_unified_staff_view", {
+          p_merchant_id: (member as any).organization_id || "",
+          p_location_id: null,
+        })
+        .eq("member_id", memberId)
+        .single(); // Attempt to get name but use memberId if fails
+
+      // Fallback to basic fetch if RPC fails or not simple
+      let resourceName = "Staff Member";
+      if (member.staff_profile_id) {
+        const { data: sp } = await supabase
+          .from("staff_profiles")
+          .select("display_name, first_name, last_name")
+          .eq("id", member.staff_profile_id)
+          .single();
+        if (sp)
+          resourceName = sp.display_name || `${sp.first_name} ${sp.last_name}`;
+      }
+
+      // We need merchant ID. Assuming member has org_id which maps to merchant in LogAuditEvent hook or we fetch it.
+      // Actually DeactivateStaffMember doesn't seem to have merchant context easily available unless we fetch it.
+      // The member record has organization_id (clerk). LogAuditEvent can take that.
+      const orgId = (member as any).organization_id;
+
+      if (orgId) {
+        await LogAuditEvent({
+          clerkOrgId: orgId,
+          action: `Deactivated Staff Member: ${resourceName}`,
+          actionCategory: "staff",
+          resourceType: "staff_member",
+          resourceId: memberId,
+          resourceName: resourceName,
+          locationId: locationId,
+        });
+      }
+    }
+
     return { data: { success: true } };
   } catch (error) {
     console.error("[DeactivateStaffMember] Unexpected error:", error);
@@ -770,14 +941,14 @@ export async function DeactivateStaffMember(
  */
 export async function ReactivateStaffMember(
   memberId: string,
-  locationId?: string
+  locationId?: string,
 ): Promise<StaffActionResponse<{ success: boolean }>> {
   const supabase = createServerSupabaseClient();
 
   try {
     const { data: member } = await supabase
       .from("members")
-      .select("user_id, staff_profile_id")
+      .select("user_id, staff_profile_id, organization_id")
       .eq("id", memberId)
       .single();
 
@@ -808,6 +979,34 @@ export async function ReactivateStaffMember(
 
     revalidatePath("/dashboard/staff");
 
+    // Log audit event
+    if (member) {
+      let resourceName = "Staff Member";
+      if (member.staff_profile_id) {
+        const { data: sp } = await supabase
+          .from("staff_profiles")
+          .select("display_name, first_name, last_name")
+          .eq("id", member.staff_profile_id)
+          .single();
+        if (sp)
+          resourceName = sp.display_name || `${sp.first_name} ${sp.last_name}`;
+      }
+
+      const orgId = (member as any).organization_id;
+
+      if (orgId) {
+        await LogAuditEvent({
+          clerkOrgId: orgId,
+          action: `Reactivated Staff Member: ${resourceName}`,
+          actionCategory: "staff",
+          resourceType: "staff_member",
+          resourceId: memberId,
+          resourceName: resourceName,
+          locationId: locationId,
+        });
+      }
+    }
+
     return { data: { success: true } };
   } catch (error) {
     console.error("[ReactivateStaffMember] Unexpected error:", error);
@@ -831,7 +1030,7 @@ export async function ReactivateStaffMember(
 export async function UpgradePOSStaffToClerk(
   memberId: string,
   locationId: string,
-  email: string
+  email: string,
 ): Promise<StaffActionResponse<UpgradePOSToClerkResult>> {
   const supabase = createServerSupabaseClient();
 
@@ -853,7 +1052,7 @@ export async function UpgradePOSStaffToClerk(
                     phone,
                     account_type
                 )
-            `
+            `,
       )
       .eq("id", memberId)
       .single();
@@ -893,7 +1092,7 @@ export async function UpgradePOSStaffToClerk(
     if (locationError || !locationAssignment) {
       console.error(
         "[UpgradePOSStaffToClerk] Location assignment not found:",
-        locationError
+        locationError,
       );
       return { error: "Location assignment not found" };
     }
@@ -929,7 +1128,7 @@ export async function UpgradePOSStaffToClerk(
     } catch (clerkError: any) {
       console.error(
         "[UpgradePOSStaffToClerk] Clerk creation failed:",
-        clerkError
+        clerkError,
       );
       return {
         error: `Failed to create Clerk user: ${
@@ -948,7 +1147,7 @@ export async function UpgradePOSStaffToClerk(
     } catch (orgError: any) {
       console.error(
         "[UpgradePOSStaffToClerk] Failed to add to organization:",
-        orgError
+        orgError,
       );
       // Rollback: Delete Clerk user
       await clerk.users.deleteUser(clerkUser.id);
@@ -969,7 +1168,7 @@ export async function UpgradePOSStaffToClerk(
     if (profileUpdateError) {
       console.error(
         "[UpgradePOSStaffToClerk] Failed to update staff profile:",
-        profileUpdateError
+        profileUpdateError,
       );
       // Rollback: Delete Clerk user
       await clerk.users.deleteUser(clerkUser.id);
@@ -988,7 +1187,7 @@ export async function UpgradePOSStaffToClerk(
     if (memberUpdateError) {
       console.error(
         "[UpgradePOSStaffToClerk] Failed to update member:",
-        memberUpdateError
+        memberUpdateError,
       );
       // Rollback: Revert staff_profiles and delete Clerk user
       await supabase
@@ -1017,7 +1216,7 @@ export async function UpgradePOSStaffToClerk(
     if (locationUpdateError) {
       console.error(
         "[UpgradePOSStaffToClerk] Failed to update location_members:",
-        locationUpdateError
+        locationUpdateError,
       );
       // Rollback all changes
       await supabase
@@ -1038,6 +1237,21 @@ export async function UpgradePOSStaffToClerk(
 
     // 11. Success - revalidate and return credentials
     revalidatePath("/dashboard/staff");
+
+    // Log audit event
+    await LogAuditEvent({
+      merchantId: staffProfile.merchant_id,
+      action: `Upgraded POS Staff to Clerk: ${staffProfile.first_name} ${staffProfile.last_name}`,
+      actionCategory: "staff",
+      resourceType: "staff_profile",
+      resourceId: staffProfile.id,
+      resourceName: `${staffProfile.first_name} ${staffProfile.last_name}`,
+      metadata: {
+        new_user_id: clerkUser.id,
+        email: email,
+        role_code: locationAssignment.role_code,
+      },
+    });
 
     return {
       data: {

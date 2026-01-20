@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { SchedulesModel, ScheduleTimeSlotsModel } from "@/types/db-modles";
 import { GetLocationScheduleOverrides } from "./location-schedule-overrides";
+import { LogAuditEvent } from "./audit-logs";
 
 // ============================================================================
 // GET OPERATIONS
@@ -34,7 +35,7 @@ export async function GetSchedules(clerkOrgId: string, locationId?: string) {
     .select(
       `*,
             schedule_time_slots(*)
-        `
+        `,
     )
     .eq("merchant_id", merchant.id);
 
@@ -90,7 +91,7 @@ export async function GetSchedule(scheduleId: string) {
       `
             *,
             schedule_time_slots(*)
-        `
+        `,
     )
     .eq("id", scheduleId)
     .single();
@@ -122,7 +123,7 @@ export async function CreateSchedule(
       end_time: string;
       is_active?: boolean;
     }>;
-  }
+  },
 ) {
   if (!clerkOrgId) {
     return { error: "Organization ID is required" };
@@ -185,6 +186,33 @@ export async function CreateSchedule(
     }
   }
 
+  // Fetch location name for audit log if applicable
+  let locationName: string | undefined;
+  if (data.location_id) {
+    const { data: loc } = await supabase
+      .from("locations")
+      .select("name")
+      .eq("id", data.location_id)
+      .single();
+    locationName = loc?.name;
+  }
+
+  // Log audit event
+  await LogAuditEvent({
+    merchantId: merchant.id,
+    action: `Created Schedule: ${data.name}`,
+    actionCategory: "settings",
+    resourceType: "schedule",
+    resourceId: schedule.id,
+    resourceName: data.name,
+    locationId: data.location_id || undefined,
+    metadata: {
+      location_name: locationName,
+      has_time_slots: !!(data.time_slots && data.time_slots.length > 0),
+    },
+    changes: { after: data as Record<string, unknown> },
+  });
+
   return { data: schedule as SchedulesModel };
 }
 
@@ -198,7 +226,8 @@ export async function UpdateSchedule(
     name?: string;
     description?: string;
     is_active?: boolean;
-  }
+  },
+  locationId?: string | null,
 ) {
   if (!scheduleId) {
     return { error: "Schedule ID is required" };
@@ -223,6 +252,18 @@ export async function UpdateSchedule(
     return { error: error.message };
   }
 
+  // Log audit event
+  await LogAuditEvent({
+    merchantId: schedule.merchant_id,
+    action: `Updated Schedule: ${schedule.name}`,
+    actionCategory: "settings",
+    resourceType: "schedule",
+    resourceId: scheduleId,
+    resourceName: schedule.name,
+    locationId: locationId || schedule.location_id || undefined,
+    changes: { after: data as Record<string, unknown> },
+  });
+
   return { data: schedule as SchedulesModel };
 }
 
@@ -230,7 +271,10 @@ export async function UpdateSchedule(
 // DELETE OPERATIONS
 // ============================================================================
 
-export async function DeleteSchedule(scheduleId: string) {
+export async function DeleteSchedule(
+  scheduleId: string,
+  locationId?: string | null,
+) {
   if (!scheduleId) {
     return { error: "Schedule ID is required" };
   }
@@ -271,6 +315,13 @@ export async function DeleteSchedule(scheduleId: string) {
     return { error: "Failed to delete time slots" };
   }
 
+  // Fetch schedule details for audit log before deletion
+  const { data: scheduleToDelete } = await supabase
+    .from("schedules")
+    .select("name, merchant_id, location_id")
+    .eq("id", scheduleId)
+    .single();
+
   // 4. Finally delete the schedule itself
   const { error } = await supabase
     .from("schedules")
@@ -280,6 +331,20 @@ export async function DeleteSchedule(scheduleId: string) {
   if (error) {
     console.error("Error deleting schedule:", error);
     return { error: error.message };
+  }
+
+  // Log audit event
+  if (scheduleToDelete) {
+    await LogAuditEvent({
+      merchantId: scheduleToDelete.merchant_id,
+      action: `Deleted Schedule: ${scheduleToDelete.name}`,
+      actionCategory: "settings",
+      resourceType: "schedule",
+      resourceId: scheduleId,
+      resourceName: scheduleToDelete.name,
+      locationId:
+        locationId || (scheduleToDelete as any).location_id || undefined,
+    });
   }
 
   return { success: true };
@@ -294,7 +359,7 @@ export async function DeleteSchedule(scheduleId: string) {
  */
 export async function GetCategorySchedules(
   categoryId: string,
-  locationId?: string
+  locationId?: string,
 ) {
   if (!categoryId) {
     return [];
@@ -311,7 +376,7 @@ export async function GetCategorySchedules(
                 *,
                 schedule_time_slots(*)
             )
-        `
+        `,
     )
     .eq("category_id", categoryId);
 
@@ -349,7 +414,8 @@ export async function GetCategorySchedules(
 export async function AssignScheduleToMenu(
   menuId: string,
   scheduleId: string,
-  clerkOrgId: string
+  clerkOrgId: string,
+  locationId?: string | null,
 ) {
   if (!menuId || !scheduleId) {
     return { error: "Menu ID and Schedule ID are required" };
@@ -397,12 +463,34 @@ export async function AssignScheduleToMenu(
     return { error: error.message };
   }
 
+  // Fetch names for audit log
+  const [{ data: menu }, { data: schedule }] = await Promise.all([
+    supabase.from("menus").select("name").eq("id", menuId).single(),
+    supabase.from("schedules").select("name").eq("id", scheduleId).single(),
+  ]);
+
+  // Log audit event
+  await LogAuditEvent({
+    merchantId: merchant.id,
+    action: `Assigned Schedule "${schedule?.name}" to Menu "${menu?.name}"`,
+    actionCategory: "settings",
+    resourceType: "schedule",
+    resourceId: scheduleId,
+    resourceName: schedule?.name,
+    locationId: locationId,
+    metadata: {
+      menu_id: menuId,
+      menu_name: menu?.name,
+    },
+  });
+
   return { success: true, data };
 }
 
 export async function AssignScheduleToCategory(
   categoryId: string,
-  scheduleId: string
+  scheduleId: string,
+  locationId?: string | null,
 ) {
   if (!categoryId || !scheduleId) {
     return { error: "Category ID and Schedule ID are required" };
@@ -437,12 +525,40 @@ export async function AssignScheduleToCategory(
     return { error: error.message };
   }
 
+  // Fetch details for audit log
+  const [{ data: category }, { data: schedule }] = await Promise.all([
+    supabase
+      .from("categories")
+      .select("category, merchant_id")
+      .eq("id", categoryId)
+      .single(),
+    supabase.from("schedules").select("name").eq("id", scheduleId).single(),
+  ]);
+
+  // Log audit event
+  if (category) {
+    await LogAuditEvent({
+      merchantId: category.merchant_id,
+      action: `Assigned Schedule "${schedule?.name}" to Category "${category.category}"`,
+      actionCategory: "settings",
+      resourceType: "schedule",
+      resourceId: scheduleId,
+      resourceName: schedule?.name,
+      locationId: locationId,
+      metadata: {
+        category_id: categoryId,
+        category_name: category.category,
+      },
+    });
+  }
+
   return { success: true, data };
 }
 
 export async function RemoveScheduleFromMenu(
   menuId: string,
-  scheduleId: string
+  scheduleId: string,
+  locationId?: string | null,
 ) {
   if (!menuId || !scheduleId) {
     return { error: "Menu ID and Schedule ID are required" };
@@ -461,12 +577,39 @@ export async function RemoveScheduleFromMenu(
     return { error: error.message };
   }
 
+  // Fetch names for audit log (after delete, but entities still exist)
+  const [{ data: menu }, { data: schedule }] = await Promise.all([
+    supabase
+      .from("menus")
+      .select("name, merchant_id")
+      .eq("id", menuId)
+      .single(),
+    supabase.from("schedules").select("name").eq("id", scheduleId).single(),
+  ]);
+
+  if (menu) {
+    await LogAuditEvent({
+      merchantId: menu.merchant_id,
+      action: `Removed Schedule "${schedule?.name}" from Menu "${menu.name}"`,
+      actionCategory: "settings",
+      resourceType: "schedule",
+      resourceId: scheduleId,
+      resourceName: schedule?.name,
+      locationId: locationId,
+      metadata: {
+        menu_id: menuId,
+        menu_name: menu.name,
+      },
+    });
+  }
+
   return { success: true };
 }
 
 export async function RemoveScheduleFromCategory(
   categoryId: string,
-  scheduleId: string
+  scheduleId: string,
+  locationId?: string | null,
 ) {
   if (!categoryId || !scheduleId) {
     return { error: "Category ID and Schedule ID are required" };
@@ -483,6 +626,32 @@ export async function RemoveScheduleFromCategory(
   if (error) {
     console.error("Error removing schedule from category:", error);
     return { error: error.message };
+  }
+
+  // Fetch details for audit log
+  const [{ data: category }, { data: schedule }] = await Promise.all([
+    supabase
+      .from("categories")
+      .select("category, merchant_id")
+      .eq("id", categoryId)
+      .single(),
+    supabase.from("schedules").select("name").eq("id", scheduleId).single(),
+  ]);
+
+  if (category) {
+    await LogAuditEvent({
+      merchantId: category.merchant_id,
+      action: `Removed Schedule "${schedule?.name}" from Category "${category.category}"`,
+      actionCategory: "settings",
+      resourceType: "schedule",
+      resourceId: scheduleId,
+      resourceName: schedule?.name,
+      locationId: locationId,
+      metadata: {
+        category_id: categoryId,
+        category_name: category.category,
+      },
+    });
   }
 
   return { success: true };
@@ -508,7 +677,7 @@ export async function GetMenuSchedules(menuId: string) {
                 *,
                 schedule_time_slots(*)
             )
-        `
+        `,
     )
     .eq("menu_id", menuId);
 
@@ -552,7 +721,7 @@ export async function GetSchedulesWithTimeSlots(clerkOrgId: string) {
       `
             *,
             schedule_time_slots(*)
-        `
+        `,
     )
     .eq("merchant_id", merchant.id)
     .order("created_at", { ascending: false });
@@ -603,7 +772,7 @@ export async function GetSchedulesWithMenus(clerkOrgId: string) {
                     is_active
                 )
             )
-        `
+        `,
     )
     .eq("merchant_id", merchant.id)
     .order("created_at", { ascending: false });
@@ -650,7 +819,7 @@ export async function GetScheduleWithDetails(scheduleId: string) {
                     is_active
                 )
             )
-        `
+        `,
     )
     .eq("id", scheduleId)
     .single();
@@ -674,7 +843,10 @@ export async function GetScheduleWithDetails(scheduleId: string) {
 }
 
 // Toggle schedule active status
-export async function ToggleScheduleActive(scheduleId: string) {
+export async function ToggleScheduleActive(
+  scheduleId: string,
+  locationId?: string | null,
+) {
   if (!scheduleId) {
     return { error: "Schedule ID is required" };
   }
@@ -706,6 +878,22 @@ export async function ToggleScheduleActive(scheduleId: string) {
     return { error: error.message };
   }
 
+  // Log audit event
+  const newStatus = updatedSchedule.is_active ? "activated" : "deactivated";
+  await LogAuditEvent({
+    merchantId: updatedSchedule.merchant_id,
+    action: `Schedule ${newStatus}: ${updatedSchedule.name}`,
+    actionCategory: "settings",
+    resourceType: "schedule",
+    resourceId: scheduleId,
+    resourceName: updatedSchedule.name,
+    locationId: locationId || updatedSchedule.location_id || undefined,
+    changes: {
+      before: { is_active: schedule.is_active },
+      after: { is_active: updatedSchedule.is_active },
+    },
+  });
+
   return { data: updatedSchedule as SchedulesModel };
 }
 
@@ -720,7 +908,7 @@ export async function CreateTimeSlot(
     start_time: string;
     end_time: string;
     is_active?: boolean;
-  }
+  },
 ) {
   if (!scheduleId) {
     return { error: "Schedule ID is required" };
@@ -745,6 +933,30 @@ export async function CreateTimeSlot(
     return { error: error.message };
   }
 
+  // Fetch schedule name for audit log
+  const { data: schedule } = await supabase
+    .from("schedules")
+    .select("name, merchant_id")
+    .eq("id", scheduleId)
+    .single();
+
+  if (schedule) {
+    await LogAuditEvent({
+      merchantId: schedule.merchant_id,
+      action: `Created Time Slot for Schedule: ${schedule.name}`,
+      actionCategory: "settings",
+      resourceType: "schedule",
+      resourceId: scheduleId,
+      resourceName: schedule.name,
+      metadata: {
+        time_slot_id: timeSlot.id,
+        day_of_week: data.day_of_week,
+        start_time: data.start_time,
+        end_time: data.end_time,
+      },
+    });
+  }
+
   return { data: timeSlot as ScheduleTimeSlotsModel };
 }
 
@@ -755,7 +967,7 @@ export async function UpdateTimeSlot(
     start_time?: string;
     end_time?: string;
     is_active?: boolean;
-  }
+  },
 ) {
   if (!timeSlotId) {
     return { error: "Time Slot ID is required" };
@@ -781,6 +993,28 @@ export async function UpdateTimeSlot(
     return { error: error.message };
   }
 
+  // Fetch schedule info for audit log
+  const { data: schedule } = await supabase
+    .from("schedules")
+    .select("name, merchant_id")
+    .eq("id", timeSlot.schedule_id)
+    .single();
+
+  if (schedule) {
+    await LogAuditEvent({
+      merchantId: schedule.merchant_id,
+      action: `Updated Time Slot for Schedule: ${schedule.name}`,
+      actionCategory: "settings",
+      resourceType: "schedule",
+      resourceId: timeSlot.schedule_id,
+      resourceName: schedule.name,
+      metadata: {
+        time_slot_id: timeSlotId,
+      },
+      changes: { after: data as Record<string, unknown> },
+    });
+  }
+
   return { data: timeSlot as ScheduleTimeSlotsModel };
 }
 
@@ -791,6 +1025,28 @@ export async function DeleteTimeSlot(timeSlotId: string) {
 
   const supabase = createServerSupabaseClient();
 
+  // Fetch info before delete
+  const { data: timeSlot } = await supabase
+    .from("schedule_time_slots")
+    .select("schedule_id")
+    .eq("id", timeSlotId)
+    .single();
+
+  let scheduleName = "Unknown";
+  let merchantId = "";
+
+  if (timeSlot) {
+    const { data: schedule } = await supabase
+      .from("schedules")
+      .select("name, merchant_id")
+      .eq("id", timeSlot.schedule_id)
+      .single();
+    if (schedule) {
+      scheduleName = schedule.name;
+      merchantId = schedule.merchant_id;
+    }
+  }
+
   const { error } = await supabase
     .from("schedule_time_slots")
     .delete()
@@ -799,6 +1055,21 @@ export async function DeleteTimeSlot(timeSlotId: string) {
   if (error) {
     console.error("Error deleting time slot:", error);
     return { error: error.message };
+  }
+
+  // Log audit event
+  if (merchantId) {
+    await LogAuditEvent({
+      merchantId: merchantId,
+      action: `Deleted Time Slot from Schedule: ${scheduleName}`,
+      actionCategory: "settings",
+      resourceType: "schedule",
+      resourceId: timeSlot?.schedule_id || "",
+      resourceName: scheduleName,
+      metadata: {
+        time_slot_id: timeSlotId,
+      },
+    });
   }
 
   return { success: true };
@@ -824,7 +1095,8 @@ export async function UpdateScheduleWithTimeSlots(
       end_time: string;
       is_active?: boolean;
     }>;
-  }
+  },
+  locationId?: string | null,
 ) {
   if (!scheduleId) {
     return { error: "Schedule ID is required" };
@@ -866,13 +1138,13 @@ export async function UpdateScheduleWithTimeSlots(
   if (data.time_slots !== undefined) {
     console.log(
       "[DEBUG UpdateScheduleWithTimeSlots] time_slots provided, count:",
-      data.time_slots.length
+      data.time_slots.length,
     );
 
     // Delete existing time slots
     console.log(
       "[DEBUG UpdateScheduleWithTimeSlots] Attempting to delete existing slots for schedule:",
-      scheduleId
+      scheduleId,
     );
 
     // Use service role client to bypass RLS for delete operation
@@ -887,7 +1159,7 @@ export async function UpdateScheduleWithTimeSlots(
       "[DEBUG UpdateScheduleWithTimeSlots] Delete result - error:",
       deleteError,
       "deleted count:",
-      deletedData?.length ?? 0
+      deletedData?.length ?? 0,
     );
 
     if (deleteError) {
@@ -908,7 +1180,7 @@ export async function UpdateScheduleWithTimeSlots(
 
       console.log(
         "[DEBUG UpdateScheduleWithTimeSlots] Inserting new slots, count:",
-        timeSlots.length
+        timeSlots.length,
       );
 
       const { error: insertError, data: insertedData } = await supabase
@@ -920,7 +1192,7 @@ export async function UpdateScheduleWithTimeSlots(
         "[DEBUG UpdateScheduleWithTimeSlots] Insert result - error:",
         insertError,
         "inserted count:",
-        insertedData?.length
+        insertedData?.length,
       );
 
       if (insertError) {
@@ -937,7 +1209,7 @@ export async function UpdateScheduleWithTimeSlots(
       `
             *,
             schedule_time_slots(*)
-        `
+        `,
     )
     .eq("id", scheduleId)
     .single();
@@ -946,6 +1218,24 @@ export async function UpdateScheduleWithTimeSlots(
     console.error("Error fetching updated schedule:", fetchError);
     return { error: "Schedule updated but failed to fetch" };
   }
+
+  // Log audit event
+  await LogAuditEvent({
+    merchantId: schedule.merchant_id, // fetched at start
+    action: `Updated Schedule Logic: ${updatedSchedule.name}`, // "Logic" implies slots
+    actionCategory: "settings",
+    resourceType: "schedule",
+    resourceId: scheduleId,
+    resourceName: updatedSchedule.name,
+    locationId: locationId || updatedSchedule.location_id || undefined,
+    metadata: {
+      updated_slots_count: data.time_slots
+        ? data.time_slots.length
+        : "unchanged",
+      has_slots_changes: data.time_slots !== undefined,
+    },
+    changes: { after: data as Record<string, unknown> },
+  });
 
   return {
     data: updatedSchedule as SchedulesModel & {

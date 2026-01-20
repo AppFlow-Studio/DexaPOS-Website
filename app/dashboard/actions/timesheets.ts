@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { StaffShift } from "@/types/staff";
 import { startOfDay, endOfDay } from "date-fns";
+import { LogAuditEvent } from "./audit-logs";
 
 // ============================================================================
 // TYPES
@@ -60,7 +61,7 @@ async function getMerchantIdFromClerkOrg(clerkOrgId: string): Promise<string> {
 
 export async function GetTimesheets(
   clerkOrgId: string,
-  filters: TimesheetFilters
+  filters: TimesheetFilters,
 ): Promise<MutationResult<StaffShift[]>> {
   try {
     const supabase = createServiceRoleClient();
@@ -86,7 +87,7 @@ export async function GetTimesheets(
                 staff_profile_id,
                 staff_profile:staff_profiles(first_name, last_name, avatar_url),
                 location:locations(name)
-            `
+            `,
       )
       .eq("merchant_id", merchantId)
       .gte("clock_in_time", from)
@@ -123,7 +124,7 @@ export async function GetTimesheets(
 // ============================================================================
 
 export async function GetTimesheetResources(
-  clerkOrgId: string
+  clerkOrgId: string,
 ): Promise<MutationResult<TimesheetResources>> {
   try {
     const supabase = createServerSupabaseClient();
@@ -168,7 +169,7 @@ export async function GetTimesheetResources(
 
 export async function GetShiftById(
   clerkOrgId: string,
-  shiftId: string
+  shiftId: string,
 ): Promise<MutationResult<StaffShift>> {
   try {
     const supabase = createServiceRoleClient();
@@ -193,7 +194,7 @@ export async function GetShiftById(
                 staff_profile_id,
                 staff_profile:staff_profiles(first_name, last_name, avatar_url),
                 location:locations(name)
-            `
+            `,
       )
       .eq("id", shiftId)
       .eq("merchant_id", merchantId)
@@ -220,13 +221,13 @@ export async function GetShiftById(
 export async function UpdateShiftStatus(
   clerkOrgId: string,
   shiftId: string,
-  status: "active" | "completed" | "approved" | "rejected"
+  status: "active" | "completed" | "approved" | "rejected",
 ): Promise<MutationResult<StaffShift>> {
   try {
     const supabase = createServiceRoleClient();
     const merchantId = await getMerchantIdFromClerkOrg(clerkOrgId);
 
-    const { data, error } = await supabase
+    const { data: updatedData, error } = await supabase
       .from("staff_shifts")
       .update({
         status,
@@ -237,27 +238,47 @@ export async function UpdateShiftStatus(
       .eq("merchant_id", merchantId)
       .select(
         `
-                id, 
-                status, 
-                clock_in_time, 
-                clock_out_time, 
-                break_logs, 
-                hourly_rate_snapshot, 
+                id,
+                status,
+                clock_in_time,
+                clock_out_time,
+                break_logs,
+                hourly_rate_snapshot,
                 created_at,
                 merchant_id,
                 location_id,
                 staff_profile_id,
                 staff_profile:staff_profiles(first_name, last_name, avatar_url),
                 location:locations(name)
-            `
+            `,
       )
       .single();
 
-    if (error || !data) {
+    if (error || !updatedData) {
       throw error || new Error("Failed to update shift");
     }
 
-    return { success: true, data: data as unknown as StaffShift };
+    // Log audit event
+    // Cast to any because the joined type isn't fully inferred
+    const staffProfile = (updatedData as any).staff_profile;
+    const staffName = staffProfile
+      ? `${staffProfile.first_name} ${staffProfile.last_name}`
+      : "Unknown Staff";
+
+    await LogAuditEvent({
+      merchantId: updatedData.merchant_id,
+      action: `Shift ${status}: ${staffName}`,
+      actionCategory: "staff_shifts",
+      resourceType: "staff_shift",
+      resourceId: shiftId,
+      resourceName: staffName,
+      locationId: updatedData.location_id,
+      changes: {
+        after: { status, is_verified: status === "approved" },
+      },
+    });
+
+    return { success: true, data: updatedData as unknown as StaffShift };
   } catch (error) {
     console.error("[UpdateShiftStatus] error", error);
     return {
@@ -278,13 +299,20 @@ export async function AdjustShiftTimes(
   clerkOrgId: string,
   shiftId: string,
   clockInTime: string,
-  clockOutTime: string | null
+  clockOutTime: string | null,
 ): Promise<MutationResult<StaffShift>> {
   try {
     const supabase = createServiceRoleClient();
     const merchantId = await getMerchantIdFromClerkOrg(clerkOrgId);
 
-    const { data, error } = await supabase
+    // Fetch before state
+    const { data: beforeShift } = await supabase
+      .from("staff_shifts")
+      .select("*")
+      .eq("id", shiftId)
+      .single();
+
+    const { data: updatedData, error } = await supabase
       .from("staff_shifts")
       .update({
         clock_in_time: clockInTime,
@@ -295,27 +323,55 @@ export async function AdjustShiftTimes(
       .eq("merchant_id", merchantId)
       .select(
         `
-                id, 
-                status, 
-                clock_in_time, 
-                clock_out_time, 
-                break_logs, 
-                hourly_rate_snapshot, 
+                id,
+                status,
+                clock_in_time,
+                clock_out_time,
+                break_logs,
+                hourly_rate_snapshot,
                 created_at,
                 merchant_id,
                 location_id,
                 staff_profile_id,
                 staff_profile:staff_profiles(first_name, last_name, avatar_url),
                 location:locations(name)
-            `
+            `,
       )
       .single();
 
-    if (error || !data) {
+    if (error || !updatedData) {
       throw error || new Error("Failed to adjust shift times");
     }
 
-    return { success: true, data: data as unknown as StaffShift };
+    // Log audit event
+    if (beforeShift) {
+      const staffProfile = (updatedData as any).staff_profile;
+      const staffName = staffProfile
+        ? `${staffProfile.first_name} ${staffProfile.last_name}`
+        : "Unknown Staff";
+
+      await LogAuditEvent({
+        merchantId: updatedData.merchant_id,
+        action: `Adjusted Shift Times: ${staffName}`,
+        actionCategory: "staff_shifts",
+        resourceType: "staff_shift",
+        resourceId: shiftId,
+        resourceName: staffName,
+        locationId: updatedData.location_id,
+        changes: {
+          before: {
+            clock_in_time: beforeShift.clock_in_time,
+            clock_out_time: beforeShift.clock_out_time,
+          },
+          after: {
+            clock_in_time: clockInTime,
+            clock_out_time: clockOutTime,
+          },
+        },
+      });
+    }
+
+    return { success: true, data: updatedData as unknown as StaffShift };
   } catch (error) {
     console.error("[AdjustShiftTimes] error", error);
     return {
@@ -332,19 +388,47 @@ export async function AdjustShiftTimes(
 
 export async function DeleteShift(
   clerkOrgId: string,
-  shiftId: string
+  shiftId: string,
 ): Promise<MutationResult<null>> {
   try {
     const supabase = createServiceRoleClient();
     const merchantId = await getMerchantIdFromClerkOrg(clerkOrgId);
 
-    const { error } = await supabase
+    // Fetch shift before deleting
+    const { data: shiftToDelete } = await supabase
+      .from("staff_shifts")
+      .select(
+        `
+        *,
+        staff_profile:staff_profiles(first_name, last_name)
+      `,
+      )
+      .eq("id", shiftId)
+      .single();
+
+    const { error: deleteError } = await supabase
       .from("staff_shifts")
       .delete()
       .eq("id", shiftId)
       .eq("merchant_id", merchantId);
 
-    if (error) throw error;
+    if (deleteError) throw deleteError;
+
+    // Log audit event
+    if (shiftToDelete) {
+      const staffName = shiftToDelete.staff_profile
+        ? `${shiftToDelete.staff_profile.first_name} ${shiftToDelete.staff_profile.last_name}`
+        : "Unknown Staff";
+      await LogAuditEvent({
+        merchantId: shiftToDelete.merchant_id,
+        action: `Deleted Shift: ${staffName}`,
+        actionCategory: "staff_shifts",
+        resourceType: "staff_shift",
+        resourceId: shiftId,
+        resourceName: staffName,
+        locationId: shiftToDelete.location_id,
+      });
+    }
 
     return { success: true, data: null };
   } catch (error) {
@@ -362,7 +446,7 @@ export async function DeleteShift(
 
 export async function BulkApproveShifts(
   clerkOrgId: string,
-  shiftIds: string[]
+  shiftIds: string[],
 ): Promise<MutationResult<number>> {
   try {
     if (!shiftIds.length) return { success: true, data: 0 };
@@ -370,7 +454,7 @@ export async function BulkApproveShifts(
     const supabase = createServiceRoleClient();
     const merchantId = await getMerchantIdFromClerkOrg(clerkOrgId);
 
-    const { error, count } = await supabase
+    const { data, error } = await supabase
       .from("staff_shifts")
       .update({
         status: "approved",
@@ -379,11 +463,27 @@ export async function BulkApproveShifts(
       })
       .in("id", shiftIds)
       .eq("merchant_id", merchantId)
-      .select("*", { count: "exact", head: true });
+      .select();
 
     if (error) throw error;
 
-    return { success: true, data: count || 0 };
+    const count = data?.length || 0;
+
+    // Log bulk approval
+    await LogAuditEvent({
+      merchantId: merchantId,
+      action: `Bulk Approved ${count} Shifts`,
+      actionCategory: "staff_shifts",
+      resourceType: "staff_shift",
+      resourceId: undefined,
+      resourceName: `${count} Shifts`,
+      metadata: {
+        count,
+        shift_ids: shiftIds,
+      },
+    });
+
+    return { success: true, data: count };
   } catch (error) {
     console.error("[BulkApproveShifts] error", error);
     return {

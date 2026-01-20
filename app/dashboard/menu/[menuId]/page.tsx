@@ -91,18 +91,18 @@ export default function MenuDetailPage() {
   // Categories for wizard selections
   const { data: categoriesWithItems } = useCategoriesWithItems(
     clerkOrgId || "",
-    selectedLocationId
+    selectedLocationId,
   );
 
   // Locations for mapping location_id to location name
   const { data: locations } = useLocations(
     clerkOrgId || "",
-    userInfo?.id || ""
+    userInfo?.id || "",
   );
 
   // Track expanded categories
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -117,7 +117,7 @@ export default function MenuDetailPage() {
 
   // Item editing within menu-category context
   const [editingItem, setEditingItem] = useState<EditItemWithOverrides | null>(
-    null
+    null,
   );
   const [isItemSheetOpen, setIsItemSheetOpen] = useState(false);
   const [editingCategoryContext, setEditingCategoryContext] = useState<{
@@ -132,7 +132,7 @@ export default function MenuDetailPage() {
   const [editedDescription, setEditedDescription] = useState("");
   const [hasSettingsChanges, setHasSettingsChanges] = useState(false);
   const [categoryViewMode, setCategoryViewMode] = useState<"list" | "table">(
-    "list"
+    "list",
   );
 
   const [reorderedCategories, setReorderedCategories] = useState<
@@ -149,7 +149,7 @@ export default function MenuDetailPage() {
     Map<string, boolean>
   >(new Map());
   const [savingItemOrderFor, setSavingItemOrderFor] = useState<string | null>(
-    null
+    null,
   );
 
   // Preview modal state
@@ -245,7 +245,7 @@ export default function MenuDetailPage() {
   const mapMenuCategoryItemToEdit = (
     category: MenuCategory,
     item: MenuCategoryItem,
-    menuId: string
+    menuId: string,
   ): EditItemWithOverrides => {
     const mi = item.menu_item;
     const priceLevels = (mi as any).price_levels || {};
@@ -334,7 +334,7 @@ export default function MenuDetailPage() {
 
   const handleEditMenuItem = (
     item: MenuCategoryItem,
-    category: MenuCategory
+    category: MenuCategory,
   ) => {
     const mapped = mapMenuCategoryItemToEdit(category, item, menuId);
     setEditingCategoryContext({
@@ -348,7 +348,10 @@ export default function MenuDetailPage() {
   const handleToggleMenuActive = async () => {
     setIsTogglingActive(true);
     try {
-      const result = await ToggleMenuActive(menuId);
+      const result = await ToggleMenuActive(
+        menuId,
+        selectedLocationId || undefined,
+      );
       if (result.error) {
         toast.error("Update Failed", { description: result.error });
         return;
@@ -382,7 +385,8 @@ export default function MenuDetailPage() {
       const result = await AssignScheduleToMenu(
         menuId,
         scheduleWizardId,
-        clerkOrgId
+        clerkOrgId,
+        selectedLocationId || undefined,
       );
       if ((result as any)?.error) {
         toast.error("Add Failed", { description: (result as any).error });
@@ -409,10 +413,14 @@ export default function MenuDetailPage() {
 
     setIsSavingSettings(true);
     try {
-      const result = await UpdateMenu(menuId, {
-        name: editedName.trim(),
-        description: editedDescription.trim() || undefined,
-      });
+      const result = await UpdateMenu(
+        menuId,
+        {
+          name: editedName.trim(),
+          description: editedDescription.trim() || undefined,
+        },
+        selectedLocationId || undefined,
+      );
 
       if (result.error) {
         toast.error("Save Failed", { description: result.error });
@@ -478,14 +486,14 @@ export default function MenuDetailPage() {
     if (!menu?.categories) return 0;
     return menu.categories.reduce(
       (sum, cat) => sum + (cat.items?.length || 0),
-      0
+      0,
     );
   }, [menu?.categories]);
 
   const handleDeleteMenu = async () => {
     setIsDeleting(true);
     try {
-      const result = await DeleteMenu(menuId);
+      const result = await DeleteMenu(menuId, selectedLocationId || undefined);
       if (result.error) {
         toast.error("Delete Failed", {
           description: result.error,
@@ -533,7 +541,7 @@ export default function MenuDetailPage() {
     const assignResult = await AssignScheduleToMenu(
       menuId,
       createResult.data.id,
-      clerkOrgId
+      clerkOrgId,
     );
 
     if (assignResult.error) {
@@ -565,7 +573,11 @@ export default function MenuDetailPage() {
 
   const handleRemoveSchedule = async (scheduleId: string) => {
     try {
-      const result = await RemoveScheduleFromMenu(menuId, scheduleId);
+      const result = await RemoveScheduleFromMenu(
+        menuId,
+        scheduleId,
+        selectedLocationId || undefined,
+      );
 
       if (result.error) {
         toast.error("Remove Failed", { description: result.error });
@@ -590,14 +602,14 @@ export default function MenuDetailPage() {
   // Handle toggling category visibility
   const handleToggleCategoryVisibility = async (
     categoryId: string,
-    isActive: boolean
+    isActive: boolean,
   ) => {
     try {
       const result = await ToggleCategoryInMenu(
         menuId,
         categoryId,
         isActive,
-        selectedLocationId === "all" ? null : selectedLocationId
+        selectedLocationId === "all" ? null : selectedLocationId,
       );
 
       if (result.error) {
@@ -630,7 +642,7 @@ export default function MenuDetailPage() {
       const result = await RemoveLocationMenuCategoryOverride(
         selectedLocationId,
         menuId,
-        categoryId
+        categoryId,
       );
 
       if (result.error) {
@@ -700,7 +712,7 @@ export default function MenuDetailPage() {
       const result = await UpdateLocationMenuCategoriesOrder(
         selectedLocationId === "all" ? null : selectedLocationId,
         menuId,
-        categoryOrders
+        categoryOrders,
       );
 
       if (result.error) {
@@ -743,7 +755,7 @@ export default function MenuDetailPage() {
   const handleResetCategoryOrder = () => {
     if (menu?.categories) {
       const sorted = [...menu.categories].sort(
-        (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)
+        (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0),
       );
       setReorderedCategories(sorted);
       setHasCategoryOrderChanges(false);
@@ -759,7 +771,7 @@ export default function MenuDetailPage() {
   // Handle item order change within a category
   const handleItemOrderChange = (
     categoryId: string,
-    items: MenuCategoryItem[]
+    items: MenuCategoryItem[],
   ) => {
     setReorderedItemsMap((prev) => {
       const newMap = new Map(prev);
@@ -777,9 +789,8 @@ export default function MenuDetailPage() {
   const handleSaveItemOrder = async (categoryId: string) => {
     setSavingItemOrderFor(categoryId);
     try {
-      const { UpdateLocationCategoryItemsOrder } = await import(
-        "../../actions/item-assignments"
-      );
+      const { UpdateLocationCategoryItemsOrder } =
+        await import("../../actions/item-assignments");
 
       const items = reorderedItemsMap.get(categoryId);
       if (!items) return;
@@ -793,7 +804,7 @@ export default function MenuDetailPage() {
         selectedLocationId === "all" ? null : selectedLocationId,
         menuId,
         categoryId,
-        itemOrders
+        itemOrders,
       );
 
       if (result.error) {
@@ -859,9 +870,8 @@ export default function MenuDetailPage() {
 
   const handleRemoveCategory = async (categoryId: string) => {
     try {
-      const { RemoveCategoryFromMenu } = await import(
-        "../../actions/categories"
-      );
+      const { RemoveCategoryFromMenu } =
+        await import("../../actions/categories");
       const result = await RemoveCategoryFromMenu(menuId, categoryId);
 
       if (result.error) {

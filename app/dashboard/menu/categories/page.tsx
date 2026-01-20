@@ -124,7 +124,7 @@ export default function CategoriesPage() {
   const { data: menus } = useMenus(clerkOrgId || "");
   const { data: locations } = useLocations(
     clerkOrgId || "",
-    userInfo?.id || ""
+    userInfo?.id || "",
   );
 
   const currentLocation = locations?.find((l) => l.id === selectedLocationId);
@@ -136,15 +136,15 @@ export default function CategoriesPage() {
   const [deletingCategory, setDeletingCategory] =
     useState<CategoryWithItems | null>(null);
   const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(
-    null
+    null,
   );
   const [togglingCategories, setTogglingCategories] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
 
   // Item editing state
   const [editingItem, setEditingItem] = useState<EditItemWithOverrides | null>(
-    null
+    null,
   );
   const [isItemSheetOpen, setIsItemSheetOpen] = useState(false);
   const [editingCategoryContext, setEditingCategoryContext] = useState<{
@@ -165,10 +165,10 @@ export default function CategoriesPage() {
     Map<string, CategoryMenuItem[]>
   >(new Map());
   const [itemOrderChanges, setItemOrderChanges] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
   const [savingItemOrderFor, setSavingItemOrderFor] = useState<string | null>(
-    null
+    null,
   );
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -180,7 +180,7 @@ export default function CategoriesPage() {
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   // Use RPC data as primary source
@@ -191,19 +191,19 @@ export default function CategoriesPage() {
   const filteredCategories = categoriesList.filter(
     (category) =>
       category.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      category.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      category.description?.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   // Stats from RPC data
   const totalItems = categoriesList.reduce(
     (acc, c) => acc + (c.item_count || 0),
-    0
+    0,
   );
   const activeCategories = categoriesList.filter((c) =>
-    isAllLocations ? c.is_active : c.effective_is_active
+    isAllLocations ? c.is_active : c.effective_is_active,
   ).length;
   const categoriesWithOverrides = categoriesList.filter(
-    (c) => c.location_override !== null
+    (c) => c.location_override !== null,
   ).length;
 
   // Get current editing level
@@ -224,7 +224,7 @@ export default function CategoriesPage() {
   const mapCategoryItemToEditItem = (
     item: CategoryMenuItem,
     categoryId: string,
-    categoryName: string
+    categoryName: string,
   ): EditItemWithOverrides => ({
     id: item.menu_item_id,
     name: item.menu_item.name,
@@ -265,7 +265,7 @@ export default function CategoriesPage() {
   // Handle toggling category visibility at location level
   const handleToggleCategoryAtLocation = async (
     categoryId: string,
-    isActive: boolean
+    isActive: boolean,
   ) => {
     if (isAllLocations || !selectedLocationId) return;
 
@@ -275,7 +275,7 @@ export default function CategoriesPage() {
       const result = await UpdateLocationCategoryOverride(
         selectedLocationId,
         categoryId,
-        { isActive }
+        { isActive },
       );
 
       if (result.error) {
@@ -314,7 +314,7 @@ export default function CategoriesPage() {
     try {
       const result = await RemoveLocationCategoryOverride(
         selectedLocationId,
-        categoryId
+        categoryId,
       );
 
       if (result.error) {
@@ -369,7 +369,10 @@ export default function CategoriesPage() {
     }
 
     try {
-      const result = await DeleteCategory(deletingCategory.id);
+      const result = await DeleteCategory(
+        deletingCategory.id,
+        selectedLocationId,
+      );
       if (result.error) {
         toast.error("Delete Failed", {
           description: result.error,
@@ -402,7 +405,7 @@ export default function CategoriesPage() {
 
   const handleEditCategory = (
     category: CategoryWithItems,
-    e: React.MouseEvent
+    e: React.MouseEvent,
   ) => {
     e.stopPropagation();
     setEditingCategory(category);
@@ -415,11 +418,15 @@ export default function CategoriesPage() {
   const handleRemoveItemFromCategory = async (
     categoryId: string,
     menuItemId: string,
-    e: React.MouseEvent
+    e: React.MouseEvent,
   ) => {
     e.stopPropagation();
     try {
-      const result = await RemoveItemFromCategory(categoryId, menuItemId);
+      const result = await RemoveItemFromCategory(
+        categoryId,
+        menuItemId,
+        selectedLocationId,
+      );
       if (result.error) {
         toast.error("Remove Failed", { description: result.error });
         return;
@@ -440,7 +447,7 @@ export default function CategoriesPage() {
   const handleEditItem = (
     item: CategoryMenuItem,
     category: CategoryWithItems,
-    e: React.MouseEvent
+    e: React.MouseEvent,
   ) => {
     e.stopPropagation();
     setEditingCategoryContext({ id: category.id, name: category.name });
@@ -454,7 +461,7 @@ export default function CategoriesPage() {
 
   const handleOrderChange = (
     categoryId: string,
-    updatedItems: CategoryMenuItem[]
+    updatedItems: CategoryMenuItem[],
   ) => {
     setReorderedItemsMap((prev) => {
       const newMap = new Map(prev);
@@ -472,10 +479,10 @@ export default function CategoriesPage() {
       const currentItems =
         reorderedItemsMap.get(categoryId) || getItemsForCategory(categoryId);
       const oldIndex = currentItems.findIndex(
-        (item) => item.menu_item_id === active.id
+        (item) => item.menu_item_id === active.id,
       );
       const newIndex = currentItems.findIndex(
-        (item) => item.menu_item_id === over.id
+        (item) => item.menu_item_id === over.id,
       );
 
       if (oldIndex !== -1 && newIndex !== -1) {
@@ -505,7 +512,7 @@ export default function CategoriesPage() {
         selectedLocationId === "all" ? null : selectedLocationId,
         null,
         categoryId,
-        itemOrders
+        itemOrders,
       );
 
       if (result.error) {
@@ -570,7 +577,7 @@ export default function CategoriesPage() {
               className={cn(
                 "gap-1.5 animate-in fade-in slide-in-from-left-2 duration-300",
                 !isAllLocations &&
-                  "bg-blue-500/10 text-blue-600 border-blue-200"
+                  "bg-blue-500/10 text-blue-600 border-blue-200",
               )}
             >
               {isAllLocations ? (
@@ -685,13 +692,13 @@ export default function CategoriesPage() {
             <div
               className={cn(
                 "text-2xl font-bold",
-                isAllLocations ? "text-purple-600" : "text-amber-600"
+                isAllLocations ? "text-purple-600" : "text-amber-600",
               )}
             >
               {isAllLocations
                 ? categoriesList.reduce(
                     (acc, c) => acc + (c.menu_count || 0),
-                    0
+                    0,
                   )
                 : categoriesWithOverrides}
             </div>
@@ -764,7 +771,7 @@ export default function CategoriesPage() {
                       "transition-all animate-in fade-in slide-in-from-bottom-4 overflow-hidden",
                       isExpanded
                         ? "ring-2 ring-primary shadow-lg"
-                        : "hover:shadow-md hover:border-primary/30 cursor-pointer"
+                        : "hover:shadow-md hover:border-primary/30 cursor-pointer",
                     )}
                     style={{ animationDelay: `${index * 50}ms` }}
                   >
@@ -772,7 +779,7 @@ export default function CategoriesPage() {
                     <div
                       className={cn(
                         "p-4 cursor-pointer transition-colors",
-                        isExpanded && "bg-muted/30"
+                        isExpanded && "bg-muted/30",
                       )}
                       onClick={() => handleCategoryClick(category)}
                     >
@@ -792,7 +799,7 @@ export default function CategoriesPage() {
                               "h-16 w-16 rounded-lg flex items-center justify-center shrink-0 transition-colors",
                               isExpanded
                                 ? "bg-primary/20"
-                                : "bg-primary/10 group-hover:bg-primary/20"
+                                : "bg-primary/10 group-hover:bg-primary/20",
                             )}
                           >
                             <Tag className="h-8 w-8 text-primary" />
@@ -805,7 +812,7 @@ export default function CategoriesPage() {
                               <h3
                                 className={cn(
                                   "font-semibold transition-colors truncate",
-                                  isExpanded && "text-primary"
+                                  isExpanded && "text-primary",
                                 )}
                               >
                                 {category.name}
@@ -831,11 +838,11 @@ export default function CategoriesPage() {
                                           onCheckedChange={(checked) =>
                                             handleToggleCategoryAtLocation(
                                               category.id,
-                                              checked
+                                              checked,
                                             )
                                           }
                                           disabled={togglingCategories.has(
-                                            category.id
+                                            category.id,
                                           )}
                                         />
                                         {category.effective_is_active ? (
@@ -917,11 +924,11 @@ export default function CategoriesPage() {
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             handleResetCategoryToGlobal(
-                                              category.id
+                                              category.id,
                                             );
                                           }}
                                           disabled={togglingCategories.has(
-                                            category.id
+                                            category.id,
                                           )}
                                         >
                                           <RotateCcw className="h-4 w-4" />
@@ -939,7 +946,7 @@ export default function CategoriesPage() {
                                   "p-1 rounded-full transition-colors",
                                   isExpanded
                                     ? "bg-primary text-primary-foreground"
-                                    : "bg-muted"
+                                    : "bg-muted",
                                 )}
                               >
                                 {isExpanded ? (
@@ -1244,7 +1251,7 @@ export default function CategoriesPage() {
                                         ).map(
                                           (
                                             item: CategoryMenuItem,
-                                            itemIndex: number
+                                            itemIndex: number,
                                           ) => (
                                             <SortableCategoryItemRow
                                               key={item.id}
@@ -1260,7 +1267,7 @@ export default function CategoriesPage() {
                                                 handleRemoveItemFromCategory
                                               }
                                             />
-                                          )
+                                          ),
                                         )}
                                       </ScrollArea>
                                     </SortableContext>
@@ -1270,18 +1277,19 @@ export default function CategoriesPage() {
                                           item={
                                             (
                                               reorderedItemsMap.get(
-                                                category.id
+                                                category.id,
                                               ) || categoryItems
                                             ).find(
-                                              (i) => i.menu_item_id === activeId
+                                              (i) =>
+                                                i.menu_item_id === activeId,
                                             )!
                                           }
                                           index={(
                                             reorderedItemsMap.get(
-                                              category.id
+                                              category.id,
                                             ) || categoryItems
                                           ).findIndex(
-                                            (i) => i.menu_item_id === activeId
+                                            (i) => i.menu_item_id === activeId,
                                           )}
                                         />
                                       )}
@@ -1460,12 +1468,12 @@ interface SortableCategoryItemRowProps {
   handleEditItem: (
     item: CategoryMenuItem,
     category: CategoryWithItems,
-    e: React.MouseEvent
+    e: React.MouseEvent,
   ) => void;
   handleRemoveItemFromCategory: (
     categoryId: string,
     menuItemId: string,
-    e: React.MouseEvent
+    e: React.MouseEvent,
   ) => void;
 }
 
@@ -1501,7 +1509,7 @@ function SortableCategoryItemRow({
         isDragging
           ? "opacity-30 shadow-lg z-50 ring-2 ring-primary"
           : "hover:shadow-sm hover:border-primary/30",
-        !item.menu_item.effective_availability && "opacity-60"
+        !item.menu_item.effective_availability && "opacity-60",
       )}
       onClick={(e) => handleEditItem(item, category, e)}
     >
@@ -1565,7 +1573,7 @@ function SortableCategoryItemRow({
                 item.menu_item.price_source === "location_item" &&
                   "text-blue-600 border-blue-200",
                 item.menu_item.price_source === "location_category" &&
-                  "text-purple-600 border-purple-200"
+                  "text-purple-600 border-purple-200",
               )}
             >
               {item.menu_item.price_source === "category" && "Cat"}
@@ -1620,7 +1628,7 @@ function SortableCategoryItemRow({
                     handleRemoveItemFromCategory(
                       category.id,
                       item.menu_item_id,
-                      e
+                      e,
                     )
                   }
                 >

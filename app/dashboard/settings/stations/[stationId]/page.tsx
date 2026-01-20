@@ -47,6 +47,9 @@ import {
   useDeleteStation,
 } from "../hooks/useStations";
 
+import { useAuth } from "@clerk/nextjs";
+import { AddStationDialog } from "../components/AddStationDialog";
+
 // Tab components
 import { StationOverviewTab } from "./components/StationOverviewTab";
 import { StationDevicesTab } from "./components/StationDevicesTab";
@@ -67,6 +70,7 @@ export default function StationDetailPage() {
   const params = useParams();
   const router = useRouter();
   const stationId = params.stationId as string;
+  const { orgId } = useAuth();
 
   const [activeTab, setActiveTab] = useState("overview");
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -79,6 +83,7 @@ export default function StationDetailPage() {
 
   // Delete dialog state
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   // Mutations
   const updateMutation = useUpdateStation();
@@ -242,7 +247,9 @@ export default function StationDetailPage() {
                   </div>
                 ) : (
                   <div className="group flex items-center gap-2">
-                    <h1 className="text-2xl font-bold">{station.station_name}</h1>
+                    <h1 className="text-2xl font-bold">
+                      {station.station_name}
+                    </h1>
                     <Button
                       size="icon"
                       variant="ghost"
@@ -269,7 +276,7 @@ export default function StationDetailPage() {
                   className={cn(
                     isOnline
                       ? "border-green-500/50 bg-green-500/10 text-green-600"
-                      : "border-gray-400/50 bg-gray-100 text-gray-600"
+                      : "border-gray-400/50 bg-gray-100 text-gray-600",
                   )}
                 >
                   <Circle
@@ -277,7 +284,7 @@ export default function StationDetailPage() {
                       "mr-1 h-2 w-2",
                       isOnline
                         ? "fill-green-500 text-green-500"
-                        : "fill-gray-400 text-gray-400"
+                        : "fill-gray-400 text-gray-400",
                     )}
                   />
                   {isOnline ? "ONLINE" : "OFFLINE"}
@@ -314,7 +321,7 @@ export default function StationDetailPage() {
             <Button
               variant="outline"
               size="icon"
-              onClick={() => setIsDeleteDialogOpen(true)}
+              onClick={() => setIsEditDialogOpen(true)}
             >
               <Settings className="h-4 w-4" />
             </Button>
@@ -334,7 +341,7 @@ export default function StationDetailPage() {
               {station.last_heartbeat_at
                 ? `Last seen ${formatDistanceToNow(
                     new Date(station.last_heartbeat_at),
-                    { addSuffix: true }
+                    { addSuffix: true },
                   )}. `
                 : ""}
               Some features are unavailable while offline.
@@ -353,7 +360,7 @@ export default function StationDetailPage() {
               "px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap",
               activeTab === tab.id
                 ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >
             {tab.label}
@@ -375,6 +382,15 @@ export default function StationDetailPage() {
           <StationActivityTab station={station} timeFilter={timeFilter} />
         )}
       </div>
+
+      {/* Edit Station Dialog */}
+      <AddStationDialog
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        stationToEdit={station}
+        locationId={station.location_id}
+        clerkOrgId={orgId || ""}
+      />
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog

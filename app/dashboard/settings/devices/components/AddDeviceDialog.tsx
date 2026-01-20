@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -18,41 +19,40 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
-import { useState, useEffect } from "react";
-import {
-  useDevices,
-  DeviceType,
-  Device,
-  ConnectionType,
-  PrinterType,
-  DetectedPrinter,
-  PREP_STATIONS,
-  getDeviceTypeLabel,
-} from "../hooks/useDevices";
-import {
-  Loader2,
-  Smartphone,
-  Monitor,
-  Printer,
-  Bluetooth,
-  Usb,
-  Wifi,
-  CheckCircle,
-  AlertCircle,
-  ExternalLink,
-  Sparkles,
-  HelpCircle,
-} from "lucide-react";
-import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import {
+  AlertCircle,
+  Bluetooth,
+  CheckCircle,
+  ExternalLink,
+  HelpCircle,
+  Info,
+  Loader2,
+  Monitor,
+  Printer,
+  Smartphone,
+  Sparkles,
+  Usb,
+  Wifi,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import {
+  ConnectionType,
+  DetectedPrinter,
+  Device,
+  DeviceType,
+  PREP_STATIONS,
+  PrinterType,
+  useDevices,
+} from "../hooks/useDevices";
 
 export interface AddDeviceDialogProps {
   open: boolean;
@@ -127,7 +127,7 @@ function StepIndicator({ step }: { step: number }) {
           "flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors",
           step >= 1
             ? "bg-primary text-primary-foreground"
-            : "bg-muted text-muted-foreground"
+            : "bg-muted text-muted-foreground",
         )}
       >
         1
@@ -138,7 +138,7 @@ function StepIndicator({ step }: { step: number }) {
           "flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors",
           step >= 2
             ? "bg-primary text-primary-foreground"
-            : "bg-muted text-muted-foreground"
+            : "bg-muted text-muted-foreground",
         )}
       >
         2
@@ -224,7 +224,7 @@ function DetectedPrinterRow({
         "flex items-center justify-between p-4 rounded-lg border transition-colors",
         printer.isAssigned
           ? "bg-muted/50 opacity-60"
-          : "bg-card hover:bg-muted/30"
+          : "bg-card hover:bg-muted/30",
       )}
     >
       <div className="flex items-center gap-3">
@@ -657,8 +657,33 @@ export function AddDeviceDialog({
       );
     }
 
-    // Step 2B: Dejavoo P18 Tablet Setup
+    // Step 2B: Dejavoo P18 Tablet Setup / Edit
     if (type === "tablet") {
+      if (deviceToEdit) {
+        return (
+          <div className="space-y-5 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="deviceName">Station Name *</Label>
+              <Input
+                id="deviceName"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g., Main POS Station"
+              />
+            </div>
+            <div className="grid gap-2 text-sm text-muted-foreground bg-muted/30 p-4 rounded-lg border border-dashed">
+              <div className="flex items-center gap-2 mb-2 font-medium text-foreground">
+                <Info className="h-4 w-4" />
+                Device Information
+              </div>
+              <p>Model: {deviceToEdit.model || "Dejavoo P18"}</p>
+              <p>Serial: {deviceToEdit.serialNumber || "Unknown"}</p>
+              <p>App Version: {deviceToEdit.appVersion || "2.3.1"}</p>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="py-4 space-y-4">
           <InstructionalCard icon="📱" title="To connect your P18 Tablet:">
@@ -823,7 +848,7 @@ export function AddDeviceDialog({
             ) : null}
 
             {/* Cancel/Done button */}
-            {type === "tablet" ? (
+            {type === "tablet" && !deviceToEdit ? (
               <>
                 <Button
                   type="button"
@@ -831,7 +856,7 @@ export function AddDeviceDialog({
                   onClick={() =>
                     window.open(
                       "https://help.dexapos.com/setup-p18-tablet",
-                      "_blank"
+                      "_blank",
                     )
                   }
                 >
@@ -868,6 +893,19 @@ export function AddDeviceDialog({
                     ) : (
                       "Pair Device"
                     )}
+                  </Button>
+                )}
+                {type === "tablet" && deviceToEdit && (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      updateDevice(deviceToEdit.id, { name });
+                      toast.success("Station updated successfully");
+                      handleClose();
+                    }}
+                    disabled={!name.trim()}
+                  >
+                    Update Station
                   </Button>
                 )}
                 {configuringPrinter && (

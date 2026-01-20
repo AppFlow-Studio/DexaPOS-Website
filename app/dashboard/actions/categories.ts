@@ -14,7 +14,7 @@ import { LogAuditEvent } from "./audit-logs";
  */
 export async function GetCategories(
   clerkOrgId: string,
-  menuId?: string | null
+  menuId?: string | null,
 ) {
   if (!clerkOrgId) {
     return [];
@@ -66,7 +66,7 @@ export async function GetCategories(
  */
 export async function GetCategoriesForLocation(
   merchantId: string,
-  locationId?: string | null
+  locationId?: string | null,
 ) {
   if (!merchantId) {
     return { success: false, error: "Merchant ID is required", data: [] };
@@ -93,7 +93,7 @@ export async function GetCategoriesForLocation(
  */
 export async function GetCategoriesWithItemsForLocation(
   clerkOrgId: string,
-  locationId?: string | null
+  locationId?: string | null,
 ) {
   if (!clerkOrgId) {
     return { success: false, error: "Organization ID is required", data: [] };
@@ -132,7 +132,7 @@ export async function GetCategory(categoryId: string) {
                 id,
                 schedule:schedules(*)
             )
-        `
+        `,
     )
     .eq("id", categoryId)
     .single();
@@ -155,7 +155,7 @@ export async function GetCategory(categoryId: string) {
  */
 export async function GetCategoryWithItems(
   categoryId: string,
-  locationId?: string | null
+  locationId?: string | null,
 ) {
   if (!categoryId) {
     return null;
@@ -188,7 +188,7 @@ export async function GetCategoryWithItems(
 
   // Find the specific category
   const categoryWithItems = (data as CategoryWithItems[])?.find(
-    (c) => c.id === categoryId
+    (c) => c.id === categoryId,
   );
   return categoryWithItems || null;
 }
@@ -207,7 +207,7 @@ export async function CreateCategory(
     display_order?: number;
     image?: string;
     is_active?: boolean;
-  }
+  },
 ) {
   if (!clerkOrgId) {
     return { error: "Organization ID is required" };
@@ -262,7 +262,8 @@ export async function CreateCategory(
   }
 
   // Log Audit Event
-  LogAuditEvent({
+  await LogAuditEvent({
+    merchantId: merchant.id,
     action: `Created Category: ${data.name}`,
     actionCategory: "menu",
     resourceType: "category",
@@ -288,7 +289,8 @@ export async function UpdateCategory(
     display_order?: number;
     image?: string;
     is_active?: boolean;
-  }
+  },
+  locationId?: string | null,
 ) {
   if (!categoryId) {
     return { error: "Category ID is required" };
@@ -341,12 +343,14 @@ export async function UpdateCategory(
   }
 
   // Log Audit Event
-  LogAuditEvent({
+  await LogAuditEvent({
+    merchantId: category.merchant_id,
     action: `Updated Category: ${category.name}`,
     actionCategory: "menu",
     resourceType: "category",
     resourceId: categoryId,
     resourceName: category.name,
+    locationId: locationId,
     changes: { after: data as any },
   });
 
@@ -357,12 +361,22 @@ export async function UpdateCategory(
 // DELETE OPERATIONS
 // ============================================================================
 
-export async function DeleteCategory(categoryId: string) {
+export async function DeleteCategory(
+  categoryId: string,
+  locationId?: string | null,
+) {
   if (!categoryId) {
     return { error: "Category ID is required" };
   }
 
   const supabase = createServerSupabaseClient();
+
+  // Fetch category first to get name for logging
+  const { data: category } = await supabase
+    .from("categories")
+    .select("name, merchant_id")
+    .eq("id", categoryId)
+    .single();
 
   const { error } = await supabase
     .from("categories")
@@ -375,13 +389,18 @@ export async function DeleteCategory(categoryId: string) {
   }
 
   // Log Audit Event
-  LogAuditEvent({
-    action: `Deleted Category`,
-    actionCategory: "menu",
-    resourceType: "category",
-    resourceId: categoryId,
-    severity: "warning",
-  });
+  if (category) {
+    await LogAuditEvent({
+      merchantId: category.merchant_id,
+      action: `Deleted Category: ${category.name}`,
+      actionCategory: "menu",
+      resourceType: "category",
+      resourceId: categoryId,
+      resourceName: category.name,
+      locationId: locationId,
+      severity: "warning",
+    });
+  }
 
   return { success: true };
 }
@@ -398,7 +417,8 @@ export async function AddCategoryToMenu(
   categoryId: string,
   merchantId: string,
   displayOrder?: number,
-  customTitle?: string
+  customTitle?: string,
+  locationId?: string | null,
 ) {
   if (!categoryId || !menuId) {
     return { error: "Category ID and Menu ID are required" };
@@ -425,6 +445,32 @@ export async function AddCategoryToMenu(
     return { error: error.message };
   }
 
+  // Fetch menu and category names for logging
+  const [menuRes, catRes] = await Promise.all([
+    supabase
+      .from("menus")
+      .select("name, merchant_id")
+      .eq("id", menuId)
+      .single(),
+    supabase.from("categories").select("name").eq("id", categoryId).single(),
+  ]);
+
+  await LogAuditEvent({
+    merchantId: menuRes.data?.merchant_id,
+    action: `Assigned Category "${catRes.data?.name || "Unknown"}" to Menu: ${menuRes.data?.name || "Unknown"}`,
+    actionCategory: "menu",
+    resourceType: "menu_category",
+    resourceId: categoryId,
+    locationId: locationId,
+    metadata: {
+      menu_id: menuId,
+      menu_name: menuRes.data?.name,
+      category_name: catRes.data?.name,
+      display_order: displayOrder,
+      custom_title: customTitle,
+    },
+  });
+
   return { success: true, data };
 }
 
@@ -433,7 +479,8 @@ export async function AddCategoryToMenu(
  */
 export async function RemoveCategoryFromMenu(
   menuId: string,
-  categoryId: string
+  categoryId: string,
+  locationId?: string | null,
 ) {
   if (!categoryId || !menuId) {
     return { error: "Category ID and Menu ID are required" };
@@ -451,6 +498,30 @@ export async function RemoveCategoryFromMenu(
     return { error: error.message };
   }
 
+  // Fetch menu and category names for logging
+  const [menuRes, catRes] = await Promise.all([
+    supabase
+      .from("menus")
+      .select("name, merchant_id")
+      .eq("id", menuId)
+      .single(),
+    supabase.from("categories").select("name").eq("id", categoryId).single(),
+  ]);
+
+  await LogAuditEvent({
+    merchantId: menuRes.data?.merchant_id,
+    action: `Removed Category "${catRes.data?.name || "Unknown"}" from Menu: ${menuRes.data?.name || "Unknown"}`,
+    actionCategory: "menu",
+    resourceType: "menu_category",
+    resourceId: categoryId,
+    locationId: locationId,
+    metadata: {
+      menu_id: menuId,
+      menu_name: menuRes.data?.name,
+      category_name: catRes.data?.name,
+    },
+  });
+
   return { success: true, data };
 }
 
@@ -460,9 +531,20 @@ export async function RemoveCategoryFromMenu(
 export async function AssignCategoryToMenu(
   categoryId: string,
   menuId: string,
-  displayOrder?: number
+  displayOrder?: number,
 ) {
-  return AddCategoryToMenu(menuId, categoryId, displayOrder);
+  const supabase = createServerSupabaseClient();
+  const { data: menu } = await supabase
+    .from("menus")
+    .select("merchant_id")
+    .eq("id", menuId)
+    .single();
+
+  if (!menu) {
+    return { error: "Menu not found" };
+  }
+
+  return AddCategoryToMenu(menuId, categoryId, menu.merchant_id, displayOrder);
 }
 
 // ============================================================================
@@ -478,7 +560,8 @@ export async function AddItemToCategory(
   merchantId: string,
   displayOrder?: number,
   customPrice?: number,
-  isFeatured?: boolean
+  isFeatured?: boolean,
+  locationId?: string | null,
 ) {
   if (!categoryId || !menuItemId) {
     return { error: "Category ID and Menu Item ID are required" };
@@ -500,6 +583,29 @@ export async function AddItemToCategory(
     return { error: error.message };
   }
 
+  // Fetch category and item names
+  const [catRes, itemRes] = await Promise.all([
+    supabase.from("categories").select("name").eq("id", categoryId).single(),
+    supabase.from("menu_items").select("name").eq("id", menuItemId).single(),
+  ]);
+
+  await LogAuditEvent({
+    merchantId,
+    action: `Assigned Item "${itemRes.data?.name || "Unknown"}" to Category: ${catRes.data?.name || "Unknown"}`,
+    actionCategory: "menu",
+    resourceType: "category_item",
+    resourceId: menuItemId,
+    locationId: locationId,
+    metadata: {
+      category_id: categoryId,
+      category_name: catRes.data?.name,
+      item_name: itemRes.data?.name,
+      display_order: displayOrder,
+      custom_price: customPrice,
+      is_featured: isFeatured,
+    },
+  });
+
   return { success: true, data };
 }
 
@@ -508,7 +614,8 @@ export async function AddItemToCategory(
  */
 export async function RemoveItemFromCategory(
   categoryId: string,
-  menuItemId: string
+  menuItemId: string,
+  locationId?: string | null,
 ) {
   if (!categoryId || !menuItemId) {
     return { error: "Category ID and Menu Item ID are required" };
@@ -524,6 +631,35 @@ export async function RemoveItemFromCategory(
   if (error) {
     console.error("Error removing item from category:", error);
     return { error: error.message };
+  }
+
+  // Fetch category and item details (need merchant_id from item or category)
+  const { data: itemRes } = await supabase
+    .from("menu_items")
+    .select("name, merchant_id")
+    .eq("id", menuItemId)
+    .single();
+  const { data: catRes } = await supabase
+    .from("categories")
+    .select("name")
+    .eq("id", categoryId)
+    .single();
+
+  if (itemRes) {
+    await LogAuditEvent({
+      merchantId: itemRes.merchant_id,
+      action: `Removed Item "${itemRes.name}" from Category "${catRes?.name || "Unknown"}"`,
+      actionCategory: "menu",
+      resourceType: "category_item",
+      resourceId: menuItemId,
+      resourceName: itemRes.name,
+      locationId: locationId,
+      metadata: {
+        category_id: categoryId,
+        category_name: catRes?.name,
+        item_name: itemRes.name,
+      },
+    });
   }
 
   return { success: true, data };
@@ -551,7 +687,7 @@ export async function UpsertCategoryItemOverride(
     isFeatured?: boolean | null;
     stockTrackingMode?: string | null;
     currentStock?: number | null;
-  }
+  },
 ) {
   if (!menuItemId) {
     return { error: "Menu Item ID is required" };
@@ -581,6 +717,46 @@ export async function UpsertCategoryItemOverride(
     return { error: error.message };
   }
 
+  // Log audit event
+  const itemRes = await supabase
+    .from("menu_items")
+    .select("name, merchant_id")
+    .eq("id", menuItemId)
+    .single();
+  let contextName = "Base Item";
+  if (options.categoryId) {
+    const { data } = await supabase
+      .from("categories")
+      .select("name")
+      .eq("id", options.categoryId)
+      .single();
+    if (data) contextName = `Category: ${data.name}`;
+  } else if (options.menuId) {
+    const { data } = await supabase
+      .from("menus")
+      .select("name")
+      .eq("id", options.menuId)
+      .single();
+    if (data) contextName = `Menu: ${data.name}`;
+  }
+
+  if (itemRes.data) {
+    await LogAuditEvent({
+      merchantId: itemRes.data.merchant_id,
+      action: `Overridden Item "${itemRes.data.name}" (${contextName})`,
+      actionCategory: "menu",
+      resourceType: "category_item_override",
+      resourceId: menuItemId,
+      resourceName: itemRes.data.name,
+      locationId: options.locationId === "all" ? undefined : options.locationId,
+      changes: { after: options },
+      metadata: {
+        context: contextName,
+        location_id: options.locationId,
+      },
+    });
+  }
+
   return { success: true, data };
 }
 
@@ -594,7 +770,7 @@ export async function ResetCategoryItemToLevel(
     categoryId?: string | null;
     menuId?: string | null;
     locationId?: string | null;
-  }
+  },
 ) {
   if (!menuItemId) {
     return { error: "Menu Item ID is required" };
@@ -616,6 +792,27 @@ export async function ResetCategoryItemToLevel(
     return { error: error.message };
   }
 
+  // Log audit event
+  const { data: item } = await supabase
+    .from("menu_items")
+    .select("name, merchant_id")
+    .eq("id", menuItemId)
+    .single();
+  if (item) {
+    await LogAuditEvent({
+      merchantId: item.merchant_id,
+      action: `Reset Item to Level ${targetLevel}: ${item.name}`,
+      actionCategory: "menu",
+      resourceType: "category_item_override",
+      resourceId: menuItemId,
+      resourceName: item.name,
+      metadata: {
+        target_level: targetLevel,
+        ...options,
+      },
+    });
+  }
+
   return { success: true, data };
 }
 
@@ -633,7 +830,7 @@ export async function UpdateLocationCategoryOverride(
     isActive?: boolean;
     displayOrder?: number;
     customTitle?: string;
-  }
+  },
 ) {
   if (!locationId || !categoryId) {
     return { error: "Location ID and Category ID are required" };
@@ -644,7 +841,7 @@ export async function UpdateLocationCategoryOverride(
   // First, check if this is a location-specific category
   const { data: category, error: categoryError } = await supabase
     .from("categories")
-    .select("location_id")
+    .select("location_id, name, merchant_id")
     .eq("id", categoryId)
     .single();
 
@@ -680,6 +877,18 @@ export async function UpdateLocationCategoryOverride(
       return { error: error.message };
     }
 
+    // Log Audit Event (Direct Update)
+    await LogAuditEvent({
+      merchantId: category.merchant_id, // category fetched above
+      action: `Updated Location Category: ${category.name}`,
+      actionCategory: "menu",
+      resourceType: "category",
+      resourceId: categoryId,
+      resourceName: category.name,
+      locationId: locationId,
+      changes: { after: updateData },
+    });
+
     return { success: true };
   }
 
@@ -696,12 +905,32 @@ export async function UpdateLocationCategoryOverride(
     },
     {
       onConflict: "location_id,category_id",
-    }
+    },
   );
 
   if (error) {
     console.error("Error updating location category override:", error);
     return { error: error.message };
+  }
+
+  // Fetch category name for log
+  const { data: catName } = await supabase
+    .from("categories")
+    .select("name, merchant_id")
+    .eq("id", categoryId)
+    .single();
+
+  if (catName) {
+    await LogAuditEvent({
+      merchantId: catName.merchant_id,
+      action: `Updated Category Override: ${catName.name}`,
+      actionCategory: "menu",
+      resourceType: "location_category_override",
+      resourceId: categoryId,
+      resourceName: catName.name,
+      locationId: locationId,
+      changes: { after: data as any },
+    });
   }
 
   return { success: true };
@@ -712,7 +941,7 @@ export async function UpdateLocationCategoryOverride(
  */
 export async function RemoveLocationCategoryOverride(
   locationId: string,
-  categoryId: string
+  categoryId: string,
 ) {
   if (!locationId || !categoryId) {
     return { error: "Location ID and Category ID are required" };
@@ -729,6 +958,25 @@ export async function RemoveLocationCategoryOverride(
   if (error) {
     console.error("Error removing location category override:", error);
     return { error: error.message };
+  }
+
+  // Fetch category name for log
+  const { data: catName } = await supabase
+    .from("categories")
+    .select("name, merchant_id")
+    .eq("id", categoryId)
+    .single();
+
+  if (catName) {
+    await LogAuditEvent({
+      merchantId: catName.merchant_id,
+      action: `Removed Category Override: ${catName.name}`,
+      actionCategory: "menu",
+      resourceType: "location_category_override",
+      resourceId: categoryId,
+      resourceName: catName.name,
+      locationId: locationId,
+    });
   }
 
   return { success: true };
@@ -750,7 +998,7 @@ export async function UpdateLocationMenuCategoryOverride(
     isActive?: boolean;
     displayOrder?: number;
     customTitle?: string;
-  }
+  },
 ) {
   if (!locationId || !menuId || !categoryId) {
     return { error: "Location ID, Menu ID, and Category ID are required" };
@@ -772,7 +1020,7 @@ export async function UpdateLocationMenuCategoryOverride(
       },
       {
         onConflict: "location_id,menu_id,category_id",
-      }
+      },
     );
 
   if (error) {
@@ -790,7 +1038,7 @@ export async function ToggleCategoryInMenu(
   menuId: string,
   categoryId: string,
   isActive: boolean,
-  locationId?: string | null
+  locationId?: string | null,
 ) {
   if (!menuId || !categoryId) {
     return { error: "Menu ID and Category ID are required" };
@@ -828,7 +1076,7 @@ export async function ToggleCategoryInMenu(
         },
         {
           onConflict: "location_id,menu_id,category_id",
-        }
+        },
       );
 
     if (error) {
@@ -846,7 +1094,7 @@ export async function ToggleCategoryInMenu(
 export async function RemoveLocationMenuCategoryOverride(
   locationId: string,
   menuId: string,
-  categoryId: string
+  categoryId: string,
 ) {
   if (!locationId || !menuId || !categoryId) {
     return { error: "Location ID, Menu ID, and Category ID are required" };

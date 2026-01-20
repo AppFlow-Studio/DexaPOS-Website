@@ -10,6 +10,7 @@ import {
   defaultApplicableDays,
 } from "@/types/discount";
 import { discountFormSchema } from "@/lib/validations/discount";
+import { LogAuditEvent } from "./audit-logs";
 
 type MutationResult<T> =
   | { success: true; data: T }
@@ -49,7 +50,7 @@ async function getMerchantIdFromSession() {
             merchants(id)
           )
         )
-      `
+      `,
       )
       .eq("id", userId)
       .single();
@@ -86,7 +87,7 @@ function buildPayload(input: DiscountFormInput, merchantId: string) {
     min_purchase_amount: parsed.min_purchase_amount ?? null,
     max_discount_amount:
       parsed.discount_type === "percentage"
-        ? parsed.max_discount_amount ?? null
+        ? (parsed.max_discount_amount ?? null)
         : null,
     start_date: serializeDate(parsed.start_date),
     end_date: serializeDate(parsed.end_date),
@@ -190,12 +191,12 @@ export async function getDiscountById(discountId: string) {
 async function upsertMenuItemLinks(
   discountId: string,
   merchantId: string,
-  menuItemIds?: string[] | null
+  menuItemIds?: string[] | null,
 ) {
   const supabase = createServerSupabaseClient();
   console.log(
     `[upsertMenuItemLinks] Updating links for discount: ${discountId}, items:`,
-    menuItemIds
+    menuItemIds,
   );
 
   // Clear existing links first
@@ -222,7 +223,7 @@ async function upsertMenuItemLinks(
         discount_id: discountId,
         menu_item_id,
         merchant_id: merchantId,
-      }))
+      })),
     );
 
   if (insertError) {
@@ -234,7 +235,7 @@ async function upsertMenuItemLinks(
 }
 
 export async function createDiscount(
-  input: DiscountFormInput
+  input: DiscountFormInput,
 ): Promise<MutationResult<Discount>> {
   try {
     const supabase = createServerSupabaseClient();
@@ -253,6 +254,20 @@ export async function createDiscount(
 
     await upsertMenuItemLinks(data.id, merchantId, input.menu_item_ids);
 
+    // Log audit event
+    await LogAuditEvent({
+      merchantId,
+      action: `Created Discount: ${input.name}`,
+      actionCategory: "settings",
+      resourceType: "discount",
+      resourceId: data.id,
+      resourceName: input.name,
+      metadata: {
+        discount_type: input.discount_type,
+        discount_value: input.discount_value,
+      },
+    });
+
     return { success: true, data: data as Discount };
   } catch (error) {
     console.error("[createDiscount] error", error);
@@ -266,7 +281,7 @@ export async function createDiscount(
 
 export async function updateDiscount(
   discountId: string,
-  input: DiscountFormInput
+  input: DiscountFormInput,
 ): Promise<MutationResult<Discount>> {
   try {
     const supabase = createServerSupabaseClient();
@@ -287,6 +302,17 @@ export async function updateDiscount(
 
     await upsertMenuItemLinks(discountId, merchantId, input.menu_item_ids);
 
+    // Log audit event
+    await LogAuditEvent({
+      merchantId,
+      action: `Updated Discount: ${data.name}`,
+      actionCategory: "settings",
+      resourceType: "discount",
+      resourceId: discountId,
+      resourceName: data.name,
+      changes: { after: input as unknown as Record<string, unknown> },
+    });
+
     return { success: true, data: data as Discount };
   } catch (error) {
     console.error("[updateDiscount] error", error);
@@ -300,11 +326,18 @@ export async function updateDiscount(
 
 export async function toggleDiscountActive(
   discountId: string,
-  isActive: boolean
+  isActive: boolean,
 ): Promise<MutationResult<null>> {
   try {
     const supabase = createServerSupabaseClient();
     const merchantId = await getMerchantIdFromSession();
+
+    // Fetch discount name for audit log
+    const { data: discount } = await supabase
+      .from("discounts")
+      .select("name")
+      .eq("id", discountId)
+      .single();
 
     const { error } = await supabase
       .from("discounts")
@@ -313,6 +346,18 @@ export async function toggleDiscountActive(
       .eq("merchant_id", merchantId);
 
     if (error) throw error;
+
+    // Log audit event
+    const status = isActive ? "activated" : "deactivated";
+    await LogAuditEvent({
+      merchantId,
+      action: `Discount ${status}: ${discount?.name || "Unknown"}`,
+      actionCategory: "settings",
+      resourceType: "discount",
+      resourceId: discountId,
+      resourceName: discount?.name,
+      changes: { after: { is_active: isActive } },
+    });
 
     return { success: true, data: null };
   } catch (error) {
@@ -326,7 +371,7 @@ export async function toggleDiscountActive(
 
 export async function bulkUpdateDiscountStatus(
   discountIds: string[],
-  isActive: boolean
+  isActive: boolean,
 ): Promise<MutationResult<number>> {
   try {
     if (!discountIds.length) return { success: true, data: 0 };
@@ -343,6 +388,21 @@ export async function bulkUpdateDiscountStatus(
 
     if (error) throw error;
 
+    // Log bulk update
+    await LogAuditEvent({
+      merchantId,
+      action: `Bulk Updated Status ${isActive ? "Activated" : "Deactivated"} ${count} Discounts`,
+      actionCategory: "settings",
+      resourceType: "discount",
+      resourceId: undefined,
+      resourceName: `${count} Discounts`,
+      metadata: {
+        count: count,
+        discount_ids: discountIds,
+        new_status: isActive,
+      },
+    });
+
     return { success: true, data: count || 0 };
   } catch (error) {
     console.error("[bulkUpdateDiscountStatus] error", error);
@@ -356,11 +416,18 @@ export async function bulkUpdateDiscountStatus(
 
 export async function deleteDiscount(
   discountId: string,
-  mode: "soft" | "hard" = "hard"
+  mode: "soft" | "hard" = "hard",
 ): Promise<MutationResult<null>> {
   try {
     const supabase = createServerSupabaseClient();
     const merchantId = await getMerchantIdFromSession();
+
+    // Fetch discount name for audit log
+    const { data: discount } = await supabase
+      .from("discounts")
+      .select("name")
+      .eq("id", discountId)
+      .single();
 
     if (mode === "soft") {
       const { error } = await supabase
@@ -370,6 +437,17 @@ export async function deleteDiscount(
         .eq("merchant_id", merchantId);
 
       if (error) throw error;
+
+      // Log audit event
+      await LogAuditEvent({
+        merchantId,
+        action: `Soft Deleted Discount: ${discount?.name || "Unknown"}`,
+        actionCategory: "settings",
+        resourceType: "discount",
+        resourceId: discountId,
+        resourceName: discount?.name,
+      });
+
       return { success: true, data: null };
     }
 
@@ -385,6 +463,16 @@ export async function deleteDiscount(
       .eq("merchant_id", merchantId);
     if (error) throw error;
 
+    // Log audit event
+    await LogAuditEvent({
+      merchantId,
+      action: `Deleted Discount: ${discount?.name || "Unknown"}`,
+      actionCategory: "settings",
+      resourceType: "discount",
+      resourceId: discountId,
+      resourceName: discount?.name,
+    });
+
     return { success: true, data: null };
   } catch (error) {
     console.error("[deleteDiscount] error", error);
@@ -398,7 +486,7 @@ export async function deleteDiscount(
 
 export async function bulkDeleteDiscounts(
   discountIds: string[],
-  mode: "soft" | "hard" = "hard"
+  mode: "soft" | "hard" = "hard",
 ): Promise<MutationResult<number>> {
   try {
     if (!discountIds.length) return { success: true, data: 0 };
@@ -406,31 +494,65 @@ export async function bulkDeleteDiscounts(
     const merchantId = await getMerchantIdFromSession();
 
     if (mode === "soft") {
-      const { error, count } = await supabase
+      const { data, error } = await supabase
         .from("discounts")
         .update({ is_active: false, updated_at: new Date().toISOString() })
         .in("id", discountIds)
         .eq("merchant_id", merchantId)
-        // @ts-expect-error - Supabase types don't properly type the second argument
-        .select("*", { count: "exact", head: true });
+        .select();
 
       if (error) throw error;
-      return { success: true, data: count || 0 };
+      const count = data?.length || 0;
+
+      // Log bulk delete (soft)
+      await LogAuditEvent({
+        merchantId,
+        action: `Bulk Deleted ${count} Discounts (soft)`,
+        actionCategory: "settings",
+        resourceType: "discount",
+        resourceId: undefined,
+        resourceName: `${count} Discounts`,
+        metadata: {
+          count: count,
+          discount_ids: discountIds,
+          mode: mode,
+        },
+      });
+
+      return { success: true, data: count };
     }
 
     await supabase
       .from("menu_item_discounts")
       .delete()
       .in("discount_id", discountIds);
-    const { error, count } = await supabase
+    const { data, error } = await supabase
       .from("discounts")
       .delete()
       .in("id", discountIds)
       .eq("merchant_id", merchantId)
-      // @ts-expect-error - Supabase types don't properly type the second argument
-      .select("*", { count: "exact", head: true });
+      .select();
 
     if (error) throw error;
+
+    const count = data?.length || 0;
+    if (error) throw error;
+
+    // Log bulk delete
+    await LogAuditEvent({
+      merchantId,
+      action: `Bulk Deleted ${count} Discounts (${mode})`,
+      actionCategory: "settings",
+      resourceType: "discount",
+      resourceId: undefined,
+      resourceName: `${count} Discounts`,
+      metadata: {
+        count: count,
+        discount_ids: discountIds,
+        mode: mode,
+      },
+    });
+
     return { success: true, data: count || 0 };
   } catch (error) {
     console.error("[bulkDeleteDiscounts] error", error);
@@ -443,7 +565,7 @@ export async function bulkDeleteDiscounts(
 }
 
 export async function getDiscountUsage(
-  discountId: string
+  discountId: string,
 ): Promise<MutationResult<DiscountUsageStats>> {
   try {
     const supabase = createServerSupabaseClient();

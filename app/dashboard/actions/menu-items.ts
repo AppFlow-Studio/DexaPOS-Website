@@ -31,7 +31,7 @@ export interface MenuItemWithLocationContext extends MenuItemsModel {
 
 export async function GetMenuItems(
   clerkOrgId: string,
-  locationId?: string | null
+  locationId?: string | null,
 ) {
   if (!clerkOrgId) {
     return [];
@@ -74,7 +74,7 @@ export async function GetMenuItems(
     .eq("location_id", locationId);
 
   const overrideMap = new Map(
-    (overrides || []).map((o) => [o.menu_item_id, o])
+    (overrides || []).map((o) => [o.menu_item_id, o]),
   );
 
   // Return items with effective prices
@@ -99,7 +99,7 @@ export async function GetMenuItems(
 
 export async function GetMenuItem(
   itemId: string,
-  locationId?: string | null // Optional: Add context if known
+  locationId?: string | null, // Optional: Add context if known
 ) {
   if (!itemId) return null;
 
@@ -128,7 +128,7 @@ export async function GetMenuItem(
  */
 export async function GetMenuItemWithLocationContext(
   itemId: string,
-  locationId?: string | null
+  locationId?: string | null,
 ) {
   if (!itemId) {
     return null;
@@ -160,7 +160,7 @@ export async function GetMenuItemWithLocationContext(
                     modifier_group_items(*)
                 )
             )
-        `
+        `,
     )
     .eq("id", itemId)
     .single();
@@ -219,7 +219,7 @@ export async function GetMenuItemWithLocationContext(
  */
 export async function GetMenuItemsByMenu(
   menuId: string,
-  locationId?: string | null
+  locationId?: string | null,
 ) {
   if (!menuId) {
     return [];
@@ -250,7 +250,7 @@ export async function GetMenuItemsByMenu(
                     menu_item:menu_items(*)
                 )
             )
-        `
+        `,
     )
     .eq("menu_id", menuId)
     .order("display_order", { ascending: true, nullsFirst: false });
@@ -322,7 +322,7 @@ export async function GetMenuItemsByMenu(
     .in("menu_item_id", itemIds);
 
   const overrideMap = new Map(
-    (overrides || []).map((o) => [o.menu_item_id, o])
+    (overrides || []).map((o) => [o.menu_item_id, o]),
   );
 
   // Apply location overrides to items
@@ -371,7 +371,8 @@ export async function CreateMenuItem(
     availability?: boolean;
     stock_tracking_mode?: "in_stock" | "out_of_stock" | "quantity";
     modifier_group_ids?: string[];
-  }
+  },
+  locationId?: string | null,
 ) {
   if (!clerkOrgId) {
     return { error: "Organization ID is required" };
@@ -433,12 +434,14 @@ export async function CreateMenuItem(
   console.log("Created menu item:", item);
 
   // Log Audit Event
-  LogAuditEvent({
+  await LogAuditEvent({
+    merchantId: merchant.id,
     action: `Created Menu Item: ${data.name}`,
     actionCategory: "menu",
     resourceType: "menu_item",
     resourceId: item.id,
     resourceName: data.name,
+    locationId: locationId,
     changes: { after: data as any },
   });
 
@@ -475,7 +478,7 @@ export async function UpdateMenuItem(
     available_channels?: string[];
     modifier_group_ids?: string[];
   },
-  locationId?: string | null
+  locationId?: string | null,
 ) {
   console.log("UpdateMenuItem data", data);
   console.log("UpdateMenuItem locationId", locationId);
@@ -500,11 +503,11 @@ export async function UpdateMenuItem(
 
   // Check if we have any location-overridable fields in the data
   const hasLocationOverrideData = locationOverrideFields.some(
-    (field) => data[field as keyof typeof data] !== undefined
+    (field) => data[field as keyof typeof data] !== undefined,
   );
   console.log(
     "UpdateMenuItem hasLocationOverrideData",
-    hasLocationOverrideData
+    hasLocationOverrideData,
   );
 
   // If location-scoped and has overridable data, use location override
@@ -530,7 +533,7 @@ export async function UpdateMenuItem(
     const overrideResult = await UpsertLocationMenuItemOverride(
       locationId,
       itemId,
-      overrideData
+      overrideData,
     );
 
     if (overrideResult.error) {
@@ -547,7 +550,7 @@ export async function UpdateMenuItem(
       "card_bg_color",
     ];
     const hasGlobalData = globalFields.some(
-      (field) => data[field as keyof typeof data] !== undefined
+      (field) => data[field as keyof typeof data] !== undefined,
     );
 
     // If no global fields, return success with just the override
@@ -555,7 +558,7 @@ export async function UpdateMenuItem(
       // Get updated item with context
       const updatedItem = await GetMenuItemWithLocationContext(
         itemId,
-        locationId
+        locationId,
       );
 
       // Log Audit Event for location-only update
@@ -628,7 +631,7 @@ export async function UpdateMenuItem(
     if (deleteError) {
       console.error(
         "Error deleting existing modifier assignments:",
-        deleteError
+        deleteError,
       );
       return { error: "Failed to update modifiers" };
     }
@@ -695,7 +698,7 @@ export async function UpdateMenuItem(
   if (isLocationScoped) {
     const contextItem = await GetMenuItemWithLocationContext(
       itemId,
-      locationId
+      locationId,
     );
 
     // Log Audit Event for location-scoped update
@@ -732,7 +735,7 @@ export async function UpdateMenuItem(
  */
 export async function ResetMenuItemToGlobal(
   itemId: string,
-  locationId: string
+  locationId: string,
 ) {
   if (!itemId || !locationId) {
     return { error: "Item ID and Location ID are required" };
@@ -771,7 +774,10 @@ export async function ResetMenuItemToGlobal(
 // DELETE OPERATIONS
 // ============================================================================
 
-export async function DeleteMenuItem(itemId: string) {
+export async function DeleteMenuItem(
+  itemId: string,
+  locationId?: string | null,
+) {
   if (!itemId) {
     return { error: "Item ID is required" };
   }
@@ -801,6 +807,7 @@ export async function DeleteMenuItem(itemId: string) {
       resourceType: "menu_item",
       resourceId: itemId,
       resourceName: item.name,
+      locationId: locationId,
       severity: "warning",
     });
   }
@@ -814,7 +821,7 @@ export async function DeleteMenuItem(itemId: string) {
 
 export async function GetMenuItemsWithCategories(
   clerkOrgId: string,
-  locationId?: string | null
+  locationId?: string | null,
 ) {
   if (!clerkOrgId) {
     return [];
@@ -849,7 +856,7 @@ export async function GetMenuItemsWithCategories(
                     name
                 )
             )
-        `
+        `,
     )
     .eq("merchant_id", merchant.id)
     .order("created_at", { ascending: false });
@@ -884,7 +891,7 @@ export async function GetMenuItemsWithCategories(
     .in("menu_item_id", itemIds);
 
   const overrideMap = new Map(
-    (overrides || []).map((o) => [o.menu_item_id, o])
+    (overrides || []).map((o) => [o.menu_item_id, o]),
   );
 
   // Return items with location context
@@ -931,7 +938,7 @@ export async function GetMenuItemsByCategory(categoryId: string) {
             is_available,
             is_featured,
             menu_item:menu_items(*)
-        `
+        `,
     )
     .eq("category_id", categoryId)
     .order("display_order", { ascending: true });
@@ -958,7 +965,7 @@ export async function GetMenuItemsByCategory(categoryId: string) {
     })
     .filter(
       (
-        item
+        item,
       ): item is MenuItemsModel & {
         category_item_id: string;
         category_custom_price: number | null;
@@ -966,6 +973,6 @@ export async function GetMenuItemsByCategory(categoryId: string) {
         category_is_available: boolean;
         is_featured: boolean;
         display_order: number;
-      } => item !== null
+      } => item !== null,
     );
 }

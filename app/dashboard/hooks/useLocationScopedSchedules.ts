@@ -158,7 +158,8 @@ export function useUpdateScheduleMutation() {
       scheduleId: string;
       data: Parameters<typeof UpdateScheduleWithTimeSlots>[1];
     }) => {
-      return UpdateScheduleWithTimeSlots(scheduleId, data);
+      const locationId = useEffectiveLocationId();
+      return UpdateScheduleWithTimeSlots(scheduleId, data, locationId);
     },
     onSuccess: (result, variables) => {
       if (result.error) {
@@ -188,8 +189,10 @@ export function useUpdateScheduleMutation() {
 export function useDeleteScheduleMutation() {
   const queryClient = useQueryClient();
 
+  const locationId = useEffectiveLocationId();
+
   return useMutation({
-    mutationFn: (scheduleId: string) => DeleteSchedule(scheduleId),
+    mutationFn: (scheduleId: string) => DeleteSchedule(scheduleId, locationId),
     onSuccess: (result) => {
       if (result.error) {
         toast.error("Deletion Failed", { description: result.error });
@@ -216,7 +219,10 @@ export function useToggleScheduleActiveMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (scheduleId: string) => ToggleScheduleActive(scheduleId),
+    mutationFn: (scheduleId: string) => {
+      const locationId = useEffectiveLocationId();
+      return ToggleScheduleActive(scheduleId, locationId);
+    },
     onSuccess: (result) => {
       if (result.error) {
         toast.error("Failed to toggle schedule", { description: result.error });
@@ -266,7 +272,7 @@ export function useScheduleVisibilityMutation() {
         selectedLocationId,
         scheduleId,
         merchantId,
-        { is_active: isActive }
+        { is_active: isActive },
       );
     },
     onSuccess: (result) => {
@@ -321,6 +327,8 @@ export function useResetScheduleMutation() {
 export function useAssignScheduleToCategoryMutation() {
   const queryClient = useQueryClient();
 
+  const locationId = useEffectiveLocationId();
+
   return useMutation({
     mutationFn: ({
       categoryId,
@@ -328,7 +336,7 @@ export function useAssignScheduleToCategoryMutation() {
     }: {
       categoryId: string;
       scheduleId: string;
-    }) => AssignScheduleToCategory(categoryId, scheduleId),
+    }) => AssignScheduleToCategory(categoryId, scheduleId, locationId),
     onSuccess: (result) => {
       if (result.error) {
         toast.error("Assignment Failed", { description: result.error });
@@ -347,6 +355,8 @@ export function useAssignScheduleToCategoryMutation() {
 export function useRemoveScheduleFromCategoryMutation() {
   const queryClient = useQueryClient();
 
+  const locationId = useEffectiveLocationId();
+
   return useMutation({
     mutationFn: ({
       categoryId,
@@ -354,7 +364,7 @@ export function useRemoveScheduleFromCategoryMutation() {
     }: {
       categoryId: string;
       scheduleId: string;
-    }) => RemoveScheduleFromCategory(categoryId, scheduleId),
+    }) => RemoveScheduleFromCategory(categoryId, scheduleId, locationId),
     onSuccess: (result) => {
       if (result.error) {
         toast.error("Removal Failed", { description: result.error });

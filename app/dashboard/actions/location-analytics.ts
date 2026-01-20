@@ -79,17 +79,19 @@ export interface BackfillResult {
  * Returns true if there's already data, false if backfill is needed
  */
 export async function checkAnalyticsDataExists(
-  merchantId: string
+  merchantId: string,
 ): Promise<boolean> {
   const supabase = createServerSupabaseClient();
 
   try {
-    const { count, error } = await supabase
+    const { data, error } = await supabase
       .schema("analytics")
       .from("location_daily_stats")
-      .select("*", { count: "exact", head: true })
+      .select("id")
       .eq("merchant_id", merchantId)
       .limit(1);
+
+    const count = data?.length || 0;
 
     if (error) {
       console.error("Error checking analytics data:", error);
@@ -115,7 +117,7 @@ export async function checkAnalyticsDataExists(
 export async function triggerAnalyticsBackfill(
   merchantId: string,
   startDate?: string,
-  endDate?: string
+  endDate?: string,
 ): Promise<{ success: boolean; results?: BackfillResult[]; error?: string }> {
   const supabase = createServerSupabaseClient();
 
@@ -154,7 +156,7 @@ export async function triggerAnalyticsBackfill(
  * Call this when loading the analytics page
  */
 export async function ensureAnalyticsInitialized(
-  merchantId: string
+  merchantId: string,
 ): Promise<{ initialized: boolean; wasBackfilled: boolean; error?: string }> {
   const dataExists = await checkAnalyticsDataExists(merchantId);
 
@@ -184,7 +186,7 @@ export async function getLocationComparison(
   merchantId: string,
   locationIds: string[],
   startDate: string,
-  endDate: string
+  endDate: string,
 ): Promise<LocationComparisonData[]> {
   const supabase = createServerSupabaseClient();
 
@@ -217,7 +219,7 @@ export async function getHourlyComparison(
   merchantId: string,
   locationIds: string[],
   startDate: string,
-  endDate?: string
+  endDate?: string,
 ): Promise<HourlyComparisonData[]> {
   const supabase = createServerSupabaseClient();
 
@@ -251,7 +253,7 @@ export async function getLocationRankings(
   startDate: string,
   endDate: string,
   metric: string = "gross_sales",
-  limit: number = 10
+  limit: number = 10,
 ): Promise<LocationRanking[]> {
   const supabase = createServerSupabaseClient();
 
@@ -285,7 +287,7 @@ export async function getDaypartComparison(
   merchantId: string,
   locationIds: string[],
   startDate: string,
-  endDate: string
+  endDate: string,
 ): Promise<DaypartData[]> {
   const supabase = createServerSupabaseClient();
 
@@ -318,7 +320,7 @@ export async function getComparisonSummary(
   merchantId: string,
   locationIds: string[],
   startDate: string,
-  endDate: string
+  endDate: string,
 ): Promise<LocationSummary[]> {
   const supabase = createServerSupabaseClient();
 
@@ -368,7 +370,7 @@ export interface SavedComparisonView {
  * Get saved comparison views for a merchant
  */
 export async function getSavedViews(
-  merchantId: string
+  merchantId: string,
 ): Promise<SavedComparisonView[]> {
   const supabase = createServerSupabaseClient();
 
@@ -398,7 +400,7 @@ export async function getSavedViews(
 export async function createSavedView(
   merchantId: string,
   userId: string,
-  view: Omit<SavedComparisonView, "id" | "created_at">
+  view: Omit<SavedComparisonView, "id" | "created_at">,
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   const supabase = createServerSupabaseClient();
 
@@ -433,7 +435,7 @@ export async function createSavedView(
  * Delete a saved view
  */
 export async function deleteSavedView(
-  viewId: string
+  viewId: string,
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = createServerSupabaseClient();
 
@@ -469,7 +471,7 @@ export async function deleteSavedView(
  */
 export async function refreshHourlyStats(
   locationId: string,
-  hourStart: string // ISO timestamp
+  hourStart: string, // ISO timestamp
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = createServerSupabaseClient();
 
@@ -501,7 +503,7 @@ export async function refreshHourlyStats(
  */
 export async function refreshDailyStats(
   locationId: string,
-  businessDate: string // YYYY-MM-DD
+  businessDate: string, // YYYY-MM-DD
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = createServerSupabaseClient();
 

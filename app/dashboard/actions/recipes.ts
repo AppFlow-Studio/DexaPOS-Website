@@ -1,6 +1,7 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { LogAuditEvent } from "./audit-logs";
 
 // ============================================================================
 // TYPES
@@ -74,7 +75,7 @@ export async function GetRecipesForMenuItem(menuItemId: string): Promise<{
 
   // Create a map for quick lookup
   const itemMap = new Map(
-    (inventoryItems || []).map((item) => [item.id, item])
+    (inventoryItems || []).map((item) => [item.id, item]),
   );
 
   // Merge recipe data with inventory item data
@@ -108,7 +109,7 @@ export async function GetRecipesForMenuItem(menuItemId: string): Promise<{
 export async function AddRecipeIngredient(
   menuItemId: string,
   inventoryItemId: string,
-  quantityUsed: number
+  quantityUsed: number,
 ): Promise<{ data?: RecipeIngredient; error?: string }> {
   if (!menuItemId) {
     return { error: "Menu item ID is required" };
@@ -171,6 +172,19 @@ export async function AddRecipeIngredient(
     .eq("id", inventoryItemId)
     .single();
 
+  await LogAuditEvent({
+    merchantId: menuItem.merchant_id,
+    action: `Added Ingredient: ${quantityUsed} ${inventoryItem?.unit_type} ${inventoryItem?.name}`,
+    actionCategory: "menu_recipes",
+    resourceType: "menu_item_recipe",
+    resourceId: recipe.id,
+    resourceName: inventoryItem?.name,
+    metadata: {
+      menu_item_id: menuItemId,
+      inventory_item_id: inventoryItemId,
+    },
+  });
+
   return {
     data: {
       ...recipe,
@@ -185,7 +199,7 @@ export async function AddRecipeIngredient(
 
 export async function UpdateRecipeIngredient(
   recipeId: string,
-  quantityUsed: number
+  quantityUsed: number,
 ): Promise<{ data?: RecipeIngredient; error?: string }> {
   if (!recipeId) {
     return { error: "Recipe ID is required" };
@@ -216,6 +230,25 @@ export async function UpdateRecipeIngredient(
     .eq("id", recipe.inventory_item_id)
     .single();
 
+  // Fetch menu item for context name
+  const { data: menuItem } = await supabase
+    .from("menu_items")
+    .select("name")
+    .eq("id", recipe.menu_item_id)
+    .single();
+
+  await LogAuditEvent({
+    merchantId: recipe.merchant_id,
+    action: `Updated Ingredient in ${menuItem?.name}: ${inventoryItem?.name}`,
+    actionCategory: "menu_recipes",
+    resourceType: "menu_item_recipe",
+    resourceId: recipeId,
+    resourceName: inventoryItem?.name,
+    changes: {
+      after: { quantity_used: quantityUsed },
+    },
+  });
+
   return {
     data: {
       ...recipe,
@@ -229,13 +262,26 @@ export async function UpdateRecipeIngredient(
 // ============================================================================
 
 export async function RemoveRecipeIngredient(
-  recipeId: string
+  recipeId: string,
 ): Promise<{ success?: boolean; error?: string }> {
   if (!recipeId) {
     return { error: "Recipe ID is required" };
   }
 
   const supabase = createServerSupabaseClient();
+
+  // Fetch before delete
+  const { data: recipeToDelete } = await supabase
+    .from("menu_item_recipes")
+    .select(
+      `
+        *,
+        inventory_item:inventory_items(name),
+        menu_item:menu_items(name)
+    `,
+    )
+    .eq("id", recipeId)
+    .single();
 
   const { error } = await supabase
     .from("menu_item_recipes")
@@ -247,6 +293,21 @@ export async function RemoveRecipeIngredient(
     return { error: error.message };
   }
 
+  if (recipeToDelete) {
+    const invName =
+      (recipeToDelete as any).inventory_item?.name || "Unknown Item";
+    const menuName = (recipeToDelete as any).menu_item?.name || "Unknown Dish";
+
+    await LogAuditEvent({
+      merchantId: recipeToDelete.merchant_id,
+      action: `Removed Ingredient: ${invName} from ${menuName}`,
+      actionCategory: "menu_recipes",
+      resourceType: "menu_item_recipe",
+      resourceId: recipeId,
+      resourceName: invName,
+    });
+  }
+
   return { success: true };
 }
 
@@ -256,7 +317,7 @@ export async function RemoveRecipeIngredient(
 
 export async function GetInventoryItemsForRecipe(
   clerkOrgId: string,
-  locationId?: string | null
+  locationId?: string | null,
 ): Promise<{
   data?: Array<{
     id: string;
@@ -319,7 +380,7 @@ export async function GetInventoryItemsForRecipe(
 export async function UpdateMenuItemRecipe(
   menuItemId: string,
   recipeItems: Array<{ inventoryItemId: string; quantity: number }>,
-  locationId?: string | null // Optional - location context
+  locationId?: string | null, // Optional - location context
 ): Promise<{ success?: boolean; error?: string }> {
   if (!menuItemId) {
     return { error: "Menu Item ID is required" };
@@ -346,5 +407,27 @@ export async function UpdateMenuItemRecipe(
   }
 
   console.log("[UpdateMenuItemRecipe] Success");
+
+  // Fetch menu item for logs
+  const { data: menuItem } = await supabase
+    .from("menu_items")
+    .select("name, merchant_id")
+    .eq("id", menuItemId)
+    .single();
+
+  if (menuItem) {
+    await LogAuditEvent({
+      merchantId: menuItem.merchant_id,
+      action: `Bulk Updated Recipe for ${menuItem.name}`,
+      actionCategory: "menu_recipes",
+      resourceType: "menu_item",
+      resourceId: menuItemId,
+      resourceName: menuItem.name,
+      changes: {
+        after: { ingredients_count: recipeItems.length },
+      },
+    });
+  }
+
   return { success: true };
 }
