@@ -1,125 +1,62 @@
 'use client'
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table'
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
     Building2,
     Search,
-    Plus,
-    MoreHorizontal,
+    ChevronLeft,
+    ChevronRight,
+    RefreshCw,
     TrendingUp,
     TrendingDown,
-    Eye,
-    Edit,
-    Trash2
+    Clock,
+    LayoutGrid,
+    List,
 } from 'lucide-react'
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { useMerchantOrganizations } from '../hooks/useMerchantOrganizations'
-import { MerchantsModel } from '@/types/db-modles'
-import { useRouter } from 'next/navigation'
-import { CreateMerchantsButton } from '../organizations/[organizationId]/componenets/CreateMerchantsButtons'
-import { useOrganizationInfo } from '../hooks/useOrganizationInfo'
-import { useUser } from '@clerk/nextjs'
-
-const merchantsData = [
-    {
-        id: 1,
-        name: 'Coffee Corner',
-        type: 'Restaurant',
-        status: 'active',
-        revenue: 12500,
-        transactions: 245,
-        growth: 12.5,
-        location: 'New York, NY',
-        joinedDate: '2024-01-15',
-    },
-    {
-        id: 2,
-        name: 'Tech Store Pro',
-        type: 'Retail',
-        status: 'active',
-        revenue: 9800,
-        transactions: 189,
-        growth: 8.2,
-        location: 'San Francisco, CA',
-        joinedDate: '2024-02-20',
-    },
-    {
-        id: 3,
-        name: 'Fresh Market',
-        type: 'Grocery',
-        status: 'pending',
-        revenue: 7200,
-        transactions: 156,
-        growth: -2.1,
-        location: 'Chicago, IL',
-        joinedDate: '2024-03-10',
-    },
-    {
-        id: 4,
-        name: 'Beauty Salon',
-        type: 'Service',
-        status: 'active',
-        revenue: 5600,
-        transactions: 134,
-        growth: 15.3,
-        location: 'Miami, FL',
-        joinedDate: '2024-03-25',
-    },
-    {
-        id: 5,
-        name: 'Pharmacy Plus',
-        type: 'Healthcare',
-        status: 'suspended',
-        revenue: 4200,
-        transactions: 98,
-        growth: 5.7,
-        location: 'Austin, TX',
-        joinedDate: '2024-04-05',
-    },
-]
+import { useMerchants, useMerchantStats } from '@/lib/queries/use-merchants'
+import { useDebounce } from '@/lib/hooks/useDebounce'
+import { MerchantCard } from '@/components/admin/MerchantCard'
+import { useAdminAuth } from '@/lib/hooks/useAdminAuth'
+import { PermissionGate } from '@/components/admin/PermissionGate'
+import type { MerchantFilters } from '@/types/merchant'
+import { DEFAULT_MERCHANT_FILTERS } from '@/types/merchant'
+import Link from 'next/link'
 
 export default function MerchantsPage() {
     const router = useRouter()
-    const { user } = useUser()
-    const { data: merchantsData, isLoading, isError, refetch: refetchMerchants } = useMerchantOrganizations()
-    if (isLoading) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[300px]">
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-800 mb-4" />
-                <p className="text-lg text-muted-foreground">Loading merchants...</p>
-            </div>
-        )
+    const { canCreateMerchants } = useAdminAuth()
+    const [page, setPage] = useState(1)
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+    const [filters, setFilters] = useState<MerchantFilters>(DEFAULT_MERCHANT_FILTERS)
+
+    // Debounce search to avoid too many requests
+    const debouncedSearch = useDebounce(filters.search, 300)
+    const activeFilters = { ...filters, search: debouncedSearch }
+
+    // Fetch data
+    const { data, isLoading, isFetching, refetch } = useMerchants(activeFilters, page)
+    const { data: stats, isLoading: statsLoading } = useMerchantStats()
+
+    const pageSize = 20
+    const totalPages = data ? Math.ceil(data.total / pageSize) : 0
+
+    const handleFilterChange = (key: keyof MerchantFilters, value: string) => {
+        setFilters((prev) => ({ ...prev, [key]: value }))
+        setPage(1) // Reset to first page on filter change
     }
 
-    if (isError) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[300px]">
-                <span className="text-destructive text-2xl mb-2">⚠️</span>
-                <p className="text-lg text-destructive mb-4">Failed to load merchants.</p>
-                <Button onClick={async () => await refetchMerchants()} variant="outline">
-                    Retry
-                </Button>
-            </div>
-        )
-    }
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -130,175 +67,359 @@ export default function MerchantsPage() {
                         Manage and monitor your merchant accounts
                     </p>
                 </div>
-                <CreateMerchantsButton organizationId={user?.publicMetadata?.organizationId as string} refetch={refetchMerchants} />
+                <PermissionGate permission="hq.merchant.create">
+                    <Link href="/manage/create-merchant">
+                        <Button>Create Merchant</Button>
+                    </Link>
+                </PermissionGate>
             </div>
 
             {/* Stats Cards */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Merchants</CardTitle>
-                        <Building2 className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">1,234</div>
-                        <p className="text-xs text-muted-foreground">
-                            +12.5% from last month
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active Merchants</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-green-600" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">1,156</div>
-                        <p className="text-xs text-muted-foreground">
-                            +8.2% from last month
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Pending Approval</CardTitle>
-                        <TrendingDown className="h-4 w-4 text-yellow-600" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">45</div>
-                        <p className="text-xs text-muted-foreground">
-                            -5.2% from last month
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Suspended</CardTitle>
-                        <TrendingDown className="h-4 w-4 text-red-600" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">33</div>
-                        <p className="text-xs text-muted-foreground">
-                            +2.1% from last month
-                        </p>
-                    </CardContent>
-                </Card>
+                <StatsCard
+                    title="Total Merchants"
+                    value={stats?.total ?? 0}
+                    icon={<Building2 className="h-4 w-4 text-muted-foreground" />}
+                    isLoading={statsLoading}
+                />
+                <StatsCard
+                    title="Active"
+                    value={stats?.active ?? 0}
+                    icon={<TrendingUp className="h-4 w-4 text-green-600" />}
+                    isLoading={statsLoading}
+                    className="text-green-600"
+                />
+                <StatsCard
+                    title="Inactive"
+                    value={stats?.inactive ?? 0}
+                    icon={<TrendingDown className="h-4 w-4 text-red-600" />}
+                    isLoading={statsLoading}
+                    className="text-red-600"
+                />
+                <StatsCard
+                    title="Onboarding"
+                    value={stats?.onboarding ?? 0}
+                    icon={<Clock className="h-4 w-4 text-yellow-600" />}
+                    isLoading={statsLoading}
+                    className="text-yellow-600"
+                />
             </div>
 
-            {/* Search and Filters */}
+            {/* Filters */}
             <Card>
-                <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <CardTitle>All Merchants</CardTitle>
-                            <CardDescription>
-                                A list of all merchants in your system
-                            </CardDescription>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                            <div className="relative">
-                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input placeholder="Search merchants..." className="pl-8 w-64" />
+                <CardHeader className="pb-4">
+                    <div className="flex flex-wrap gap-4 items-center justify-between">
+                        <div className="flex flex-wrap gap-4 items-center">
+                            {/* Search */}
+                            <div className="relative flex-1 min-w-[200px] max-w-sm">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search merchants..."
+                                    value={filters.search}
+                                    onChange={(e) => handleFilterChange('search', e.target.value)}
+                                    className="pl-10"
+                                />
                             </div>
-                            <Button variant="outline" size="sm">
-                                Filter
+
+                            {/* Status Filter */}
+                            <Select
+                                value={filters.status}
+                                onValueChange={(value) => handleFilterChange('status', value)}
+                            >
+                                <SelectTrigger className="w-36">
+                                    <SelectValue placeholder="Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Status</SelectItem>
+                                    <SelectItem value="active">Active</SelectItem>
+                                    <SelectItem value="inactive">Inactive</SelectItem>
+                                    <SelectItem value="onboarding">Onboarding</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            {/* Sort By */}
+                            <Select
+                                value={filters.sortBy}
+                                onValueChange={(value) => handleFilterChange('sortBy', value)}
+                            >
+                                <SelectTrigger className="w-40">
+                                    <SelectValue placeholder="Sort by" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="name">Name</SelectItem>
+                                    <SelectItem value="created_at">Date Created</SelectItem>
+                                    <SelectItem value="orders_today">Orders Today</SelectItem>
+                                    <SelectItem value="revenue_today">Revenue Today</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            {/* Sort Order */}
+                            <Select
+                                value={filters.sortOrder}
+                                onValueChange={(value) => handleFilterChange('sortOrder', value)}
+                            >
+                                <SelectTrigger className="w-32">
+                                    <SelectValue placeholder="Order" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="asc">Ascending</SelectItem>
+                                    <SelectItem value="desc">Descending</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            {/* View Mode Toggle */}
+                            <div className="flex border rounded-lg">
+                                <Button
+                                    variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+                                    size="icon"
+                                    onClick={() => setViewMode('grid')}
+                                >
+                                    <LayoutGrid className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                                    size="icon"
+                                    onClick={() => setViewMode('list')}
+                                >
+                                    <List className="h-4 w-4" />
+                                </Button>
+                            </div>
+
+                            {/* Refresh */}
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => refetch()}
+                                disabled={isFetching}
+                            >
+                                <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
                             </Button>
                         </div>
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Merchant</TableHead>
-                                <TableHead>Type</TableHead>
-                                {/* <TableHead>Status</TableHead> */}
-                                <TableHead>Revenue</TableHead>
-                                <TableHead>Transactions</TableHead>
-                                <TableHead>Growth</TableHead>
-                                <TableHead>Location</TableHead>
-                                <TableHead>Joined</TableHead>
-                                <TableHead className="w-[70px]">Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {merchantsData?.map((merchant: MerchantsModel) => (
-                                <TableRow key={merchant.id} className="cursor-pointer" onClick={() => router.push(`/manage/merchants/${merchant.clerk_org_id}`)} >
-                                    <TableCell className="font-medium">
-                                        <div>
-                                            <div className="font-semibold">{merchant.name}</div>
-                                            <div className="text-sm text-muted-foreground">ID: {merchant.clerk_org_id}</div>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant="outline">{merchant.type}</Badge>
-                                    </TableCell>
-                                    {/* <TableCell>
-                                        <Badge
-                                        // variant={
-                                        //     merchant.status === 'active' ? 'default' :
-                                        //         merchant.status === 'pending' ? 'secondary' : 'destructive'
-                                        // }
-                                        >
-                                            {merchant.status}
-                                            N/A
-                                        </Badge>
-                                    </TableCell> */}
-                                    <TableCell className="font-medium">
-                                        $0
-                                    </TableCell>
-                                    <TableCell>{/*merchant.transactions*/}0</TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center">
-                                            {/* {merchant.growth > 0 ? (
-                                                <TrendingUp className="h-3 w-3 text-green-600 mr-1" />
-                                            ) : (
-                                                <TrendingDown className="h-3 w-3 text-red-600 mr-1" />
-                                            )}
-                                            <span className={merchant.growth > 0 ? 'text-green-600' : 'text-red-600'}>
-                                                {merchant.growth > 0 ? '+' : ''}{merchant.growth}%
-                                            </span> */}
-                                            0
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="text-sm text-muted-foreground">
-                                        {/* {merchant.location} */}
-                                        N/A
-                                    </TableCell>
-                                    <TableCell className="text-sm text-muted-foreground">
-                                        {new Date(merchant.created_at).toLocaleDateString()}
-                                    </TableCell>
-                                    <TableCell>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" className="h-8 w-8 p-0">
-                                                    <MoreHorizontal className="h-4 w-4" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                <DropdownMenuItem>
-                                                    <Eye className="mr-2 h-4 w-4" />
-                                                    View Details
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem>
-                                                    <Edit className="mr-2 h-4 w-4" />
-                                                    Edit Merchant
-                                                </DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuItem className="text-red-600">
-                                                    <Trash2 className="mr-2 h-4 w-4" />
-                                                    Delete
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </TableCell>
-                                </TableRow>
+                    {/* Results count */}
+                    <div className="text-sm text-muted-foreground mb-4">
+                        {data?.total ?? 0} merchants found
+                        {isFetching && ' · Loading...'}
+                    </div>
+
+                    {/* Content */}
+                    {isLoading ? (
+                        <MerchantGridSkeleton />
+                    ) : data?.merchants.length === 0 ? (
+                        <div className="text-center py-12 text-muted-foreground">
+                            No merchants found matching your filters.
+                        </div>
+                    ) : viewMode === 'grid' ? (
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                            {data?.merchants.map((merchant) => (
+                                <MerchantCard
+                                    key={merchant.id}
+                                    merchant={merchant}
+                                    onClick={() => router.push(`/manage/merchants/${merchant.clerk_org_id}`)}
+                                />
                             ))}
-                        </TableBody>
-                    </Table>
+                        </div>
+                    ) : (
+                        <MerchantListView
+                            merchants={data?.merchants || []}
+                            onMerchantClick={(clerkOrgId) => router.push(`/manage/merchants/${clerkOrgId}`)}
+                        />
+                    )}
+
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                        <div className="flex items-center justify-between pt-6 border-t mt-6">
+                            <p className="text-sm text-muted-foreground">
+                                Page {page} of {totalPages}
+                            </p>
+                            <div className="flex gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                    disabled={page === 1}
+                                >
+                                    <ChevronLeft className="h-4 w-4 mr-1" />
+                                    Previous
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                    disabled={page === totalPages}
+                                >
+                                    Next
+                                    <ChevronRight className="h-4 w-4 ml-1" />
+                                </Button>
+                            </div>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         </div>
+    )
+}
+
+// ============================================================================
+// HELPER COMPONENTS
+// ============================================================================
+
+function StatsCard({
+    title,
+    value,
+    icon,
+    isLoading,
+    className,
+}: {
+    title: string
+    value: number
+    icon: React.ReactNode
+    isLoading?: boolean
+    className?: string
+}) {
+    return (
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{title}</CardTitle>
+                {icon}
+            </CardHeader>
+            <CardContent>
+                {isLoading ? (
+                    <Skeleton className="h-8 w-16" />
+                ) : (
+                    <div className={`text-2xl font-bold ${className || ''}`}>{value}</div>
+                )}
+            </CardContent>
+        </Card>
+    )
+}
+
+function MerchantGridSkeleton() {
+    return (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {[...Array(6)].map((_, i) => (
+                <Card key={i}>
+                    <CardContent className="p-5">
+                        <div className="flex items-start justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                                <Skeleton className="w-10 h-10 rounded-lg" />
+                                <div>
+                                    <Skeleton className="h-5 w-32 mb-1" />
+                                    <Skeleton className="h-4 w-20" />
+                                </div>
+                            </div>
+                            <Skeleton className="h-6 w-16" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            {[...Array(4)].map((_, j) => (
+                                <div key={j} className="flex items-center gap-2">
+                                    <Skeleton className="h-4 w-4" />
+                                    <div>
+                                        <Skeleton className="h-3 w-16 mb-1" />
+                                        <Skeleton className="h-4 w-12" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="mt-4 pt-3 border-t">
+                            <Skeleton className="h-3 w-32" />
+                        </div>
+                    </CardContent>
+                </Card>
+            ))}
+        </div>
+    )
+}
+
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import type { MerchantSummary } from '@/types/merchant'
+
+function MerchantListView({
+    merchants,
+    onMerchantClick,
+}: {
+    merchants: MerchantSummary[]
+    onMerchantClick: (clerkOrgId: string) => void
+}) {
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 0,
+        }).format(amount)
+    }
+
+    const statusColors: Record<string, string> = {
+        active: 'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400',
+        inactive: 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400',
+        onboarding: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-400',
+    }
+
+    return (
+        <Table>
+            <TableHeader>
+                <TableRow>
+                    <TableHead>Merchant</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Locations</TableHead>
+                    <TableHead className="text-right">Staff</TableHead>
+                    <TableHead className="text-right">Orders Today</TableHead>
+                    <TableHead className="text-right">Revenue Today</TableHead>
+                    <TableHead>Created</TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                {merchants.map((merchant) => (
+                    <TableRow
+                        key={merchant.id}
+                        className="cursor-pointer"
+                        onClick={() => onMerchantClick(merchant.clerk_org_id)}
+                    >
+                        <TableCell>
+                            <div>
+                                <div className="font-semibold">{merchant.name}</div>
+                                {merchant.type && (
+                                    <div className="text-sm text-muted-foreground capitalize">
+                                        {merchant.type}
+                                    </div>
+                                )}
+                            </div>
+                        </TableCell>
+                        <TableCell>
+                            <Badge className={statusColors[merchant.derived_status]}>
+                                {merchant.derived_status}
+                            </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                            {merchant.active_locations} / {merchant.total_locations}
+                        </TableCell>
+                        <TableCell className="text-right">
+                            {merchant.active_staff_count}
+                        </TableCell>
+                        <TableCell className="text-right">
+                            {merchant.orders_today}
+                        </TableCell>
+                        <TableCell className="text-right">
+                            {formatCurrency(merchant.revenue_today)}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                            {new Date(merchant.created_at).toLocaleDateString()}
+                        </TableCell>
+                    </TableRow>
+                ))}
+            </TableBody>
+        </Table>
     )
 }

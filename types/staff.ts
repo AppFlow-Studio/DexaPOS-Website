@@ -229,3 +229,67 @@ export interface StaffShift {
     name: string;
   };
 }
+
+// ============================================================================
+// Admin Staff Management Types
+// ============================================================================
+
+/**
+ * Admin view of staff member - extends UnifiedStaffMember with additional context
+ */
+export interface AdminStaffMember extends UnifiedStaffMember {
+  // Account type explicit for admin display
+  account_type: "clerk" | "pos_only";
+}
+
+/**
+ * Result from bulk PIN reset operation
+ */
+export interface BulkPinResetResult {
+  staff_profile_id: string;
+  staff_name: string;
+  new_pin: string;
+}
+
+/**
+ * Data for creating staff via admin interface
+ */
+export interface AdminCreateStaffData {
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phone?: string;
+  locationId: string;
+  roleCode: string;
+  hourlyRate?: number;
+  employmentType: EmploymentType;
+  autoGeneratePin?: boolean;
+  pin?: string;
+}
+
+/**
+ * Admin PIN reset result
+ */
+export interface AdminPinResetResult {
+  success: boolean;
+  pin?: string;
+  error?: string;
+}
+
+/**
+ * Admin staff status toggle result
+ */
+export interface AdminToggleStatusResult {
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * Admin create staff result
+ */
+export interface AdminCreateStaffResult {
+  success: boolean;
+  staffProfileId?: string;
+  pin?: string;
+  error?: string;
+}

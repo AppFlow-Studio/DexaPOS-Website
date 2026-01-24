@@ -12,9 +12,11 @@ import {
     Settings,
     Download,
     AlertTriangle,
-    Building2
+    Building2,
+    RefreshCw,
 } from 'lucide-react'
 import { useMerchantInfo } from '../../hooks/useMerchantInfo'
+import { useMerchantDetails } from '@/lib/queries/use-merchants'
 import { MerchantInfoModel, UsersModel } from '@/types/db-modles'
 import { RemoveUserPopup } from '../../organizations/[organizationId]/componenets/RemoveUserPopup'
 import { OverviewTab } from './components/OverviewTab'
@@ -23,16 +25,26 @@ import { TransactionsTab } from './components/TransactionsTab'
 import { AuditLogsTab } from './components/AuditLogsTab'
 import { StaffTab } from './components/StaffTab'
 import { CustomersTab } from './components/CustomersTab'
-import { ProductsTab } from './components/ProductsTab'
+import { MenuTab } from './components/MenuTab'
 import { SettingsTab } from './components/SettingsTab'
 import { BusinessInfoTab } from './components/BusinessInfoTab'
- import { DevicesTab } from './components/DevicesTab'
+import { DevicesTab } from './components/DevicesTab'
 
 export default function MerchantInfoPage() {
     const { merchantId } = useParams()
     const { data: merchantInfo, isLoading, isError, refetch: refetchMerchantInfo } = useMerchantInfo(merchantId as string)
     const [removeUserPopup, setRemoveUserPopup] = useState<UsersModel | null>(null)
     const [openRemoveUserPopup, setOpenRemoveUserPopup] = useState(false)
+
+    // Get merchant UUID from merchantInfo (clerk_org_id -> merchant id)
+    const merchantUUID = merchantInfo && !(merchantInfo instanceof Error) ? merchantInfo.id : undefined
+
+    // Fetch real metrics using the merchant UUID
+    const {
+        data: merchantDetails,
+        isLoading: isLoadingDetails,
+        refetch: refetchDetails,
+    } = useMerchantDetails(merchantUUID ?? '')
 
     if (isLoading) {
         return (
@@ -87,8 +99,8 @@ export default function MerchantInfoPage() {
                             </div>
                             <div>
                                 <CardTitle className="text-2xl font-semibold">{merchantInfo?.name}</CardTitle>
-                                {/* Carrier indicator */}
-                                {merchantInfo?.carriers && (
+                                {/* Carrier indicator -- Coming soon  */}
+                                {/* {merchantInfo?.carriers && (
                                     <div className="mt-1 flex items-center gap-2 text-sm">
                                         <div className="flex items-center gap-2 rounded-md border px-2 py-1">
                                             <Building2 className="h-4 w-4 text-muted-foreground" />
@@ -97,11 +109,17 @@ export default function MerchantInfoPage() {
                                             <Link href={`/manage/organizations/${merchantInfo?.carriers?.clerk_org_id || ''}`} className="text-primary hover:underline ml-2">View</Link>
                                         </div>
                                     </div>
-                                )}
+                                )} */}
                                 <div className="flex items-center gap-2 mt-1">
                                     <Badge variant="outline">ID: {merchantInfo?.clerk_org_id}</Badge>
-                                    <Badge variant={merchantInfo?.public_metadata?.status === 'active' ? 'default' : 'secondary'}>
-                                        {merchantInfo?.public_metadata?.status}
+                                    <Badge className={
+                                        merchantDetails?.derived_status === 'active'
+                                            ? 'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400'
+                                            : merchantDetails?.derived_status === 'inactive'
+                                            ? 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400'
+                                            : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-400'
+                                    }>
+                                        {merchantDetails?.derived_status || merchantInfo?.public_metadata?.status || 'unknown'}
                                     </Badge>
                                     <span className="text-xs text-muted-foreground">
                                         Created {merchantInfo?.created_at ? new Date(merchantInfo?.created_at).toLocaleDateString() : 'N/A'}
@@ -110,6 +128,18 @@ export default function MerchantInfoPage() {
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                    refetchMerchantInfo()
+                                    refetchDetails()
+                                }}
+                                disabled={isLoadingDetails}
+                            >
+                                <RefreshCw className={`h-4 w-4 mr-2 ${isLoadingDetails ? 'animate-spin' : ''}`} />
+                                Refresh
+                            </Button>
                             <Button variant="outline" size="sm">
                                 <Settings className="h-4 w-4 mr-2" /> Settings
                             </Button>
@@ -129,7 +159,7 @@ export default function MerchantInfoPage() {
                             <TabsTrigger value="audit">Audit Logs</TabsTrigger>
                             <TabsTrigger value="staff">Staff</TabsTrigger>
                             <TabsTrigger value="customers">Customers</TabsTrigger>
-                            <TabsTrigger value="products">Products</TabsTrigger>
+                            <TabsTrigger value="menu">Menu</TabsTrigger>
                             <TabsTrigger value="devices">Devices</TabsTrigger>
                             <TabsTrigger value="settings">Settings</TabsTrigger>
                             <TabsTrigger value="business-info">Business Info</TabsTrigger>
@@ -139,15 +169,19 @@ export default function MerchantInfoPage() {
                         {merchantInfo && (
                             <>
                                 <TabsContent value="overview" className="mt-6">
-                                    <OverviewTab merchantInfo={merchantInfo} />
+                                    <OverviewTab
+                                        merchantInfo={merchantInfo}
+                                        merchantDetails={merchantDetails}
+                                        isLoadingDetails={isLoadingDetails}
+                                    />
                                 </TabsContent>
 
                                 <TabsContent value="analytics" className="mt-6">
-                                    <AnalyticsTab />
+                                    <AnalyticsTab merchantDetails={merchantDetails} />
                                 </TabsContent>
 
                                 <TabsContent value="transactions" className="mt-6">
-                                    <TransactionsTab />
+                                    <TransactionsTab merchantDetails={merchantDetails} />
                                 </TabsContent>
 
                                 <TabsContent value="audit" className="mt-6">
@@ -155,15 +189,19 @@ export default function MerchantInfoPage() {
                                 </TabsContent>
 
                                 <TabsContent value="staff" className="mt-6">
-                                    <StaffTab merchantInfo={merchantInfo} refetchMerchantInfo={refetchMerchantInfo} />
+                                    <StaffTab
+                                        merchantInfo={merchantInfo}
+                                        merchantDetails={merchantDetails}
+                                        refetchMerchantInfo={refetchMerchantInfo}
+                                    />
                                 </TabsContent>
 
                                 <TabsContent value="customers" className="mt-6">
                                     <CustomersTab />
                                 </TabsContent>
 
-                                <TabsContent value="products" className="mt-6">
-                                    <ProductsTab />
+                                <TabsContent value="menu" className="mt-6">
+                                    <MenuTab merchantDetails={merchantDetails} />
                                 </TabsContent>
 
                                 <TabsContent value="devices" className="mt-6">
