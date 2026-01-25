@@ -30,11 +30,10 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion'
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import {
   Loader2,
   Globe,
@@ -42,6 +41,7 @@ import {
   Plus,
   Trash2,
   DollarSign,
+  ChevronRight,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -419,9 +419,9 @@ export function ModifierFormSheet({
               </BottomSheetSection>
 
               {/* Modifier Options */}
-              <BottomSheetSection
-                title="Modifier Options"
-                action={
+              <BottomSheetSection title="Modifier Options">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-medium">Options</h3>
                   <Button
                     type="button"
                     variant="outline"
@@ -431,8 +431,7 @@ export function ModifierFormSheet({
                     <Plus className="h-4 w-4 mr-2" />
                     Add Option
                   </Button>
-                }
-              >
+                </div>
                 {visibleItems.length === 0 ? (
                   <div className="rounded-lg border border-dashed p-6 text-center">
                     <p className="text-sm text-muted-foreground">
@@ -440,30 +439,33 @@ export function ModifierFormSheet({
                     </p>
                   </div>
                 ) : (
-                  <Accordion type="single" collapsible className="w-full space-y-2">
+                  <div className="space-y-2">
                     {fields.map((field, index) => {
                       const item = form.getValues(`items.${index}`)
                       if ((item as any)._isDeleted) return null
 
                       return (
-                        <AccordionItem key={field.id} value={`item-${index}`} className="border rounded-lg">
-                          <AccordionTrigger className="px-4 hover:no-underline">
-                            <div className="flex items-center gap-2 flex-1">
-                              <span className="font-medium">
-                                {form.watch(`items.${index}.name`) || `Option ${index + 1}`}
-                              </span>
-                              {form.watch(`items.${index}.price_modifier`) !== 0 && (
-                                <Badge variant="secondary" className="text-xs">
-                                  {form.watch(`items.${index}.price_modifier`) > 0 ? '+' : ''}
-                                  ${form.watch(`items.${index}.price_modifier`).toFixed(2)}
-                                </Badge>
-                              )}
-                              {form.watch(`items.${index}.is_default`) && (
-                                <Badge variant="outline" className="text-xs">Default</Badge>
-                              )}
+                        <Collapsible key={field.id} className="border rounded-lg">
+                          <CollapsibleTrigger asChild>
+                            <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/50">
+                              <div className="flex items-center gap-2 flex-1">
+                                <ChevronRight className="h-4 w-4 transition-transform duration-200 [&[data-state=open]]:rotate-90" />
+                                <span className="font-medium">
+                                  {form.watch(`items.${index}.name`) || `Option ${index + 1}`}
+                                </span>
+                                {form.watch(`items.${index}.price_modifier`) !== 0 && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    {form.watch(`items.${index}.price_modifier`) > 0 ? '+' : ''}
+                                    ${form.watch(`items.${index}.price_modifier`).toFixed(2)}
+                                  </Badge>
+                                )}
+                                {form.watch(`items.${index}.is_default`) && (
+                                  <Badge variant="outline" className="text-xs">Default</Badge>
+                                )}
+                              </div>
                             </div>
-                          </AccordionTrigger>
-                          <AccordionContent className="px-4 pb-4 space-y-4">
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="px-4 pb-4 space-y-4">
                             <FormField
                               control={form.control}
                               name={`items.${index}.name`}
@@ -574,11 +576,11 @@ export function ModifierFormSheet({
                               <Trash2 className="h-4 w-4 mr-2" />
                               Remove Option
                             </Button>
-                          </AccordionContent>
-                        </AccordionItem>
+                          </CollapsibleContent>
+                        </Collapsible>
                       )
                     })}
-                  </Accordion>
+                  </div>
                 )}
               </BottomSheetSection>
 

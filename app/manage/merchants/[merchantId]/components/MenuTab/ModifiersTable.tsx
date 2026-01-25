@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -20,6 +21,22 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   Search,
   RefreshCw,
   ChevronDown,
@@ -31,14 +48,25 @@ import {
   XCircle,
   Asterisk,
   ListOrdered,
+  Plus,
+  MoreVertical,
+  Pencil,
+  Trash2,
+  Loader2,
 } from 'lucide-react'
+import { toast } from 'sonner'
 
-// Admin hooks
+// Admin hooks and actions
 import {
   useAdminModifierGroups,
   useAdminModifierGroupDetails,
   type AdminModifierGroup,
 } from '@/lib/queries/use-admin-merchant'
+import { deleteAdminModifierGroup } from '@/app/manage/actions/admin-merchant/menus'
+import { adminKeys } from '@/lib/queries/admin-keys'
+
+// Form sheet
+import { ModifierFormSheet } from './sheets/ModifierFormSheet'
 
 // ============================================================================
 // HELPERS
@@ -70,6 +98,17 @@ export function ModifiersTable({
   const [search, setSearch] = useState('')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
+  // Sheet state
+  const [modifierSheetOpen, setModifierSheetOpen] = useState(false)
+  const [modifierSheetMode, setModifierSheetMode] = useState<'create' | 'edit'>('create')
+  const [editingGroup, setEditingGroup] = useState<AdminModifierGroup | null>(null)
+
+  // Delete confirmation
+  const [deleteGroupConfirm, setDeleteGroupConfirm] = useState<AdminModifierGroup | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const queryClient = useQueryClient()
+
   // Fetch modifier groups
   const {
     data: modifierGroups,
@@ -77,6 +116,13 @@ export function ModifiersTable({
     refetch,
     isFetching,
   } = useAdminModifierGroups(merchantId, locationId)
+
+  // Fetch details for editing group
+  const { data: editingGroupDetails } = useAdminModifierGroupDetails(
+    merchantId,
+    editingGroup?.id || null,
+    locationId
+  )
 
   // Filter by search
   const filteredGroups = (modifierGroups ?? []).filter(
@@ -103,6 +149,51 @@ export function ModifiersTable({
 
   const collapseAll = () => {
     setExpandedIds(new Set())
+  }
+
+  const handleCreateModifier = () => {
+    setModifierSheetMode('create')
+    setEditingGroup(null)
+    setModifierSheetOpen(true)
+  }
+
+  const handleEditModifier = (group: AdminModifierGroup) => {
+    setModifierSheetMode('edit')
+    setEditingGroup(group)
+    setModifierSheetOpen(true)
+  }
+
+  const handleDeleteModifier = async () => {
+    if (!deleteGroupConfirm) return
+
+    setIsDeleting(true)
+    try {
+      const result = await deleteAdminModifierGroup(merchantId, deleteGroupConfirm.id)
+
+      if (result.error) {
+        toast.error('Failed to delete modifier group', { description: result.error })
+        return
+      }
+
+      toast.success('Modifier group deleted successfully')
+
+      // Invalidate queries
+      await queryClient.invalidateQueries({
+        queryKey: adminKeys.merchantModifiers(merchantId, locationId),
+      })
+
+      setDeleteGroupConfirm(null)
+    } catch (error) {
+      toast.error('An unexpected error occurred')
+      console.error(error)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const handleSheetSuccess = async () => {
+    // Query invalidation is handled in the sheet
+    await refetch()
   }
 
   return (
@@ -137,6 +228,12 @@ export function ModifiersTable({
                 Collapse All
               </Button>
             </div>
+
+            {/* Add Modifier Group */}
+            <Button variant="default" size="sm" onClick={handleCreateModifier}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Modifier Group
+            </Button>
 
             {/* Refresh */}
             <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
@@ -174,11 +271,52 @@ export function ModifiersTable({
                 isAllLocations={isAllLocations}
                 isExpanded={expandedIds.has(group.id)}
                 onToggle={() => toggleExpanded(group.id)}
+                onEdit={handleEditModifier}
+                onDelete={setDeleteGroupConfirm}
               />
             ))}
           </div>
         )}
       </CardContent>
+
+      {/* Modifier Form Sheet */}
+      <ModifierFormSheet
+        open={modifierSheetOpen}
+        onClose={() => {
+          setModifierSheetOpen(false)
+          setEditingGroup(null)
+        }}
+        merchantId={merchantId}
+        locationId={locationId}
+        mode={modifierSheetMode}
+        group={editingGroup}
+        groupDetails={editingGroupDetails}
+        onSuccess={handleSheetSuccess}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteGroupConfirm} onOpenChange={(open) => !open && setDeleteGroupConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Modifier Group?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deleteGroupConfirm?.name}"?
+              This will also delete all modifier options in this group. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteModifier}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }
@@ -194,6 +332,8 @@ interface ModifierGroupRowProps {
   isAllLocations: boolean
   isExpanded: boolean
   onToggle: () => void
+  onEdit: (group: AdminModifierGroup) => void
+  onDelete: (group: AdminModifierGroup) => void
 }
 
 function ModifierGroupRow({
@@ -203,6 +343,8 @@ function ModifierGroupRow({
   isAllLocations,
   isExpanded,
   onToggle,
+  onEdit,
+  onDelete,
 }: ModifierGroupRowProps) {
   // Fetch details only when expanded
   const { data: details, isLoading: detailsLoading } = useAdminModifierGroupDetails(
@@ -280,6 +422,28 @@ function ModifierGroupRow({
                 </Badge>
               )}
             </div>
+
+            {/* Actions */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(group); }}>
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Edit Modifier Group
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={(e) => { e.stopPropagation(); onDelete(group); }}
+                  className="text-destructive"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Modifier Group
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </CollapsibleTrigger>
 
