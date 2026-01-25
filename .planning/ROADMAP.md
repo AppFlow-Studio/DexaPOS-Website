@@ -34,10 +34,14 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. Admin can set pricing including base price, cash price, and location-specific overrides
   6. Admin can assign items to menus and control availability
   7. Admin can configure menu schedules (which menus are active during specific time periods)
-**Plans**: TBD
+**Plans**: 5
 
 Plans:
-- [ ] TBD
+- [ ] PLAN-01: Modifier Group Management (wave 1)
+- [ ] PLAN-02: Menu Schedule Management (wave 2)
+- [ ] PLAN-03: Audit Information Display (wave 3)
+- [ ] PLAN-04: Modifier Group Assignment to Items (wave 3)
+- [ ] PLAN-05: Admin Menu Detail Page (wave 4)
 
 ### Phase 2: Location & Floor Plan Management
 **Goal**: Admin can manage merchant locations and their physical layouts
@@ -144,7 +148,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Menu Management (Admin) | 0/TBD | Not started | - |
+| 1. Menu Management (Admin) | 0/5 | Planned | - |
 | 2. Location & Floor Plan Management | 0/TBD | Not started | - |
 | 3. Staff Management (Admin) | 0/TBD | Not started | - |
 | 4. Settings & Online Store | 0/TBD | Not started | - |
