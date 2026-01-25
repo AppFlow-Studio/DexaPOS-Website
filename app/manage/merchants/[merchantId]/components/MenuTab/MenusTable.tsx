@@ -55,6 +55,8 @@ import {
   Package,
   FolderTree,
   Eye,
+  Calendar,
+  Clock,
 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -83,6 +85,7 @@ import { MenuFormSheet } from './sheets/MenuFormSheet'
 import { CategoryFormSheet } from './sheets/CategoryFormSheet'
 import { ItemFormSheet } from './sheets/ItemFormSheet'
 import { ItemDetailSheet } from './sheets/ItemDetailSheet'
+import { MenuSchedulesSheet } from './sheets/MenuSchedulesSheet'
 
 // ============================================================================
 // HELPERS
@@ -134,6 +137,9 @@ export function MenusTable({
   const [itemDetailOpen, setItemDetailOpen] = useState(false)
   const [viewingItemId, setViewingItemId] = useState<string | null>(null)
   const [deleteItemConfirm, setDeleteItemConfirm] = useState<{ itemId: string; categoryId: string } | null>(null)
+
+  const [scheduleSheetOpen, setScheduleSheetOpen] = useState(false)
+  const [selectedMenuForSchedules, setSelectedMenuForSchedules] = useState<{id: string; name: string} | null>(null)
 
   const queryClient = useQueryClient()
 
@@ -290,6 +296,18 @@ export function MenusTable({
     setDeleteItemConfirm(null)
   }
 
+  const handleManageSchedules = (menu: AdminMenu) => {
+    setSelectedMenuForSchedules({ id: menu.id, name: menu.name })
+    setScheduleSheetOpen(true)
+  }
+
+  const invalidateSchedules = () => {
+    if (selectedMenuForSchedules) {
+      queryClient.invalidateQueries({ queryKey: adminKeys.merchantMenuSchedules(merchantId, selectedMenuForSchedules.id) })
+    }
+    queryClient.invalidateQueries({ queryKey: adminKeys.merchantSchedules(merchantId, locationId) })
+  }
+
   return (
     <>
       <Card>
@@ -386,6 +404,7 @@ export function MenusTable({
                   onEditItem={handleEditItem}
                   onViewItem={handleViewItem}
                   onDeleteItem={(itemId, categoryId) => setDeleteItemConfirm({ itemId, categoryId })}
+                  onManageSchedules={() => handleManageSchedules(menu)}
                 />
               ))}
             </div>
@@ -440,6 +459,23 @@ export function MenusTable({
           handleEditItem(item, itemCategoryId || '')
         }}
         onSuccess={invalidateAll}
+      />
+
+      {/* Menu Schedules Sheet */}
+      <MenuSchedulesSheet
+        open={scheduleSheetOpen}
+        onClose={() => {
+          setScheduleSheetOpen(false)
+          setSelectedMenuForSchedules(null)
+        }}
+        merchantId={merchantId}
+        locationId={locationId}
+        menuId={selectedMenuForSchedules?.id || null}
+        menuName={selectedMenuForSchedules?.name || ''}
+        onSuccess={() => {
+          invalidateSchedules()
+          invalidateMenus()
+        }}
       />
 
       {/* Delete Menu Confirmation */}
@@ -540,6 +576,7 @@ interface MenuRowProps {
   onEditItem: (item: AdminMenuItem, categoryId: string) => void
   onViewItem: (itemId: string) => void
   onDeleteItem: (itemId: string, categoryId: string) => void
+  onManageSchedules: () => void
 }
 
 function MenuRow({
@@ -558,6 +595,7 @@ function MenuRow({
   onEditItem,
   onViewItem,
   onDeleteItem,
+  onManageSchedules,
 }: MenuRowProps) {
   // Fetch details only when expanded
   const { data: menuDetails, isLoading: detailsLoading } = useAdminMenuWithCategories(
@@ -616,6 +654,12 @@ function MenuRow({
                 <Package className="h-3 w-3 mr-1" />
                 {menu.items_count} items
               </Badge>
+              {menu.schedules_count > 0 && (
+                <Badge variant="outline" className="text-xs">
+                  <Clock className="h-3 w-3 mr-1" />
+                  {menu.schedules_count} schedules
+                </Badge>
+              )}
             </div>
 
             {/* Status */}
@@ -662,6 +706,10 @@ function MenuRow({
                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onAddCategory(); }}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add Category
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onManageSchedules(); }}>
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Manage Schedules
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
