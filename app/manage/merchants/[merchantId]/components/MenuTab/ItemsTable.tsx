@@ -52,6 +52,7 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
+  Sliders,
 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -530,7 +531,7 @@ function ItemRow({ item, isAllLocations, onView, onEdit, onDelete }: ItemRowProp
 
       {/* Availability Status */}
       <TableCell>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {item.effective_availability ? (
             <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-300 border-0">
               <CheckCircle2 className="h-3 w-3 mr-1" />
@@ -545,6 +546,12 @@ function ItemRow({ item, isAllLocations, onView, onEdit, onDelete }: ItemRowProp
           {item.has_location_override && !isAllLocations && (
             <Badge variant="outline" className="text-xs bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-300 border-0">
               Override
+            </Badge>
+          )}
+          {item.modifier_groups_count > 0 && (
+            <Badge variant="outline" className="text-xs">
+              <Sliders className="h-3 w-3 mr-1" />
+              {item.modifier_groups_count} modifier{item.modifier_groups_count !== 1 ? 's' : ''}
             </Badge>
           )}
         </div>
