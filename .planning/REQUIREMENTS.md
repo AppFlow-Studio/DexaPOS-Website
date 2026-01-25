@@ -138,71 +138,71 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MENU-01 | TBD | Pending |
-| MENU-02 | TBD | Pending |
-| MENU-03 | TBD | Pending |
-| MENU-04 | TBD | Pending |
-| MENU-05 | TBD | Pending |
-| MENU-06 | TBD | Pending |
-| MENU-07 | TBD | Pending |
-| LOC-01 | TBD | Pending |
-| LOC-02 | TBD | Pending |
-| LOC-03 | TBD | Pending |
-| LOC-04 | TBD | Pending |
-| LOC-05 | TBD | Pending |
-| LOC-06 | TBD | Pending |
-| TABLE-01 | TBD | Pending |
-| TABLE-02 | TBD | Pending |
-| TABLE-03 | TBD | Pending |
-| TABLE-04 | TBD | Pending |
-| STAFF-01 | TBD | Pending |
-| STAFF-02 | TBD | Pending |
-| STAFF-03 | TBD | Pending |
-| STAFF-04 | TBD | Pending |
-| STAFF-05 | TBD | Pending |
-| STAFF-06 | TBD | Pending |
-| SET-01 | TBD | Pending |
-| SET-02 | TBD | Pending |
-| SET-03 | TBD | Pending |
-| SET-04 | TBD | Pending |
-| SET-05 | TBD | Pending |
-| STORE-01 | TBD | Pending |
-| STORE-02 | TBD | Pending |
-| STORE-03 | TBD | Pending |
-| STORE-04 | TBD | Pending |
-| ANLYT-01 | TBD | Pending |
-| ANLYT-02 | TBD | Pending |
-| ANLYT-03 | TBD | Pending |
-| ANLYT-04 | TBD | Pending |
-| ANLYT-05 | TBD | Pending |
-| ANLYT-06 | TBD | Pending |
-| FIN-01 | TBD | Pending |
-| FIN-02 | TBD | Pending |
-| FIN-03 | TBD | Pending |
-| FIN-04 | TBD | Pending |
-| FIN-05 | TBD | Pending |
-| FIN-06 | TBD | Pending |
-| PERF-01 | TBD | Pending |
-| PERF-02 | TBD | Pending |
-| PERF-03 | TBD | Pending |
-| PERF-04 | TBD | Pending |
-| TREND-01 | TBD | Pending |
-| TREND-02 | TBD | Pending |
-| TREND-03 | TBD | Pending |
-| TREND-04 | TBD | Pending |
-| TIME-01 | TBD | Pending |
-| TIME-02 | TBD | Pending |
-| TIME-03 | TBD | Pending |
-| TIME-04 | TBD | Pending |
-| PERM-01 | TBD | Pending |
-| PERM-02 | TBD | Pending |
-| PERM-03 | TBD | Pending |
+| MENU-01 | Phase 1 | Pending |
+| MENU-02 | Phase 1 | Pending |
+| MENU-03 | Phase 1 | Pending |
+| MENU-04 | Phase 1 | Pending |
+| MENU-05 | Phase 1 | Pending |
+| MENU-06 | Phase 1 | Pending |
+| MENU-07 | Phase 1 | Pending |
+| LOC-01 | Phase 2 | Pending |
+| LOC-02 | Phase 2 | Pending |
+| LOC-03 | Phase 2 | Pending |
+| LOC-04 | Phase 2 | Pending |
+| LOC-05 | Phase 2 | Pending |
+| LOC-06 | Phase 2 | Pending |
+| TABLE-01 | Phase 2 | Pending |
+| TABLE-02 | Phase 2 | Pending |
+| TABLE-03 | Phase 2 | Pending |
+| TABLE-04 | Phase 2 | Pending |
+| STAFF-01 | Phase 3 | Pending |
+| STAFF-02 | Phase 3 | Pending |
+| STAFF-03 | Phase 3 | Pending |
+| STAFF-04 | Phase 3 | Pending |
+| STAFF-05 | Phase 3 | Pending |
+| STAFF-06 | Phase 3 | Pending |
+| SET-01 | Phase 4 | Pending |
+| SET-02 | Phase 4 | Pending |
+| SET-03 | Phase 4 | Pending |
+| SET-04 | Phase 4 | Pending |
+| SET-05 | Phase 4 | Pending |
+| STORE-01 | Phase 4 | Pending |
+| STORE-02 | Phase 4 | Pending |
+| STORE-03 | Phase 4 | Pending |
+| STORE-04 | Phase 4 | Pending |
+| ANLYT-01 | Phase 5 | Pending |
+| ANLYT-02 | Phase 5 | Pending |
+| ANLYT-03 | Phase 5 | Pending |
+| ANLYT-04 | Phase 5 | Pending |
+| ANLYT-05 | Phase 5 | Pending |
+| ANLYT-06 | Phase 5 | Pending |
+| FIN-01 | Phase 5 | Pending |
+| FIN-02 | Phase 5 | Pending |
+| FIN-03 | Phase 5 | Pending |
+| FIN-04 | Phase 5 | Pending |
+| FIN-05 | Phase 5 | Pending |
+| FIN-06 | Phase 5 | Pending |
+| PERF-01 | Phase 6 | Pending |
+| PERF-02 | Phase 6 | Pending |
+| PERF-03 | Phase 6 | Pending |
+| PERF-04 | Phase 6 | Pending |
+| TREND-01 | Phase 6 | Pending |
+| TREND-02 | Phase 6 | Pending |
+| TREND-03 | Phase 6 | Pending |
+| TREND-04 | Phase 6 | Pending |
+| TIME-01 | Phase 7 | Pending |
+| TIME-02 | Phase 7 | Pending |
+| TIME-03 | Phase 7 | Pending |
+| TIME-04 | Phase 7 | Pending |
+| PERM-01 | Phase 7 | Pending |
+| PERM-02 | Phase 7 | Pending |
+| PERM-03 | Phase 7 | Pending |
 
 **Coverage:**
 - v1 requirements: 53 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 53
+- Mapped to phases: 53 (100%)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-01-25*
-*Last updated: 2026-01-25 after initial definition*
+*Last updated: 2026-01-25 after roadmap creation*
