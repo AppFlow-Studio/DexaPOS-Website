@@ -2641,7 +2641,7 @@ export async function getItemModifierGroups(
 
   // Query item_modifier_groups junction table with modifier group details
   const { data: assignments, error } = await supabase
-    .from('item_modifier_groups')
+    .from('menu_item_modifier_groups')
     .select(`
       sort_order,
       modifier_groups!inner(
@@ -2829,4 +2829,172 @@ export async function updateItemModifierGroupOrder(
   }
 
   return { success: true, error: null }
+}
+
+// ============================================================================
+// MENU DETAIL PAGE ACTIONS
+// ============================================================================
+
+/**
+ * Toggle category visibility within a specific menu context
+ * This updates the is_active field on menu_categories
+ */
+export async function toggleAdminCategoryInMenu(
+  merchantId: string,
+  menuId: string,
+  categoryId: string,
+  isActive: boolean
+): Promise<{ success: boolean; error: string | null }> {
+  await assertHQPermission('hq.merchant.update')
+
+  const supabase = createServerSupabaseClient()
+
+  // Verify menu belongs to merchant
+  const { data: menu } = await supabase
+    .from('menus')
+    .select('id')
+    .eq('id', menuId)
+    .eq('merchant_id', merchantId)
+    .single()
+
+  if (!menu) {
+    return { success: false, error: 'Menu not found' }
+  }
+
+  // Update the menu_categories is_active field
+  const { error } = await supabase
+    .from('menu_categories')
+    .update({ is_active: isActive })
+    .eq('menu_id', menuId)
+    .eq('category_id', categoryId)
+
+  if (error) {
+    console.error('[toggleAdminCategoryInMenu] Error:', error)
+    return { success: false, error: error.message }
+  }
+
+  return { success: true, error: null }
+}
+
+/**
+ * Update category display order within a menu (admin version with merchant verification)
+ * Uses the same pattern as updateMenuCategoryOrder but with additional admin context
+ */
+export async function updateAdminMenuCategoryOrder(
+  merchantId: string,
+  menuId: string,
+  categoryOrders: Array<{ categoryId: string; displayOrder: number }>
+): Promise<{ success: boolean; error: string | null }> {
+  await assertHQPermission('hq.merchant.update')
+
+  const supabase = createServerSupabaseClient()
+
+  // Verify menu belongs to merchant
+  const { data: menu } = await supabase
+    .from('menus')
+    .select('id')
+    .eq('id', menuId)
+    .eq('merchant_id', merchantId)
+    .single()
+
+  if (!menu) {
+    return { success: false, error: 'Menu not found' }
+  }
+
+  // Update each category's order
+  for (const { categoryId, displayOrder } of categoryOrders) {
+    const { error } = await supabase
+      .from('menu_categories')
+      .update({ display_order: displayOrder })
+      .eq('menu_id', menuId)
+      .eq('category_id', categoryId)
+
+    if (error) {
+      console.error('[updateAdminMenuCategoryOrder] Error:', error)
+      return { success: false, error: error.message }
+    }
+  }
+
+  return { success: true, error: null }
+}
+
+/**
+ * Get schedules assigned to a specific menu (admin version)
+ * Returns detailed schedule information with time slots
+ */
+export async function getAdminMenuSchedules(
+  merchantId: string,
+  menuId: string
+): Promise<Array<{
+  id: string
+  name: string
+  description: string | null
+  is_active: boolean
+  time_slots: Array<{
+    id: string
+    day_of_week: number
+    start_time: string
+    end_time: string
+    is_active: boolean
+  }>
+}>> {
+  await assertHQPermission('hq.merchant.view')
+
+  const supabase = createServerSupabaseClient()
+
+  // Verify menu belongs to merchant
+  const { data: menu } = await supabase
+    .from('menus')
+    .select('id')
+    .eq('id', menuId)
+    .eq('merchant_id', merchantId)
+    .single()
+
+  if (!menu) {
+    return []
+  }
+
+  // Query menu_schedules with schedule and time slot details
+  const { data, error } = await supabase
+    .from('menu_schedules')
+    .select(`
+      id,
+      schedule:schedules(
+        id,
+        name,
+        description,
+        is_active,
+        schedule_time_slots(
+          id,
+          day_of_week,
+          start_time,
+          end_time,
+          is_active
+        )
+      )
+    `)
+    .eq('menu_id', menuId)
+
+  if (error) {
+    console.error('[getAdminMenuSchedules] Error:', error)
+    return []
+  }
+
+  // Transform to a cleaner format
+  return (data || [])
+    .map((ms: any) => ms.schedule)
+    .filter((s: any): s is NonNullable<typeof s> => s !== null)
+    .map((schedule: any) => ({
+      id: schedule.id,
+      name: schedule.name,
+      description: schedule.description,
+      is_active: schedule.is_active,
+      time_slots: (schedule.schedule_time_slots || []).map((slot: any) => ({
+        id: slot.id,
+        day_of_week: slot.day_of_week,
+        start_time: slot.start_time,
+        end_time: slot.end_time,
+        is_active: slot.is_active,
+      })),
+    }))
 }
