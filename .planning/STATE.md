@@ -52,6 +52,8 @@ Recent decisions affecting current work:
 - Schedule count badge in menu stats for visibility
 - Assignment-only pattern for item-modifier groups (no inline creation)
 - Collapsible UI for nested modifier options display
+- Query audit_logs for last editor info (centralized audit tracking)
+- date-fns formatDistanceToNow for relative timestamps
 
 ### Pending Todos
 
@@ -63,8 +65,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-01-25T17:58:00Z
-Stopped at: Completed Phase 1 (01-04-PLAN.md)
+Last session: 2026-01-25T18:06:00Z
+Stopped at: Completed Phase 1 (all 4 plans)
 Resume file: .planning/phases/02-pricing/PLAN-01.md (next phase)
 
 ### Phase 1 Plan Summary (Complete)
