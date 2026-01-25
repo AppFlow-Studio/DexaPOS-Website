@@ -280,6 +280,32 @@ export const adminKeys = {
       locationId ?? 'all',
     ] as const,
 
+  // Schedules
+  merchantSchedules: (merchantId: string, locationId: string | null) =>
+    [
+      ...adminKeys.merchants(),
+      merchantId,
+      'schedules',
+      locationId ?? 'all',
+    ] as const,
+
+  merchantScheduleDetail: (merchantId: string, scheduleId: string) =>
+    [
+      ...adminKeys.merchants(),
+      merchantId,
+      'schedule',
+      scheduleId,
+    ] as const,
+
+  merchantMenuSchedules: (merchantId: string, menuId: string) =>
+    [
+      ...adminKeys.merchants(),
+      merchantId,
+      'menu',
+      menuId,
+      'schedules',
+    ] as const,
+
   // ============================================================================
   // MERCHANT CUSTOMERS (Admin View)
   // ============================================================================

@@ -353,6 +353,13 @@ import {
   type PriceSource,
 } from '@/app/manage/actions/admin-merchant/menus'
 
+// Schedule actions
+import {
+  getAdminSchedules,
+  getMenuSchedules,
+  type AdminSchedule,
+} from '@/app/manage/actions/admin-merchant/schedules'
+
 export function useAdminMenus(merchantId: string, locationId?: string | null) {
   return useQuery<AdminMenu[]>({
     queryKey: adminKeys.merchantMenus(merchantId, locationId),
@@ -488,6 +495,34 @@ export function useAdminMenuStats(
 }
 
 // ============================================================================
+// SCHEDULES HOOKS
+// ============================================================================
+
+export function useAdminSchedules(
+  merchantId: string,
+  locationId: string | null
+) {
+  return useQuery<AdminSchedule[]>({
+    queryKey: adminKeys.merchantSchedules(merchantId, locationId),
+    queryFn: () => getAdminSchedules(merchantId, locationId),
+    enabled: !!merchantId,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useAdminMenuSchedules(
+  merchantId: string,
+  menuId: string | null
+) {
+  return useQuery<AdminSchedule[]>({
+    queryKey: adminKeys.merchantMenuSchedules(merchantId, menuId || ''),
+    queryFn: () => (menuId ? getMenuSchedules(merchantId, menuId) : []),
+    enabled: !!merchantId && !!menuId,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+// ============================================================================
 // TYPE EXPORTS (Re-export for convenience)
 // ============================================================================
 
@@ -521,4 +556,6 @@ export type {
   AdminModifierGroupWithItems,
   AdminMenuStats,
   PriceSource,
+  // Schedules
+  AdminSchedule,
 }
