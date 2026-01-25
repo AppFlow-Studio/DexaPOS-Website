@@ -2048,3 +2048,332 @@ export async function getAdminMenuStats(
     totalModifierGroups: totalModifierGroups || 0,
   }
 }
+
+// ============================================================================
+// MODIFIER GROUP CRUD
+// ============================================================================
+
+export interface CreateModifierGroupData {
+  name: string
+  description?: string | null
+  is_required?: boolean
+  min_selections?: number
+  max_selections?: number | null
+  location_id?: string | null
+  is_active?: boolean
+}
+
+export async function createAdminModifierGroup(
+  merchantId: string,
+  data: CreateModifierGroupData
+): Promise<{ data: AdminModifierGroup | null; error: string | null }> {
+  await assertHQPermission('hq.merchant.update')
+
+  const supabase = createServerSupabaseClient()
+
+  const { data: group, error } = await supabase
+    .from('modifier_groups')
+    .insert({
+      merchant_id: merchantId,
+      name: data.name,
+      description: data.description || null,
+      is_required: data.is_required ?? false,
+      min_selections: data.min_selections ?? 0,
+      max_selections: data.max_selections ?? null,
+      location_id: data.location_id || null,
+      is_active: data.is_active ?? true,
+    })
+    .select(`
+      id,
+      name,
+      description,
+      is_required,
+      is_active,
+      min_selections,
+      max_selections,
+      location_id,
+      created_at
+    `)
+    .single()
+
+  if (error) {
+    console.error('[createAdminModifierGroup] Error:', error)
+    return { data: null, error: error.message }
+  }
+
+  return {
+    data: {
+      id: group.id,
+      name: group.name,
+      description: group.description,
+      is_required: group.is_required,
+      is_active: group.is_active,
+      min_selections: group.min_selections || 0,
+      max_selections: group.max_selections,
+      items_count: 0,
+      is_global: !group.location_id,
+      location_id: group.location_id,
+      created_at: group.created_at,
+    },
+    error: null,
+  }
+}
+
+export interface UpdateModifierGroupData {
+  name?: string
+  description?: string | null
+  is_required?: boolean
+  min_selections?: number
+  max_selections?: number | null
+  is_active?: boolean
+}
+
+export async function updateAdminModifierGroup(
+  merchantId: string,
+  groupId: string,
+  data: UpdateModifierGroupData
+): Promise<{ data: AdminModifierGroup | null; error: string | null }> {
+  await assertHQPermission('hq.merchant.update')
+
+  const supabase = createServerSupabaseClient()
+
+  const updateData: any = {}
+  if (data.name !== undefined) updateData.name = data.name
+  if (data.description !== undefined) updateData.description = data.description
+  if (data.is_required !== undefined) updateData.is_required = data.is_required
+  if (data.min_selections !== undefined) updateData.min_selections = data.min_selections
+  if (data.max_selections !== undefined) updateData.max_selections = data.max_selections
+  if (data.is_active !== undefined) updateData.is_active = data.is_active
+
+  const { data: group, error } = await supabase
+    .from('modifier_groups')
+    .update(updateData)
+    .eq('id', groupId)
+    .eq('merchant_id', merchantId)
+    .select(`
+      id,
+      name,
+      description,
+      is_required,
+      is_active,
+      min_selections,
+      max_selections,
+      location_id,
+      created_at,
+      modifier_group_items(count)
+    `)
+    .single()
+
+  if (error) {
+    console.error('[updateAdminModifierGroup] Error:', error)
+    return { data: null, error: error.message }
+  }
+
+  return {
+    data: {
+      id: group.id,
+      name: group.name,
+      description: group.description,
+      is_required: group.is_required,
+      is_active: group.is_active,
+      min_selections: group.min_selections || 0,
+      max_selections: group.max_selections,
+      items_count: (group as any).modifier_group_items?.length || 0,
+      is_global: !group.location_id,
+      location_id: group.location_id,
+      created_at: group.created_at,
+    },
+    error: null,
+  }
+}
+
+export async function deleteAdminModifierGroup(
+  merchantId: string,
+  groupId: string
+): Promise<{ success: boolean; error: string | null }> {
+  await assertHQPermission('hq.merchant.update')
+
+  const supabase = createServerSupabaseClient()
+
+  // First delete all modifier items in this group (cascade)
+  await supabase
+    .from('modifier_group_items')
+    .delete()
+    .eq('modifier_group_id', groupId)
+
+  // Then delete the group
+  const { error } = await supabase
+    .from('modifier_groups')
+    .delete()
+    .eq('id', groupId)
+    .eq('merchant_id', merchantId)
+
+  if (error) {
+    console.error('[deleteAdminModifierGroup] Error:', error)
+    return { success: false, error: error.message }
+  }
+
+  return { success: true, error: null }
+}
+
+// ============================================================================
+// MODIFIER ITEM CRUD
+// ============================================================================
+
+export interface CreateModifierItemData {
+  name: string
+  description?: string | null
+  price_modifier: number
+  is_default?: boolean
+  is_active?: boolean
+  display_order?: number
+}
+
+export async function createAdminModifierItem(
+  merchantId: string,
+  groupId: string,
+  data: CreateModifierItemData
+): Promise<{ data: AdminModifierItem | null; error: string | null }> {
+  await assertHQPermission('hq.merchant.update')
+
+  const supabase = createServerSupabaseClient()
+
+  // Verify group belongs to merchant
+  const { data: group } = await supabase
+    .from('modifier_groups')
+    .select('id')
+    .eq('id', groupId)
+    .eq('merchant_id', merchantId)
+    .single()
+
+  if (!group) {
+    return { data: null, error: 'Modifier group not found' }
+  }
+
+  const { data: item, error } = await supabase
+    .from('modifier_group_items')
+    .insert({
+      modifier_group_id: groupId,
+      name: data.name,
+      description: data.description || null,
+      price_modifier: data.price_modifier,
+      is_default: data.is_default ?? false,
+      is_active: data.is_active ?? true,
+      display_order: data.display_order || 0,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('[createAdminModifierItem] Error:', error)
+    return { data: null, error: error.message }
+  }
+
+  return {
+    data: {
+      id: item.id,
+      name: item.name,
+      description: item.description,
+      price_modifier: Number(item.price_modifier || 0),
+      is_default: item.is_default,
+      is_active: item.is_active,
+      display_order: item.display_order || 0,
+    },
+    error: null,
+  }
+}
+
+export interface UpdateModifierItemData {
+  name?: string
+  description?: string | null
+  price_modifier?: number
+  is_default?: boolean
+  is_active?: boolean
+  display_order?: number
+}
+
+export async function updateAdminModifierItem(
+  merchantId: string,
+  itemId: string,
+  data: UpdateModifierItemData
+): Promise<{ data: AdminModifierItem | null; error: string | null }> {
+  await assertHQPermission('hq.merchant.update')
+
+  const supabase = createServerSupabaseClient()
+
+  // Verify item belongs to merchant's group
+  const { data: item } = await supabase
+    .from('modifier_group_items')
+    .select('modifier_group_id, modifier_groups!inner(merchant_id)')
+    .eq('id', itemId)
+    .single()
+
+  if (!item || (item as any).modifier_groups?.merchant_id !== merchantId) {
+    return { data: null, error: 'Modifier item not found' }
+  }
+
+  const updateData: any = {}
+  if (data.name !== undefined) updateData.name = data.name
+  if (data.description !== undefined) updateData.description = data.description
+  if (data.price_modifier !== undefined) updateData.price_modifier = data.price_modifier
+  if (data.is_default !== undefined) updateData.is_default = data.is_default
+  if (data.is_active !== undefined) updateData.is_active = data.is_active
+  if (data.display_order !== undefined) updateData.display_order = data.display_order
+
+  const { data: updatedItem, error } = await supabase
+    .from('modifier_group_items')
+    .update(updateData)
+    .eq('id', itemId)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('[updateAdminModifierItem] Error:', error)
+    return { data: null, error: error.message }
+  }
+
+  return {
+    data: {
+      id: updatedItem.id,
+      name: updatedItem.name,
+      description: updatedItem.description,
+      price_modifier: Number(updatedItem.price_modifier || 0),
+      is_default: updatedItem.is_default,
+      is_active: updatedItem.is_active,
+      display_order: updatedItem.display_order || 0,
+    },
+    error: null,
+  }
+}
+
+export async function deleteAdminModifierItem(
+  merchantId: string,
+  itemId: string
+): Promise<{ success: boolean; error: string | null }> {
+  await assertHQPermission('hq.merchant.update')
+
+  const supabase = createServerSupabaseClient()
+
+  // Verify item belongs to merchant's group
+  const { data: item } = await supabase
+    .from('modifier_group_items')
+    .select('modifier_group_id, modifier_groups!inner(merchant_id)')
+    .eq('id', itemId)
+    .single()
+
+  if (!item || (item as any).modifier_groups?.merchant_id !== merchantId) {
+    return { success: false, error: 'Modifier item not found' }
+  }
+
+  const { error } = await supabase
+    .from('modifier_group_items')
+    .delete()
+    .eq('id', itemId)
+
+  if (error) {
+    console.error('[deleteAdminModifierItem] Error:', error)
+    return { success: false, error: error.message }
+  }
+
+  return { success: true, error: null }
+}
