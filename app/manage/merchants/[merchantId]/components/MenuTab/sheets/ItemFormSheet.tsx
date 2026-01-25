@@ -46,8 +46,12 @@ import {
   Smartphone,
   Globe,
   Monitor,
+  X,
+  Plus,
+  Sliders,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useQueryClient } from '@tanstack/react-query'
 
 import {
   createAdminMenuItem,
@@ -55,8 +59,17 @@ import {
   addItemToCategory,
   upsertAdminLocationItemOverride,
   deleteAdminLocationItemOverride,
+  assignModifierGroupToItem,
+  removeModifierGroupFromItem,
   type AdminMenuItem,
+  type AdminMenuItemModifierGroup,
 } from '@/app/manage/actions/admin-merchant/menus'
+
+import {
+  useAdminModifierGroups,
+  useAdminItemModifierGroups,
+} from '@/lib/queries/use-admin-merchant'
+import { adminKeys } from '@/lib/queries/admin-keys'
 
 // ============================================================================
 // CONSTANTS
@@ -137,6 +150,75 @@ export function ItemFormSheet({
   const isLocationView = locationId && locationId !== 'all'
   const [isResetting, setIsResetting] = useState(false)
   const hasLocationOverride = isEdit && item?.has_location_override
+
+  // Modifier groups management state
+  const [selectedModifierGroup, setSelectedModifierGroup] = useState<string>('')
+  const [isAddingModifier, setIsAddingModifier] = useState(false)
+  const [isRemovingModifier, setIsRemovingModifier] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+
+  // Fetch all modifier groups for this merchant
+  const { data: allModifierGroups } = useAdminModifierGroups(merchantId, locationId)
+
+  // Fetch modifier groups already assigned to this item
+  const { data: itemModifierGroups, isLoading: isLoadingItemModifiers } = useAdminItemModifierGroups(
+    merchantId,
+    isEdit ? item?.id ?? null : null
+  )
+
+  // Filter out already assigned groups
+  const availableModifierGroups = (allModifierGroups || []).filter(
+    (g) => !itemModifierGroups?.some((ig) => ig.id === g.id)
+  )
+
+  const handleAddModifierGroup = async () => {
+    if (!selectedModifierGroup || !item) return
+
+    setIsAddingModifier(true)
+    try {
+      const result = await assignModifierGroupToItem(merchantId, item.id, selectedModifierGroup)
+
+      if (!result.success) {
+        toast.error('Failed to add modifier group', { description: result.error })
+        return
+      }
+
+      queryClient.invalidateQueries({
+        queryKey: adminKeys.merchantItemModifiers(merchantId, item.id),
+      })
+      setSelectedModifierGroup('')
+      toast.success('Modifier group added')
+    } catch (error) {
+      toast.error('An unexpected error occurred')
+      console.error(error)
+    } finally {
+      setIsAddingModifier(false)
+    }
+  }
+
+  const handleRemoveModifierGroup = async (groupId: string) => {
+    if (!item) return
+
+    setIsRemovingModifier(groupId)
+    try {
+      const result = await removeModifierGroupFromItem(merchantId, item.id, groupId)
+
+      if (!result.success) {
+        toast.error('Failed to remove modifier group', { description: result.error })
+        return
+      }
+
+      queryClient.invalidateQueries({
+        queryKey: adminKeys.merchantItemModifiers(merchantId, item.id),
+      })
+      toast.success('Modifier group removed')
+    } catch (error) {
+      toast.error('An unexpected error occurred')
+      console.error(error)
+    } finally {
+      setIsRemovingModifier(null)
+    }
+  }
 
   const form = useForm<ItemFormValues>({
     resolver: zodResolver(itemFormSchema),
@@ -765,6 +847,106 @@ export function ItemFormSheet({
                     />
                   </BottomSheetSection>
                 </>
+              )}
+
+              {/* Modifier Groups Section - Only in edit mode */}
+              {isEdit && item && (
+                <BottomSheetSection title="Modifier Groups">
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Attach modifier groups to allow customers to customize this item.
+                  </p>
+
+                  {/* Currently assigned modifiers */}
+                  {isLoadingItemModifiers ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      <span className="text-sm text-muted-foreground">Loading...</span>
+                    </div>
+                  ) : itemModifierGroups && itemModifierGroups.length > 0 ? (
+                    <div className="space-y-2 mb-4">
+                      {itemModifierGroups.map((group) => (
+                        <div
+                          key={group.id}
+                          className="flex items-center justify-between p-3 border rounded-lg"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Sliders className="h-4 w-4 text-muted-foreground" />
+                            <div>
+                              <p className="font-medium text-sm">{group.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {group.items_count} option{group.items_count !== 1 ? 's' : ''}
+                                {group.is_required && (
+                                  <Badge variant="outline" className="ml-2 text-xs">
+                                    Required
+                                  </Badge>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveModifierGroup(group.id)}
+                            disabled={isRemovingModifier === group.id}
+                          >
+                            {isRemovingModifier === group.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <X className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground mb-4">
+                      No modifier groups attached.
+                    </p>
+                  )}
+
+                  {/* Add modifier group dropdown */}
+                  {availableModifierGroups.length > 0 && (
+                    <div className="flex gap-2">
+                      <Select
+                        value={selectedModifierGroup}
+                        onValueChange={setSelectedModifierGroup}
+                      >
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="Select a modifier group..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableModifierGroups.map((group) => (
+                            <SelectItem key={group.id} value={group.id}>
+                              {group.name} ({group.items_count} option
+                              {group.items_count !== 1 ? 's' : ''})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        onClick={handleAddModifierGroup}
+                        disabled={!selectedModifierGroup || isAddingModifier}
+                      >
+                        {isAddingModifier ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
+
+                  {availableModifierGroups.length === 0 && allModifierGroups && allModifierGroups.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      No modifier groups have been created yet. Create modifier groups first to attach them to items.
+                    </p>
+                  )}
+                </BottomSheetSection>
               )}
             </BottomSheetBody>
 
