@@ -12,7 +12,7 @@ This roadmap transforms the HQ admin portal into a comprehensive merchant manage
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Menu Management (Admin)** - Full menu, category, item, and modifier management
+- [x] **Phase 1: Menu Management (Admin)** - Full menu, category, item, and modifier management ✓
 - [ ] **Phase 2: Location & Floor Plan Management** - Location CRUD and table/floor plan administration
 - [ ] **Phase 3: Staff Management (Admin)** - Staff CRUD, roles, PINs, and location assignments
 - [ ] **Phase 4: Settings & Online Store** - Merchant settings and storefront configuration
@@ -38,10 +38,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 Plans:
 - [x] PLAN-01: Modifier Group Management (wave 1) - Completed 2026-01-25
-- [ ] PLAN-02: Menu Schedule Management (wave 2)
-- [ ] PLAN-03: Audit Information Display (wave 3)
-- [ ] PLAN-04: Modifier Group Assignment to Items (wave 3)
-- [ ] PLAN-05: Admin Menu Detail Page (wave 4)
+- [x] PLAN-02: Menu Schedule Management (wave 2) - Completed 2026-01-25
+- [x] PLAN-03: Audit Information Display (wave 3) - Completed 2026-01-25
+- [x] PLAN-04: Modifier Group Assignment to Items (wave 3) - Completed 2026-01-25
+- [x] PLAN-05: Admin Menu Detail Page (wave 4) - Completed 2026-01-25
 
 ### Phase 2: Location & Floor Plan Management
 **Goal**: Admin can manage merchant locations and their physical layouts
@@ -148,7 +148,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Menu Management (Admin) | 0/5 | Planned | - |
+| 1. Menu Management (Admin) | 5/5 | Complete ✓ | 2026-01-25 |
 | 2. Location & Floor Plan Management | 0/TBD | Not started | - |
 | 3. Staff Management (Admin) | 0/TBD | Not started | - |
 | 4. Settings & Online Store | 0/TBD | Not started | - |
