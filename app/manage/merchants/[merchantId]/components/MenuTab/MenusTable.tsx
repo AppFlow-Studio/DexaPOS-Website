@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -674,7 +675,13 @@ function MenuRow({
             {/* Name & Description */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <p className="font-medium truncate">{menu.name}</p>
+                <Link
+                  href={`/manage/merchants/${merchantId}/menu/${menu.id}`}
+                  className="font-medium truncate hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {menu.name}
+                </Link>
                 {menu.is_global ? (
                   <Badge variant="outline" className="text-xs bg-slate-50 dark:bg-slate-900">
                     <Globe className="h-3 w-3 mr-1" />
@@ -733,9 +740,11 @@ function MenuRow({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onViewDetails(); }}>
-                  <Eye className="h-4 w-4 mr-2" />
-                  View Details
+                <DropdownMenuItem asChild>
+                  <Link href={`/manage/merchants/${merchantId}/menu/${menu.id}`}>
+                    <Eye className="h-4 w-4 mr-2" />
+                    View Details
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}>
                   <Pencil className="h-4 w-4 mr-2" />
