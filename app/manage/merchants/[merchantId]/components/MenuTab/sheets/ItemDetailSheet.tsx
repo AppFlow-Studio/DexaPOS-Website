@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { formatDistanceToNow, format } from 'date-fns'
 import {
   BottomSheet,
   BottomSheetContent,
@@ -15,6 +16,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,6 +45,10 @@ import {
   ArrowRight,
   Layers,
   Copy,
+  Loader2,
+  User,
+  Calendar,
+  FileText,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -52,6 +59,9 @@ import {
 import {
   deleteAdminMenuItem,
   deleteAdminLocationItemOverride,
+  updateAdminNotes,
+  getMenuItemAuditInfo,
+  type AuditInfo,
 } from '@/app/manage/actions/admin-merchant/menus'
 
 // ============================================================================
@@ -144,6 +154,15 @@ export function ItemDetailSheet({
   const [isDeleting, setIsDeleting] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
 
+  // Audit info state
+  const [auditInfo, setAuditInfo] = useState<AuditInfo | null>(null)
+  const [isLoadingAudit, setIsLoadingAudit] = useState(false)
+  const [adminNotes, setAdminNotes] = useState('')
+  const [originalNotes, setOriginalNotes] = useState('')
+  const [isSavingNotes, setIsSavingNotes] = useState(false)
+
+  const hasNotesChanged = adminNotes !== originalNotes
+
   const isLocationView = locationId && locationId !== 'all'
 
   const { data: item, isLoading } = useAdminMenuItemDetails(
@@ -152,8 +171,58 @@ export function ItemDetailSheet({
     locationId
   )
 
+  // Fetch audit info when item is loaded
+  useEffect(() => {
+    async function fetchAuditInfo() {
+      if (!item || !open) return
+      setIsLoadingAudit(true)
+      try {
+        const info = await getMenuItemAuditInfo(merchantId, item.id)
+        setAuditInfo(info)
+        setAdminNotes(info?.admin_notes || '')
+        setOriginalNotes(info?.admin_notes || '')
+      } catch (error) {
+        console.error('Failed to fetch audit info:', error)
+      } finally {
+        setIsLoadingAudit(false)
+      }
+    }
+    fetchAuditInfo()
+  }, [item, merchantId, open])
+
+  // Reset notes state when sheet closes
+  useEffect(() => {
+    if (!open) {
+      setAuditInfo(null)
+      setAdminNotes('')
+      setOriginalNotes('')
+    }
+  }, [open])
+
   const priceSource = item?.price_source || 'base'
   const priceConfig = PRICE_LEVEL_CONFIG[priceSource]
+
+  const handleSaveNotes = async () => {
+    if (!item) return
+
+    setIsSavingNotes(true)
+    try {
+      const result = await updateAdminNotes(merchantId, 'menu_item', item.id, adminNotes || null)
+
+      if (!result.success) {
+        toast.error('Failed to save notes', { description: result.error || undefined })
+        return
+      }
+
+      setOriginalNotes(adminNotes)
+      toast.success('Notes saved')
+    } catch (error) {
+      toast.error('An unexpected error occurred')
+      console.error(error)
+    } finally {
+      setIsSavingNotes(false)
+    }
+  }
 
   const handleDelete = async () => {
     if (!item) return
@@ -410,20 +479,86 @@ export function ItemDetailSheet({
                   </div>
                 </BottomSheetSection>
 
-                {/* Metadata */}
-                <BottomSheetSection title="Metadata">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Created</p>
-                      <p className="font-medium">
-                        {new Date(item.created_at).toLocaleDateString()}
-                      </p>
+                {/* Audit Information */}
+                <BottomSheetSection title="Audit Information">
+                  <div className="space-y-4">
+                    {/* Last Modified */}
+                    <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-muted/50">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">Last Modified</span>
+                      </div>
+                      <span className="text-sm font-medium">
+                        {item.updated_at
+                          ? formatDistanceToNow(new Date(item.updated_at), { addSuffix: true })
+                          : 'Never'}
+                      </span>
                     </div>
-                    <div>
-                      <p className="text-muted-foreground">Last Updated</p>
-                      <p className="font-medium">
-                        {new Date(item.updated_at).toLocaleDateString()}
-                      </p>
+
+                    {/* Modified By */}
+                    {isLoadingAudit ? (
+                      <div className="flex items-center gap-2 py-2 px-3">
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">Loading audit info...</span>
+                      </div>
+                    ) : auditInfo?.updated_by ? (
+                      <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-muted/50">
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">Modified By</span>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium">{auditInfo.updated_by.name}</p>
+                          <p className="text-xs text-muted-foreground">{auditInfo.updated_by.email}</p>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* Created */}
+                    <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-muted/50">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">Created</span>
+                      </div>
+                      <span className="text-sm font-medium">
+                        {item.created_at ? format(new Date(item.created_at), 'MMM d, yyyy') : 'Unknown'}
+                      </span>
+                    </div>
+
+                    <Separator />
+
+                    {/* Admin Notes */}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <Label htmlFor="admin-notes" className="text-sm font-medium">
+                          Admin Notes
+                        </Label>
+                      </div>
+                      <Textarea
+                        id="admin-notes"
+                        placeholder="Internal notes (only visible to admins)..."
+                        value={adminNotes}
+                        onChange={(e) => setAdminNotes(e.target.value)}
+                        rows={3}
+                        className="resize-none"
+                      />
+                      {hasNotesChanged && (
+                        <Button
+                          size="sm"
+                          onClick={handleSaveNotes}
+                          disabled={isSavingNotes}
+                        >
+                          {isSavingNotes ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            'Save Notes'
+                          )}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </BottomSheetSection>
