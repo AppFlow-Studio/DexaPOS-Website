@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-01-25)
 ## Current Position
 
 Phase: 1 of 7 (Menu Management)
-Plan: 4 of 4 in current phase
+Plan: 5 of 5 in current phase
 Status: Phase 1 complete
-Last activity: 2026-01-25 - Completed 01-04-PLAN.md
+Last activity: 2026-01-25 - Completed 01-05-PLAN.md
 
-Progress: [████░░░░░░] 100% of Phase 1
+Progress: [█████░░░░░] 100% of Phase 1
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 7.75 min
-- Total execution time: 0.52 hours
+- Total plans completed: 5
+- Average duration: 7 min
+- Total execution time: 0.58 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 1 | 4/4 | 31 min | 7.75 min |
+| 1 | 5/5 | 35 min | 7 min |
 
 **Recent Trend:**
-- Last 5 plans: 7, 8, 8, 8 min
-- Trend: Consistent pace around 7-8 min per plan
+- Last 5 plans: 8, 8, 8, 4 min
+- Trend: Efficient execution (4-8 min per plan)
 
 *Updated after each plan completion*
 
@@ -54,6 +54,8 @@ Recent decisions affecting current work:
 - Collapsible UI for nested modifier options display
 - Query audit_logs for last editor info (centralized audit tracking)
 - date-fns formatDistanceToNow for relative timestamps
+- Page route instead of sheet for menu details (better UX for complex data)
+- Clickable menu name + dropdown View Details for dual navigation paths
 
 ### Pending Todos
 
@@ -65,8 +67,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-01-25T18:06:00Z
-Stopped at: Completed Phase 1 (all 4 plans)
+Last session: 2026-01-25T20:13:36Z
+Stopped at: Completed Phase 1 (all 5 plans)
 Resume file: .planning/phases/02-pricing/PLAN-01.md (next phase)
 
 ### Phase 1 Plan Summary (Complete)
@@ -81,8 +83,12 @@ Resume file: .planning/phases/02-pricing/PLAN-01.md (next phase)
 - PLAN-03: Audit Information Display - COMPLETE
 - PLAN-04: Modifier Group Assignment to Items - COMPLETE
 
+**Wave 4:**
+- PLAN-05: Admin Menu Detail Page - COMPLETE
+
 **Phase 1 Deliverables:**
 - Full modifier group CRUD with inline item management
 - Menu schedule management with inline schedule creation
 - Audit information display (created_at, updated_at, last editor, admin notes)
 - Item-modifier group assignment with real-time UI
+- Admin menu detail page with categories, schedules, and settings tabs
