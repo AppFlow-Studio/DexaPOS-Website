@@ -43,6 +43,7 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
+  Eye,
 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -56,6 +57,7 @@ import { deleteAdminCategory } from '@/app/manage/actions/admin-merchant/menus'
 
 // Form Sheets
 import { CategoryFormSheet } from './sheets/CategoryFormSheet'
+import { CategoryDetailSheet } from './sheets/CategoryDetailSheet'
 
 // ============================================================================
 // MAIN COMPONENT
@@ -81,6 +83,10 @@ export function CategoriesTable({
   const [editingCategory, setEditingCategory] = useState<AdminCategory | null>(null)
   const [deleteCategoryConfirm, setDeleteCategoryConfirm] = useState<AdminCategory | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // Detail sheet state
+  const [detailSheetOpen, setDetailSheetOpen] = useState(false)
+  const [selectedCategory, setSelectedCategory] = useState<AdminCategory | null>(null)
 
   const queryClient = useQueryClient()
 
@@ -135,6 +141,17 @@ export function CategoriesTable({
     setCategorySheetMode('edit')
     setEditingCategory(category)
     setCategorySheetOpen(true)
+  }
+
+  const handleViewDetails = (category: AdminCategory) => {
+    setSelectedCategory(category)
+    setDetailSheetOpen(true)
+  }
+
+  const handleEditFromDetail = (category: AdminCategory) => {
+    setDetailSheetOpen(false)
+    setSelectedCategory(null)
+    handleEditCategory(category)
   }
 
   const handleDeleteCategory = async () => {
@@ -243,6 +260,7 @@ export function CategoriesTable({
                   isAllLocations={isAllLocations}
                   isExpanded={expandedIds.has(category.id)}
                   onToggle={() => toggleExpanded(category.id)}
+                  onViewDetails={() => handleViewDetails(category)}
                   onEdit={() => handleEditCategory(category)}
                   onDelete={() => setDeleteCategoryConfirm(category)}
                 />
@@ -260,6 +278,20 @@ export function CategoriesTable({
         locationId={locationId}
         mode={categorySheetMode}
         category={editingCategory}
+        onSuccess={invalidateCategories}
+      />
+
+      {/* Category Detail Sheet */}
+      <CategoryDetailSheet
+        open={detailSheetOpen}
+        onClose={() => {
+          setDetailSheetOpen(false)
+          setSelectedCategory(null)
+        }}
+        merchantId={merchantId}
+        locationId={locationId}
+        category={selectedCategory}
+        onEdit={handleEditFromDetail}
         onSuccess={invalidateCategories}
       />
 
@@ -306,6 +338,7 @@ interface CategoryRowProps {
   isAllLocations: boolean
   isExpanded: boolean
   onToggle: () => void
+  onViewDetails: () => void
   onEdit: () => void
   onDelete: () => void
 }
@@ -315,6 +348,7 @@ function CategoryRow({
   isAllLocations,
   isExpanded,
   onToggle,
+  onViewDetails,
   onEdit,
   onDelete,
 }: CategoryRowProps) {
@@ -398,6 +432,10 @@ function CategoryRow({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onViewDetails(); }}>
+                  <Eye className="h-4 w-4 mr-2" />
+                  View Details
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}>
                   <Pencil className="h-4 w-4 mr-2" />
                   Edit Category

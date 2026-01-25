@@ -86,6 +86,7 @@ import { CategoryFormSheet } from './sheets/CategoryFormSheet'
 import { ItemFormSheet } from './sheets/ItemFormSheet'
 import { ItemDetailSheet } from './sheets/ItemDetailSheet'
 import { MenuSchedulesSheet } from './sheets/MenuSchedulesSheet'
+import { MenuDetailSheet } from './sheets/MenuDetailSheet'
 
 // ============================================================================
 // HELPERS
@@ -140,6 +141,10 @@ export function MenusTable({
 
   const [scheduleSheetOpen, setScheduleSheetOpen] = useState(false)
   const [selectedMenuForSchedules, setSelectedMenuForSchedules] = useState<{id: string; name: string} | null>(null)
+
+  // Menu detail sheet state
+  const [menuDetailOpen, setMenuDetailOpen] = useState(false)
+  const [selectedMenuForDetails, setSelectedMenuForDetails] = useState<AdminMenu | null>(null)
 
   const queryClient = useQueryClient()
 
@@ -301,6 +306,32 @@ export function MenusTable({
     setScheduleSheetOpen(true)
   }
 
+  const handleViewMenuDetails = (menu: AdminMenu) => {
+    setSelectedMenuForDetails(menu)
+    setMenuDetailOpen(true)
+  }
+
+  const handleEditFromDetail = (menu: AdminMenu | AdminMenuWithCategories) => {
+    setMenuDetailOpen(false)
+    setSelectedMenuForDetails(null)
+    // Convert AdminMenuWithCategories to AdminMenu if needed
+    const adminMenu: AdminMenu = {
+      id: menu.id,
+      name: menu.name,
+      description: menu.description,
+      is_active: menu.is_active,
+      is_global: menu.is_global,
+      location_id: menu.location_id,
+      location_name: menu.location_name,
+      categories_count: menu.categories_count,
+      items_count: menu.items_count,
+      schedules_count: menu.schedules_count,
+      created_at: menu.created_at,
+      updated_at: menu.updated_at,
+    }
+    handleEditMenu(adminMenu)
+  }
+
   const invalidateSchedules = () => {
     if (selectedMenuForSchedules) {
       queryClient.invalidateQueries({ queryKey: adminKeys.merchantMenuSchedules(merchantId, selectedMenuForSchedules.id) })
@@ -394,6 +425,7 @@ export function MenusTable({
                   locationId={locationId}
                   isExpanded={expandedMenuIds.has(menu.id)}
                   onToggle={() => toggleMenuExpanded(menu.id)}
+                  onViewDetails={() => handleViewMenuDetails(menu)}
                   onEdit={() => handleEditMenu(menu)}
                   onDelete={() => setDeleteMenuConfirm(menu)}
                   onToggleActive={() => handleToggleActive(menu)}
@@ -476,6 +508,20 @@ export function MenusTable({
           invalidateSchedules()
           invalidateMenus()
         }}
+      />
+
+      {/* Menu Detail Sheet */}
+      <MenuDetailSheet
+        open={menuDetailOpen}
+        onClose={() => {
+          setMenuDetailOpen(false)
+          setSelectedMenuForDetails(null)
+        }}
+        merchantId={merchantId}
+        locationId={locationId}
+        menu={selectedMenuForDetails}
+        onEdit={handleEditFromDetail}
+        onSuccess={invalidateMenus}
       />
 
       {/* Delete Menu Confirmation */}
@@ -566,6 +612,7 @@ interface MenuRowProps {
   locationId: string | null
   isExpanded: boolean
   onToggle: () => void
+  onViewDetails: () => void
   onEdit: () => void
   onDelete: () => void
   onToggleActive: () => void
@@ -585,6 +632,7 @@ function MenuRow({
   locationId,
   isExpanded,
   onToggle,
+  onViewDetails,
   onEdit,
   onDelete,
   onToggleActive,
@@ -685,6 +733,10 @@ function MenuRow({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onViewDetails(); }}>
+                  <Eye className="h-4 w-4 mr-2" />
+                  View Details
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}>
                   <Pencil className="h-4 w-4 mr-2" />
                   Edit Menu
