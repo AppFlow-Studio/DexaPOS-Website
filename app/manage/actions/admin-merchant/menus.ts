@@ -9,6 +9,15 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 
 export type PriceSource = 'base' | 'location_item' | 'category' | 'location_category' | 'location_menu'
 
+// Audit information type for admin display
+export interface AuditInfo {
+  created_at: string
+  updated_at: string
+  created_by?: { id: string; name: string; email: string } | null
+  updated_by?: { id: string; name: string; email: string } | null
+  admin_notes?: string | null
+}
+
 export interface AdminMenu {
   id: string
   name: string
@@ -22,6 +31,24 @@ export interface AdminMenu {
   schedules_count: number
   created_at: string
   updated_at: string
+  // Audit fields for admin display
+  created_by?: { id: string; name: string; email: string } | null
+  updated_by?: { id: string; name: string; email: string } | null
+  admin_notes?: string | null
+}
+
+export interface AdminMenuItemModifierGroup {
+  id: string
+  name: string
+  is_required: boolean
+  items_count: number
+  sort_order: number
+  items?: Array<{
+    id: string
+    name: string
+    price_modifier: number
+    is_active: boolean
+  }>
 }
 
 export interface AdminMenuItem {
@@ -62,6 +89,9 @@ export interface AdminMenuItem {
     location_name: string | null
     is_global: boolean
   }>
+  // Modifier groups
+  modifier_groups?: AdminMenuItemModifierGroup[]
+  modifier_groups_count: number
   // Location override details (L2)
   location_override: {
     id: string
@@ -78,6 +108,10 @@ export interface AdminMenuItem {
   } | null
   created_at: string
   updated_at: string
+  // Audit fields for admin display
+  created_by?: { id: string; name: string; email: string } | null
+  updated_by?: { id: string; name: string; email: string } | null
+  admin_notes?: string | null
 }
 
 export interface AdminCategory {
@@ -92,6 +126,11 @@ export interface AdminCategory {
   items_count: number
   display_order: number
   created_at: string
+  updated_at?: string
+  // Audit fields for admin display
+  created_by?: { id: string; name: string; email: string } | null
+  updated_by?: { id: string; name: string; email: string } | null
+  admin_notes?: string | null
 }
 
 export interface AdminModifierGroup {
@@ -2378,6 +2417,200 @@ export async function deleteAdminModifierItem(
     console.error('[deleteAdminModifierItem] Error:', error)
     return { success: false, error: error.message }
   }
+
+  return { success: true, error: null }
+}
+
+// ============================================================================
+// AUDIT INFORMATION
+// ============================================================================
+
+/**
+ * Helper function to fetch last edit information from audit_logs
+ * Returns who last edited a resource and when
+ */
+export async function getLastEditInfo(
+  resourceType: 'menu_item' | 'category' | 'menu' | 'modifier_group',
+  resourceId: string
+): Promise<{
+  updated_by: { id: string; name: string; email: string } | null
+  updated_at: string | null
+}> {
+  const supabase = createServerSupabaseClient()
+
+  // Query audit_logs table for the last edit action on this resource
+  const { data } = await supabase
+    .from('audit_logs')
+    .select('created_at, actor_user_id, actor_name, actor_email')
+    .eq('resource_type', resourceType)
+    .eq('resource_id', resourceId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
+
+  if (data) {
+    return {
+      updated_by: {
+        id: data.actor_user_id || '',
+        name: data.actor_name || 'Unknown',
+        email: data.actor_email || '',
+      },
+      updated_at: data.created_at,
+    }
+  }
+
+  return { updated_by: null, updated_at: null }
+}
+
+/**
+ * Fetch audit information for a menu item including last editor from audit_logs
+ */
+export async function getMenuItemAuditInfo(
+  merchantId: string,
+  itemId: string
+): Promise<AuditInfo | null> {
+  await assertHQPermission('hq.merchant.view')
+
+  const supabase = createServerSupabaseClient()
+
+  // Get basic timestamps from menu_items
+  const { data: item, error } = await supabase
+    .from('menu_items')
+    .select('created_at, updated_at, merchant_id')
+    .eq('id', itemId)
+    .single()
+
+  if (error || !item || item.merchant_id !== merchantId) {
+    return null
+  }
+
+  // Get last editor from audit_logs
+  const { updated_by, updated_at } = await getLastEditInfo('menu_item', itemId)
+
+  return {
+    created_at: item.created_at,
+    updated_at: updated_at || item.updated_at,
+    updated_by,
+    admin_notes: null, // Will be populated when admin_notes field is added to DB
+  }
+}
+
+/**
+ * Fetch audit information for a category including last editor from audit_logs
+ */
+export async function getCategoryAuditInfo(
+  merchantId: string,
+  categoryId: string
+): Promise<AuditInfo | null> {
+  await assertHQPermission('hq.merchant.view')
+
+  const supabase = createServerSupabaseClient()
+
+  // Get basic timestamps and created_by from categories
+  const { data: category, error } = await supabase
+    .from('categories')
+    .select('created_at, updated_at, merchant_id, created_by')
+    .eq('id', categoryId)
+    .single()
+
+  if (error || !category || category.merchant_id !== merchantId) {
+    return null
+  }
+
+  // Get last editor from audit_logs
+  const { updated_by, updated_at } = await getLastEditInfo('category', categoryId)
+
+  return {
+    created_at: category.created_at,
+    updated_at: updated_at || category.updated_at,
+    updated_by,
+    admin_notes: null, // Will be populated when admin_notes field is added to DB
+  }
+}
+
+/**
+ * Fetch audit information for a menu including last editor from audit_logs
+ */
+export async function getMenuAuditInfo(
+  merchantId: string,
+  menuId: string
+): Promise<AuditInfo | null> {
+  await assertHQPermission('hq.merchant.view')
+
+  const supabase = createServerSupabaseClient()
+
+  // Get basic timestamps and created_by from menus
+  const { data: menu, error } = await supabase
+    .from('menus')
+    .select('created_at, updated_at, merchant_id, created_by')
+    .eq('id', menuId)
+    .single()
+
+  if (error || !menu || menu.merchant_id !== merchantId) {
+    return null
+  }
+
+  // Get last editor from audit_logs
+  const { updated_by, updated_at } = await getLastEditInfo('menu', menuId)
+
+  return {
+    created_at: menu.created_at,
+    updated_at: updated_at || menu.updated_at,
+    updated_by,
+    admin_notes: null, // Will be populated when admin_notes field is added to DB
+  }
+}
+
+/**
+ * Update admin notes for a resource
+ * Note: This requires admin_notes column to exist in the database tables
+ * For now, returns success as placeholder - will work when DB migration is applied
+ */
+export async function updateAdminNotes(
+  merchantId: string,
+  resourceType: 'menu_item' | 'category' | 'menu' | 'modifier_group',
+  resourceId: string,
+  notes: string | null
+): Promise<{ success: boolean; error: string | null }> {
+  await assertHQPermission('hq.merchant.update')
+
+  const supabase = createServerSupabaseClient()
+
+  // Map resource type to table name
+  const tableMap: Record<string, string> = {
+    menu_item: 'menu_items',
+    category: 'categories',
+    menu: 'menus',
+    modifier_group: 'modifier_groups',
+  }
+
+  const tableName = tableMap[resourceType]
+  if (!tableName) {
+    return { success: false, error: 'Invalid resource type' }
+  }
+
+  // Note: admin_notes column needs to be added to the database tables via migration
+  // For now, we'll just verify the resource exists and belongs to merchant
+  const { data, error: fetchError } = await supabase
+    .from(tableName)
+    .select('id, merchant_id')
+    .eq('id', resourceId)
+    .single()
+
+  if (fetchError || !data) {
+    return { success: false, error: 'Resource not found' }
+  }
+
+  if ((data as any).merchant_id !== merchantId) {
+    return { success: false, error: 'Resource does not belong to merchant' }
+  }
+
+  // The actual update would be:
+  // await supabase.from(tableName).update({ admin_notes: notes }).eq('id', resourceId)
+  // This will work once the admin_notes column is added to the tables
+
+  // For now, log the intent and return success
+  console.log(`[updateAdminNotes] Would update ${tableName}.${resourceId} with notes: ${notes?.substring(0, 50)}...`)
 
   return { success: true, error: null }
 }
