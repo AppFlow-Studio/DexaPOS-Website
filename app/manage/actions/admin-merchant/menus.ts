@@ -2614,3 +2614,219 @@ export async function updateAdminNotes(
 
   return { success: true, error: null }
 }
+
+// ============================================================================
+// ITEM-MODIFIER GROUP ASSIGNMENT
+// ============================================================================
+
+export async function getItemModifierGroups(
+  merchantId: string,
+  itemId: string
+): Promise<AdminMenuItemModifierGroup[]> {
+  await assertHQPermission('hq.merchant.view')
+
+  const supabase = createServerSupabaseClient()
+
+  // Verify item belongs to merchant
+  const { data: menuItem } = await supabase
+    .from('menu_items')
+    .select('id')
+    .eq('id', itemId)
+    .eq('merchant_id', merchantId)
+    .single()
+
+  if (!menuItem) {
+    return []
+  }
+
+  // Query item_modifier_groups junction table with modifier group details
+  const { data: assignments, error } = await supabase
+    .from('item_modifier_groups')
+    .select(`
+      sort_order,
+      modifier_groups!inner(
+        id,
+        name,
+        is_required,
+        modifier_group_items(
+          id,
+          name,
+          price_modifier,
+          is_active
+        )
+      )
+    `)
+    .eq('menu_item_id', itemId)
+    .order('sort_order', { ascending: true })
+
+  if (error) {
+    console.error('[getItemModifierGroups] Error:', error)
+    return []
+  }
+
+  return (assignments || []).map((assignment: any) => ({
+    id: assignment.modifier_groups.id,
+    name: assignment.modifier_groups.name,
+    is_required: assignment.modifier_groups.is_required,
+    items_count: assignment.modifier_groups.modifier_group_items?.length || 0,
+    sort_order: assignment.sort_order || 0,
+    items: (assignment.modifier_groups.modifier_group_items || []).map((item: any) => ({
+      id: item.id,
+      name: item.name,
+      price_modifier: Number(item.price_modifier || 0),
+      is_active: item.is_active,
+    })),
+  }))
+}
+
+export async function assignModifierGroupToItem(
+  merchantId: string,
+  itemId: string,
+  modifierGroupId: string,
+  sortOrder?: number
+): Promise<{ success: boolean; error: string | null }> {
+  await assertHQPermission('hq.merchant.update')
+
+  const supabase = createServerSupabaseClient()
+
+  // Verify item belongs to merchant
+  const { data: menuItem } = await supabase
+    .from('menu_items')
+    .select('id')
+    .eq('id', itemId)
+    .eq('merchant_id', merchantId)
+    .single()
+
+  if (!menuItem) {
+    return { success: false, error: 'Menu item not found' }
+  }
+
+  // Verify modifier group belongs to merchant
+  const { data: modifierGroup } = await supabase
+    .from('modifier_groups')
+    .select('id')
+    .eq('id', modifierGroupId)
+    .eq('merchant_id', merchantId)
+    .single()
+
+  if (!modifierGroup) {
+    return { success: false, error: 'Modifier group not found' }
+  }
+
+  // Check if already assigned
+  const { data: existing } = await supabase
+    .from('item_modifier_groups')
+    .select('id')
+    .eq('menu_item_id', itemId)
+    .eq('modifier_group_id', modifierGroupId)
+    .single()
+
+  if (existing) {
+    // Already assigned, return success
+    return { success: true, error: null }
+  }
+
+  // Get max sort order if not provided
+  let effectiveSortOrder = sortOrder
+  if (effectiveSortOrder === undefined) {
+    const { data: maxOrder } = await supabase
+      .from('item_modifier_groups')
+      .select('sort_order')
+      .eq('menu_item_id', itemId)
+      .order('sort_order', { ascending: false })
+      .limit(1)
+      .single()
+
+    effectiveSortOrder = (maxOrder?.sort_order ?? -1) + 1
+  }
+
+  // Insert the assignment
+  const { error } = await supabase
+    .from('item_modifier_groups')
+    .insert({
+      menu_item_id: itemId,
+      modifier_group_id: modifierGroupId,
+      sort_order: effectiveSortOrder,
+    })
+
+  if (error) {
+    console.error('[assignModifierGroupToItem] Error:', error)
+    return { success: false, error: error.message }
+  }
+
+  return { success: true, error: null }
+}
+
+export async function removeModifierGroupFromItem(
+  merchantId: string,
+  itemId: string,
+  modifierGroupId: string
+): Promise<{ success: boolean; error: string | null }> {
+  await assertHQPermission('hq.merchant.update')
+
+  const supabase = createServerSupabaseClient()
+
+  // Verify item belongs to merchant
+  const { data: menuItem } = await supabase
+    .from('menu_items')
+    .select('id')
+    .eq('id', itemId)
+    .eq('merchant_id', merchantId)
+    .single()
+
+  if (!menuItem) {
+    return { success: false, error: 'Menu item not found' }
+  }
+
+  // Delete the assignment
+  const { error } = await supabase
+    .from('item_modifier_groups')
+    .delete()
+    .eq('menu_item_id', itemId)
+    .eq('modifier_group_id', modifierGroupId)
+
+  if (error) {
+    console.error('[removeModifierGroupFromItem] Error:', error)
+    return { success: false, error: error.message }
+  }
+
+  return { success: true, error: null }
+}
+
+export async function updateItemModifierGroupOrder(
+  merchantId: string,
+  itemId: string,
+  modifierGroupIds: string[]
+): Promise<{ success: boolean; error: string | null }> {
+  await assertHQPermission('hq.merchant.update')
+
+  const supabase = createServerSupabaseClient()
+
+  // Verify item belongs to merchant
+  const { data: menuItem } = await supabase
+    .from('menu_items')
+    .select('id')
+    .eq('id', itemId)
+    .eq('merchant_id', merchantId)
+    .single()
+
+  if (!menuItem) {
+    return { success: false, error: 'Menu item not found' }
+  }
+
+  // Update sort_order for each modifier group
+  for (let i = 0; i < modifierGroupIds.length; i++) {
+    const { error } = await supabase
+      .from('item_modifier_groups')
+      .update({ sort_order: i })
+      .eq('menu_item_id', itemId)
+      .eq('modifier_group_id', modifierGroupIds[i])
+
+    if (error) {
+      console.error('[updateItemModifierGroupOrder] Error:', error)
+      return { success: false, error: error.message }
+    }
+  }
+
+  return { success: true, error: null }
+}
