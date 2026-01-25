@@ -340,6 +340,7 @@ import {
   getAdminModifierGroups,
   getAdminModifierGroupDetails,
   getAdminMenuStats,
+  getItemModifierGroups,
   type AdminMenu,
   type AdminMenuWithCategories,
   type AdminMenuItem,
@@ -350,6 +351,7 @@ import {
   type AdminModifierGroup,
   type AdminModifierGroupWithItems,
   type AdminMenuStats,
+  type AdminMenuItemModifierGroup,
   type PriceSource,
 } from '@/app/manage/actions/admin-merchant/menus'
 
@@ -482,6 +484,18 @@ export function useAdminModifierGroupDetails(
   })
 }
 
+export function useAdminItemModifierGroups(
+  merchantId: string,
+  itemId: string | null
+) {
+  return useQuery<AdminMenuItemModifierGroup[]>({
+    queryKey: adminKeys.merchantItemModifiers(merchantId, itemId || ''),
+    queryFn: () => (itemId ? getItemModifierGroups(merchantId, itemId) : []),
+    enabled: !!merchantId && !!itemId,
+    staleTime: 2 * 60 * 1000,
+  })
+}
+
 export function useAdminMenuStats(
   merchantId: string,
   locationId?: string | null
@@ -554,6 +568,7 @@ export type {
   AdminCategoryWithItems,
   AdminModifierGroup,
   AdminModifierGroupWithItems,
+  AdminMenuItemModifierGroup,
   AdminMenuStats,
   PriceSource,
   // Schedules

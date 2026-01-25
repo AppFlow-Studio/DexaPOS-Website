@@ -272,6 +272,15 @@ export const adminKeys = {
       locationId ?? 'all',
     ] as const,
 
+  merchantItemModifiers: (merchantId: string, itemId: string) =>
+    [
+      ...adminKeys.merchants(),
+      merchantId,
+      'item',
+      itemId,
+      'modifiers',
+    ] as const,
+
   merchantMenuStats: (merchantId: string, locationId?: string | null) =>
     [
       ...adminKeys.merchants(),
