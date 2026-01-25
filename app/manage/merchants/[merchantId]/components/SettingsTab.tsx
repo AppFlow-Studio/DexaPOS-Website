@@ -23,7 +23,7 @@ import {
     Plus,
     Globe,
 } from 'lucide-react'
-import { DeleteOrganizationDialog } from '../../../organizations/[organizationId]/componenets/DeleteOrganizationDialog'
+import { DeleteOrganizationDialog } from '../../../organizations/[organizationId]/components/DeleteOrganizationDialog'
 import { useState } from 'react'
 import { MerchantInfoModel } from '@/types/db-modles'
 import { useQuery } from '@tanstack/react-query'

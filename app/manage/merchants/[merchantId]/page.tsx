@@ -18,7 +18,7 @@ import {
 import { useMerchantInfo } from '../../hooks/useMerchantInfo'
 import { useMerchantDetails } from '@/lib/queries/use-merchants'
 import { MerchantInfoModel, UsersModel } from '@/types/db-modles'
-import { RemoveUserPopup } from '../../organizations/[organizationId]/componenets/RemoveUserPopup'
+import { RemoveUserPopup } from '../../organizations/[organizationId]/components/RemoveUserPopup'
 import { OverviewTab } from './components/OverviewTab'
 import { AnalyticsTab } from './components/AnalyticsTab'
 import { TransactionsTab } from './components/TransactionsTab'

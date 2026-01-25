@@ -53,7 +53,7 @@ import {
 } from 'lucide-react'
 import { useOrganizationUsers } from '../hooks/useOrganizationUsers'
 import { useUser } from '@clerk/nextjs'
-import { SendOrganizationMembersInviteButton } from '../organizations/[organizationId]/componenets/SendOrganizationMembersInviteButton'
+import { SendOrganizationMembersInviteButton } from '../organizations/[organizationId]/components/SendOrganizationMembersInviteButton'
 import { useOrganizationInfo } from '../hooks/useOrganizationInfo'
 import { useRouter } from 'next/navigation'
 
