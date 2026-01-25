@@ -49,11 +49,19 @@ import {
   User,
   Calendar,
   FileText,
+  ChevronRight,
+  Sliders,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 
 import {
   useAdminMenuItemDetails,
+  useAdminItemModifierGroups,
   type AdminMenuItem,
 } from '@/lib/queries/use-admin-merchant'
 import {
@@ -169,6 +177,12 @@ export function ItemDetailSheet({
     merchantId,
     open ? itemId : null,
     locationId
+  )
+
+  // Fetch modifier groups for this item
+  const { data: modifierGroups, isLoading: isLoadingModifiers } = useAdminItemModifierGroups(
+    merchantId,
+    open ? itemId : null
   )
 
   // Fetch audit info when item is loaded
@@ -435,6 +449,70 @@ export function ItemDetailSheet({
                     </div>
                   </BottomSheetSection>
                 )}
+
+                {/* Modifier Groups */}
+                <BottomSheetSection title="Modifier Groups">
+                  {isLoadingModifiers ? (
+                    <div className="flex items-center gap-2 py-4">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">Loading modifiers...</span>
+                    </div>
+                  ) : modifierGroups && modifierGroups.length > 0 ? (
+                    <div className="space-y-2">
+                      {modifierGroups.map((group) => (
+                        <Collapsible key={group.id}>
+                          <CollapsibleTrigger asChild>
+                            <div className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
+                              <div className="flex items-center gap-2">
+                                <ChevronRight className="h-4 w-4 transition-transform duration-200 [&[data-state=open]>svg]:rotate-90" />
+                                <Sliders className="h-4 w-4 text-muted-foreground" />
+                                <span className="font-medium">{group.name}</span>
+                                {group.is_required && (
+                                  <Badge variant="outline" className="text-xs">
+                                    Required
+                                  </Badge>
+                                )}
+                              </div>
+                              <span className="text-sm text-muted-foreground">
+                                {group.items_count} option{group.items_count !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <div className="ml-6 mt-2 space-y-1">
+                              {group.items?.map((modItem) => (
+                                <div
+                                  key={modItem.id}
+                                  className="flex justify-between text-sm p-2 bg-muted/30 rounded"
+                                >
+                                  <span className={!modItem.is_active ? 'text-muted-foreground line-through' : ''}>
+                                    {modItem.name}
+                                  </span>
+                                  {modItem.price_modifier !== 0 && (
+                                    <span
+                                      className={
+                                        modItem.price_modifier > 0
+                                          ? 'text-green-600 dark:text-green-400'
+                                          : 'text-red-600 dark:text-red-400'
+                                      }
+                                    >
+                                      {modItem.price_modifier > 0 ? '+' : ''}
+                                      {formatCurrency(modItem.price_modifier)}
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </CollapsibleContent>
+                        </Collapsible>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No modifier groups attached to this item.
+                    </p>
+                  )}
+                </BottomSheetSection>
 
                 {/* Settings */}
                 <BottomSheetSection title="Settings">
