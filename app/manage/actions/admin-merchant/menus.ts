@@ -19,6 +19,7 @@ export interface AdminMenu {
   location_name: string | null
   categories_count: number
   items_count: number
+  schedules_count: number
   created_at: string
   updated_at: string
 }
@@ -208,7 +209,8 @@ export async function getAdminMenus(
         categories(
           category_items(count)
         )
-      )
+      ),
+      menu_schedules(count)
     `)
     .eq('merchant_id', merchantId)
     .order('display_order', { ascending: true })
@@ -227,12 +229,13 @@ export async function getAdminMenus(
   }
 
   return (menus || []).map((menu: any) => {
-    // Count categories and items
+    // Count categories, items, and schedules
     const categoriesCount = menu.menu_categories?.length || 0
     let itemsCount = 0
     menu.menu_categories?.forEach((mc: any) => {
       itemsCount += mc.categories?.category_items?.length || 0
     })
+    const schedulesCount = menu.menu_schedules?.length || 0
 
     return {
       id: menu.id,
@@ -244,6 +247,7 @@ export async function getAdminMenus(
       location_name: menu.locations?.name || null,
       categories_count: categoriesCount,
       items_count: itemsCount,
+      schedules_count: schedulesCount,
       created_at: menu.created_at,
       updated_at: menu.updated_at,
     }
