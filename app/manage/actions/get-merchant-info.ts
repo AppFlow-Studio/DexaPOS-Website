@@ -12,7 +12,11 @@ export async function GetMerchantInfo(clerkOrgId: string) {
         organizations(
         imageURL, 
         members(*, users(*)),
-        pending_org_admin_invites(*, users(*))
+        pending_org_admin_invites(
+            *,
+            clerk_user:users!clerk_user_id(*),
+            invited_by_user:users!invited_by(*)
+        )
         ),
         carriers(*)
         `

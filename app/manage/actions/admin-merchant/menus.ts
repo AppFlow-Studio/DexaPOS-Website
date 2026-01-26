@@ -730,6 +730,20 @@ export async function getAdminMenuWithCategories(
 
   const supabase = createServerSupabaseClient()
   const effectiveLocationId = locationId === 'all' ? null : locationId
+  
+  // GET Merchant ID
+  const { data: merchant, error: merchantError } = await supabase
+    .from('merchants')
+    .select('id')
+    .eq('clerk_org_id', merchantId)
+    .single()
+
+  
+  if (merchantError || !merchant) {
+    console.error('[getAdminMenuWithCategories] Error getting merchant:', merchantError)
+    return null
+  }
+
 
   // Use the RPC that implements full 5-level cascade
   const { data, error } = await supabase.rpc('get_menu_with_categories', {
@@ -743,7 +757,7 @@ export async function getAdminMenuWithCategories(
   }
 
   // Verify menu belongs to merchant
-  if (data.merchant_id !== merchantId) {
+  if (data.merchant_id !== merchant.id) {
     console.error('[getAdminMenuWithCategories] Menu does not belong to merchant')
     return null
   }
@@ -2301,6 +2315,7 @@ export async function createAdminModifierItem(
       description: data.description || null,
       price_modifier: data.price_modifier,
       is_default: data.is_default ?? false,
+      merchant_id : merchantId,
       is_active: data.is_active ?? true,
       display_order: data.display_order || 0,
     })
@@ -2643,7 +2658,6 @@ export async function getItemModifierGroups(
   const { data: assignments, error } = await supabase
     .from('menu_item_modifier_groups')
     .select(`
-      sort_order,
       modifier_groups!inner(
         id,
         name,
@@ -2657,7 +2671,7 @@ export async function getItemModifierGroups(
       )
     `)
     .eq('menu_item_id', itemId)
-    .order('sort_order', { ascending: true })
+    // .order('sort_order', { ascending: true })
 
   if (error) {
     console.error('[getItemModifierGroups] Error:', error)

@@ -92,12 +92,12 @@ const navMain: NavGroup[] = [
                 icon: Building2,
                 permission: 'hq.merchant.view',
             },
-            {
-                title: 'Organizations',
-                url: '/manage/organizations',
-                icon: Layers,
-                permission: 'hq.org.view',
-            },
+            // {
+            //     title: 'Organizations',
+            //     url: '/manage/organizations',
+            //     icon: Layers,
+            //     permission: 'hq.org.view',
+            // },
             {
                 title: 'Transactions',
                 url: '/manage/transactions',
@@ -155,6 +155,7 @@ function AppSidebar() {
     const { data: userInfo, isLoading: userInfoLoading } = useUserInfo()
     const { role, hasPermission, isLoading: authLoading, canCreateMerchants } = useAdminAuth()
     const pathname = usePathname()
+    
     const { signOut } = useClerk()
 
     const isLoading = userInfoLoading || authLoading

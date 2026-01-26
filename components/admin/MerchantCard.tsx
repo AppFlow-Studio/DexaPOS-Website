@@ -37,8 +37,12 @@ export function MerchantCard({ merchant, onClick }: MerchantCardProps) {
         {/* Header */}
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-              <Image src={merchant} className="h-5 w-5 text-primary" />
+            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center relative overflow-hidden">
+              {merchant.logo_url ? (
+                <Image src={merchant.logo_url} alt={merchant.name} fill className="h-5 w-5 text-primary" />
+              ) : (
+                <Building2 className="h-5 w-5 text-primary" />
+              )}
             </div>
             <div>
               <h3 className="font-semibold text-foreground">{merchant.name}</h3>

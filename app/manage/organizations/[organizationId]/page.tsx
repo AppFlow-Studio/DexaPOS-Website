@@ -13,15 +13,16 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { MoreHorizontal, Shield, Settings, UserPlus2, Users, AlertTriangle, Trash2 } from 'lucide-react'
 import { useParams } from 'next/navigation';
 import { useState } from 'react'
-import { SendAdminInviteButton } from './componenets/SendAdminInviteButton'
-import { SendOrganizationMembersInviteButton } from './componenets/SendOrganizationMembersInviteButton'
+import { SendAdminInviteButton } from './components/SendAdminInviteButton'
+import { SendOrganizationMembersInviteButton } from './components/SendOrganizationMembersInviteButton'
 import { MerchantsModel, PendingOrgAdminInvitesModel, UsersModel } from '@/types/db-modles'
-import { RevokeAdminInvitePopup } from './componenets/RevokeAdminInvitePopup'
-import { RemoveUserPopup } from './componenets/RemoveUserPopup'
-import { ResendAdminInvitePopup } from './componenets/ResendAdminInvitePopup'
-import { AddMerchantButton } from './componenets/AddMerchantButtons'
-import { MerchantsTable } from './componenets/MerchantsTable'
-import { DeleteOrganizationDialog } from './componenets/DeleteOrganizationDialog'
+import { RevokeAdminInvitePopup } from './components/RevokeAdminInvitePopup'
+import { RemoveUserPopup } from './components/RemoveUserPopup'
+import { ResendAdminInvitePopup } from './components/ResendAdminInvitePopup'
+import { AddMerchantButton } from './components/AddMerchantButtons'
+import { MerchantsTable } from './components/MerchantsTable'
+import { DeleteOrganizationDialog } from './components/DeleteOrganizationDialog'
+import { AdminInviteWizard } from './components/AdminInviteWizard'
 export default function OrganizationInfoPage() {
     const { organizationId } = useParams()
     const { data, isLoading, error, refetch: refetchOrganizationInfo } = useOrganizationInfo(organizationId as string)

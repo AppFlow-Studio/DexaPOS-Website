@@ -106,12 +106,14 @@ const formatCurrency = (amount: number) =>
 // ============================================================================
 
 interface MenusTableProps {
+  clerkOrgId: string
   merchantId: string
   locationId: string | null
   isAllLocations: boolean
 }
 
 export function MenusTable({
+  clerkOrgId,
   merchantId,
   locationId,
   isAllLocations,
@@ -339,7 +341,7 @@ export function MenusTable({
     }
     queryClient.invalidateQueries({ queryKey: adminKeys.merchantSchedules(merchantId, locationId) })
   }
-
+   
   return (
     <>
       <Card>
@@ -422,6 +424,7 @@ export function MenusTable({
                 <MenuRow
                   key={menu.id}
                   menu={menu}
+                  clerkOrgId={clerkOrgId}
                   merchantId={merchantId}
                   locationId={locationId}
                   isExpanded={expandedMenuIds.has(menu.id)}
@@ -609,6 +612,7 @@ export function MenusTable({
 
 interface MenuRowProps {
   menu: AdminMenu
+  clerkOrgId: string
   merchantId: string
   locationId: string | null
   isExpanded: boolean
@@ -629,6 +633,7 @@ interface MenuRowProps {
 
 function MenuRow({
   menu,
+  clerkOrgId,
   merchantId,
   locationId,
   isExpanded,
@@ -648,7 +653,7 @@ function MenuRow({
 }: MenuRowProps) {
   // Fetch details only when expanded
   const { data: menuDetails, isLoading: detailsLoading } = useAdminMenuWithCategories(
-    merchantId,
+    clerkOrgId,
     isExpanded ? menu.id : null,
     locationId
   )
@@ -676,7 +681,7 @@ function MenuRow({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <Link
-                  href={`/manage/merchants/${merchantId}/menu/${menu.id}`}
+                  href={`/manage/merchants/${clerkOrgId}/menu/${menu.id}`}
                   className="font-medium truncate hover:underline"
                   onClick={(e) => e.stopPropagation()}
                 >
@@ -741,7 +746,7 @@ function MenuRow({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem asChild>
-                  <Link href={`/manage/merchants/${merchantId}/menu/${menu.id}`}>
+                  <Link href={`/manage/merchants/${clerkOrgId}/menu/${menu.id}`}>
                     <Eye className="h-4 w-4 mr-2" />
                     View Details
                   </Link>

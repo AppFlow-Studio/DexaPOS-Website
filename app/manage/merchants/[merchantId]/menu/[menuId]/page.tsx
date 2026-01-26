@@ -91,6 +91,7 @@ import {
   type AdminMenuCategory,
 } from '@/app/manage/actions/admin-merchant/menus'
 import { getAdminMenuSchedules } from '@/app/manage/actions/admin-merchant/menus'
+import { useMerchantId } from '@/app/manage/hooks/useMerchantId'
 
 // Form Sheets (reuse from MenuTab)
 import { MenuFormSheet } from '../../components/MenuTab/sheets/MenuFormSheet'
@@ -148,10 +149,14 @@ function getPriceSourceBadge(priceSource: string) {
 // ============================================================================
 
 export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps) {
-  const { merchantId, menuId } = use(params)
+  const { merchantId: clerkOrgId, menuId } = use(params)
   const router = useRouter()
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
+
+  // Fetch merchant UUID from clerk_org_id
+  const { data: merchantData, isLoading: isMerchantLoading } = useMerchantId(clerkOrgId)
+  const merchantId = merchantData?.id
 
   // Get location from URL search params (?location=uuid or ?location=all)
   const locationParam = searchParams.get('location')
@@ -183,13 +188,16 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
   const [schedules, setSchedules] = useState<MenuSchedule[]>([])
   const [isLoadingSchedules, setIsLoadingSchedules] = useState(false)
 
-  // Fetch menu with categories
+  // Fetch menu with categories (only when merchantId is available)
   const {
     data: menu,
-    isLoading,
+    isLoading: isMenuLoading,
     refetch,
     isFetching,
-  } = useAdminMenuWithCategories(merchantId, menuId, locationId)
+  } = useAdminMenuWithCategories(clerkOrgId, menuId, locationId)
+
+  // Combined loading state
+  const isLoading = isMerchantLoading || isMenuLoading
 
   // Initialize settings when menu loads
   useEffect(() => {
@@ -208,9 +216,10 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
     }
   }, [menu?.categories, hasCategoryOrderChanges])
 
-  // Load schedules
+  // Load schedules (only when merchantId is available)
   useEffect(() => {
     async function loadSchedules() {
+      if (!merchantId) return
       setIsLoadingSchedules(true)
       try {
         const data = await getAdminMenuSchedules(merchantId, menuId)
@@ -221,7 +230,7 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
         setIsLoadingSchedules(false)
       }
     }
-    if (menuId) {
+    if (merchantId && menuId) {
       loadSchedules()
     }
   }, [merchantId, menuId])
@@ -262,6 +271,7 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
 
   // Category visibility toggle
   const handleToggleCategoryVisibility = async (categoryId: string, isActive: boolean) => {
+    if (!merchantId) return
     const result = await toggleAdminCategoryInMenu(merchantId, menuId, categoryId, isActive)
     if (result.error) {
       toast.error('Failed to update visibility', { description: result.error })
@@ -293,6 +303,7 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
   }
 
   const handleSaveCategoryOrder = async () => {
+    if (!merchantId) return
     setIsSavingOrder(true)
     try {
       const categoryOrders = reorderedCategories.map((cat, index) => ({
@@ -365,6 +376,7 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
 
   // Settings save
   const handleSaveSettings = async () => {
+    if (!merchantId) return
     setIsSavingSettings(true)
     try {
       const result = await updateAdminMenu(merchantId, menuId, {
@@ -389,6 +401,7 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
 
   // Delete menu
   const handleDeleteMenu = async () => {
+    if (!merchantId) return
     setIsDeletingMenu(true)
     try {
       const result = await deleteAdminMenu(merchantId, menuId)
@@ -400,7 +413,7 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
 
       toast.success('Menu deleted')
       invalidateMenuList()
-      router.push(`/manage/merchants/${merchantId}?tab=menu`)
+      router.push(`/manage/merchants/${clerkOrgId}?tab=menu`)
     } catch (error) {
       toast.error('An unexpected error occurred')
     } finally {
@@ -411,12 +424,14 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
 
   // Invalidation helpers
   const invalidateMenu = () => {
+    if (!merchantId) return
     queryClient.invalidateQueries({
       queryKey: adminKeys.merchantMenuWithCategories(merchantId, menuId, locationId),
     })
   }
 
   const invalidateMenuList = () => {
+    if (!merchantId) return
     queryClient.invalidateQueries({
       queryKey: adminKeys.merchantMenus(merchantId, locationId),
     })
@@ -445,7 +460,7 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
           The menu you are looking for does not exist or you do not have access.
         </p>
         <Button asChild>
-          <Link href={`/manage/merchants/${merchantId}?tab=menu`}>
+          <Link href={`/manage/merchants/${clerkOrgId}?tab=menu`}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Menus
           </Link>
@@ -460,7 +475,7 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" asChild>
-            <Link href={`/manage/merchants/${merchantId}?tab=menu`}>
+            <Link href={`/manage/merchants/${clerkOrgId}?tab=menu`}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Link>
@@ -811,40 +826,44 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
         </TabsContent>
       </Tabs>
 
-      {/* Menu Form Sheet */}
-      <MenuFormSheet
-        open={menuFormOpen}
-        onClose={() => setMenuFormOpen(false)}
-        merchantId={merchantId}
-        locationId={locationId}
-        mode="edit"
-        menu={menu}
-        onSuccess={() => {
-          invalidateMenu()
-          invalidateMenuList()
-        }}
-      />
+      {/* Menu Form Sheet - only render when merchantId is available */}
+      {merchantId && (
+        <MenuFormSheet
+          open={menuFormOpen}
+          onClose={() => setMenuFormOpen(false)}
+          merchantId={merchantId}
+          locationId={locationId}
+          mode="edit"
+          menu={menu}
+          onSuccess={() => {
+            invalidateMenu()
+            invalidateMenuList()
+          }}
+        />
+      )}
 
-      {/* Item Form Sheet */}
-      <ItemFormSheet
-        open={itemFormOpen}
-        onClose={() => {
-          setItemFormOpen(false)
-          setEditingItem(null)
-          setEditingCategoryId(null)
-        }}
-        merchantId={merchantId}
-        locationId={locationId}
-        mode="edit"
-        item={editingItem}
-        categoryId={editingCategoryId}
-        onSuccess={() => {
-          invalidateMenu()
-          setItemFormOpen(false)
-          setEditingItem(null)
-          setEditingCategoryId(null)
-        }}
-      />
+      {/* Item Form Sheet - only render when merchantId is available */}
+      {merchantId && (
+        <ItemFormSheet
+          open={itemFormOpen}
+          onClose={() => {
+            setItemFormOpen(false)
+            setEditingItem(null)
+            setEditingCategoryId(null)
+          }}
+          merchantId={merchantId}
+          locationId={locationId}
+          mode="edit"
+          item={editingItem}
+          categoryId={editingCategoryId}
+          onSuccess={() => {
+            invalidateMenu()
+            setItemFormOpen(false)
+            setEditingItem(null)
+            setEditingCategoryId(null)
+          }}
+        />
+      )}
 
       {/* Delete Menu Confirmation */}
       <AlertDialog open={deleteMenuOpen} onOpenChange={setDeleteMenuOpen}>

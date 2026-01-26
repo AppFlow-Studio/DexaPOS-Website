@@ -10,6 +10,7 @@ const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID
 export function useAdminAuth(): AdminAuthContext {
   const { userId, orgId, isLoaded: clerkLoaded } = useAuth()
   const { session } = useSession()
+  console.log(session)
 
   const isHQAdmin = orgId === DEXA_HQ_ORG_ID
   
@@ -20,7 +21,7 @@ export function useAdminAuth(): AdminAuthContext {
       if (!userId || !isHQAdmin || !session) return null
 
       // Get Clerk token for Supabase auth
-      const token = session?.getToken()
+      const token = await session?.getToken()
       if (!token) return null
 
       const supabase = createBrowserSupabaseClient(token)
@@ -55,6 +56,7 @@ export function useAdminAuth(): AdminAuthContext {
 
   const isLoading = !clerkLoaded || (isHQAdmin && roleLoading)
   const permissions = adminData?.permissions || []
+  const isSuperAdmin = adminData?.role?.role_code === 'hq.super_admin'
 
   const hasPermission = (permission: HQPermission): boolean => {
     return permissions.includes(permission)
@@ -65,6 +67,7 @@ export function useAdminAuth(): AdminAuthContext {
     isAuthenticated: !!userId,
     isLoading,
     isHQAdmin,
+    isSuperAdmin,
 
     // Role and permissions
     role: adminData?.role || null,

@@ -97,7 +97,7 @@ export function CategoriesTable({
     refetch,
     isFetching,
   } = useAdminCategories(merchantId, locationId)
-
+ console.log(categories)
   // Filter categories by search
   const filteredCategories = (categories ?? []).filter(
     (cat) =>

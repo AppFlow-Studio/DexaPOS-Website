@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -13,9 +14,16 @@ import {
   DollarSign,
   Activity,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  UserPlus2,
+  Store,
 } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
+import { AdminInviteWizard } from './organizations/[organizationId]/components/AdminInviteWizard'
+import Link from 'next/link'
+
+// HQ Organization ID for direct admin invites
+const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID || 'org_33z36QibAMZy6kc2xZNYmDl5duh'
 
 const kpiData = [
   {
@@ -91,6 +99,8 @@ const merchantData = [
 ]
 
 export default function Dashboard() {
+  const [isAdminInviteOpen, setIsAdminInviteOpen] = useState(false)
+
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
@@ -222,9 +232,23 @@ export default function Dashboard() {
                   <div className="space-y-2">
                     <h4 className="font-medium">Quick Actions</h4>
                     <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline">Add Merchant</Button>
-                      <Button size="sm" variant="outline">Generate Report</Button>
-                      <Button size="sm" variant="outline">View Analytics</Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => setIsAdminInviteOpen(true)}
+                      >
+                        <UserPlus2 className="h-4 w-4 mr-2" />
+                        Invite Admin
+                      </Button>
+                      <Link href="/manage/create-merchant">
+                        <Button size="sm" variant="outline">
+                          <Store className="h-4 w-4 mr-2" />
+                          Add Merchant
+                        </Button>
+                      </Link>
+                      <Link href="/manage/analytics">
+                        <Button size="sm" variant="outline">View Analytics</Button>
+                      </Link>
                     </div>
                   </div>
                 </div>
@@ -361,6 +385,18 @@ export default function Dashboard() {
           </Tabs>
         </CardHeader>
       </Card>
+
+      {/* Admin Invite Wizard */}
+      <AdminInviteWizard
+        organizationId={DEXA_HQ_ORG_ID}
+        orgType="hq"
+        open={isAdminInviteOpen}
+        onOpenChange={setIsAdminInviteOpen}
+        onSuccess={() => {
+          // Optionally refresh data or show success message
+          console.log('Admin invited successfully')
+        }}
+      />
     </div>
   )
 }

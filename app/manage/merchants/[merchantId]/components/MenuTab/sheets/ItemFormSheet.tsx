@@ -165,6 +165,7 @@ export function ItemFormSheet({
     merchantId,
     isEdit ? item?.id ?? null : null
   )
+  console.log(itemModifierGroups)
 
   // Filter out already assigned groups
   const availableModifierGroups = (allModifierGroups || []).filter(
@@ -389,6 +390,7 @@ export function ItemFormSheet({
       setIsResetting(false)
     }
   }
+  console.log()
 
   return (
     <BottomSheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -409,7 +411,7 @@ export function ItemFormSheet({
         </BottomSheetHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full overflow-y-scroll ">
             <BottomSheetBody className="space-y-6">
               {/* Location Override Warning */}
               {isEdit && isLocationView && (

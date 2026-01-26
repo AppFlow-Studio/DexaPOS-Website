@@ -92,7 +92,7 @@ export function CategoryDetailSheet({
 
   const hasNotesChanged = adminNotes !== originalNotes
   const isLocationView = locationId && locationId !== 'all'
-
+ console.log(category)
   // Fetch audit info when category is loaded
   useEffect(() => {
     async function fetchAuditInfo() {

@@ -10,6 +10,7 @@ export interface MerchantSummary {
   name: string
   clerk_org_id: string
   type: string | null
+  logo_url: string | null
   created_at: string
   updated_at: string | null
   public_metadata: Record<string, unknown> | null

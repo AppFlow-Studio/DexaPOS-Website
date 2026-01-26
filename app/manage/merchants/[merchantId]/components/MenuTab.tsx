@@ -41,9 +41,10 @@ import { ModifiersTable } from './MenuTab/ModifiersTable'
 
 interface MenuTabProps {
   merchantDetails?: MerchantDetails | null
+  clerkOrgId: string
 }
 
-export function MenuTab({ merchantDetails }: MenuTabProps) {
+export function MenuTab({ merchantDetails, clerkOrgId }: MenuTabProps) {
   const [selectedLocationId, setSelectedLocationId] = useState<string>('all')
   const [activeSubTab, setActiveSubTab] = useState<'menus' | 'items' | 'categories' | 'modifiers'>('menus')
 
@@ -215,6 +216,7 @@ export function MenuTab({ merchantDetails }: MenuTabProps) {
 
         <TabsContent value="menus" className="mt-6">
           <MenusTable
+            clerkOrgId={clerkOrgId}
             merchantId={merchantId}
             locationId={isAllLocations ? null : selectedLocationId}
             isAllLocations={isAllLocations}

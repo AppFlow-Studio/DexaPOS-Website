@@ -3,6 +3,7 @@
 import { useParams } from 'next/navigation'
 import { useState } from 'react'
 import Link from 'next/link'
+import { useAuth } from '@clerk/nextjs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,9 +15,13 @@ import {
     AlertTriangle,
     Building2,
     RefreshCw,
+    ShieldAlert,
+    ArrowLeft,
 } from 'lucide-react'
 import { useMerchantInfo } from '../../hooks/useMerchantInfo'
 import { useMerchantDetails } from '@/lib/queries/use-merchants'
+import { useAdminAuth } from '@/lib/hooks/useAdminAuth'
+import { useAdminMerchantAccess } from '@/app/manage/hooks/useAdminMerchantAccess'
 import { MerchantInfoModel, UsersModel } from '@/types/db-modles'
 import { RemoveUserPopup } from '../../organizations/[organizationId]/components/RemoveUserPopup'
 import { OverviewTab } from './components/OverviewTab'
@@ -32,12 +37,22 @@ import { DevicesTab } from './components/DevicesTab'
 
 export default function MerchantInfoPage() {
     const { merchantId } = useParams()
+    const { userId } = useAuth()
+    const { isSuperAdmin, isLoading: authLoading } = useAdminAuth()
     const { data: merchantInfo, isLoading, isError, refetch: refetchMerchantInfo } = useMerchantInfo(merchantId as string)
     const [removeUserPopup, setRemoveUserPopup] = useState<UsersModel | null>(null)
     const [openRemoveUserPopup, setOpenRemoveUserPopup] = useState(false)
 
     // Get merchant UUID from merchantInfo (clerk_org_id -> merchant id)
     const merchantUUID = merchantInfo && !(merchantInfo instanceof Error) ? merchantInfo.id : undefined
+
+    // Fetch merchant access for non-super-admins
+    const { data: merchantAccess, isLoading: accessLoading } = useAdminMerchantAccess(userId || '')
+
+    // Check if user has access to this merchant
+    const hasAccess = isSuperAdmin || merchantAccess?.some(
+        access => access.merchantId === merchantUUID && access.isActive
+    )
 
     // Fetch real metrics using the merchant UUID
     const {
@@ -46,7 +61,8 @@ export default function MerchantInfoPage() {
         refetch: refetchDetails,
     } = useMerchantDetails(merchantUUID ?? '')
 
-    if (isLoading) {
+    // Loading state - wait for auth, access check, and merchant info
+    if (isLoading || authLoading || (!isSuperAdmin && accessLoading)) {
         return (
             <div className="flex flex-col items-center justify-center py-20">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-3"></div>
@@ -71,6 +87,25 @@ export default function MerchantInfoPage() {
                 <AlertTriangle className="h-8 w-8 text-destructive mb-2" />
                 <div className="text-destructive font-semibold mb-1">Something went wrong</div>
                 <div className="text-muted-foreground text-sm">{merchantInfo.message}</div>
+            </div>
+        )
+    }
+
+    // Access denied - user doesn't have permission to view this merchant
+    if (!hasAccess && merchantUUID) {
+        return (
+            <div className="flex flex-col items-center justify-center py-20">
+                <ShieldAlert className="h-12 w-12 text-muted-foreground mb-4" />
+                <div className="text-lg font-semibold mb-2">Access Denied</div>
+                <div className="text-muted-foreground text-sm text-center max-w-md mb-6">
+                    You don&apos;t have permission to view this merchant. Contact a Super Admin to request access.
+                </div>
+                <Link href="/manage/merchants">
+                    <Button variant="outline">
+                        <ArrowLeft className="h-4 w-4 mr-2" />
+                        Back to Merchants
+                    </Button>
+                </Link>
             </div>
         )
     }
@@ -201,7 +236,7 @@ export default function MerchantInfoPage() {
                                 </TabsContent>
 
                                 <TabsContent value="menu" className="mt-6">
-                                    <MenuTab merchantDetails={merchantDetails} />
+                                    <MenuTab merchantDetails={merchantDetails} clerkOrgId={merchantInfo?.clerk_org_id} />
                                 </TabsContent>
 
                                 <TabsContent value="devices" className="mt-6">

@@ -20,7 +20,8 @@ import type {
 export async function getMerchants(
   filters: MerchantFilters,
   page: number = 1,
-  pageSize: number = 20
+  pageSize: number = 20,
+  accessibleMerchantIds?: string[] // Optional: filter to only these merchant IDs (for non-super-admins)
 ): Promise<{ merchants: MerchantSummary[]; total: number }> {
   await assertHQPermission('hq.merchant.view')
 
@@ -31,6 +32,15 @@ export async function getMerchants(
   let query = supabase
     .from('admin_merchant_summary')
     .select('*', { count: 'exact' })
+
+  // Filter by accessible merchant IDs (for non-super-admins)
+  if (accessibleMerchantIds !== undefined) {
+    if (accessibleMerchantIds.length === 0) {
+      // User has no merchant access - return empty result
+      return { merchants: [], total: 0 }
+    }
+    query = query.in('id', accessibleMerchantIds)
+  }
 
   // Apply search filter
   if (filters.search && filters.search.trim() !== '') {

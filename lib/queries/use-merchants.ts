@@ -15,10 +15,14 @@ import type { MerchantFilters, MerchantSettingsUpdate } from '@/types/merchant'
 // MERCHANT LIST QUERY
 // ============================================================================
 
-export function useMerchants(filters: MerchantFilters, page: number = 1) {
+export function useMerchants(
+  filters: MerchantFilters, 
+  page: number = 1,
+  accessibleMerchantIds?: string[] // Optional: filter to only these merchant IDs (for non-super-admins)
+) {
   return useQuery({
-    queryKey: adminKeys.merchantList(filters, page),
-    queryFn: () => getMerchants(filters, page),
+    queryKey: [...adminKeys.merchantList(filters, page), accessibleMerchantIds],
+    queryFn: () => getMerchants(filters, page, 20, accessibleMerchantIds),
     staleTime: 30 * 1000, // 30 seconds
   })
 }

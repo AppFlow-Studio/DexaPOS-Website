@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@clerk/nextjs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,29 +25,46 @@ import {
     Clock,
     LayoutGrid,
     List,
+    ShieldAlert,
 } from 'lucide-react'
 import { useMerchants, useMerchantStats } from '@/lib/queries/use-merchants'
 import { useDebounce } from '@/lib/hooks/useDebounce'
 import { MerchantCard } from '@/components/admin/MerchantCard'
 import { useAdminAuth } from '@/lib/hooks/useAdminAuth'
+import { useAdminMerchantAccess } from '@/app/manage/hooks/useAdminMerchantAccess'
 import { PermissionGate } from '@/components/admin/PermissionGate'
 import type { MerchantFilters } from '@/types/merchant'
 import { DEFAULT_MERCHANT_FILTERS } from '@/types/merchant'
 import Link from 'next/link'
-
+import Image from 'next/image'
 export default function MerchantsPage() {
     const router = useRouter()
-    const { canCreateMerchants } = useAdminAuth()
+    const { userId } = useAuth()
+    const { canCreateMerchants, isSuperAdmin, isLoading: authLoading } = useAdminAuth()
     const [page, setPage] = useState(1)
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
     const [filters, setFilters] = useState<MerchantFilters>(DEFAULT_MERCHANT_FILTERS)
+
+    // Fetch accessible merchant IDs for non-super-admins
+    const { data: merchantAccess, isLoading: accessLoading } = useAdminMerchantAccess(userId || '')
 
     // Debounce search to avoid too many requests
     const debouncedSearch = useDebounce(filters.search, 300)
     const activeFilters = { ...filters, search: debouncedSearch }
 
-    // Fetch data
-    const { data, isLoading, isFetching, refetch } = useMerchants(activeFilters, page)
+    // Determine which merchant IDs to fetch
+    // Super admin: undefined (fetch all)
+    // Others: only their accessible merchant IDs
+    const accessibleMerchantIds = isSuperAdmin 
+        ? undefined 
+        : merchantAccess?.map(access => access.merchantId)
+
+    // Fetch data with role-based filtering
+    const { data, isLoading, isFetching, refetch } = useMerchants(
+        activeFilters, 
+        page, 
+        accessibleMerchantIds
+    )
     const { data: stats, isLoading: statsLoading } = useMerchantStats()
 
     const pageSize = 20
@@ -207,11 +225,25 @@ export default function MerchantsPage() {
                     </div>
 
                     {/* Content */}
-                    {isLoading ? (
+                    {isLoading || authLoading || (!isSuperAdmin && accessLoading) ? (
                         <MerchantGridSkeleton />
                     ) : data?.merchants.length === 0 ? (
-                        <div className="text-center py-12 text-muted-foreground">
-                            No merchants found matching your filters.
+                        <div className="text-center py-12">
+                            {!isSuperAdmin && (!merchantAccess || merchantAccess.length === 0) ? (
+                                <div className="flex flex-col items-center gap-3">
+                                    <ShieldAlert className="h-12 w-12 text-muted-foreground" />
+                                    <div>
+                                        <p className="font-medium text-lg">No Merchant Access</p>
+                                        <p className="text-muted-foreground">
+                                            You don&apos;t have access to any merchants yet. Contact a Super Admin to request access.
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="text-muted-foreground">
+                                    No merchants found matching your filters.
+                                </p>
+                            )}
                         </div>
                     ) : viewMode === 'grid' ? (
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -388,13 +420,16 @@ function MerchantListView({
                         onClick={() => onMerchantClick(merchant.clerk_org_id)}
                     >
                         <TableCell>
-                            <div>
-                                <div className="font-semibold">{merchant.name}</div>
-                                {merchant.type && (
-                                    <div className="text-sm text-muted-foreground capitalize">
-                                        {merchant.type}
-                                    </div>
-                                )}
+                            <div className="flex items-center gap-2">
+                                <Image src={merchant.logo_url || ''} alt={merchant.name} width={40} height={40} className="rounded-md object-cover " />
+                                <div className='flex flex-col'>
+                                    <div className="font-semibold">{merchant.name}</div>
+                                    {merchant.type && (
+                                        <div className="text-sm text-muted-foreground capitalize">
+                                            {merchant.type}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </TableCell>
                         <TableCell>
