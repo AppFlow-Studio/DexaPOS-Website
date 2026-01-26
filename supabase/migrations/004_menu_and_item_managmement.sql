@@ -338,7 +338,6 @@ BEGIN
         'name', m.name,
         'description', m.description,
         'is_active', m.is_active,
-        'display_order', m.display_order,
         'is_global', (m.location_id IS NULL),
         'is_location_owned', (m.location_id IS NOT NULL),
         'created_at', m.created_at,
@@ -348,7 +347,6 @@ BEGIN
             SELECT COALESCE(json_agg(
                 json_build_object(
                     'id', mc.id,
-                    'display_order', COALESCE(lco.display_order, mc.display_order),
                     'category', json_build_object(
                         'id', c.id,
                         'name', c.name,
@@ -357,7 +355,7 @@ BEGIN
                         'is_active', COALESCE(lco.is_active, c.is_active),
                         'has_override', (lco.id IS NOT NULL)
                     )
-                ) ORDER BY COALESCE(lco.display_order, mc.display_order)
+                ) 
             ), '[]'::json)
             FROM menu_categories mc
             JOIN categories c ON c.id = mc.category_id
@@ -370,7 +368,6 @@ BEGIN
             SELECT COALESCE(json_agg(
                 json_build_object(
                     'id', mim.id,
-                    'display_order', COALESCE(lmio.display_order, mim.display_order),
                     
                     -- Level 3: Menu-level pricing
                     'custom_price', mim.custom_price,
@@ -500,9 +497,59 @@ BEGIN
                             NULLIF(lio.stock_tracking_mode, 'use_default'),
                             mi.stock_tracking_mode
                         ),
-                        'current_stock', lio.current_stock
+                        'current_stock', lio.current_stock,
+--  3. NESTED MODIFIERS (The New Logic)
+                        'modifier_groups', (
+                            SELECT COALESCE(json_agg(
+                                json_build_object(
+                                    'id', mg.id,
+                                    'name', mg.name,
+                                    'min_selections', mg.min_selections,
+                                    'max_selections', mg.max_selections,
+                                    'is_required', mg.is_required,
+                                    
+                                    -- Group Availability Override
+                                    'is_active', COALESCE(lmgo.is_active, true),
+                                    
+                                    'items', (
+                                        SELECT COALESCE(json_agg(
+                                            json_build_object(
+                                                'id', mgi.id,
+                                                'name', mgi.name,
+                                                
+                                                -- Modifier Price: Location Override > Global Base
+                                                'price_modifier', COALESCE(lmio_mod.price_modifier, mgi.price_modifier),
+                                                
+                                                -- Modifier Availability: Location Override > Global Base
+                                                'is_active', (
+                                                    mgi.is_active = true 
+                                                    AND COALESCE(lmio_mod.is_active, true) = true
+                                                ),
+
+                                                -- Stock Status (Location Specific)
+                                                'stock_tracking_mode', COALESCE(lmio_mod.stock_tracking_mode, 'in_stock'),
+                                                'current_stock', lmio_mod.current_stock
+                                            ) ORDER BY mgi.name
+                                        ), '[]'::json)
+                                        FROM modifier_group_items mgi
+                                        -- LEFT JOIN: Check for Item Override
+                                        LEFT JOIN location_modifier_item_overrides lmio_mod
+                                            ON lmio_mod.modifier_group_item_id = mgi.id 
+                                            AND lmio_mod.location_id = p_location_id
+                                        WHERE mgi.modifier_group_id = mg.id
+                                    )
+                                ) ORDER BY mg.name
+                            ), '[]'::json)
+                            FROM menu_item_modifier_groups mimg
+                            JOIN modifier_groups mg ON mg.id = mimg.modifier_group_id
+                            -- LEFT JOIN: Check for Group Override
+                            LEFT JOIN location_modifier_group_overrides lmgo
+                                ON lmgo.modifier_group_id = mg.id 
+                                AND lmgo.location_id = p_location_id
+                            WHERE mimg.menu_item_id = mi.id
+                        )
                     )
-                ) ORDER BY COALESCE(lmio.display_order, mim.display_order)
+                )
             ), '[]'::json)
             FROM menu_item_menus mim
             JOIN menu_items mi ON mi.id = mim.menu_item_id
@@ -524,6 +571,8 @@ BEGIN
                     'schedule', json_build_object(
                         'id', s.id,
                         'name', s.name,
+                        'description', s.description,
+                        'is_active', s.is_active,
                         'schedule_time_slots', (
                             SELECT COALESCE(json_agg(
                                 json_build_object(
@@ -541,7 +590,8 @@ BEGIN
             ), '[]'::json)
             FROM menu_schedules ms
             JOIN schedules s ON s.id = ms.schedule_id
-            WHERE ms.menu_id = m.id
+            WHERE ms.menu_id = m.id 
+            AND ms.location_id = p_location_id
         )
     ) INTO result
     FROM menus m

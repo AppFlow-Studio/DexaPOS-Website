@@ -52,10 +52,14 @@ import {
     UserX,
 } from 'lucide-react'
 import { useOrganizationUsers } from '../hooks/useOrganizationUsers'
-import { useUser } from '@clerk/nextjs'
-import { SendOrganizationMembersInviteButton } from '../organizations/[organizationId]/componenets/SendOrganizationMembersInviteButton'
+import { useAuth, useUser } from '@clerk/nextjs'
+import { SendOrganizationMembersInviteButton } from '../organizations/[organizationId]/components/SendOrganizationMembersInviteButton'
 import { useOrganizationInfo } from '../hooks/useOrganizationInfo'
 import { useRouter } from 'next/navigation'
+import { AdminInviteWizard } from '../organizations/[organizationId]/components/AdminInviteWizard'
+
+// HQ Organization ID for direct admin invites
+const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID || 'org_33z36QibAMZy6kc2xZNYmDl5duh'
 
 
 const roleColors = {
@@ -73,28 +77,28 @@ const statusColors = {
 
 export default function UsersPage() {
     const router = useRouter()
-
+    const { userId, orgId } = useAuth()
     const [searchTerm, setSearchTerm] = useState('')
     const [roleFilter, setRoleFilter] = useState('all')
     const [statusFilter, setStatusFilter] = useState('all')
     const [isAddUserOpen, setIsAddUserOpen] = useState(false)
     const [activeTab, setActiveTab] = useState('users')
+    const [isAdminInviteOpen, setIsAdminInviteOpen] = useState(false)
     const { user } = useUser()
-    const { data: users, isLoading, error } = useOrganizationUsers(user?.publicMetadata.organizationId as string)
+    const { data: users, isLoading, error } = useOrganizationUsers(orgId as string)
     const { data: organizationInfo, refetch: refetchOrganizationInfo } = useOrganizationInfo(user?.publicMetadata.organizationId as string)
 
     if (isLoading) return <div>Loading...</div>
     if (error) return <div>Error: {error.message}</div>
     if (!users) return <div>No users found</div>
     if (users instanceof Error) return <div>Error: {users.message}</div>
-
     const filteredUsers = users?.members?.filter((user: any) => {
         const matchesSearch =
             user.users.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             user.users.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             user.users.email.toLowerCase().includes(searchTerm.toLowerCase())
 
-        const matchesRole = roleFilter === 'all' || user.users.public_metadata.role === roleFilter
+        const matchesRole = roleFilter === 'all' || user.role === roleFilter
         const matchesStatus = statusFilter === 'all' || user.users.public_metadata.status === statusFilter
 
         return matchesSearch && matchesRole && matchesStatus
@@ -125,9 +129,19 @@ export default function UsersPage() {
                         Manage user accounts, roles, and permissions across your organization.
                     </p>
                 </div>
+                <div className="flex items-center gap-2">
+                    <Button 
+                        variant="outline"
+                        onClick={() => setIsAdminInviteOpen(true)}
+                    >
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Invite Admin
+                    </Button>
+                    <SendOrganizationMembersInviteButton organizationId={user?.publicMetadata.organizationId as string} refetch={() => refetchOrganizationInfo()} role_types='hq' />
+                </div>
                 <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
                     <DialogTrigger asChild>
-                        <SendOrganizationMembersInviteButton organizationId={user?.publicMetadata.organizationId as string} refetch={() => refetchOrganizationInfo()} role_types='hq' />
+                        <Button className="hidden">Add User</Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-[425px]">
                         <DialogHeader>
@@ -337,7 +351,7 @@ export default function UsersPage() {
                                             </TableCell>
                                             <TableCell>
                                                 <Badge variant={(roleColors[user?.users?.public_metadata?.role as keyof typeof roleColors] || 'secondary') as "default" | "destructive" | "outline" | "secondary"}>
-                                                    {user?.users?.public_metadata?.role}
+                                                    {user?.role}
                                                 </Badge>
                                             </TableCell>
                                             {/* <TableCell>
@@ -401,7 +415,14 @@ export default function UsersPage() {
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Input placeholder="Search invites..." className="w-72" />
-                                    <SendOrganizationMembersInviteButton organizationId={user?.publicMetadata.organizationId as string} />
+                                    <Button 
+                                        variant="outline"
+                                        onClick={() => setIsAdminInviteOpen(true)}
+                                    >
+                                        <UserPlus className="h-4 w-4 mr-2" />
+                                        Invite Admin
+                                    </Button>
+                                    <SendOrganizationMembersInviteButton organizationId={user?.publicMetadata.organizationId as string} refetch={() => refetchOrganizationInfo()} role_types='hq' />
                                 </div>
                             </div>
                         </CardHeader>
@@ -507,7 +528,18 @@ export default function UsersPage() {
                         </CardContent>
                     </Card>
                 </TabsContent>
-            </Tabs >
-        </div >
+            </Tabs>
+
+            {/* Admin Invite Wizard */}
+            <AdminInviteWizard
+                organizationId={DEXA_HQ_ORG_ID}
+                orgType="hq"
+                open={isAdminInviteOpen}
+                onOpenChange={setIsAdminInviteOpen}
+                onSuccess={() => {
+                    refetchOrganizationInfo()
+                }}
+            />
+        </div>
     )
 }

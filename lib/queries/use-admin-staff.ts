@@ -1,0 +1,166 @@
+'use client'
+
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { adminKeys } from './admin-keys'
+import {
+  getAdminMerchantStaff,
+  adminResetStaffPin,
+  adminBulkResetPins,
+  adminToggleStaffStatus,
+  adminCreateStaff,
+  getMerchantLocationsForStaff,
+  getMerchantStaffRoles,
+  getAdminMerchantStaffStats,
+} from '@/app/manage/actions/admin-merchant/staff'
+import type { AdminCreateStaffData } from '@/types/staff'
+
+// ============================================================================
+// QUERY HOOKS
+// ============================================================================
+
+/**
+ * Get unified staff view for a merchant
+ */
+export function useAdminMerchantStaff(merchantId: string, locationId?: string | null) {
+  return useQuery({
+    queryKey: adminKeys.merchantStaff(merchantId),
+    queryFn: () => getAdminMerchantStaff(merchantId, locationId),
+    enabled: !!merchantId,
+    staleTime: 30 * 1000, // 30 seconds
+  })
+}
+
+/**
+ * Get staff statistics for a merchant
+ */
+export function useAdminMerchantStaffStats(merchantId: string) {
+  return useQuery({
+    queryKey: [...adminKeys.merchantStaff(merchantId), 'stats'],
+    queryFn: () => getAdminMerchantStaffStats(merchantId),
+    enabled: !!merchantId,
+    staleTime: 30 * 1000,
+  })
+}
+
+/**
+ * Get locations for staff assignment dropdown
+ */
+export function useMerchantLocationsForStaff(merchantId: string) {
+  return useQuery({
+    queryKey: [...adminKeys.merchantDetail(merchantId), 'locations-for-staff'],
+    queryFn: () => getMerchantLocationsForStaff(merchantId),
+    enabled: !!merchantId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  })
+}
+
+/**
+ * Get available staff roles for assignment
+ */
+export function useMerchantStaffRoles() {
+  return useQuery({
+    queryKey: ['staff-roles'],
+    queryFn: getMerchantStaffRoles,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+  })
+}
+
+// ============================================================================
+// MUTATION HOOKS
+// ============================================================================
+
+/**
+ * Reset PIN for a single staff member
+ */
+export function useAdminResetStaffPin() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      merchantId,
+      staffProfileId,
+      locationId,
+      customPin,
+    }: {
+      merchantId: string
+      staffProfileId: string
+      locationId: string
+      customPin?: string
+    }) => adminResetStaffPin(merchantId, staffProfileId, locationId, customPin),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: adminKeys.merchantStaff(variables.merchantId),
+      })
+    },
+  })
+}
+
+/**
+ * Bulk reset PINs for all staff at a merchant/location
+ */
+export function useAdminBulkResetPins() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      merchantId,
+      locationId,
+    }: {
+      merchantId: string
+      locationId?: string | null
+    }) => adminBulkResetPins(merchantId, locationId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: adminKeys.merchantStaff(variables.merchantId),
+      })
+    },
+  })
+}
+
+/**
+ * Toggle staff active status
+ */
+export function useAdminToggleStaffStatus() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      merchantId,
+      staffProfileId,
+      locationId,
+      newStatus,
+    }: {
+      merchantId: string
+      staffProfileId: string
+      locationId: string
+      newStatus: boolean
+    }) => adminToggleStaffStatus(merchantId, staffProfileId, locationId, newStatus),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: adminKeys.merchantStaff(variables.merchantId),
+      })
+    },
+  })
+}
+
+/**
+ * Create a new staff member
+ */
+export function useAdminCreateStaff() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      merchantId,
+      data,
+    }: {
+      merchantId: string
+      data: AdminCreateStaffData
+    }) => adminCreateStaff(merchantId, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: adminKeys.merchantStaff(variables.merchantId),
+      })
+    },
+  })
+}

@@ -2,7 +2,7 @@
 
 import { SignOutButton, useClerk, useSession } from '@clerk/nextjs'
 import { redirect, usePathname } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import {
     Sidebar,
     SidebarContent,
@@ -48,64 +48,101 @@ import {
     ShieldCheck,
     History,
     LogOut,
+    LucideIcon,
 } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { AnimatedThemeToggler } from '@/components/ui/animated-theme-toggler'
 import { useUserInfo } from './hooks/useUserInfo.'
+import { useAdminAuth } from '@/lib/hooks/useAdminAuth'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Badge } from '@/components/ui/badge'
 import Image from 'next/image'
+import type { HQPermission } from '@/types/admin'
 
-const navMain = [
+// Navigation item type with optional permission requirement
+interface NavItem {
+    title: string
+    url: string
+    icon: LucideIcon
+    permission?: HQPermission | HQPermission[]
+    group?: string
+}
+
+interface NavGroup {
+    title: string
+    items: NavItem[]
+}
+
+// Navigation configuration with permission requirements
+const navMain: NavGroup[] = [
     {
-        "title": "Operations",
-        "items": [
+        title: "Operations",
+        items: [
             {
                 title: 'Dashboard',
                 url: '/manage',
                 icon: LayoutDashboard,
-                group: 'Dashboard',
+                // Dashboard is visible to all HQ users
             },
             {
                 title: 'Merchants',
                 url: '/manage/merchants',
                 icon: Building2,
+                permission: 'hq.merchant.view',
+            },
+            // {
+            //     title: 'Organizations',
+            //     url: '/manage/organizations',
+            //     icon: Layers,
+            //     permission: 'hq.org.view',
+            // },
+            {
+                title: 'Transactions',
+                url: '/manage/transactions',
+                icon: CreditCard,
+                permission: 'hq.merchant.transactions',
             },
             {
-                title: 'Organizations',
-                url: '/manage/organizations',
-                icon: Layers,
+                title: 'Analytics',
+                url: '/manage/analytics',
+                icon: BarChart3,
+                permission: 'system.analytics.view',
             }
         ]
     },
-
     {
-        "title": "Internal Management",
-        "items": [
+        title: "Internal Management",
+        items: [
             {
                 title: 'Users',
                 url: '/manage/users',
-                icon: UserCheck
+                icon: UserCheck,
+                permission: 'hq.team.view',
             },
             {
                 title: 'Roles & Permissions',
                 url: '/manage/roles-permissions',
                 icon: ShieldCheck,
+                permission: 'hq.team.manage',
             },
             {
                 title: 'Audit Logs',
                 url: '/manage/audit-logs',
                 icon: History,
-            }]
+                permission: 'system.audit.view',
+            }
+        ]
     }
 ]
 
 const navFooter = [
     {
         title: 'Settings',
-        url: '#',
+        url: '/manage/settings',
         icon: Settings,
+        permission: 'system.config.manage' as HQPermission,
     },
     {
         title: 'Get Help',
@@ -115,55 +152,84 @@ const navFooter = [
 ]
 
 function AppSidebar() {
-    const { data: userInfo, isLoading, error } = useUserInfo()
+    const { data: userInfo, isLoading: userInfoLoading } = useUserInfo()
+    const { role, hasPermission, isLoading: authLoading, canCreateMerchants } = useAdminAuth()
     const pathname = usePathname()
+    
     const { signOut } = useClerk()
-    console.log(userInfo)
+
+    const isLoading = userInfoLoading || authLoading
+    // Filter navigation items based on user permissions
+    const filteredNavMain = useMemo(() => {
+        return navMain.map(group => ({
+            ...group,
+            items: group.items.filter(item => {
+                // If no permission required, show the item
+                if (!item.permission) return true
+                // Check if user has any of the required permissions
+                const permissions = Array.isArray(item.permission) ? item.permission : [item.permission]
+                return permissions.some(p => hasPermission(p))
+            })
+        })).filter(group => group.items.length > 0) // Remove empty groups
+    }, [hasPermission])
+
+    // Filter footer navigation based on permissions
+    const filteredNavFooter = useMemo(() => {
+        return navFooter.filter(item => {
+            if (!item.permission) return true
+            return hasPermission(item.permission as HQPermission)
+        })
+    }, [hasPermission])
+   console.log(role)
     return (
         <Sidebar variant="inset">
             <SidebarHeader>
                 <div className="flex items-center gap-2 px-4 py-2">
-                    {
-                        isLoading ? (
-                            <Skeleton className="h-8 w-8" />
-                        ) : (
-                            <>
-                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                                    {userInfo?.members?.[0]?.organizations?.imageURL ? (
-                                        <Image src={userInfo?.members?.[0]?.organizations?.imageURL} alt={userInfo?.members?.[0]?.organizations?.name} width={32} height={32} className='rounded-lg' />
-                                    ) : (
-                                        <Shield className="h-4 w-4 text-primary-foreground" />
-                                    )}
-                                </div>
-                                <div className="grid flex-1 text-left text-sm leading-tight">
-                                    <span className="truncate font-semibold">{userInfo?.members?.[0]?.organizations?.name}</span>
-                                    <span className="truncate text-xs text-muted-foreground">Admin Dashboard</span>
-                                </div>
-                            </>
-                        )
-                    }
-
-
+                    {isLoading ? (
+                        <Skeleton className="h-8 w-8" />
+                    ) : (
+                        <>
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+                                {userInfo?.members?.[0]?.organizations?.imageURL ? (
+                                    <Image src={userInfo?.members?.[0]?.organizations?.imageURL} alt={userInfo?.members?.[0]?.organizations?.name || 'Organization'} width={32} height={32} className='rounded-lg' />
+                                ) : (
+                                    <Shield className="h-4 w-4 text-primary-foreground" />
+                                )}
+                            </div>
+                            <div className="grid flex-1 text-left text-sm leading-tight">
+                                <span className="truncate font-semibold">{userInfo?.members?.[0]?.organizations?.name || 'DexaPOS HQ'}</span>
+                                <span className="truncate text-xs text-muted-foreground">Admin Dashboard</span>
+                            </div>
+                        </>
+                    )}
                 </div>
-                <Link href="/manage/create-merchant" className="px-4 pb-2">
-                    <Button className="w-full justify-start gap-2" size="sm">
-                        <Plus className="h-4 w-4" />
-                        Create Merchant
-                    </Button>
-                </Link>
+                {/* Only show Create Merchant button if user has permission */}
+                {canCreateMerchants && (
+                    <Link href="/manage/create-merchant" className="px-4 pb-2">
+                        <Button className="w-full justify-start gap-2" size="sm">
+                            <Plus className="h-4 w-4" />
+                            Create Merchant
+                        </Button>
+                    </Link>
+                )}
             </SidebarHeader>
             <SidebarContent>
                 <SidebarGroup>
                     <SidebarGroupContent>
                         <SidebarMenu>
-                            {navMain.map((item, index) => (
-                                <SidebarMenuItem key={item.title}>
+                            {filteredNavMain.map((group) => (
+                                <SidebarMenuItem key={group.title}>
                                     <SidebarGroup>
-                                        <SidebarGroupLabel>{item.title}</SidebarGroupLabel>
+                                        <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
                                         <SidebarMenu>
-                                            {item.items.map((item) => (
+                                            {group.items.map((item) => (
                                                 <SidebarMenuItem key={item.title}>
-                                                    <SidebarMenuButton asChild isActive={pathname.includes(item.url.split('/')[2]) || pathname === item.url}
+                                                    <SidebarMenuButton
+                                                        asChild
+                                                        isActive={
+                                                            pathname === item.url ||
+                                                            (item.url !== '/manage' && pathname.startsWith(item.url))
+                                                        }
                                                     >
                                                         <Link href={item.url}>
                                                             <item.icon className="h-4 w-4" />
@@ -179,27 +245,10 @@ function AppSidebar() {
                         </SidebarMenu>
                     </SidebarGroupContent>
                 </SidebarGroup>
-                {/* <SidebarGroup>
-                    <SidebarGroupLabel>Documents</SidebarGroupLabel>
-                    <SidebarGroupContent>
-                        <SidebarMenu>
-                            {data.navSecondary.map((item) => (
-                                <SidebarMenuItem key={item.title}>
-                                    <SidebarMenuButton asChild>
-                                        <Link href={item.url} className="text-primary">
-                                            <item.icon className="h-4 w-4" />
-                                            <span>{item.title}</span>
-                                        </Link>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
-                            ))}
-                        </SidebarMenu>
-                    </SidebarGroupContent>
-                </SidebarGroup> */}
             </SidebarContent>
             <SidebarFooter>
                 <SidebarMenu>
-                    {navFooter.map((item) => (
+                    {filteredNavFooter.map((item) => (
                         <SidebarMenuItem key={item.title}>
                             <SidebarMenuButton asChild>
                                 <Link href={item.url}>
@@ -211,18 +260,19 @@ function AppSidebar() {
                     ))}
                 </SidebarMenu>
                 <div className="flex items-center gap-2 p-2">
-
                     {isLoading ? (
                         <Skeleton className="h-8 w-8" />
                     ) : (
                         <>
                             <Avatar className="h-8 w-8">
-                                <AvatarImage src={userInfo?.avatar_url} alt={userInfo?.first_name} />
+                                <AvatarImage src={userInfo?.avatar_url} alt={userInfo?.first_name || ''} />
                                 <AvatarFallback>{userInfo?.first_name?.charAt(0)}{userInfo?.last_name?.charAt(0)}</AvatarFallback>
                             </Avatar>
                             <div className="grid flex-1 text-left text-sm leading-tight">
                                 <span className="truncate font-semibold">{userInfo?.first_name} {userInfo?.last_name}</span>
-                                <span className="truncate text-xs text-muted-foreground">{userInfo?.email}</span>
+                                <span className="truncate text-xs text-muted-foreground">
+                                    {role?.role_name || userInfo?.email}
+                                </span>
                             </div>
                         </>
                     )}
@@ -234,7 +284,16 @@ function AppSidebar() {
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-56">
-                            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                            <DropdownMenuLabel>
+                                <div className="flex flex-col gap-1">
+                                    <span>My Account</span>
+                                    {role && (
+                                        <Badge variant="secondary" className="w-fit text-xs">
+                                            {role.role_name}
+                                        </Badge>
+                                    )}
+                                </div>
+                            </DropdownMenuLabel>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem>
                                 <User className="mr-2 h-4 w-4" />

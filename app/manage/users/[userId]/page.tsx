@@ -1,7 +1,14 @@
 'use client'
 
 import { useParams } from 'next/navigation'
+import { useState } from 'react'
+import { useAuth } from '@clerk/nextjs'
 import { useGetInfoOfUser } from '../../hooks/useGetInfoOfUser'
+import { useAdminAuth } from '@/lib/hooks/useAdminAuth'
+import { useAdminMerchantAccess, useGrantMerchantAccess, useRevokeMerchantAccess } from '../../hooks/useAdminMerchantAccess'
+import { useMerchants } from '@/lib/queries/use-merchants'
+import { HQ_ROLES, HQRoleCode } from '@/types/admin'
+import { DEFAULT_MERCHANT_FILTERS } from '@/types/merchant'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -25,6 +32,13 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog'
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
+import {
     User,
     Mail,
     Shield,
@@ -36,12 +50,32 @@ import {
     Building2,
     Calendar,
     ExternalLink,
+    Store,
+    Plus,
+    X,
+    Lock,
 } from 'lucide-react'
 import Link from 'next/link'
 
 export default function UserInfoPage() {
-    const { userId } = useParams()
-    const { data: user, isLoading, error } = useGetInfoOfUser(userId as string)
+    const { userId: targetUserId } = useParams()
+    const { userId: currentUserId } = useAuth()
+    const { role: currentUserRole, isSuperAdmin } = useAdminAuth()
+    const { data: user, isLoading, error } = useGetInfoOfUser(targetUserId as string)
+    
+    // Merchant access management state
+    const [selectedMerchantToGrant, setSelectedMerchantToGrant] = useState<string>('')
+    const [isGrantDialogOpen, setIsGrantDialogOpen] = useState(false)
+    
+    // Fetch target user's merchant access
+    const { data: targetUserMerchantAccess, isLoading: accessLoading } = useAdminMerchantAccess(targetUserId as string)
+    
+    // Fetch all merchants for the grant dropdown (only super admins need this)
+    const { data: allMerchantsData } = useMerchants(DEFAULT_MERCHANT_FILTERS, 1, undefined)
+    
+    // Mutations for granting/revoking access
+    const grantAccessMutation = useGrantMerchantAccess()
+    const revokeAccessMutation = useRevokeMerchantAccess()
 
     if (isLoading) {
         return (
@@ -71,6 +105,49 @@ export default function UserInfoPage() {
                 </div>
             </div>
         )
+    }
+
+    // Get target user's HQ role from their membership
+    const targetUserHQMembership = user.members?.find((m: any) => 
+        m.role && (m.role.startsWith('hq.') || Object.keys(HQ_ROLES).includes(m.role))
+    )
+    const targetUserRoleCode = targetUserHQMembership?.role as HQRoleCode | undefined
+    const targetUserRoleLevel = targetUserRoleCode ? (HQ_ROLES[targetUserRoleCode]?.level || 0) : 0
+    const currentUserRoleLevel = currentUserRole?.level || 0
+    
+    // Can edit if current user has higher role level than target user
+    const canEditMerchantAccess = isSuperAdmin || currentUserRoleLevel > targetUserRoleLevel
+    
+    // Filter out merchants the target user already has access to
+    const availableMerchantsToGrant = allMerchantsData?.merchants?.filter(
+        (merchant) => !targetUserMerchantAccess?.some((access) => access.merchantId === merchant.id)
+    ) || []
+
+    const handleGrantAccess = async () => {
+        if (!selectedMerchantToGrant) return
+        
+        try {
+            await grantAccessMutation.mutateAsync({
+                adminUserId: targetUserId as string,
+                merchantId: selectedMerchantToGrant,
+                grantedBy: currentUserId || undefined,
+            })
+            setSelectedMerchantToGrant('')
+            setIsGrantDialogOpen(false)
+        } catch (error) {
+            console.error('Error granting merchant access:', error)
+        }
+    }
+
+    const handleRevokeAccess = async (merchantId: string) => {
+        try {
+            await revokeAccessMutation.mutateAsync({
+                adminUserId: targetUserId as string,
+                merchantId,
+            })
+        } catch (error) {
+            console.error('Error revoking merchant access:', error)
+        }
     }
 
     const getInitials = (firstName: string, lastName: string) => {
@@ -148,6 +225,7 @@ export default function UserInfoPage() {
                     <Tabs defaultValue="details" className="mt-6">
                         <TabsList>
                             <TabsTrigger value="details">Details</TabsTrigger>
+                            <TabsTrigger value="merchant-access">Merchant Access</TabsTrigger>
                             <TabsTrigger value="sessions">Sessions</TabsTrigger>
                             <TabsTrigger value="events">Events</TabsTrigger>
                         </TabsList>
@@ -301,6 +379,137 @@ export default function UserInfoPage() {
                                     </CardContent>
                                 </Card>
                             </div>
+                        </TabsContent>
+
+                        <TabsContent value="merchant-access" className="mt-6">
+                            <Card>
+                                <CardHeader>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <CardTitle>Merchant Access</CardTitle>
+                                            <CardDescription>
+                                                Merchants this user can access and manage
+                                                {!canEditMerchantAccess && (
+                                                    <span className="ml-2 text-yellow-600">(View only)</span>
+                                                )}
+                                            </CardDescription>
+                                        </div>
+                                        {canEditMerchantAccess && (
+                                            <Dialog open={isGrantDialogOpen} onOpenChange={setIsGrantDialogOpen}>
+                                                <DialogTrigger asChild>
+                                                    <Button>
+                                                        <Plus className="mr-2 h-4 w-4" />
+                                                        Grant Access
+                                                    </Button>
+                                                </DialogTrigger>
+                                                <DialogContent>
+                                                    <DialogHeader>
+                                                        <DialogTitle>Grant Merchant Access</DialogTitle>
+                                                        <DialogDescription>
+                                                            Select a merchant to grant access to {user.first_name} {user.last_name}
+                                                        </DialogDescription>
+                                                    </DialogHeader>
+                                                    <div className="py-4">
+                                                        <Select value={selectedMerchantToGrant} onValueChange={setSelectedMerchantToGrant}>
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder="Select a merchant" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {availableMerchantsToGrant.length === 0 ? (
+                                                                    <SelectItem value="none" disabled>No merchants available</SelectItem>
+                                                                ) : (
+                                                                    availableMerchantsToGrant.map((merchant) => (
+                                                                        <SelectItem key={merchant.id} value={merchant.id}>
+                                                                            {merchant.name}
+                                                                        </SelectItem>
+                                                                    ))
+                                                                )}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                    <DialogFooter>
+                                                        <Button variant="outline" onClick={() => setIsGrantDialogOpen(false)}>
+                                                            Cancel
+                                                        </Button>
+                                                        <Button 
+                                                            onClick={handleGrantAccess} 
+                                                            disabled={!selectedMerchantToGrant || grantAccessMutation.isPending}
+                                                        >
+                                                            {grantAccessMutation.isPending ? 'Granting...' : 'Grant Access'}
+                                                        </Button>
+                                                    </DialogFooter>
+                                                </DialogContent>
+                                            </Dialog>
+                                        )}
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    {accessLoading ? (
+                                        <div className="flex items-center justify-center py-8">
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                                        </div>
+                                    ) : !targetUserMerchantAccess || targetUserMerchantAccess.length === 0 ? (
+                                        <div className="text-center py-8 text-muted-foreground">
+                                            <Store className="h-12 w-12 mx-auto mb-4" />
+                                            <p>No merchant access assigned</p>
+                                            {canEditMerchantAccess && (
+                                                <p className="text-sm mt-2">
+                                                    Click &quot;Grant Access&quot; to assign merchants to this user.
+                                                </p>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {targetUserMerchantAccess.map((access) => (
+                                                <div 
+                                                    key={access.id} 
+                                                    className="flex items-center justify-between p-4 rounded-lg border bg-muted/30"
+                                                >
+                                                    <div className="flex items-center space-x-3">
+                                                        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                                            <Store className="h-5 w-5 text-primary" />
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-medium">{access.merchantName}</div>
+                                                            <div className="text-sm text-muted-foreground">
+                                                                Granted {access.grantedAt ? new Date(access.grantedAt).toLocaleDateString() : 'N/A'}
+                                                                {access.grantedByName && ` by ${access.grantedByName}`}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center space-x-2">
+                                                        <Badge variant="outline" className="bg-green-100 text-green-700">
+                                                            Active
+                                                        </Badge>
+                                                        {canEditMerchantAccess ? (
+                                                            <Button 
+                                                                variant="ghost" 
+                                                                size="sm"
+                                                                className="text-red-600 hover:text-red-700 hover:bg-red-100"
+                                                                onClick={() => handleRevokeAccess(access.merchantId)}
+                                                                disabled={revokeAccessMutation.isPending}
+                                                            >
+                                                                <X className="h-4 w-4" />
+                                                            </Button>
+                                                        ) : (
+                                                            <Lock className="h-4 w-4 text-muted-foreground" />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    
+                                    {!canEditMerchantAccess && targetUserMerchantAccess && targetUserMerchantAccess.length > 0 && (
+                                        <div className="mt-4 p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm flex items-center gap-2">
+                                            <Lock className="h-4 w-4" />
+                                            <span>
+                                                You can only view merchant access. Contact a user with a higher role level to make changes.
+                                            </span>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
                         </TabsContent>
 
                         <TabsContent value="sessions" className="mt-6">
