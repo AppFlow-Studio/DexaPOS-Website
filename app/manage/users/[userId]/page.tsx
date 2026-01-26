@@ -214,7 +214,7 @@ export default function UserInfoPage() {
                             <h1 className="text-3xl font-bold">{user.first_name} {user.last_name}</h1>
                             <div className="flex items-center space-x-3 mt-2">
                                 <Badge variant="outline" className="text-xs">
-                                    {userId}
+                                    {targetUserId}
                                 </Badge>
                                 <span className="text-muted-foreground">{user.email}</span>
                             </div>
