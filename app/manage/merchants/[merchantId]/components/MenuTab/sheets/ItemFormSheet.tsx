@@ -70,6 +70,8 @@ import {
   useAdminItemModifierGroups,
 } from '@/lib/queries/use-admin-merchant'
 import { adminKeys } from '@/lib/queries/admin-keys'
+import { useMerchantDetails } from '@/lib/queries/use-merchants'
+import { AdminPriceBreakdown } from '../components/AdminPriceBreakdown'
 
 // ============================================================================
 // CONSTANTS
@@ -166,6 +168,13 @@ export function ItemFormSheet({
     isEdit ? item?.id ?? null : null
   )
   console.log(itemModifierGroups)
+
+  // Fetch merchant details to get location names
+  const { data: merchantDetails } = useMerchantDetails(merchantId)
+  
+  const currentLocationName = isLocationView 
+    ? merchantDetails?.locations.find((l) => l.id === locationId)?.name || 'This Location'
+    : 'All Locations'
 
   // Filter out already assigned groups
   const availableModifierGroups = (allModifierGroups || []).filter(
@@ -546,90 +555,94 @@ export function ItemFormSheet({
                 {isLocationView && isEdit ? (
                   // Location override pricing
                   <>
-                    <div className="rounded-lg border p-3 mb-3 bg-muted/30">
-                      <p className="text-xs text-muted-foreground">
-                        Base Price: <span className="font-medium">${item?.base_price.toFixed(2)}</span>
-                        {item?.base_cash_price && (
-                          <> | Cash: <span className="font-medium">${item.base_cash_price.toFixed(2)}</span></>
-                        )}
-                      </p>
-                    </div>
+                    {/* Visual Price Breakdown */}
+                    {item && (
+                      <div className="mb-4">
+                        <AdminPriceBreakdown 
+                          item={item} 
+                          isAllLocations={false} 
+                          currentLocationName={currentLocationName} 
+                        />
+                      </div>
+                    )}
 
-                    <FormField
-                      control={form.control}
-                      name="override_price"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Location Price Override</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                              <Input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                placeholder="Leave empty to use base price"
-                                className="pl-9"
-                                {...field}
-                                value={field.value ?? ''}
-                                onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
-                              />
-                            </div>
-                          </FormControl>
-                          <FormDescription>
-                            Set a custom price for this location
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="override_cash_price"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Location Cash Price Override</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                              <Input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                placeholder="Leave empty to use base cash price"
-                                className="pl-9"
-                                {...field}
-                                value={field.value ?? ''}
-                                onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
-                              />
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="override_availability"
-                      render={({ field }) => (
-                        <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-base">Available at Location</FormLabel>
+                    <div className="rounded-lg border p-4 bg-muted/10 space-y-4">
+                       <FormField
+                        control={form.control}
+                        name="override_price"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Location Price Override</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder={item ? `Inherit Base: $${item.base_price.toFixed(2)}` : "Inherit Base"}
+                                  className="pl-9"
+                                  {...field}
+                                  value={field.value ?? ''}
+                                  onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                                />
+                              </div>
+                            </FormControl>
                             <FormDescription>
-                              Item can be ordered at this location
+                              Enter a value to set a specific price for this location (Level 2). Leave empty to inherit Level 1.
                             </FormDescription>
-                          </div>
-                          <FormControl>
-                            <Switch
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                            />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="override_cash_price"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Location Cash Price Override</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="Leave empty to use base cash price"
+                                  className="pl-9"
+                                  {...field}
+                                  value={field.value ?? ''}
+                                  onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="override_availability"
+                        render={({ field }) => (
+                          <FormItem className="flex items-center justify-between rounded-lg border bg-background p-4">
+                            <div className="space-y-0.5">
+                              <FormLabel className="text-base">Available at Location</FormLabel>
+                              <FormDescription>
+                                Item can be ordered at this location
+                              </FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                   </>
                 ) : (
                   // Base pricing (create or global edit)
