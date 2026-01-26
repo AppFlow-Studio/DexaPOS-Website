@@ -83,11 +83,15 @@ export async function getMerchantDetails(
 
   const supabase = createServerSupabaseClient()
 
+  // Determine if we're querying by internal ID or Clerk Org ID
+  const isClerkId = merchantId.startsWith('org_')
+  const idField = isClerkId ? 'clerk_org_id' : 'id'
+
   // Get merchant summary
   const { data: merchant, error: merchantError } = await supabase
     .from('admin_merchant_summary')
     .select('*')
-    .eq('id', merchantId)
+    .eq(idField, merchantId)
     .single()
 
   if (merchantError || !merchant) {
@@ -109,7 +113,7 @@ export async function getMerchantDetails(
       is_accepting_orders,
       timezone
     `)
-    .eq('merchant_id', merchantId)
+    .eq('merchant_id', merchant.id)
     .order('name')
 
   if (locationsError) {

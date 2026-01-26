@@ -27,9 +27,9 @@ export default clerkMiddleware(async (auth, req) => {
   }
 
   if (isInternalTeamRoutes(req)) {
-    // if( UserSession.orgId !== process.env.DEXA_POS_INTERNAL_TEAM_ID) {
-    //   return NextResponse.redirect(new URL('/dashboard', req.url));
-    // }
+    if( UserSession.orgId !== process.env.DEXA_POS_INTERNAL_TEAM_ID) {
+      return NextResponse.redirect(new URL('/dashboard', req.url));
+    }
     return NextResponse.next();
   }
 
