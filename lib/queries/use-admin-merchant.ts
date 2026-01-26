@@ -15,6 +15,14 @@ import {
   type AdminBestSellingItem,
 } from '@/app/manage/actions/admin-merchant/analytics'
 
+import {
+  getMerchantDetails,
+} from '@/app/manage/actions/merchants'
+
+import type {
+  MerchantDetails,
+} from '@/types/merchant'
+
 // Orders actions
 import {
   getAdminOrders,
@@ -57,6 +65,20 @@ function getDefaultDateRange() {
     from: toDateString(thirtyDaysAgo),
     to: toDateString(now),
   }
+}
+
+// ============================================================================
+// MERCHANT DETAILS HOOK
+// ============================================================================
+
+export function useAdminMerchantDetails(merchantId: string) {
+  return useQuery<MerchantDetails | null>({
+    queryKey: adminKeys.merchantDetail(merchantId),
+    queryFn: () => getMerchantDetails(merchantId),
+    enabled: !!merchantId,
+    // Longer stale time since merchant details don't change often
+    staleTime: 10 * 60 * 1000, 
+  })
 }
 
 // ============================================================================
@@ -573,4 +595,6 @@ export type {
   PriceSource,
   // Schedules
   AdminSchedule,
+  // Merchant
+  MerchantDetails,
 }

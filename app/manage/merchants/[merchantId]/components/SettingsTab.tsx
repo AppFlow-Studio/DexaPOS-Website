@@ -41,10 +41,12 @@ import {
 } from '@/types/tax'
 import { toast } from 'sonner'
 import type { Location } from '@/types/merchant_locations'
-import { OnlineStoreTab } from './OnlineStoreTab'
+
+
+import { MerchantDetails } from '@/types/merchant'
 
 interface SettingsTabProps {
-    merchantInfo: MerchantInfoModel
+    merchantInfo: MerchantDetails
     refetchMerchantInfo: () => void
 }
 
@@ -58,14 +60,9 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo }: SettingsTabPr
         percentage: string
     } | null>(null)
 
-    // Fetch locations for this merchant
-    const { data: locationsData, isLoading: locationsLoading } = useQuery({
-        queryKey: ['admin', 'merchant-locations', merchantInfo?.clerk_org_id],
-        queryFn: () => GetLocations(merchantInfo?.clerk_org_id as string),
-        enabled: !!merchantInfo?.clerk_org_id,
-    })
-
-    const locations: Location[] = locationsData || []
+    // Use locations from merchantInfo directly
+    const locations: Location[] = (merchantInfo.locations || []) as unknown as Location[]
+    const locationsLoading = false
 
     // Fetch tax rates for the merchant (or specific location)
     const { data: taxRatesData, isLoading: taxRatesLoading } = useAdminMerchantTaxRates(
@@ -98,7 +95,6 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo }: SettingsTabPr
 
     const handleSave = async () => {
         if (!editing || selectedLocationId === 'all') return
-
         const percentage = parseFloat(editing.percentage)
         if (isNaN(percentage) || percentage < 0 || percentage > 100) {
             toast.error('Percentage must be between 0 and 100')
@@ -167,10 +163,7 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo }: SettingsTabPr
                         <DollarSign className="h-4 w-4" />
                         Tax Settings
                     </TabsTrigger>
-                    <TabsTrigger value="online" className="gap-2">
-                        <Globe className="h-4 w-4" />
-                        Online Store
-                    </TabsTrigger>
+
                     <TabsTrigger value="general" className="gap-2">
                         <Settings className="h-4 w-4" />
                         General
@@ -411,14 +404,7 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo }: SettingsTabPr
                     )}
                 </TabsContent>
 
-                {/* Online Store Tab */}
-                <TabsContent value="online" className="space-y-6">
-                    <OnlineStoreTab
-                        merchantId={merchantInfo?.id as string}
-                        locations={locations}
-                        locationsLoading={locationsLoading}
-                    />
-                </TabsContent>
+
 
                 {/* General Settings Tab */}
                 <TabsContent value="general" className="space-y-6">

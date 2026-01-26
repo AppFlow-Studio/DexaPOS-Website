@@ -14,7 +14,7 @@ import {
     Store,
     Edit
 } from 'lucide-react'
-import { MerchantInfoModel } from '@/types/db-modles'
+import { MerchantDetails } from '@/types/merchant'
 import { useQuery } from '@tanstack/react-query'
 import { GetLocations } from '../../../../dashboard/actions/get-locations'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty'
 
 interface BusinessInfoTabProps {
-    merchantInfo: MerchantInfoModel
+    merchantInfo: MerchantDetails
 }
 
 // Business type options
@@ -35,14 +35,10 @@ const businessTypes = {
 }
 
 export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
-    const clerkOrgId = merchantInfo?.clerk_org_id
-    const { data: locations, isLoading: locationsLoading } = useQuery({
-        queryKey: ['merchant-locations', clerkOrgId],
-        queryFn: () => GetLocations(clerkOrgId || ''),
-        enabled: !!clerkOrgId,
-    })
+    // Use locations from merchantInfo directly (since we use MerchantDetails)
+    const locationsList = merchantInfo.locations || []
 
-    const locationsList = Array.isArray(locations) ? locations : []
+    const locationsLoading = false
 
     // Get business info from public_metadata or use defaults
     const businessInfo = (merchantInfo?.public_metadata as any) || {}
@@ -51,6 +47,10 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
     const einTaxId = businessInfo.ein_tax_id || 'Not provided'
     const businessType = businessInfo.business_type || 'Not specified'
     const businessLicenseNumber = businessInfo.business_license_number || 'Not provided'
+
+    const formatAddress = (loc: any) => {
+        return [loc.address_line1, loc.city, loc.state].filter(Boolean).join(', ')
+    }
 
     return (
         <Tabs defaultValue="legal" className="w-full">
@@ -235,7 +235,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                     <TableRow>
                                         <TableHead>Location Name</TableHead>
                                         <TableHead>Address</TableHead>
-                                        <TableHead>Created</TableHead>
+                                        <TableHead>Status</TableHead>
                                         <TableHead className="text-right">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -249,20 +249,24 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                                     </div>
                                                     <div>
                                                         <div className="font-medium">{location.name}</div>
-                                                        <Badge variant="outline" className="mt-1">Active</Badge>
+                                                        <Badge variant={location.is_active ? "outline" : "secondary"} className="mt-1">
+                                                            {location.is_active ? 'Active' : 'Inactive'}
+                                                        </Badge>
                                                     </div>
                                                 </div>
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                                     <MapPin className="h-4 w-4" />
-                                                    {location.address}
+                                                    {formatAddress(location)}
                                                 </div>
                                             </TableCell>
                                             <TableCell>
-                                                <div className="text-sm text-muted-foreground">
-                                                    {new Date(location.created_at).toLocaleDateString()}
-                                                </div>
+                                                {location.is_accepting_orders ? (
+                                                     <Badge variant="outline" className="border-green-200 text-green-700 bg-green-50">Online</Badge>
+                                                ) : (
+                                                     <Badge variant="outline" className="border-amber-200 text-amber-700 bg-amber-50">Offline</Badge>
+                                                )}
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <Button variant="ghost" size="sm">
@@ -288,7 +292,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                             <CardContent>
                                 <div className="text-2xl font-bold">{locationsList.length}</div>
                                 <p className="text-xs text-muted-foreground">
-                                    Active locations
+                                    Registered locations
                                 </p>
                             </CardContent>
                         </Card>
@@ -300,24 +304,21 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                             <CardContent>
                                 <div className="text-sm font-medium">{locationsList[0]?.name || 'N/A'}</div>
                                 <p className="text-xs text-muted-foreground">
-                                    {locationsList[0]?.address || 'No address'}
+                                    {formatAddress(locationsList[0]) || 'No address'}
                                 </p>
                             </CardContent>
                         </Card>
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Latest Location</CardTitle>
-                                <Calendar className="h-4 w-4 text-muted-foreground" />
+                                <CardTitle className="text-sm font-medium">Active Locations</CardTitle>
+                                <Store className="h-4 w-4 text-muted-foreground" />
                             </CardHeader>
                             <CardContent>
-                                <div className="text-sm font-medium">
-                                    {locationsList[0]?.name || 'N/A'}
+                                <div className="text-2xl font-bold">
+                                    {locationsList.filter((l: any) => l.is_active).length}
                                 </div>
                                 <p className="text-xs text-muted-foreground">
-                                    Added {locationsList[0]?.created_at
-                                        ? new Date(locationsList[0].created_at).toLocaleDateString()
-                                        : 'N/A'
-                                    }
+                                    Accepting orders
                                 </p>
                             </CardContent>
                         </Card>

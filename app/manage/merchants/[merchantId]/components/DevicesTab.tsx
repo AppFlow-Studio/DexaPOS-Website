@@ -24,9 +24,7 @@ import {
     Unlink,
     RefreshCw,
 } from 'lucide-react'
-import { MerchantInfoModel } from '@/types/db-modles'
-import { useQuery } from '@tanstack/react-query'
-import { GetLocations } from '../../../../dashboard/actions/locations'
+import { MerchantDetails } from '@/types/merchant'
 import { useState } from 'react'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -57,7 +55,8 @@ import { AddStationDialog } from './AddStationDialog'
 import { AddTerminalDialog } from './AddTerminalDialog'
 
 interface DevicesTabProps {
-    merchantInfo: MerchantInfoModel
+    merchantInfo: MerchantDetails
+    merchantId?: string // Optional override if needed
 }
 
 // Helper functions
@@ -103,9 +102,8 @@ const getTerminalTypeLabel = (type: string): string => {
 }
 
 export function DevicesTab({ merchantInfo }: DevicesTabProps) {
-    const merchantId = merchantInfo?.id
-    const clerkOrgId = merchantInfo?.clerk_org_id
-
+    const merchantId = merchantInfo.id
+    
     // Local state
     const [selectedLocationId, setSelectedLocationId] = useState<string>('all')
     const [searchTerm, setSearchTerm] = useState('')
@@ -113,12 +111,9 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
     const [isAddStationOpen, setIsAddStationOpen] = useState(false)
     const [isAddTerminalOpen, setIsAddTerminalOpen] = useState(false)
 
-    // Fetch locations
-    const { data: locations, isLoading: locationsLoading } = useQuery({
-        queryKey: ['merchant-locations', clerkOrgId],
-        queryFn: () => GetLocations(clerkOrgId || ''),
-        enabled: !!clerkOrgId,
-    })
+    // Use locations from merchantInfo directly
+    const locationsList = merchantInfo.locations || []
+    const locationsLoading = false
 
     // Fetch stations
     const {
@@ -154,7 +149,6 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
     const testConnectionMutation = useAdminTestTerminalConnection()
     const unlinkTerminalMutation = useAdminUnlinkTerminal()
 
-    const locationsList = Array.isArray(locations) ? locations : []
     const stations = stationsResult?.data || []
     const terminals = terminalsResult?.data || []
     const stationStats = stationStatsResult?.data

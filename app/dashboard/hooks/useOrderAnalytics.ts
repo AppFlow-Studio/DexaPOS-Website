@@ -32,12 +32,19 @@ function useClerkOrgId() {
 /**
  * Main analytics hook
  */
-export function useOrderAnalytics(dateFrom: Date, dateTo: Date) {
-  const clerkOrgId = useClerkOrgId();
+export function useOrderAnalytics(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
   const { selectedLocationId } = useLocationStore();
   const isAllLocations = useIsAllLocations();
 
-  const effectiveLocationId = isAllLocations ? null : selectedLocationId;
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId = locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
 
   return useQuery<OrderAnalytics>({
     queryKey: [
@@ -58,12 +65,19 @@ export function useOrderAnalytics(dateFrom: Date, dateTo: Date) {
 /**
  * Sales by date range hook
  */
-export function useSalesByDateRange(dateFrom: Date, dateTo: Date) {
-  const clerkOrgId = useClerkOrgId();
+export function useSalesByDateRange(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
   const { selectedLocationId } = useLocationStore();
   const isAllLocations = useIsAllLocations();
 
-  const effectiveLocationId = isAllLocations ? null : selectedLocationId;
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId = locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
 
   return useQuery<SalesByDateRange[]>({
     queryKey: [
@@ -87,13 +101,17 @@ export function useSalesByDateRange(dateFrom: Date, dateTo: Date) {
 export function useBestSellingItems(
   dateFrom: Date,
   dateTo: Date,
-  limit: number = 10
+  limit: number = 10,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
 ) {
-  const clerkOrgId = useClerkOrgId();
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
   const { selectedLocationId } = useLocationStore();
   const isAllLocations = useIsAllLocations();
 
-  const effectiveLocationId = isAllLocations ? null : selectedLocationId;
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId = locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
 
   return useQuery<BestSellingItem[]>({
     queryKey: [
@@ -121,12 +139,19 @@ export function useBestSellingItems(
 /**
  * Order type breakdown hook
  */
-export function useOrderTypeBreakdown(dateFrom: Date, dateTo: Date) {
-  const clerkOrgId = useClerkOrgId();
+export function useOrderTypeBreakdown(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
   const { selectedLocationId } = useLocationStore();
   const isAllLocations = useIsAllLocations();
 
-  const effectiveLocationId = isAllLocations ? null : selectedLocationId;
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId = locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
 
   return useQuery<OrderTypeBreakdown>({
     queryKey: [
@@ -147,12 +172,19 @@ export function useOrderTypeBreakdown(dateFrom: Date, dateTo: Date) {
 /**
  * Order stats hook
  */
-export function useOrderStats(dateFrom: Date, dateTo: Date) {
-  const clerkOrgId = useClerkOrgId();
+export function useOrderStats(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
   const { selectedLocationId } = useLocationStore();
   const isAllLocations = useIsAllLocations();
 
-  const effectiveLocationId = isAllLocations ? null : selectedLocationId;
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId = locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
 
   return useQuery<OrderStats>({
     queryKey: [
@@ -173,12 +205,19 @@ export function useOrderStats(dateFrom: Date, dateTo: Date) {
 /**
  * Voids Report Hook
  */
-export function useVoidsReport(dateFrom: Date, dateTo: Date) {
-  const clerkOrgId = useClerkOrgId();
+export function useVoidsReport(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
   const { selectedLocationId } = useLocationStore();
   const isAllLocations = useIsAllLocations();
 
-  const effectiveLocationId = isAllLocations ? null : selectedLocationId;
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId = locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
 
   return useQuery({
     queryKey: [
@@ -199,12 +238,19 @@ export function useVoidsReport(dateFrom: Date, dateTo: Date) {
 /**
  * Sales By Item Report Hook
  */
-export function useSalesByItemReport(dateFrom: Date, dateTo: Date) {
-  const clerkOrgId = useClerkOrgId();
+export function useSalesByItemReport(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
   const { selectedLocationId } = useLocationStore();
   const isAllLocations = useIsAllLocations();
 
-  const effectiveLocationId = isAllLocations ? null : selectedLocationId;
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId = locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
 
   return useQuery({
     queryKey: [
@@ -225,12 +271,19 @@ export function useSalesByItemReport(dateFrom: Date, dateTo: Date) {
 /**
  * Cash Flow Report Hook
  */
-export function useCashFlowReport(dateFrom: Date, dateTo: Date) {
-  const clerkOrgId = useClerkOrgId();
+export function useCashFlowReport(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
   const { selectedLocationId } = useLocationStore();
   const isAllLocations = useIsAllLocations();
 
-  const effectiveLocationId = isAllLocations ? null : selectedLocationId;
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId = locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
 
   return useQuery({
     queryKey: [
@@ -250,12 +303,19 @@ export function useCashFlowReport(dateFrom: Date, dateTo: Date) {
 /**
  * Financial KPIs Hook
  */
-export function useFinancialKPIs(dateFrom: Date, dateTo: Date) {
-  const clerkOrgId = useClerkOrgId();
+export function useFinancialKPIs(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
   const { selectedLocationId } = useLocationStore();
   const isAllLocations = useIsAllLocations();
 
-  const effectiveLocationId = isAllLocations ? null : selectedLocationId;
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId = locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
 
   return useQuery({
     queryKey: [

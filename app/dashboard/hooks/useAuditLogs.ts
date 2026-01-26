@@ -8,9 +8,11 @@ import { AuditLogFilters } from "@/types/audit-log";
 export function useAuditLogs(
   filters?: AuditLogFilters,
   limit: number = 50,
-  offset: number = 0
+  offset: number = 0,
+  orgIdOverride?: string
 ) {
-  const clerkOrgId = useClerkOrgId();
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
 
   return useQuery({
     queryKey: ["audit-logs", clerkOrgId, filters, limit, offset],

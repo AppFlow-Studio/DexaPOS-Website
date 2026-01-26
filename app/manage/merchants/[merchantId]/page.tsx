@@ -3,7 +3,6 @@
 import { useParams } from 'next/navigation'
 import { useState } from 'react'
 import Link from 'next/link'
-import { useAuth } from '@clerk/nextjs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,55 +13,28 @@ import {
     Download,
     AlertTriangle,
     Building2,
-    RefreshCw,
-    ShieldAlert,
-    ArrowLeft,
+    Store as StoreIcon
 } from 'lucide-react'
-import { useMerchantInfo } from '../../hooks/useMerchantInfo'
-import { useMerchantDetails } from '@/lib/queries/use-merchants'
-import { useAdminAuth } from '@/lib/hooks/useAdminAuth'
-import { useAdminMerchantAccess } from '@/app/manage/hooks/useAdminMerchantAccess'
-import { MerchantInfoModel, UsersModel } from '@/types/db-modles'
-import { RemoveUserPopup } from '../../organizations/[organizationId]/components/RemoveUserPopup'
+import { useAdminMerchantDetails } from '@/lib/queries/use-admin-merchant'
+import { MerchantDetails } from '@/types/merchant'
+import { MerchantInfoModel } from '@/types/db-modles'
 import { OverviewTab } from './components/OverviewTab'
-import { AnalyticsTab } from './components/AnalyticsTab'
 import { TransactionsTab } from './components/TransactionsTab'
-import { AuditLogsTab } from './components/AuditLogsTab'
 import { StaffTab } from './components/StaffTab'
+import { AuditLogsTab } from './components/AuditLogsTab'
 import { CustomersTab } from './components/CustomersTab'
-import { MenuTab } from './components/MenuTab'
+import { ProductsTab } from './components/ProductsTab'
 import { SettingsTab } from './components/SettingsTab'
 import { BusinessInfoTab } from './components/BusinessInfoTab'
 import { DevicesTab } from './components/DevicesTab'
+import { MenuTab } from './components/MenuTab'
+import { OnlineStoreTab } from './components/OnlineStoreTab'
 
-export default function MerchantInfoPage() {
+export default function MerchantDetailsPage() {
     const { merchantId } = useParams()
-    const { userId } = useAuth()
-    const { isSuperAdmin, isLoading: authLoading } = useAdminAuth()
-    const { data: merchantInfo, isLoading, isError, refetch: refetchMerchantInfo } = useMerchantInfo(merchantId as string)
-    const [removeUserPopup, setRemoveUserPopup] = useState<UsersModel | null>(null)
-    const [openRemoveUserPopup, setOpenRemoveUserPopup] = useState(false)
+    const { data: merchantDetails, isLoading, isError, refetch } = useAdminMerchantDetails(merchantId as string)
 
-    // Get merchant UUID from merchantInfo (clerk_org_id -> merchant id)
-    const merchantUUID = merchantInfo && !(merchantInfo instanceof Error) ? merchantInfo.id : undefined
-
-    // Fetch merchant access for non-super-admins
-    const { data: merchantAccess, isLoading: accessLoading } = useAdminMerchantAccess(userId || '')
-
-    // Check if user has access to this merchant
-    const hasAccess = isSuperAdmin || merchantAccess?.some(
-        access => access.merchantId === merchantUUID && access.isActive
-    )
-
-    // Fetch real metrics using the merchant UUID
-    const {
-        data: merchantDetails,
-        isLoading: isLoadingDetails,
-        refetch: refetchDetails,
-    } = useMerchantDetails(merchantUUID ?? '')
-
-    // Loading state - wait for auth, access check, and merchant info
-    if (isLoading || authLoading || (!isSuperAdmin && accessLoading)) {
+    if (isLoading) {
         return (
             <div className="flex flex-col items-center justify-center py-20">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-3"></div>
@@ -71,41 +43,14 @@ export default function MerchantInfoPage() {
         )
     }
 
-    if (isError) {
+    if (isError || !merchantDetails) {
         return (
             <div className="flex flex-col items-center justify-center py-20">
                 <AlertTriangle className="h-8 w-8 text-destructive mb-2" />
                 <div className="text-destructive font-semibold mb-1">Unable to load merchant</div>
-                <div className="text-muted-foreground text-sm">{String(isError)}</div>
-            </div>
-        )
-    }
-
-    if (merchantInfo instanceof Error) {
-        return (
-            <div className="flex flex-col items-center justify-center py-20">
-                <AlertTriangle className="h-8 w-8 text-destructive mb-2" />
-                <div className="text-destructive font-semibold mb-1">Something went wrong</div>
-                <div className="text-muted-foreground text-sm">{merchantInfo.message}</div>
-            </div>
-        )
-    }
-
-    // Access denied - user doesn't have permission to view this merchant
-    if (!hasAccess && merchantUUID) {
-        return (
-            <div className="flex flex-col items-center justify-center py-20">
-                <ShieldAlert className="h-12 w-12 text-muted-foreground mb-4" />
-                <div className="text-lg font-semibold mb-2">Access Denied</div>
-                <div className="text-muted-foreground text-sm text-center max-w-md mb-6">
-                    You don&apos;t have permission to view this merchant. Contact a Super Admin to request access.
-                </div>
-                <Link href="/manage/merchants">
-                    <Button variant="outline">
-                        <ArrowLeft className="h-4 w-4 mr-2" />
-                        Back to Merchants
-                    </Button>
-                </Link>
+                <Button variant="outline" asChild className="mt-4">
+                    <Link href="/manage/merchants">Back to Merchants</Link>
+                </Button>
             </div>
         )
     }
@@ -125,62 +70,31 @@ export default function MerchantInfoPage() {
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                             <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
-                                {merchantInfo?.organizations?.imageURL ? (
+                                {merchantDetails.logo_url ? (
                                     // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={merchantInfo?.organizations?.imageURL} alt={merchantInfo?.name} className="h-full w-full object-cover" />
+                                    <img src={merchantDetails.logo_url} alt={merchantDetails.name} className="h-full w-full object-cover" />
                                 ) : (
                                     <Store className="h-6 w-6 text-primary" />
                                 )}
                             </div>
                             <div>
-                                <CardTitle className="text-2xl font-semibold">{merchantInfo?.name}</CardTitle>
-                                {/* Carrier indicator -- Coming soon  */}
-                                {/* {merchantInfo?.carriers && (
-                                    <div className="mt-1 flex items-center gap-2 text-sm">
-                                        <div className="flex items-center gap-2 rounded-md border px-2 py-1">
-                                            <Building2 className="h-4 w-4 text-muted-foreground" />
-                                            <span className="text-muted-foreground">Carrier:</span>
-                                            <span className="font-medium text-foreground">{merchantInfo?.carriers?.name || 'Carrier'}</span>
-                                            <Link href={`/manage/organizations/${merchantInfo?.carriers?.clerk_org_id || ''}`} className="text-primary hover:underline ml-2">View</Link>
-                                        </div>
-                                    </div>
-                                )} */}
+                                <CardTitle className="text-2xl font-semibold">{merchantDetails.name}</CardTitle>
                                 <div className="flex items-center gap-2 mt-1">
-                                    <Badge variant="outline">ID: {merchantInfo?.clerk_org_id}</Badge>
-                                    <Badge className={
-                                        merchantDetails?.derived_status === 'active'
-                                            ? 'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400'
-                                            : merchantDetails?.derived_status === 'inactive'
-                                            ? 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400'
-                                            : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-400'
-                                    }>
-                                        {merchantDetails?.derived_status || merchantInfo?.public_metadata?.status || 'unknown'}
+                                    <Badge variant="outline">ID: {merchantDetails.clerk_org_id}</Badge>
+                                    <Badge variant={merchantDetails.derived_status === 'active' ? 'default' : 'secondary'}>
+                                        {merchantDetails.derived_status}
                                     </Badge>
                                     <span className="text-xs text-muted-foreground">
-                                        Created {merchantInfo?.created_at ? new Date(merchantInfo?.created_at).toLocaleDateString() : 'N/A'}
+                                        Created {new Date(merchantDetails.created_at).toLocaleDateString()}
                                     </span>
                                 </div>
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                    refetchMerchantInfo()
-                                    refetchDetails()
-                                }}
-                                disabled={isLoadingDetails}
-                            >
-                                <RefreshCw className={`h-4 w-4 mr-2 ${isLoadingDetails ? 'animate-spin' : ''}`} />
-                                Refresh
-                            </Button>
                             <Button variant="outline" size="sm">
                                 <Settings className="h-4 w-4 mr-2" /> Settings
                             </Button>
-                            <Button variant="outline" size="sm">
-                                <Download className="h-4 w-4 mr-2" /> Export Data
-                            </Button>
+                             {/* Export Data Button */}
                         </div>
                     </div>
                 </CardHeader>
@@ -189,79 +103,74 @@ export default function MerchantInfoPage() {
                     <Tabs defaultValue="overview" className="w-full">
                         <TabsList className="flex flex-wrap gap-x-3">
                             <TabsTrigger value="overview">Overview</TabsTrigger>
-                            <TabsTrigger value="analytics">Analytics</TabsTrigger>
-                            <TabsTrigger value="transactions">Transactions</TabsTrigger>
-                            <TabsTrigger value="audit">Audit Logs</TabsTrigger>
+                            <TabsTrigger value="business-info">Business Info</TabsTrigger>
                             <TabsTrigger value="staff">Staff</TabsTrigger>
                             <TabsTrigger value="customers">Customers</TabsTrigger>
+                            <TabsTrigger value="products">Products</TabsTrigger>
                             <TabsTrigger value="menu">Menu</TabsTrigger>
+                            <TabsTrigger value="online-store">Online Store</TabsTrigger>
                             <TabsTrigger value="devices">Devices</TabsTrigger>
+                            <TabsTrigger value="transactions">Transactions</TabsTrigger>
+                            <TabsTrigger value="audit">Audit Logs</TabsTrigger>
                             <TabsTrigger value="settings">Settings</TabsTrigger>
-                            <TabsTrigger value="business-info">Business Info</TabsTrigger>
                         </TabsList>
 
                         {/* Tab Contents */}
-                        {merchantInfo && (
-                            <>
-                                <TabsContent value="overview" className="mt-6">
-                                    <OverviewTab
-                                        merchantInfo={merchantInfo}
-                                        merchantDetails={merchantDetails}
-                                        isLoadingDetails={isLoadingDetails}
-                                    />
-                                </TabsContent>
+                        <TabsContent value="overview" className="mt-6">
+                            <OverviewTab merchantInfo={merchantDetails} />
+                        </TabsContent>
 
-                                <TabsContent value="analytics" className="mt-6">
-                                    <AnalyticsTab merchantDetails={merchantDetails} />
-                                </TabsContent>
+                        <TabsContent value="business-info" className="mt-6">
+                            <BusinessInfoTab merchantInfo={merchantDetails} />
+                        </TabsContent>
 
-                                <TabsContent value="transactions" className="mt-6">
-                                    <TransactionsTab merchantDetails={merchantDetails} />
-                                </TabsContent>
+                        <TabsContent value="staff" className="mt-6">
+                            <StaffTab 
+                                merchantInfo={merchantDetails as unknown as MerchantInfoModel} 
+                                merchantDetails={merchantDetails}
+                                refetchMerchantInfo={refetch} 
+                            />
+                        </TabsContent>
 
-                                <TabsContent value="audit" className="mt-6">
-                                    <AuditLogsTab />
-                                </TabsContent>
+                        <TabsContent value="customers" className="mt-6">
+                            <CustomersTab merchantInfo={merchantDetails} />
+                        </TabsContent>
 
-                                <TabsContent value="staff" className="mt-6">
-                                    <StaffTab
-                                        merchantInfo={merchantInfo}
-                                        merchantDetails={merchantDetails}
-                                        refetchMerchantInfo={refetchMerchantInfo}
-                                    />
-                                </TabsContent>
+                        <TabsContent value="products" className="mt-6">
+                            <ProductsTab merchantInfo={merchantDetails} />
+                        </TabsContent>
 
-                                <TabsContent value="customers" className="mt-6">
-                                    <CustomersTab />
-                                </TabsContent>
+                        <TabsContent value="devices" className="mt-6">
+                            <DevicesTab merchantId={merchantDetails.id} merchantInfo={merchantDetails} />
+                        </TabsContent>
 
-                                <TabsContent value="menu" className="mt-6">
-                                    <MenuTab merchantDetails={merchantDetails} clerkOrgId={merchantInfo?.clerk_org_id} />
-                                </TabsContent>
+                        <TabsContent value="transactions" className="mt-6">
+                             {/* TransactionsTab likely expects MerchantInfoModel or ID */}
+                            <TransactionsTab merchantInfo={merchantDetails as unknown as MerchantInfoModel} />
+                        </TabsContent>
 
-                                <TabsContent value="devices" className="mt-6">
-                                    <DevicesTab merchantInfo={merchantInfo} />
-                                </TabsContent>
+                        <TabsContent value="menu" className="mt-6">
+                            <MenuTab merchantDetails={merchantDetails} clerkOrgId={merchantDetails.clerk_org_id} />
+                        </TabsContent>
 
-                                <TabsContent value="settings" className="mt-6">
-                                    <SettingsTab merchantInfo={merchantInfo} refetchMerchantInfo={refetchMerchantInfo} />
-                                </TabsContent>
-                                <TabsContent value="business-info" className="mt-6">
-                                    <BusinessInfoTab merchantInfo={merchantInfo} />
-                                </TabsContent>
-                            </>
-                        )}
+                        <TabsContent value="online-store" className="mt-6">
+                            <OnlineStoreTab 
+                                merchantId={merchantDetails.id}
+                                locations={merchantDetails.locations as any[]} 
+                                locationsLoading={false}
+                            />
+                        </TabsContent>
+
+                        <TabsContent value="audit" className="mt-6">
+                            <AuditLogsTab merchantInfo={merchantDetails as unknown as MerchantInfoModel} />
+                        </TabsContent>
+
+                        <TabsContent value="settings" className="mt-6">
+                            <SettingsTab merchantInfo={merchantDetails} refetchMerchantInfo={refetch} />
+                        </TabsContent>
                     </Tabs>
                 </CardContent>
             </Card>
-
-            {/* Popups */}
-            <RemoveUserPopup
-                user={removeUserPopup!}
-                open={openRemoveUserPopup}
-                setOpen={setOpenRemoveUserPopup}
-                refetch={refetchMerchantInfo}
-            />
         </div>
     )
 }
