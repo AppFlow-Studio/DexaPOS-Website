@@ -131,6 +131,7 @@ export interface AdminCategory {
   created_by?: { id: string; name: string; email: string } | null
   updated_by?: { id: string; name: string; email: string } | null
   admin_notes?: string | null
+  items?: any[]
 }
 
 export interface AdminModifierGroup {
@@ -416,50 +417,40 @@ export async function getAdminCategories(
   const supabase = createServerSupabaseClient()
   const effectiveLocationId = locationId === 'all' ? null : locationId
 
-  // Build query for categories
-  let query = supabase
-    .from('categories')
-    .select(`
-      id,
-      name,
-      description,
-      image,
-      is_active,
-      is_global,
-      location_id,
-      display_order,
-      created_at,
-      locations(name),
-      category_items(count)
-    `)
-    .eq('merchant_id', merchantId)
-    .order('display_order', { ascending: true })
-    .order('name', { ascending: true })
-
-  // If location specified, show global categories + that location's categories
-  if (effectiveLocationId) {
-    query = query.or(`location_id.is.null,location_id.eq.${effectiveLocationId}`)
-  }
-
-  const { data: categories, error } = await query
+  // Use the same RPC as the dashboard to ensure consistency
+  // This returns full item details, effectively fetching "CategoriesWithItems"
+  const { data: categories, error } = await supabase.rpc('get_categories_for_location', {
+    p_merchant_id: merchantId,
+    p_location_id: effectiveLocationId || null,
+  })
 
   if (error) {
     console.error('[getAdminCategories] Error:', error)
     return []
   }
 
+  // Map RPC result to AdminCategory
   return (categories || []).map((cat: any) => ({
     id: cat.id,
     name: cat.name,
     description: cat.description,
     image: cat.image,
-    is_active: cat.is_active,
-    is_global: cat.is_global ?? (cat.location_id === null),
+    is_active: cat.effective_is_active ?? cat.is_active, // Use effective active state
+    is_global: cat.is_global,
     location_id: cat.location_id,
-    location_name: cat.locations?.name || null,
-    items_count: cat.category_items?.length || 0,
-    display_order: cat.display_order || 0,
+    location_name: cat.location_name,
+    items_count: cat.items?.length || 0, // Count from actual items
+    display_order: cat.effective_display_order ?? cat.display_order,
     created_at: cat.created_at,
+    updated_at: cat.updated_at,
+    // Optional: Pass items if we update the interface to support it
+    items: cat.items?.map((item: any) => ({
+      ...item,
+       // Normalize item fields if needed by UI
+       name: item.menu_item.name,
+       image: item.menu_item.image,
+       base_price: item.menu_item.base_price
+    }))
   }))
 }
 
@@ -554,9 +545,80 @@ export async function getAdminCategoryWithItems(
   }
 }
 
-// ============================================================================
-// MODIFIERS
-// ============================================================================
+// ... existing code ...
+
+export async function updateAdminCategoryItemsOrder(
+  merchantId: string,
+  categoryId: string,
+  itemOrders: Array<{ menuItemId: string; displayOrder: number }>
+) {
+  await assertHQPermission('hq.merchant.view')
+
+  if (!categoryId || !itemOrders?.length) {
+    return { error: 'Category ID and item orders are required' }
+  }
+
+  const supabase = createServerSupabaseClient()
+
+  // Update each item's display order
+  const updates = itemOrders.map(({ menuItemId, displayOrder }) =>
+    supabase
+      .from('category_items')
+      .update({
+        display_order: displayOrder,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('category_id', categoryId)
+      .eq('menu_item_id', menuItemId)
+  )
+
+  const results = await Promise.all(updates)
+  const errors = results.filter((r) => r.error)
+
+  if (errors.length > 0) {
+    console.error('[updateAdminCategoryItemsOrder] Error:', errors)
+    return { success: false, error: 'Failed to update some item orders' }
+  }
+
+  return { success: true }
+}
+
+export async function updateAdminCategoriesOrder(
+  merchantId: string,
+  categoryOrders: Array<{ categoryId: string; displayOrder: number }>,
+) {
+  await assertHQPermission("hq.merchant.view");
+
+  if (!categoryOrders?.length) {
+    return { error: "Category orders are required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  // Update each category's display order
+  const updates = categoryOrders.map(({ categoryId, displayOrder }) =>
+    supabase
+      .from("categories")
+      .update({
+        display_order: displayOrder,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", categoryId)
+      .eq("merchant_id", merchantId),
+  );
+
+  const results = await Promise.all(updates);
+  const errors = results.filter((r) => r.error);
+
+  if (errors.length > 0) {
+    console.error("[updateAdminCategoriesOrder] Error:", errors);
+    return { success: false, error: "Failed to update some category orders" };
+  }
+
+  return { success: true };
+}
+
+// ... existing code ...
 
 export async function getAdminModifierGroups(
   merchantId: string,
@@ -800,6 +862,7 @@ function transformToAdminMenuWithCategories(data: any): AdminMenuWithCategories 
     location_name: null, // RPC doesn't include location name, can fetch separately if needed
     categories_count: categories.length,
     items_count: categories.reduce((sum, cat) => sum + cat.items.length, 0),
+    schedules_count: data.schedules_count || 0,
     created_at: data.created_at,
     updated_at: data.updated_at,
     categories,
@@ -927,6 +990,7 @@ export async function createAdminMenu(
       location_name: (menu as any).locations?.name || null,
       categories_count: 0,
       items_count: 0,
+      schedules_count: 0,
       created_at: menu.created_at,
       updated_at: menu.updated_at,
     },
@@ -985,6 +1049,7 @@ export async function updateAdminMenu(
       location_name: (menu as any).locations?.name || null,
       categories_count: (menu as any).menu_categories?.length || 0,
       items_count: 0,
+      schedules_count: 0,
       created_at: menu.created_at,
       updated_at: menu.updated_at,
     },
@@ -1248,6 +1313,7 @@ export async function addCategoryToMenu(
   const { error } = await supabase
     .from('menu_categories')
     .insert({
+      merchant_id: merchantId,
       menu_id: menuId,
       category_id: categoryId,
       display_order: displayOrder || 0,
@@ -1416,6 +1482,8 @@ export async function createAdminMenuItem(
       stock_tracking_mode: item.stock_tracking_mode,
       current_stock: null,
       categories: [],
+      modifier_groups: [],
+      modifier_groups_count: 0,
       location_override: null,
       created_at: item.created_at,
       updated_at: item.updated_at,

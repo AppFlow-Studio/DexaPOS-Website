@@ -59,9 +59,13 @@ interface AddItemToCategoryWizardProps {
   onOpenChange: (open: boolean) => void;
   categoryId: string;
   categoryName: string;
-  clerkOrgId: string;
+  clerkOrgId?: string; // Made optional
   existingItemIds: string[]; // Items already in this category
   onSuccess?: () => void;
+  // Admin Props
+  merchantId?: string;
+  locationId?: string | null;
+  isAllLocations?: boolean;
 }
 
 // Form schema for creating new items
@@ -75,24 +79,30 @@ const itemSchema = z.object({
 
 type ItemFormValues = z.infer<typeof itemSchema>;
 
-// ============================================================================
-// COMPONENT
-// ============================================================================
-
 export function AddItemToCategoryWizard({
   open,
   onOpenChange,
   categoryId,
   categoryName,
-  clerkOrgId,
+  clerkOrgId = "",
   existingItemIds,
   onSuccess,
+  merchantId: propMerchantId,
+  locationId: propLocationId,
+  isAllLocations: propIsAllLocations,
 }: AddItemToCategoryWizardProps) {
   const queryClient = useQueryClient();
-  const { selectedLocationId } = useLocationStore();
-  const isAllLocations = useIsAllLocations();
+  
+  // Dashboard hooks - safely access values or fallback
+  const locationStore = useLocationStore();
+  const dashboardIsAllLocations = useIsAllLocations();
   const { data: userInfo } = useUserInfo();
-  const merchantId = userInfo?.members?.[0]?.organizations?.merchants?.id || "";
+
+  // effective values
+  const merchantId = propMerchantId || userInfo?.members?.[0]?.organizations?.merchants?.id || "";
+  const selectedLocationId = propLocationId !== undefined ? propLocationId : locationStore.selectedLocationId;
+  const isAllLocations = propIsAllLocations !== undefined ? propIsAllLocations : dashboardIsAllLocations;
+
   // State
   const [activeTab, setActiveTab] = React.useState<"existing" | "create">(
     "existing",
@@ -119,21 +129,25 @@ export function AddItemToCategoryWizard({
 
   // Fetch all items when wizard opens
   React.useEffect(() => {
-    if (open && clerkOrgId) {
-      setIsLoadingItems(true);
-      GetMenuItems(clerkOrgId)
-        .then((items) => {
-          setAllItems(items as MenuItemsModel[]);
-        })
-        .catch((err) => {
-          console.error("Failed to fetch items:", err);
-          toast.error("Failed to load items");
-        })
-        .finally(() => {
-          setIsLoadingItems(false);
-        });
+    if (open) {
+       setIsLoadingItems(true);
+       
+       // Use selectedLocationId if we are in a specific location view, otherwise null (global items)
+       const locId = (!isAllLocations && selectedLocationId) ? selectedLocationId : null;
+       
+       GetMenuItems(clerkOrgId, locId, merchantId || undefined)
+         .then((items) => {
+           setAllItems(items as MenuItemsModel[]);
+         })
+         .catch((err) => {
+           console.error("Failed to fetch items:", err);
+           toast.error("Failed to load items");
+         })
+         .finally(() => {
+           setIsLoadingItems(false);
+         });
     }
-  }, [open, clerkOrgId]);
+  }, [open, clerkOrgId, merchantId, isAllLocations, selectedLocationId]);
 
   // Filter items - exclude those already in category
   const availableItems = React.useMemo(() => {
@@ -260,7 +274,7 @@ export function AddItemToCategoryWizard({
 
     try {
       const result = await CreateItemInCategory(
-        clerkOrgId,
+        clerkOrgId || "", // Pass empty string if undefined
         categoryId,
         {
           name: values.name,
@@ -271,6 +285,7 @@ export function AddItemToCategoryWizard({
         },
         {
           locationId: isAllLocations ? null : selectedLocationId,
+          merchantId: merchantId,
         },
       );
 

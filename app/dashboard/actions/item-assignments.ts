@@ -745,10 +745,11 @@ export async function CreateItemInCategory(
     customPrice?: number;
     isFeatured?: boolean;
     locationId?: string | null;
+    merchantId?: string;
   },
 ) {
-  if (!clerkOrgId) {
-    return { error: "Organization ID is required" };
+  if (!clerkOrgId && !options?.merchantId) {
+    return { error: "Organization ID or Merchant ID is required" };
   }
 
   if (!categoryId) {
@@ -757,23 +758,28 @@ export async function CreateItemInCategory(
 
   const supabase = createServerSupabaseClient();
 
-  // Get merchant ID from clerk org
-  const { data: merchant, error: merchantError } = await supabase
-    .from("merchants")
-    .select("id")
-    .eq("clerk_org_id", clerkOrgId)
-    .single();
+  let finalMerchantId = options?.merchantId;
 
-  if (merchantError || !merchant) {
-    console.error("Error getting merchant:", merchantError);
-    return { error: "Merchant not found" };
+  if (!finalMerchantId) {
+    // Get merchant ID from clerk org
+    const { data: merchant, error: merchantError } = await supabase
+      .from("merchants")
+      .select("id")
+      .eq("clerk_org_id", clerkOrgId)
+      .single();
+
+    if (merchantError || !merchant) {
+      console.error("Error getting merchant:", merchantError);
+      return { error: "Merchant not found" };
+    }
+    finalMerchantId = merchant.id;
   }
 
   // Step 1: Create the menu item
   const { data: createdItem, error: createError } = await supabase
     .from("menu_items")
     .insert({
-      merchant_id: merchant.id,
+      merchant_id: finalMerchantId,
       location_id: options?.locationId || null,
       name: item.name,
       description: item.description,
