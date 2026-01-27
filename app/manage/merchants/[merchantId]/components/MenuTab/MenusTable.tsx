@@ -58,6 +58,7 @@ import {
   Eye,
   Calendar,
   Clock,
+  Settings,
 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -411,16 +412,6 @@ export function MenusTable({
                 />
               </div>
 
-              {/* Expand/Collapse All */}
-              <div className="flex gap-1">
-                <Button variant="outline" size="sm" onClick={expandAll}>
-                  Expand All
-                </Button>
-                <Button variant="outline" size="sm" onClick={collapseAll}>
-                  Collapse All
-                </Button>
-              </div>
-
               {/* Create Menu */}
               <Button size="sm" onClick={handleCreateMenu}>
                 <Plus className="h-4 w-4 mr-2" />
@@ -579,6 +570,7 @@ export function MenusTable({
           setMenuDetailOpen(false)
           setSelectedMenuForDetails(null)
         }}
+        clerkOrgId={clerkOrgId}
         merchantId={merchantId}
         locationId={locationId}
         menu={selectedMenuForDetails}
@@ -718,17 +710,22 @@ function MenuRow({
 
   return (
     <Collapsible open={isExpanded} onOpenChange={onToggle}>
-      <div className="border rounded-lg">
-        <CollapsibleTrigger asChild>
-          <div className="flex items-center gap-4 p-4 cursor-pointer hover:bg-muted/50 transition-colors">
-            {/* Expand Icon */}
-            <div className="text-muted-foreground">
-              {isExpanded ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
-            </div>
+      <div className="border rounded-lg group/row">
+        <div 
+          className="flex items-center gap-4 p-4 cursor-pointer hover:bg-muted/50 transition-colors"
+          onClick={() => onViewDetails()}
+        >
+          {/* Peeking Collapsible Icon - moved to left */}
+          <div 
+            className="text-muted-foreground hover:text-foreground p-1 rounded" 
+            onClick={(e) => { e.stopPropagation(); onToggle(); }}
+          >
+            {isExpanded ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </div>
 
             {/* Icon */}
             <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
@@ -796,37 +793,42 @@ function MenuRow({
             </div>
 
             {/* Actions */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                <Button variant="ghost" size="sm">
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem asChild>
-                  <Link href={`/manage/merchants/${clerkOrgId}/menu/${menu.id}`}>
+            <div onClick={(e) => e.stopPropagation()}>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onViewDetails(); }}>
                     <Eye className="h-4 w-4 mr-2" />
-                    View Details
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}>
-                  <Pencil className="h-4 w-4 mr-2" />
-                  Edit Menu
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onToggleActive(); }}>
-                  {menu.is_active ? (
-                    <>
-                      <XCircle className="h-4 w-4 mr-2" />
-                      Deactivate
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="h-4 w-4 mr-2" />
-                      Activate
-                    </>
-                  )}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
+                    Quick View
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href={`/manage/merchants/${clerkOrgId}/menu/${menu.id}`}>
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Manage Structure
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}>
+                    <Settings className="h-4 w-4 mr-2" />
+                    Menu Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onToggleActive(); }}>
+                    {menu.is_active ? (
+                      <>
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Deactivate
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        Activate
+                      </>
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onAddCategory(); }}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add Category
@@ -837,8 +839,11 @@ function MenuRow({
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDelete()
+                  }}
                   className="text-destructive"
-                  onClick={(e) => { e.stopPropagation(); onDelete(); }}
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
                   Delete Menu
@@ -846,7 +851,7 @@ function MenuRow({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-        </CollapsibleTrigger>
+        </div>
 
         <CollapsibleContent>
           <div className="border-t">

@@ -22,9 +22,16 @@ import {
     Edit,
     Plus,
     Globe,
+    CreditCard,
+    Percent,
+    Gift,
+    Box,
+    ShoppingBag,
+    Save,
+    Loader2 as LoaderIcon
 } from 'lucide-react'
 import { DeleteOrganizationDialog } from '../../../organizations/[organizationId]/components/DeleteOrganizationDialog'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { MerchantInfoModel } from '@/types/db-modles'
 import { useQuery } from '@tanstack/react-query'
 import { GetLocations } from '../../../../dashboard/actions/locations'
@@ -33,6 +40,9 @@ import {
     useAdminUpsertTaxRate,
     useAdminDeactivateTaxRate,
 } from '@/lib/queries/use-admin-tax-rates'
+import { useAdminUpdateMerchant } from '@/lib/queries/use-admin-merchant'
+import { Switch } from '@/components/ui/switch'
+import { Separator } from '@/components/ui/separator'
 import {
     TAX_CATEGORIES,
     TAX_CATEGORY_LABELS,
@@ -75,6 +85,49 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo }: SettingsTabPr
     // Mutations
     const upsertMutation = useAdminUpsertTaxRate()
     const deactivateMutation = useAdminDeactivateTaxRate()
+    const updateMerchantMutation = useAdminUpdateMerchant()
+
+    // General Settings State
+    const [generalSettings, setGeneralSettings] = useState({
+        processing_fee_mode: 'no_surcharge',
+        card_fee_percentage: '4.0',
+        enable_loyalty: false,
+        enable_inventory: false,
+        enable_online_ordering: false
+    })
+
+    useEffect(() => {
+        const metadata = (merchantInfo?.public_metadata as any) || {}
+        setGeneralSettings({
+            processing_fee_mode: metadata.processing_fee_mode || 'no_surcharge',
+            card_fee_percentage: metadata.card_fee_percentage?.toString() || '4.0',
+            enable_loyalty: !!metadata.enable_loyalty,
+            enable_inventory: !!metadata.enable_inventory,
+            enable_online_ordering: !!metadata.enable_online_ordering
+        })
+    }, [merchantInfo])
+
+    const handleSaveGeneral = async () => {
+        try {
+            const result = await updateMerchantMutation.mutateAsync({
+                merchantId: merchantInfo.id,
+                updates: {
+                    public_metadata: {
+                        ...generalSettings,
+                        card_fee_percentage: parseFloat(generalSettings.card_fee_percentage)
+                    }
+                }
+            })
+
+            if (result.success) {
+                toast.success('General settings updated successfully')
+            } else {
+                toast.error(result.error || 'Failed to update settings')
+            }
+        } catch (error) {
+            toast.error('An error occurred while updating settings')
+        }
+    }
 
     // ========================================================================
     // Handlers
@@ -408,19 +461,114 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo }: SettingsTabPr
 
                 {/* General Settings Tab */}
                 <TabsContent value="general" className="space-y-6">
-                    {/* General Settings */}
+                    {/* Processing Settings */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>General Settings</CardTitle>
-                            <CardDescription>Configure merchant account and preferences</CardDescription>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle>Processing & Fees</CardTitle>
+                                    <CardDescription>Configure how credit card fees are handled</CardDescription>
+                                </div>
+                                <Button 
+                                    onClick={handleSaveGeneral} 
+                                    disabled={updateMerchantMutation.isPending}
+                                    size="sm"
+                                >
+                                    {updateMerchantMutation.isPending ? (
+                                        <LoaderIcon className="h-4 w-4 mr-2 animate-spin" />
+                                    ) : (
+                                        <Save className="h-4 w-4 mr-2" />
+                                    )}
+                                    Save Changes
+                                </Button>
+                            </div>
                         </CardHeader>
-                        <CardContent>
-                            <div className="text-center py-12">
-                                <Settings className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                                <h3 className="text-lg font-semibold mb-2">General Settings</h3>
-                                <p className="text-sm text-muted-foreground">
-                                    Merchant configuration and settings panel coming soon.
-                                </p>
+                        <CardContent className="space-y-6">
+                            <div className="grid gap-6 md:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label>Fee Mode</Label>
+                                    <Select 
+                                        value={generalSettings.processing_fee_mode}
+                                        onValueChange={(v) => setGeneralSettings({ ...generalSettings, processing_fee_mode: v })}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="no_surcharge">No Surcharge (Absorb Fees)</SelectItem>
+                                            <SelectItem value="surcharge">Surcharge (Pass to Customer)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-muted-foreground">
+                                        Determine if the merchant absorbs fees or passes them to customers.
+                                    </p>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>Card Fee Percentage (%)</Label>
+                                    <div className="relative">
+                                        <Input 
+                                            type="number" 
+                                            step="0.1"
+                                            value={generalSettings.card_fee_percentage}
+                                            onChange={(e) => setGeneralSettings({ ...generalSettings, card_fee_percentage: e.target.value })}
+                                            className="pr-8"
+                                        />
+                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        The standard percentage to apply for card transactions.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <Separator />
+
+                            <div className="space-y-4">
+                                <h4 className="text-sm font-medium">Feature Toggles</h4>
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                                        <div className="flex items-center gap-3">
+                                            <Gift className="h-5 w-5 text-primary" />
+                                            <div>
+                                                <Label className="text-base">Loyalty Program</Label>
+                                                <p className="text-sm text-muted-foreground">Points and rewards system</p>
+                                            </div>
+                                        </div>
+                                        <Switch 
+                                            checked={generalSettings.enable_loyalty}
+                                            onCheckedChange={(checked) => setGeneralSettings({ ...generalSettings, enable_loyalty: checked })}
+                                        />
+                                    </div>
+
+                                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                                        <div className="flex items-center gap-3">
+                                            <Box className="h-5 w-5 text-primary" />
+                                            <div>
+                                                <Label className="text-base">Inventory Management</Label>
+                                                <p className="text-sm text-muted-foreground">Track stock levels and vendors</p>
+                                            </div>
+                                        </div>
+                                        <Switch 
+                                            checked={generalSettings.enable_inventory}
+                                            onCheckedChange={(checked) => setGeneralSettings({ ...generalSettings, enable_inventory: checked })}
+                                        />
+                                    </div>
+
+                                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                                        <div className="flex items-center gap-3">
+                                            <ShoppingBag className="h-5 w-5 text-primary" />
+                                            <div>
+                                                <Label className="text-base">Online Ordering</Label>
+                                                <p className="text-sm text-muted-foreground">Allow customers to order via web</p>
+                                            </div>
+                                        </div>
+                                        <Switch 
+                                            checked={generalSettings.enable_online_ordering}
+                                            onCheckedChange={(checked) => setGeneralSettings({ ...generalSettings, enable_online_ordering: checked })}
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>

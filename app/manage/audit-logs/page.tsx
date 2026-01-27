@@ -47,179 +47,23 @@ import {
     Edit,
     Trash2,
 } from 'lucide-react'
-import AuditLogViewer from '@/components/AuditLogViewer'
-
-// Mock data for audit logs
-const mockAuditLogs = [
-    {
-        id: '1',
-        timestamp: '2024-01-15T14:30:25Z',
-        user: {
-            id: 'user1',
-            name: 'John Doe',
-            email: 'john.doe@example.com',
-            avatar: null,
-        },
-        action: 'user.created',
-        actionType: 'CREATE',
-        resource: 'User',
-        resourceId: 'user_123',
-        details: {
-            targetUser: 'Sarah Johnson',
-            targetEmail: 'sarah.johnson@example.com',
-            organization: 'Retail Solutions Inc',
-        },
-        ipAddress: '192.168.1.100',
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        location: 'New York, NY',
-        status: 'SUCCESS',
-        severity: 'INFO',
-    },
-    {
-        id: '2',
-        timestamp: '2024-01-15T14:25:10Z',
-        user: {
-            id: 'user2',
-            name: 'Sarah Johnson',
-            email: 'sarah.johnson@example.com',
-            avatar: null,
-        },
-        action: 'merchant.updated',
-        actionType: 'UPDATE',
-        resource: 'Merchant',
-        resourceId: 'merchant_456',
-        details: {
-            merchantName: 'TechCorp Store',
-            changes: ['business_name', 'contact_email', 'address'],
-            previousValues: {
-                business_name: 'TechCorp',
-                contact_email: 'old@techcorp.com',
-            },
-        },
-        ipAddress: '10.0.0.50',
-        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-        location: 'Los Angeles, CA',
-        status: 'SUCCESS',
-        severity: 'INFO',
-    },
-    {
-        id: '3',
-        timestamp: '2024-01-15T14:20:45Z',
-        user: {
-            id: 'user3',
-            name: 'Mike Chen',
-            email: 'mike.chen@example.com',
-            avatar: null,
-        },
-        action: 'role.permissions.updated',
-        actionType: 'UPDATE',
-        resource: 'Role',
-        resourceId: 'role_789',
-        details: {
-            roleName: 'Manager',
-            addedPermissions: ['merchants.create', 'analytics.read'],
-            removedPermissions: ['users.delete'],
-        },
-        ipAddress: '172.16.0.25',
-        userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
-        location: 'San Francisco, CA',
-        status: 'SUCCESS',
-        severity: 'WARNING',
-    },
-    {
-        id: '4',
-        timestamp: '2024-01-15T14:15:30Z',
-        user: {
-            id: 'user4',
-            name: 'Emily Wilson',
-            email: 'emily.wilson@example.com',
-            avatar: null,
-        },
-        action: 'login.failed',
-        actionType: 'AUTH',
-        resource: 'Authentication',
-        resourceId: null,
-        details: {
-            reason: 'Invalid password',
-            attempts: 3,
-        },
-        ipAddress: '203.0.113.45',
-        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
-        location: 'Chicago, IL',
-        status: 'FAILED',
-        severity: 'WARNING',
-    },
-    {
-        id: '5',
-        timestamp: '2024-01-15T14:10:15Z',
-        user: {
-            id: 'user5',
-            name: 'David Brown',
-            email: 'david.brown@example.com',
-            avatar: null,
-        },
-        action: 'organization.deleted',
-        actionType: 'DELETE',
-        resource: 'Organization',
-        resourceId: 'org_101',
-        details: {
-            organizationName: 'StartupXYZ',
-            merchantCount: 5,
-            userCount: 12,
-        },
-        ipAddress: '198.51.100.75',
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        location: 'Austin, TX',
-        status: 'SUCCESS',
-        severity: 'ERROR',
-    },
-    {
-        id: '6',
-        timestamp: '2024-01-15T14:05:00Z',
-        user: {
-            id: 'user1',
-            name: 'John Doe',
-            email: 'john.doe@example.com',
-            avatar: null,
-        },
-        action: 'system.settings.updated',
-        actionType: 'UPDATE',
-        resource: 'System Settings',
-        resourceId: 'settings_global',
-        details: {
-            settings: ['session_timeout', 'password_policy', 'audit_retention'],
-            previousValues: {
-                session_timeout: '8 hours',
-                password_policy: 'medium',
-            },
-        },
-        ipAddress: '192.168.1.100',
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        location: 'New York, NY',
-        status: 'SUCCESS',
-        severity: 'INFO',
-    },
-]
-
-const actionTypes = {
-    CREATE: { label: 'Create', icon: Plus, color: 'bg-green-100 text-green-800' },
-    UPDATE: { label: 'Update', icon: Edit, color: 'bg-blue-100 text-blue-800' },
-    DELETE: { label: 'Delete', icon: Trash2, color: 'bg-red-100 text-red-800' },
-    AUTH: { label: 'Authentication', icon: Shield, color: 'bg-purple-100 text-purple-800' },
-    READ: { label: 'Read', icon: Eye, color: 'bg-gray-100 text-gray-800' },
-}
+import { usePlatformAuditLogs } from '@/lib/queries/use-platform-analytics'
+import { format } from 'date-fns'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 const severityColors = {
-    INFO: 'bg-blue-100 text-blue-800',
-    WARNING: 'bg-yellow-100 text-yellow-800',
-    ERROR: 'bg-red-100 text-red-800',
-    CRITICAL: 'bg-red-200 text-red-900',
+    info: 'bg-blue-100 text-blue-800',
+    warning: 'bg-yellow-100 text-yellow-800',
+    error: 'bg-red-100 text-red-800',
+    critical: 'bg-red-200 text-red-900',
 }
 
 const statusColors = {
-    SUCCESS: 'bg-green-100 text-green-800',
-    FAILED: 'bg-red-100 text-red-800',
-    PENDING: 'bg-yellow-100 text-yellow-800',
+    success: 'bg-green-100 text-green-800',
+    failed: 'bg-red-100 text-red-800',
+    pending: 'bg-yellow-100 text-yellow-800',
 }
 
 const resourceIcons = {
@@ -235,23 +79,18 @@ export default function AuditLogsPage() {
     const [searchTerm, setSearchTerm] = useState('')
     const [actionFilter, setActionFilter] = useState('all')
     const [severityFilter, setSeverityFilter] = useState('all')
-    const [statusFilter, setStatusFilter] = useState('all')
-    const [dateRange, setDateRange] = useState('today')
+    const [page, setPage] = useState(1)
+    const [selectedLog, setSelectedLog] = useState<any>(null)
+    const [isDetailOpen, setIsDetailOpen] = useState(false)
 
-    const filteredLogs = mockAuditLogs.filter(log => {
-        const matchesSearch =
-            log.user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            log.user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            log.resource.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (log.details && JSON.stringify(log.details).toLowerCase().includes(searchTerm.toLowerCase()))
+    const { data: auditLogsData, isLoading, refetch } = usePlatformAuditLogs({
+        search: searchTerm,
+        action_category: actionFilter !== 'all' ? actionFilter : undefined,
+        severity: severityFilter !== 'all' ? severityFilter : undefined
+    }, 50, (page - 1) * 50)
 
-        const matchesAction = actionFilter === 'all' || log.actionType === actionFilter
-        const matchesSeverity = severityFilter === 'all' || log.severity === severityFilter
-        const matchesStatus = statusFilter === 'all' || log.status === statusFilter
-
-        return matchesSearch && matchesAction && matchesSeverity && matchesStatus
-    })
+    const logs = auditLogsData?.data || []
+    const totalLogs = auditLogsData?.total || 0
 
     const formatTimestamp = (timestamp: string) => {
         const date = new Date(timestamp)
@@ -310,51 +149,51 @@ export default function AuditLogsPage() {
                         <FileText className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{mockAuditLogs.length}</div>
+                        <div className="text-2xl font-bold">{totalLogs.toLocaleString()}</div>
                         <p className="text-xs text-muted-foreground">
-                            +12 from yesterday
+                            Platform-wide log stream
                         </p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Failed Events</CardTitle>
+                        <CardTitle className="text-sm font-medium">Critical Errors</CardTitle>
                         <XCircle className="h-4 w-4 text-red-600" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">
-                            {mockAuditLogs.filter(log => log.status === 'FAILED').length}
+                            {logs.filter(log => log.severity === 'critical').length}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                            Requires attention
+                            Requiring immediate attention
                         </p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">High Severity</CardTitle>
+                        <CardTitle className="text-sm font-medium">Security Alarms</CardTitle>
                         <AlertTriangle className="h-4 w-4 text-yellow-600" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">
-                            {mockAuditLogs.filter(log => log.severity === 'WARNING' || log.severity === 'ERROR').length}
+                            {logs.filter(log => log.action_category === 'security' || log.severity === 'warning').length}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                            Security events
+                            High-risk activity flags
                         </p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active Users</CardTitle>
-                        <User className="h-4 w-4 text-green-600" />
+                        <CardTitle className="text-sm font-medium">Active Organizations</CardTitle>
+                        <Building2 className="h-4 w-4 text-green-600" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">
-                            {new Set(mockAuditLogs.map(log => log.user.id)).size}
+                            {new Set(logs.map(log => log.merchant_id)).size}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                            Unique users today
+                            Broadcasting events today
                         </p>
                     </CardContent>
                 </Card>
@@ -406,19 +245,10 @@ export default function AuditLogsPage() {
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">All Severity</SelectItem>
-                                            <SelectItem value="INFO">Info</SelectItem>
-                                            <SelectItem value="WARNING">Warning</SelectItem>
-                                            <SelectItem value="ERROR">Error</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                        <SelectTrigger className="w-[140px]">
-                                            <SelectValue placeholder="Status" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Status</SelectItem>
-                                            <SelectItem value="SUCCESS">Success</SelectItem>
-                                            <SelectItem value="FAILED">Failed</SelectItem>
+                                            <SelectItem value="info">Info</SelectItem>
+                                            <SelectItem value="warning">Warning</SelectItem>
+                                            <SelectItem value="error">Error</SelectItem>
+                                            <SelectItem value="critical">Critical</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -443,32 +273,42 @@ export default function AuditLogsPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {filteredLogs.map((log) => {
-                                        const { date, time } = formatTimestamp(log.timestamp)
-                                        const ActionIcon = actionTypes[log.actionType as keyof typeof actionTypes]?.icon || Info
-                                        const ResourceIcon = resourceIcons[log.resource as keyof typeof resourceIcons] || FileText
-                                        const DeviceIcon = getDeviceIcon(log.userAgent)
+                                    {isLoading ? (
+                                        Array.from({ length: 5 }).map((_, i) => (
+                                            <TableRow key={i}>
+                                                <TableCell colSpan={8}><Skeleton className="h-10 w-full" /></TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : logs.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
+                                                No audit logs found.
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : logs.map((log) => {
+                                        const ActionIcon = Shield 
 
                                         return (
                                             <TableRow key={log.id}>
                                                 <TableCell>
                                                     <div className="space-y-1">
-                                                        <div className="text-sm font-medium">{date}</div>
+                                                        <div className="text-sm font-medium text-nowrap">
+                                                            {format(new Date(log.created_at), 'MMM d, yyyy')}
+                                                        </div>
                                                         <div className="text-xs text-muted-foreground flex items-center">
                                                             <Clock className="h-3 w-3 mr-1" />
-                                                            {time}
+                                                            {format(new Date(log.created_at), 'h:mm:ss a')}
                                                         </div>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center space-x-3">
                                                         <Avatar className="h-8 w-8">
-                                                            <AvatarImage src={log.user.avatar || ''} alt={log.user.name} />
-                                                            <AvatarFallback>{getInitials(log.user.name)}</AvatarFallback>
+                                                            <AvatarFallback>{log.actor_name?.[0]}</AvatarFallback>
                                                         </Avatar>
                                                         <div>
-                                                            <div className="font-medium text-sm">{log.user.name}</div>
-                                                            <div className="text-xs text-muted-foreground">{log.user.email}</div>
+                                                            <div className="font-medium text-sm">{log.actor_name}</div>
+                                                            <div className="text-xs text-muted-foreground">{log.merchants.business_name}</div>
                                                         </div>
                                                     </div>
                                                 </TableCell>
@@ -477,27 +317,25 @@ export default function AuditLogsPage() {
                                                         <ActionIcon className="h-4 w-4 text-muted-foreground" />
                                                         <div>
                                                             <div className="text-sm font-medium">{log.action}</div>
-                                                            <Badge variant="outline" className="text-xs">
-                                                                {actionTypes[log.actionType as keyof typeof actionTypes]?.label || log.actionType}
+                                                            <Badge variant="outline" className="text-xs capitalize">
+                                                                {log.action_category}
                                                             </Badge>
                                                         </div>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center space-x-2">
-                                                        <ResourceIcon className="h-4 w-4 text-muted-foreground" />
+                                                        <FileText className="h-4 w-4 text-muted-foreground" />
                                                         <div>
-                                                            <div className="text-sm">{log.resource}</div>
-                                                            {log.resourceId && (
-                                                                <div className="text-xs text-muted-foreground">{log.resourceId}</div>
+                                                            <div className="text-sm">{log.resource_type}</div>
+                                                            {log.resource_name && (
+                                                                <div className="text-xs text-muted-foreground max-w-[150px] truncate">{log.resource_name}</div>
                                                             )}
                                                         </div>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Badge className={statusColors[log.status as keyof typeof statusColors]}>
-                                                        {log.status}
-                                                    </Badge>
+                                                     <Badge className={statusColors.success}>SUCCESS</Badge>
                                                 </TableCell>
                                                 <TableCell>
                                                     <Badge className={severityColors[log.severity as keyof typeof severityColors]}>
@@ -507,11 +345,14 @@ export default function AuditLogsPage() {
                                                 <TableCell>
                                                     <div className="flex items-center space-x-1 text-xs text-muted-foreground">
                                                         <MapPin className="h-3 w-3" />
-                                                        <span>{log.location}</span>
+                                                        <span>{log.location?.name || 'Global'}</span>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Button variant="ghost" size="icon">
+                                                    <Button variant="ghost" size="icon" onClick={() => {
+                                                        setSelectedLog(log);
+                                                        setIsDetailOpen(true);
+                                                    }}>
                                                         <Eye className="h-4 w-4" />
                                                     </Button>
                                                 </TableCell>
@@ -522,45 +363,95 @@ export default function AuditLogsPage() {
                             </Table>
                         </CardContent>
                     </Card>
-                    {/* <AuditLogViewer /> */}
+                    
+                    <Sheet open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+                        <SheetContent className="sm:max-w-xl">
+                            <SheetHeader>
+                                <SheetTitle>Log Details</SheetTitle>
+                                <SheetDescription>
+                                    Technical data for event {selectedLog?.id}
+                                </SheetDescription>
+                            </SheetHeader>
+                            <ScrollArea className="h-[calc(100vh-120px)] mt-6">
+                                <div className="space-y-6 pb-6">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <p className="text-xs text-muted-foreground uppercase font-semibold">Action</p>
+                                            <p className="text-sm font-medium mt-1">{selectedLog?.action}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-muted-foreground uppercase font-semibold">Severity</p>
+                                            <Badge className={`mt-1 ${severityColors[selectedLog?.severity as keyof typeof severityColors]}`}>
+                                                {selectedLog?.severity}
+                                            </Badge>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-muted-foreground uppercase font-semibold">Actor</p>
+                                            <p className="text-sm font-medium mt-1">{selectedLog?.actor_name}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-muted-foreground uppercase font-semibold">Merchant</p>
+                                            <p className="text-sm font-medium mt-1">{selectedLog?.merchants?.business_name}</p>
+                                        </div>
+                                    </div>
+
+                                    {selectedLog?.changes && (
+                                        <div className="space-y-3">
+                                            <p className="text-xs text-muted-foreground uppercase font-semibold">Data Changes</p>
+                                            <div className="bg-muted p-4 rounded-lg overflow-hidden">
+                                                <pre className="text-xs font-mono overflow-auto max-h-[400px]">
+                                                    {JSON.stringify(selectedLog.changes, null, 2)}
+                                                </pre>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {selectedLog?.metadata && (
+                                        <div className="space-y-3">
+                                            <p className="text-xs text-muted-foreground uppercase font-semibold">Metadata</p>
+                                            <div className="bg-muted p-4 rounded-lg overflow-hidden">
+                                                <pre className="text-xs font-mono overflow-auto max-h-[400px]">
+                                                    {JSON.stringify(selectedLog.metadata, null, 2)}
+                                                </pre>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </ScrollArea>
+                        </SheetContent>
+                    </Sheet>
                 </TabsContent>
 
                 <TabsContent value="security" className="space-y-4">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Security Events</CardTitle>
+                            <CardTitle>Global Security Feed</CardTitle>
                             <CardDescription>
-                                Monitor security-related activities and potential threats.
+                                Significant security events across all merchants.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-4">
-                                {mockAuditLogs
-                                    .filter(log => log.severity === 'WARNING' || log.severity === 'ERROR' || log.actionType === 'AUTH')
-                                    .map((log) => {
-                                        const { date, time } = formatTimestamp(log.timestamp)
+                                {logs
+                                    .filter((log: any) => log.severity === 'critical' || log.severity === 'warning' || log.action_category === 'security')
+                                    .map((log: any) => {
                                         return (
                                             <div key={log.id} className="flex items-center space-x-4 p-4 border rounded-lg">
-                                                <div className={`p-2 rounded-full ${log.severity === 'ERROR' ? 'bg-red-100' :
-                                                    log.severity === 'WARNING' ? 'bg-yellow-100' : 'bg-blue-100'
+                                                <div className={`p-2 rounded-full ${log.severity === 'critical' ? 'bg-red-100' :
+                                                    log.severity === 'warning' ? 'bg-yellow-100' : 'bg-blue-100'
                                                     }`}>
-                                                    <AlertTriangle className={`h-4 w-4 ${log.severity === 'ERROR' ? 'text-red-600' :
-                                                        log.severity === 'WARNING' ? 'text-yellow-600' : 'text-blue-600'
+                                                    <AlertTriangle className={`h-4 w-4 ${log.severity === 'critical' ? 'text-red-600' :
+                                                        log.severity === 'warning' ? 'text-yellow-600' : 'text-blue-600'
                                                         }`} />
                                                 </div>
                                                 <div className="flex-1">
                                                     <div className="flex items-center justify-between">
                                                         <div className="font-medium">{log.action}</div>
-                                                        <div className="text-sm text-muted-foreground">{date} {time}</div>
+                                                        <div className="text-sm text-muted-foreground">{format(new Date(log.created_at), 'MMM d, h:mm a')}</div>
                                                     </div>
                                                     <div className="text-sm text-muted-foreground">
-                                                        {log.user.name} • {log.location} • {log.ipAddress}
+                                                        {log.actor_name} • {log.merchants?.business_name} • {log.resource_type}
                                                     </div>
-                                                    {log.details && (
-                                                        <div className="text-xs text-muted-foreground mt-1">
-                                                            {JSON.stringify(log.details, null, 2)}
-                                                        </div>
-                                                    )}
                                                 </div>
                                                 <Badge className={severityColors[log.severity as keyof typeof severityColors]}>
                                                     {log.severity}
@@ -568,6 +459,11 @@ export default function AuditLogsPage() {
                                             </div>
                                         )
                                     })}
+                                {logs.filter((log: any) => log.severity === 'critical' || log.severity === 'warning' || log.action_category === 'security').length === 0 && (
+                                    <div className="text-center py-10 text-muted-foreground">
+                                        No security events recorded in this period.
+                                    </div>
+                                )}
                             </div>
                         </CardContent>
                     </Card>

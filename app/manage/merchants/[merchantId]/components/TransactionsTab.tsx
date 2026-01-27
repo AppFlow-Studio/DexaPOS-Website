@@ -81,7 +81,7 @@ export function TransactionsTab({ merchantInfo }: TransactionsTabProps) {
   );
 
   // Fetch orders for the transactions tab
-  const { data: orders, isLoading: isLoadingOrders } = useOrders({
+  const { data: orders, isLoading: isLoadingOrders, refetch: refetchOrders } = useOrders({
     dateRange: {
       from: date?.from || subDays(new Date(), 7),
       to: date?.to || new Date(),
@@ -348,7 +348,11 @@ export function TransactionsTab({ merchantInfo }: TransactionsTabProps) {
           order={selectedOrder}
           location={null} 
           open={!!selectedOrder}
-          onOpenChange={(open) => !open && setSelectedOrder(null)}
+          onOpenChange={(open: boolean) => !open && setSelectedOrder(null)}
+          showAdminActions={true}
+          onOrderUpdate={() => {
+            refetchOrders()
+          }}
         />
       )}
     </div>

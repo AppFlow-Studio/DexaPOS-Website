@@ -807,7 +807,7 @@ export async function CreateItemInCategory(
       {
         category_id: categoryId,
         menu_item_id: createdItem.id,
-        merchant_id: merchant.id,
+        merchant_id: finalMerchantId,
         display_order: options?.displayOrder ?? 0,
         custom_price: options?.customPrice || null,
         is_featured: options?.isFeatured ?? false,
@@ -844,7 +844,7 @@ export async function CreateItemInCategory(
 
   // Log Audit Event for created item with human-readable names
   const logResult = await LogAuditEvent({
-    merchantId: merchant.id,
+    merchantId: finalMerchantId,
     action: `Created Item "${item.name}" in Category: ${categoryName}`,
     actionCategory: "menu",
     resourceType: "menu_item",

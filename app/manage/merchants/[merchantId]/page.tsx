@@ -29,6 +29,8 @@ import { BusinessInfoTab } from './components/BusinessInfoTab'
 import { DevicesTab } from './components/DevicesTab'
 import { MenuTab } from './components/MenuTab'
 import { OnlineStoreTab } from './components/OnlineStoreTab'
+import { DiscountsTab } from './components/DiscountsTab'
+import { SchedulesTab } from './components/SchedulesTab'
 
 export default function MerchantDetailsPage() {
     const { merchantId } = useParams()
@@ -101,18 +103,20 @@ export default function MerchantDetailsPage() {
                 <CardContent>
                     {/* Tabs */}
                     <Tabs defaultValue="overview" className="w-full">
-                        <TabsList className="flex flex-wrap gap-x-3">
-                            <TabsTrigger value="overview">Overview</TabsTrigger>
-                            <TabsTrigger value="business-info">Business Info</TabsTrigger>
-                            <TabsTrigger value="staff">Staff</TabsTrigger>
-                            <TabsTrigger value="customers">Customers</TabsTrigger>
-                            <TabsTrigger value="products">Products</TabsTrigger>
-                            <TabsTrigger value="menu">Menu</TabsTrigger>
-                            <TabsTrigger value="online-store">Online Store</TabsTrigger>
-                            <TabsTrigger value="devices">Devices</TabsTrigger>
-                            <TabsTrigger value="transactions">Transactions</TabsTrigger>
-                            <TabsTrigger value="audit">Audit Logs</TabsTrigger>
-                            <TabsTrigger value="settings">Settings</TabsTrigger>
+                        <TabsList className="w-full justify-start overflow-x-auto overflow-y-hidden flex-nowrap bg-muted/50 p-1 h-auto gap-1">
+                            <TabsTrigger value="overview" className="flex-none">Overview</TabsTrigger>
+                            <TabsTrigger value="business-info" className="flex-none">Business Info</TabsTrigger>
+                            <TabsTrigger value="staff" className="flex-none">Staff</TabsTrigger>
+                            <TabsTrigger value="customers" className="flex-none">Customers</TabsTrigger>
+                            <TabsTrigger value="products" className="flex-none">Products</TabsTrigger>
+                            <TabsTrigger value="menu" className="flex-none">Menu</TabsTrigger>
+                            <TabsTrigger value="schedules" className="flex-none">Schedules</TabsTrigger>
+                            <TabsTrigger value="discounts" className="flex-none">Discounts</TabsTrigger>
+                            <TabsTrigger value="online-store" className="flex-none">Online Store</TabsTrigger>
+                            <TabsTrigger value="devices" className="flex-none">Devices</TabsTrigger>
+                            <TabsTrigger value="transactions" className="flex-none">Transactions</TabsTrigger>
+                            <TabsTrigger value="audit" className="flex-none">Audit Logs</TabsTrigger>
+                            <TabsTrigger value="settings" className="flex-none">Settings</TabsTrigger>
                         </TabsList>
 
                         {/* Tab Contents */}
@@ -151,6 +155,17 @@ export default function MerchantDetailsPage() {
 
                         <TabsContent value="menu" className="mt-6">
                             <MenuTab merchantDetails={merchantDetails} clerkOrgId={merchantDetails.clerk_org_id} />
+                        </TabsContent>
+
+                        <TabsContent value="discounts" className="mt-6">
+                            <DiscountsTab merchantId={merchantDetails.id} />
+                        </TabsContent>
+
+                        <TabsContent value="schedules" className="mt-6">
+                            <SchedulesTab 
+                                merchantId={merchantDetails.id} 
+                                locations={merchantDetails.locations as any[]} 
+                            />
                         </TabsContent>
 
                         <TabsContent value="online-store" className="mt-6">

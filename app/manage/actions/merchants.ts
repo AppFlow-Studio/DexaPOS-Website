@@ -3,6 +3,7 @@
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
 import type {
   MerchantFilters,
   MerchantSummary,
@@ -166,12 +167,29 @@ export async function updateMerchantSettings(
 
   const supabase = createServerSupabaseClient()
 
-  const { error } = await supabase
-    .from('merchants')
-    .update({
+  // Prepare the update object
+  let finalUpdates: any = {
       ...updates,
       updated_at: new Date().toISOString(),
-    })
+  }
+
+  // If public_metadata is provided, merge it with existing metadata to avoid overwriting everything
+  if (updates.public_metadata) {
+      const { data: existing } = await supabase
+          .from('merchants')
+          .select('public_metadata')
+          .eq('id', merchantId)
+          .single()
+      
+      finalUpdates.public_metadata = {
+          ...(existing?.public_metadata || {}),
+          ...updates.public_metadata
+      }
+  }
+
+  const { error } = await supabase
+    .from('merchants')
+    .update(finalUpdates)
     .eq('id', merchantId)
 
   if (error) {
@@ -180,16 +198,16 @@ export async function updateMerchantSettings(
   }
 
   // Audit log
-  await supabase.from('audit_logs').insert({
-    actor_user_id: userId,
-    actor_role: 'hq.admin',
+  await LogAuditEvent({
+    merchantId,
     action: 'ADMIN_UPDATE_MERCHANT',
-    action_category: 'settings',
-    severity: 'info',
-    resource_type: 'merchant',
-    resource_id: merchantId,
-    merchant_id: merchantId,
-    changes: { after: updates },
+    actionCategory: 'settings',
+    resourceType: 'merchant',
+    resourceId: merchantId,
+    changes: { after: updates as unknown as Record<string, unknown> },
+    metadata: {
+      admin_action: true,
+    },
   })
 
   revalidatePath(`/manage/merchants/${merchantId}`)
@@ -238,18 +256,20 @@ export async function toggleLocationStatus(
   }
 
   // Audit log
-  await supabase.from('audit_logs').insert({
-    actor_user_id: userId,
-    actor_role: 'hq.admin',
-    action: isActive ? 'ADMIN_ACTIVATE_LOCATION' : 'ADMIN_DEACTIVATE_LOCATION',
-    action_category: 'settings',
-    severity: 'warning',
-    resource_type: 'location',
-    resource_id: locationId,
-    resource_name: location.name,
-    merchant_id: merchantId,
-    location_id: locationId,
+  await LogAuditEvent({
+    merchantId,
+    action: isActive ? 'Activated Location' : 'Deactivated Location',
+    actionCategory: 'settings',
+    resourceType: 'location',
+    resourceId: locationId,
+    resourceName: location.name,
+    locationId,
     changes: { before: { is_active: !isActive }, after: { is_active: isActive } },
+    severity: 'warning',
+    metadata: {
+      location_name: location.name,
+      admin_action: true,
+    },
   })
 
   revalidatePath(`/manage/merchants/${merchantId}`)

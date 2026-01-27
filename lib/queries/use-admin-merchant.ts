@@ -17,10 +17,13 @@ import {
 
 import {
   getMerchantDetails,
+  updateMerchantSettings,
 } from '@/app/manage/actions/merchants'
 
 import type {
   MerchantDetails,
+  MerchantSettingsUpdate,
+  UpdateMerchantResult,
 } from '@/types/merchant'
 
 // Orders actions
@@ -78,6 +81,23 @@ export function useAdminMerchantDetails(merchantId: string) {
     enabled: !!merchantId,
     // Longer stale time since merchant details don't change often
     staleTime: 10 * 60 * 1000, 
+  })
+}
+
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+
+export function useAdminUpdateMerchant() {
+  const queryClient = useQueryClient()
+
+  return useMutation<UpdateMerchantResult, Error, { merchantId: string; updates: MerchantSettingsUpdate }>({
+    mutationFn: ({ merchantId, updates }) => updateMerchantSettings(merchantId, updates),
+    onSuccess: (result, variables) => {
+      if (result.success) {
+        queryClient.invalidateQueries({
+          queryKey: adminKeys.merchantDetail(variables.merchantId),
+        })
+      }
+    },
   })
 }
 
@@ -381,6 +401,7 @@ import {
 import {
   getAdminSchedules,
   getMenuSchedules,
+  getCategorySchedules,
   type AdminSchedule,
 } from '@/app/manage/actions/admin-merchant/schedules'
 
@@ -554,6 +575,18 @@ export function useAdminMenuSchedules(
     queryKey: adminKeys.merchantMenuSchedules(merchantId, menuId || ''),
     queryFn: () => (menuId ? getMenuSchedules(merchantId, menuId) : []),
     enabled: !!merchantId && !!menuId,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useAdminCategorySchedules(
+  merchantId: string,
+  categoryId: string | null
+) {
+  return useQuery<AdminSchedule[]>({
+    queryKey: adminKeys.merchantCategorySchedules(merchantId, categoryId || ''),
+    queryFn: () => (categoryId ? getCategorySchedules(merchantId, categoryId) : []),
+    enabled: !!merchantId && !!categoryId,
     staleTime: 5 * 60 * 1000,
   })
 }

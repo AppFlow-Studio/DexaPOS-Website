@@ -12,7 +12,8 @@ import {
     Hash,
     Calendar,
     Store,
-    Edit
+    Edit,
+    Loader2
 } from 'lucide-react'
 import { MerchantDetails } from '@/types/merchant'
 import { useQuery } from '@tanstack/react-query'
@@ -21,6 +22,26 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty'
+import { useState, useEffect } from 'react'
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+    DialogDescription,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
+import { useAdminUpdateMerchant } from '@/lib/queries/use-admin-merchant'
+import { toast } from 'sonner'
 
 interface BusinessInfoTabProps {
     merchantInfo: MerchantDetails
@@ -52,6 +73,55 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
         return [loc.address_line1, loc.city, loc.state].filter(Boolean).join(', ')
     }
 
+    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+    const updateMutation = useAdminUpdateMerchant()
+
+    const [formData, setFormData] = useState({
+        legal_business_name: '',
+        dba_name: '',
+        ein_tax_id: '',
+        business_type: '',
+        business_license_number: '',
+        merchant_type: '',
+        status: ''
+    })
+
+    useEffect(() => {
+        if (isEditDialogOpen) {
+            setFormData({
+                legal_business_name: businessInfo.legal_business_name || '',
+                dba_name: businessInfo.dba_name || '',
+                ein_tax_id: businessInfo.ein_tax_id || '',
+                business_type: businessInfo.business_type || '',
+                business_license_number: businessInfo.business_license_number || '',
+                merchant_type: businessInfo.merchant_type || '',
+                status: businessInfo.status || ''
+            })
+        }
+    }, [isEditDialogOpen, businessInfo])
+
+    const handleSave = async () => {
+        try {
+            const result = await updateMutation.mutateAsync({
+                merchantId: merchantInfo.id,
+                updates: {
+                    public_metadata: {
+                        ...formData
+                    }
+                }
+            })
+
+            if (result.success) {
+                toast.success('Business info updated successfully')
+                setIsEditDialogOpen(false)
+            } else {
+                toast.error(result.error || 'Failed to update business info')
+            }
+        } catch (error) {
+            toast.error('An error occurred while updating business info')
+        }
+    }
+
     return (
         <Tabs defaultValue="legal" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
@@ -70,7 +140,11 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                     <CardTitle className="text-lg">Business Details</CardTitle>
                                     <CardDescription>Legal business information and registration details</CardDescription>
                                 </div>
-                                <Button variant="outline" size="sm">
+                                <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    onClick={() => setIsEditDialogOpen(true)}
+                                >
                                     <Edit className="h-4 w-4 mr-2" />
                                     Edit
                                 </Button>
@@ -325,6 +399,113 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                     </div>
                 )}
             </TabsContent>
+
+            {/* Edit Business Info Dialog */}
+            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                <DialogContent className="sm:max-w-[600px]">
+                    <DialogHeader>
+                        <DialogTitle>Edit Business Information</DialogTitle>
+                        <DialogDescription>
+                            Update the legal and registration details for this merchant.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="grid gap-4 py-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="legal_business_name">Legal Business Name</Label>
+                            <Input
+                                id="legal_business_name"
+                                value={formData.legal_business_name}
+                                onChange={(e) => setFormData({ ...formData, legal_business_name: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="dba_name">DBA Name</Label>
+                            <Input
+                                id="dba_name"
+                                value={formData.dba_name}
+                                onChange={(e) => setFormData({ ...formData, dba_name: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="ein_tax_id">EIN / Tax ID</Label>
+                            <Input
+                                id="ein_tax_id"
+                                value={formData.ein_tax_id}
+                                onChange={(e) => setFormData({ ...formData, ein_tax_id: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="business_type">Business Type</Label>
+                            <Select 
+                                value={formData.business_type} 
+                                onValueChange={(value) => setFormData({ ...formData, business_type: value })}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select business type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {Object.entries(businessTypes).map(([key, label]) => (
+                                        <SelectItem key={key} value={key}>{label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="business_license_number">Business License Number</Label>
+                            <Input
+                                id="business_license_number"
+                                value={formData.business_license_number}
+                                onChange={(e) => setFormData({ ...formData, business_license_number: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="merchant_type">Merchant Category</Label>
+                            <Input
+                                id="merchant_type"
+                                value={formData.merchant_type}
+                                onChange={(e) => setFormData({ ...formData, merchant_type: e.target.value })}
+                                placeholder="e.g. Restaurant, Retail"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="status">Merchant Status</Label>
+                            <Select 
+                                value={formData.status} 
+                                onValueChange={(value) => setFormData({ ...formData, status: value })}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="active">Active</SelectItem>
+                                    <SelectItem value="inactive">Inactive</SelectItem>
+                                    <SelectItem value="onboarding">Onboarding</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button 
+                            onClick={handleSave} 
+                            disabled={updateMutation.isPending}
+                        >
+                            {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Save Changes
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </Tabs>
     )
 }

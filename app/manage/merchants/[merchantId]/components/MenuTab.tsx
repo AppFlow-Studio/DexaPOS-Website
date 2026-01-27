@@ -225,6 +225,7 @@ export function MenuTab({ merchantDetails, clerkOrgId }: MenuTabProps) {
 
         <TabsContent value="items" className="mt-6">
           <ItemsTable
+            clerkOrgId={clerkOrgId}
             merchantId={merchantId}
             locationId={isAllLocations ? null : selectedLocationId}
             isAllLocations={isAllLocations}
@@ -233,6 +234,7 @@ export function MenuTab({ merchantDetails, clerkOrgId }: MenuTabProps) {
 
         <TabsContent value="categories" className="mt-6">
           <CategoriesTable
+            clerkOrgId={clerkOrgId}
             merchantId={merchantId}
             locationId={isAllLocations ? null : selectedLocationId}
             isAllLocations={isAllLocations}
@@ -241,6 +243,7 @@ export function MenuTab({ merchantDetails, clerkOrgId }: MenuTabProps) {
 
         <TabsContent value="modifiers" className="mt-6">
           <ModifiersTable
+            clerkOrgId={clerkOrgId}
             merchantId={merchantId}
             locationId={isAllLocations ? null : selectedLocationId}
             isAllLocations={isAllLocations}

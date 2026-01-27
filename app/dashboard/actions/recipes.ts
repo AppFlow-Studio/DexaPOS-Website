@@ -318,6 +318,7 @@ export async function RemoveRecipeIngredient(
 export async function GetInventoryItemsForRecipe(
   clerkOrgId: string,
   locationId?: string | null,
+  merchantId?: string,
 ): Promise<{
   data?: Array<{
     id: string;
@@ -329,28 +330,32 @@ export async function GetInventoryItemsForRecipe(
   }>;
   error?: string;
 }> {
-  if (!clerkOrgId) {
-    return { error: "Organization ID is required" };
-  }
-
   const supabase = createServerSupabaseClient();
+  let finalMerchantId = merchantId;
 
-  // Get merchant
-  const { data: merchant, error: merchantError } = await supabase
-    .from("merchants")
-    .select("id")
-    .eq("clerk_org_id", clerkOrgId)
-    .single();
+  if (!finalMerchantId) {
+    if (!clerkOrgId) {
+      return { error: "Organization ID or Merchant ID is required" };
+    }
 
-  if (merchantError || !merchant) {
-    return { error: "Merchant not found" };
+    // Get merchant
+    const { data: merchant, error: merchantError } = await supabase
+      .from("merchants")
+      .select("id")
+      .eq("clerk_org_id", clerkOrgId)
+      .single();
+
+    if (merchantError || !merchant) {
+      return { error: "Merchant not found" };
+    }
+    finalMerchantId = merchant.id;
   }
 
   // Build query - get global items + location-specific items
   let query = supabase
     .from("inventory_items")
     .select("id, name, sku, unit_type, cost_per_unit, location_id")
-    .eq("merchant_id", merchant.id)
+    .eq("merchant_id", finalMerchantId)
     .order("name");
 
   // If viewing a specific location, get both global (location_id IS NULL)

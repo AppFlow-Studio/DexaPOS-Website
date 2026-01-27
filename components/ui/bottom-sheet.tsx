@@ -58,7 +58,7 @@ function BottomSheetOverlay({
                 "duration-300 ease-out",
                 className
             )}
-            style={{ zIndex: 51 + (level - 1) * 10 }}
+            style={{ zIndex: 100 + (level - 1) * 10 }}
             {...props}
         />
     )
@@ -102,7 +102,7 @@ function BottomSheetContent({
                     level > 1 && "data-[state=open]:scale-100",
                     className
                 )}
-                style={{ zIndex: 50 + (level - 1) * 10 + 1 }}
+                style={{ zIndex: 100 + (level - 1) * 10 + 1 }}
                 {...props}
             >
                 {/* Drag Handle */}

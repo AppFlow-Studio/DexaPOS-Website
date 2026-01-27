@@ -103,10 +103,10 @@ export function useAdminCreateStation() {
     }) => adminCreateStation(merchantId, input),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantStations(variables.merchantId),
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'stations'],
       })
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantStationStats(variables.merchantId),
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'station-stats'],
       })
     },
   })
@@ -130,7 +130,7 @@ export function useAdminUpdateStation() {
     }) => adminUpdateStation(stationId, input),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantStations(variables.merchantId),
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'stations'],
       })
     },
   })
@@ -152,10 +152,10 @@ export function useAdminDeactivateStation() {
     }) => adminDeactivateStation(stationId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantStations(variables.merchantId),
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'stations'],
       })
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantStationStats(variables.merchantId),
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'station-stats'],
       })
     },
   })
@@ -177,10 +177,10 @@ export function useAdminReactivateStation() {
     }) => adminReactivateStation(stationId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantStations(variables.merchantId),
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'stations'],
       })
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantStationStats(variables.merchantId),
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'station-stats'],
       })
     },
   })
@@ -202,10 +202,10 @@ export function useAdminDeleteStation() {
     }) => adminDeleteStation(stationId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantStations(variables.merchantId),
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'stations'],
       })
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantStationStats(variables.merchantId),
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'station-stats'],
       })
     },
   })
@@ -283,10 +283,10 @@ export function useAdminCreateTerminal() {
     }) => adminCreateTerminal(merchantId, input),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantPaymentTerminals(variables.merchantId),
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'payment-terminals'],
       })
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantTerminalStats(variables.merchantId),
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'terminal-stats'],
       })
     },
   })
@@ -310,7 +310,7 @@ export function useAdminUpdateTerminal() {
     }) => adminUpdateTerminal(terminalId, input),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantPaymentTerminals(variables.merchantId),
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'payment-terminals'],
       })
     },
   })
@@ -334,10 +334,10 @@ export function useAdminLinkTerminal() {
     }) => adminLinkTerminalToStation(terminalId, stationId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantPaymentTerminals(variables.merchantId),
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'payment-terminals'],
       })
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantStations(variables.merchantId),
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'stations'],
       })
     },
   })
@@ -359,10 +359,10 @@ export function useAdminUnlinkTerminal() {
     }) => adminUnlinkTerminalFromStation(terminalId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantPaymentTerminals(variables.merchantId),
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'payment-terminals'],
       })
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantStations(variables.merchantId),
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'stations'],
       })
     },
   })
@@ -384,10 +384,10 @@ export function useAdminDeleteTerminal() {
     }) => adminDeleteTerminal(terminalId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantPaymentTerminals(variables.merchantId),
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'payment-terminals'],
       })
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantTerminalStats(variables.merchantId),
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'terminal-stats'],
       })
     },
   })
@@ -409,10 +409,10 @@ export function useAdminTestTerminalConnection() {
     }) => adminTestTerminalConnection(terminalId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantPaymentTerminals(variables.merchantId),
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'payment-terminals'],
       })
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantTerminalStats(variables.merchantId),
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'terminal-stats'],
       })
     },
   })

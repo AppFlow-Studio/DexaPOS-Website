@@ -58,6 +58,10 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
+import { useMerchantDetails } from '@/lib/queries/use-merchants'
+
+import { RecipeManager } from '@/app/dashboard/menu/components/RecipeManager'
+import { ItemPreviewCard } from '@/components/dashboard/menu/ItemPreviewCard'
 
 import {
   useAdminMenuItemDetails,
@@ -168,6 +172,8 @@ export function ItemDetailSheet({
   const [adminNotes, setAdminNotes] = useState('')
   const [originalNotes, setOriginalNotes] = useState('')
   const [isSavingNotes, setIsSavingNotes] = useState(false)
+
+  const { data: merchantDetails } = useMerchantDetails(merchantId)
 
   const hasNotesChanged = adminNotes !== originalNotes
 
@@ -351,6 +357,25 @@ export function ItemDetailSheet({
 
                 <Separator />
 
+                {/* POS Preview */}
+                <BottomSheetSection title="POS Preview">
+                  <div className="flex justify-center p-4 bg-muted/20 rounded-xl border border-dashed">
+                    <div className="max-w-[300px] w-full">
+                      <ItemPreviewCard
+                        name={item.name}
+                        description={item.description || undefined}
+                        price={item.effective_price}
+                        cashPrice={item.effective_cash_price || undefined}
+                        image={item.image || undefined}
+                        categories={item.categories?.map((c) => c.name)}
+                        availability={item.effective_availability}
+                      />
+                    </div>
+                  </div>
+                </BottomSheetSection>
+
+                <Separator />
+
                 {/* Price Breakdown */}
                 <BottomSheetSection title="Price Information">
                   {/* Effective Price */}
@@ -514,6 +539,18 @@ export function ItemDetailSheet({
                   )}
                 </BottomSheetSection>
 
+                {/* Recipe / Ingredients Section */}
+                <RecipeManager
+                  menuItemId={item.id}
+                  menuItemName={item.name}
+                  clerkOrgId={merchantDetails?.clerk_org_id}
+                  merchantId={merchantId}
+                  locationId={locationId}
+                  isEditable={
+                    !isLocationView || (!!item.location_id && item.location_id === locationId)
+                  }
+                />
+
                 {/* Settings */}
                 <BottomSheetSection title="Settings">
                   <div className="grid grid-cols-2 gap-4">
@@ -553,6 +590,24 @@ export function ItemDetailSheet({
                           {channel}
                         </Badge>
                       ))}
+                    </div>
+                  </div>
+                </BottomSheetSection>
+
+                {/* Quick Stats */}
+                <BottomSheetSection title="Quick Stats">
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="rounded-lg border p-3 text-center bg-muted/20">
+                      <p className="text-xs text-muted-foreground mb-1">Categories</p>
+                      <p className="text-lg font-bold">{item.categories?.length || 0}</p>
+                    </div>
+                    <div className="rounded-lg border p-3 text-center bg-muted/20">
+                      <p className="text-xs text-muted-foreground mb-1">Modifiers</p>
+                      <p className="text-lg font-bold">{item.modifier_groups_count || 0}</p>
+                    </div>
+                    <div className="rounded-lg border p-3 text-center bg-muted/20">
+                      <p className="text-xs text-muted-foreground mb-1">Menus</p>
+                      <p className="text-lg font-bold">{item.menu_count || 0}</p>
                     </div>
                   </div>
                 </BottomSheetSection>

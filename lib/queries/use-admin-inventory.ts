@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { adminKeys } from './admin-keys'
+import { GetInventoryItems, GetVendors, GetInventoryStats } from '@/app/dashboard/actions/inventory'
 
 // Types
 export interface AdminInventoryItem {
@@ -9,7 +10,7 @@ export interface AdminInventoryItem {
     category?: string
     current_stock: number
     unit_type: string
-    stock_mode: 'in_stock' | 'out_of_stock' | 'low_stock' | 'manual'
+    stock_mode: 'in_stock' | 'out_of_stock' | 'low_stock' | 'manual' | 'stock_tracking'
     reorder_point?: number
     cost_per_unit: number
     location_count?: number
@@ -40,9 +41,8 @@ export function useAdminInventoryItems(clerkOrgId: string, locationId: string | 
     return useQuery<AdminInventoryItem[]>({
         queryKey: ['admin', 'inventory', 'items', clerkOrgId, locationId],
         queryFn: async () => {
-             // Placeholder: Replace with actual server action call
-             // const response = await getAdminInventoryItems(clerkOrgId, locationId)
-             return []
+             const data = await GetInventoryItems(clerkOrgId, locationId)
+             return data as unknown as AdminInventoryItem[]
         },
         enabled: !!clerkOrgId,
     })
@@ -52,8 +52,8 @@ export function useAdminVendors(clerkOrgId: string, locationId: string | null) {
     return useQuery<AdminVendor[]>({
         queryKey: ['admin', 'inventory', 'vendors', clerkOrgId, locationId],
         queryFn: async () => {
-             // Placeholder: Replace with actual server action call
-             return []
+             const data = await GetVendors(clerkOrgId, locationId)
+             return data as unknown as AdminVendor[]
         },
         enabled: !!clerkOrgId,
     })
@@ -63,12 +63,14 @@ export function useAdminInventoryStats(clerkOrgId: string, locationId: string | 
     return useQuery<AdminInventoryStats>({
         queryKey: ['admin', 'inventory', 'stats', clerkOrgId, locationId],
         queryFn: async () => {
-             // Placeholder: Replace with actual server action call
+             const stats = await GetInventoryStats(clerkOrgId, locationId)
+             if (!stats) return { totalItems: 0, lowStock: 0, outOfStock: 0, totalValue: 0 }
+             
              return {
-                 totalItems: 0,
-                 lowStock: 0,
-                 outOfStock: 0,
-                 totalValue: 0
+                 totalItems: stats.totalItems,
+                 lowStock: stats.lowStock,
+                 outOfStock: stats.outOfStock,
+                 totalValue: stats.totalValue
              }
         },
         enabled: !!clerkOrgId,

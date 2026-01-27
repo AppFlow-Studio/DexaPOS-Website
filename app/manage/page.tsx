@@ -18,94 +18,89 @@ import {
   UserPlus2,
   Store,
 } from 'lucide-react'
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts'
 import { AdminInviteWizard } from './organizations/[organizationId]/components/AdminInviteWizard'
 import Link from 'next/link'
+import { usePlatformKPIs, usePlatformSalesTrend, useTopMerchants } from '@/lib/queries/use-platform-analytics'
+import { format } from 'date-fns'
+import { Skeleton } from '@/components/ui/skeleton'
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 
 // HQ Organization ID for direct admin invites
 const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID || 'org_33z36QibAMZy6kc2xZNYmDl5duh'
 
-const kpiData = [
-  {
-    title: 'Total Revenue',
-    value: '$1,250.00',
-    change: '+12.5%',
-    trend: 'up',
-    description: 'Trending up this month',
-    subtitle: 'Visitors for the last 6 months',
-    icon: DollarSign,
+const chartConfig = {
+  revenue: {
+    label: 'Platform Revenue',
+    color: 'hsl(var(--chart-1))',
   },
-  {
-    title: 'New Merchants',
-    value: '1,234',
-    change: '-20%',
-    trend: 'down',
-    description: 'Down 20% this period',
-    subtitle: 'Acquisition needs attention',
-    icon: Building2,
+  merchants: {
+    label: 'Active Merchants',
+    color: 'hsl(var(--chart-2))',
   },
-  {
-    title: 'Active Accounts',
-    value: '45,678',
-    change: '+12.5%',
-    trend: 'up',
-    description: 'Strong user retention',
-    subtitle: 'Engagement exceed targets',
-    icon: Users,
-  },
-  {
-    title: 'Growth Steps',
-    value: '4.2',
-    change: '+8.1%',
-    trend: 'up',
-    description: 'Metrics trending positive',
-    subtitle: 'Performance indicators',
-    icon: Activity,
-  },
-]
-
-const chartData = [
-  { date: 'Jun 1', visitors: 1200, revenue: 800 },
-  { date: 'Jun 2', visitors: 1900, revenue: 1200 },
-  { date: 'Jun 3', visitors: 3000, revenue: 1800 },
-  { date: 'Jun 4', visitors: 2800, revenue: 1600 },
-  { date: 'Jun 5', visitors: 1890, revenue: 1100 },
-  { date: 'Jun 6', visitors: 2390, revenue: 1400 },
-  { date: 'Jun 7', visitors: 3490, revenue: 2100 },
-  { date: 'Jun 8', visitors: 3200, revenue: 1900 },
-  { date: 'Jun 9', visitors: 2800, revenue: 1600 },
-  { date: 'Jun 10', visitors: 3100, revenue: 1800 },
-  { date: 'Jun 11', visitors: 2900, revenue: 1700 },
-  { date: 'Jun 12', visitors: 3400, revenue: 2000 },
-  { date: 'Jun 13', visitors: 3600, revenue: 2200 },
-  { date: 'Jun 14', visitors: 3200, revenue: 1900 },
-  { date: 'Jun 15', visitors: 2800, revenue: 1600 },
-  { date: 'Jun 16', visitors: 3000, revenue: 1800 },
-  { date: 'Jun 17', visitors: 3500, revenue: 2100 },
-  { date: 'Jun 18', visitors: 3800, revenue: 2300 },
-  { date: 'Jun 19', visitors: 3400, revenue: 2000 },
-  { date: 'Jun 20', visitors: 3200, revenue: 1900 },
-  { date: 'Jun 21', visitors: 3000, revenue: 1800 },
-  { date: 'Jun 22', visitors: 2800, revenue: 1600 },
-  { date: 'Jun 23', visitors: 3200, revenue: 1900 },
-]
-
-const merchantData = [
-  { name: 'Coffee Shop A', transactions: 245, revenue: 12500, growth: 12.5 },
-  { name: 'Restaurant B', transactions: 189, revenue: 9800, growth: 8.2 },
-  { name: 'Retail Store C', transactions: 156, revenue: 7200, growth: -2.1 },
-  { name: 'Bakery D', transactions: 134, revenue: 5600, growth: 15.3 },
-  { name: 'Pharmacy E', transactions: 98, revenue: 4200, growth: 5.7 },
-]
+}
 
 export default function Dashboard() {
   const [isAdminInviteOpen, setIsAdminInviteOpen] = useState(false)
+  const { data: kpis, isLoading: kpisLoading } = usePlatformKPIs()
+  const { data: salesTrend, isLoading: salesLoading } = usePlatformSalesTrend()
+  const { data: topMerchants, isLoading: merchantsLoading } = useTopMerchants(5)
+
+  const kpiItems = [
+    {
+      title: 'Total Revenue',
+      value: kpis ? `$${kpis.totalRevenue.toLocaleString()}` : '$0.00',
+      change: kpis?.revenueChange || '0%',
+      trend: 'up',
+      description: 'Trending up this month',
+      subtitle: '30-day aggregate',
+      icon: DollarSign,
+    },
+    {
+      title: 'Total Merchants',
+      value: kpis ? kpis.totalMerchants.toLocaleString() : '0',
+      change: kpis?.merchantChange || '0%',
+      trend: 'up',
+      description: 'Platform capacity',
+      subtitle: 'Registered organizations',
+      icon: Building2,
+    },
+    {
+      title: 'Active Accounts',
+      value: kpis ? kpis.activeAccounts.toLocaleString() : '0',
+      change: kpis?.activeChange || '0%',
+      trend: 'up',
+      description: '30-day active pool',
+      subtitle: 'Transactional activity',
+      icon: Users,
+    },
+    {
+      title: 'Platform Growth',
+      value: kpis ? `${kpis.growthRate.toFixed(1)}%` : '0%',
+      change: kpis?.growthChange || '0%',
+      trend: 'up',
+      description: 'Metrics trending positive',
+      subtitle: 'Velocity indicator',
+      icon: Activity,
+    },
+  ]
+
+  const chartData = salesTrend?.map(item => ({
+    ...item,
+    formattedDate: format(new Date(item.date), 'MMM d')
+  })) || []
+
+  const merchantChartData = topMerchants?.map((m, index) => ({
+    name: m.name,
+    revenue: m.revenue,
+    color: `hsl(var(--chart-${(index % 5) + 1}))`
+  })) || []
 
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {kpiData.map((kpi) => (
+        {kpiItems.map((kpi) => (
           <Card key={kpi.title}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -114,19 +109,24 @@ export default function Dashboard() {
               <kpi.icon className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{kpi.value}</div>
-              <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                {kpi.trend === 'up' ? (
-                  <ArrowUpRight className="h-3 w-3 text-green-600" />
-                ) : (
-                  <ArrowDownRight className="h-3 w-3 text-red-600" />
-                )}
-                <span className={kpi.trend === 'up' ? 'text-green-600' : 'text-red-600'}>
-                  {kpi.change}
-                </span>
-                <span>{kpi.description}</span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">{kpi.subtitle}</p>
+              {kpisLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-8 w-24" />
+                  <Skeleton className="h-4 w-full" />
+                </div>
+              ) : (
+                <>
+                  <div className="text-2xl font-bold">{kpi.value}</div>
+                  <div className="flex items-center space-x-2 text-xs text-muted-foreground">
+                    <ArrowUpRight className="h-3 w-3 text-green-600" />
+                    <span className="text-green-600">
+                      {kpi.change}
+                    </span>
+                    <span>{kpi.description}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">{kpi.subtitle}</p>
+                </>
+              )}
             </CardContent>
           </Card>
         ))}
@@ -136,60 +136,84 @@ export default function Dashboard() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4">
           <CardHeader>
-            <CardTitle>Total Visitors</CardTitle>
-            <CardDescription>Total for the last 3 months</CardDescription>
+            <CardTitle>Platform Sales Trend</CardTitle>
+            <CardDescription>Aggregate revenue across all merchants (30 Days)</CardDescription>
           </CardHeader>
           <CardContent className="pl-2">
-            <div className="flex items-center space-x-2 mb-4">
-              <Button variant="outline" size="sm">
-                Last 3 months
-              </Button>
-              <Button variant="ghost" size="sm">
-                Last 6 months
-              </Button>
-            </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip />
-                <Area
-                  type="monotone"
-                  dataKey="visitors"
-                  stackId="1"
-                  stroke="var(--primary)"
-                  fill="var(--primary)"
-                  fillOpacity={0.3}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="revenue"
-                  stackId="2"
-                  stroke="var(--primary)"
-                  fill="var(--primary)"
-                  fillOpacity={0.1}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            {salesLoading ? (
+              <div className="h-[300px] flex items-center justify-center">
+                <Skeleton className="h-[280px] w-full" />
+              </div>
+            ) : chartData.length > 0 ? (
+              <ChartContainer config={chartConfig} className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="formattedDate" tickLine={false} axisLine={false} tickMargin={8} minTickGap={32} />
+                    <YAxis tickLine={false} axisLine={false} tickFormatter={(val) => `$${val}`} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Area
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="var(--primary)"
+                      fill="var(--primary)"
+                      fillOpacity={0.2}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            ) : (
+              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                No transaction data found for the last 30 days.
+              </div>
+            )}
           </CardContent>
         </Card>
 
         <Card className="col-span-3">
           <CardHeader>
             <CardTitle>Top Merchants</CardTitle>
-            <CardDescription>Revenue by merchant this month</CardDescription>
+            <CardDescription>Revenue by merchant (Last 30 Days)</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={merchantData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="revenue" fill="var(--primary)" />
-              </BarChart>
-            </ResponsiveContainer>
+            {merchantsLoading ? (
+              <div className="h-[300px] flex items-center justify-center">
+                <Skeleton className="h-[280px] w-full" />
+              </div>
+            ) : merchantChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={merchantChartData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} />
+                  <YAxis tickLine={false} axisLine={false} hide />
+                  <Tooltip 
+                    cursor={{fill: 'transparent'}}
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-background border rounded-lg p-2 shadow-sm text-xs">
+                            <p className="font-bold">{payload[0].payload.name}</p>
+                            <p className="text-muted-foreground">
+                              Revenue: ${payload[0].value?.toLocaleString()}
+                            </p>
+                          </div>
+                        )
+                      }
+                      return null
+                    }}
+                  />
+                  <Bar dataKey="revenue" radius={[4, 4, 0, 0]}>
+                    {merchantChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                No active merchants found.
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -257,28 +281,41 @@ export default function Dashboard() {
 
             <TabsContent value="performance" className="mt-6">
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Performance Metrics</h3>
+                <h3 className="text-lg font-semibold">High Performing Merchants</h3>
                 <div className="grid gap-4 md:grid-cols-3">
-                  {merchantData.map((merchant) => (
-                    <Card key={merchant.name}>
+                  {merchantsLoading ? (
+                    Array.from({ length: 3 }).map((_, i) => (
+                      <Card key={i}>
+                        <CardHeader className="pb-2">
+                          <Skeleton className="h-4 w-32" />
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                          <Skeleton className="h-8 w-24" />
+                          <Skeleton className="h-4 w-full" />
+                        </CardContent>
+                      </Card>
+                    ))
+                  ) : topMerchants?.map((merchant) => (
+                    <Card key={merchant.id}>
                       <CardHeader className="pb-2">
                         <CardTitle className="text-sm">{merchant.name}</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="text-2xl font-bold">${merchant.revenue.toLocaleString()}</div>
+                        <div className="text-2xl font-bold">${Number(merchant.revenue).toLocaleString()}</div>
                         <div className="flex items-center space-x-2 text-xs">
-                          {merchant.growth > 0 ? (
-                            <TrendingUp className="h-3 w-3 text-green-600" />
-                          ) : (
-                            <TrendingDown className="h-3 w-3 text-red-600" />
-                          )}
-                          <span className={merchant.growth > 0 ? 'text-green-600' : 'text-red-600'}>
-                            {merchant.growth > 0 ? '+' : ''}{merchant.growth}%
+                          <TrendingUp className="h-3 w-3 text-green-600" />
+                          <span className="text-green-600">
+                             +12.5%
                           </span>
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">
                           {merchant.transactions} transactions
                         </p>
+                        <Link href={`/manage/merchants/${merchant.id}`}>
+                          <Button variant="ghost" size="sm" className="w-full mt-2 h-7 text-xs">
+                            View Merchant
+                          </Button>
+                        </Link>
                       </CardContent>
                     </Card>
                   ))}

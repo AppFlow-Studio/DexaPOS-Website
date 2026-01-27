@@ -65,20 +65,10 @@ import {
 import { deleteAdminModifierGroup } from '@/app/manage/actions/admin-merchant/menus'
 import { adminKeys } from '@/lib/queries/admin-keys'
 
-// Form sheet
+// Sheets
 import { ModifierFormSheet } from './sheets/ModifierFormSheet'
-
-// ============================================================================
-// HELPERS
-// ============================================================================
-
-const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount)
+import { ModifierGroupDetailSheet } from './sheets/ModifierGroupDetailSheet'
+import { formatCurrency } from '@/lib/utils'
 
 // ============================================================================
 // MAIN COMPONENT
@@ -88,12 +78,14 @@ interface ModifiersTableProps {
   merchantId: string
   locationId: string | null
   isAllLocations: boolean
+  clerkOrgId: string
 }
 
 export function ModifiersTable({
   merchantId,
   locationId,
   isAllLocations,
+  clerkOrgId,
 }: ModifiersTableProps) {
   const [search, setSearch] = useState('')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
@@ -102,6 +94,17 @@ export function ModifiersTable({
   const [modifierSheetOpen, setModifierSheetOpen] = useState(false)
   const [modifierSheetMode, setModifierSheetMode] = useState<'create' | 'edit'>('create')
   const [editingGroup, setEditingGroup] = useState<AdminModifierGroup | null>(null)
+
+  // Detail sheet state
+  const [detailSheetOpen, setDetailSheetOpen] = useState(false)
+  const [selectedGroup, setSelectedGroup] = useState<AdminModifierGroup | null>(null)
+
+  // Fetch details for selected group
+  const { data: detailGroupDetails } = useAdminModifierGroupDetails(
+    merchantId,
+    selectedGroup?.id || null,
+    locationId
+  )
 
   // Delete confirmation
   const [deleteGroupConfirm, setDeleteGroupConfirm] = useState<AdminModifierGroup | null>(null)
@@ -219,16 +222,6 @@ export function ModifiersTable({
               />
             </div>
 
-            {/* Expand/Collapse All */}
-            <div className="flex gap-1">
-              <Button variant="outline" size="sm" onClick={expandAll}>
-                Expand All
-              </Button>
-              <Button variant="outline" size="sm" onClick={collapseAll}>
-                Collapse All
-              </Button>
-            </div>
-
             {/* Add Modifier Group */}
             <Button variant="default" size="sm" onClick={handleCreateModifier}>
               <Plus className="h-4 w-4 mr-2" />
@@ -273,6 +266,10 @@ export function ModifiersTable({
                 onToggle={() => toggleExpanded(group.id)}
                 onEdit={handleEditModifier}
                 onDelete={setDeleteGroupConfirm}
+                onShowDetails={(g) => {
+                  setSelectedGroup(g)
+                  setDetailSheetOpen(true)
+                }}
               />
             ))}
           </div>
@@ -292,6 +289,23 @@ export function ModifiersTable({
         group={editingGroup}
         groupDetails={editingGroupDetails}
         onSuccess={handleSheetSuccess}
+      />
+
+      {/* Modifier Detail Sheet */}
+      <ModifierGroupDetailSheet
+        open={detailSheetOpen}
+        onClose={() => {
+          setDetailSheetOpen(false)
+          setSelectedGroup(null)
+        }}
+        merchantId={merchantId}
+        locationId={locationId}
+        group={selectedGroup}
+        details={detailGroupDetails || null}
+        onEdit={(g) => {
+          setDetailSheetOpen(false)
+          handleEditModifier(g)
+        }}
       />
 
       {/* Delete Confirmation Dialog */}
@@ -334,6 +348,7 @@ interface ModifierGroupRowProps {
   onToggle: () => void
   onEdit: (group: AdminModifierGroup) => void
   onDelete: (group: AdminModifierGroup) => void
+  onShowDetails?: (group: AdminModifierGroup) => void
 }
 
 function ModifierGroupRow({
@@ -345,6 +360,7 @@ function ModifierGroupRow({
   onToggle,
   onEdit,
   onDelete,
+  onShowDetails,
 }: ModifierGroupRowProps) {
   // Fetch details only when expanded
   const { data: details, isLoading: detailsLoading } = useAdminModifierGroupDetails(
@@ -355,17 +371,22 @@ function ModifierGroupRow({
 
   return (
     <Collapsible open={isExpanded} onOpenChange={onToggle}>
-      <div className="border rounded-lg">
-        <CollapsibleTrigger asChild>
-          <div className="flex items-center gap-4 p-4 cursor-pointer hover:bg-muted/50 transition-colors">
-            {/* Expand Icon */}
-            <div className="text-muted-foreground">
-              {isExpanded ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
-            </div>
+      <div className="border rounded-lg group/row">
+        <div 
+          className="flex items-center gap-4 p-4 cursor-pointer hover:bg-muted/50 transition-colors"
+          onClick={() => onShowDetails?.(group)}
+        >
+          {/* Peeking Collapsible Icon - moved to left */}
+          <div 
+            className="text-muted-foreground hover:text-foreground p-1 rounded" 
+            onClick={(e) => { e.stopPropagation(); onToggle(); }}
+          >
+            {isExpanded ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </div>
 
             {/* Icon */}
             <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
@@ -424,30 +445,39 @@ function ModifierGroupRow({
             </div>
 
             {/* Actions */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(group); }}>
-                  <Pencil className="h-4 w-4 mr-2" />
-                  Edit Modifier Group
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={(e) => { e.stopPropagation(); onDelete(group); }}
-                  className="text-destructive"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Modifier Group
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <div onClick={(e) => e.stopPropagation()}>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onEdit(group)
+                    }}
+                  >
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Edit Modifier Group
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onDelete(group)
+                    }}
+                    className="text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Modifier Group
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
-        </CollapsibleTrigger>
 
-        <CollapsibleContent>
+          <CollapsibleContent>
           <div className="border-t">
             {detailsLoading ? (
               <div className="p-4 space-y-2">

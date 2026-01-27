@@ -1,10 +1,17 @@
 'use server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createClerkClient } from '@clerk/backend'
+import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
+
 export async function DeleteOrganization(organizationId: string) {
     try {
         const supabase = createServerSupabaseClient()
         const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
+
+        // Fetch organization details before deletion for audit log
+        const clerkOrg = await clerkClient.organizations.getOrganization({ organizationId })
+        const orgName = clerkOrg.name
+
         // Delete pending invites for this organization
         const { data: pendingInvites, error: pendingInvitesError } = await supabase.from('pending_org_admin_invites').select('*').eq('organization_id', organizationId)
         if (pendingInvitesError) {
@@ -25,7 +32,25 @@ export async function DeleteOrganization(organizationId: string) {
         if (organization) {
             // Delete Image from Supabase Storage and all pending invites
             const { data, error } = await supabase.storage.from('Organizations-Logos').remove([organizationId.toString() + '.png'])
+
+            // Log audit event
+            await LogAuditEvent({
+                clerkOrgId: organizationId,
+                action: `Deleted Organization: ${orgName}`,
+                actionCategory: 'organization',
+                resourceType: 'organization',
+                resourceId: organizationId,
+                resourceName: orgName,
+                severity: 'info',
+                metadata: {
+                    organization_id: organizationId,
+                    method: 'DeleteOrganization',
+                    admin_action: true,
+                    revoked_invites: pendingInvites.length,
+                },
+            })
         }
+        return { success: true }
     }
     catch (error) {
         console.error('Error deleting organization:', error)
@@ -35,3 +60,4 @@ export async function DeleteOrganization(organizationId: string) {
         }
     }
 }
+

@@ -86,10 +86,13 @@ import { deleteAdminCategory, updateAdminCategoryItemsOrder, updateAdminCategori
 import { CategoryFormSheet } from './sheets/CategoryFormSheet'
 import { CategoryDetailSheet } from './sheets/CategoryDetailSheet'
 import { AddItemToCategoryWizard } from '@/components/dashboard/menu/categories/AddItemToCategoryWizard'
+import { CategoryItemsList } from './CategoryItemsList'
+import { removeAdminItemFromCategory } from '@/app/manage/actions/admin-merchant/menus'
+import { ItemDetailSheet } from './sheets/ItemDetailSheet'
 
 interface CategoriesTableProps {
   merchantId: string
-  locationId?: string
+  locationId: string | null
   isAllLocations: boolean
   clerkOrgId: string
 }
@@ -122,6 +125,10 @@ export function CategoriesTable({
   
   const [deleteCategoryConfirm, setDeleteCategoryConfirm] = useState<AdminCategory | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // Item states
+  const [itemDetailOpen, setItemDetailOpen] = useState(false)
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
 
   const queryClient = useQueryClient()
 
@@ -244,6 +251,27 @@ export function CategoriesTable({
     setAddItemWizardCategory(category)
     setAddItemWizardOpen(true)
   }
+
+  const handleEditItem = (itemId: string) => {
+    setSelectedItemId(itemId)
+    setItemDetailOpen(true)
+  }
+
+  const handleRemoveItem = async (category: AdminCategory, itemId: string) => {
+    if (!confirm('Are you sure you want to remove this item from the category?')) return
+
+    try {
+      const result = await removeAdminItemFromCategory(merchantId, category.id, itemId)
+      if (result.success) {
+        toast.success('Item removed from category')
+        invalidateCategories()
+      } else {
+        toast.error(result.error || 'Failed to remove item')
+      }
+    } catch (err) {
+      toast.error('An error occurred while removing the item')
+    }
+  }
   
   const handleDeleteCategory = async () => {
     if (!deleteCategoryConfirm) return
@@ -290,16 +318,6 @@ export function CategoriesTable({
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-9 w-[200px]"
                 />
-              </div>
-
-              {/* Expand/Collapse All */}
-              <div className="flex gap-1">
-                <Button variant="outline" size="sm" onClick={expandAll}>
-                  Expand All
-                </Button>
-                <Button variant="outline" size="sm" onClick={collapseAll}>
-                  Collapse All
-                </Button>
               </div>
 
               {/* Create Category */}
@@ -403,9 +421,11 @@ export function CategoriesTable({
                       onViewDetails={() => handleViewDetails(category)}
                       onEdit={() => handleEditCategory(category)}
                       onDelete={() => setDeleteCategoryConfirm(category)}
-                      onUpdate={invalidateCategories}
-                      onAddItem={() => handleAddItem(category)}
-                      isDragEnabled={!isFiltered}
+                       onUpdate={invalidateCategories}
+                       onAddItem={() => handleAddItem(category)}
+                       onEditItem={handleEditItem}
+                       onRemoveItem={(itemId) => handleRemoveItem(category, itemId)}
+                       isDragEnabled={!isFiltered}
                     />
                   ))}
                 </SortableContext>
@@ -491,6 +511,16 @@ export function CategoriesTable({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ItemDetailSheet
+        open={itemDetailOpen}
+        onClose={() => setItemDetailOpen(false)}
+        itemId={selectedItemId}
+        merchantId={merchantId}
+        locationId={locationId || null}
+        onEdit={() => {}} // Handle item edit if needed
+        onSuccess={invalidateCategories}
+      />
     </>
   )
 }
@@ -538,6 +568,8 @@ interface CategoryRowProps {
   onDelete: () => void
   onUpdate: () => void
   onAddItem: () => void
+  onEditItem: (itemId: string) => void
+  onRemoveItem: (itemId: string) => void
   dragHandleProps?: any
 }
 
@@ -552,6 +584,8 @@ function CategoryRow({
   onDelete,
   onUpdate,
   onAddItem,
+  onEditItem,
+  onRemoveItem,
   dragHandleProps,
 }: CategoryRowProps) {
   // We'll reimplement Item DND here or use existing
@@ -562,35 +596,34 @@ function CategoryRow({
     <Collapsible
       open={isExpanded}
       onOpenChange={onToggle}
-      className="border rounded-lg bg-card"
+      className="border rounded-lg bg-card group/row"
     >
-      <div className="flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors group">
+      <div 
+        className="flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors cursor-pointer"
+        onClick={() => onViewDetails()}
+      >
          {/* Drag Handle */}
         {dragHandleProps && (
           <div
             {...dragHandleProps}
             className="cursor-grab text-muted-foreground/30 hover:text-foreground mr-1"
             onClick={(e) => e.stopPropagation()}
-            onMouseDown={(e) => {
-               // Prevent collapsible toggle when clicking handle
-               // e.stopPropagation() is handled by parent div logic usually?
-            }}
           >
             <GripVertical className="h-4 w-4" />
           </div>
         )}
 
-        {/* Expand/Collapse Trigger Icon */}
-        <CollapsibleTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-            {isExpanded ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
-            )}
-            <span className="sr-only">Toggle</span>
-          </Button>
-        </CollapsibleTrigger>
+        {/* Peeking Collapsible Icon - moved to left */}
+        <div 
+          className="text-muted-foreground hover:text-foreground p-1 rounded" 
+          onClick={(e) => { e.stopPropagation(); onToggle(); }}
+        >
+          {isExpanded ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+        </div>
 
         {/* Category Info */}
         <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
@@ -629,8 +662,7 @@ function CategoryRow({
             </div>
           </div>
 
-          <div className="flex justify-end items-center gap-1">
-             {/* Read-only view doesn't have edit buttons if we wanted, but this is Admin */}
+           <div className="flex justify-end items-center gap-1" onClick={(e) => e.stopPropagation()}>
             <Button variant="ghost" size="sm" onClick={onAddItem}>
                 <Plus className="h-4 w-4 mr-1"/> Item
             </Button>
@@ -645,14 +677,14 @@ function CategoryRow({
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={onViewDetails}>
                   <Eye className="h-4 w-4 mr-2" />
-                  View Details
+                  Quick View
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onEdit}>
                   <Pencil className="h-4 w-4 mr-2" />
-                  Edit Category
+                  Category Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem
+               <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
                   onClick={onDelete}
                 >
@@ -672,18 +704,15 @@ function CategoryRow({
                  The CategoryItemRow list should be here. 
                  Note: nested DND might be complex. For now just render items list. 
               */}
-              {(category.items && category.items.length > 0) ? (
-                 <div className="space-y-1 mt-2">
-                    {category.items.map((item: any, index: number) => (
-                       <CategoryItemRow 
-                          key={item.id || item.menu_item_id} 
-                          item={item} 
-                          index={index}
-                          onEdit={() => {}}
-                          onRemove={() => {}}
-                       />
-                    ))}
-                 </div>
+               {(category.items && category.items.length > 0) ? (
+                  <CategoryItemsList
+                    merchantId={merchantId}
+                    categoryId={category.id}
+                    items={category.items}
+                    onSuccess={onUpdate}
+                    onEditItem={onEditItem}
+                    onRemoveItem={onRemoveItem}
+                  />
               ) : (
                   <div className="py-6 text-center text-muted-foreground">
                       <Utensils className="h-8 w-8 mx-auto mb-2 opacity-20" />

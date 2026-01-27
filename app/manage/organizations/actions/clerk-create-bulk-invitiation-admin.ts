@@ -2,7 +2,10 @@
 
 import { createClerkClient, Invitation } from '@clerk/backend'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
+
 export async function createBulkInvitationAdmin(organizationId: string, invitations: { email: string, role: string, level_type: string }[]) {
+
     try {
         const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
         const invitationsResponse = await clerkClient.invitations.createInvitationBulk(
@@ -38,16 +41,46 @@ export async function createBulkInvitationAdmin(organizationId: string, invitati
                 message: 'Error creating bulk invitation: ' + error.message,
             }
         }
+
+        // Log audit event
+        // Find the merchant ID for this organization to log correctly
+        const { data: merchant } = await supabase
+            .from('merchants')
+            .select('id')
+            .eq('clerk_org_id', organizationId)
+            .single()
+
+        await LogAuditEvent({
+            merchantId: merchant?.id,
+            clerkOrgId: organizationId,
+            action: `Sent Bulk Admin Invitations (${invitations.length})`,
+            actionCategory: 'people',
+            resourceType: 'invitation',
+            metadata: {
+                invitation_count: invitations.length,
+                emails: invitations.map(i => i.email),
+                roles: Array.from(new Set(invitations.map(i => i.role))),
+                admin_action: true,
+            },
+        })
+
         return {
             success: true,
             message: 'Bulk invitation sent successfully',
         }
+
     }
-    catch (error) {
+    catch (error: any) {
         console.error('Error creating bulk invitation:', error)
+        let errorMessage = 'Unknown error'
+        if (error?.errors && Array.isArray(error.errors) && error.errors.length > 0) {
+            errorMessage = error.errors[0].longMessage || error.errors[0].message || errorMessage
+        } else if (error?.message) {
+            errorMessage = error.message
+        }
         return {
             success: false,
-            message: 'Error creating bulk invitation: ' + error?.errors[0].longMessage || 'Unknown error',
+            message: 'Error creating bulk invitation: ' + errorMessage,
         }
     }
 }

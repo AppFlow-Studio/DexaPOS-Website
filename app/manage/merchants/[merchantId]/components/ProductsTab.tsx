@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
+    CheckCircle2,
     Package,
     Search,
     Truck,
@@ -17,7 +18,9 @@ import {
     Globe,
     Filter,
     Ghost,
-    Boxes
+    Boxes,
+    Plus,
+    Edit2
 } from 'lucide-react'
 import {
     useAdminInventoryItems,
@@ -27,6 +30,13 @@ import {
 import { MerchantDetails } from '@/types/merchant'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { SetLocationStock } from '@/app/dashboard/actions/location-stock'
+import { UpdateItemStock } from '@/app/dashboard/actions/inventory'
+import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { Loader2 as Spinner } from 'lucide-react'
+import { AdminAddItemDialog } from './inventory/AdminAddItemDialog'
+import { AdminEditItemDialog } from './inventory/AdminEditItemDialog'
 
 interface ProductsTabProps {
     merchantInfo?: MerchantDetails
@@ -36,6 +46,10 @@ export function ProductsTab({ merchantInfo }: ProductsTabProps) {
     const [activeTab, setActiveTab] = useState('catalog')
     const [searchTerm, setSearchTerm] = useState('')
     const [selectedLocationId, setSelectedLocationId] = useState<string>('all')
+
+    const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+    const [editingItem, setEditingItem] = useState<any | null>(null)
+    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
 
     const clerkOrgId = merchantInfo?.clerk_org_id || ''
     const locations = merchantInfo?.locations || []
@@ -62,6 +76,59 @@ export function ProductsTab({ merchantInfo }: ProductsTabProps) {
             vendor.name.toLowerCase().includes(searchTerm.toLowerCase())
     )
 
+    const queryClient = useQueryClient()
+    const [editingStockId, setEditingStockId] = useState<string | null>(null)
+    const [stockValue, setStockValue] = useState<string>('')
+    const [isUpdatingStock, setIsUpdatingStock] = useState(false)
+
+    const handleStockUpdate = async (itemId: string, currentStock: number) => {
+        if (!stockValue) {
+            setEditingStockId(null)
+            return
+        }
+
+        setIsUpdatingStock(true)
+        try {
+            let newValue = currentStock
+            if (stockValue.startsWith('+')) {
+                newValue += parseFloat(stockValue.substring(1))
+            } else if (stockValue.startsWith('-')) {
+                newValue -= parseFloat(stockValue.substring(1))
+            } else {
+                newValue = parseFloat(stockValue)
+            }
+
+            if (isNaN(newValue)) {
+                toast.error('Invalid quantity')
+                return
+            }
+
+            let result
+            if (isAllLocations) {
+                // Update base inventory item stock
+                result = await UpdateItemStock(itemId, newValue)
+            } else {
+                // Update location-specific stock
+                result = await SetLocationStock(selectedLocationId, itemId, newValue)
+            }
+
+            if (result.error) {
+                toast.error(result.error)
+            } else {
+                toast.success('Stock updated')
+                queryClient.invalidateQueries({ queryKey: ['admin', 'inventory', 'items', clerkOrgId, selectedLocationId] })
+                queryClient.invalidateQueries({ queryKey: ['admin', 'inventory', 'stats', clerkOrgId, selectedLocationId] })
+            }
+        } catch (error) {
+            toast.error('Failed to update stock')
+            console.error(error)
+        } finally {
+            setIsUpdatingStock(false)
+            setEditingStockId(null)
+            setStockValue('')
+        }
+    }
+
     if (!clerkOrgId) {
         return (
             <Card>
@@ -85,27 +152,33 @@ export function ProductsTab({ merchantInfo }: ProductsTabProps) {
                         Viewing inventory for {selectedLocationId === 'all' ? 'all locations' : locations.find(l => l.id === selectedLocationId)?.name || 'selected location'}
                     </p>
                 </div>
-                {locations.length > 0 && (
-                    <div className="flex items-center gap-2">
-                         <MapPin className="h-4 w-4 text-muted-foreground" />
-                        <Select
-                            value={selectedLocationId}
-                            onValueChange={setSelectedLocationId}
-                        >
-                            <SelectTrigger className="w-[200px]">
-                                <SelectValue placeholder="Select location" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Global (All Locations)</SelectItem>
-                                {locations.map((loc: any) => (
-                                    <SelectItem key={loc.id} value={loc.id}>
-                                        {loc.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                )}
+                <div className="flex items-center gap-4">
+                    {locations.length > 0 && (
+                        <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                            <Select
+                                value={selectedLocationId}
+                                onValueChange={setSelectedLocationId}
+                            >
+                                <SelectTrigger className="w-[200px]">
+                                    <SelectValue placeholder="Select location" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Global (All Locations)</SelectItem>
+                                    {locations.map((loc: any) => (
+                                        <SelectItem key={loc.id} value={loc.id}>
+                                            {loc.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                    <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2">
+                        <Plus className="h-4 w-4" />
+                        Add Product
+                    </Button>
+                </div>
             </div>
 
             {/* Stats Overview */}
@@ -200,15 +273,35 @@ export function ProductsTab({ merchantInfo }: ProductsTabProps) {
                             ) : (
                                 <div className="divide-y">
                                      <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-muted/30 text-sm font-medium text-muted-foreground">
-                                        <div className="col-span-5">Item</div>
+                                        <div className="col-span-1"></div>
+                                        <div className="col-span-4">Item</div>
                                         <div className="col-span-2">Stock</div>
                                         <div className="col-span-3">Status</div>
                                         <div className="col-span-2 text-right">Cost</div>
                                     </div>
                                     {filteredItems.map((item) => (
-                                        <div key={item.id} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-muted/50 transition-colors">
-                                             <div className="col-span-5">
-                                                <div className="flex items-center gap-3">
+                                        <div key={item.id} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-muted/50 transition-colors group">
+                                            <div className="col-span-1">
+                                                <Button 
+                                                    size="icon" 
+                                                    variant="ghost" 
+                                                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    onClick={() => {
+                                                        setEditingItem(item);
+                                                        setIsEditDialogOpen(true);
+                                                    }}
+                                                >
+                                                    <Edit2 className="h-4 w-4 text-muted-foreground" />
+                                                </Button>
+                                            </div>
+                                             <div className="col-span-4">
+                                                <div 
+                                                    className="flex items-center gap-3 cursor-pointer"
+                                                    onClick={() => {
+                                                        setEditingItem(item);
+                                                        setIsEditDialogOpen(true);
+                                                    }}
+                                                >
                                                     <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
                                                         <Package className="h-5 w-5" />
                                                     </div>
@@ -222,7 +315,45 @@ export function ProductsTab({ merchantInfo }: ProductsTabProps) {
                                                 </div>
                                              </div>
                                              <div className="col-span-2">
-                                                 <div className="font-medium">{item.current_stock} <span className="text-xs text-muted-foreground">{item.unit_type}</span></div>
+                                                 {editingStockId === item.id ? (
+                                                     <div className="flex items-center gap-1">
+                                                         <Input
+                                                              autoFocus
+                                                              className="h-8 w-20 text-sm"
+                                                              value={stockValue}
+                                                              onChange={(e) => setStockValue(e.target.value)}
+                                                              onKeyDown={(e) => {
+                                                                  if (e.key === 'Enter') handleStockUpdate(item.id, item.current_stock)
+                                                                  if (e.key === 'Escape') setEditingStockId(null)
+                                                              }}
+                                                              placeholder={item.current_stock.toString()}
+                                                              disabled={isUpdatingStock}
+                                                         />
+                                                         {isUpdatingStock ? (
+                                                              <Spinner className="h-4 w-4 animate-spin text-muted-foreground" />
+                                                         ) : (
+                                                              <Button 
+                                                                 size="icon" 
+                                                                 variant="ghost" 
+                                                                 className="h-8 w-8"
+                                                                 onClick={() => handleStockUpdate(item.id, item.current_stock)}
+                                                              >
+                                                                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                                              </Button>
+                                                         )}
+                                                     </div>
+                                                 ) : (
+                                                     <div 
+                                                         className="font-medium cursor-pointer hover:bg-muted/80 hover:scale-105 transition-all p-1 rounded inline-block"
+                                                         onClick={() => {
+                                                              setEditingStockId(item.id)
+                                                              setStockValue('')
+                                                         }}
+                                                         title="Click to adjust stock (+/- supported)"
+                                                     >
+                                                         {item.current_stock} <span className="text-xs text-muted-foreground">{item.unit_type}</span>
+                                                     </div>
+                                                 )}
                                                  {isAllLocations && (item as any).location_count !== undefined && (
                                                      <div className="text-xs text-muted-foreground">across {(item as any).location_count} locs</div>
                                                  )}
@@ -304,6 +435,25 @@ export function ProductsTab({ merchantInfo }: ProductsTabProps) {
                     </Card>
                 </TabsContent>
             </Tabs>
+
+            {/* Dialogs */}
+            <AdminAddItemDialog 
+                open={isAddDialogOpen}
+                onOpenChange={setIsAddDialogOpen}
+                clerkOrgId={clerkOrgId}
+                merchantId={merchantInfo?.id || ''}
+                selectedLocationId={queryLocationId}
+                locations={locations}
+                vendors={vendors}
+            />
+
+            <AdminEditItemDialog 
+                open={isEditDialogOpen}
+                onOpenChange={setIsEditDialogOpen}
+                item={editingItem}
+                clerkOrgId={clerkOrgId}
+                vendors={vendors}
+            />
         </div>
     )
 }
