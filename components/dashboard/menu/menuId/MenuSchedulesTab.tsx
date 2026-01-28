@@ -18,6 +18,7 @@ interface MenuSchedulesTabProps {
     onAddSchedule: () => void
     onOpenScheduleSheet: () => void
     onRemoveSchedule: (scheduleId: string) => void
+    onEditSchedule?: (schedule: SchedulesModel & { schedule_time_slots: ScheduleTimeSlotsModel[] }) => void
 }
 
 export function MenuSchedulesTab({
@@ -26,6 +27,7 @@ export function MenuSchedulesTab({
     onAddSchedule,
     onOpenScheduleSheet,
     onRemoveSchedule,
+    onEditSchedule,
 }: MenuSchedulesTabProps) {
     return (
         <div className="space-y-4">
@@ -82,6 +84,7 @@ export function MenuSchedulesTab({
                                     schedule={schedule}
                                     index={index}
                                     onRemove={() => onRemoveSchedule(schedule.id)}
+                                    onEdit={onEditSchedule ? () => onEditSchedule(schedule) : undefined}
                                 />
                             ))}
                         </div>

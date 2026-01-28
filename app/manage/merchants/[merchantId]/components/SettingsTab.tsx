@@ -34,7 +34,7 @@ import { DeleteOrganizationDialog } from '../../../organizations/[organizationId
 import { useState, useEffect } from 'react'
 import { MerchantInfoModel } from '@/types/db-modles'
 import { useQuery } from '@tanstack/react-query'
-import { GetLocations } from '../../../../dashboard/actions/locations'
+import { GetLocations, UpdateLocation } from '../../../../dashboard/actions/locations'
 import {
     useAdminMerchantTaxRates,
     useAdminUpsertTaxRate,
@@ -215,6 +215,11 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo }: SettingsTabPr
                     <TabsTrigger value="taxes" className="gap-2">
                         <DollarSign className="h-4 w-4" />
                         Tax Settings
+                    </TabsTrigger>
+
+                    <TabsTrigger value="pricing" className="gap-2">
+                         <CreditCard className="h-4 w-4" />
+                         Pricing
                     </TabsTrigger>
 
                     <TabsTrigger value="general" className="gap-2">
@@ -455,6 +460,133 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo }: SettingsTabPr
                             </CardContent>
                         </Card>
                     )}
+                </TabsContent>
+
+                {/* Pricing Strategy Content */}
+                <TabsContent value="pricing" className="space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle>Pricing Strategy</CardTitle>
+                                    <CardDescription>
+                                        Configure pricing strategy for each location
+                                    </CardDescription>
+                                </div>
+                                <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+                                    <SelectTrigger className="w-[250px]">
+                                        <MapPin className="h-4 w-4 mr-2 text-muted-foreground" />
+                                        <SelectValue placeholder="Select location" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Locations</SelectItem>
+                                        {locations.map((loc: Location) => (
+                                            <SelectItem key={loc.id} value={loc.id}>
+                                                {loc.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                             {selectedLocationId === 'all' ? (
+                                 <div className="space-y-4">
+                                     {locations.map((location) => (
+                                         <div key={location.id} className="flex items-center justify-between p-4 border rounded-lg">
+                                             <div className="flex items-center gap-3">
+                                                 <MapPin className="h-5 w-5 text-muted-foreground" />
+                                                 <div>
+                                                     <p className="font-medium">{location.name}</p>
+                                                     <p className="text-sm text-muted-foreground">
+                                                         Strategy: {location.pricing_strategy === 'dual' ? 'Dual Pricing' : 'Manual'} 
+                                                         {location.pricing_strategy === 'dual' && ` (${location.dual_pricing_percentage}%)`}
+                                                     </p>
+                                                 </div>
+                                             </div>
+                                             <Button variant="outline" size="sm" onClick={() => setSelectedLocationId(location.id)}>
+                                                 <Edit className="h-4 w-4 mr-2" />
+                                                 Edit
+                                             </Button>
+                                         </div>
+                                     ))}
+                                 </div>
+                             ) : currentLocation ? (
+                                 <div className="space-y-6 max-w-lg">
+                                     <div className="space-y-2">
+                                         <Label>Pricing Strategy</Label>
+                                         <Select 
+                                             value={currentLocation.pricing_strategy || 'manual'}
+                                             onValueChange={async (val) => {
+                                                  try {
+                                                      // Call the server action to update location
+                                                      const result = await UpdateLocation(currentLocation.id, { 
+                                                          pricing_strategy: val as 'manual'| 'dual',
+                                                          // If switching to dual and no percentage is set, default to 4.0
+                                                          dual_pricing_percentage: val === 'dual' && !currentLocation.dual_pricing_percentage 
+                                                              ? 4.0 
+                                                              : currentLocation.dual_pricing_percentage
+                                                      });
+                                                      
+                                                      if (result.data) {
+                                                         toast.success('Strategy Updated Successfully');
+                                                         // Force a refetch of the merchant info to update the locations list
+                                                         refetchMerchantInfo();
+                                                      } else {
+                                                         toast.error(result.error || 'Failed to update');
+                                                      }
+                                                  } catch(e) { 
+                                                      console.error(e);
+                                                      toast.error('Error updating strategy'); 
+                                                  }
+                                             }}
+                                         >
+                                             <SelectTrigger>
+                                                 <SelectValue />
+                                             </SelectTrigger>
+                                             <SelectContent>
+                                                 <SelectItem value="manual">Manual Pricing</SelectItem>
+                                                 <SelectItem value="dual">Dual Pricing (Cash Discount)</SelectItem>
+                                             </SelectContent>
+                                         </Select>
+                                         <p className="text-sm text-muted-foreground">
+                                             {currentLocation.pricing_strategy === 'dual' 
+                                              ? 'Card prices are automatically higher than cash prices by the set percentage.'
+                                              : 'Manually set Independent Cash and Card prices.'}
+                                         </p>
+                                     </div>
+
+                                     {currentLocation.pricing_strategy === 'dual' && (
+                                         <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                                             <Label>Dual Pricing Percentage (%)</Label>
+                                             <div className="relative">
+                                                 <Input 
+                                                     type="number" 
+                                                     defaultValue={currentLocation.dual_pricing_percentage ?? 4.0}
+                                                     step="0.1"
+                                                     className="pr-8"
+                                                     onBlur={async (e) => {
+                                                         const val = parseFloat(e.target.value);
+                                                         if (isNaN(val)) return;
+                                                         if (val === currentLocation.dual_pricing_percentage) return;
+                                                         
+                                                         const result = await UpdateLocation(currentLocation.id, { dual_pricing_percentage: val });
+                                                          if (result.data) {
+                                                             toast.success('Percentage Updated');
+                                                             refetchMerchantInfo();
+                                                          } else {
+                                                             toast.error(result.error || 'Failed to update');
+                                                          }
+                                                     }}
+                                                 />
+                                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
+                                             </div>
+                                         </div>
+                                     )}
+                                 </div>
+                             ) : null}
+                        </CardContent>
+                    </Card>
                 </TabsContent>
 
 

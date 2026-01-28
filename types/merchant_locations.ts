@@ -29,6 +29,8 @@ export interface Location {
   latitude: number | null;
   longitude: number | null;
   timezone: string;
+  pricing_strategy: 'manual' | 'dual';
+  dual_pricing_percentage: number;
   is_active: boolean;
   is_accepting_orders: boolean;
   business_hours: BusinessHours;
@@ -323,6 +325,8 @@ export const createLocationSchema = z.object({
   latitude: z.number().min(-90).max(90).nullable().optional(),
   longitude: z.number().min(-180).max(180).nullable().optional(),
   timezone: z.string().default('America/New_York'),
+  pricing_strategy: z.enum(['manual', 'dual']).default('manual'),
+  dual_pricing_percentage: z.number().min(0).max(100).default(4.0),
   is_active: z.boolean().default(true),
   is_accepting_orders: z.boolean().default(true),
   business_hours: businessHoursSchema.default({}),

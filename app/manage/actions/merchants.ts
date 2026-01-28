@@ -112,7 +112,9 @@ export async function getMerchantDetails(
       postal_code,
       is_active,
       is_accepting_orders,
-      timezone
+      timezone,
+      pricing_strategy,
+      dual_pricing_percentage
     `)
     .eq('merchant_id', merchant.id)
     .order('name')
