@@ -60,6 +60,7 @@ import {
   Globe,
   GitCompare,
   Monitor,
+  MonitorPlay,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -485,6 +486,19 @@ function MerchantSidebar() {
                       <Link href="/dashboard/settings/stations">
                         <Monitor className="h-3 w-3" />
                         <span>Stations</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={pathname.startsWith(
+                        "/dashboard/settings/customer-display"
+                      )}
+                    >
+                      <Link href="/dashboard/settings/customer-display">
+                        <MonitorPlay className="h-3 w-3" />
+                        <span>Customer Display</span>
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>

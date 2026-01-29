@@ -27,9 +27,12 @@ export function ItemPreviewCard({
     availability = true,
     className,
 }: ItemPreviewCardProps) {
+    const safePrice = Number(price) || 0
+    const safeCashPrice = cashPrice ? Number(cashPrice) : undefined
+
     return (
         <Card className={cn(
-            "w-full  w-full overflow-hidden transition-all duration-300",
+            "w-full overflow-hidden transition-all duration-300",
             "bg-card border-2 border-border/50",
             "hover:shadow-xl hover:border-primary/30",
             className
@@ -111,13 +114,13 @@ export function ItemPreviewCard({
                 <div className="pt-2 flex items-baseline gap-2">
                     <span className={cn(
                         "text-2xl font-bold transition-all duration-300",
-                        price > 0 ? "text-primary" : "text-muted-foreground/30"
+                        safePrice > 0 ? "text-primary" : "text-muted-foreground/30"
                     )}>
-                        ${price > 0 ? price.toFixed(2) : '0.00'}
+                        ${safePrice > 0 ? safePrice.toFixed(2) : '0.00'}
                     </span>
-                    {cashPrice && cashPrice > 0 && (
+                    {safeCashPrice && safeCashPrice > 0 && (
                         <span className="text-sm text-muted-foreground">
-                            / ${cashPrice.toFixed(2)} cash
+                            / ${safeCashPrice.toFixed(2)} cash
                         </span>
                     )}
                 </div>
@@ -137,6 +140,9 @@ export function ItemPreviewRow({
     availability = true,
     className,
 }: ItemPreviewCardProps) {
+    const safePrice = Number(price) || 0
+    const safeCashPrice = cashPrice ? Number(cashPrice) : undefined
+
     return (
         <div className={cn(
             "flex items-center gap-4 p-3 rounded-lg border bg-card",
@@ -189,7 +195,7 @@ export function ItemPreviewRow({
                     </div>
                     <div className="text-right shrink-0">
                         <span className="font-semibold text-primary">
-                            ${price > 0 ? price.toFixed(2) : '0.00'}
+                            ${safePrice > 0 ? safePrice.toFixed(2) : '0.00'}
                         </span>
                         {!availability && (
                             <Badge variant="secondary" className="ml-2 text-xs">

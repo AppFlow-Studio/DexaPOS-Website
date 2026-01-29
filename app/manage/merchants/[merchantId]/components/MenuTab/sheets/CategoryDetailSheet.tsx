@@ -42,8 +42,12 @@ import {
   User,
   Calendar,
   FileText,
+  Clock,
+  ChevronRight,
+  Zap,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import Link from 'next/link'
 
 import {
   deleteAdminCategory,
@@ -52,6 +56,11 @@ import {
   type AdminCategory,
   type AuditInfo,
 } from '@/app/manage/actions/admin-merchant/menus'
+
+import { 
+    useAdminCategorySchedules,
+    type AdminSchedule
+} from '@/lib/queries/use-admin-merchant'
 
 // ============================================================================
 // PROPS
@@ -66,6 +75,8 @@ interface CategoryDetailSheetProps {
   onEdit: (category: AdminCategory) => void
   onSuccess: () => void
 }
+
+const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 // ============================================================================
 // COMPONENT
@@ -90,9 +101,15 @@ export function CategoryDetailSheet({
   const [originalNotes, setOriginalNotes] = useState('')
   const [isSavingNotes, setIsSavingNotes] = useState(false)
 
+  // Schedules state
+  const { data: schedules = [], isLoading: isLoadingSchedules } = useAdminCategorySchedules(
+    merchantId,
+    category?.id || null
+  )
+
   const hasNotesChanged = adminNotes !== originalNotes
   const isLocationView = locationId && locationId !== 'all'
- console.log(category)
+
   // Fetch audit info when category is loaded
   useEffect(() => {
     async function fetchAuditInfo() {
@@ -167,211 +184,205 @@ export function CategoryDetailSheet({
     }
   }
 
+  // Live Availability Check
+  const getAvailabilityStatus = () => {
+    if (!category?.is_active) return { label: 'Inactive', color: 'text-red-500', bg: 'bg-red-50' }
+    if (schedules.length === 0) return { label: 'Always Available', color: 'text-green-600', bg: 'bg-green-50' }
+
+    const now = new Date()
+    const currentDay = now.getDay()
+    const currentTimeStr = format(now, 'HH:mm')
+
+    let isCurrentlyActive = false
+
+    for (const schedule of schedules) {
+      if (!schedule.is_active) continue
+      for (const slot of schedule.schedule_time_slots) {
+        if (!slot.is_active) continue
+        if (slot.day_of_week === currentDay) {
+          if (currentTimeStr >= slot.start_time && currentTimeStr <= slot.end_time) {
+            isCurrentlyActive = true
+            break
+          }
+        }
+      }
+      if (isCurrentlyActive) break
+    }
+
+    if (isCurrentlyActive) {
+      return { label: 'Currently Live', color: 'text-green-600', bg: 'bg-green-50', icon: <Zap className="h-3 w-3 mr-1" /> }
+    } else {
+      return { label: 'Scheduled', color: 'text-amber-600', bg: 'bg-amber-50', icon: <Clock className="h-3 w-3 mr-1" /> }
+    }
+  }
+
+  const availability = getAvailabilityStatus()
+
   return (
     <>
       <BottomSheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-        <BottomSheetContent height="auto">
+        <BottomSheetContent className="!h-[95vh]">
           <BottomSheetHeader>
-            <BottomSheetTitle>Category Details</BottomSheetTitle>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-10 w-10 rounded-xl bg-orange-50 flex items-center justify-center overflow-hidden">
+                {category?.image ? (
+                   // eslint-disable-next-line @next/next/no-img-element
+                   <img src={category.image} alt={category.name} className="h-full w-full object-cover" />
+                ) : (
+                  <Folder className="h-5 w-5 text-orange-600" />
+                )}
+              </div>
+              <div>
+                <BottomSheetTitle className="text-xl">{category?.name}</BottomSheetTitle>
+                <div className="flex gap-2 items-center mt-1">
+                  <Badge variant="outline" className={`text-[10px] ${availability.bg} ${availability.color} border-0`}>
+                    {availability.icon}
+                    {availability.label}
+                  </Badge>
+                  {category?.is_global ? (
+                    <Badge variant="outline" className="text-[10px] bg-slate-50">
+                      <Globe className="h-3 w-3 mr-1" />
+                      Global
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700">
+                      <MapPin className="h-3 w-3 mr-1" />
+                      {category?.location_name || 'Location'}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </div>
             <BottomSheetDescription>
-              {isLocationView
-                ? 'Viewing category with location context'
-                : 'Viewing category details'}
+              {category?.description || 'No description provided.'}
             </BottomSheetDescription>
           </BottomSheetHeader>
 
-          <BottomSheetBody className="space-y-6">
-            {!category ? (
-              <div className="space-y-4">
-                <Skeleton className="h-32 w-full" />
-                <Skeleton className="h-20 w-full" />
-              </div>
-            ) : (
-              <>
-                {/* Category Header */}
-                <div className="flex gap-4">
-                  <div className="h-20 w-20 rounded-lg bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
-                    {category.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={category.image}
-                        alt={category.name}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <Folder className="h-8 w-8 text-muted-foreground" />
-                    )}
+          <BottomSheetBody>
+             <div className="space-y-6 pb-20 px-1">
+                {/* Stats Bar */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border bg-muted/20 p-3 text-center">
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Items linked</p>
+                    <p className="text-xl font-bold">{category?.items_count}</p>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-xl font-semibold">{category.name}</h3>
-                    {category.description && (
-                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                        {category.description}
-                      </p>
-                    )}
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {category.is_active ? (
-                        <Badge variant="outline" className="bg-green-50 text-green-700 border-0">
-                          <CheckCircle2 className="h-3 w-3 mr-1" />
-                          Active
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="bg-red-50 text-red-700 border-0">
-                          <XCircle className="h-3 w-3 mr-1" />
-                          Inactive
-                        </Badge>
-                      )}
-                      <Badge
-                        variant="outline"
-                        className={category.is_global ? 'bg-slate-50' : 'bg-blue-50 text-blue-700'}
-                      >
-                        {category.is_global ? (
-                          <>
-                            <Globe className="h-3 w-3 mr-1" />
-                            Global
-                          </>
-                        ) : (
-                          <>
-                            <MapPin className="h-3 w-3 mr-1" />
-                            {category.location_name || 'Location'}
-                          </>
-                        )}
-                      </Badge>
-                    </div>
+                  <div className="rounded-xl border bg-muted/20 p-3 text-center">
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Display Rank</p>
+                    <p className="text-xl font-bold">#{category?.display_order}</p>
                   </div>
                 </div>
 
                 <Separator />
 
-                {/* Stats */}
-                <BottomSheetSection title="Statistics">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="rounded-lg border p-4">
-                      <div className="flex items-center gap-2">
-                        <Package className="h-5 w-5 text-muted-foreground" />
-                        <div>
-                          <p className="text-2xl font-bold">{category.items_count}</p>
-                          <p className="text-sm text-muted-foreground">Items</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="rounded-lg border p-4">
-                      <div>
-                        <p className="text-2xl font-bold">{category.display_order}</p>
-                        <p className="text-sm text-muted-foreground">Display Order</p>
-                      </div>
-                    </div>
-                  </div>
-                </BottomSheetSection>
-
-                {/* Audit Information */}
-                <BottomSheetSection title="Audit Information">
-                  <div className="space-y-4">
-                    {/* Last Modified */}
-                    <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-muted/50">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Last Modified</span>
-                      </div>
-                      <span className="text-sm font-medium">
-                        {category.updated_at
-                          ? formatDistanceToNow(new Date(category.updated_at), { addSuffix: true })
-                          : category.created_at
-                            ? formatDistanceToNow(new Date(category.created_at), { addSuffix: true })
-                            : 'Unknown'}
-                      </span>
-                    </div>
-
-                    {/* Modified By */}
-                    {isLoadingAudit ? (
-                      <div className="flex items-center gap-2 py-2 px-3">
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Loading audit info...</span>
-                      </div>
-                    ) : auditInfo?.updated_by ? (
-                      <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-muted/50">
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">Modified By</span>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-medium">{auditInfo.updated_by.name}</p>
-                          <p className="text-xs text-muted-foreground">{auditInfo.updated_by.email}</p>
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {/* Created */}
-                    <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-muted/50">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Created</span>
-                      </div>
-                      <span className="text-sm font-medium">
-                        {category.created_at
-                          ? format(new Date(category.created_at), 'MMM d, yyyy')
-                          : 'Unknown'}
-                      </span>
-                    </div>
-
-                    <Separator />
-
-                    {/* Admin Notes */}
+                {/* Schedule Summary */}
+                <BottomSheetSection title="Availability Schedule">
+                  {isLoadingSchedules ? (
                     <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <Label htmlFor="admin-notes-category" className="text-sm font-medium">
-                          Admin Notes
-                        </Label>
-                      </div>
-                      <Textarea
-                        id="admin-notes-category"
-                        placeholder="Internal notes (only visible to admins)..."
-                        value={adminNotes}
-                        onChange={(e) => setAdminNotes(e.target.value)}
-                        rows={3}
-                        className="resize-none"
-                      />
-                      {hasNotesChanged && (
-                        <Button
-                          size="sm"
-                          onClick={handleSaveNotes}
-                          disabled={isSavingNotes}
-                        >
-                          {isSavingNotes ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Saving...
-                            </>
-                          ) : (
-                            'Save Notes'
-                          )}
-                        </Button>
-                      )}
+                      <Skeleton className="h-12 w-full" />
+                      <Skeleton className="h-12 w-full" />
                     </div>
-                  </div>
+                  ) : schedules.length === 0 ? (
+                    <div className="rounded-xl border border-dashed p-4 text-center">
+                      <p className="text-sm text-muted-foreground">This category is always available while active.</p>
+                      <Button variant="link" size="sm" className="mt-1">
+                         Assign Schedule <ChevronRight className="h-3 w-3 ml-1" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {schedules.map((schedule) => (
+                        <div key={schedule.id} className="rounded-xl border p-3 bg-card shadow-sm">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-semibold">{schedule.name}</span>
+                            {!schedule.is_active && <Badge variant="destructive" className="text-[10px]">Disabled</Badge>}
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {schedule.schedule_time_slots.map((slot) => (
+                              <div key={slot.id} className="text-[10px] px-2 py-1 rounded bg-muted font-medium">
+                                {dayNames[slot.day_of_week].substring(0, 3)}: {slot.start_time} - {slot.end_time}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </BottomSheetSection>
-              </>
-            )}
+
+                <Separator />
+
+                {/* Audit & Info */}
+                <BottomSheetSection title="Internal Context">
+                   <div className="space-y-3">
+                       <div className="flex justify-between items-center p-3 rounded-xl bg-muted/30 border border-transparent">
+                        <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">Created</span>
+                        </div>
+                        <span className="text-xs font-medium">
+                            {category?.created_at ? format(new Date(category.created_at), 'PPP') : 'N/A'}
+                        </span>
+                        </div>
+
+                        {auditInfo?.updated_by && (
+                        <div className="flex justify-between items-center p-3 rounded-xl bg-muted/30 border border-transparent">
+                            <div className="flex items-center gap-2">
+                                <User className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-xs text-muted-foreground">Last Edited By</span>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-xs font-bold">{auditInfo.updated_by.name}</p>
+                                <p className="text-[10px] text-muted-foreground">{auditInfo.updated_by.email}</p>
+                            </div>
+                        </div>
+                        )}
+
+                        <div className="space-y-2 mt-4">
+                            <div className="flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-muted-foreground" />
+                                <Label htmlFor="admin-notes-category" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                    Admin Notes
+                                </Label>
+                            </div>
+                            <Textarea
+                                id="admin-notes-category"
+                                placeholder="Internal notes for this category..."
+                                value={adminNotes}
+                                onChange={(e) => setAdminNotes(e.target.value)}
+                                rows={3}
+                                className="resize-none rounded-xl bg-muted/20 border-muted-foreground/10"
+                            />
+                            {hasNotesChanged && (
+                                <Button
+                                    size="sm"
+                                    className="w-full"
+                                    onClick={handleSaveNotes}
+                                    disabled={isSavingNotes}
+                                >
+                                    {isSavingNotes ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Notes'}
+                                </Button>
+                            )}
+                        </div>
+                   </div>
+                </BottomSheetSection>
+             </div>
           </BottomSheetBody>
 
           {category && (
-            <BottomSheetFooter>
-              <Button
+            <BottomSheetFooter className="gap-2 pt-4 border-t">
+               <Button
                 variant="outline"
                 onClick={() => setDeleteDialogOpen(true)}
-                className="text-destructive hover:text-destructive"
+                className="text-destructive hover:bg-destructive/10 border-destructive/20"
               >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete
+                <Trash2 className="h-4 w-4" />
               </Button>
-              <div className="flex-1" />
-              <Button variant="outline" onClick={onClose}>
+              <Button variant="outline" className="flex-1" onClick={onClose}>
                 Close
               </Button>
-              <Button onClick={() => category && onEdit(category)}>
+              <Button className="flex-1" onClick={() => category && onEdit(category)}>
                 <Pencil className="h-4 w-4 mr-2" />
-                Edit
+                Edit Settings
               </Button>
             </BottomSheetFooter>
           )}

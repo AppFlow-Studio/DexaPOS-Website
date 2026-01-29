@@ -140,6 +140,13 @@ export async function UpdateTablePositionAction(
 ) {
   const supabase = createServerSupabaseClient();
 
+  // Fetch context before update
+  const { data: table } = await supabase
+    .from("floor_plan_objects")
+    .select("name, floor_plan:floor_plans(location_id, merchant_id)")
+    .eq("id", tableId)
+    .single();
+
   const { error } = await supabase.rpc("update_floor_plan_object_position", {
     p_object_id: tableId,
     p_x: x,
@@ -148,19 +155,61 @@ export async function UpdateTablePositionAction(
   });
 
   if (error) throw error;
+
+  if (table) {
+    const fp = (table as any).floor_plan;
+    await LogAuditEvent({
+      merchantId: fp?.merchant_id,
+      action: `Moved Table: ${table.name}`,
+      actionCategory: "settings",
+      resourceType: "table",
+      resourceId: tableId,
+      resourceName: table.name,
+      locationId: fp?.location_id,
+      changes: { after: { x, y, rotation } },
+    });
+  }
 }
 
 export async function UpdateTablePositionsBatchAction(
   updates: Array<{ id: string; x: number; y: number; rotation?: number }>,
 ) {
   const supabase = createServerSupabaseClient();
-  console.log("[UpdateTablePositionsBatchAction] updates", updates);
+  // console.log("[UpdateTablePositionsBatchAction] updates", updates);
+
+  if (updates.length === 0) return;
 
   const { error } = await supabase.rpc("update_floor_plan_objects_batch", {
     p_updates: updates,
   });
 
   if (error) throw error;
+
+  // Log Audit Event (Batched)
+  // Fetch context from the first table
+  const firstId = updates[0].id;
+  const { data: tableContext } = await supabase
+    .from("floor_plan_objects")
+    .select("floor_plan:floor_plans(id, name, location_id, merchant_id)")
+    .eq("id", firstId)
+    .single();
+
+  if (tableContext && (tableContext as any).floor_plan) {
+    const fp = (tableContext as any).floor_plan;
+    await LogAuditEvent({
+      merchantId: fp.merchant_id,
+      action: `Updated Floor Plan Layout`,
+      actionCategory: "settings",
+      resourceType: "floor_plan",
+      resourceId: fp.id,
+      resourceName: fp.name,
+      locationId: fp.location_id,
+      metadata: {
+        tables_updated_count: updates.length,
+      },
+      changes: { after: { updates_count: updates.length } }, // Simplified change log
+    });
+  }
 }
 
 export async function RemoveTableAction(tableId: string) {
@@ -204,12 +253,33 @@ export async function UpdateTableRotationAction(
 ) {
   const supabase = createServerSupabaseClient();
 
+  // Fetch context
+  const { data: table } = await supabase
+    .from("floor_plan_objects")
+    .select("name, floor_plan:floor_plans(location_id, merchant_id)")
+    .eq("id", tableId)
+    .single();
+
   const { error } = await supabase
     .from("floor_plan_objects")
     .update({ rotation })
     .eq("id", tableId);
 
   if (error) throw error;
+
+  if (table) {
+    const fp = (table as any).floor_plan;
+    await LogAuditEvent({
+      merchantId: fp?.merchant_id,
+      action: `Rotated Table: ${table.name}`,
+      actionCategory: "settings",
+      resourceType: "table",
+      resourceId: tableId,
+      resourceName: table.name,
+      locationId: fp?.location_id,
+      changes: { after: { rotation } },
+    });
+  }
 }
 
 export async function UpdateTableNameAction(tableId: string, name: string) {

@@ -51,7 +51,7 @@ import { toast } from 'sonner'
 import type { AdminStaffMember, LocationAssignment } from '@/types/staff'
 import type { MerchantInfoModel } from '@/types/db-modles'
 import type { MerchantDetails } from '@/types/merchant'
-import { CreateStaffDialog } from './CreateStaffDialog'
+import { AdminCreateStaffWizard } from './AdminCreateStaffWizard'
 import { BulkPinResetDialog } from './BulkPinResetDialog'
 import { PinResultDialog } from './PinResultDialog'
 
@@ -299,8 +299,8 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
         </Table>
       </Card>
 
-      {/* Create Staff Dialog */}
-      <CreateStaffDialog
+      {/* Create Staff Wizard */}
+      <AdminCreateStaffWizard
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
         merchantId={merchantId}

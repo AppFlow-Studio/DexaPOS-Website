@@ -37,6 +37,8 @@ export interface LocationSummary {
   is_active: boolean
   is_accepting_orders: boolean
   timezone: string | null
+  pricing_strategy?: 'manual' | 'dual'
+  dual_pricing_percentage?: number
   orders_today: number
   revenue_today: number
 }

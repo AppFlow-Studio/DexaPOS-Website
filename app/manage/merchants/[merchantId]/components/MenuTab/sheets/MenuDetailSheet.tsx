@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { formatDistanceToNow, format } from 'date-fns'
+import { formatDistanceToNow, format, isWithinInterval, parse } from 'date-fns'
 import {
   BottomSheet,
   BottomSheetContent,
@@ -35,7 +35,7 @@ import {
   MapPin,
   CheckCircle2,
   XCircle,
-  Menu,
+  Menu as MenuIcon,
   Folder,
   Package,
   Clock,
@@ -43,17 +43,23 @@ import {
   User,
   Calendar,
   FileText,
+  ChevronRight,
+  Zap,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import Link from 'next/link'
 
 import {
   deleteAdminMenu,
   updateAdminNotes,
   getMenuAuditInfo,
+  getAdminMenuSchedules,
   type AdminMenu,
   type AdminMenuWithCategories,
   type AuditInfo,
 } from '@/app/manage/actions/admin-merchant/menus'
+
+import { formatCurrency } from '@/lib/utils'
 
 // ============================================================================
 // PROPS
@@ -62,6 +68,7 @@ import {
 interface MenuDetailSheetProps {
   open: boolean
   onClose: () => void
+  clerkOrgId: string
   merchantId: string
   locationId: string | null
   menu: AdminMenu | AdminMenuWithCategories | null
@@ -69,10 +76,26 @@ interface MenuDetailSheetProps {
   onSuccess: () => void
 }
 
+interface MenuSchedule {
+  id: string
+  name: string
+  description: string | null
+  is_active: boolean
+  time_slots: Array<{
+    id: string
+    day_of_week: number
+    start_time: string
+    end_time: string
+    is_active: boolean
+  }>
+}
+
 // Helper to check if menu has categories details
 function hasCategories(menu: AdminMenu | AdminMenuWithCategories): menu is AdminMenuWithCategories {
   return 'categories' in menu && Array.isArray((menu as AdminMenuWithCategories).categories)
 }
+
+const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 // ============================================================================
 // COMPONENT
@@ -81,6 +104,7 @@ function hasCategories(menu: AdminMenu | AdminMenuWithCategories): menu is Admin
 export function MenuDetailSheet({
   open,
   onClose,
+  clerkOrgId,
   merchantId,
   locationId,
   menu,
@@ -97,34 +121,48 @@ export function MenuDetailSheet({
   const [originalNotes, setOriginalNotes] = useState('')
   const [isSavingNotes, setIsSavingNotes] = useState(false)
 
+  // Schedules state
+  const [schedules, setSchedules] = useState<MenuSchedule[]>([])
+  const [isLoadingSchedules, setIsLoadingSchedules] = useState(false)
+
   const hasNotesChanged = adminNotes !== originalNotes
   const isLocationView = locationId && locationId !== 'all'
 
-  // Fetch audit info when menu is loaded
+  // Fetch audit info and schedules when menu is loaded
   useEffect(() => {
-    async function fetchAuditInfo() {
+    async function fetchData() {
       if (!menu || !open) return
+      
       setIsLoadingAudit(true)
+      setIsLoadingSchedules(true)
+      
       try {
-        const info = await getMenuAuditInfo(merchantId, menu.id)
+        const [info, scheduleData] = await Promise.all([
+          getMenuAuditInfo(merchantId, menu.id),
+          getAdminMenuSchedules(merchantId, menu.id)
+        ])
+        
         setAuditInfo(info)
         setAdminNotes(info?.admin_notes || '')
         setOriginalNotes(info?.admin_notes || '')
+        setSchedules(scheduleData)
       } catch (error) {
-        console.error('Failed to fetch audit info:', error)
+        console.error('Failed to fetch menu details:', error)
       } finally {
         setIsLoadingAudit(false)
+        setIsLoadingSchedules(false)
       }
     }
-    fetchAuditInfo()
+    fetchData()
   }, [menu, merchantId, open])
 
-  // Reset notes state when sheet closes
+  // Reset state when sheet closes
   useEffect(() => {
     if (!open) {
       setAuditInfo(null)
       setAdminNotes('')
       setOriginalNotes('')
+      setSchedules([])
     }
   }, [open])
 
@@ -174,263 +212,255 @@ export function MenuDetailSheet({
     }
   }
 
+  // Live Availability Check
+  const getAvailabilityStatus = () => {
+    if (!menu?.is_active) return { label: 'Inactive', color: 'text-red-500', bg: 'bg-red-50' }
+    if (schedules.length === 0) return { label: 'Always Available', color: 'text-green-600', bg: 'bg-green-50' }
+
+    const now = new Date()
+    const currentDay = now.getDay()
+    const currentTimeStr = format(now, 'HH:mm')
+
+    let isCurrentlyActive = false
+    let nextAvailable = null
+
+    for (const schedule of schedules) {
+      if (!schedule.is_active) continue
+      for (const slot of schedule.time_slots) {
+        if (!slot.is_active) continue
+        if (slot.day_of_week === currentDay) {
+          if (currentTimeStr >= slot.start_time && currentTimeStr <= slot.end_time) {
+            isCurrentlyActive = true
+            break
+          }
+        }
+      }
+      if (isCurrentlyActive) break
+    }
+
+    if (isCurrentlyActive) {
+      return { label: 'Currently Live', color: 'text-green-600', bg: 'bg-green-50', icon: <Zap className="h-3 w-3 mr-1" /> }
+    } else {
+      return { label: 'Scheduled', color: 'text-amber-600', bg: 'bg-amber-50', icon: <Clock className="h-3 w-3 mr-1" /> }
+    }
+  }
+
+  const availability = getAvailabilityStatus()
+
   // Get categories from menu if available
   const categories = menu && hasCategories(menu) ? menu.categories : null
 
   return (
     <>
       <BottomSheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-        <BottomSheetContent height="95">
+        <BottomSheetContent className="!h-[95vh]">
           <BottomSheetHeader>
-            <BottomSheetTitle>Menu Details</BottomSheetTitle>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-10 w-10 rounded-xl bg-orange-50 flex items-center justify-center">
+                <MenuIcon className="h-5 w-5 text-orange-600" />
+              </div>
+              <div>
+                <BottomSheetTitle className="text-xl">{menu?.name}</BottomSheetTitle>
+                <div className="flex gap-2 items-center mt-1">
+                  <Badge variant="outline" className={`text-[10px] ${availability.bg} ${availability.color} border-0`}>
+                    {availability.icon}
+                    {availability.label}
+                  </Badge>
+                  {menu?.is_global ? (
+                    <Badge variant="outline" className="text-[10px] bg-slate-50">
+                      <Globe className="h-3 w-3 mr-1" />
+                      Global
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700">
+                      <MapPin className="h-3 w-3 mr-1" />
+                      {menu?.location_name || 'Location'}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </div>
             <BottomSheetDescription>
-              {isLocationView
-                ? 'Viewing menu with location context'
-                : 'Viewing menu details'}
+              {menu?.description || 'No description provided.'}
             </BottomSheetDescription>
           </BottomSheetHeader>
 
-          <BottomSheetBody className="space-y-6">
-            {!menu ? (
-              <div className="space-y-4">
-                <Skeleton className="h-32 w-full" />
-                <Skeleton className="h-20 w-full" />
+          <BottomSheetBody>
+            <div className="space-y-6 pb-20 px-1">
+              {/* Quick Actions / Link */}
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="flex-1 text-xs" asChild>
+                  <Link href={`/manage/merchants/${clerkOrgId}/menu/${menu?.id}`}>
+                    <Pencil className="h-3 w-3 mr-1" />
+                    Open Menu Builder
+                  </Link>
+                </Button>
+                <Button variant="outline" size="sm" className="flex-1 text-xs">
+                  <Package className="h-3 w-3 mr-1" />
+                  View as Customer
+                </Button>
               </div>
-            ) : (
-              <>
-                {/* Menu Header */}
-                <div className="flex gap-4">
-                  <div className="h-20 w-20 rounded-lg bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
-                    <Menu className="h-8 w-8 text-muted-foreground" />
+
+              {/* Stats Bar */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-xl border bg-muted/20 p-3 text-center">
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Categories</p>
+                  <p className="text-xl font-bold">{menu?.categories_count}</p>
+                </div>
+                <div className="rounded-xl border bg-muted/20 p-3 text-center">
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Total Items</p>
+                  <p className="text-xl font-bold">{menu?.items_count}</p>
+                </div>
+                <div className="rounded-xl border bg-muted/20 p-3 text-center">
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Schedules</p>
+                  <p className="text-xl font-bold">{menu?.schedules_count}</p>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Schedule Summary */}
+              <BottomSheetSection title="Availability Schedule">
+                {isLoadingSchedules ? (
+                   <div className="space-y-2">
+                     <Skeleton className="h-12 w-full" />
+                     <Skeleton className="h-12 w-full" />
+                   </div>
+                ) : schedules.length === 0 ? (
+                  <div className="rounded-xl border border-dashed p-4 text-center">
+                    <p className="text-sm text-muted-foreground">This menu is always available while active.</p>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-xl font-semibold">{menu.name}</h3>
-                    {menu.description && (
-                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                        {menu.description}
-                      </p>
-                    )}
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {menu.is_active ? (
-                        <Badge variant="outline" className="bg-green-50 text-green-700 border-0">
-                          <CheckCircle2 className="h-3 w-3 mr-1" />
-                          Active
+                ) : (
+                  <div className="space-y-3">
+                    {schedules.map((schedule) => (
+                      <div key={schedule.id} className="rounded-xl border p-3 bg-card shadow-sm">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-semibold">{schedule.name}</span>
+                          {!schedule.is_active && <Badge variant="destructive" className="text-[10px]">Disabled</Badge>}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {schedule.time_slots.map((slot) => (
+                            <div key={slot.id} className="text-[10px] px-2 py-1 rounded bg-muted font-medium">
+                              {dayNames[slot.day_of_week].substring(0, 3)}: {slot.start_time} - {slot.end_time}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </BottomSheetSection>
+
+              <Separator />
+
+              {/* Menu Structure View */}
+              <BottomSheetSection title="Categories Structure">
+                {!categories ? (
+                  <div className="flex flex-col items-center justify-center p-8 border rounded-xl border-dashed">
+                    <Folder className="h-8 w-8 text-muted-foreground/30 mb-2" />
+                    <p className="text-sm text-muted-foreground">Detailed structure only available in Menu Builder</p>
+                    <Button variant="link" size="sm" asChild>
+                       <Link href={`/manage/merchants/${clerkOrgId}/menu/${menu?.id}`}>
+                         Go to Builder <ChevronRight className="h-3 w-3 ml-1" />
+                       </Link>
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {categories.map((mc) => (
+                      <div key={mc.id} className="flex items-center justify-between p-3 rounded-xl border bg-card hover:bg-muted/30 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-lg bg-orange-50 flex items-center justify-center">
+                            <Folder className="h-4 w-4 text-orange-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold">{mc.custom_title || mc.category.name}</p>
+                            <p className="text-[10px] text-muted-foreground">{mc.items.length} items</p>
+                          </div>
+                        </div>
+                        <Badge variant="outline" className="text-[10px]">
+                          {mc.category.is_global ? 'Global' : 'Location'}
                         </Badge>
-                      ) : (
-                        <Badge variant="outline" className="bg-red-50 text-red-700 border-0">
-                          <XCircle className="h-3 w-3 mr-1" />
-                          Inactive
-                        </Badge>
-                      )}
-                      <Badge
-                        variant="outline"
-                        className={menu.is_global ? 'bg-slate-50' : 'bg-blue-50 text-blue-700'}
-                      >
-                        {menu.is_global ? (
-                          <>
-                            <Globe className="h-3 w-3 mr-1" />
-                            Global
-                          </>
-                        ) : (
-                          <>
-                            <MapPin className="h-3 w-3 mr-1" />
-                            {menu.location_name || 'Location'}
-                          </>
-                        )}
-                      </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </BottomSheetSection>
+
+              <Separator />
+
+              {/* Audit Section */}
+              <BottomSheetSection title="Audit & Info">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center p-3 rounded-xl bg-muted/30 border border-transparent">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">Created</span>
                     </div>
+                    <span className="text-xs font-medium">
+                      {menu?.created_at ? format(new Date(menu.created_at), 'PPP') : 'N/A'}
+                    </span>
+                  </div>
+
+                  {auditInfo?.updated_by && (
+                    <div className="flex justify-between items-center p-3 rounded-xl bg-muted/30 border border-transparent">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">Last Edited By</span>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-bold">{auditInfo.updated_by.name}</p>
+                        <p className="text-[10px] text-muted-foreground">{auditInfo.updated_by.email}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2 mt-4">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <Label htmlFor="admin-notes-menu" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                        Admin Notes
+                      </Label>
+                    </div>
+                    <Textarea
+                      id="admin-notes-menu"
+                      placeholder="Internal notes for this menu..."
+                      value={adminNotes}
+                      onChange={(e) => setAdminNotes(e.target.value)}
+                      rows={3}
+                      className="resize-none rounded-xl bg-muted/20 border-muted-foreground/10"
+                    />
+                    {hasNotesChanged && (
+                      <Button
+                        size="sm"
+                        className="w-full"
+                        onClick={handleSaveNotes}
+                        disabled={isSavingNotes}
+                      >
+                        {isSavingNotes ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Notes'}
+                      </Button>
+                    )}
                   </div>
                 </div>
-
-                <Separator />
-
-                {/* Stats */}
-                <BottomSheetSection title="Statistics">
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="rounded-lg border p-4">
-                      <div className="flex items-center gap-2">
-                        <Folder className="h-5 w-5 text-muted-foreground" />
-                        <div>
-                          <p className="text-2xl font-bold">{menu.categories_count}</p>
-                          <p className="text-sm text-muted-foreground">Categories</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="rounded-lg border p-4">
-                      <div className="flex items-center gap-2">
-                        <Package className="h-5 w-5 text-muted-foreground" />
-                        <div>
-                          <p className="text-2xl font-bold">{menu.items_count}</p>
-                          <p className="text-sm text-muted-foreground">Items</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="rounded-lg border p-4">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-5 w-5 text-muted-foreground" />
-                        <div>
-                          <p className="text-2xl font-bold">{menu.schedules_count}</p>
-                          <p className="text-sm text-muted-foreground">Schedules</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </BottomSheetSection>
-
-                {/* Assigned Categories */}
-                {categories && categories.length > 0 && (
-                  <BottomSheetSection title="Assigned Categories">
-                    <div className="space-y-2">
-                      {categories.slice(0, 10).map((mc) => (
-                        <div
-                          key={mc.id}
-                          className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Folder className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm font-medium">
-                              {mc.custom_title || mc.category.name}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-xs">
-                              {mc.items.length} items
-                            </Badge>
-                            {mc.category.is_global ? (
-                              <Globe className="h-3 w-3 text-muted-foreground" />
-                            ) : (
-                              <MapPin className="h-3 w-3 text-blue-500" />
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                      {categories.length > 10 && (
-                        <p className="text-sm text-muted-foreground text-center py-2">
-                          And {categories.length - 10} more categories...
-                        </p>
-                      )}
-                    </div>
-                  </BottomSheetSection>
-                )}
-
-                {/* No categories message */}
-                {menu.categories_count === 0 && (
-                  <BottomSheetSection title="Assigned Categories">
-                    <div className="text-center py-6 text-muted-foreground">
-                      <Folder className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">No categories assigned to this menu yet</p>
-                    </div>
-                  </BottomSheetSection>
-                )}
-
-                {/* Audit Information */}
-                <BottomSheetSection title="Audit Information">
-                  <div className="space-y-4">
-                    {/* Last Modified */}
-                    <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-muted/50">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Last Modified</span>
-                      </div>
-                      <span className="text-sm font-medium">
-                        {menu.updated_at
-                          ? formatDistanceToNow(new Date(menu.updated_at), { addSuffix: true })
-                          : menu.created_at
-                            ? formatDistanceToNow(new Date(menu.created_at), { addSuffix: true })
-                            : 'Unknown'}
-                      </span>
-                    </div>
-
-                    {/* Modified By */}
-                    {isLoadingAudit ? (
-                      <div className="flex items-center gap-2 py-2 px-3">
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Loading audit info...</span>
-                      </div>
-                    ) : auditInfo?.updated_by ? (
-                      <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-muted/50">
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">Modified By</span>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-medium">{auditInfo.updated_by.name}</p>
-                          <p className="text-xs text-muted-foreground">{auditInfo.updated_by.email}</p>
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {/* Created */}
-                    <div className="flex justify-between items-center py-2 px-3 rounded-lg bg-muted/50">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Created</span>
-                      </div>
-                      <span className="text-sm font-medium">
-                        {menu.created_at
-                          ? format(new Date(menu.created_at), 'MMM d, yyyy')
-                          : 'Unknown'}
-                      </span>
-                    </div>
-
-                    <Separator />
-
-                    {/* Admin Notes */}
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <Label htmlFor="admin-notes-menu" className="text-sm font-medium">
-                          Admin Notes
-                        </Label>
-                      </div>
-                      <Textarea
-                        id="admin-notes-menu"
-                        placeholder="Internal notes (only visible to admins)..."
-                        value={adminNotes}
-                        onChange={(e) => setAdminNotes(e.target.value)}
-                        rows={3}
-                        className="resize-none"
-                      />
-                      {hasNotesChanged && (
-                        <Button
-                          size="sm"
-                          onClick={handleSaveNotes}
-                          disabled={isSavingNotes}
-                        >
-                          {isSavingNotes ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Saving...
-                            </>
-                          ) : (
-                            'Save Notes'
-                          )}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </BottomSheetSection>
-              </>
-            )}
+              </BottomSheetSection>
+            </div>
           </BottomSheetBody>
 
           {menu && (
-            <BottomSheetFooter>
+            <BottomSheetFooter className="gap-2 pt-4 border-t">
               <Button
                 variant="outline"
                 onClick={() => setDeleteDialogOpen(true)}
-                className="text-destructive hover:text-destructive"
+                className="text-destructive hover:bg-destructive/10 border-destructive/20"
               >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete
+                <Trash2 className="h-4 w-4" />
               </Button>
-              <div className="flex-1" />
-              <Button variant="outline" onClick={onClose}>
+              <Button variant="outline" className="flex-1" onClick={onClose}>
                 Close
               </Button>
-              <Button onClick={() => menu && onEdit(menu)}>
+              <Button className="flex-1" onClick={() => menu && onEdit(menu)}>
                 <Pencil className="h-4 w-4 mr-2" />
-                Edit
+                Edit Settings
               </Button>
             </BottomSheetFooter>
           )}

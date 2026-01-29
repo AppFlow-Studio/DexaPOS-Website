@@ -7,6 +7,8 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 // TYPES
 // ============================================================================
 
+import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
+
 export type PriceSource = 'base' | 'location_item' | 'category' | 'location_category' | 'location_menu'
 
 // Audit information type for admin display
@@ -78,6 +80,8 @@ export interface AdminMenuItem {
   effective_tax_category: string | null
   effective_is_tax_exempt: boolean
   effective_available_channels: string[]
+  location_id?: string | null
+  menu_count?: number
   // Stock
   stock_tracking_mode: string | null
   current_stock: number | null
@@ -131,6 +135,7 @@ export interface AdminCategory {
   created_by?: { id: string; name: string; email: string } | null
   updated_by?: { id: string; name: string; email: string } | null
   admin_notes?: string | null
+  items?: any[]
 }
 
 export interface AdminModifierGroup {
@@ -389,10 +394,10 @@ export async function getAdminMenuItemDetails(
 
   if (!data) return null
 
-  // Verify item belongs to merchant
+  // Verify item belongs to merchant AND get location_id for UI logic
   const { data: item } = await supabase
     .from('menu_items')
-    .select('merchant_id')
+    .select('merchant_id, location_id')
     .eq('id', itemId)
     .single()
 
@@ -400,7 +405,10 @@ export async function getAdminMenuItemDetails(
     return null
   }
 
-  return data as AdminMenuItem
+  return {
+    ...(data as AdminMenuItem),
+    location_id: item.location_id
+  }
 }
 
 // ============================================================================
@@ -416,50 +424,40 @@ export async function getAdminCategories(
   const supabase = createServerSupabaseClient()
   const effectiveLocationId = locationId === 'all' ? null : locationId
 
-  // Build query for categories
-  let query = supabase
-    .from('categories')
-    .select(`
-      id,
-      name,
-      description,
-      image,
-      is_active,
-      is_global,
-      location_id,
-      display_order,
-      created_at,
-      locations(name),
-      category_items(count)
-    `)
-    .eq('merchant_id', merchantId)
-    .order('display_order', { ascending: true })
-    .order('name', { ascending: true })
-
-  // If location specified, show global categories + that location's categories
-  if (effectiveLocationId) {
-    query = query.or(`location_id.is.null,location_id.eq.${effectiveLocationId}`)
-  }
-
-  const { data: categories, error } = await query
+  // Use the same RPC as the dashboard to ensure consistency
+  // This returns full item details, effectively fetching "CategoriesWithItems"
+  const { data: categories, error } = await supabase.rpc('get_categories_for_location', {
+    p_merchant_id: merchantId,
+    p_location_id: effectiveLocationId || null,
+  })
 
   if (error) {
     console.error('[getAdminCategories] Error:', error)
     return []
   }
 
+  // Map RPC result to AdminCategory
   return (categories || []).map((cat: any) => ({
     id: cat.id,
     name: cat.name,
     description: cat.description,
     image: cat.image,
-    is_active: cat.is_active,
-    is_global: cat.is_global ?? (cat.location_id === null),
+    is_active: cat.effective_is_active ?? cat.is_active, // Use effective active state
+    is_global: cat.is_global,
     location_id: cat.location_id,
-    location_name: cat.locations?.name || null,
-    items_count: cat.category_items?.length || 0,
-    display_order: cat.display_order || 0,
+    location_name: cat.location_name,
+    items_count: cat.items?.length || 0, // Count from actual items
+    display_order: cat.effective_display_order ?? cat.display_order,
     created_at: cat.created_at,
+    updated_at: cat.updated_at,
+    // Optional: Pass items if we update the interface to support it
+    items: cat.items?.map((item: any) => ({
+      ...item,
+       // Normalize item fields if needed by UI
+       name: item.menu_item.name,
+       image: item.menu_item.image,
+       base_price: item.menu_item.base_price
+    }))
   }))
 }
 
@@ -554,9 +552,103 @@ export async function getAdminCategoryWithItems(
   }
 }
 
-// ============================================================================
-// MODIFIERS
-// ============================================================================
+// ... existing code ...
+
+export async function updateAdminCategoryItemsOrder(
+  merchantId: string,
+  categoryId: string,
+  itemOrders: Array<{ menuItemId: string; displayOrder: number }>
+) {
+  await assertHQPermission('hq.merchant.view')
+
+  if (!categoryId || !itemOrders?.length) {
+    return { error: 'Category ID and item orders are required' }
+  }
+
+  const supabase = createServerSupabaseClient()
+
+  // Update each item's display order
+  const updates = itemOrders.map(({ menuItemId, displayOrder }) =>
+    supabase
+      .from('category_items')
+      .update({
+        display_order: displayOrder,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('category_id', categoryId)
+      .eq('menu_item_id', menuItemId)
+  )
+
+  const results = await Promise.all(updates)
+  const errors = results.filter((r) => r.error)
+
+  if (errors.length > 0) {
+    console.error('[updateAdminCategoryItemsOrder] Error:', errors)
+    return { success: false, error: 'Failed to update some item orders' }
+  }
+
+  return { success: true }
+}
+
+export async function removeAdminItemFromCategory(
+  merchantId: string,
+  categoryId: string,
+  menuItemId: string
+) {
+  await assertHQPermission('hq.merchant.update')
+
+  const supabase = createServerSupabaseClient()
+
+  const { error } = await supabase
+    .from('category_items')
+    .delete()
+    .eq('category_id', categoryId)
+    .eq('menu_item_id', menuItemId)
+
+  if (error) {
+    console.error('[removeAdminItemFromCategory] Error:', error)
+    return { success: false, error: error.message }
+  }
+
+  return { success: true }
+}
+
+export async function updateAdminCategoriesOrder(
+  merchantId: string,
+  categoryOrders: Array<{ categoryId: string; displayOrder: number }>,
+) {
+  await assertHQPermission("hq.merchant.view");
+
+  if (!categoryOrders?.length) {
+    return { error: "Category orders are required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  // Update each category's display order
+  const updates = categoryOrders.map(({ categoryId, displayOrder }) =>
+    supabase
+      .from("categories")
+      .update({
+        display_order: displayOrder,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", categoryId)
+      .eq("merchant_id", merchantId),
+  );
+
+  const results = await Promise.all(updates);
+  const errors = results.filter((r) => r.error);
+
+  if (errors.length > 0) {
+    console.error("[updateAdminCategoriesOrder] Error:", errors);
+    return { success: false, error: "Failed to update some category orders" };
+  }
+
+  return { success: true };
+}
+
+// ... existing code ...
 
 export async function getAdminModifierGroups(
   merchantId: string,
@@ -605,7 +697,7 @@ export async function getAdminModifierGroups(
     is_active: group.is_active,
     min_selections: group.min_selections || 0,
     max_selections: group.max_selections,
-    items_count: group.modifier_group_items?.length || 0,
+    items_count: group.modifier_group_items?.[0]?.count ?? 0,
     is_global: !group.location_id,
     location_id: group.location_id,
     created_at: group.created_at,
@@ -800,6 +892,7 @@ function transformToAdminMenuWithCategories(data: any): AdminMenuWithCategories 
     location_name: null, // RPC doesn't include location name, can fetch separately if needed
     categories_count: categories.length,
     items_count: categories.reduce((sum, cat) => sum + cat.items.length, 0),
+    schedules_count: data.schedules_count || 0,
     created_at: data.created_at,
     updated_at: data.updated_at,
     categories,
@@ -916,6 +1009,22 @@ export async function createAdminMenu(
     return { data: null, error: error.message }
   }
 
+  // Log Audit Event
+  await LogAuditEvent({
+    merchantId,
+    action: `Created Menu: ${data.name}`,
+    actionCategory: 'menu',
+    resourceType: 'menu',
+    resourceId: menu.id,
+    resourceName: data.name,
+    locationId: data.location_id || undefined,
+    changes: { after: data as any },
+    metadata: {
+      location_name: (menu as any).locations?.name,
+      admin_action: true,
+    },
+  })
+
   return {
     data: {
       id: menu.id,
@@ -927,6 +1036,7 @@ export async function createAdminMenu(
       location_name: (menu as any).locations?.name || null,
       categories_count: 0,
       items_count: 0,
+      schedules_count: 0,
       created_at: menu.created_at,
       updated_at: menu.updated_at,
     },
@@ -974,6 +1084,21 @@ export async function updateAdminMenu(
     return { data: null, error: error.message }
   }
 
+  // Log Audit Event
+  await LogAuditEvent({
+    merchantId,
+    action: `Updated Menu: ${menu.name}`,
+    actionCategory: 'menu',
+    resourceType: 'menu',
+    resourceId: menuId,
+    resourceName: menu.name,
+    locationId: menu.location_id || undefined,
+    changes: { after: data as any },
+    metadata: {
+      admin_action: true,
+    },
+  })
+
   return {
     data: {
       id: menu.id,
@@ -985,6 +1110,7 @@ export async function updateAdminMenu(
       location_name: (menu as any).locations?.name || null,
       categories_count: (menu as any).menu_categories?.length || 0,
       items_count: 0,
+      schedules_count: 0,
       created_at: menu.created_at,
       updated_at: menu.updated_at,
     },
@@ -999,6 +1125,13 @@ export async function deleteAdminMenu(
   await assertHQPermission('hq.merchant.update')
 
   const supabase = createServerSupabaseClient()
+
+  // Fetch menu details before deletion for audit log
+  const { data: menuToDelete } = await supabase
+    .from('menus')
+    .select('name, location_id')
+    .eq('id', menuId)
+    .single()
 
   // First delete menu_categories associations
   await supabase
@@ -1018,6 +1151,22 @@ export async function deleteAdminMenu(
     return { success: false, error: error.message }
   }
 
+  if (menuToDelete) {
+    await LogAuditEvent({
+      merchantId,
+      action: `Deleted Menu: ${menuToDelete.name}`,
+      actionCategory: 'menu',
+      resourceType: 'menu',
+      resourceId: menuId,
+      resourceName: menuToDelete.name,
+      locationId: menuToDelete.location_id || undefined,
+      severity: 'info',
+      metadata: {
+        admin_action: true,
+      },
+    })
+  }
+
   return { success: true, error: null }
 }
 
@@ -1032,7 +1181,7 @@ export async function toggleAdminMenuActive(
   // Get current state
   const { data: current } = await supabase
     .from('menus')
-    .select('is_active')
+    .select('is_active, name, location_id')
     .eq('id', menuId)
     .eq('merchant_id', merchantId)
     .single()
@@ -1041,7 +1190,19 @@ export async function toggleAdminMenuActive(
     return { data: null, error: 'Menu not found' }
   }
 
-  return updateAdminMenu(merchantId, menuId, { is_active: !current.is_active })
+  const result = await updateAdminMenu(merchantId, menuId, { is_active: !current.is_active })
+  
+  // Audit log is handled inside updateAdminMenu, but we want a more specific message if possible.
+  // Actually, updateAdminMenu logs "Updated Menu: {name}" with changes. 
+  // We can leave it as is, or add a specific log here. 
+  // Dashboard toggle uses: `Menu ${newStatus}: ${updatedMenu.name}`
+  // To match dashboard, we might want to override or add another log.
+  // But updateAdminMenu already logs, so creating another log might be spammy.
+  // Dashboard's ToggleMenuActive uses LogAuditEvent directly and doesn't call UpdateMenu.
+  // Since we call updateAdminMenu, we get the "Updated Menu" log which shows the change in `changes`.
+  // That should be sufficient and consistent with "Updated Menu".
+  
+  return result
 }
 
 // ============================================================================
@@ -1087,6 +1248,22 @@ export async function createAdminCategory(
     console.error('[createAdminCategory] Error:', error)
     return { data: null, error: error.message }
   }
+
+  // Log Audit Event
+  await LogAuditEvent({
+    merchantId,
+    action: `Created Category: ${data.name}`,
+    actionCategory: 'menu',
+    resourceType: 'category',
+    resourceId: category.id,
+    resourceName: data.name,
+    locationId: data.location_id || undefined,
+    changes: { after: data as any },
+    metadata: {
+      location_name: (category as any).locations?.name,
+      admin_action: true,
+    },
+  })
 
   return {
     data: {
@@ -1147,6 +1324,21 @@ export async function updateAdminCategory(
     return { data: null, error: error.message }
   }
 
+  // Log Audit Event
+  await LogAuditEvent({
+    merchantId,
+    action: `Updated Category: ${category.name}`,
+    actionCategory: 'menu',
+    resourceType: 'category',
+    resourceId: categoryId,
+    resourceName: category.name,
+    locationId: category.location_id || undefined,
+    changes: { after: data as any },
+    metadata: {
+      admin_action: true,
+    },
+  })
+
   return {
     data: {
       id: category.id,
@@ -1173,6 +1365,13 @@ export async function deleteAdminCategory(
 
   const supabase = createServerSupabaseClient()
 
+  // Fetch category first to get name for logging
+  const { data: category } = await supabase
+    .from('categories')
+    .select('name, location_id')
+    .eq('id', categoryId)
+    .single()
+
   // Delete category_items associations
   await supabase
     .from('category_items')
@@ -1197,6 +1396,22 @@ export async function deleteAdminCategory(
     return { success: false, error: error.message }
   }
 
+  if (category) {
+    await LogAuditEvent({
+      merchantId,
+      action: `Deleted Category: ${category.name}`,
+      actionCategory: 'menu',
+      resourceType: 'category',
+      resourceId: categoryId,
+      resourceName: category.name,
+      locationId: category.location_id || undefined,
+      severity: 'info',
+      metadata: {
+        admin_action: true,
+      },
+    })
+  }
+
   return { success: true, error: null }
 }
 
@@ -1217,14 +1432,14 @@ export async function addCategoryToMenu(
   // Verify menu and category belong to merchant
   const { data: menu } = await supabase
     .from('menus')
-    .select('id')
+    .select('id, name, location_id')
     .eq('id', menuId)
     .eq('merchant_id', merchantId)
     .single()
 
   const { data: category } = await supabase
     .from('categories')
-    .select('id')
+    .select('id, name')
     .eq('id', categoryId)
     .eq('merchant_id', merchantId)
     .single()
@@ -1248,6 +1463,7 @@ export async function addCategoryToMenu(
   const { error } = await supabase
     .from('menu_categories')
     .insert({
+      merchant_id: merchantId,
       menu_id: menuId,
       category_id: categoryId,
       display_order: displayOrder || 0,
@@ -1258,6 +1474,22 @@ export async function addCategoryToMenu(
     console.error('[addCategoryToMenu] Error:', error)
     return { success: false, error: error.message }
   }
+
+  await LogAuditEvent({
+    merchantId,
+    action: `Assigned Category "${category.name || 'Unknown'}" to Menu: ${menu.name || 'Unknown'}`,
+    actionCategory: 'menu',
+    resourceType: 'menu_category',
+    resourceId: categoryId,
+    locationId: menu.location_id || undefined,
+    metadata: {
+      menu_id: menuId,
+      menu_name: menu.name,
+      category_name: category.name,
+      display_order: displayOrder,
+      admin_action: true,
+    },
+  })
 
   return { success: true, error: null }
 }
@@ -1274,7 +1506,7 @@ export async function removeCategoryFromMenu(
   // Verify menu belongs to merchant
   const { data: menu } = await supabase
     .from('menus')
-    .select('id')
+    .select('id, name, location_id')
     .eq('id', menuId)
     .eq('merchant_id', merchantId)
     .single()
@@ -1294,6 +1526,28 @@ export async function removeCategoryFromMenu(
     return { success: false, error: error.message }
   }
 
+  // Fetch category name
+  const { data: category } = await supabase
+    .from('categories')
+    .select('name')
+    .eq('id', categoryId)
+    .single()
+
+  await LogAuditEvent({
+    merchantId,
+    action: `Removed Category "${category?.name || 'Unknown'}" from Menu: ${menu.name || 'Unknown'}`,
+    actionCategory: 'menu',
+    resourceType: 'menu_category',
+    resourceId: categoryId,
+    locationId: menu.location_id || undefined,
+    metadata: {
+      menu_id: menuId,
+      menu_name: menu.name,
+      category_name: category?.name,
+      admin_action: true,
+    },
+  })
+
   return { success: true, error: null }
 }
 
@@ -1309,7 +1563,7 @@ export async function updateMenuCategoryOrder(
   // Verify menu belongs to merchant
   const { data: menu } = await supabase
     .from('menus')
-    .select('id')
+    .select('id, name, location_id')
     .eq('id', menuId)
     .eq('merchant_id', merchantId)
     .single()
@@ -1353,6 +1607,7 @@ export interface CreateMenuItemData {
   tax_category?: string
   is_tax_exempt?: boolean
   available_channels?: string[]
+  modifier_group_ids?: string[]
 }
 
 export async function createAdminMenuItem(
@@ -1389,6 +1644,39 @@ export async function createAdminMenuItem(
     return { data: null, error: error.message }
   }
 
+  // Handle modifier groups if provided
+  if (data.modifier_group_ids && data.modifier_group_ids.length > 0) {
+    const modifierInserts = data.modifier_group_ids.map((groupId, index) => ({
+      merchant_id: merchantId,
+      menu_item_id: item.id,
+      modifier_group_id: groupId,
+    }))
+
+    const { error: modError } = await supabase
+      .from('menu_item_modifier_groups')
+      .insert(modifierInserts)
+
+    if (modError) {
+       console.error('[createAdminMenuItem] Failed to add modifiers:', modError)
+       // We don't fail the whole request, but we log it. 
+       // Optionally we could return a warning.
+    }
+  }
+
+  // Log Audit Event
+  await LogAuditEvent({
+    merchantId,
+    action: `Created Menu Item: ${data.name}`,
+    actionCategory: 'menu',
+    resourceType: 'menu_item',
+    resourceId: item.id,
+    resourceName: data.name,
+    changes: { after: data as any },
+    metadata: {
+      admin_action: true,
+    },
+  })
+
   // Return in AdminMenuItem format
   return {
     data: {
@@ -1416,6 +1704,8 @@ export async function createAdminMenuItem(
       stock_tracking_mode: item.stock_tracking_mode,
       current_stock: null,
       categories: [],
+      modifier_groups: [],
+      modifier_groups_count: 0,
       location_override: null,
       created_at: item.created_at,
       updated_at: item.updated_at,
@@ -1469,13 +1759,27 @@ export async function updateAdminMenuItem(
     .update(updateData)
     .eq('id', itemId)
     .eq('merchant_id', merchantId)
-    .select('id')
+    .select('id, name')
     .single()
 
   if (error) {
     console.error('[updateAdminMenuItem] Error:', error)
     return { data: null, error: error.message }
   }
+
+  // Log Audit Event
+  await LogAuditEvent({
+    merchantId,
+    action: `Updated Menu Item: ${item.name}`,
+    actionCategory: 'menu',
+    resourceType: 'menu_item',
+    resourceId: itemId,
+    resourceName: item.name,
+    changes: { after: data as any },
+    metadata: {
+      admin_action: true,
+    },
+  })
 
   return { data: { id: item.id }, error: null }
 }
@@ -1501,6 +1805,12 @@ export async function deleteAdminMenuItem(
     .eq('menu_item_id', itemId)
 
   // Delete the item
+  const { data: item } = await supabase
+    .from('menu_items')
+    .select('name')
+    .eq('id', itemId)
+    .single()
+
   const { error } = await supabase
     .from('menu_items')
     .delete()
@@ -1510,6 +1820,21 @@ export async function deleteAdminMenuItem(
   if (error) {
     console.error('[deleteAdminMenuItem] Error:', error)
     return { success: false, error: error.message }
+  }
+
+  if (item) {
+    await LogAuditEvent({
+      merchantId,
+      action: `Deleted Menu Item: ${item.name}`,
+      actionCategory: 'menu',
+      resourceType: 'menu_item',
+      resourceId: itemId,
+      resourceName: item.name,
+      severity: 'info',
+      metadata: {
+        admin_action: true,
+      },
+    })
   }
 
   return { success: true, error: null }
@@ -1533,14 +1858,14 @@ export async function addItemToCategory(
   // Verify category and item belong to merchant
   const { data: category } = await supabase
     .from('categories')
-    .select('id')
+    .select('id, name')
     .eq('id', categoryId)
     .eq('merchant_id', merchantId)
     .single()
 
   const { data: item } = await supabase
     .from('menu_items')
-    .select('id')
+    .select('id, name')
     .eq('id', itemId)
     .eq('merchant_id', merchantId)
     .single()
@@ -1577,6 +1902,23 @@ export async function addItemToCategory(
     return { success: false, error: error.message }
   }
 
+  // Log Audit Event
+  await LogAuditEvent({
+    merchantId,
+    action: `Assigned Item "${item.name}" to Category: ${category.name}`,
+    actionCategory: 'menu',
+    resourceType: 'category_item',
+    resourceId: itemId,
+    metadata: {
+      category_id: categoryId,
+      category_name: category.name,
+      item_name: item.name,
+      display_order: displayOrder,
+      custom_price: customPrice,
+      admin_action: true,
+    },
+  })
+
   return { success: true, error: null }
 }
 
@@ -1592,7 +1934,7 @@ export async function removeItemFromCategory(
   // Verify category belongs to merchant
   const { data: category } = await supabase
     .from('categories')
-    .select('id')
+    .select('id, name')
     .eq('id', categoryId)
     .eq('merchant_id', merchantId)
     .single()
@@ -1612,6 +1954,29 @@ export async function removeItemFromCategory(
     return { success: false, error: error.message }
   }
 
+  // Get item name for log
+  const { data: item } = await supabase
+    .from('menu_items')
+    .select('name')
+    .eq('id', itemId)
+    .single()
+
+  // Log Audit Event
+  await LogAuditEvent({
+    merchantId,
+    action: `Removed Item "${item?.name || 'Unknown'}" from Category "${category.name || 'Unknown'}"`,
+    actionCategory: 'menu',
+    resourceType: 'category_item',
+    resourceId: itemId,
+    resourceName: item?.name,
+    metadata: {
+      category_id: categoryId,
+      category_name: category.name,
+      item_name: item?.name,
+      admin_action: true,
+    },
+  })
+
   return { success: true, error: null }
 }
 
@@ -1627,7 +1992,7 @@ export async function updateCategoryItemOrder(
   // Verify category belongs to merchant
   const { data: category } = await supabase
     .from('categories')
-    .select('id')
+    .select('id, name')
     .eq('id', categoryId)
     .eq('merchant_id', merchantId)
     .single()
@@ -1666,7 +2031,7 @@ export async function updateCategoryItemPrice(
   // Verify category belongs to merchant
   const { data: category } = await supabase
     .from('categories')
-    .select('id')
+    .select('id, name')
     .eq('id', categoryId)
     .eq('merchant_id', merchantId)
     .single()
@@ -1688,6 +2053,29 @@ export async function updateCategoryItemPrice(
     console.error('[updateCategoryItemPrice] Error:', error)
     return { success: false, error: error.message }
   }
+
+  // Get item name
+  const { data: item } = await supabase
+    .from('menu_items')
+    .select('name')
+    .eq('id', itemId)
+    .single()
+
+  // Log Audit Event
+  await LogAuditEvent({
+    merchantId,
+    action: `Updated Category Item Price: "${item?.name || 'Unknown'}" (Category: "${category.name || 'Unknown'}")`,
+    actionCategory: 'menu',
+    resourceType: 'category_item',
+    resourceId: itemId,
+    resourceName: item?.name,
+    changes: { after: { customPrice, customCashPrice } },
+    metadata: {
+      category_id: categoryId,
+      category_name: category.name,
+      admin_action: true,
+    },
+  })
 
   return { success: true, error: null }
 }
@@ -1749,7 +2137,7 @@ export async function upsertAdminLocationItemOverride(
   // Verify item belongs to merchant
   const { data: item } = await supabase
     .from('menu_items')
-    .select('id')
+    .select('id, name')
     .eq('id', itemId)
     .eq('merchant_id', merchantId)
     .single()
@@ -1761,7 +2149,7 @@ export async function upsertAdminLocationItemOverride(
   // Verify location belongs to merchant
   const { data: location } = await supabase
     .from('locations')
-    .select('id')
+    .select('id, name')
     .eq('id', locationId)
     .eq('merchant_id', merchantId)
     .single()
@@ -1821,6 +2209,22 @@ export async function upsertAdminLocationItemOverride(
     }
   }
 
+  // Log Audit Event
+  await LogAuditEvent({
+    merchantId,
+    action: `Overridden Item "${item.name}" (Location: ${location.name || 'Unknown'})`,
+    actionCategory: 'menu',
+    resourceType: 'menu_item',
+    resourceId: itemId,
+    resourceName: item.name,
+    locationId,
+    changes: { after: data as any },
+    metadata: {
+      location_name: location.name,
+      admin_action: true,
+    },
+  })
+
   return { success: true, error: null }
 }
 
@@ -1836,7 +2240,7 @@ export async function deleteAdminLocationItemOverride(
   // Verify item belongs to merchant
   const { data: item } = await supabase
     .from('menu_items')
-    .select('id')
+    .select('id, name')
     .eq('id', itemId)
     .eq('merchant_id', merchantId)
     .single()
@@ -1855,6 +2259,21 @@ export async function deleteAdminLocationItemOverride(
     console.error('[deleteAdminLocationItemOverride] Error:', error)
     return { success: false, error: error.message }
   }
+
+  // Log Audit Event
+  await LogAuditEvent({
+    merchantId,
+    action: `Removed Override for Item "${item.name}"`,
+    actionCategory: 'menu',
+    resourceType: 'menu_item',
+    resourceId: itemId,
+    resourceName: item.name,
+    locationId,
+    severity: 'info',
+    metadata: {
+      admin_action: true,
+    },
+  })
 
   return { success: true, error: null }
 }
@@ -1884,7 +2303,7 @@ export async function upsertAdminLocationCategoryOverride(
   // Verify category belongs to merchant
   const { data: category } = await supabase
     .from('categories')
-    .select('id')
+    .select('id, name')
     .eq('id', categoryId)
     .eq('merchant_id', merchantId)
     .single()
@@ -1936,6 +2355,21 @@ export async function upsertAdminLocationCategoryOverride(
     }
   }
 
+  // Log Audit Event
+  await LogAuditEvent({
+    merchantId,
+    action: `Overridden Category "${category.name || 'Unknown'}" (Location Override)`,
+    actionCategory: 'menu',
+    resourceType: 'category',
+    resourceId: categoryId,
+    resourceName: category.name || 'Unknown',
+    locationId,
+    changes: { after: data as any },
+    metadata: {
+      admin_action: true,
+    },
+  })
+
   return { success: true, error: null }
 }
 
@@ -1958,6 +2392,27 @@ export async function deleteAdminLocationCategoryOverride(
     console.error('[deleteAdminLocationCategoryOverride] Error:', error)
     return { success: false, error: error.message }
   }
+
+  // Fetch category name
+  const { data: category } = await supabase
+    .from('categories')
+    .select('name')
+    .eq('id', categoryId)
+    .single()
+
+  await LogAuditEvent({
+    merchantId,
+    action: `Removed Override for Category "${category?.name || 'Unknown'}"`,
+    actionCategory: 'menu',
+    resourceType: 'category',
+    resourceId: categoryId,
+    resourceName: category?.name,
+    locationId,
+    severity: 'info',
+    metadata: {
+      admin_action: true,
+    },
+  })
 
   return { success: true, error: null }
 }
@@ -2158,6 +2613,21 @@ export async function createAdminModifierGroup(
     return { data: null, error: error.message }
   }
 
+  // Log Audit Event
+  await LogAuditEvent({
+    merchantId,
+    action: `Created Modifier Group: ${data.name}`,
+    actionCategory: 'menu',
+    resourceType: 'modifier_group',
+    resourceId: group.id,
+    resourceName: data.name,
+    locationId: data.location_id || undefined,
+    changes: { after: data as any },
+    metadata: {
+      admin_action: true,
+    },
+  })
+
   return {
     data: {
       id: group.id,
@@ -2226,6 +2696,21 @@ export async function updateAdminModifierGroup(
     return { data: null, error: error.message }
   }
 
+  // Log Audit Event
+  await LogAuditEvent({
+    merchantId,
+    action: `Updated Modifier Group: ${group.name}`,
+    actionCategory: 'menu',
+    resourceType: 'modifier_group',
+    resourceId: groupId,
+    resourceName: group.name,
+    locationId: group.location_id || undefined,
+    changes: { after: data as any },
+    metadata: {
+      admin_action: true,
+    },
+  })
+
   return {
     data: {
       id: group.id,
@@ -2235,7 +2720,7 @@ export async function updateAdminModifierGroup(
       is_active: group.is_active,
       min_selections: group.min_selections || 0,
       max_selections: group.max_selections,
-      items_count: (group as any).modifier_group_items?.length || 0,
+      items_count: (group as any).modifier_group_items?.[0]?.count ?? 0,
       is_global: !group.location_id,
       location_id: group.location_id,
       created_at: group.created_at,
@@ -2251,6 +2736,13 @@ export async function deleteAdminModifierGroup(
   await assertHQPermission('hq.merchant.update')
 
   const supabase = createServerSupabaseClient()
+
+  // Fetch group first for logging
+  const { data: group } = await supabase
+    .from('modifier_groups')
+    .select('name, location_id')
+    .eq('id', groupId)
+    .single()
 
   // First delete all modifier items in this group (cascade)
   await supabase
@@ -2268,6 +2760,22 @@ export async function deleteAdminModifierGroup(
   if (error) {
     console.error('[deleteAdminModifierGroup] Error:', error)
     return { success: false, error: error.message }
+  }
+
+  if (group) {
+    await LogAuditEvent({
+      merchantId,
+      action: `Deleted Modifier Group: ${group.name}`,
+      actionCategory: 'menu',
+      resourceType: 'modifier_group',
+      resourceId: groupId,
+      resourceName: group.name,
+      locationId: group.location_id || undefined,
+      severity: 'info',
+      metadata: {
+        admin_action: true,
+      },
+    })
   }
 
   return { success: true, error: null }
@@ -2298,7 +2806,7 @@ export async function createAdminModifierItem(
   // Verify group belongs to merchant
   const { data: group } = await supabase
     .from('modifier_groups')
-    .select('id')
+    .select('id, name')
     .eq('id', groupId)
     .eq('merchant_id', merchantId)
     .single()
@@ -2326,6 +2834,22 @@ export async function createAdminModifierItem(
     console.error('[createAdminModifierItem] Error:', error)
     return { data: null, error: error.message }
   }
+
+  // Log Audit Event
+  await LogAuditEvent({
+    merchantId,
+    action: `Created Modifier Option: ${data.name} (in ${group.name || 'Unknown Group'})`,
+    actionCategory: 'menu',
+    resourceType: 'modifier_group', // Logging as modifier_group as items are part of it
+    resourceId: groupId,
+    resourceName: data.name,
+    changes: { after: data as any },
+    metadata: {
+      option_id: item.id,
+      modifier_group_name: group.name,
+      admin_action: true,
+    },
+  })
 
   return {
     data: {
@@ -2390,6 +2914,21 @@ export async function updateAdminModifierItem(
     return { data: null, error: error.message }
   }
 
+  // Log Audit Event
+  await LogAuditEvent({
+    merchantId,
+    action: `Updated Modifier Option: ${updatedItem.name}`,
+    actionCategory: 'menu',
+    resourceType: 'modifier_group',
+    resourceId: item.modifier_group_id,
+    resourceName: updatedItem.name,
+    changes: { after: data as any },
+    metadata: {
+      option_id: itemId,
+      admin_action: true,
+    },
+  })
+
   return {
     data: {
       id: updatedItem.id,
@@ -2415,7 +2954,7 @@ export async function deleteAdminModifierItem(
   // Verify item belongs to merchant's group
   const { data: item } = await supabase
     .from('modifier_group_items')
-    .select('modifier_group_id, modifier_groups!inner(merchant_id)')
+    .select('id, name, modifier_group_id, modifier_groups!inner(merchant_id)')
     .eq('id', itemId)
     .single()
 
@@ -2432,6 +2971,20 @@ export async function deleteAdminModifierItem(
     console.error('[deleteAdminModifierItem] Error:', error)
     return { success: false, error: error.message }
   }
+
+  await LogAuditEvent({
+    merchantId,
+    action: `Deleted Modifier Option: ${item.name}`,
+    actionCategory: 'menu',
+    resourceType: 'modifier_group',
+    resourceId: item.modifier_group_id,
+    resourceName: item.name,
+    severity: 'info',
+    metadata: {
+      option_id: itemId,
+      admin_action: true,
+    },
+  })
 
   return { success: true, error: null }
 }
@@ -2571,6 +3124,39 @@ export async function getMenuAuditInfo(
   return {
     created_at: menu.created_at,
     updated_at: updated_at || menu.updated_at,
+    updated_by,
+    admin_notes: null, // Will be populated when admin_notes field is added to DB
+  }
+}
+
+/**
+ * Fetch audit information for a modifier group including last editor from audit_logs
+ */
+export async function getModifierGroupAuditInfo(
+  merchantId: string,
+  groupId: string
+): Promise<AuditInfo | null> {
+  await assertHQPermission('hq.merchant.view')
+
+  const supabase = createServerSupabaseClient()
+
+  // Get basic timestamps and created_by from modifier_groups
+  const { data: group, error } = await supabase
+    .from('modifier_groups')
+    .select('created_at, updated_at, merchant_id, created_by')
+    .eq('id', groupId)
+    .single()
+
+  if (error || !group || group.merchant_id !== merchantId) {
+    return null
+  }
+
+  // Get last editor from audit_logs
+  const { updated_by, updated_at } = await getLastEditInfo('modifier_group', groupId)
+
+  return {
+    created_at: group.created_at,
+    updated_at: updated_at || group.updated_at,
     updated_by,
     admin_notes: null, // Will be populated when admin_notes field is added to DB
   }
@@ -2729,7 +3315,7 @@ export async function assignModifierGroupToItem(
 
   // Check if already assigned
   const { data: existing } = await supabase
-    .from('item_modifier_groups')
+    .from('menu_item_modifier_groups')
     .select('id')
     .eq('menu_item_id', itemId)
     .eq('modifier_group_id', modifierGroupId)
@@ -2740,27 +3326,13 @@ export async function assignModifierGroupToItem(
     return { success: true, error: null }
   }
 
-  // Get max sort order if not provided
-  let effectiveSortOrder = sortOrder
-  if (effectiveSortOrder === undefined) {
-    const { data: maxOrder } = await supabase
-      .from('item_modifier_groups')
-      .select('sort_order')
-      .eq('menu_item_id', itemId)
-      .order('sort_order', { ascending: false })
-      .limit(1)
-      .single()
-
-    effectiveSortOrder = (maxOrder?.sort_order ?? -1) + 1
-  }
-
   // Insert the assignment
   const { error } = await supabase
-    .from('item_modifier_groups')
+    .from('menu_item_modifier_groups')
     .insert({
+      merchant_id: merchantId,
       menu_item_id: itemId,
       modifier_group_id: modifierGroupId,
-      sort_order: effectiveSortOrder,
     })
 
   if (error) {
@@ -2794,7 +3366,7 @@ export async function removeModifierGroupFromItem(
 
   // Delete the assignment
   const { error } = await supabase
-    .from('item_modifier_groups')
+    .from('menu_item_modifier_groups')
     .delete()
     .eq('menu_item_id', itemId)
     .eq('modifier_group_id', modifierGroupId)
@@ -2866,7 +3438,7 @@ export async function toggleAdminCategoryInMenu(
   // Verify menu belongs to merchant
   const { data: menu } = await supabase
     .from('menus')
-    .select('id')
+    .select('id, name, location_id')
     .eq('id', menuId)
     .eq('merchant_id', merchantId)
     .single()
@@ -2906,7 +3478,7 @@ export async function updateAdminMenuCategoryOrder(
   // Verify menu belongs to merchant
   const { data: menu } = await supabase
     .from('menus')
-    .select('id')
+    .select('id, name, location_id')
     .eq('id', menuId)
     .eq('merchant_id', merchantId)
     .single()
@@ -2959,7 +3531,7 @@ export async function getAdminMenuSchedules(
   // Verify menu belongs to merchant
   const { data: menu } = await supabase
     .from('menus')
-    .select('id')
+    .select('id, name, location_id')
     .eq('id', menuId)
     .eq('merchant_id', merchantId)
     .single()

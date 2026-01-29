@@ -236,9 +236,10 @@ export async function CreateModifierGroup(
   }
 
   // Log audit event
+  const optionNames = data.options?.map((opt) => opt.name) || [];
   await LogAuditEvent({
     merchantId: merchant.id,
-    action: `Created Modifier Group: ${data.name}`,
+    action: `Created Modifier Group: ${data.name}${optionNames.length > 0 ? ` (with ${optionNames.length} option${optionNames.length > 1 ? "s" : ""}: ${optionNames.join(", ")})` : ""}`,
     actionCategory: "menu",
     resourceType: "modifier_group",
     resourceId: modifierGroup.id,
@@ -246,9 +247,9 @@ export async function CreateModifierGroup(
     locationId: data.location_id || undefined,
     metadata: {
       is_required: data.is_required,
-      options_count: data.options?.length || 0,
+      options_count: optionNames.length,
+      options: optionNames,
     },
-    changes: { after: data as Record<string, unknown> },
   });
 
   return { data: modifierGroup as ModifierGroupsModel };
@@ -277,17 +278,52 @@ export async function UpdateModifierGroup(
 
   const supabase = createServerSupabaseClient();
 
+  // Fetch existing modifier group BEFORE updating (for audit log)
+  const { data: existingGroup } = await supabase
+    .from("modifier_groups")
+    .select("*")
+    .eq("id", modifierGroupId)
+    .single();
+
   const updateData: any = {};
-  if (data.name !== undefined) updateData.name = data.name;
-  if (data.description !== undefined) updateData.description = data.description;
-  if (data.is_required !== undefined) updateData.is_required = data.is_required;
-  if (data.min_selections !== undefined)
+  const beforeLog: Record<string, unknown> = {};
+  const afterLog: Record<string, unknown> = {};
+
+  if (data.name !== undefined) {
+    updateData.name = data.name;
+    if (existingGroup) beforeLog.name = existingGroup.name;
+    afterLog.name = data.name;
+  }
+  if (data.description !== undefined) {
+    updateData.description = data.description;
+    if (existingGroup) beforeLog.description = existingGroup.description;
+    afterLog.description = data.description;
+  }
+  if (data.is_required !== undefined) {
+    updateData.is_required = data.is_required;
+    if (existingGroup) beforeLog.is_required = existingGroup.is_required;
+    afterLog.is_required = data.is_required;
+  }
+  if (data.min_selections !== undefined) {
     updateData.min_selections = data.min_selections;
-  if (data.max_selections !== undefined)
+    if (existingGroup) beforeLog.min_selections = existingGroup.min_selections;
+    afterLog.min_selections = data.min_selections;
+  }
+  if (data.max_selections !== undefined) {
     updateData.max_selections = data.max_selections;
-  if (data.display_order !== undefined)
+    if (existingGroup) beforeLog.max_selections = existingGroup.max_selections;
+    afterLog.max_selections = data.max_selections;
+  }
+  if (data.display_order !== undefined) {
     updateData.display_order = data.display_order;
-  if (data.location_id !== undefined) updateData.location_id = data.location_id;
+    if (existingGroup) beforeLog.display_order = existingGroup.display_order;
+    afterLog.display_order = data.display_order;
+  }
+  if (data.location_id !== undefined) {
+    updateData.location_id = data.location_id;
+    if (existingGroup) beforeLog.location_id = existingGroup.location_id;
+    afterLog.location_id = data.location_id;
+  }
 
   const { data: modifierGroup, error } = await supabase
     .from("modifier_groups")
@@ -301,19 +337,27 @@ export async function UpdateModifierGroup(
     return { error: error.message };
   }
 
-  // Fetch current details for better log context might be expensive, but we have partial data.
-  // We'll rely on updateData.
+  // Check if any values actually changed before logging
+  let hasRealChanges = false;
+  for (const key of Object.keys(afterLog)) {
+    if (JSON.stringify(beforeLog[key]) !== JSON.stringify(afterLog[key])) {
+      hasRealChanges = true;
+      break;
+    }
+  }
 
-  await LogAuditEvent({
-    merchantId: modifierGroup.merchant_id,
-    action: `Updated Modifier Group: ${modifierGroup.name}`,
-    actionCategory: "menu",
-    resourceType: "modifier_group",
-    resourceId: modifierGroupId,
-    resourceName: modifierGroup.name,
-    locationId: locationId || modifierGroup.location_id,
-    changes: { after: updateData },
-  });
+  if (hasRealChanges) {
+    await LogAuditEvent({
+      merchantId: modifierGroup.merchant_id,
+      action: `Updated Modifier Group: ${modifierGroup.name}`,
+      actionCategory: "menu",
+      resourceType: "modifier_group",
+      resourceId: modifierGroupId,
+      resourceName: modifierGroup.name,
+      locationId: locationId || modifierGroup.location_id,
+      changes: { before: beforeLog, after: afterLog },
+    });
+  }
 
   return { data: modifierGroup as ModifierGroupsModel };
 }
@@ -439,10 +483,17 @@ export async function CreateModifierGroupItem(
     return { error: error.message };
   }
 
+  // Fetch modifier group name for context
+  const { data: modifierGroup } = await supabase
+    .from("modifier_groups")
+    .select("name")
+    .eq("id", modifierGroupId)
+    .single();
+
   // Log audit event
   await LogAuditEvent({
     merchantId: data.merchant_id,
-    action: `Created Modifier Option: ${data.name}`,
+    action: `Created Modifier Option: ${data.name} (in ${modifierGroup?.name || "Unknown Group"})`,
     actionCategory: "menu",
     resourceType: "modifier_group",
     resourceId: modifierGroupId,
@@ -450,6 +501,7 @@ export async function CreateModifierGroupItem(
     locationId: locationId,
     metadata: {
       option_id: item.id,
+      modifier_group_name: modifierGroup?.name,
       price_modifier: data.price_modifier,
     },
   });
@@ -479,37 +531,61 @@ export async function UpdateModifierGroupItem(
 
   const supabase = createServerSupabaseClient();
 
-  // If setting as default, get the modifier_group_id first and unset other defaults
-  if (data.is_default) {
-    const { data: currentItem } = await supabase
+  // Fetch existing item BEFORE updating (for audit log and default handling)
+  const { data: existingItem } = await supabase
+    .from("modifier_group_items")
+    .select("*")
+    .eq("id", itemId)
+    .single();
+
+  // If setting as default, unset other defaults in this group
+  if (data.is_default && existingItem?.modifier_group_id) {
+    const { error: unsetError } = await supabase
       .from("modifier_group_items")
-      .select("modifier_group_id")
-      .eq("id", itemId)
-      .single();
+      .update({ is_default: false })
+      .eq("modifier_group_id", existingItem.modifier_group_id)
+      .eq("is_default", true)
+      .neq("id", itemId); // Don't unset the current item
 
-    if (currentItem?.modifier_group_id) {
-      const { error: unsetError } = await supabase
-        .from("modifier_group_items")
-        .update({ is_default: false })
-        .eq("modifier_group_id", currentItem.modifier_group_id)
-        .eq("is_default", true)
-        .neq("id", itemId); // Don't unset the current item
-
-      if (unsetError) {
-        console.error("Error unsetting other defaults:", unsetError);
-      }
+    if (unsetError) {
+      console.error("Error unsetting other defaults:", unsetError);
     }
   }
 
   const updateData: any = {};
-  if (data.name !== undefined) updateData.name = data.name;
-  if (data.description !== undefined) updateData.description = data.description;
-  if (data.price_modifier !== undefined)
+  const beforeLog: Record<string, unknown> = {};
+  const afterLog: Record<string, unknown> = {};
+
+  if (data.name !== undefined) {
+    updateData.name = data.name;
+    if (existingItem) beforeLog.name = existingItem.name;
+    afterLog.name = data.name;
+  }
+  if (data.description !== undefined) {
+    updateData.description = data.description;
+    if (existingItem) beforeLog.description = existingItem.description;
+    afterLog.description = data.description;
+  }
+  if (data.price_modifier !== undefined) {
     updateData.price_modifier = data.price_modifier;
-  if (data.display_order !== undefined)
+    if (existingItem) beforeLog.price_modifier = existingItem.price_modifier;
+    afterLog.price_modifier = data.price_modifier;
+  }
+  if (data.display_order !== undefined) {
     updateData.display_order = data.display_order;
-  if (data.is_active !== undefined) updateData.is_active = data.is_active;
-  if (data.is_default !== undefined) updateData.is_default = data.is_default;
+    if (existingItem) beforeLog.display_order = existingItem.display_order;
+    afterLog.display_order = data.display_order;
+  }
+  if (data.is_active !== undefined) {
+    updateData.is_active = data.is_active;
+    if (existingItem) beforeLog.is_active = existingItem.is_active;
+    afterLog.is_active = data.is_active;
+  }
+  if (data.is_default !== undefined) {
+    updateData.is_default = data.is_default;
+    if (existingItem) beforeLog.is_default = existingItem.is_default;
+    afterLog.is_default = data.is_default;
+  }
 
   const { data: item, error } = await supabase
     .from("modifier_group_items")
@@ -523,19 +599,38 @@ export async function UpdateModifierGroupItem(
     return { error: error.message };
   }
 
-  await LogAuditEvent({
-    merchantId: item.merchant_id,
-    action: `Updated Modifier Option: ${item.name}`,
-    actionCategory: "menu",
-    resourceType: "modifier_group",
-    resourceId: item.modifier_group_id,
-    resourceName: item.name,
-    locationId: locationId,
-    metadata: {
-      option_id: itemId,
-    },
-    changes: { after: updateData },
-  });
+  // Check if any values actually changed before logging
+  let hasRealChanges = false;
+  for (const key of Object.keys(afterLog)) {
+    if (JSON.stringify(beforeLog[key]) !== JSON.stringify(afterLog[key])) {
+      hasRealChanges = true;
+      break;
+    }
+  }
+
+  if (hasRealChanges) {
+    // Fetch modifier group name for better context
+    const { data: modifierGroup } = await supabase
+      .from("modifier_groups")
+      .select("name")
+      .eq("id", item.modifier_group_id)
+      .single();
+
+    await LogAuditEvent({
+      merchantId: item.merchant_id,
+      action: `Updated Modifier Option: ${item.name} (in ${modifierGroup?.name || "Unknown Group"})`,
+      actionCategory: "menu",
+      resourceType: "modifier_group",
+      resourceId: item.modifier_group_id,
+      resourceName: item.name,
+      locationId: locationId,
+      metadata: {
+        option_id: itemId,
+        modifier_group_name: modifierGroup?.name,
+      },
+      changes: { before: beforeLog, after: afterLog },
+    });
+  }
 
   return { data: item as ModifierGroupItemsModel };
 }
@@ -587,9 +682,16 @@ export async function DeleteModifierGroupItem(
 
     // Log audit event (Soft Delete)
     if (item) {
+      // Fetch modifier group name for context
+      const { data: modifierGroup } = await supabase
+        .from("modifier_groups")
+        .select("name")
+        .eq("id", item.modifier_group_id)
+        .single();
+
       await LogAuditEvent({
         merchantId: item.merchant_id,
-        action: `Deactivated Modifier Option (In Use): ${item.name}`,
+        action: `Deactivated Modifier Option: ${item.name} (from ${modifierGroup?.name || "Unknown Group"})`,
         actionCategory: "menu",
         resourceType: "modifier_group",
         resourceId: item.modifier_group_id,
@@ -597,6 +699,7 @@ export async function DeleteModifierGroupItem(
         locationId: locationId,
         metadata: {
           option_id: itemId,
+          modifier_group_name: modifierGroup?.name,
           soft_deleted: true,
           order_reference_count: orderReferenceCount,
         },
@@ -617,6 +720,17 @@ export async function DeleteModifierGroupItem(
     .select("name, merchant_id, modifier_group_id")
     .eq("id", itemId)
     .single();
+
+  // Fetch modifier group name for context (before we lose the reference)
+  let modifierGroupName: string | null = null;
+  if (itemToDelete?.modifier_group_id) {
+    const { data: modifierGroup } = await supabase
+      .from("modifier_groups")
+      .select("name")
+      .eq("id", itemToDelete.modifier_group_id)
+      .single();
+    modifierGroupName = modifierGroup?.name || null;
+  }
 
   // No order references - safe to hard delete
   const { error } = await supabase
@@ -646,7 +760,7 @@ export async function DeleteModifierGroupItem(
       if (item) {
         await LogAuditEvent({
           merchantId: item.merchant_id,
-          action: `Deactivated Modifier Option (Fallback): ${item.name}`,
+          action: `Deactivated Modifier Option: ${item.name} (from ${modifierGroupName || "Unknown Group"})`,
           actionCategory: "menu",
           resourceType: "modifier_group",
           resourceId: item.modifier_group_id,
@@ -654,6 +768,7 @@ export async function DeleteModifierGroupItem(
           locationId: locationId,
           metadata: {
             option_id: itemId,
+            modifier_group_name: modifierGroupName,
             soft_deleted: true,
             reason: "foreign_key_violation",
           },
@@ -674,7 +789,7 @@ export async function DeleteModifierGroupItem(
   if (itemToDelete) {
     await LogAuditEvent({
       merchantId: itemToDelete.merchant_id,
-      action: `Deleted Modifier Option: ${itemToDelete.name}`,
+      action: `Deleted Modifier Option: ${itemToDelete.name} (from ${modifierGroupName || "Unknown Group"})`,
       actionCategory: "menu",
       resourceType: "modifier_group",
       resourceId: itemToDelete.modifier_group_id,
@@ -682,6 +797,7 @@ export async function DeleteModifierGroupItem(
       locationId: locationId,
       metadata: {
         option_id: itemId,
+        modifier_group_name: modifierGroupName,
       },
     });
   }

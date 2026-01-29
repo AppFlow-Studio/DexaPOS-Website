@@ -167,7 +167,8 @@ export function CreateScheduleSheet({
                 time_slots: timeSlots.map(slot => ({
                     day_of_week: slot.day_of_week,
                     start_time: slot.start_time + ':00',
-                    end_time: slot.end_time + ':00',
+                    // Handle midnight: if end_time is 00:00, use 23:59:59 to satisfy start < end constraint safely
+                    end_time: slot.end_time === '00:00' ? '23:59:59' : slot.end_time + ':00',
                 })),
             })
 

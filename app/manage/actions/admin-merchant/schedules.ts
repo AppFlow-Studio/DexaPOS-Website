@@ -3,6 +3,7 @@
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
 
 // ============================================================================
 // TYPES
@@ -141,9 +142,9 @@ export async function getMenuSchedules(
   }
 
   // Flatten to just return the schedules with time slots
-  return data
-    .map((item) => item.schedule)
-    .filter((s): s is AdminSchedule => s !== null)
+  return (data || [])
+    .map((item: any) => item.schedule)
+    .filter((s: any): s is AdminSchedule => s !== null) as AdminSchedule[]
 }
 
 // ============================================================================
@@ -165,7 +166,7 @@ export async function createAdminSchedule(
     }>
   }
 ): Promise<{ data?: AdminSchedule; error?: string }> {
-  await assertHQPermission('hq.merchant.edit')
+  await assertHQPermission('hq.merchant.update')
 
   const supabase = createServerSupabaseClient()
 
@@ -224,6 +225,21 @@ export async function createAdminSchedule(
     .eq('id', schedule.id)
     .single()
 
+  // Log Audit Event
+  await LogAuditEvent({
+    merchantId,
+    action: `Created Schedule: ${data.name}`,
+    actionCategory: 'settings',
+    resourceType: 'schedule',
+    resourceId: schedule.id,
+    resourceName: data.name,
+    locationId: data.location_id || undefined,
+    metadata: {
+      admin_action: true,
+      slots_count: data.time_slots?.length || 0,
+    },
+  })
+
   return { data: completeSchedule as AdminSchedule }
 }
 
@@ -246,7 +262,7 @@ export async function updateAdminSchedule(
     }>
   }
 ): Promise<{ data?: AdminSchedule; error?: string }> {
-  await assertHQPermission('hq.merchant.edit')
+  await assertHQPermission('hq.merchant.update')
 
   const supabase = createServerSupabaseClient()
 
@@ -325,6 +341,20 @@ export async function updateAdminSchedule(
     return { error: 'Schedule updated but failed to fetch' }
   }
 
+  // Log Audit Event
+  await LogAuditEvent({
+    merchantId,
+    action: `Updated Schedule: ${updatedSchedule.name}`,
+    actionCategory: 'settings',
+    resourceType: 'schedule',
+    resourceId: scheduleId,
+    resourceName: updatedSchedule.name,
+    changes: { after: data as any },
+    metadata: {
+      admin_action: true,
+    },
+  })
+
   return { data: updatedSchedule as AdminSchedule }
 }
 
@@ -336,7 +366,7 @@ export async function deleteAdminSchedule(
   merchantId: string,
   scheduleId: string
 ): Promise<{ success?: boolean; error?: string }> {
-  await assertHQPermission('hq.merchant.edit')
+  await assertHQPermission('hq.merchant.update')
 
   // Use service role client to bypass RLS
   const supabase = createServiceRoleClient()
@@ -375,6 +405,13 @@ export async function deleteAdminSchedule(
     return { error: 'Failed to delete time slots' }
   }
 
+  // Fetch schedule details for logging
+  const { data: schedule } = await supabase
+    .from('schedules')
+    .select('name, location_id')
+    .eq('id', scheduleId)
+    .single()
+
   // 4. Finally delete the schedule itself
   const { error } = await supabase
     .from('schedules')
@@ -385,6 +422,22 @@ export async function deleteAdminSchedule(
   if (error) {
     console.error('Error deleting admin schedule:', error)
     return { error: error.message }
+  }
+
+  // Log Audit Event
+  if (schedule) {
+    await LogAuditEvent({
+      merchantId,
+      action: `Deleted Schedule: ${schedule.name}`,
+      actionCategory: 'settings',
+      resourceType: 'schedule',
+      resourceId: scheduleId,
+      resourceName: schedule.name,
+      severity: 'info',
+      metadata: {
+        admin_action: true,
+      },
+    })
   }
 
   return { success: true }
@@ -399,7 +452,7 @@ export async function assignScheduleToMenu(
   menuId: string,
   scheduleId: string
 ): Promise<{ success?: boolean; error?: string }> {
-  await assertHQPermission('hq.merchant.edit')
+  await assertHQPermission('hq.merchant.update')
 
   const supabase = createServerSupabaseClient()
 
@@ -438,7 +491,7 @@ export async function removeScheduleFromMenu(
   menuId: string,
   scheduleId: string
 ): Promise<{ success?: boolean; error?: string }> {
-  await assertHQPermission('hq.merchant.edit')
+  await assertHQPermission('hq.merchant.update')
 
   const supabase = createServerSupabaseClient()
 
@@ -451,6 +504,98 @@ export async function removeScheduleFromMenu(
 
   if (error) {
     console.error('Error removing schedule from menu:', error)
+    return { error: error.message }
+  }
+
+  return { success: true }
+}
+
+export async function getCategorySchedules(
+  merchantId: string,
+  categoryId: string
+): Promise<AdminSchedule[]> {
+  await assertHQPermission('hq.merchant.view')
+
+  const supabase = createServerSupabaseClient()
+
+  const { data, error } = await supabase
+    .from('category_schedules')
+    .select(
+      `
+      id,
+      schedule:schedules(
+        *,
+        schedule_time_slots(*)
+      )
+    `
+    )
+    .eq('category_id', categoryId)
+
+  if (error) {
+    console.error('Error getting category schedules:', error)
+    return []
+  }
+
+  return (data || [])
+    .map((item: any) => item.schedule)
+    .filter((s: any): s is AdminSchedule => s !== null) as AdminSchedule[]
+}
+
+export async function assignScheduleToCategory(
+  merchantId: string,
+  categoryId: string,
+  scheduleId: string
+): Promise<{ success?: boolean; error?: string }> {
+  await assertHQPermission('hq.merchant.update')
+
+  const supabase = createServerSupabaseClient()
+
+  // Check if assignment already exists
+  const { data: existing } = await supabase
+    .from('category_schedules')
+    .select('id')
+    .eq('category_id', categoryId)
+    .eq('schedule_id', scheduleId)
+    .single()
+
+  if (existing) {
+    return { success: true }
+  }
+
+  // Create new assignment
+  const { error } = await supabase
+    .from('category_schedules')
+    .insert({
+      category_id: categoryId,
+      schedule_id: scheduleId,
+      merchant_id: merchantId,
+    })
+
+  if (error) {
+    console.error('Error assigning schedule to category:', error)
+    return { error: error.message }
+  }
+
+  return { success: true }
+}
+
+export async function removeScheduleFromCategory(
+  merchantId: string,
+  categoryId: string,
+  scheduleId: string
+): Promise<{ success?: boolean; error?: string }> {
+  await assertHQPermission('hq.merchant.update')
+
+  const supabase = createServerSupabaseClient()
+
+  const { error } = await supabase
+    .from('category_schedules')
+    .delete()
+    .eq('category_id', categoryId)
+    .eq('schedule_id', scheduleId)
+
+  if (error) {
+    console.error('Error removing schedule from category:', error)
     return { error: error.message }
   }
 

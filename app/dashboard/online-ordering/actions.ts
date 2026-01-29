@@ -5,9 +5,19 @@ import { Site, SiteThemeConfig } from "@/types/site";
 import {
   OnlineOrderingSettings,
   WeeklySchedule,
-  dayOrder,
 } from "./hooks/useOnlineOrderingSettings";
 import { revalidatePath } from "next/cache";
+import { LogAuditEvent } from "../actions/audit-logs";
+
+const dayOrder = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
 
 // Helper to map DB Site to Frontend Settings partial
 function mapSiteToSettings(site: Site): Partial<OnlineOrderingSettings> {
@@ -27,7 +37,7 @@ function mapSiteToSettings(site: Site): Partial<OnlineOrderingSettings> {
 
 // Fetch all settings for a location by combining Location + Site data
 export async function getOnlineOrderingSettings(
-  locationId: string
+  locationId: string,
 ): Promise<Partial<OnlineOrderingSettings> | null> {
   const supabase = createServerSupabaseClient();
 
@@ -35,7 +45,7 @@ export async function getOnlineOrderingSettings(
   const { data: location, error: locError } = await supabase
     .from("locations")
     .select(
-      "name, phone, email, address_line1, city, state, postal_code, business_hours"
+      "name, phone, email, address_line1, city, state, postal_code, business_hours",
     )
     .eq("id", locationId)
     .single();
@@ -117,17 +127,64 @@ export async function getOnlineOrderingSettings(
 // Upsert settings (Split between Sites and Locations tables)
 export async function saveOnlineOrderingSettings(
   locationId: string,
-  settings: Partial<OnlineOrderingSettings>
+  settings: Partial<OnlineOrderingSettings>,
 ) {
   const supabase = createServerSupabaseClient();
 
-  // 1. Update Location Details (Hours, Contact)
-  // We only update fields that map to location
+  // 1. Fetch Current State for Audit Diffing
+  const { data: currentLocation, error: locFetchError } = await supabase
+    .from("locations")
+    .select("merchant_id, name, phone, email, business_hours")
+    .eq("id", locationId)
+    .single();
+
+  if (locFetchError || !currentLocation) {
+    throw new Error("Location not found");
+  }
+
+  const { data: existingSite } = await supabase
+    .from("sites")
+    .select("*")
+    .eq("location_id", locationId)
+    .single();
+
+  const merchantId = currentLocation.merchant_id;
+  const auditChanges: { before: any; after: any } = { before: {}, after: {} };
+  let hasChanges = false;
+
+  // 2. Prepare Location Updates
   const locationUpdates: any = {};
   if (settings.phone !== undefined) locationUpdates.phone = settings.phone;
   if (settings.email !== undefined) locationUpdates.email = settings.email;
   if (settings.operatingHours !== undefined)
     locationUpdates.business_hours = settings.operatingHours;
+
+  // detailed diff for location
+  // detailed diff for location
+  Object.keys(locationUpdates).forEach((key) => {
+    const newVal = locationUpdates[key];
+    const oldVal = currentLocation[key as keyof typeof currentLocation];
+
+    if (JSON.stringify(newVal) !== JSON.stringify(oldVal)) {
+      if (key === "business_hours") {
+        // Flatten business hours diff to avoid huge logs
+        dayOrder.forEach((day) => {
+          // business_hours is stored as JSONB but follows WeeklySchedule structure
+          const newDay = (newVal as any)?.[day];
+          const oldDay = (oldVal as any)?.[day];
+          if (JSON.stringify(newDay) !== JSON.stringify(oldDay)) {
+            auditChanges.before[`business_hours_${day}`] = oldDay;
+            auditChanges.after[`business_hours_${day}`] = newDay;
+            hasChanges = true;
+          }
+        });
+      } else {
+        auditChanges.before[key] = oldVal;
+        auditChanges.after[key] = newVal;
+        hasChanges = true;
+      }
+    }
+  });
 
   if (Object.keys(locationUpdates).length > 0) {
     const { error: locError } = await supabase
@@ -139,16 +196,7 @@ export async function saveOnlineOrderingSettings(
       throw new Error(`Location update failed: ${locError.message}`);
   }
 
-  // 2. Upsert Site Details (Branding, Config)
-  // First, check if site exists to get ID and current config
-  const { data: existingSite } = await supabase
-    .from("sites")
-    .select(
-      "id, theme_config, online_ordering_config, title, subdomain, logo_url, is_active"
-    )
-    .eq("location_id", locationId)
-    .single();
-
+  // 3. Prepare Site Updates
   const currentTheme: any = existingSite?.theme_config || {};
   const currentOnlineConfig: any = existingSite?.online_ordering_config || {};
 
@@ -221,8 +269,7 @@ export async function saveOnlineOrderingSettings(
       settings.autoClosePaidOrders ?? currentOnlineConfig.autoClosePaidOrders,
   };
 
-  // Build siteData dynamically, only including defined values
-  // and falling back to existing values to prevent constraint violations
+  // Build siteData dynamically
   const siteData: Record<string, any> = {
     location_id: locationId,
     theme_config: themeConfig,
@@ -248,7 +295,91 @@ export async function saveOnlineOrderingSettings(
   else if (existingSite?.is_active !== undefined)
     siteData.is_active = existingSite.is_active;
 
+  // 4. Update Site and Calculate Site Diffs
   if (existingSite) {
+    // Compare Theme Config
+    // Compare Theme Config
+    Object.keys(themeConfig).forEach((key) => {
+      const k = key as keyof SiteThemeConfig;
+      const newVal = themeConfig[k];
+      const oldVal = currentTheme[k];
+
+      if (JSON.stringify(newVal) !== JSON.stringify(oldVal)) {
+        auditChanges.before[k] = oldVal;
+        auditChanges.after[k] = newVal;
+        hasChanges = true;
+      }
+    });
+
+    // Compare Online Ordering Config
+    if (
+      JSON.stringify(onlineOrderingConfig) !==
+      JSON.stringify(currentOnlineConfig)
+    ) {
+      // Find changed keys within config for cleaner logs if possible,
+      // but for now logging the whole object ensures we capture deep changes
+      // Let's try to isolate changed keys
+      const configDiffBefore: any = {};
+      const configDiffAfter: any = {};
+      let configChanged = false;
+
+      Object.keys(onlineOrderingConfig).forEach((key) => {
+        const newVal = onlineOrderingConfig[key];
+        const oldVal = currentOnlineConfig[key];
+
+        if (JSON.stringify(newVal) !== JSON.stringify(oldVal)) {
+          // Flatten hours diffs
+          if (key === "operatingHours" || key === "deliveryHours") {
+            dayOrder.forEach((day) => {
+              const newDay = newVal[day];
+              const oldDay = oldVal[day];
+              if (JSON.stringify(newDay) !== JSON.stringify(oldDay)) {
+                const logKey = `${key === "operatingHours" ? "operating_hours" : "delivery_hours"}_${day}`;
+                configDiffBefore[logKey] = oldDay;
+                configDiffAfter[logKey] = newDay;
+                configChanged = true;
+              }
+            });
+          } else {
+            configDiffBefore[key] = oldVal;
+            configDiffAfter[key] = newVal;
+            configChanged = true;
+          }
+        }
+      });
+
+      if (configChanged) {
+        auditChanges.before = {
+          ...auditChanges.before,
+          ...configDiffBefore,
+        };
+        auditChanges.after = {
+          ...auditChanges.after,
+          ...configDiffAfter,
+        };
+        hasChanges = true;
+      }
+    }
+
+    // Compare Root Fields
+    ["title", "subdomain", "logo_url", "banner_text", "is_active"].forEach(
+      (key) => {
+        const newVal = siteData[key];
+        const oldVal = existingSite[key as keyof typeof existingSite];
+        // Only check if newVal is defined (it might be undefined if not in siteData construction)
+        // Actually siteData has them if they were set.
+        // But careful about undefined vs null.
+        if (
+          newVal !== undefined &&
+          JSON.stringify(newVal) !== JSON.stringify(oldVal)
+        ) {
+          auditChanges.before[key] = oldVal;
+          auditChanges.after[key] = newVal;
+          hasChanges = true;
+        }
+      },
+    );
+
     const { error: siteUpdateError } = await supabase
       .from("sites")
       .update(siteData)
@@ -257,21 +388,37 @@ export async function saveOnlineOrderingSettings(
     if (siteUpdateError)
       throw new Error(`Site update failed: ${siteUpdateError.message}`);
   } else {
-    // Need merchant_id to create
-    const { data: location } = await supabase
-      .from("locations")
-      .select("merchant_id")
-      .eq("id", locationId)
-      .single();
-    if (!location) throw new Error("Location not found");
-
+    // Create New Site
     const { error: siteInsertError } = await supabase.from("sites").insert({
       ...siteData,
-      merchant_id: location.merchant_id,
+      merchant_id: merchantId,
     });
 
     if (siteInsertError)
       throw new Error(`Site creation failed: ${siteInsertError.message}`);
+
+    hasChanges = true;
+    auditChanges.after = {
+      ...auditChanges.after,
+      ...siteData,
+      ...locationUpdates,
+    };
+  }
+
+  // 5. Log Audit Event
+  if (hasChanges) {
+    await LogAuditEvent({
+      merchantId: merchantId,
+      action: existingSite
+        ? `Updated Online Ordering Settings`
+        : `Created Online Ordering Settings`,
+      actionCategory: "settings",
+      resourceType: "online_ordering",
+      resourceId: locationId,
+      resourceName: settings.storeName || currentLocation.name,
+      locationId: locationId,
+      changes: auditChanges,
+    });
   }
 
   revalidatePath(`/dashboard/online-ordering`);

@@ -9,6 +9,13 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
+import {
     Dialog,
     DialogContent,
     DialogDescription,
@@ -25,7 +32,8 @@ import {
     CheckCircle,
     XCircle,
     Globe,
-    Layers
+    Layers,
+    DollarSign
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { UpdateLocation, ToggleLocationActive, ToggleLocationOrders } from '@/app/dashboard/actions/locations'
@@ -203,6 +211,94 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
                         <Badge variant="outline">
                             {location.uses_global_menu ? 'Global' : 'Custom'}
                         </Badge>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Pricing Strategy Settings */}            <Card>
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <DollarSign className="h-4 w-4" />
+                        Pricing Strategy
+                    </CardTitle>
+                    <CardDescription>Configure how item prices are calculated</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="space-y-4">
+                        <div className="grid gap-2">
+                            <Label>Pricing Mode</Label>
+                            <Select
+                                defaultValue={location.pricing_strategy || 'manual'}
+                                onValueChange={async (value) => {
+                                    try {
+                                        const result = await UpdateLocation(location.id, {
+                                            pricing_strategy: value as 'manual' | 'dual'
+                                        });
+                                        if (result.error) {
+                                            toast.error('Update Failed', { description: result.error });
+                                        } else {
+                                            toast.success('Strategy Updated');
+                                            queryClient.invalidateQueries({ queryKey: ['locations'] });
+                                            onUpdate?.();
+                                        }
+                                    } catch (e) {
+                                        toast.error('Update Failed');
+                                    }
+                                }}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select strategy" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="manual">Manual Pricing</SelectItem>
+                                    <SelectItem value="dual">Dual Pricing</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <p className="text-sm text-muted-foreground">
+                                {location.pricing_strategy === 'dual' 
+                                    ? 'Card prices are automatically calculated based on a percentage markup over cash prices.' 
+                                    : 'Cash and Card prices are set independently.'}
+                            </p>
+                        </div>
+
+                        {location.pricing_strategy === 'dual' && (
+                            <div className="grid gap-2 animate-in fade-in slide-in-from-top-2">
+                                <Label>Dual Pricing Percentage (%)</Label>
+                                <div className="relative">
+                                    <Input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        max="100"
+                                        defaultValue={location.dual_pricing_percentage ?? 4.0}
+                                        onBlur={async (e) => {
+                                            const val = parseFloat(e.target.value);
+                                            if (isNaN(val)) return;
+                                            if (val === location.dual_pricing_percentage) return;
+
+                                            try {
+                                                const result = await UpdateLocation(location.id, {
+                                                    dual_pricing_percentage: val
+                                                });
+                                                if (result.error) {
+                                                    toast.error('Update Failed', { description: result.error });
+                                                } else {
+                                                    toast.success('Percentage Updated');
+                                                    queryClient.invalidateQueries({ queryKey: ['locations'] });
+                                                    onUpdate?.();
+                                                }
+                                            } catch (e) {
+                                                toast.error('Update Failed');
+                                            }
+                                        }}
+                                    />
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    Typical values range from 3.5% to 4.0%
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </CardContent>
             </Card>

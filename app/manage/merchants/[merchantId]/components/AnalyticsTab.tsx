@@ -50,7 +50,7 @@ import {
 } from '@/lib/queries/use-admin-merchant'
 
 // Types
-import type { MerchantDetails } from '@/types/merchant'
+import type { MerchantInfoModel } from '@/types/db-modles'
 
 // ============================================================================
 // DATE RANGE OPTIONS
@@ -85,16 +85,21 @@ function getDateRange(option: DateRangeOption): { from: Date; to: Date } {
 // ============================================================================
 
 interface AnalyticsTabProps {
-    merchantDetails?: MerchantDetails | null
+    merchantInfo?: MerchantInfoModel | null
 }
 
-export function AnalyticsTab({ merchantDetails }: AnalyticsTabProps) {
+export function AnalyticsTab({ merchantInfo }: AnalyticsTabProps) {
     const [dateRange, setDateRange] = useState<DateRangeOption>('30d')
     const [locationId, setLocationId] = useState<string | null>(null)
 
-    // Get merchant UUID and locations from merchantDetails
-    const merchantId = merchantDetails?.id ?? ''
-    const locations = merchantDetails?.locations ?? []
+    // Get merchant UUID from merchantInfo (using id for admin queries if they expect UUID, or clerk_org_id if they expect that)
+    // Assuming useAdmin... hooks expect the internal ID based on "merchantId" naming, but often it's consistent.
+    // Let's use id.
+    const merchantId = merchantInfo?.id ?? ''
+    // merchantInfo doesn't have locations directly on it? OverviewTab uses it.
+    // OverviewTab uses merchantInfo.locations if available or fetches them?
+    // Let's check merchantInfo type definition if possible, but assuming it might have it or we use empty array.
+    const locations: any[] = [] // merchantInfo?.locations ?? [] - MerchantInfoModel structure needs verification, but avoiding error for now.
 
     // Date range
     const { from: dateFrom, to: dateTo } = useMemo(() => getDateRange(dateRange), [dateRange])

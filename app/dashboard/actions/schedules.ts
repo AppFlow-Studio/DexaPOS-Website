@@ -163,14 +163,23 @@ export async function CreateSchedule(
 
   // Create time slots if provided
   if (data.time_slots && data.time_slots.length > 0) {
-    const timeSlots = data.time_slots.map((slot) => ({
-      schedule_id: schedule.id,
-      day_of_week: slot.day_of_week,
-      start_time: slot.start_time,
-      end_time: slot.end_time,
-      is_active: slot.is_active ?? true,
-      merchant_id: merchant.id,
-    }));
+    const timeSlots = data.time_slots.map((slot) => {
+      // Handle midnight end times: '00:00' or '00:00:00' means "end of day"
+      // Convert to '23:59:59' to satisfy the start_time < end_time database constraint
+      let endTime = slot.end_time;
+      if (endTime === '00:00' || endTime === '00:00:00') {
+        endTime = '23:59:59';
+      }
+      
+      return {
+        schedule_id: schedule.id,
+        day_of_week: slot.day_of_week,
+        start_time: slot.start_time,
+        end_time: endTime,
+        is_active: slot.is_active ?? true,
+        merchant_id: merchant.id,
+      };
+    });
 
     const { error: slotsError } = await supabase
       .from("schedule_time_slots")
@@ -1169,14 +1178,23 @@ export async function UpdateScheduleWithTimeSlots(
 
     // Insert new time slots
     if (data.time_slots.length > 0) {
-      const timeSlots = data.time_slots.map((slot) => ({
-        schedule_id: scheduleId,
-        merchant_id: schedule.merchant_id,
-        day_of_week: slot.day_of_week,
-        start_time: slot.start_time,
-        end_time: slot.end_time,
-        is_active: slot.is_active ?? true,
-      }));
+      const timeSlots = data.time_slots.map((slot) => {
+        // Handle midnight end times: '00:00' or '00:00:00' means "end of day"
+        // Convert to '23:59:59' to satisfy the start_time < end_time database constraint
+        let endTime = slot.end_time;
+        if (endTime === '00:00' || endTime === '00:00:00') {
+          endTime = '23:59:59';
+        }
+
+        return {
+          schedule_id: scheduleId,
+          merchant_id: schedule.merchant_id,
+          day_of_week: slot.day_of_week,
+          start_time: slot.start_time,
+          end_time: endTime,
+          is_active: slot.is_active ?? true,
+        };
+      });
 
       console.log(
         "[DEBUG UpdateScheduleWithTimeSlots] Inserting new slots, count:",

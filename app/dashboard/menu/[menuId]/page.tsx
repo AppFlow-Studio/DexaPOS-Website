@@ -110,6 +110,9 @@ export default function MenuDetailPage() {
   const [isScheduleSheetOpen, setIsScheduleSheetOpen] = useState(false);
   const [isCategoryWizardOpen, setIsCategoryWizardOpen] = useState(false);
   const [isScheduleWizardOpen, setIsScheduleWizardOpen] = useState(false);
+  const [editingSchedule, setEditingSchedule] = useState<
+    (SchedulesModel & { schedule_time_slots: ScheduleTimeSlotsModel[] }) | null
+  >(null);
 
   // Schedule wizard
   const [scheduleWizardId, setScheduleWizardId] = useState<string | null>(null);
@@ -599,6 +602,13 @@ export default function MenuDetailPage() {
     }
   };
 
+  const handleEditSchedule = (
+    schedule: SchedulesModel & { schedule_time_slots: ScheduleTimeSlotsModel[] },
+  ) => {
+    setEditingSchedule(schedule);
+    setIsScheduleSheetOpen(true);
+  };
+
   // Handle toggling category visibility
   const handleToggleCategoryVisibility = async (
     categoryId: string,
@@ -1020,6 +1030,7 @@ export default function MenuDetailPage() {
             onAddSchedule={() => setIsScheduleWizardOpen(true)}
             onOpenScheduleSheet={() => setIsScheduleSheetOpen(true)}
             onRemoveSchedule={handleRemoveSchedule}
+            onEditSchedule={handleEditSchedule}
           />
         </TabsContent>
 
@@ -1208,8 +1219,13 @@ export default function MenuDetailPage() {
 
       {/* Schedule Form Sheet */}
       <ScheduleFormSheet
-        open={isScheduleSheetOpen}
-        onOpenChange={setIsScheduleSheetOpen}
+        open={isScheduleSheetOpen || !!editingSchedule}
+        onOpenChange={(open) => {
+          setIsScheduleSheetOpen(open);
+          if (!open) setEditingSchedule(null);
+        }}
+        mode={editingSchedule ? "edit" : "create"}
+        editSchedule={editingSchedule}
         onAssignSchedule={handleAssignSchedule}
       />
 

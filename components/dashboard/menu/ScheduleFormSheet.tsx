@@ -313,38 +313,75 @@ export function ScheduleFormSheet({
 
     setIsSubmitting(true);
 
-    console.log("[DEBUG ScheduleFormSheet] handleSubmit called");
-    console.log(
-      "[DEBUG ScheduleFormSheet] Current timeSlots state:",
-      timeSlots
-    );
-
     try {
-      const scheduleData = {
+      // Process time slots to handle overnight schedules
+      // e.g., 10 PM to 2 AM needs to be split into:
+      // 1. 10 PM to 11:59 PM (Current Day)
+      // 2. 12 AM to 2 AM (Next Day)
+      const processedTimeSlots: {
+        day_of_week: number;
+        start_time: string;
+        end_time: string;
+      }[] = [];
+
+      timeSlots.forEach((slot) => {
+        // Parse time strings HH:MM
+        const [startH, startM] = slot.start_time.split(':').map(Number);
+        const [endH, endM] = slot.end_time.split(':').map(Number);
+        
+        const startMinutes = startH * 60 + startM;
+        const endMinutes = endH * 60 + endM;
+
+        if (endMinutes <= startMinutes && endMinutes !== 0) {
+          // Overnight detected (End is before Start, and not 00:00 exactly if interpreted as midnight start)
+          // Wait, if endMinutes is 0 (00:00), it counts as next day if start > 0
+          
+          // Split Algorithm:
+          // Slot 1: Current Day | Start Time -> 23:59
+          processedTimeSlots.push({
+            day_of_week: slot.day_of_week,
+            start_time: slot.start_time + ":00",
+            end_time: "23:59:00"
+          });
+
+          // Slot 2: Next Day | 00:00 -> End Time
+          const nextDay = (slot.day_of_week + 1) % 7;
+          processedTimeSlots.push({
+            day_of_week: nextDay,
+            start_time: "00:00:00",
+            end_time: slot.end_time + ":00"
+          });
+          
+          console.log(`[Schedule Form] Splitting overnight slot: ${slot.start_time}-${slot.end_time} on day ${slot.day_of_week}`);
+        } else {
+          // Normal slot
+          processedTimeSlots.push({
+            day_of_week: slot.day_of_week,
+            start_time: slot.start_time + ":00",
+            end_time: slot.end_time + ":00"
+          });
+        }
+      });
+
+      const scheduleData: any = {
         name: name.trim(),
         description: description.trim() || undefined,
-        time_slots: timeSlots.map((slot) => ({
-          day_of_week: slot.day_of_week,
-          start_time: slot.start_time + ":00",
-          end_time: slot.end_time + ":00",
-        })),
+        time_slots: processedTimeSlots,
       };
+
+      // Explicitly handle location_id if we are in a specific location view
+      // This ensures that even if the mutation hook relies on store, we are being explicit for the action
+      if (!isAllLocations && selectedLocation?.id) {
+        scheduleData.location_id = selectedLocation.id;
+      }
 
       console.log(
         "[DEBUG ScheduleFormSheet] scheduleData being sent:",
         scheduleData
       );
-      console.log(
-        "[DEBUG ScheduleFormSheet] Number of time_slots being sent:",
-        scheduleData.time_slots.length
-      );
 
       if (mode === "edit" && editSchedule) {
         // Update existing schedule
-        console.log(
-          "[DEBUG ScheduleFormSheet] Calling updateScheduleMutation with scheduleId:",
-          editSchedule.id
-        );
         const result = await updateScheduleMutation.mutateAsync({
           scheduleId: editSchedule.id,
           data: scheduleData,
@@ -354,7 +391,7 @@ export function ScheduleFormSheet({
           toast.error("Failed to update schedule", {
             description: result.error,
           });
-          return;
+          return; // Stop here, do not close or show success
         }
 
         setShowSuccess(true);
@@ -367,16 +404,20 @@ export function ScheduleFormSheet({
         }, 1500);
       } else {
         // Create new schedule
+        // IMPORTANT: The useCreateScheduleMutation hook handles location_id automatically via the store
+        // but passing it in data override might be safer if the hook merges.
+        // However, CreateSchedule action takes location_id.
+        
         const result = await createScheduleMutation.mutateAsync(scheduleData);
 
         if (result.error) {
           toast.error("Failed to create schedule", {
             description: result.error,
           });
-          return;
+          return; // Stop here on error!
         }
 
-        // If there's an onAssignSchedule callback, assign it
+        // Only try to assign if creation succeeded
         if (onAssignSchedule && result.data) {
           await onAssignSchedule(result.data.id);
         }
@@ -391,6 +432,7 @@ export function ScheduleFormSheet({
         }, 1500);
       }
     } catch (error) {
+      console.error("Schedule Submit Error:", error);
       toast.error("An error occurred", { description: "Please try again." });
     } finally {
       setIsSubmitting(false);

@@ -32,29 +32,34 @@ export interface MenuItemWithLocationContext extends MenuItemsModel {
 export async function GetMenuItems(
   clerkOrgId: string,
   locationId?: string | null,
+  merchantId?: string,
 ) {
-  if (!clerkOrgId) {
-    return [];
-  }
-
   const supabase = createServerSupabaseClient();
+  let finalMerchantId = merchantId;
 
-  // Get merchant ID
-  const { data: merchant, error: merchantError } = await supabase
-    .from("merchants")
-    .select("id")
-    .eq("clerk_org_id", clerkOrgId)
-    .single();
+  if (!finalMerchantId) {
+    if (!clerkOrgId) {
+      return [];
+    }
 
-  if (merchantError || !merchant) {
-    console.error("Error getting merchant:", merchantError);
-    return [];
+    // Get merchant ID
+    const { data: merchant, error: merchantError } = await supabase
+      .from("merchants")
+      .select("id")
+      .eq("clerk_org_id", clerkOrgId)
+      .single();
+
+    if (merchantError || !merchant) {
+      console.error("Error getting merchant:", merchantError);
+      return [];
+    }
+    finalMerchantId = merchant.id;
   }
 
   const { data, error } = await supabase
     .from("menu_items")
     .select("*")
-    .eq("merchant_id", merchant.id)
+    .eq("merchant_id", finalMerchantId)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -808,7 +813,7 @@ export async function DeleteMenuItem(
       resourceId: itemId,
       resourceName: item.name,
       locationId: locationId,
-      severity: "warning",
+      severity: "info",
     });
   }
 

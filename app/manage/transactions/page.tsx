@@ -20,7 +20,8 @@ import {
     MoreHorizontal,
     CheckCircle,
     XCircle,
-    Clock
+    Clock,
+    DollarSign
 } from 'lucide-react'
 import {
     DropdownMenu,
@@ -30,61 +31,51 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-
-const transactionsData = [
-    {
-        id: 'TXN-001',
-        merchant: 'Coffee Corner',
-        amount: 12.50,
-        status: 'completed',
-        type: 'sale',
-        timestamp: '2024-06-23 10:30:00',
-        customer: 'John Doe',
-        method: 'card',
-    },
-    {
-        id: 'TXN-002',
-        merchant: 'Tech Store Pro',
-        amount: 299.99,
-        status: 'completed',
-        type: 'sale',
-        timestamp: '2024-06-23 11:15:00',
-        customer: 'Jane Smith',
-        method: 'card',
-    },
-    {
-        id: 'TXN-003',
-        merchant: 'Fresh Market',
-        amount: 45.20,
-        status: 'pending',
-        type: 'sale',
-        timestamp: '2024-06-23 12:00:00',
-        customer: 'Bob Johnson',
-        method: 'cash',
-    },
-    {
-        id: 'TXN-004',
-        merchant: 'Beauty Salon',
-        amount: 85.00,
-        status: 'completed',
-        type: 'sale',
-        timestamp: '2024-06-23 13:45:00',
-        customer: 'Alice Brown',
-        method: 'card',
-    },
-    {
-        id: 'TXN-005',
-        merchant: 'Pharmacy Plus',
-        amount: 23.75,
-        status: 'failed',
-        type: 'sale',
-        timestamp: '2024-06-23 14:20:00',
-        customer: 'Charlie Wilson',
-        method: 'card',
-    },
-]
+import { usePlatformKPIs, usePlatformTransactions } from '@/lib/queries/use-platform-analytics'
+import { format } from 'date-fns'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useState } from 'react'
+import Link from 'next/link'
 
 export default function TransactionsPage() {
+    const [page, setPage] = useState(1)
+    const pageSize = 50
+    const { data: kpis, isLoading: kpisLoading } = usePlatformKPIs()
+    const { data: transactionsData, isLoading: transactionsLoading } = usePlatformTransactions(pageSize, (page - 1) * pageSize)
+
+    const transactions = transactionsData?.data || []
+    const totalTransactions = transactionsData?.total || 0
+
+    const stats = [
+        {
+            title: 'Total Transactions',
+            value: totalTransactions.toLocaleString(),
+            icon: CreditCard,
+            color: 'text-muted-foreground',
+            sub: '+15.3% from last month'
+        },
+        {
+            title: 'Completed',
+            value: transactions.filter(t => t.status === 'completed').length.toLocaleString(), // This is just for the current page, ideally should come from aggregate stats
+            icon: CheckCircle,
+            color: 'text-green-600',
+            sub: 'Success rate'
+        },
+        {
+            title: 'Pending',
+            value: transactions.filter(t => t.status === 'pending').length.toLocaleString(),
+            icon: Clock,
+            color: 'text-yellow-600',
+            sub: 'Active logic'
+        },
+        {
+            title: 'Total Revenue (30d)',
+            value: kpis ? `$${kpis.totalRevenue.toLocaleString()}` : '$0',
+            icon: DollarSign,
+            color: 'text-blue-600',
+            sub: 'Platform aggregate'
+        }
+    ]
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -109,54 +100,26 @@ export default function TransactionsPage() {
 
             {/* Stats Cards */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Transactions</CardTitle>
-                        <CreditCard className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">4,270</div>
-                        <p className="text-xs text-muted-foreground">
-                            +15.3% from last month
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Completed</CardTitle>
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">4,156</div>
-                        <p className="text-xs text-muted-foreground">
-                            97.3% success rate
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Pending</CardTitle>
-                        <Clock className="h-4 w-4 text-yellow-600" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">89</div>
-                        <p className="text-xs text-muted-foreground">
-                            2.1% pending
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Failed</CardTitle>
-                        <XCircle className="h-4 w-4 text-red-600" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">25</div>
-                        <p className="text-xs text-muted-foreground">
-                            0.6% failure rate
-                        </p>
-                    </CardContent>
-                </Card>
+                {stats.map((stat) => (
+                    <Card key={stat.title}>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+                            <stat.icon className={`h-4 w-4 ${stat.color}`} />
+                        </CardHeader>
+                        <CardContent>
+                            {kpisLoading || transactionsLoading ? (
+                                <Skeleton className="h-8 w-24" />
+                            ) : (
+                                <>
+                                    <div className="text-2xl font-bold">{stat.value}</div>
+                                    <p className="text-xs text-muted-foreground">
+                                        {stat.sub}
+                                    </p>
+                                </>
+                            )}
+                        </CardContent>
+                    </Card>
+                ))}
             </div>
 
             {/* Transactions Table */}
@@ -192,15 +155,34 @@ export default function TransactionsPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {transactionsData.map((transaction) => (
-                                <TableRow key={transaction.id}>
-                                    <TableCell className="font-medium">
-                                        {transaction.id}
+                            {transactionsLoading ? (
+                                Array.from({ length: 5 }).map((_, i) => (
+                                    <TableRow key={i}>
+                                        <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                                        <TableCell><Skeleton className="h-6 w-20" /></TableCell>
+                                        <TableCell><Skeleton className="h-6 w-16" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                                        <TableCell><Skeleton className="h-8 w-8" /></TableCell>
+                                    </TableRow>
+                                ))
+                            ) : transactions.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
+                                        No transactions found across the platform.
                                     </TableCell>
-                                    <TableCell>{transaction.merchant}</TableCell>
-                                    <TableCell>{transaction.customer}</TableCell>
+                                </TableRow>
+                            ) : transactions.map((transaction) => (
+                                <TableRow key={transaction.id}>
+                                    <TableCell className="font-medium text-xs">
+                                        {transaction.id.slice(0, 8)}...
+                                    </TableCell>
+                                    <TableCell className="font-medium">{transaction.merchant_name}</TableCell>
+                                    <TableCell>{transaction.customer_name || 'Anonymous'}</TableCell>
                                     <TableCell className="font-medium">
-                                        ${transaction.amount.toFixed(2)}
+                                        ${transaction.total_amount.toFixed(2)}
                                     </TableCell>
                                     <TableCell>
                                         <Badge
@@ -208,17 +190,18 @@ export default function TransactionsPage() {
                                                 transaction.status === 'completed' ? 'default' :
                                                     transaction.status === 'pending' ? 'secondary' : 'destructive'
                                             }
+                                            className="capitalize"
                                         >
                                             {transaction.status}
                                         </Badge>
                                     </TableCell>
                                     <TableCell>
-                                        <Badge variant="outline">
-                                            {transaction.method}
+                                        <Badge variant="outline" className="capitalize">
+                                            {transaction.order_type}
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-sm text-muted-foreground">
-                                        {new Date(transaction.timestamp).toLocaleString()}
+                                        {format(new Date(transaction.created_at), 'MMM d, h:mm a')}
                                     </TableCell>
                                     <TableCell>
                                         <DropdownMenu>
@@ -229,9 +212,11 @@ export default function TransactionsPage() {
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
                                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                <DropdownMenuItem>
-                                                    View Details
-                                                </DropdownMenuItem>
+                                                <Link href={`/manage/merchants/${transaction.merchant_id}/transactions`}>
+                                                    <DropdownMenuItem>
+                                                        View in Merchant
+                                                    </DropdownMenuItem>
+                                                </Link>
                                                 <DropdownMenuItem>
                                                     Refund
                                                 </DropdownMenuItem>

@@ -109,6 +109,7 @@ import {
   FlatItem,
 } from "@/app/dashboard/actions/menu-items-rpc";
 import { RecipeManager } from "@/app/dashboard/menu/components/RecipeManager";
+import { PriceInputGroup } from "@/components/dashboard/locations/PriceInputGroup";
 
 // ============================================================================
 // TYPES
@@ -1577,79 +1578,31 @@ export function NewEditItemFormSheet({
                       {editItem && <PriceBreakdown />}
 
                       {/* Price Inputs */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="price"
-                          render={({ field }: { field: any }) => (
-                            <FormItem>
-                              <FormLabel>
-                                {editingContext.priceLabel} *
-                              </FormLabel>
-                              <FormControl>
-                                <div className="relative">
-                                  <span className="absolute left-3 top-2.5 text-muted-foreground font-medium">
-                                    $
-                                  </span>
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    className={cn(
-                                      "pl-7",
-                                      editingContext.level > 1 &&
-                                        "border-blue-300 focus:ring-blue-500",
-                                    )}
-                                    placeholder="0.00"
-                                    {...field}
-                                    onChange={(e) =>
-                                      field.onChange(
-                                        parseFloat(e.target.value) || 0,
-                                      )
-                                    }
-                                  />
-                                </div>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="cash_price"
-                          render={({ field }: { field: any }) => (
-                            <FormItem>
-                              <FormLabel>Cash Price</FormLabel>
-                              <FormControl>
-                                <div className="relative">
-                                  <span className="absolute left-3 top-2.5 text-muted-foreground font-medium">
-                                    $
-                                  </span>
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    className="pl-7"
-                                    placeholder="Optional"
-                                    {...field}
-                                    value={field.value ?? ""}
-                                    onChange={(e) =>
-                                      field.onChange(
-                                        e.target.value
-                                          ? parseFloat(e.target.value)
-                                          : null,
-                                      )
-                                    }
-                                  />
-                                </div>
-                              </FormControl>
-                              <FormDescription>
-                                Optional cash discount
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                      <div className="space-y-2">
+                          <PriceInputGroup
+                              price={form.watch("price") || 0}
+                              cashPrice={form.watch("cash_price") ?? null}
+                              onPriceChange={(val) => form.setValue("price", val, { shouldValidate: true })}
+                              onCashPriceChange={(val) => form.setValue("cash_price", val, { shouldValidate: true })}
+                              label={editingContext.priceLabel}
+                              disabled={!editingContext.canEditBaseFields && !!editItem}
+                          />
+                          <div className="flex gap-4 px-4">
+                              <div className="flex-1">
+                                  {form.formState.errors.price && (
+                                      <p className="text-[0.8rem] font-medium text-destructive">
+                                          {form.formState.errors.price.message}
+                                      </p>
+                                  )}
+                              </div>
+                              <div className="flex-1">
+                                  {form.formState.errors.cash_price && (
+                                      <p className="text-[0.8rem] font-medium text-destructive">
+                                          {form.formState.errors.cash_price.message}
+                                      </p>
+                                  )}
+                              </div>
+                          </div>
                       </div>
 
                       {/* Reset Button */}

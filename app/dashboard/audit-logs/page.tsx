@@ -159,21 +159,28 @@ export default function AuditLogsPage() {
     actor_user_id: "",
   });
 
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
-  const { data, isLoading, refetch, isFetching } = useAuditLogs({
-    search: filters.search,
-    location_id: filters.location_id,
-    action_category: filters.action_category || undefined,
-    severity: filters.severity || undefined,
-    date_from: dateRange?.from
-      ? startOfDay(dateRange.from).toISOString()
-      : undefined,
-    date_to: dateRange?.to ? endOfDay(dateRange.to).toISOString() : undefined,
-  });
+  const { data, isLoading, refetch, isFetching } = useAuditLogs(
+    {
+      search: filters.search,
+      location_id: filters.location_id,
+      action_category: filters.action_category || undefined,
+      severity: filters.severity || undefined,
+      date_from: dateRange?.from
+        ? startOfDay(dateRange.from).toISOString()
+        : undefined,
+      date_to: dateRange?.to ? endOfDay(dateRange.to).toISOString() : undefined,
+    },
+    pageSize,
+    (page - 1) * pageSize,
+  );
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
+    setPage(1); // Reset to first page on filter change
   };
 
   const clearFilters = () => {
@@ -188,6 +195,7 @@ export default function AuditLogsPage() {
       from: subDays(new Date(), 7),
       to: new Date(),
     });
+    setPage(1);
   };
 
   const logs = data?.data || [];
@@ -809,15 +817,28 @@ export default function AuditLogsPage() {
       <div className="flex items-center justify-between px-2">
         <p className="text-sm text-muted-foreground">
           Showing{" "}
-          <span className="font-medium text-foreground">{logs.length}</span> of{" "}
-          <span className="font-medium text-foreground">{total}</span> total
+          <span className="font-medium text-foreground">
+            {Math.min((page - 1) * pageSize + 1, total)}-
+            {Math.min(page * pageSize, total)}
+          </span>{" "}
+          of <span className="font-medium text-foreground">{total}</span> total
           logs
         </p>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" disabled>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1 || isLoading}
+          >
             Previous
           </Button>
-          <Button variant="outline" size="sm" disabled>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage((p) => p + 1)}
+            disabled={page * pageSize >= total || isLoading}
+          >
             Next
           </Button>
         </div>

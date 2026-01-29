@@ -2,6 +2,7 @@
 
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
 
 // ============================================================================
 // DATABASE TYPES
@@ -621,3 +622,162 @@ export async function getAdminDailyRevenue(
     }))
     .sort((a, b) => a.date.localeCompare(b.date))
 }
+
+// ============================================================================
+// OPERATIONAL ACTIONS (REFUND / VOID)
+// ============================================================================
+
+/**
+ * Refund an order and its payments
+ */
+export async function refundAdminOrder(
+  merchantId: string,
+  orderId: string,
+  reason: string = 'Admin Refund'
+) {
+  await assertHQPermission('hq.merchant.update')
+  console.log(`[refundAdminOrder] Refunding order: ${orderId}, reason: ${reason}`)
+
+  const supabase = createServerSupabaseClient()
+
+  // Fetch order details for logging
+  const { data: order } = await supabase
+    .from('orders')
+    .select('order_number, total_amount, location_id')
+    .eq('id', orderId)
+    .single()
+
+  // 1. Update order status
+  const { error: orderError } = await supabase
+    .from('orders')
+    .update({
+      status: 'refunded',
+      payment_status: 'refunded',
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', orderId)
+    .eq('merchant_id', merchantId)
+
+  if (orderError) {
+    console.error('[refundAdminOrder] Order update error:', orderError)
+    return { success: false, error: orderError.message }
+  }
+
+  // 2. Update all captured payments for this order
+  const { error: paymentError } = await supabase
+    .from('order_payments')
+    .update({
+      status: 'refunded',
+      is_returned: true,
+      returned_at: new Date().toISOString(),
+      return_reason: reason,
+      refunded_amount: 0, // Placeholder for numeric value
+      refunded_at: new Date().toISOString(),
+      refund_reason: reason
+    } as any)
+    .eq('order_id', orderId)
+    .eq('status', 'captured')
+
+  if (paymentError) {
+    console.error('[refundAdminOrder] Payment update error:', paymentError)
+    return { success: false, error: paymentError.message }
+  }
+
+  // Audit log
+  if (order) {
+    await LogAuditEvent({
+      merchantId,
+      locationId: order.location_id,
+      action: `Refunded Order: ${order.order_number}`,
+      actionCategory: 'order',
+      severity: 'critical',
+      resourceType: 'order',
+      resourceId: orderId,
+      resourceName: order.order_number,
+      metadata: {
+        amount: order.total_amount,
+        reason,
+        admin_action: true,
+      },
+    })
+  }
+
+  return { success: true }
+}
+
+/**
+ * Void an order and its payments
+ */
+export async function voidAdminOrder(
+  merchantId: string,
+  orderId: string,
+  reason: string = 'Admin Void'
+) {
+  await assertHQPermission('hq.merchant.update')
+  console.log(`[voidAdminOrder] Voiding order: ${orderId}, reason: ${reason}`)
+
+  const supabase = createServerSupabaseClient()
+
+  // Fetch order details for logging
+  const { data: order } = await supabase
+    .from('orders')
+    .select('order_number, total_amount, location_id')
+    .eq('id', orderId)
+    .single()
+
+  // 1. Update order status
+  const { error: orderError } = await supabase
+    .from('orders')
+    .update({
+      status: 'voided',
+      payment_status: 'unpaid',
+      voided_at: new Date().toISOString(),
+      void_reason: reason,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', orderId)
+    .eq('merchant_id', merchantId)
+
+  if (orderError) {
+    console.error('[voidAdminOrder] Order update error:', orderError)
+    return { success: false, error: orderError.message }
+  }
+
+  // 2. Update all payments for this order
+  const { error: paymentError } = await supabase
+    .from('order_payments')
+    .update({
+      status: 'voided',
+      is_voided: true,
+      voided_at: new Date().toISOString(),
+      void_reason: reason,
+    } as any)
+    .eq('order_id', orderId)
+
+  if (paymentError) {
+    console.error('[voidAdminOrder] Payment update error:', paymentError)
+    return { success: false, error: paymentError.message }
+  }
+
+  // Audit log
+  if (order) {
+    await LogAuditEvent({
+      merchantId,
+      locationId: order.location_id,
+      action: `Voided Order: ${order.order_number}`,
+      actionCategory: 'order',
+      severity: 'critical',
+      resourceType: 'order',
+      resourceId: orderId,
+      resourceName: order.order_number,
+      metadata: {
+        amount: order.total_amount,
+        reason,
+        admin_action: true,
+      },
+    })
+  }
+
+  return { success: true }
+}
+

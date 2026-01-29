@@ -124,9 +124,15 @@ interface ItemsTableProps {
   merchantId: string
   locationId: string | null
   isAllLocations: boolean
+  clerkOrgId: string
 }
 
-export function ItemsTable({ merchantId, locationId, isAllLocations }: ItemsTableProps) {
+export function ItemsTable({
+  merchantId,
+  locationId,
+  isAllLocations,
+  clerkOrgId,
+}: ItemsTableProps) {
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [page, setPage] = useState(1)
@@ -164,7 +170,7 @@ export function ItemsTable({ merchantId, locationId, isAllLocations }: ItemsTabl
   const totalPages = Math.ceil(total / pageSize)
 
   const invalidateItems = () => {
-    queryClient.invalidateQueries({ queryKey: adminKeys.merchantMenuItems(merchantId, locationId) })
+    queryClient.invalidateQueries({ queryKey: adminKeys.merchantMenuItems(merchantId, locationId).slice(0, -1) })
     queryClient.invalidateQueries({ queryKey: adminKeys.merchantMenus(merchantId, locationId) })
     queryClient.invalidateQueries({ queryKey: adminKeys.merchantCategories(merchantId, locationId) })
   }

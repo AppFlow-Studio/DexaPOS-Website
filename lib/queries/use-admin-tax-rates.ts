@@ -64,8 +64,10 @@ export function useAdminUpsertTaxRate() {
       percentage: number
     }) => adminUpsertTaxRate(merchantId, locationId, taxCategory, name, percentage),
     onSuccess: (_, variables) => {
+      // Invalidate all tax rates for this merchant (regardless of location)
+      const key = adminKeys.merchantTaxRates(variables.merchantId)
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantTaxRates(variables.merchantId),
+        queryKey: key.slice(0, -1),
       })
     },
   })
@@ -86,8 +88,10 @@ export function useAdminDeactivateTaxRate() {
       taxRateId: string
     }) => adminDeactivateTaxRate(merchantId, taxRateId),
     onSuccess: (_, variables) => {
+      // Invalidate all tax rates for this merchant (regardless of location)
+      const key = adminKeys.merchantTaxRates(variables.merchantId)
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantTaxRates(variables.merchantId),
+        queryKey: key.slice(0, -1),
       })
     },
   })
@@ -108,8 +112,10 @@ export function useAdminDeleteTaxRate() {
       taxRateId: string
     }) => adminDeleteTaxRate(merchantId, taxRateId),
     onSuccess: (_, variables) => {
+      // Invalidate all tax rates for this merchant (regardless of location)
+      const key = adminKeys.merchantTaxRates(variables.merchantId)
       queryClient.invalidateQueries({
-        queryKey: adminKeys.merchantTaxRates(variables.merchantId),
+        queryKey: key.slice(0, -1),
       })
     },
   })

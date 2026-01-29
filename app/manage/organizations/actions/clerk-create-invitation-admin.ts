@@ -3,6 +3,8 @@
 import { createClerkClient } from '@clerk/backend'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { CreateAdminInviteParams, MerchantAccessAssignment } from '@/types/admin'
+import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
+
 
 // Legacy interface for backwards compatibility
 interface LegacyAdminInviteParams {
@@ -127,7 +129,7 @@ export async function createInvitationAdmin(
       .select()
       .single()
 
-    if (error) {
+    if (!data?.id) {
       console.error('Error creating pending invite record:', error)
       // Try to revoke the Clerk organization invitation since we failed to store it
       try {
@@ -141,9 +143,34 @@ export async function createInvitationAdmin(
       }
       return {
         success: false,
-        message: 'Error creating invitation record: ' + error.message,
+        message: 'Error creating invitation record: ' + (error?.message || 'Unknown error'),
       }
     }
+
+    // Log audit event
+    // Find the merchant ID for this organization to log correctly
+    const { data: merchant } = await supabase
+      .from('merchants')
+      .select('id')
+      .eq('clerk_org_id', normalizedParams.organizationId)
+      .single()
+
+    await LogAuditEvent({
+      merchantId: merchant?.id,
+      clerkOrgId: normalizedParams.organizationId,
+      action: `Sent Admin Invitation: ${normalizedParams.email}`,
+      actionCategory: 'people',
+      resourceType: 'invitation',
+      resourceId: data.id,
+      resourceName: normalizedParams.email,
+      metadata: {
+        role: normalizedParams.roleCode,
+        level: normalizedParams.levelType,
+        org_type: normalizedParams.orgType,
+        merchant_access_count: normalizedParams.merchantAccess.length,
+        admin_action: true,
+      },
+    })
 
     return {
       success: true,
@@ -155,6 +182,7 @@ export async function createInvitationAdmin(
         merchantAccessCount: normalizedParams.merchantAccess.length,
       },
     }
+
 
   } catch (error: any) {
     console.error('Error in createInvitationAdmin:', error)

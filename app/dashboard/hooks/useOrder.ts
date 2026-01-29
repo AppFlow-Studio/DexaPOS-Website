@@ -19,13 +19,20 @@ function useClerkOrgId() {
  * - All Locations: returns all merchant orders
  * - Specific Location: returns orders for that location
  */
-export function useOrders(filters?: any) {
-  const clerkOrgId = useClerkOrgId();
+export function useOrders(
+  filters?: any,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
   const { selectedLocationId } = useLocationStore();
   const isAllLocations = useIsAllLocations();
 
   // Determine effective location ID
-  const effectiveLocationId = isAllLocations ? "all" : selectedLocationId;
+  const storeLocationId = isAllLocations ? "all" : selectedLocationId;
+  const effectiveLocationId =
+    locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
 
   return useQuery<OrderResponse[]>({
     queryKey: ["orders", clerkOrgId, effectiveLocationId, filters],

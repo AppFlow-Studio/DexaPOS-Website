@@ -15,6 +15,17 @@ import {
   type AdminBestSellingItem,
 } from '@/app/manage/actions/admin-merchant/analytics'
 
+import {
+  getMerchantDetails,
+  updateMerchantSettings,
+} from '@/app/manage/actions/merchants'
+
+import type {
+  MerchantDetails,
+  MerchantSettingsUpdate,
+  UpdateMerchantResult,
+} from '@/types/merchant'
+
 // Orders actions
 import {
   getAdminOrders,
@@ -57,6 +68,37 @@ function getDefaultDateRange() {
     from: toDateString(thirtyDaysAgo),
     to: toDateString(now),
   }
+}
+
+// ============================================================================
+// MERCHANT DETAILS HOOK
+// ============================================================================
+
+export function useAdminMerchantDetails(merchantId: string) {
+  return useQuery<MerchantDetails | null>({
+    queryKey: adminKeys.merchantDetail(merchantId),
+    queryFn: () => getMerchantDetails(merchantId),
+    enabled: !!merchantId,
+    // Longer stale time since merchant details don't change often
+    staleTime: 10 * 60 * 1000, 
+  })
+}
+
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+
+export function useAdminUpdateMerchant() {
+  const queryClient = useQueryClient()
+
+  return useMutation<UpdateMerchantResult, Error, { merchantId: string; updates: MerchantSettingsUpdate }>({
+    mutationFn: ({ merchantId, updates }) => updateMerchantSettings(merchantId, updates),
+    onSuccess: (result, variables) => {
+      if (result.success) {
+        queryClient.invalidateQueries({
+          queryKey: adminKeys.merchantDetail(variables.merchantId),
+        })
+      }
+    },
+  })
 }
 
 // ============================================================================
@@ -359,6 +401,7 @@ import {
 import {
   getAdminSchedules,
   getMenuSchedules,
+  getCategorySchedules,
   type AdminSchedule,
 } from '@/app/manage/actions/admin-merchant/schedules'
 
@@ -536,6 +579,18 @@ export function useAdminMenuSchedules(
   })
 }
 
+export function useAdminCategorySchedules(
+  merchantId: string,
+  categoryId: string | null
+) {
+  return useQuery<AdminSchedule[]>({
+    queryKey: adminKeys.merchantCategorySchedules(merchantId, categoryId || ''),
+    queryFn: () => (categoryId ? getCategorySchedules(merchantId, categoryId) : []),
+    enabled: !!merchantId && !!categoryId,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
 // ============================================================================
 // TYPE EXPORTS (Re-export for convenience)
 // ============================================================================
@@ -573,4 +628,6 @@ export type {
   PriceSource,
   // Schedules
   AdminSchedule,
+  // Merchant
+  MerchantDetails,
 }

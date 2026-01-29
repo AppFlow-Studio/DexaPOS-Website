@@ -12,12 +12,13 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+  BottomSheet,
+  BottomSheetContent,
+  BottomSheetHeader,
+  BottomSheetTitle,
+  BottomSheetTrigger,
+  BottomSheetBody,
+} from "@/components/ui/bottom-sheet";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Check, X } from "lucide-react";
@@ -62,8 +63,8 @@ export function CategoryPicker({
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetTrigger asChild>
+      <BottomSheet open={open} onOpenChange={setOpen}>
+        <BottomSheetTrigger asChild>
           <Button variant="outline" className="w-full justify-between">
             <span>
               {selected.length > 0
@@ -76,15 +77,15 @@ export function CategoryPicker({
               </span>
             )}
           </Button>
-        </SheetTrigger>
-        <SheetContent side="right" className="w-full sm:max-w-md">
-          <SheetHeader>
-            <SheetTitle>{label}</SheetTitle>
-          </SheetHeader>
-          <div className="mt-6">
+        </BottomSheetTrigger>
+        <BottomSheetContent height="auto" className="sm:max-w-md mx-auto">
+          <BottomSheetHeader>
+            <BottomSheetTitle>{label}</BottomSheetTitle>
+          </BottomSheetHeader>
+          <BottomSheetBody className="mt-4">
             <Command>
               <CommandInput placeholder="Search categories" />
-              <CommandList className="max-h-screen">
+              <CommandList className="max-h-[50vh]">
                 <CommandEmpty>{emptyLabel}</CommandEmpty>
                 <CommandGroup>
                   {options.map((opt) => {
@@ -107,7 +108,7 @@ export function CategoryPicker({
                 </CommandGroup>
               </CommandList>
             </Command>
-          </div>
+
           {selected.length > 0 && (
             <div className="mt-4 pt-4 border-t">
               <div className="flex items-center justify-between mb-2">
@@ -146,8 +147,9 @@ export function CategoryPicker({
               </div>
             </div>
           )}
-        </SheetContent>
-      </Sheet>
+          </BottomSheetBody>
+        </BottomSheetContent>
+      </BottomSheet>
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {selected.map((opt) => (

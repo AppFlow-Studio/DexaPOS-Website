@@ -12,18 +12,39 @@ import {
     Hash,
     Calendar,
     Store,
-    Edit
+    Edit,
+    Loader2
 } from 'lucide-react'
-import { MerchantInfoModel } from '@/types/db-modles'
+import { MerchantDetails } from '@/types/merchant'
 import { useQuery } from '@tanstack/react-query'
 import { GetLocations } from '../../../../dashboard/actions/get-locations'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty'
+import { useState, useEffect } from 'react'
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+    DialogDescription,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
+import { useAdminUpdateMerchant } from '@/lib/queries/use-admin-merchant'
+import { toast } from 'sonner'
 
 interface BusinessInfoTabProps {
-    merchantInfo: MerchantInfoModel
+    merchantInfo: MerchantDetails
 }
 
 // Business type options
@@ -35,14 +56,10 @@ const businessTypes = {
 }
 
 export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
-    const clerkOrgId = merchantInfo?.clerk_org_id
-    const { data: locations, isLoading: locationsLoading } = useQuery({
-        queryKey: ['merchant-locations', clerkOrgId],
-        queryFn: () => GetLocations(clerkOrgId || ''),
-        enabled: !!clerkOrgId,
-    })
+    // Use locations from merchantInfo directly (since we use MerchantDetails)
+    const locationsList = merchantInfo.locations || []
 
-    const locationsList = Array.isArray(locations) ? locations : []
+    const locationsLoading = false
 
     // Get business info from public_metadata or use defaults
     const businessInfo = (merchantInfo?.public_metadata as any) || {}
@@ -51,6 +68,59 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
     const einTaxId = businessInfo.ein_tax_id || 'Not provided'
     const businessType = businessInfo.business_type || 'Not specified'
     const businessLicenseNumber = businessInfo.business_license_number || 'Not provided'
+
+    const formatAddress = (loc: any) => {
+        return [loc.address_line1, loc.city, loc.state].filter(Boolean).join(', ')
+    }
+
+    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+    const updateMutation = useAdminUpdateMerchant()
+
+    const [formData, setFormData] = useState({
+        legal_business_name: '',
+        dba_name: '',
+        ein_tax_id: '',
+        business_type: '',
+        business_license_number: '',
+        merchant_type: '',
+        status: ''
+    })
+
+    useEffect(() => {
+        if (isEditDialogOpen) {
+            setFormData({
+                legal_business_name: businessInfo.legal_business_name || '',
+                dba_name: businessInfo.dba_name || '',
+                ein_tax_id: businessInfo.ein_tax_id || '',
+                business_type: businessInfo.business_type || '',
+                business_license_number: businessInfo.business_license_number || '',
+                merchant_type: businessInfo.merchant_type || '',
+                status: businessInfo.status || ''
+            })
+        }
+    }, [isEditDialogOpen, businessInfo])
+
+    const handleSave = async () => {
+        try {
+            const result = await updateMutation.mutateAsync({
+                merchantId: merchantInfo.id,
+                updates: {
+                    public_metadata: {
+                        ...formData
+                    }
+                }
+            })
+
+            if (result.success) {
+                toast.success('Business info updated successfully')
+                setIsEditDialogOpen(false)
+            } else {
+                toast.error(result.error || 'Failed to update business info')
+            }
+        } catch (error) {
+            toast.error('An error occurred while updating business info')
+        }
+    }
 
     return (
         <Tabs defaultValue="legal" className="w-full">
@@ -70,7 +140,11 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                     <CardTitle className="text-lg">Business Details</CardTitle>
                                     <CardDescription>Legal business information and registration details</CardDescription>
                                 </div>
-                                <Button variant="outline" size="sm">
+                                <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    onClick={() => setIsEditDialogOpen(true)}
+                                >
                                     <Edit className="h-4 w-4 mr-2" />
                                     Edit
                                 </Button>
@@ -235,7 +309,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                     <TableRow>
                                         <TableHead>Location Name</TableHead>
                                         <TableHead>Address</TableHead>
-                                        <TableHead>Created</TableHead>
+                                        <TableHead>Status</TableHead>
                                         <TableHead className="text-right">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -249,20 +323,24 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                                     </div>
                                                     <div>
                                                         <div className="font-medium">{location.name}</div>
-                                                        <Badge variant="outline" className="mt-1">Active</Badge>
+                                                        <Badge variant={location.is_active ? "outline" : "secondary"} className="mt-1">
+                                                            {location.is_active ? 'Active' : 'Inactive'}
+                                                        </Badge>
                                                     </div>
                                                 </div>
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                                     <MapPin className="h-4 w-4" />
-                                                    {location.address}
+                                                    {formatAddress(location)}
                                                 </div>
                                             </TableCell>
                                             <TableCell>
-                                                <div className="text-sm text-muted-foreground">
-                                                    {new Date(location.created_at).toLocaleDateString()}
-                                                </div>
+                                                {location.is_accepting_orders ? (
+                                                     <Badge variant="outline" className="border-green-200 text-green-700 bg-green-50">Online</Badge>
+                                                ) : (
+                                                     <Badge variant="outline" className="border-amber-200 text-amber-700 bg-amber-50">Offline</Badge>
+                                                )}
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <Button variant="ghost" size="sm">
@@ -288,7 +366,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                             <CardContent>
                                 <div className="text-2xl font-bold">{locationsList.length}</div>
                                 <p className="text-xs text-muted-foreground">
-                                    Active locations
+                                    Registered locations
                                 </p>
                             </CardContent>
                         </Card>
@@ -300,30 +378,134 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                             <CardContent>
                                 <div className="text-sm font-medium">{locationsList[0]?.name || 'N/A'}</div>
                                 <p className="text-xs text-muted-foreground">
-                                    {locationsList[0]?.address || 'No address'}
+                                    {formatAddress(locationsList[0]) || 'No address'}
                                 </p>
                             </CardContent>
                         </Card>
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Latest Location</CardTitle>
-                                <Calendar className="h-4 w-4 text-muted-foreground" />
+                                <CardTitle className="text-sm font-medium">Active Locations</CardTitle>
+                                <Store className="h-4 w-4 text-muted-foreground" />
                             </CardHeader>
                             <CardContent>
-                                <div className="text-sm font-medium">
-                                    {locationsList[0]?.name || 'N/A'}
+                                <div className="text-2xl font-bold">
+                                    {locationsList.filter((l: any) => l.is_active).length}
                                 </div>
                                 <p className="text-xs text-muted-foreground">
-                                    Added {locationsList[0]?.created_at
-                                        ? new Date(locationsList[0].created_at).toLocaleDateString()
-                                        : 'N/A'
-                                    }
+                                    Accepting orders
                                 </p>
                             </CardContent>
                         </Card>
                     </div>
                 )}
             </TabsContent>
+
+            {/* Edit Business Info Dialog */}
+            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                <DialogContent className="sm:max-w-[600px]">
+                    <DialogHeader>
+                        <DialogTitle>Edit Business Information</DialogTitle>
+                        <DialogDescription>
+                            Update the legal and registration details for this merchant.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="grid gap-4 py-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="legal_business_name">Legal Business Name</Label>
+                            <Input
+                                id="legal_business_name"
+                                value={formData.legal_business_name}
+                                onChange={(e) => setFormData({ ...formData, legal_business_name: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="dba_name">DBA Name</Label>
+                            <Input
+                                id="dba_name"
+                                value={formData.dba_name}
+                                onChange={(e) => setFormData({ ...formData, dba_name: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="ein_tax_id">EIN / Tax ID</Label>
+                            <Input
+                                id="ein_tax_id"
+                                value={formData.ein_tax_id}
+                                onChange={(e) => setFormData({ ...formData, ein_tax_id: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="business_type">Business Type</Label>
+                            <Select 
+                                value={formData.business_type} 
+                                onValueChange={(value) => setFormData({ ...formData, business_type: value })}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select business type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {Object.entries(businessTypes).map(([key, label]) => (
+                                        <SelectItem key={key} value={key}>{label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="business_license_number">Business License Number</Label>
+                            <Input
+                                id="business_license_number"
+                                value={formData.business_license_number}
+                                onChange={(e) => setFormData({ ...formData, business_license_number: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="merchant_type">Merchant Category</Label>
+                            <Input
+                                id="merchant_type"
+                                value={formData.merchant_type}
+                                onChange={(e) => setFormData({ ...formData, merchant_type: e.target.value })}
+                                placeholder="e.g. Restaurant, Retail"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="status">Merchant Status</Label>
+                            <Select 
+                                value={formData.status} 
+                                onValueChange={(value) => setFormData({ ...formData, status: value })}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="active">Active</SelectItem>
+                                    <SelectItem value="inactive">Inactive</SelectItem>
+                                    <SelectItem value="onboarding">Onboarding</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button 
+                            onClick={handleSave} 
+                            disabled={updateMutation.isPending}
+                        >
+                            {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Save Changes
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </Tabs>
     )
 }

@@ -315,6 +315,22 @@ export const adminKeys = {
       'schedules',
     ] as const,
 
+  merchantCategorySchedules: (merchantId: string, categoryId: string) =>
+    [
+      ...adminKeys.merchants(),
+      merchantId,
+      'category',
+      categoryId,
+      'schedules',
+    ] as const,
+
+  // Timesheets
+  merchantTimesheets: (merchantId: string, filters: any) =>
+    [...adminKeys.merchants(), merchantId, 'timesheets', filters] as const,
+
+  merchantTimesheetResources: (merchantId: string) =>
+    [...adminKeys.merchants(), merchantId, 'timesheet-resources'] as const,
+
   // ============================================================================
   // MERCHANT CUSTOMERS (Admin View)
   // ============================================================================

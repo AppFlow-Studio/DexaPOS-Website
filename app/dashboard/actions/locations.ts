@@ -124,6 +124,8 @@ export async function CreateLocation(
       latitude: data.latitude || null,
       longitude: data.longitude || null,
       timezone: data.timezone || "America/New_York",
+      pricing_strategy: data.pricing_strategy || "manual",
+      dual_pricing_percentage: data.dual_pricing_percentage ?? 4.0,
       is_active: data.is_active ?? true,
       is_accepting_orders: data.is_accepting_orders ?? true,
       business_hours: data.business_hours || {},
@@ -187,6 +189,8 @@ export async function UpdateLocation(
   if (data.latitude !== undefined) updateData.latitude = data.latitude;
   if (data.longitude !== undefined) updateData.longitude = data.longitude;
   if (data.timezone !== undefined) updateData.timezone = data.timezone;
+  if (data.pricing_strategy !== undefined) updateData.pricing_strategy = data.pricing_strategy;
+  if (data.dual_pricing_percentage !== undefined) updateData.dual_pricing_percentage = data.dual_pricing_percentage;
   if (data.is_active !== undefined) updateData.is_active = data.is_active;
   if (data.is_accepting_orders !== undefined)
     updateData.is_accepting_orders = data.is_accepting_orders;
@@ -197,26 +201,29 @@ export async function UpdateLocation(
   if (data.public_metadata !== undefined)
     updateData.public_metadata = data.public_metadata;
 
+  // Fetch current location data for audit log diff
+  const { data: currentLocation, error: fetchError } = await supabase
+    .from("locations")
+    .select("*")
+    .eq("id", locationId)
+    .single();
+
+  if (fetchError || !currentLocation) {
+    return { error: "Location not found" };
+  }
+
   // Check for duplicate code if being updated
   if (data.code) {
-    const { data: currentLocation } = await supabase
+    const { data: existingLocation } = await supabase
       .from("locations")
-      .select("merchant_id")
-      .eq("id", locationId)
+      .select("id")
+      .eq("merchant_id", currentLocation.merchant_id)
+      .eq("code", data.code)
+      .neq("id", locationId)
       .single();
 
-    if (currentLocation) {
-      const { data: existingLocation } = await supabase
-        .from("locations")
-        .select("id")
-        .eq("merchant_id", currentLocation.merchant_id)
-        .eq("code", data.code)
-        .neq("id", locationId)
-        .single();
-
-      if (existingLocation) {
-        return { error: "A location with this code already exists" };
-      }
+    if (existingLocation) {
+      return { error: "A location with this code already exists" };
     }
   }
 
@@ -232,17 +239,45 @@ export async function UpdateLocation(
     return { error: error.message };
   }
 
-  // Log audit event
-  await LogAuditEvent({
-    merchantId: location.merchant_id,
-    action: `Updated Location: ${location.name}`,
-    actionCategory: "settings",
-    resourceType: "location",
-    resourceId: locationId,
-    resourceName: location.name,
-    locationId: locationId,
-    changes: { after: data as Record<string, unknown> },
+  // Debug Log
+  console.log('[UpdateLocation] Success:', {
+    id: location.id,
+    strategy: location.pricing_strategy,
+    percentage: location.dual_pricing_percentage
   });
+
+  // Calculate changes for audit log
+  const changedFields: string[] = [];
+  const beforeLog: Record<string, unknown> = {};
+  const afterLog: Record<string, unknown> = {};
+
+  Object.keys(updateData).forEach((key) => {
+    // Skip updated_at
+    if (key === "updated_at") return;
+
+    const newValue = updateData[key];
+    const oldValue = currentLocation[key as keyof typeof currentLocation];
+
+    if (JSON.stringify(newValue) !== JSON.stringify(oldValue)) {
+      changedFields.push(key);
+      beforeLog[key] = oldValue;
+      afterLog[key] = newValue;
+    }
+  });
+
+  // Log audit event
+  if (changedFields.length > 0) {
+    await LogAuditEvent({
+      merchantId: location.merchant_id,
+      action: `Updated Location: ${location.name}`,
+      actionCategory: "settings",
+      resourceType: "location",
+      resourceId: locationId,
+      resourceName: location.name,
+      locationId: locationId,
+      changes: { before: beforeLog, after: afterLog },
+    });
+  }
 
   return { data: location as Location };
 }

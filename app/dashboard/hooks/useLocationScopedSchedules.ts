@@ -149,6 +149,7 @@ export function useCreateScheduleMutation() {
  */
 export function useUpdateScheduleMutation() {
   const queryClient = useQueryClient();
+  const locationId = useEffectiveLocationId();
 
   return useMutation({
     mutationFn: async ({
@@ -158,7 +159,6 @@ export function useUpdateScheduleMutation() {
       scheduleId: string;
       data: Parameters<typeof UpdateScheduleWithTimeSlots>[1];
     }) => {
-      const locationId = useEffectiveLocationId();
       return UpdateScheduleWithTimeSlots(scheduleId, data, locationId);
     },
     onSuccess: (result, variables) => {
@@ -173,6 +173,7 @@ export function useUpdateScheduleMutation() {
       queryClient.invalidateQueries({
         queryKey: ["schedule", variables.scheduleId],
       });
+      queryClient.invalidateQueries({ queryKey: ["menu-with-categories"] });
     },
     onError: (error) => {
       toast.error("Update Failed", {

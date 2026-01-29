@@ -69,6 +69,8 @@ export interface LocationsModel {
     latitude: number | null
     longitude: number | null
     timezone: string
+    pricing_strategy: 'manual' | 'dual'
+    dual_pricing_percentage: number
     is_active: boolean
     is_accepting_orders: boolean
     business_hours: Record<string, { open: string; close: string; is_closed: boolean }>

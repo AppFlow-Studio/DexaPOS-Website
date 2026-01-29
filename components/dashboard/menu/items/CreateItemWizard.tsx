@@ -21,10 +21,12 @@ import {
 } from "@/components/ui/bottom-sheet";
 import { CategoryWithItems } from "@/types/menu";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { useLocationStore } from "@/stores/location-store";
 import {
   CreateItemInCategory,
   AddItemToCategory,
 } from "@/app/dashboard/actions/item-assignments";
+import { PriceInputGroup } from "@/components/dashboard/locations/PriceInputGroup";
 
 interface CreateItemWizardProps {
   open: boolean;
@@ -48,6 +50,19 @@ export function CreateItemWizard({
   const queryClient = useQueryClient();
   const { data: userInfo } = useUserInfo();
   const merchantId = userInfo?.members?.[0]?.organizations?.merchants?.id || "";
+  const { locations } = useLocationStore();
+  
+  // Get location details for dual pricing context
+  const targetLocation = React.useMemo(() => {
+    if (isAllLocations || !selectedLocationId) return null;
+    return locations.find(l => l.id === selectedLocationId);
+  }, [locations, selectedLocationId, isAllLocations]);
+
+  // Check if current location uses dual pricing
+  const pricingStrategy = (targetLocation as any)?.pricing_strategy || "manual";
+  const dualPricingPercentage = (targetLocation as any)?.dual_pricing_percentage || 4.0;
+  const isDualPricing = pricingStrategy === "dual";
+
 
   // Form state
   const [name, setName] = React.useState("");
@@ -254,6 +269,12 @@ export function CreateItemWizard({
                 ? "This item will be available at all locations."
                 : "This item will be specific to this location only."}
             </p>
+            {isDualPricing && !isAllLocations && (
+                 <div className="mt-2 text-xs flex items-center gap-1.5 text-blue-700 font-medium">
+                    <div className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+                    Dual Pricing Enabled at {dualPricingPercentage}%
+                 </div>
+            )}
           </div>
 
           <div className="space-y-4">
@@ -286,44 +307,27 @@ export function CreateItemWizard({
             </div>
 
             {/* Prices */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium flex items-center gap-1">
-                  <DollarSign className="h-3 w-3" />
-                  Price *
-                </label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0.00"
-                  value={price}
-                  onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
-                />
-                {errors.price && (
-                  <p className="text-sm text-red-500">{errors.price}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium flex items-center gap-1">
-                  <DollarSign className="h-3 w-3" />
-                  Cash Price
-                </label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="Optional"
-                  value={cashPrice ?? ""}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setCashPrice(val ? parseFloat(val) : null);
-                  }}
-                />
-                {errors.cashPrice && (
-                  <p className="text-sm text-red-500">{errors.cashPrice}</p>
-                )}
+            <div className="space-y-2">
+              <PriceInputGroup
+                price={price}
+                cashPrice={cashPrice}
+                onPriceChange={setPrice}
+                onCashPriceChange={setCashPrice}
+                label="Price"
+                pricingStrategy={isAllLocations ? 'manual' : pricingStrategy}
+                dualPricingPercentage={dualPricingPercentage}
+              />
+              <div className="flex gap-4 px-4">
+                <div className="flex-1">
+                  {errors.price && (
+                    <p className="text-sm text-red-500">{errors.price}</p>
+                  )}
+                </div>
+                <div className="flex-1">
+                  {errors.cashPrice && (
+                    <p className="text-sm text-red-500">{errors.cashPrice}</p>
+                  )}
+                </div>
               </div>
             </div>
 

@@ -70,8 +70,8 @@ import { GetInventoryItemsForRecipe } from "@/app/dashboard/actions/recipes";
 interface ModifierRecipeManagerProps {
   modifierItemId: string;
   modifierItemName: string;
-  clerkOrgId: string;
-  merchantId: string;
+  clerkOrgId?: string;
+  merchantId?: string;
   locationId?: string | null;
   isEditable?: boolean;
 }
@@ -79,7 +79,7 @@ interface ModifierRecipeManagerProps {
 export function ModifierRecipeManager({
   modifierItemId,
   modifierItemName,
-  clerkOrgId,
+  clerkOrgId = "",
   merchantId,
   locationId,
   isEditable = true,
@@ -101,9 +101,9 @@ export function ModifierRecipeManager({
 
   // Fetch available inventory items
   const { data: inventoryData } = useQuery({
-    queryKey: ["inventory-items-for-recipe", clerkOrgId, locationId],
-    queryFn: () => GetInventoryItemsForRecipe(clerkOrgId, locationId),
-    enabled: !!clerkOrgId && isAddDialogOpen,
+    queryKey: ["inventory-items-for-recipe", merchantId || clerkOrgId, locationId],
+    queryFn: () => GetInventoryItemsForRecipe(clerkOrgId, locationId, merchantId),
+    enabled: (!!clerkOrgId || !!merchantId) && isAddDialogOpen,
   });
 
   const ingredients = recipeData?.data?.ingredients || [];

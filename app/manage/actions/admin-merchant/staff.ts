@@ -2,6 +2,8 @@
 
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
 import { revalidatePath } from 'next/cache'
 import bcrypt from 'bcryptjs'
 import type {
@@ -97,7 +99,6 @@ export async function adminResetStaffPin(
   }
 
   revalidatePath(`/manage/merchants/${merchantId}`)
-
   return { success: true, pin: result.new_pin }
 }
 
@@ -131,10 +132,26 @@ export async function adminBulkResetPins(
     new_pin: row.new_pin as string,
   }))
 
+  // Audit log
+  if (results.length > 0) {
+    await LogAuditEvent({
+      merchantId,
+      locationId: locationId || null,
+      action: `Bulk Staff PIN Reset: ${results.length} members`,
+      actionCategory: 'staff',
+      severity: 'info',
+      metadata: {
+        bulk_reset: true,
+        staff_count: results.length,
+      },
+    })
+  }
+
   revalidatePath(`/manage/merchants/${merchantId}`)
 
   return { success: true, results }
 }
+
 
 // ============================================================================
 // TOGGLE STAFF STATUS
@@ -168,6 +185,25 @@ export async function adminToggleStaffStatus(
     return { success: false, error: result?.error_message || 'Failed to toggle status' }
   }
 
+  // Audit log
+  const actionString = newStatus
+    ? `Reactivated Staff Member: ${result.staff_name}`
+    : `Deactivated Staff Member: ${result.staff_name}`
+
+  await LogAuditEvent({
+    merchantId,
+    locationId,
+    action: actionString,
+    actionCategory: 'staff',
+    resourceType: 'staff_member',
+    resourceId: staffProfileId,
+    resourceName: result.staff_name,
+    changes: {
+      before: { is_active: !newStatus },
+      after: { is_active: newStatus },
+    },
+  })
+
   revalidatePath(`/manage/merchants/${merchantId}`)
 
   return { success: true }
@@ -185,7 +221,8 @@ export async function adminCreateStaff(
 ): Promise<AdminCreateStaffResult> {
   const { userId } = await assertHQPermission('hq.merchant.manage_team')
 
-  const supabase = createServerSupabaseClient()
+  // Use Service Role client to bypass RLS, since we already verified permissions via assertHQPermission
+  const supabase = createServiceRoleClient()
 
   // Generate or validate PIN
   let hashedPin: string | null = null
@@ -248,19 +285,29 @@ export async function adminCreateStaff(
   const staffName = `${data.firstName} ${data.lastName}`
 
   // Audit log
-  await supabase.from('audit_logs').insert({
-    actor_user_id: userId,
-    actor_role: 'hq.admin',
-    action: 'ADMIN_CREATE_STAFF',
-    action_category: 'staff_management',
+  await LogAuditEvent({
+    merchantId: merchantId,
+    locationId: data.locationId,
+    action: `Created POS Staff: ${staffName}`,
+    actionCategory: 'staff',
     severity: 'info',
-    resource_type: 'staff_profile',
-    resource_id: staffProfile.id,
-    resource_name: staffName,
-    merchant_id: merchantId,
-    location_id: data.locationId,
+    resourceType: 'staff_member',
+    resourceId: staffProfile.id,
+    resourceName: staffName,
+    changes: {
+      after: {
+        first_name: data.firstName,
+        last_name: data.lastName,
+        email: data.email,
+        phone: data.phone,
+        role: data.roleCode,
+        employment_type: data.employmentType,
+        is_active: true,
+      }
+    },
     metadata: {
       admin_created: true,
+      hq_admin_id: userId,
       role: data.roleCode,
     },
   })

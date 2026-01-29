@@ -15,8 +15,20 @@ import {
   OrderItemModifier,
 } from "@/types/order-management";
 import { Location } from "@/types/merchant_locations";
-import { Printer, X } from "lucide-react";
+import { Printer, X, RotateCcw, Ban, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { refundAdminOrder, voidAdminOrder } from "@/app/manage/actions/admin-merchant/transactions";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface ReceiptModalProps {
   order: OrderResponse;
@@ -119,8 +131,52 @@ export function ReceiptModal({
   location,
   open,
   onOpenChange,
-}: ReceiptModalProps) {
+  showAdminActions = false,
+  onOrderUpdate,
+}: ReceiptModalProps & { showAdminActions?: boolean; onOrderUpdate?: () => void }) {
   const receiptRef = React.useRef<HTMLDivElement>(null);
+  const [isRefunding, setIsRefunding] = React.useState(false);
+  const [isVoiding, setIsVoiding] = React.useState(false);
+  const [confirmRefundOpen, setConfirmRefundOpen] = React.useState(false);
+  const [confirmVoidOpen, setConfirmVoidOpen] = React.useState(false);
+
+  const handleRefund = async () => {
+    setIsRefunding(true);
+    try {
+      const result = await refundAdminOrder(order.merchant_id, order.id);
+      if (result.success) {
+        toast.success("Order refunded successfully");
+        onOrderUpdate?.();
+        onOpenChange(false);
+      } else {
+        toast.error(result.error || "Failed to refund order");
+      }
+    } catch (error) {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsRefunding(false);
+      setConfirmRefundOpen(false);
+    }
+  };
+
+  const handleVoid = async () => {
+    setIsVoiding(true);
+    try {
+      const result = await voidAdminOrder(order.merchant_id, order.id);
+      if (result.success) {
+        toast.success("Order voided successfully");
+        onOrderUpdate?.();
+        onOpenChange(false);
+      } else {
+        toast.error(result.error || "Failed to void order");
+      }
+    } catch (error) {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsVoiding(false);
+      setConfirmVoidOpen(false);
+    }
+  };
 
   const items = (order.order_items || []) as (OrderItem & {
     order_item_modifiers?: OrderItemModifier[];
@@ -534,7 +590,67 @@ export function ReceiptModal({
             <Printer className="h-4 w-4 mr-2" />
             Print Receipt
           </Button>
+          
+          {showAdminActions && order.status !== 'refunded' && order.status !== 'void' && (
+            <>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-amber-600 border-amber-200 hover:bg-amber-50"
+                onClick={() => setConfirmRefundOpen(true)}
+                disabled={isRefunding || isVoiding}
+              >
+                {isRefunding ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4 mr-2" />}
+                Refund
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-red-600 border-red-200 hover:bg-red-50"
+                onClick={() => setConfirmVoidOpen(true)}
+                disabled={isRefunding || isVoiding}
+              >
+                {isVoiding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4 mr-2" />}
+                Void
+              </Button>
+            </>
+          )}
         </div>
+
+        {/* Confirmation Dialogs */}
+        <AlertDialog open={confirmRefundOpen} onOpenChange={setConfirmRefundOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm Refund</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to refund this order? This will mark the order and all payments as refunded.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleRefund} className="bg-amber-600 hover:bg-amber-700">
+                Refund Order
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={confirmVoidOpen} onOpenChange={setConfirmVoidOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm Void</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to void this order? This will cancel any pending payments and invalidate the order.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleVoid} className="bg-red-600 hover:bg-red-700">
+                Void Order
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );

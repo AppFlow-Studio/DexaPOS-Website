@@ -70,7 +70,8 @@ import {
 interface RecipeManagerProps {
   menuItemId: string;
   menuItemName: string;
-  clerkOrgId: string;
+  clerkOrgId?: string; // Optional for Admin portal
+  merchantId?: string; // Preferred for Admin portal
   locationId?: string | null;
   isEditable?: boolean; // Only allow editing when in global view for global items
 }
@@ -78,7 +79,8 @@ interface RecipeManagerProps {
 export function RecipeManager({
   menuItemId,
   menuItemName,
-  clerkOrgId,
+  clerkOrgId = "",
+  merchantId,
   locationId,
   isEditable = true,
 }: RecipeManagerProps) {
@@ -99,9 +101,9 @@ export function RecipeManager({
 
   // Fetch available inventory items
   const { data: inventoryData } = useQuery({
-    queryKey: ["inventory-items-for-recipe", clerkOrgId, locationId],
-    queryFn: () => GetInventoryItemsForRecipe(clerkOrgId, locationId),
-    enabled: !!clerkOrgId && isAddDialogOpen,
+    queryKey: ["inventory-items-for-recipe", merchantId || clerkOrgId, locationId],
+    queryFn: () => GetInventoryItemsForRecipe(clerkOrgId, locationId, merchantId),
+    enabled: (!!clerkOrgId || !!merchantId) && isAddDialogOpen,
   });
 
   const ingredients = recipeData?.data?.ingredients || [];
