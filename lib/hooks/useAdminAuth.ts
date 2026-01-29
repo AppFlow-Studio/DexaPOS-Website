@@ -31,7 +31,7 @@ export function useAdminAuth(): AdminAuthContext {
       const { data: roleData, error: roleError } = await supabase
         .rpc('get_my_hq_role')
         .single()
-
+     
       if (roleError) {
         console.error('Error fetching HQ role:', roleError)
       }
