@@ -146,6 +146,7 @@ export function PriceInputGroup({
           </div>
         </div>
       </div>
+      
       {isDual && (
         <p className="text-[11px] text-muted-foreground mt-2">
           * Edit Cash Price; Card Price is automatically {percentage}% higher.
