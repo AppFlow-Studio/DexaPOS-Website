@@ -45,35 +45,31 @@ export function PriceInputGroup({
   const isDual = pricingStrategy === "dual";
   const percentage = Number(startDualPercentage);
 
-  // Force sync on mount or strategy change if values are out of sync
-  useEffect(() => { 
-      if (isDual && price > 0 && (cashPrice === null || cashPrice === 0)) {
-          const rawCash = price / (1 + percentage / 100);
-          const roundedCash = Math.round(rawCash * 100) / 100;
-          if (roundedCash !== cashPrice) {
-               onCashPriceChange(roundedCash);
-          }
+  // On mount/dual mode: if we have card price but no cash, derive cash so cash becomes the driver
+  useEffect(() => {
+    if (isDual && price > 0 && (cashPrice === null || cashPrice === 0)) {
+      const rawCash = price / (1 + percentage / 100);
+      const roundedCash = Math.round(rawCash * 100) / 100;
+      if (roundedCash !== cashPrice) {
+        onCashPriceChange(roundedCash);
       }
+    }
   }, [isDual, price, cashPrice, percentage, onCashPriceChange]);
 
-  // Sync logic
+  // Card price change (only used in manual mode; in dual mode card input is disabled)
   const handlePriceChange = (newPrice: number) => {
     onPriceChange(newPrice);
-    
-    if (isDual && !disabled) {
-      // If Card Price changes, Cash Price = Card Price / (1 + p/100)
-      // Round to 2 decimals
-      const rawCash = newPrice / (1 + percentage / 100);
-      const roundedCash = Math.round(rawCash * 100) / 100;
-      onCashPriceChange(roundedCash);
-    }
+    if (!isDual) return;
+    // Dual: card is derived from cash only; this path shouldn't fire when input is disabled
+    const rawCash = newPrice / (1 + percentage / 100);
+    const roundedCash = Math.round(rawCash * 100) / 100;
+    onCashPriceChange(roundedCash);
   };
 
+  // Cash price is the driver in dual mode: Card Price = Cash Price * (1 + p/100)
   const handleCashPriceChange = (newCashPrice: number | null) => {
     onCashPriceChange(newCashPrice);
-
     if (isDual && !disabled && newCashPrice !== null) {
-      // If Cash Price changes, Card Price = Cash Price * (1 + p/100)
       const rawCard = newCashPrice * (1 + percentage / 100);
       const roundedCard = Math.round(rawCard * 100) / 100;
       onPriceChange(roundedCard);
@@ -98,8 +94,8 @@ export function PriceInputGroup({
                <Info className="h-4 w-4 text-muted-foreground cursor-help" />
              </TooltipTrigger>
              <TooltipContent className="max-w-xs">
-               <p>Dual Pricing is enabled/enforced by Admin settings.</p>
-               <p>Card Price is automatically {percentage}% higher than Cash Price.</p>
+               <p>Dual Pricing is enabled by location settings.</p>
+               <p>Edit Cash Price; Card Price is calculated {percentage}% higher.</p>
              </TooltipContent>
            </Tooltip>
          </TooltipProvider>
@@ -107,12 +103,12 @@ export function PriceInputGroup({
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        {/* Card Price Input */}
+        {/* Card Price Input - read-only in dual mode (derived from Cash Price) */}
         <div className="space-y-2">
-            <div className="flex items-center justify-between">
-                <Label className="text-xs text-muted-foreground">Card Price</Label>
-                {/* No lock icon on Card Price as it's the driver */}
-            </div>
+          <div className="flex items-center justify-between">
+            <Label className="text-xs text-muted-foreground">Card Price</Label>
+            {isDual && <Lock className="h-3 w-3 text-muted-foreground opacity-50" />}
+          </div>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
             <Input
@@ -121,42 +117,40 @@ export function PriceInputGroup({
               min="0"
               value={price || ""}
               onChange={(e) => handlePriceChange(parseFloat(e.target.value) || 0)}
-              disabled={disabled}
-              className={cn("pl-7", isDual && "border-blue-200 focus-visible:ring-blue-500")}
+              disabled={disabled || isDual}
+              readOnly={isDual}
+              className={cn("pl-7", isDual && "bg-muted text-muted-foreground")}
             />
           </div>
         </div>
 
-        {/* Cash Price Input */}
+        {/* Cash Price Input - editable driver in dual mode */}
         <div className="space-y-2">
-            <div className="flex items-center justify-between">
-                <Label className="text-xs text-muted-foreground">Cash Price</Label>
-                {isDual && <Lock className="h-3 w-3 text-muted-foreground opacity-50" />}
-            </div>
+          <div className="flex items-center justify-between">
+            <Label className="text-xs text-muted-foreground">Cash Price</Label>
+          </div>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
             <Input
               type="number"
               step="0.01"
               min="0"
-              value={cashPrice ?? ""} 
+              value={cashPrice ?? ""}
               onChange={(e) => {
-                  if (isDual) return; // Prevent manual editing in dual mode
-                  const val = e.target.value === "" ? null : parseFloat(e.target.value);
-                  handleCashPriceChange(val);
+                const val = e.target.value === "" ? null : parseFloat(e.target.value);
+                handleCashPriceChange(val);
               }}
-              disabled={disabled || isDual} // Disable input if Dual Pricing is active
-              readOnly={isDual}
-              className={cn("pl-7", isDual && "bg-muted text-muted-foreground")}
+              disabled={disabled}
+              className={cn("pl-7", isDual && "border-blue-200 focus-visible:ring-blue-500")}
             />
           </div>
         </div>
       </div>
-        {isDual && (
-             <p className="text-[11px] text-muted-foreground mt-2">
-             * Changing one price automatically updates the other to maintain the {percentage}% offset.
-           </p>
-        )}
+      {isDual && (
+        <p className="text-[11px] text-muted-foreground mt-2">
+          * Edit Cash Price; Card Price is automatically {percentage}% higher.
+        </p>
+      )}
     </div>
   );
 }

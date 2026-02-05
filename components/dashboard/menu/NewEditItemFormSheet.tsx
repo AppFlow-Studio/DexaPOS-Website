@@ -1585,7 +1585,7 @@ export function NewEditItemFormSheet({
                               onPriceChange={(val) => form.setValue("price", val, { shouldValidate: true })}
                               onCashPriceChange={(val) => form.setValue("cash_price", val, { shouldValidate: true })}
                               label={editingContext.priceLabel}
-                              disabled={!editingContext.canEditBaseFields && !!editItem}
+                              disabled={!editItem}
                           />
                           <div className="flex gap-4 px-4">
                               <div className="flex-1">
