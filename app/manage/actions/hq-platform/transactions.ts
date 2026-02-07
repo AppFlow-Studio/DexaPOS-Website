@@ -35,7 +35,7 @@ export async function getPlatformTransactions(limit: number = 50, offset: number
       customer_name,
       payment_status,
       merchant_id,
-      merchants!inner(business_name)
+      merchants!inner(name)
     `, { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1)

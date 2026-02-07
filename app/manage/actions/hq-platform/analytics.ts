@@ -162,7 +162,7 @@ export async function getPlatformAuditLogs(
     .from('audit_logs')
     .select(`
       *,
-      merchants!inner(business_name),
+      merchants!inner(name),
       location:locations(id, name)
     `, { count: 'exact' })
     .order('created_at', { ascending: false })
