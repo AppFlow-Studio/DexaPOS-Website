@@ -20,6 +20,10 @@ import {
   OrderStats,
   FinancialKPIs,
 } from "../actions/order-analytics";
+import {
+  GetWaterfallReport,
+  WaterfallReport,
+} from "../actions/waterfall-report";
 
 /**
  * Get clerk organization ID from user info
@@ -327,6 +331,39 @@ export function useFinancialKPIs(
     ],
     queryFn: () =>
       GetFinancialKPIs(clerkOrgId!, effectiveLocationId, dateFrom, dateTo),
+    enabled: !!clerkOrgId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Waterfall Report Hook
+ */
+export function useWaterfallReport(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
+
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId = locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
+
+  return useQuery<WaterfallReport>({
+    queryKey: [
+      "waterfall-report",
+      clerkOrgId,
+      effectiveLocationId,
+      dateFrom.toISOString(),
+      dateTo.toISOString(),
+    ],
+    queryFn: () =>
+      GetWaterfallReport(clerkOrgId!, effectiveLocationId, dateFrom, dateTo),
     enabled: !!clerkOrgId,
     staleTime: 2 * 60 * 1000,
     refetchOnWindowFocus: false,
