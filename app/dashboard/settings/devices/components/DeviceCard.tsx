@@ -3,7 +3,6 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,290 +12,171 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Device,
-  getDeviceTypeLabel,
-  getDeviceTypeIcon,
+  StationWithHeartbeat,
+  getStationTypeLabel,
+  getStationTypeIcon,
+  getNetworkTypeLabel,
+  formatLastSeen,
 } from "../hooks/useDevices";
 import {
   MoreHorizontal,
-  Eye,
   Edit,
-  Trash2,
   Circle,
-  AlertTriangle,
+  RotateCcw,
+  Unlink,
+  Wifi,
+  Printer,
+  Monitor,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useRouter } from "next/navigation";
-import { formatDistanceToNow, format } from "date-fns";
-import { motion } from "framer-motion";
+import { toast } from "sonner";
 
 interface DeviceCardProps {
-  device: Device;
-  onEdit: (device: Device) => void;
-  onRemove: (deviceId: string) => void;
-  // Selection props
-  isSelected: boolean;
-  onSelect: (selected: boolean) => void;
+  device: StationWithHeartbeat;
+  onEdit: (device: StationWithHeartbeat) => void;
 }
 
-// Accessible Status Badge with aria-label
-function StatusBadge({ device }: { device: Device }) {
-  const isOnline = device.status === "online";
-
-  let offlineDuration = "";
-  let ariaLabel = "Online";
-
-  if (!isOnline && device.offlineSince) {
-    offlineDuration = `For ${formatDistanceToNow(
-      new Date(device.offlineSince),
-      { addSuffix: false }
-    )}`;
-    ariaLabel = `Offline for ${formatDistanceToNow(
-      new Date(device.offlineSince)
-    )}`;
-  } else if (!isOnline) {
-    ariaLabel = "Offline";
-  }
+function StatusBadge({ device }: { device: StationWithHeartbeat }) {
+  const isOnline =
+    device.latest_heartbeat?.is_online ?? device.is_online;
 
   return (
-    <div className="flex flex-col gap-0.5" role="status" aria-label={ariaLabel}>
-      <Badge
-        variant="outline"
-        className={cn(
-          "gap-1.5 w-fit transition-all duration-200",
-          isOnline
-            ? "border-green-500/50 bg-green-500/10 text-green-600 dark:text-green-400"
-            : "border-gray-400/50 bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
-        )}
-      >
-        <Circle
-          className={cn(
-            "h-2 w-2 transition-colors duration-200",
-            isOnline
-              ? "fill-green-500 text-green-500"
-              : "fill-gray-400 text-gray-400"
-          )}
-          aria-hidden="true"
-        />
-        <span aria-hidden="true">{isOnline ? "ONLINE" : "OFFLINE"}</span>
-      </Badge>
-      {!isOnline && offlineDuration && (
-        <span className="text-xs text-muted-foreground" aria-hidden="true">
-          {offlineDuration}
-        </span>
-      )}
-    </div>
-  );
-}
-
-// Accessible Alerts display
-function AlertsDisplay({ alerts }: { alerts: number }) {
-  const ariaLabel =
-    alerts === 0
-      ? "No alerts"
-      : `${alerts} active alert${alerts !== 1 ? "s" : ""}`;
-
-  if (alerts > 0) {
-    return (
-      <div
-        className="flex items-center gap-1.5 text-yellow-600"
-        role="status"
-        aria-label={ariaLabel}
-      >
-        <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-        <span className="text-sm font-medium" aria-hidden="true">
-          {alerts} alerts
-        </span>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="flex items-center gap-1.5 text-muted-foreground"
-      role="status"
-      aria-label={ariaLabel}
-    >
-      <span className="text-sm" aria-hidden="true">
-        0 alerts
-      </span>
-      <span className="text-green-500" aria-hidden="true">
-        ✓
-      </span>
-    </div>
-  );
-}
-
-// Device type icon with accessible label
-function DeviceIcon({
-  type,
-  className,
-}: {
-  type: Device["type"];
-  className?: string;
-}) {
-  const label = getDeviceTypeLabel(type);
-  const icon = getDeviceTypeIcon(type);
-
-  return (
-    <div
+    <Badge
+      variant="outline"
       className={cn(
-        "flex items-center justify-center rounded-lg bg-muted text-2xl",
-        className
+        "gap-1.5 w-fit",
+        isOnline
+          ? "border-green-500/50 bg-green-500/10 text-green-600 dark:text-green-400"
+          : "border-gray-400/50 bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
       )}
-      role="img"
-      aria-label={label}
     >
-      <span aria-hidden="true">{icon}</span>
-    </div>
+      <Circle
+        className={cn(
+          "h-2 w-2",
+          isOnline
+            ? "fill-green-500 text-green-500"
+            : "fill-gray-400 text-gray-400"
+        )}
+      />
+      {isOnline ? "ONLINE" : "OFFLINE"}
+    </Badge>
   );
 }
 
-export function DeviceCard({
-  device,
-  onEdit,
-  onRemove,
-  isSelected,
-  onSelect,
-}: DeviceCardProps) {
-  const router = useRouter();
-  const isOffline = device.status === "offline";
-
-  // Navigate to device detail when card is clicked (excluding checkbox and menu)
-  const handleCardClick = (e: React.MouseEvent) => {
-    // Don't navigate if clicking on interactive elements
-    const target = e.target as HTMLElement;
-    const isInteractive = target.closest(
-      'button, [role="checkbox"], [role="menuitem"], a'
-    );
-    if (!isInteractive) {
-      router.push(`/dashboard/settings/devices/${device.id}`);
-    }
-  };
-
-  // Handle keyboard navigation
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" || e.key === " ") {
-      const target = e.target as HTMLElement;
-      // Only navigate if focus is on the card itself, not child elements
-      if (target.getAttribute("role") === "button") {
-        e.preventDefault();
-        router.push(`/dashboard/settings/devices/${device.id}`);
-      }
-    }
-  };
+export function DeviceCard({ device, onEdit }: DeviceCardProps) {
+  const isOnline =
+    device.latest_heartbeat?.is_online ?? device.is_online;
+  const deviceModel =
+    device.device_manufacturer && device.device_model
+      ? `${device.device_manufacturer} ${device.device_model}`
+      : device.hardware_model || "Unknown device";
+  const appVersion =
+    device.latest_heartbeat?.app_version || device.app_version;
+  const networkType =
+    device.latest_heartbeat?.network_type || device.network_type;
+  const printerStatus = device.latest_heartbeat?.printer_status;
+  const cfdConnected = device.latest_heartbeat?.cfd_connected;
+  const lastSeen = formatLastSeen(
+    device.latest_heartbeat?.heartbeat_at,
+    device.last_heartbeat_at
+  );
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2, ease: "easeOut" }}
+    <Card
+      className={cn(
+        "transition-all duration-200",
+        !isOnline && "opacity-70"
+      )}
     >
-      <Card
-        onClick={handleCardClick}
-        onKeyDown={handleKeyDown}
-        role="button"
-        tabIndex={0}
-        aria-label={`${device.name}, ${device.status}, ${getDeviceTypeLabel(
-          device.type
-        )}`}
-        className={cn(
-          "group cursor-pointer transition-all duration-200 ease-out",
-          "hover:shadow-md hover:scale-[1.01]",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
-          isOffline && "opacity-60",
-          isSelected && "ring-2 ring-primary"
-        )}
-      >
-        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
-          <div className="flex items-center gap-3">
-            {/* Checkbox - stops propagation */}
-            <div onClick={(e) => e.stopPropagation()}>
-              <Checkbox
-                checked={isSelected}
-                onCheckedChange={(checked) => onSelect(!!checked)}
-                aria-label={`Select ${device.name}`}
-                className="mt-1 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-              />
+      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-lg shrink-0">
+            {getStationTypeIcon(device.station_type)}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <StatusBadge device={device} />
             </div>
-            <DeviceIcon type={device.type} className="h-12 w-12" />
-            <div className="flex flex-col">
-              <span className="font-semibold text-foreground">
-                {device.name}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {getDeviceTypeLabel(device.type)}
-              </span>
-            </div>
+            <p className="font-semibold truncate mt-1">
+              {device.station_name}
+              {device.station_number != null && (
+                <span className="text-muted-foreground font-normal">
+                  {" "}
+                  (Station #{device.station_number})
+                </span>
+              )}
+            </p>
+            <p className="text-xs text-muted-foreground truncate">
+              {deviceModel}
+            </p>
           </div>
-          {/* Dropdown Menu - stops propagation */}
-          <div onClick={(e) => e.stopPropagation()}>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="h-8 w-8 p-0 focus-visible:ring-2 focus-visible:ring-primary"
-                >
-                  <span className="sr-only">Open menu for {device.name}</span>
-                  <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                <DropdownMenuItem
-                  onClick={() =>
-                    router.push(`/dashboard/settings/devices/${device.id}`)
-                  }
-                >
-                  <Eye className="mr-2 h-4 w-4" aria-hidden="true" />
-                  View details
-                </DropdownMenuItem>
-                {device.type === "external_terminal" && (
-                  <DropdownMenuItem onClick={() => onEdit(device)}>
-                    <Edit className="mr-2 h-4 w-4" aria-hidden="true" />
-                    Edit
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => onRemove(device.id)}
-                  className="text-red-600 focus:text-red-600"
-                >
-                  <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                  Remove
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex items-center justify-between">
-            <StatusBadge device={device} />
-            <AlertsDisplay alerts={device.alerts} />
-          </div>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="h-8 w-8 p-0 shrink-0">
+              <span className="sr-only">Open menu</span>
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+            <DropdownMenuItem onClick={() => onEdit(device)}>
+              <Edit className="mr-2 h-4 w-4" />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => toast.info("Restart App — Coming soon")}
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Restart App
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => toast.info("Unpair — Coming soon")}
+            >
+              <Unlink className="mr-2 h-4 w-4" />
+              Unpair
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </CardHeader>
+      <CardContent className="space-y-2 text-sm">
+        {/* Type / App / OS */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground">
+          <span>{getStationTypeLabel(device.station_type)}</span>
+          {appVersion && <span>v{appVersion}</span>}
+          {device.os_version && <span>Android {device.os_version}</span>}
+        </div>
 
-          <div className="space-y-2 pt-2 border-t">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Serial number</span>
-              <span className="font-mono">{device.serialNumber || "—"}</span>
-            </div>
-            {device.model && (
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Model</span>
-                <span>{device.model}</span>
-              </div>
-            )}
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Last seen</span>
-              <span>
-                {device.lastSeen
-                  ? format(new Date(device.lastSeen), "MMM d, yyyy h:mm a")
-                  : "—"}
-              </span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </motion.div>
+        {/* Peripherals */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <Printer className="h-3.5 w-3.5" />
+            {printerStatus || (device.has_builtin_printer ? "Built-in" : "N/A")}
+          </span>
+          <span className="flex items-center gap-1">
+            <Monitor className="h-3.5 w-3.5" />
+            CFD:{" "}
+            {cfdConnected != null
+              ? cfdConnected
+                ? "Connected"
+                : "Disconnected"
+              : device.has_builtin_cfd
+                ? "Built-in"
+                : "N/A"}
+          </span>
+        </div>
+
+        {/* Network & Last Seen */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground border-t pt-2">
+          <span className="flex items-center gap-1">
+            <Wifi className="h-3.5 w-3.5" />
+            {getNetworkTypeLabel(networkType)}
+            {device.network_ssid && `: ${device.network_ssid}`}
+          </span>
+          <span>Last seen: {lastSeen}</span>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
