@@ -38,11 +38,13 @@ import {
   useOrderStats,
   useFinancialKPIs,
   useWaterfallReport,
+  useRevenueByCategoryReport,
+  useTransactionVolumeReport,
 } from "./hooks/useOrderAnalytics";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   ChartContainer,
   ChartTooltip,
@@ -62,6 +64,11 @@ import {
 } from "recharts";
 import { useUnifiedStaff } from "./hooks/useStaff";
 import { DashboardWaterfallCard } from "./components/DashboardWaterfallCard";
+import {
+  NetRevenueByCategoryCard,
+  type DateRangeOption,
+} from "./components/NetRevenueByCategoryCard";
+import { TransactionVolumeCard } from "./components/TransactionVolumeCard";
 
 export default function MerchantDashboardPage() {
   const { selectedLocationId, locations } = useLocationStore();
@@ -120,6 +127,27 @@ export default function MerchantDashboardPage() {
   // Waterfall report for dashboard card
   const { data: waterfallReport, isLoading: waterfallLoading } =
     useWaterfallReport(last30Days, now);
+
+  // Transaction volume report (Credits vs Debits by payment type)
+  const { data: transactionVolumeReport, isLoading: transactionVolumeLoading } =
+    useTransactionVolumeReport(last30Days, now);
+
+  // Revenue by Category tree map
+  const [categoryDateRange, setCategoryDateRange] =
+    useState<DateRangeOption>("7d");
+
+  const categoryDateFrom = useMemo(() => {
+    const date = new Date();
+    const days = categoryDateRange === "7d" ? 7 : categoryDateRange === "30d" ? 30 : 90;
+    date.setDate(date.getDate() - days);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  }, [categoryDateRange]);
+
+  const {
+    data: revenueByCategoryReport,
+    isLoading: revenueByCategoryLoading,
+  } = useRevenueByCategoryReport(categoryDateFrom, now);
 
   const menusList = Array.isArray(menus) ? menus : [];
   const itemsList = Array.isArray(menuItems) ? menuItems : [];
@@ -804,6 +832,14 @@ export default function MerchantDashboardPage() {
         </div>
       )}
 
+      {/* Net Revenue by Category Tree Map */}
+      <NetRevenueByCategoryCard
+        report={revenueByCategoryReport}
+        isLoading={revenueByCategoryLoading}
+        dateRange={categoryDateRange}
+        onDateRangeChange={setCategoryDateRange}
+      />
+
       {/* Best Selling Items */}
       {analytics7Days?.bestSellingItems &&
         analytics7Days.bestSellingItems.length > 0 && (
@@ -848,6 +884,12 @@ export default function MerchantDashboardPage() {
             </CardContent>
           </Card>
         )}
+
+      {/* Transaction Volume Analysis (Credits vs Debits) */}
+      <TransactionVolumeCard
+        report={transactionVolumeReport}
+        isLoading={transactionVolumeLoading}
+      />
 
       {/* Recent Orders */}
       <Card>

@@ -13,12 +13,16 @@ import {
   GetSalesByItemReport,
   GetCashFlowReport,
   GetFinancialKPIs,
+  GetRevenueByCategoryReport,
+  GetTransactionVolumeReport,
   OrderAnalytics,
   SalesByDateRange,
   BestSellingItem,
   OrderTypeBreakdown,
   OrderStats,
   FinancialKPIs,
+  RevenueByCategoryReport,
+  TransactionVolumeReport,
 } from "../actions/order-analytics";
 import {
   GetWaterfallReport,
@@ -364,6 +368,84 @@ export function useWaterfallReport(
     ],
     queryFn: () =>
       GetWaterfallReport(clerkOrgId!, effectiveLocationId, dateFrom, dateTo),
+    enabled: !!clerkOrgId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Revenue By Category Report Hook — powers the Tree Map component
+ */
+export function useRevenueByCategoryReport(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
+
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId =
+    locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
+
+  return useQuery<RevenueByCategoryReport>({
+    queryKey: [
+      "revenue-by-category-report",
+      clerkOrgId,
+      effectiveLocationId,
+      dateFrom.toISOString(),
+      dateTo.toISOString(),
+    ],
+    queryFn: () =>
+      GetRevenueByCategoryReport(
+        clerkOrgId,
+        effectiveLocationId,
+        dateFrom,
+        dateTo
+      ),
+    enabled: !!clerkOrgId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Transaction Volume Report Hook — Credits vs Debits by payment type
+ */
+export function useTransactionVolumeReport(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
+
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId =
+    locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
+
+  return useQuery<TransactionVolumeReport>({
+    queryKey: [
+      "transaction-volume-report",
+      clerkOrgId,
+      effectiveLocationId,
+      dateFrom.toISOString(),
+      dateTo.toISOString(),
+    ],
+    queryFn: () =>
+      GetTransactionVolumeReport(
+        clerkOrgId,
+        effectiveLocationId,
+        dateFrom,
+        dateTo
+      ),
     enabled: !!clerkOrgId,
     staleTime: 2 * 60 * 1000,
     refetchOnWindowFocus: false,
