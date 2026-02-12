@@ -1075,6 +1075,7 @@ export async function GetTransactionVolumeReport(
   // Group payment methods into display categories
   const methodDisplayMap: Record<string, string> = {
     cash: "Cash",
+    card: "Card",
     card_spinapi: "Card",
     card_dvpaylite: "Card",
     card_manual: "Card",
