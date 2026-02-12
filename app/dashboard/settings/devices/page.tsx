@@ -1,16 +1,7 @@
 "use client";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Empty } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,121 +11,69 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
-  Loader2,
+  MapPin,
   MonitorSmartphone,
-  Plus,
   Search,
-  Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import { AddDeviceDialog } from "./components/AddDeviceDialog";
-import { DeviceCard } from "./components/DeviceCard";
-import { DeviceSearchDialog } from "./components/DeviceSearchDialog";
-import { DevicesTable } from "./components/DevicesTable";
+import { useMemo, useState, useEffect } from "react";
 import {
-  Device,
-  getDeviceTypeIcon,
-  getDeviceTypeLabel,
-  useDevices,
+  useLocationStore,
+  useIsAllLocations,
+  useSelectedLocation,
+} from "@/stores/location-store";
+import { DeviceCard } from "./components/DeviceCard";
+import { DevicesTable } from "./components/DevicesTable";
+import { EditDeviceDialog } from "./components/EditDeviceDialog";
+import {
+  useDevicesHardware,
+  StationWithHeartbeat,
 } from "./hooks/useDevices";
+import { useDeviceRealtime } from "./hooks/useDeviceRealtime";
 
-type SortColumn = "name" | "status" | "alerts" | "lastSeen";
+type SortColumn = "name" | "status" | "lastSeen";
 type SortDirection = "asc" | "desc";
 
 const ITEMS_PER_PAGE = 10;
 
-// Device-specific remove messages
-const getRemoveMessage = (device: Device): string => {
-  switch (device.type) {
-    case "printer":
-      return "This printer will no longer receive orders. You can add it back later.";
-    case "external_terminal":
-      return "This terminal will no longer process payments. You can add it back later.";
-    case "tablet":
-      return "This tablet will be disconnected from your location. You can add it back later.";
-    default:
-      return "You can add this device back later.";
-  }
-};
-
 export default function DevicesPage() {
-  const { devices, removeDevice, removeMultipleDevices } = useDevices();
+  const selectedLocationId = useLocationStore(
+    (state) => state.selectedLocationId
+  );
+  const isAllLocations = useIsAllLocations();
+  const selectedLocation = useSelectedLocation();
+
+  // Fetch devices
+  const {
+    data: devices = [],
+    isLoading,
+    isError,
+    error,
+  } = useDevicesHardware(selectedLocationId);
+
+  // Realtime subscription
+  useDeviceRealtime(selectedLocationId);
+
+  // Filter & search state
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [editingDevice, setEditingDevice] = useState<Device | null>(null);
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
-  const [mounted, setMounted] = useState(false);
-
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Selection state
-  const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
-
-  // Delete confirmation dialog state
-  const [deviceToDelete, setDeviceToDelete] = useState<Device | null>(null);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  // Bulk delete dialog state
-  const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
-
-  // Command-K search dialog state
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
-
-  // Handle hydration mismatch
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // Command-K keyboard shortcut
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        setIsSearchOpen(true);
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  // Edit dialog state
+  const [editingDevice, setEditingDevice] = useState<StationWithHeartbeat | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, typeFilter, statusFilter]);
-
-  // Automated connection check every 3 minutes
-  const { performAutomatedCheck } = useDevices();
-  useEffect(() => {
-    // Initial check
-    performAutomatedCheck();
-
-    // Set up interval for every 3 minutes
-    const interval = setInterval(
-      () => {
-        performAutomatedCheck();
-      },
-      3 * 60 * 1000,
-    );
-
-    return () => clearInterval(interval);
-  }, [performAutomatedCheck]);
-
-  // Clear selection when page changes
-  useEffect(() => {
-    // Don't clear selection on page change - only clear when filters change
-  }, [currentPage]);
 
   // Filtered and sorted devices
   const filteredDevices = useMemo(() => {
@@ -144,59 +83,57 @@ export default function DevicesPage() {
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       result = result.filter(
-        (device) =>
-          device.name.toLowerCase().includes(term) ||
-          device.serialNumber?.toLowerCase().includes(term),
+        (d) =>
+          d.station_name.toLowerCase().includes(term) ||
+          d.station_code?.toLowerCase().includes(term) ||
+          d.device_model?.toLowerCase().includes(term) ||
+          d.hardware_model?.toLowerCase().includes(term)
       );
     }
 
     // Type filter
     if (typeFilter !== "all") {
-      result = result.filter((device) => device.type === typeFilter);
+      result = result.filter((d) => d.station_type === typeFilter);
     }
 
     // Status filter
     if (statusFilter !== "all") {
-      result = result.filter((device) => device.status === statusFilter);
+      const isOnlineFilter = statusFilter === "online";
+      result = result.filter((d) => {
+        const online = d.latest_heartbeat?.is_online ?? d.is_online;
+        return online === isOnlineFilter;
+      });
     }
 
     // Sorting
     if (sortColumn) {
       result.sort((a, b) => {
         let comparison = 0;
-
         switch (sortColumn) {
           case "name":
-            comparison = a.name.localeCompare(b.name);
+            comparison = a.station_name.localeCompare(b.station_name);
             break;
-          case "status":
-            comparison = a.status.localeCompare(b.status);
+          case "status": {
+            const aOnline = a.latest_heartbeat?.is_online ?? a.is_online;
+            const bOnline = b.latest_heartbeat?.is_online ?? b.is_online;
+            comparison = Number(aOnline) - Number(bOnline);
             break;
-          case "alerts":
-            comparison = a.alerts - b.alerts;
+          }
+          case "lastSeen": {
+            const aTime = a.latest_heartbeat?.heartbeat_at || a.last_heartbeat_at || "";
+            const bTime = b.latest_heartbeat?.heartbeat_at || b.last_heartbeat_at || "";
+            comparison = aTime.localeCompare(bTime);
             break;
-          case "lastSeen":
-            const dateA = a.lastSeen ? new Date(a.lastSeen).getTime() : 0;
-            const dateB = b.lastSeen ? new Date(b.lastSeen).getTime() : 0;
-            comparison = dateA - dateB;
-            break;
+          }
         }
-
         return sortDirection === "asc" ? comparison : -comparison;
       });
     }
 
     return result;
-  }, [
-    devices,
-    searchTerm,
-    typeFilter,
-    statusFilter,
-    sortColumn,
-    sortDirection,
-  ]);
+  }, [devices, searchTerm, typeFilter, statusFilter, sortColumn, sortDirection]);
 
-  // Pagination logic
+  // Pagination
   const totalPages = Math.ceil(filteredDevices.length / ITEMS_PER_PAGE);
   const showPagination = filteredDevices.length > ITEMS_PER_PAGE;
   const paginatedDevices = useMemo(() => {
@@ -205,12 +142,8 @@ export default function DevicesPage() {
     return filteredDevices.slice(start, start + ITEMS_PER_PAGE);
   }, [filteredDevices, currentPage, showPagination]);
 
-  // All device IDs (for select all functionality)
-  const allDeviceIds = devices.map((d) => d.id);
-
   const handleSort = (column: string) => {
     if (sortColumn === column) {
-      // Toggle direction or clear sort
       if (sortDirection === "asc") {
         setSortDirection("desc");
       } else {
@@ -223,102 +156,91 @@ export default function DevicesPage() {
     }
   };
 
-  const handleEdit = (device: Device) => {
+  const handleEdit = (device: StationWithHeartbeat) => {
     setEditingDevice(device);
-    setIsAddDialogOpen(true);
+    setIsEditDialogOpen(true);
   };
 
-  // Single device removal
-  const handleRemoveClick = (deviceId: string) => {
-    const device = devices.find((d) => d.id === deviceId);
-    if (device) {
-      setDeviceToDelete(device);
-      setIsDeleteDialogOpen(true);
-    }
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!deviceToDelete) return;
-
-    setIsDeleting(true);
-    // Simulate 1 second delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    removeDevice(deviceToDelete.id);
-    toast.success(`${deviceToDelete.name} has been removed`);
-    setDeviceToDelete(null);
-    setIsDeleteDialogOpen(false);
-    setIsDeleting(false);
-
-    // Remove from selection if selected
-    setSelectedDeviceIds((prev) =>
-      prev.filter((id) => id !== deviceToDelete.id),
-    );
-  };
-
-  const handleCancelDelete = () => {
-    if (isDeleting) return; // Don't allow cancel while deleting
-    setDeviceToDelete(null);
-    setIsDeleteDialogOpen(false);
-  };
-
-  // Selection handlers
-  const handleSelectDevice = (deviceId: string, selected: boolean) => {
-    setSelectedDeviceIds((prev) =>
-      selected ? [...prev, deviceId] : prev.filter((id) => id !== deviceId),
-    );
-  };
-
-  const handleSelectAll = (selected: boolean) => {
-    if (selected) {
-      setSelectedDeviceIds(allDeviceIds);
-    } else {
-      setSelectedDeviceIds([]);
-    }
-  };
-
-  // Bulk delete
-  const handleBulkRemoveClick = () => {
-    if (selectedDeviceIds.length === 0) return;
-    setIsBulkDeleteDialogOpen(true);
-  };
-
-  const handleConfirmBulkDelete = async () => {
-    if (selectedDeviceIds.length === 0) return;
-
-    setIsBulkDeleting(true);
-    // Simulate 1 second delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    removeMultipleDevices(selectedDeviceIds);
-    toast.success(`${selectedDeviceIds.length} devices removed`);
-    setSelectedDeviceIds([]);
-    setIsBulkDeleteDialogOpen(false);
-    setIsBulkDeleting(false);
-  };
-
-  const handleCancelBulkDelete = () => {
-    if (isBulkDeleting) return;
-    setIsBulkDeleteDialogOpen(false);
-  };
-
-  // Don't render until mounted to avoid hydration mismatch
-  if (!mounted) {
+  // "All Locations" prompt
+  if (isAllLocations) {
     return (
       <div className="space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">
-              Device Management
-            </h2>
-            <p className="text-muted-foreground">
-              Configure and monitor your POS terminals, tablets, and printers
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">
+            Device Management
+          </h2>
+          <p className="text-muted-foreground">
+            Monitor and configure your POS devices
+          </p>
+        </div>
+
+        <Card>
+          <CardContent className="py-12 flex flex-col items-center justify-center text-center">
+            <MapPin className="h-12 w-12 mb-4 text-muted-foreground" />
+            <h3 className="text-lg font-semibold mb-2">Select a Location</h3>
+            <p className="text-muted-foreground max-w-md">
+              Devices are location-specific. Please select a location from the
+              dropdown above to view and manage devices for that location.
             </p>
-          </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">
+            Device Management
+          </h2>
+          <p className="text-muted-foreground">
+            Devices for{" "}
+            <span className="font-medium">{selectedLocation?.name}</span>
+          </p>
         </div>
-        <div className="h-96 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <div className="flex gap-4">
+          <Skeleton className="h-10 w-[300px]" />
+          <Skeleton className="h-10 w-[180px]" />
+          <Skeleton className="h-10 w-[140px]" />
         </div>
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">
+            Device Management
+          </h2>
+          <p className="text-muted-foreground">
+            Devices for{" "}
+            <span className="font-medium">{selectedLocation?.name}</span>
+          </p>
+        </div>
+        <Card>
+          <CardContent className="py-12 flex flex-col items-center justify-center text-center">
+            <AlertTriangle className="h-12 w-12 mb-4 text-destructive" />
+            <h3 className="text-lg font-semibold mb-2">
+              Failed to load devices
+            </h3>
+            <p className="text-muted-foreground max-w-md">
+              {error instanceof Error
+                ? error.message
+                : "An error occurred while loading devices."}
+            </p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -326,108 +248,65 @@ export default function DevicesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            Device Management
-          </h2>
-          <p className="text-muted-foreground">
-            Configure and monitor your POS terminals, tablets, and printers
-          </p>
-        </div>
-        <Button onClick={() => setIsAddDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Device
-        </Button>
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight">
+          Device Management
+        </h2>
+        <p className="text-muted-foreground">
+          Monitor and configure devices for{" "}
+          <span className="font-medium">{selectedLocation?.name}</span>
+        </p>
       </div>
 
-      {/* Filters & Bulk Actions */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          {/* Search */}
-          <div className="relative flex-1 sm:max-w-[300px]">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name or serial..."
-              className="pl-9 pr-16"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              aria-label="Search devices"
-            />
-            {/* Command-K hint button */}
-            <button
-              onClick={() => setIsSearchOpen(true)}
-              className="absolute right-2 top-1.5 hidden sm:flex items-center gap-1 px-1.5 py-1 rounded border bg-muted/50 text-xs text-muted-foreground hover:bg-muted transition-colors"
-              aria-label="Open quick search (Command K)"
-            >
-              <kbd className="font-mono text-[10px]">⌘</kbd>
-              <kbd className="font-mono text-[10px]">K</kbd>
-            </button>
-          </div>
-
-          {/* Type Filter */}
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-full sm:w-[180px]">
-              <SelectValue placeholder="Device type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="external_terminal">
-                External Terminals
-              </SelectItem>
-              <SelectItem value="tablet">Tablets</SelectItem>
-              <SelectItem value="printer">Printers</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Status Filter */}
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-[140px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="online">Online</SelectItem>
-              <SelectItem value="offline">Offline</SelectItem>
-            </SelectContent>
-          </Select>
+      {/* Filters */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        {/* Search */}
+        <div className="relative flex-1 sm:max-w-[300px]">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by name or model..."
+            className="pl-9"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
 
-        {/* Bulk Actions */}
-        {selectedDeviceIds.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">
-              {selectedDeviceIds.length} selected
-            </span>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleBulkRemoveClick}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Remove Selected
-            </Button>
-          </div>
-        )}
+        {/* Type Filter */}
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger className="w-full sm:w-[180px]">
+            <SelectValue placeholder="Station type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="register">Register</SelectItem>
+            <SelectItem value="kds">Kitchen Display</SelectItem>
+            <SelectItem value="checkout">Checkout</SelectItem>
+            <SelectItem value="self_service">Self-Service</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Status Filter */}
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-full sm:w-[140px]">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="online">Online</SelectItem>
+            <SelectItem value="offline">Offline</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Content */}
       {filteredDevices.length === 0 ? (
         devices.length === 0 ? (
-          // No devices at all
           <Empty
             icon={MonitorSmartphone}
-            title="No devices connected"
-            description="Add your first device to start managing your POS hardware."
-            action={
-              <Button onClick={() => setIsAddDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Device
-              </Button>
-            }
+            title="No devices found"
+            description="No active stations at this location. Create stations in the Stations page first, then devices will appear here once the POS app connects."
           />
         ) : (
-          // No devices matching filters
           <Empty
             icon={Search}
             title="No devices found"
@@ -441,14 +320,9 @@ export default function DevicesPage() {
             <DevicesTable
               devices={paginatedDevices}
               onEdit={handleEdit}
-              onRemove={handleRemoveClick}
               sortColumn={sortColumn}
-              sortDirection={sortDirection}
+              sortDirection={sortDirection ?? "asc"}
               onSort={handleSort}
-              selectedDeviceIds={selectedDeviceIds}
-              onSelectDevice={handleSelectDevice}
-              onSelectAll={handleSelectAll}
-              allDeviceIds={allDeviceIds}
             />
           </div>
 
@@ -459,9 +333,6 @@ export default function DevicesPage() {
                 key={device.id}
                 device={device}
                 onEdit={handleEdit}
-                onRemove={handleRemoveClick}
-                isSelected={selectedDeviceIds.includes(device.id)}
-                onSelect={(selected) => handleSelectDevice(device.id, selected)}
               />
             ))}
           </div>
@@ -471,7 +342,10 @@ export default function DevicesPage() {
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
                 Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
-                {Math.min(currentPage * ITEMS_PER_PAGE, filteredDevices.length)}{" "}
+                {Math.min(
+                  currentPage * ITEMS_PER_PAGE,
+                  filteredDevices.length
+                )}{" "}
                 of {filteredDevices.length} devices
               </p>
               <div className="flex items-center gap-2">
@@ -504,141 +378,14 @@ export default function DevicesPage() {
         </>
       )}
 
-      {/* Add/Edit Dialog */}
-      <AddDeviceDialog
-        open={isAddDialogOpen}
+      {/* Edit Dialog */}
+      <EditDeviceDialog
+        open={isEditDialogOpen}
         onOpenChange={(open) => {
-          setIsAddDialogOpen(open);
+          setIsEditDialogOpen(open);
           if (!open) setEditingDevice(null);
         }}
-        deviceToEdit={editingDevice}
-      />
-
-      {/* Single Delete Confirmation Dialog */}
-      <AlertDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={(open: boolean) => {
-          if (!isDeleting) setIsDeleteDialogOpen(open);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
-                <AlertTriangle className="h-5 w-5 text-destructive" />
-              </div>
-              <div>
-                <AlertDialogTitle>
-                  Remove &quot;{deviceToDelete?.name}&quot;?
-                </AlertDialogTitle>
-              </div>
-            </div>
-            <AlertDialogDescription className="pt-3">
-              {deviceToDelete && getRemoveMessage(deviceToDelete)}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {deviceToDelete && (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
-              <span className="text-2xl">
-                {getDeviceTypeIcon(deviceToDelete.type)}
-              </span>
-              <div>
-                <p className="font-medium">{deviceToDelete.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {getDeviceTypeLabel(deviceToDelete.type)}
-                  {deviceToDelete.serialNumber &&
-                    ` • ${deviceToDelete.serialNumber}`}
-                </p>
-              </div>
-            </div>
-          )}
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              onClick={handleCancelDelete}
-              disabled={isDeleting}
-            >
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={isDeleting}
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Removing...
-                </>
-              ) : (
-                "Remove Device"
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Bulk Delete Confirmation Dialog */}
-      <AlertDialog
-        open={isBulkDeleteDialogOpen}
-        onOpenChange={(open: boolean) => {
-          if (!isBulkDeleting) setIsBulkDeleteDialogOpen(open);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
-                <AlertTriangle className="h-5 w-5 text-destructive" />
-              </div>
-              <div>
-                <AlertDialogTitle>
-                  Remove {selectedDeviceIds.length} devices?
-                </AlertDialogTitle>
-              </div>
-            </div>
-            <AlertDialogDescription className="pt-3">
-              These devices will no longer be connected to your location. This
-              action cannot be undone, but you can add them back later.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="p-3 rounded-lg bg-muted/50 border">
-            <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">
-                {selectedDeviceIds.length}
-              </span>{" "}
-              device{selectedDeviceIds.length !== 1 && "s"} will be removed
-            </p>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              onClick={handleCancelBulkDelete}
-              disabled={isBulkDeleting}
-            >
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmBulkDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={isBulkDeleting}
-            >
-              {isBulkDeleting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Removing...
-                </>
-              ) : (
-                "Remove Devices"
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Command-K Search Dialog */}
-      <DeviceSearchDialog
-        open={isSearchOpen}
-        onOpenChange={setIsSearchOpen}
-        devices={devices}
+        device={editingDevice}
       />
     </div>
   );

@@ -34,6 +34,24 @@ export interface Station {
   os_version: string | null;
   app_version: string | null;
 
+  // Hardware Details (populated by POS app)
+  device_manufacturer: string | null;
+  device_model: string | null;
+  has_builtin_cfd: boolean;
+  has_builtin_printer: boolean;
+  has_cash_drawer_port: boolean;
+  has_nfc: boolean;
+  android_sdk_version: number | null;
+  local_ip_address: string | null;
+  network_ssid: string | null;
+  network_type: string | null;
+  screen_density: number | null;
+  screen_width: number | null;
+  screen_height: number | null;
+  battery_level: number | null;
+  ram_free_mb: number | null;
+  storage_free_mb: number | null;
+
   // Network (optional - populated by POS app)
   ip_address: string | null;
   mac_address: string | null;
@@ -60,6 +78,27 @@ export interface Station {
   // Timestamps
   created_at: string;
   updated_at: string;
+}
+
+// ============================================================================
+// Device Heartbeat Types
+// ============================================================================
+
+export interface LatestHeartbeat {
+  heartbeat_at: string;
+  is_online: boolean;
+  cpu_usage: number | null;
+  battery_level: number | null;
+  ram_free_mb: number | null;
+  storage_free_mb: number | null;
+  network_type: string | null;
+  printer_status: string | null;
+  cfd_connected: boolean | null;
+  app_version: string | null;
+}
+
+export interface StationWithHeartbeat extends Station {
+  latest_heartbeat: LatestHeartbeat | null;
 }
 
 export interface CreateStationInput {
@@ -239,6 +278,88 @@ export async function getNextStationNumber(
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
       data: 1,
+    };
+  }
+}
+
+/**
+ * Get all active stations for a location with their latest heartbeat data
+ */
+export async function getStationsWithHeartbeats(locationId: string) {
+  try {
+    const supabase = createServerSupabaseClient();
+
+    // Fetch active stations for the location
+    const { data: stations, error: stationsError } = await supabase
+      .from("stations")
+      .select("*")
+      .eq("location_id", locationId)
+      .eq("is_active", true)
+      .order("station_number", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: false });
+
+    if (stationsError) {
+      console.error("[getStationsWithHeartbeats] Stations error:", stationsError);
+      return { success: false, error: stationsError.message, data: null };
+    }
+
+    if (!stations || stations.length === 0) {
+      return { success: true, data: [] as StationWithHeartbeat[], error: null };
+    }
+
+    const stationIds = stations.map((s) => s.id);
+
+    // Fetch latest heartbeat per station using distinct on station_id
+    const { data: heartbeats, error: heartbeatsError } = await supabase
+      .from("device_heartbeats")
+      .select(
+        "station_id, heartbeat_at, is_online, cpu_usage, battery_level, ram_free_mb, storage_free_mb, network_type, printer_status, cfd_connected, app_version"
+      )
+      .in("station_id", stationIds)
+      .order("station_id")
+      .order("heartbeat_at", { ascending: false });
+
+    if (heartbeatsError) {
+      console.error("[getStationsWithHeartbeats] Heartbeats error:", heartbeatsError);
+      // Continue without heartbeats - not fatal
+    }
+
+    // Build a map of station_id -> latest heartbeat (first occurrence per station)
+    const heartbeatMap = new Map<string, LatestHeartbeat>();
+    if (heartbeats) {
+      for (const hb of heartbeats) {
+        if (!heartbeatMap.has(hb.station_id)) {
+          heartbeatMap.set(hb.station_id, {
+            heartbeat_at: hb.heartbeat_at,
+            is_online: hb.is_online,
+            cpu_usage: hb.cpu_usage,
+            battery_level: hb.battery_level,
+            ram_free_mb: hb.ram_free_mb,
+            storage_free_mb: hb.storage_free_mb,
+            network_type: hb.network_type,
+            printer_status: hb.printer_status,
+            cfd_connected: hb.cfd_connected,
+            app_version: hb.app_version,
+          });
+        }
+      }
+    }
+
+    // Merge heartbeat data onto stations
+    const stationsWithHeartbeats: StationWithHeartbeat[] = (stations as Station[]).map(
+      (station) => ({
+        ...station,
+        latest_heartbeat: heartbeatMap.get(station.id) || null,
+      })
+    );
+
+    return { success: true, data: stationsWithHeartbeats, error: null };
+  } catch (error) {
+    console.error("[getStationsWithHeartbeats] Exception:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+      data: null,
     };
   }
 }

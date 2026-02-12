@@ -502,6 +502,19 @@ function MerchantSidebar() {
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={pathname.startsWith(
+                        "/dashboard/settings/receipt-templates"
+                      )}
+                    >
+                      <Link href="/dashboard/settings/receipt-templates">
+                        <Receipt className="h-3 w-3" />
+                        <span>Receipt Templates</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
                 </SidebarMenuSub>
               </CollapsibleContent>
             </Collapsible>

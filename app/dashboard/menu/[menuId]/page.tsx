@@ -11,15 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Utensils,
-  Tag,
-  Calendar,
   Clock,
-  Wand2,
   ArrowLeft,
   Trash2,
-  Save,
-  Info,
-  Tablet,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DeleteMenu, UpdateMenu, ToggleMenuActive } from "../../actions/menus";
