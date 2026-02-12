@@ -40,6 +40,8 @@ import {
   useWaterfallReport,
   useRevenueByCategoryReport,
   useTransactionVolumeReport,
+  useNetCollectedBySourceReport,
+  useTaxableRevenueByTenderReport,
 } from "./hooks/useOrderAnalytics";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
@@ -69,6 +71,8 @@ import {
   type DateRangeOption,
 } from "./components/NetRevenueByCategoryCard";
 import { TransactionVolumeCard } from "./components/TransactionVolumeCard";
+import { NetCollectedBySourceCard } from "./components/NetCollectedBySourceCard";
+import { TaxableRevenueByTenderCard } from "./components/TaxableRevenueByTenderCard";
 
 export default function MerchantDashboardPage() {
   const { selectedLocationId, locations } = useLocationStore();
@@ -131,6 +135,14 @@ export default function MerchantDashboardPage() {
   // Transaction volume report (Credits vs Debits by payment type)
   const { data: transactionVolumeReport, isLoading: transactionVolumeLoading } =
     useTransactionVolumeReport(last30Days, now);
+
+  // Net Collected by Order Source (TICKET-005)
+  const { data: netCollectedBySourceReport, isLoading: netCollectedBySourceLoading } =
+    useNetCollectedBySourceReport(last30Days, now);
+
+  // Taxable Revenue by Tender Type (TICKET-002)
+  const { data: taxableRevenueByTenderReport, isLoading: taxableRevenueByTenderLoading } =
+    useTaxableRevenueByTenderReport(last30Days, now);
 
   // Revenue by Category tree map
   const [categoryDateRange, setCategoryDateRange] =
@@ -891,6 +903,18 @@ export default function MerchantDashboardPage() {
         isLoading={transactionVolumeLoading}
       />
 
+      {/* Net Collected by Channel (TICKET-005) */}
+      <NetCollectedBySourceCard
+        report={netCollectedBySourceReport}
+        isLoading={netCollectedBySourceLoading}
+      />
+
+      {/* Taxable Revenue by Tender Type (TICKET-002) */}
+      <TaxableRevenueByTenderCard
+        report={taxableRevenueByTenderReport}
+        isLoading={taxableRevenueByTenderLoading}
+      />
+
       {/* Recent Orders */}
       <Card>
         <CardHeader>
@@ -975,3 +999,4 @@ export default function MerchantDashboardPage() {
     </div>
   );
 }
+// 

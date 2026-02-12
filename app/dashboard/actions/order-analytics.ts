@@ -1149,6 +1149,349 @@ export async function GetTransactionVolumeReport(
   return { rows, totals };
 }
 
+// ============================================================================
+// Net Collected by Order Source (TICKET-005)
+// ============================================================================
+
+export interface NetCollectedBySourceRow {
+  source: string;
+  transactionCount: number;
+  netCollected: number;
+}
+
+export interface NetCollectedBySourceReport {
+  rows: NetCollectedBySourceRow[];
+  totals: {
+    transactionCount: number;
+    netCollected: number;
+  };
+}
+
+/**
+ * Get Net Collected by Order Source — groups orders by channel (POS, Kiosk, Online, Third-Party)
+ * and computes transaction count + net collected per channel.
+ *
+ * Mapping:
+ *   POS (Staff-Assisted) = dine_in + takeout
+ *   Online               = online
+ *   Third-Party          = delivery
+ *   Catering             = catering
+ */
+export async function GetNetCollectedBySourceReport(
+  clerkOrgId: string,
+  locationId: string | null,
+  dateFrom: Date,
+  dateTo: Date
+): Promise<NetCollectedBySourceReport> {
+  const emptyReport: NetCollectedBySourceReport = {
+    rows: [],
+    totals: { transactionCount: 0, netCollected: 0 },
+  };
+
+  const merchantId = await getMerchantId(clerkOrgId);
+  if (!merchantId) return emptyReport;
+
+  const supabase = createServerSupabaseClient();
+
+  let query = supabase
+    .from("orders")
+    .select("order_type, total_amount, discount_amount, status")
+    .eq("merchant_id", merchantId)
+    .not("status", "in", "(draft,cancelled,void)")
+    .gte("created_at", dateFrom.toISOString())
+    .lte("created_at", dateTo.toISOString());
+
+  if (locationId && locationId !== "all") {
+    query = query.eq("location_id", locationId);
+  }
+
+  const { data: orders, error } = await query;
+
+  if (error) {
+    console.error("[GetNetCollectedBySourceReport] Error:", error);
+    return emptyReport;
+  }
+
+  // Map order_type → display source
+  const sourceMap: Record<string, string> = {
+    dine_in: "POS",
+    takeout: "POS",
+    online: "Online",
+    delivery: "Third-Party",
+    catering: "Catering",
+  };
+
+  const sourceAgg = new Map<string, { count: number; net: number }>();
+
+  (orders || []).forEach((order: any) => {
+    const source = sourceMap[order.order_type] || "Other";
+    const net = Number(order.total_amount || 0);
+
+    if (!sourceAgg.has(source)) {
+      sourceAgg.set(source, { count: 0, net: 0 });
+    }
+    const entry = sourceAgg.get(source)!;
+    entry.count += 1;
+    entry.net += net;
+  });
+
+  // Fixed display order
+  const displayOrder = ["POS", "Kiosk", "Online", "Third-Party", "Catering"];
+  const rows: NetCollectedBySourceRow[] = [];
+
+  for (const source of displayOrder) {
+    const entry = sourceAgg.get(source);
+    if (entry && (entry.count > 0 || entry.net > 0)) {
+      rows.push({
+        source,
+        transactionCount: entry.count,
+        netCollected: entry.net,
+      });
+    }
+  }
+
+  // Add any remaining sources not in displayOrder
+  sourceAgg.forEach((entry, source) => {
+    if (!displayOrder.includes(source) && (entry.count > 0 || entry.net > 0)) {
+      rows.push({
+        source,
+        transactionCount: entry.count,
+        netCollected: entry.net,
+      });
+    }
+  });
+
+  const totals = rows.reduce(
+    (acc, row) => ({
+      transactionCount: acc.transactionCount + row.transactionCount,
+      netCollected: acc.netCollected + row.netCollected,
+    }),
+    { transactionCount: 0, netCollected: 0 }
+  );
+
+  return { rows, totals };
+}
+
+// ============================================================================
+// Taxable Revenue by Tender Type (TICKET-002)
+// ============================================================================
+
+export interface TaxableRevenueByTenderRow {
+  taxName: string;
+  taxRate: number;
+  totalTaxCollected: number;
+  totalTaxableRevenue: number;
+  cashTaxableRevenue: number;
+  cardTaxableRevenue: number;
+}
+
+export interface TaxableRevenueByTenderReport {
+  rows: TaxableRevenueByTenderRow[];
+  nonTaxableRevenue: number;
+  totals: {
+    totalTaxCollected: number;
+    totalTaxableRevenue: number;
+    cashTaxableRevenue: number;
+    cardTaxableRevenue: number;
+  };
+}
+
+/**
+ * Get Taxable Revenue by Tender Type
+ *
+ * For each tax rate applied, breaks down taxable revenue by Cash vs Card.
+ * Split payments are pro-rated: Cash_Taxable_Rev = (Cash_Payment / Total_Payment) * Order_Taxable_Rev
+ */
+export async function GetTaxableRevenueByTenderReport(
+  clerkOrgId: string,
+  locationId: string | null,
+  dateFrom: Date,
+  dateTo: Date
+): Promise<TaxableRevenueByTenderReport> {
+  const emptyReport: TaxableRevenueByTenderReport = {
+    rows: [],
+    nonTaxableRevenue: 0,
+    totals: {
+      totalTaxCollected: 0,
+      totalTaxableRevenue: 0,
+      cashTaxableRevenue: 0,
+      cardTaxableRevenue: 0,
+    },
+  };
+
+  const merchantId = await getMerchantId(clerkOrgId);
+  if (!merchantId) return emptyReport;
+
+  const supabase = createServerSupabaseClient();
+
+  // 1. Get all completed orders with their payments and item-level tax info
+  let orderQuery = supabase
+    .from("orders")
+    .select(
+      `
+      id,
+      subtotal,
+      tax_amount,
+      total_amount,
+      discount_amount,
+      order_items(
+        subtotal,
+        tax_amount,
+        tax_rate,
+        is_tax_exempt,
+        is_voided
+      ),
+      order_payments(
+        payment_method,
+        amount,
+        status
+      )
+    `
+    )
+    .eq("merchant_id", merchantId)
+    .not("status", "in", "(draft,cancelled,void)")
+    .gte("created_at", dateFrom.toISOString())
+    .lte("created_at", dateTo.toISOString());
+
+  if (locationId && locationId !== "all") {
+    orderQuery = orderQuery.eq("location_id", locationId);
+  }
+
+  const { data: orders, error: ordersError } = await orderQuery;
+
+  if (ordersError) {
+    console.error("[GetTaxableRevenueByTenderReport] Orders error:", ordersError);
+    return emptyReport;
+  }
+
+  // 2. Get tax rates for the location(s) to map rate → name
+  let taxRatesQuery = supabase
+    .from("tax_rates")
+    .select("name, percentage, location_id")
+    .eq("is_active", true);
+
+  if (locationId && locationId !== "all") {
+    taxRatesQuery = taxRatesQuery.eq("location_id", locationId);
+  }
+
+  const { data: taxRates } = await taxRatesQuery;
+
+  // Build a map from rate percentage → tax name (use first match)
+  const rateToName = new Map<number, string>();
+  (taxRates || []).forEach((tr: any) => {
+    const pct = Number(tr.percentage);
+    if (!rateToName.has(pct)) {
+      rateToName.set(pct, tr.name);
+    }
+  });
+
+  // 3. Aggregate per tax rate
+  const taxAgg = new Map<
+    number,
+    {
+      taxName: string;
+      totalTaxCollected: number;
+      totalTaxableRevenue: number;
+      cashTaxableRevenue: number;
+      cardTaxableRevenue: number;
+    }
+  >();
+
+  let nonTaxableRevenue = 0;
+
+  (orders || []).forEach((order: any) => {
+    // Determine cash vs card ratio from payments
+    const successStatuses = ["captured", "paid", "authorized"];
+    const payments = (order.order_payments || []).filter((p: any) =>
+      successStatuses.includes(p.status)
+    );
+
+    let cashPayment = 0;
+    let cardPayment = 0;
+    let totalPayment = 0;
+
+    payments.forEach((p: any) => {
+      const amt = Number(p.amount || 0);
+      totalPayment += amt;
+      if (p.payment_method === "cash") {
+        cashPayment += amt;
+      } else {
+        cardPayment += amt;
+      }
+    });
+
+    // If no payments recorded, treat total_amount as the denominator
+    if (totalPayment === 0) {
+      totalPayment = Number(order.total_amount || 0);
+    }
+
+    const cashRatio = totalPayment > 0 ? cashPayment / totalPayment : 0;
+    const cardRatio = totalPayment > 0 ? cardPayment / totalPayment : 1;
+
+    // Process each order item
+    (order.order_items || []).forEach((item: any) => {
+      if (item.is_voided) return;
+
+      const itemSubtotal = Number(item.subtotal || 0);
+      const itemTax = Number(item.tax_amount || 0);
+      const taxRate = Number(item.tax_rate || 0);
+
+      if (item.is_tax_exempt || taxRate === 0) {
+        nonTaxableRevenue += itemSubtotal;
+        return;
+      }
+
+      // Initialize tax rate bucket
+      if (!taxAgg.has(taxRate)) {
+        const name = rateToName.get(taxRate) || `Tax ${taxRate}%`;
+        taxAgg.set(taxRate, {
+          taxName: name,
+          totalTaxCollected: 0,
+          totalTaxableRevenue: 0,
+          cashTaxableRevenue: 0,
+          cardTaxableRevenue: 0,
+        });
+      }
+
+      const bucket = taxAgg.get(taxRate)!;
+      bucket.totalTaxCollected += itemTax;
+      bucket.totalTaxableRevenue += itemSubtotal;
+      // Pro-rate by payment method ratio
+      bucket.cashTaxableRevenue += itemSubtotal * cashRatio;
+      bucket.cardTaxableRevenue += itemSubtotal * cardRatio;
+    });
+  });
+
+  // Build rows sorted by tax rate descending
+  const rows: TaxableRevenueByTenderRow[] = Array.from(taxAgg.entries())
+    .sort((a, b) => b[0] - a[0])
+    .map(([rate, data]) => ({
+      taxName: data.taxName,
+      taxRate: rate,
+      totalTaxCollected: data.totalTaxCollected,
+      totalTaxableRevenue: data.totalTaxableRevenue,
+      cashTaxableRevenue: data.cashTaxableRevenue,
+      cardTaxableRevenue: data.cardTaxableRevenue,
+    }));
+
+  const totals = rows.reduce(
+    (acc, row) => ({
+      totalTaxCollected: acc.totalTaxCollected + row.totalTaxCollected,
+      totalTaxableRevenue: acc.totalTaxableRevenue + row.totalTaxableRevenue,
+      cashTaxableRevenue: acc.cashTaxableRevenue + row.cashTaxableRevenue,
+      cardTaxableRevenue: acc.cardTaxableRevenue + row.cardTaxableRevenue,
+    }),
+    {
+      totalTaxCollected: 0,
+      totalTaxableRevenue: 0,
+      cashTaxableRevenue: 0,
+      cardTaxableRevenue: 0,
+    }
+  );
+
+  return { rows, nonTaxableRevenue, totals };
+}
+
 export async function GetFinancialKPIs(
   clerkOrgId: string,
   locationId: string | null,

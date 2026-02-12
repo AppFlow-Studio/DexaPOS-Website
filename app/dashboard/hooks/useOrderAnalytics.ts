@@ -15,6 +15,8 @@ import {
   GetFinancialKPIs,
   GetRevenueByCategoryReport,
   GetTransactionVolumeReport,
+  GetNetCollectedBySourceReport,
+  GetTaxableRevenueByTenderReport,
   OrderAnalytics,
   SalesByDateRange,
   BestSellingItem,
@@ -23,6 +25,8 @@ import {
   FinancialKPIs,
   RevenueByCategoryReport,
   TransactionVolumeReport,
+  NetCollectedBySourceReport,
+  TaxableRevenueByTenderReport,
 } from "../actions/order-analytics";
 import {
   GetWaterfallReport,
@@ -441,6 +445,84 @@ export function useTransactionVolumeReport(
     ],
     queryFn: () =>
       GetTransactionVolumeReport(
+        clerkOrgId,
+        effectiveLocationId,
+        dateFrom,
+        dateTo
+      ),
+    enabled: !!clerkOrgId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Net Collected by Order Source Hook — revenue by channel (POS, Kiosk, Online, etc.)
+ */
+export function useNetCollectedBySourceReport(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
+
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId =
+    locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
+
+  return useQuery<NetCollectedBySourceReport>({
+    queryKey: [
+      "net-collected-by-source",
+      clerkOrgId,
+      effectiveLocationId,
+      dateFrom.toISOString(),
+      dateTo.toISOString(),
+    ],
+    queryFn: () =>
+      GetNetCollectedBySourceReport(
+        clerkOrgId,
+        effectiveLocationId,
+        dateFrom,
+        dateTo
+      ),
+    enabled: !!clerkOrgId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Taxable Revenue by Tender Type Hook — tax breakdown by Cash vs Card
+ */
+export function useTaxableRevenueByTenderReport(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
+
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId =
+    locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
+
+  return useQuery<TaxableRevenueByTenderReport>({
+    queryKey: [
+      "taxable-revenue-by-tender",
+      clerkOrgId,
+      effectiveLocationId,
+      dateFrom.toISOString(),
+      dateTo.toISOString(),
+    ],
+    queryFn: () =>
+      GetTaxableRevenueByTenderReport(
         clerkOrgId,
         effectiveLocationId,
         dateFrom,
