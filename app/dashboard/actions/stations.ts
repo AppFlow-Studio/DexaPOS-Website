@@ -101,6 +101,64 @@ export interface StationWithHeartbeat extends Station {
   latest_heartbeat: LatestHeartbeat | null;
 }
 
+// ============================================================================
+// KDS Display Types
+// ============================================================================
+
+export type KdsDisplayMode = "ticket" | "list";
+export type KdsRoutingMode = "all" | "category" | "prep_station" | "order_type";
+
+export interface CreateKdsDisplayInput {
+  display_name: string;
+  display_color?: string;
+  display_mode?: KdsDisplayMode;
+  columns?: number;
+  font_scale?: number;
+  routing_mode?: KdsRoutingMode;
+  show_all_items?: boolean;
+  warning_minutes?: number;
+  alert_minutes?: number;
+  auto_bump_minutes?: number | null;
+  sound_on_new_order?: boolean;
+  sound_on_rush?: boolean;
+  show_order_source?: boolean;
+  show_server_name?: boolean;
+  show_order_notes?: boolean;
+  show_allergy_flags?: boolean;
+  show_online_orders?: boolean;
+  online_order_priority?: boolean;
+  show_ready_by_countdown?: boolean;
+}
+
+export interface KdsDisplay {
+  id: string;
+  station_id: string;
+  merchant_id: string;
+  location_id: string;
+  display_name: string;
+  display_color: string | null;
+  display_mode: string;
+  columns: number | null;
+  font_scale: number | null;
+  routing_mode: string;
+  show_all_items: boolean | null;
+  warning_minutes: number | null;
+  alert_minutes: number | null;
+  auto_bump_minutes: number | null;
+  sound_on_new_order: boolean | null;
+  sound_on_rush: boolean | null;
+  show_order_source: boolean | null;
+  show_server_name: boolean | null;
+  show_order_notes: boolean | null;
+  show_allergy_flags: boolean | null;
+  show_online_orders: boolean | null;
+  online_order_priority: boolean | null;
+  show_ready_by_countdown: boolean | null;
+  is_active: boolean | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 export interface CreateStationInput {
   location_id: string;
   station_name: string;
@@ -116,6 +174,7 @@ export interface CreateStationInput {
   can_void_orders?: boolean;
   can_apply_discounts?: boolean;
   can_update_kitchen_status?: boolean;
+  kds_config?: CreateKdsDisplayInput;
 }
 
 export interface UpdateStationInput {
@@ -465,6 +524,41 @@ export async function createStation(
       .select("name")
       .eq("id", input.location_id)
       .single();
+
+    // If KDS station type and kds_config provided, create kds_displays record
+    if (input.station_type === "kds" && input.kds_config) {
+      const kdsConfig = input.kds_config;
+      const { error: kdsError } = await supabase.from("kds_displays").insert({
+        station_id: data.id,
+        merchant_id: merchant.id,
+        location_id: input.location_id,
+        display_name: kdsConfig.display_name,
+        display_color: kdsConfig.display_color || null,
+        display_mode: kdsConfig.display_mode || "ticket",
+        columns: kdsConfig.columns ?? 4,
+        font_scale: kdsConfig.font_scale ?? 1.0,
+        routing_mode: kdsConfig.routing_mode || "all",
+        show_all_items: kdsConfig.show_all_items ?? false,
+        warning_minutes: kdsConfig.warning_minutes ?? 5,
+        alert_minutes: kdsConfig.alert_minutes ?? 10,
+        auto_bump_minutes: kdsConfig.auto_bump_minutes ?? null,
+        sound_on_new_order: kdsConfig.sound_on_new_order ?? true,
+        sound_on_rush: kdsConfig.sound_on_rush ?? true,
+        show_order_source: kdsConfig.show_order_source ?? true,
+        show_server_name: kdsConfig.show_server_name ?? true,
+        show_order_notes: kdsConfig.show_order_notes ?? true,
+        show_allergy_flags: kdsConfig.show_allergy_flags ?? true,
+        show_online_orders: kdsConfig.show_online_orders ?? true,
+        online_order_priority: kdsConfig.online_order_priority ?? true,
+        show_ready_by_countdown: kdsConfig.show_ready_by_countdown ?? true,
+      });
+
+      if (kdsError) {
+        console.error("[createStation] KDS Display insert error:", kdsError);
+        // Station was created but KDS config failed - don't fail the whole operation
+        // but log the error so it can be configured later
+      }
+    }
 
     // Log audit event
     await LogAuditEvent({
@@ -1014,6 +1108,100 @@ export async function markStationOffline(stationId: string) {
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+// ============================================================================
+// KDS Display Operations
+// ============================================================================
+
+/**
+ * Get KDS display config by station ID
+ */
+export async function getKdsDisplayByStationId(stationId: string) {
+  try {
+    const supabase = createServerSupabaseClient();
+
+    const { data, error } = await supabase
+      .from("kds_displays")
+      .select("*")
+      .eq("station_id", stationId)
+      .single();
+
+    if (error) {
+      // PGRST116 = no rows found, which is acceptable
+      if (error.code === "PGRST116") {
+        return { success: true, data: null, error: null };
+      }
+      console.error("[getKdsDisplayByStationId] Error:", error);
+      return { success: false, error: error.message, data: null };
+    }
+
+    return { success: true, data: data as KdsDisplay, error: null };
+  } catch (error) {
+    console.error("[getKdsDisplayByStationId] Exception:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    };
+  }
+}
+
+/**
+ * Update KDS display config
+ */
+export async function updateKdsDisplay(
+  kdsDisplayId: string,
+  input: Partial<CreateKdsDisplayInput>,
+) {
+  try {
+    const supabase = createServerSupabaseClient();
+
+    const updateData: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (input.display_name !== undefined) updateData.display_name = input.display_name;
+    if (input.display_color !== undefined) updateData.display_color = input.display_color || null;
+    if (input.display_mode !== undefined) updateData.display_mode = input.display_mode;
+    if (input.columns !== undefined) updateData.columns = input.columns;
+    if (input.font_scale !== undefined) updateData.font_scale = input.font_scale;
+    if (input.routing_mode !== undefined) updateData.routing_mode = input.routing_mode;
+    if (input.show_all_items !== undefined) updateData.show_all_items = input.show_all_items;
+    if (input.warning_minutes !== undefined) updateData.warning_minutes = input.warning_minutes;
+    if (input.alert_minutes !== undefined) updateData.alert_minutes = input.alert_minutes;
+    if (input.auto_bump_minutes !== undefined) updateData.auto_bump_minutes = input.auto_bump_minutes;
+    if (input.sound_on_new_order !== undefined) updateData.sound_on_new_order = input.sound_on_new_order;
+    if (input.sound_on_rush !== undefined) updateData.sound_on_rush = input.sound_on_rush;
+    if (input.show_order_source !== undefined) updateData.show_order_source = input.show_order_source;
+    if (input.show_server_name !== undefined) updateData.show_server_name = input.show_server_name;
+    if (input.show_order_notes !== undefined) updateData.show_order_notes = input.show_order_notes;
+    if (input.show_allergy_flags !== undefined) updateData.show_allergy_flags = input.show_allergy_flags;
+    if (input.show_online_orders !== undefined) updateData.show_online_orders = input.show_online_orders;
+    if (input.online_order_priority !== undefined) updateData.online_order_priority = input.online_order_priority;
+    if (input.show_ready_by_countdown !== undefined) updateData.show_ready_by_countdown = input.show_ready_by_countdown;
+
+    const { data, error } = await supabase
+      .from("kds_displays")
+      .update(updateData)
+      .eq("id", kdsDisplayId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("[updateKdsDisplay] Error:", error);
+      return { success: false, error: error.message, data: null };
+    }
+
+    return { success: true, data: data as KdsDisplay, error: null };
+  } catch (error) {
+    console.error("[updateKdsDisplay] Exception:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+      data: null,
     };
   }
 }

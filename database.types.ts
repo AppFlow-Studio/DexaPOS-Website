@@ -2014,6 +2014,236 @@ export type Database = {
           },
         ]
       }
+      kds_displays: {
+        Row: {
+          alert_minutes: number | null
+          auto_bump_minutes: number | null
+          columns: number | null
+          created_at: string | null
+          display_color: string | null
+          display_mode: string
+          display_name: string
+          font_scale: number | null
+          id: string
+          is_active: boolean | null
+          location_id: string
+          merchant_id: string
+          online_order_priority: boolean | null
+          routing_mode: string
+          show_all_items: boolean | null
+          show_allergy_flags: boolean | null
+          show_online_orders: boolean | null
+          show_order_notes: boolean | null
+          show_order_source: boolean | null
+          show_ready_by_countdown: boolean | null
+          show_server_name: boolean | null
+          sound_on_new_order: boolean | null
+          sound_on_rush: boolean | null
+          station_id: string
+          updated_at: string | null
+          warning_minutes: number | null
+        }
+        Insert: {
+          alert_minutes?: number | null
+          auto_bump_minutes?: number | null
+          columns?: number | null
+          created_at?: string | null
+          display_color?: string | null
+          display_mode?: string
+          display_name: string
+          font_scale?: number | null
+          id?: string
+          is_active?: boolean | null
+          location_id: string
+          merchant_id: string
+          online_order_priority?: boolean | null
+          routing_mode?: string
+          show_all_items?: boolean | null
+          show_allergy_flags?: boolean | null
+          show_online_orders?: boolean | null
+          show_order_notes?: boolean | null
+          show_order_source?: boolean | null
+          show_ready_by_countdown?: boolean | null
+          show_server_name?: boolean | null
+          sound_on_new_order?: boolean | null
+          sound_on_rush?: boolean | null
+          station_id: string
+          updated_at?: string | null
+          warning_minutes?: number | null
+        }
+        Update: {
+          alert_minutes?: number | null
+          auto_bump_minutes?: number | null
+          columns?: number | null
+          created_at?: string | null
+          display_color?: string | null
+          display_mode?: string
+          display_name?: string
+          font_scale?: number | null
+          id?: string
+          is_active?: boolean | null
+          location_id?: string
+          merchant_id?: string
+          online_order_priority?: boolean | null
+          routing_mode?: string
+          show_all_items?: boolean | null
+          show_allergy_flags?: boolean | null
+          show_online_orders?: boolean | null
+          show_order_notes?: boolean | null
+          show_order_source?: boolean | null
+          show_ready_by_countdown?: boolean | null
+          show_server_name?: boolean | null
+          sound_on_new_order?: boolean | null
+          sound_on_rush?: boolean | null
+          station_id?: string
+          updated_at?: string | null
+          warning_minutes?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kds_displays_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "location_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_displays_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_displays_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_location_menu_items"
+            referencedColumns: ["location_id"]
+          },
+          {
+            foreignKeyName: "kds_displays_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "admin_merchant_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_displays_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_displays_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: true
+            referencedRelation: "stations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kds_item_status: {
+        Row: {
+          bumped_at: string | null
+          bumped_by: string | null
+          completed_at: string | null
+          created_at: string | null
+          id: string
+          kds_display_id: string
+          order_id: string
+          order_item_id: string
+          started_at: string | null
+          status: string
+        }
+        Insert: {
+          bumped_at?: string | null
+          bumped_by?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          kds_display_id: string
+          order_id: string
+          order_item_id: string
+          started_at?: string | null
+          status?: string
+        }
+        Update: {
+          bumped_at?: string | null
+          bumped_by?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          kds_display_id?: string
+          order_id?: string
+          order_item_id?: string
+          started_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kds_item_status_bumped_by_fkey"
+            columns: ["bumped_by"]
+            isOneToOne: false
+            referencedRelation: "location_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_item_status_kds_display_id_fkey"
+            columns: ["kds_display_id"]
+            isOneToOne: false
+            referencedRelation: "kds_displays"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_item_status_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_item_status_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: false
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kds_routing_rules: {
+        Row: {
+          created_at: string | null
+          id: string
+          kds_display_id: string
+          rule_type: string
+          rule_value: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          kds_display_id: string
+          rule_type: string
+          rule_value: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          kds_display_id?: string
+          rule_type?: string
+          rule_value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kds_routing_rules_kds_display_id_fkey"
+            columns: ["kds_display_id"]
+            isOneToOne: false
+            referencedRelation: "kds_displays"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       location_category_item_overrides: {
         Row: {
           category_id: string

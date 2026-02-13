@@ -11,17 +11,34 @@ import {
   reactivateStation,
   deleteStation,
   deleteMultipleStations,
+  getKdsDisplayByStationId,
+  updateKdsDisplay,
   Station,
   StationType,
   SyncRole,
   ViewScope,
   CreateStationInput,
   UpdateStationInput,
+  CreateKdsDisplayInput,
+  KdsDisplayMode,
+  KdsRoutingMode,
+  KdsDisplay,
 } from "@/app/dashboard/actions/stations";
 import { toast } from "sonner";
 
 // Re-export types for convenience
-export type { Station, StationType, SyncRole, ViewScope, CreateStationInput, UpdateStationInput };
+export type {
+  Station,
+  StationType,
+  SyncRole,
+  ViewScope,
+  CreateStationInput,
+  UpdateStationInput,
+  CreateKdsDisplayInput,
+  KdsDisplayMode,
+  KdsRoutingMode,
+  KdsDisplay,
+};
 
 // ============================================================================
 // Helper Functions
@@ -297,6 +314,58 @@ export function useDeleteMultipleStations() {
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to delete stations");
+    },
+  });
+}
+
+// ============================================================================
+// KDS Display Hooks
+// ============================================================================
+
+/**
+ * Hook to fetch KDS display config for a station
+ */
+export function useKdsDisplay(stationId: string | undefined) {
+  return useQuery({
+    queryKey: ["kds-display", stationId],
+    queryFn: async () => {
+      const result = await getKdsDisplayByStationId(stationId!);
+      if (!result.success) {
+        throw new Error(result.error || "Failed to fetch KDS display config");
+      }
+      return result.data;
+    },
+    enabled: !!stationId,
+    staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * Hook to update KDS display config
+ */
+export function useUpdateKdsDisplay() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      kdsDisplayId,
+      input,
+    }: {
+      kdsDisplayId: string;
+      input: Partial<CreateKdsDisplayInput>;
+    }) => {
+      const result = await updateKdsDisplay(kdsDisplayId, input);
+      if (!result.success) {
+        throw new Error(result.error || "Failed to update KDS display config");
+      }
+      return result.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["kds-display"] });
+      toast.success("KDS display config updated");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to update KDS display config");
     },
   });
 }
