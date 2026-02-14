@@ -5223,6 +5223,8 @@ export type Database = {
           is_returned: boolean | null
           is_settled: boolean | null
           is_voided: boolean | null
+          location_id: string | null
+          merchant_id: string | null
           metadata: Json | null
           order_id: string
           original_amount: number | null
@@ -5308,6 +5310,8 @@ export type Database = {
           is_returned?: boolean | null
           is_settled?: boolean | null
           is_voided?: boolean | null
+          location_id?: string | null
+          merchant_id?: string | null
           metadata?: Json | null
           order_id: string
           original_amount?: number | null
@@ -5393,6 +5397,8 @@ export type Database = {
           is_returned?: boolean | null
           is_settled?: boolean | null
           is_voided?: boolean | null
+          location_id?: string | null
+          merchant_id?: string | null
           metadata?: Json | null
           order_id?: string
           original_amount?: number | null
@@ -5442,6 +5448,41 @@ export type Database = {
           voided_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "order_payments_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "location_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_payments_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_payments_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_location_menu_items"
+            referencedColumns: ["location_id"]
+          },
+          {
+            foreignKeyName: "order_payments_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "admin_merchant_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_payments_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "order_payments_order_id_fkey"
             columns: ["order_id"]
@@ -10228,6 +10269,10 @@ export type Database = {
         Args: { p_cancel_reason?: string; p_order_id: string }
         Returns: Json
       }
+      check_device_session_status: {
+        Args: { p_device_id: string; p_session_id: string }
+        Returns: Json
+      }
       check_merchant_access: {
         Args: { required_permission?: string; target_merchant_id: string }
         Returns: boolean
@@ -10589,6 +10634,14 @@ export type Database = {
       }
       get_kds_tickets: {
         Args: { p_location_id: string; p_statuses?: string[] }
+        Returns: Json
+      }
+      get_kds_tickets_v2: {
+        Args: {
+          p_kds_display_id?: string
+          p_location_id: string
+          p_statuses?: string[]
+        }
         Returns: Json
       }
       get_location_floor_plans: {
@@ -11269,6 +11322,10 @@ export type Database = {
         Returns: undefined
       }
       update_order_status: {
+        Args: { p_new_status: string; p_order_id: string; p_reason?: string }
+        Returns: Json
+      }
+      update_order_status_dep: {
         Args: {
           p_new_status: Database["public"]["Enums"]["order_status"]
           p_notes?: string
@@ -11452,6 +11509,7 @@ export type Database = {
       order_status:
         | "draft"
         | "pending"
+        | "sent_to_kitchen"
         | "preparing"
         | "ready"
         | "completed"
@@ -11694,6 +11752,7 @@ export const Constants = {
       order_status: [
         "draft",
         "pending",
+        "sent_to_kitchen",
         "preparing",
         "ready",
         "completed",

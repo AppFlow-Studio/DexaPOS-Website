@@ -130,6 +130,14 @@ export interface CreateKdsDisplayInput {
   show_ready_by_countdown?: boolean;
 }
 
+export interface KdsRoutingRule {
+  id: string;
+  kds_display_id: string;
+  rule_type: string;
+  rule_value: string;
+  created_at: string | null;
+}
+
 export interface KdsDisplay {
   id: string;
   station_id: string;
@@ -1183,6 +1191,20 @@ export async function updateKdsDisplay(
     if (input.online_order_priority !== undefined) updateData.online_order_priority = input.online_order_priority;
     if (input.show_ready_by_countdown !== undefined) updateData.show_ready_by_countdown = input.show_ready_by_countdown;
 
+    // If routing_mode is changing, clear all existing routing rules to prevent
+    // stale rules from matching in the route_items_to_kds() trigger
+    if (input.routing_mode !== undefined) {
+      const { error: clearError } = await supabase
+        .from("kds_routing_rules")
+        .delete()
+        .eq("kds_display_id", kdsDisplayId);
+
+      if (clearError) {
+        console.error("[updateKdsDisplay] Error clearing routing rules:", clearError);
+        // Non-fatal — continue with the display update
+      }
+    }
+
     const { data, error } = await supabase
       .from("kds_displays")
       .update(updateData)
@@ -1202,6 +1224,156 @@ export async function updateKdsDisplay(
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
       data: null,
+    };
+  }
+}
+
+// ============================================================================
+// KDS Routing Rules Operations
+// ============================================================================
+
+/**
+ * Get all routing rules for a KDS display
+ */
+export async function getKdsRoutingRules(kdsDisplayId: string) {
+  try {
+    const supabase = createServerSupabaseClient();
+
+    const { data, error } = await supabase
+      .from("kds_routing_rules")
+      .select("*")
+      .eq("kds_display_id", kdsDisplayId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("[getKdsRoutingRules] Error:", error);
+      return { success: false, error: error.message, data: null };
+    }
+
+    return { success: true, data: data as KdsRoutingRule[], error: null };
+  } catch (error) {
+    console.error("[getKdsRoutingRules] Exception:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    };
+  }
+}
+
+/**
+ * Replace all routing rules for a KDS display (delete + insert)
+ */
+export async function setKdsRoutingRules(
+  kdsDisplayId: string,
+  rules: { rule_type: string; rule_value: string }[],
+) {
+  try {
+    const supabase = createServerSupabaseClient();
+
+    // Delete existing rules
+    const { error: deleteError } = await supabase
+      .from("kds_routing_rules")
+      .delete()
+      .eq("kds_display_id", kdsDisplayId);
+
+    if (deleteError) {
+      console.error("[setKdsRoutingRules] Delete error:", deleteError);
+      return { success: false, error: deleteError.message, data: null };
+    }
+
+    // Insert new rules if any
+    if (rules.length > 0) {
+      const { data, error: insertError } = await supabase
+        .from("kds_routing_rules")
+        .insert(
+          rules.map((r) => ({
+            kds_display_id: kdsDisplayId,
+            rule_type: r.rule_type,
+            rule_value: r.rule_value,
+          }))
+        )
+        .select();
+
+      if (insertError) {
+        console.error("[setKdsRoutingRules] Insert error:", insertError);
+        return { success: false, error: insertError.message, data: null };
+      }
+
+      return { success: true, data: data as KdsRoutingRule[], error: null };
+    }
+
+    return { success: true, data: [] as KdsRoutingRule[], error: null };
+  } catch (error) {
+    console.error("[setKdsRoutingRules] Exception:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    };
+  }
+}
+
+/**
+ * Add a single routing rule to a KDS display
+ */
+export async function addKdsRoutingRule(
+  kdsDisplayId: string,
+  ruleType: string,
+  ruleValue: string,
+) {
+  try {
+    const supabase = createServerSupabaseClient();
+
+    const { data, error } = await supabase
+      .from("kds_routing_rules")
+      .insert({
+        kds_display_id: kdsDisplayId,
+        rule_type: ruleType,
+        rule_value: ruleValue,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("[addKdsRoutingRule] Error:", error);
+      return { success: false, error: error.message, data: null };
+    }
+
+    return { success: true, data: data as KdsRoutingRule, error: null };
+  } catch (error) {
+    console.error("[addKdsRoutingRule] Exception:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    };
+  }
+}
+
+/**
+ * Remove a single routing rule by ID
+ */
+export async function removeKdsRoutingRule(ruleId: string) {
+  try {
+    const supabase = createServerSupabaseClient();
+
+    const { error } = await supabase
+      .from("kds_routing_rules")
+      .delete()
+      .eq("id", ruleId);
+
+    if (error) {
+      console.error("[removeKdsRoutingRule] Error:", error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, error: null };
+  } catch (error) {
+    console.error("[removeKdsRoutingRule] Exception:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
     };
   }
 }

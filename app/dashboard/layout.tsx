@@ -61,6 +61,7 @@ import {
   GitCompare,
   Monitor,
   MonitorPlay,
+  Flame,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -486,6 +487,19 @@ function MerchantSidebar() {
                       <Link href="/dashboard/settings/stations">
                         <Monitor className="h-3 w-3" />
                         <span>Stations</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={pathname.startsWith(
+                        "/dashboard/settings/prep-stations"
+                      )}
+                    >
+                      <Link href="/dashboard/settings/prep-stations">
+                        <Flame className="h-3 w-3" />
+                        <span>Prep Stations</span>
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>

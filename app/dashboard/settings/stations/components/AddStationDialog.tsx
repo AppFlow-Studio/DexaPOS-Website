@@ -28,6 +28,8 @@ import {
   useUpdateKdsDisplay,
   useNextStationNumber,
   useKdsDisplay,
+  useKdsRoutingRules,
+  useSetKdsRoutingRules,
   Station,
   StationType,
   SyncRole,
@@ -36,8 +38,10 @@ import {
   KdsRoutingMode,
   getStationTypeIcon,
 } from "../hooks/useStations";
+import { usePrepStations } from "@/app/dashboard/hooks/usePrepStations";
 import { ColorSwatchPicker } from "./ColorSwatchPicker";
-import { Loader2, Info } from "lucide-react";
+import { Loader2, Info, ChefHat } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
 export interface AddStationDialogProps {
@@ -148,6 +152,15 @@ export function AddStationDialog({
     stationToEdit?.station_type === "kds" ? stationToEdit?.id : undefined
   );
 
+  // KDS routing rules
+  const { data: existingRoutingRules } = useKdsRoutingRules(existingKdsDisplay?.id);
+  const setRoutingRulesMutation = useSetKdsRoutingRules();
+  const [selectedPrepStationNames, setSelectedPrepStationNames] = useState<string[]>([]);
+
+  // Prep stations for the location
+  const { data: prepStations } = usePrepStations(locationId);
+  const activePrepStations = prepStations?.filter((ps) => ps.is_active) || [];
+
   const isKds = stationType === "kds";
 
   // Tab safety: redirect away from KDS tabs if type changes away from KDS
@@ -180,6 +193,16 @@ export function AddStationDialog({
       }
     }
   }, [open, stationToEdit]);
+
+  // Populate selected prep stations from existing routing rules
+  useEffect(() => {
+    if (existingRoutingRules && stationToEdit) {
+      const prepNames = existingRoutingRules
+        .filter((r) => r.rule_type === "prep_station")
+        .map((r) => r.rule_value);
+      setSelectedPrepStationNames(prepNames);
+    }
+  }, [existingRoutingRules, stationToEdit]);
 
   // Populate KDS fields from existing display config in edit mode
   useEffect(() => {
@@ -270,6 +293,7 @@ export function AddStationDialog({
     setKdsShowOnlineOrders(true);
     setKdsOnlineOrderPriority(true);
     setKdsShowReadyByCountdown(true);
+    setSelectedPrepStationNames([]);
   };
 
   const resetForm = () => {
@@ -347,12 +371,38 @@ export function AddStationDialog({
             kdsDisplayId: existingKdsDisplay.id,
             input: kdsConfig,
           });
+          // Save routing rules for prep_station mode
+          if (kdsRoutingMode === "prep_station") {
+            await setRoutingRulesMutation.mutateAsync({
+              kdsDisplayId: existingKdsDisplay.id,
+              rules: selectedPrepStationNames.map((name) => ({
+                rule_type: "prep_station",
+                rule_value: name,
+              })),
+            });
+          }
         }
       } else {
-        await createMutation.mutateAsync({
+        const created = await createMutation.mutateAsync({
           clerkOrgId,
           input: stationData,
         });
+        // After creating a KDS station, fetch its display and save routing rules
+        if (isKds && created && kdsRoutingMode === "prep_station" && selectedPrepStationNames.length > 0) {
+          // The KDS display was created in the createStation action
+          // We need to fetch it to get the display ID
+          const { getKdsDisplayByStationId } = await import("@/app/dashboard/actions/stations");
+          const displayResult = await getKdsDisplayByStationId(created.id);
+          if (displayResult.success && displayResult.data) {
+            await setRoutingRulesMutation.mutateAsync({
+              kdsDisplayId: displayResult.data.id,
+              rules: selectedPrepStationNames.map((name) => ({
+                rule_type: "prep_station",
+                rule_value: name,
+              })),
+            });
+          }
+        }
       }
       handleClose();
     } catch (error) {
@@ -365,7 +415,7 @@ export function AddStationDialog({
     setTimeout(resetForm, 200);
   };
 
-  const isLoading = createMutation.isPending || updateMutation.isPending || updateKdsMutation.isPending;
+  const isLoading = createMutation.isPending || updateMutation.isPending || updateKdsMutation.isPending || setRoutingRulesMutation.isPending;
   const canSave = stationName.trim().length > 0;
 
   return (
@@ -622,6 +672,59 @@ export function AddStationDialog({
                   </Select>
                 </div>
 
+                {/* Prep Station Selection - shown when routing mode is prep_station */}
+                {kdsRoutingMode === "prep_station" && (
+                  <div className="grid gap-2">
+                    <Label>Assigned Prep Stations</Label>
+                    {activePrepStations.length === 0 ? (
+                      <div className="flex items-start gap-2 rounded-lg bg-muted/50 border p-3">
+                        <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                        <p className="text-xs text-muted-foreground">
+                          No prep stations found for this location. Create prep stations in Settings &gt; Prep Stations first.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {activePrepStations.map((ps) => {
+                          const isSelected = selectedPrepStationNames.includes(ps.name);
+                          return (
+                            <label
+                              key={ps.id}
+                              className={cn(
+                                "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors",
+                                isSelected
+                                  ? "border-primary bg-primary/5"
+                                  : "border-border hover:bg-muted/50"
+                              )}
+                            >
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setSelectedPrepStationNames((prev) => [...prev, ps.name]);
+                                  } else {
+                                    setSelectedPrepStationNames((prev) =>
+                                      prev.filter((n) => n !== ps.name)
+                                    );
+                                  }
+                                }}
+                              />
+                              <div
+                                className="h-3 w-3 rounded-full shrink-0"
+                                style={{ backgroundColor: ps.color || "#6B7280" }}
+                              />
+                              <span className="text-sm font-medium">{ps.name}</span>
+                            </label>
+                          );
+                        })}
+                        <p className="text-xs text-muted-foreground">
+                          Select which prep stations this KDS display should show items for.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between">
                   <div>
                     <Label htmlFor="kdsShowAllItems" className="cursor-pointer">
@@ -638,12 +741,14 @@ export function AddStationDialog({
                   />
                 </div>
 
-                <div className="flex items-start gap-2 rounded-lg bg-muted/50 border p-3">
-                  <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                  <p className="text-xs text-muted-foreground">
-                    Routing rules for specific categories can be configured on the station detail page after creation.
-                  </p>
-                </div>
+                {kdsRoutingMode !== "prep_station" && (
+                  <div className="flex items-start gap-2 rounded-lg bg-muted/50 border p-3">
+                    <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <p className="text-xs text-muted-foreground">
+                      Routing rules for specific categories can be configured on the station detail page after creation.
+                    </p>
+                  </div>
+                )}
               </div>
             </TabsContent>
           )}
