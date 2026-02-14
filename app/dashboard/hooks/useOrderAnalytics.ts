@@ -13,13 +13,25 @@ import {
   GetSalesByItemReport,
   GetCashFlowReport,
   GetFinancialKPIs,
+  GetRevenueByCategoryReport,
+  GetTransactionVolumeReport,
+  GetNetCollectedBySourceReport,
+  GetTaxableRevenueByTenderReport,
   OrderAnalytics,
   SalesByDateRange,
   BestSellingItem,
   OrderTypeBreakdown,
   OrderStats,
   FinancialKPIs,
+  RevenueByCategoryReport,
+  TransactionVolumeReport,
+  NetCollectedBySourceReport,
+  TaxableRevenueByTenderReport,
 } from "../actions/order-analytics";
+import {
+  GetWaterfallReport,
+  WaterfallReport,
+} from "../actions/waterfall-report";
 
 /**
  * Get clerk organization ID from user info
@@ -327,6 +339,195 @@ export function useFinancialKPIs(
     ],
     queryFn: () =>
       GetFinancialKPIs(clerkOrgId!, effectiveLocationId, dateFrom, dateTo),
+    enabled: !!clerkOrgId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Waterfall Report Hook
+ */
+export function useWaterfallReport(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
+
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId = locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
+
+  return useQuery<WaterfallReport>({
+    queryKey: [
+      "waterfall-report",
+      clerkOrgId,
+      effectiveLocationId,
+      dateFrom.toISOString(),
+      dateTo.toISOString(),
+    ],
+    queryFn: () =>
+      GetWaterfallReport(clerkOrgId!, effectiveLocationId, dateFrom, dateTo),
+    enabled: !!clerkOrgId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Revenue By Category Report Hook — powers the Tree Map component
+ */
+export function useRevenueByCategoryReport(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
+
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId =
+    locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
+
+  return useQuery<RevenueByCategoryReport>({
+    queryKey: [
+      "revenue-by-category-report",
+      clerkOrgId,
+      effectiveLocationId,
+      dateFrom.toISOString(),
+      dateTo.toISOString(),
+    ],
+    queryFn: () =>
+      GetRevenueByCategoryReport(
+        clerkOrgId,
+        effectiveLocationId,
+        dateFrom,
+        dateTo
+      ),
+    enabled: !!clerkOrgId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Transaction Volume Report Hook — Credits vs Debits by payment type
+ */
+export function useTransactionVolumeReport(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
+
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId =
+    locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
+
+  return useQuery<TransactionVolumeReport>({
+    queryKey: [
+      "transaction-volume-report",
+      clerkOrgId,
+      effectiveLocationId,
+      dateFrom.toISOString(),
+      dateTo.toISOString(),
+    ],
+    queryFn: () =>
+      GetTransactionVolumeReport(
+        clerkOrgId,
+        effectiveLocationId,
+        dateFrom,
+        dateTo
+      ),
+    enabled: !!clerkOrgId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Net Collected by Order Source Hook — revenue by channel (POS, Kiosk, Online, etc.)
+ */
+export function useNetCollectedBySourceReport(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
+
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId =
+    locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
+
+  return useQuery<NetCollectedBySourceReport>({
+    queryKey: [
+      "net-collected-by-source",
+      clerkOrgId,
+      effectiveLocationId,
+      dateFrom.toISOString(),
+      dateTo.toISOString(),
+    ],
+    queryFn: () =>
+      GetNetCollectedBySourceReport(
+        clerkOrgId,
+        effectiveLocationId,
+        dateFrom,
+        dateTo
+      ),
+    enabled: !!clerkOrgId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Taxable Revenue by Tender Type Hook — tax breakdown by Cash vs Card
+ */
+export function useTaxableRevenueByTenderReport(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
+
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId =
+    locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
+
+  return useQuery<TaxableRevenueByTenderReport>({
+    queryKey: [
+      "taxable-revenue-by-tender",
+      clerkOrgId,
+      effectiveLocationId,
+      dateFrom.toISOString(),
+      dateTo.toISOString(),
+    ],
+    queryFn: () =>
+      GetTaxableRevenueByTenderReport(
+        clerkOrgId,
+        effectiveLocationId,
+        dateFrom,
+        dateTo
+      ),
     enabled: !!clerkOrgId,
     staleTime: 2 * 60 * 1000,
     refetchOnWindowFocus: false,

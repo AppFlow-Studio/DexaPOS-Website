@@ -2,12 +2,12 @@
 
 import React, { useState, useMemo } from "react";
 import { format, subDays } from "date-fns";
-import { CreditCard } from "lucide-react";
+import { CreditCard, FileSpreadsheet } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import { useFinancialKPIs } from "../../hooks/useOrderAnalytics";
+import { useFinancialKPIs, useWaterfallReport } from "../../hooks/useOrderAnalytics";
 import { useOrders } from "../../hooks/useOrder";
 import { FinancialHeroChart } from "@/app/dashboard/transactions/components/FinancialHeroChart";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,6 +15,7 @@ import { ReceiptModal } from "@/components/dashboard/orders/ReceiptModal";
 import { OrdersDataTable } from "@/components/dashboard/orders/OrdersDataTable";
 import { OrderResponse } from "@/types/order-management";
 import { useSelectedLocation } from "@/stores/location-store";
+import { WaterfallReportCard } from "./components/WaterfallReportCard";
 
 export default function FinancialsPage() {
   const [date, setDate] = useState<DateRange | undefined>({
@@ -29,6 +30,12 @@ export default function FinancialsPage() {
   const selectedLocation = useSelectedLocation();
 
   const { data: kpis, isLoading } = useFinancialKPIs(
+    date?.from || subDays(new Date(), 30),
+    date?.to || new Date()
+  );
+
+  // Fetch waterfall report data
+  const { data: waterfallReport, isLoading: isLoadingWaterfall } = useWaterfallReport(
     date?.from || subDays(new Date(), 30),
     date?.to || new Date()
   );
@@ -110,12 +117,18 @@ export default function FinancialsPage() {
             onValueChange={setActiveTab}
             className="w-full"
           >
-            <TabsList className="bg-white p-1 h-auto rounded-xl shadow-sm border border-gray-200/50 w-full grid grid-cols-3">
+            <TabsList className="bg-white p-1 h-auto rounded-xl shadow-sm border border-gray-200/50 w-full grid grid-cols-4">
               <TabsTrigger
                 value="overview"
                 className="rounded-lg data-[state=active]:bg-[#6366f1] data-[state=active]:text-white py-2 text-xs font-medium"
               >
                 Overview
+              </TabsTrigger>
+              <TabsTrigger
+                value="waterfall"
+                className="rounded-lg data-[state=active]:bg-[#6366f1] data-[state=active]:text-white py-2 text-xs font-medium"
+              >
+                Waterfall
               </TabsTrigger>
               <TabsTrigger
                 value="transactions"
@@ -279,6 +292,13 @@ export default function FinancialsPage() {
               </Card>
             </>
           )}
+
+          {activeTab === "waterfall" && (
+            <WaterfallReportCard
+              report={waterfallReport}
+              isLoading={isLoadingWaterfall}
+            />
+          )}
         </div>
       </div>
 
@@ -287,6 +307,20 @@ export default function FinancialsPage() {
         {activeTab === "overview" && (
           <div className="h-full w-full rounded-[32px] overflow-hidden shadow-sm bg-white border border-gray-100 relative">
             <FinancialHeroChart data={chartData} />
+          </div>
+        )}
+
+        {activeTab === "waterfall" && (
+          <div className="h-full w-full rounded-[32px] overflow-hidden shadow-sm bg-white border border-gray-100 relative flex flex-col items-center justify-center p-8">
+            <FileSpreadsheet className="w-16 h-16 text-[#6366f1]/20 mb-4" />
+            <h3 className="text-xl font-bold text-gray-900 mb-2">
+              Net Collected Statement
+            </h3>
+            <p className="text-gray-500 text-center text-sm max-w-md">
+              Click any line item in the waterfall report to expand and see the
+              contributing transactions. Use the date picker to adjust the
+              reporting period.
+            </p>
           </div>
         )}
 
