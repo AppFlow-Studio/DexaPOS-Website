@@ -149,7 +149,7 @@ export async function GetOrderDetails(
                 users(first_name, last_name),
                 staff_profiles(first_name, last_name)
                 ),
-                table_sessions(
+                table_sessions!orders_session_id_fkey(
                 *,
                 table_session_events(
                 *,

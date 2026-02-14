@@ -1,13 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Station } from "@/app/dashboard/actions/stations";
 import {
   getStationTypeLabel,
   getSyncRoleLabel,
   getViewScopeLabel,
+  useKdsDisplay,
+  useKdsRoutingRules,
+  useSetKdsRoutingRules,
 } from "../../hooks/useStations";
+import { usePrepStations } from "@/app/dashboard/hooks/usePrepStations";
 import { useStationDevices } from "../../hooks/useStationDevices";
 import { useStationTerminal } from "../../hooks/usePaymentTerminals";
 import {
@@ -24,7 +30,17 @@ import {
   WifiOff,
   CheckCircle,
   XCircle,
+  Plus,
+  X,
+  Router,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { format, formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -109,6 +125,45 @@ function StatCard({
 export function StationOverviewTab({ station, timeFilter }: StationOverviewTabProps) {
   const { data: devices } = useStationDevices(station.id);
   const { data: terminal } = useStationTerminal(station.id);
+
+  // KDS-specific data
+  const isKds = station.station_type === "kds";
+  const { data: kdsDisplay } = useKdsDisplay(isKds ? station.id : undefined);
+  const { data: routingRules } = useKdsRoutingRules(kdsDisplay?.id);
+  const setRoutingRulesMutation = useSetKdsRoutingRules();
+  const { data: prepStations } = usePrepStations(isKds ? station.location_id : undefined);
+  const activePrepStations = prepStations?.filter((ps) => ps.is_active) || [];
+  const [addingPrepStation, setAddingPrepStation] = useState(false);
+
+  const prepStationRules = routingRules?.filter((r) => r.rule_type === "prep_station") || [];
+  const assignedPrepNames = prepStationRules.map((r) => r.rule_value);
+  const availablePrepStations = activePrepStations.filter(
+    (ps) => !assignedPrepNames.includes(ps.name)
+  );
+
+  const handleAddPrepStation = async (name: string) => {
+    if (!kdsDisplay?.id) return;
+    const newRules = [
+      ...prepStationRules.map((r) => ({ rule_type: r.rule_type, rule_value: r.rule_value })),
+      { rule_type: "prep_station", rule_value: name },
+    ];
+    await setRoutingRulesMutation.mutateAsync({
+      kdsDisplayId: kdsDisplay.id,
+      rules: newRules,
+    });
+    setAddingPrepStation(false);
+  };
+
+  const handleRemovePrepStation = async (name: string) => {
+    if (!kdsDisplay?.id) return;
+    const newRules = prepStationRules
+      .filter((r) => r.rule_value !== name)
+      .map((r) => ({ rule_type: r.rule_type, rule_value: r.rule_value }));
+    await setRoutingRulesMutation.mutateAsync({
+      kdsDisplayId: kdsDisplay.id,
+      rules: newRules,
+    });
+  };
 
   const deviceCount = devices?.length || 0;
   const hasTerminal = !!terminal;
@@ -235,6 +290,147 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
           </CardContent>
         </Card>
       </div>
+
+      {/* KDS Routing - only for KDS stations */}
+      {isKds && kdsDisplay && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Router className="h-5 w-5" />
+                KDS Routing
+              </CardTitle>
+              <Badge variant="outline">
+                {kdsDisplay.routing_mode === "all"
+                  ? "All Items"
+                  : kdsDisplay.routing_mode === "prep_station"
+                    ? "By Prep Station"
+                    : kdsDisplay.routing_mode === "category"
+                      ? "By Category"
+                      : "By Order Type"}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {kdsDisplay.routing_mode === "all" && (
+              <p className="text-sm text-muted-foreground">
+                This display receives all items sent to the kitchen.
+              </p>
+            )}
+
+            {kdsDisplay.routing_mode === "prep_station" && (
+              <div className="space-y-3">
+                {prepStationRules.length === 0 && !addingPrepStation ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <ChefHat className="h-8 w-8 text-muted-foreground mb-2" />
+                    <p className="text-sm font-medium">No prep stations assigned</p>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Assign prep stations to route items to this display.
+                    </p>
+                    {availablePrepStations.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAddingPrepStation(true)}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Prep Station
+                      </Button>
+                    )}
+                    {activePrepStations.length === 0 && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        No prep stations exist for this location. Create them in Settings &gt; Prep Stations.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      {prepStationRules.map((rule) => {
+                        const ps = activePrepStations.find((p) => p.name === rule.rule_value);
+                        return (
+                          <div
+                            key={rule.id}
+                            className="flex items-center gap-3 p-3 rounded-lg border bg-card"
+                          >
+                            <div
+                              className="h-3 w-3 rounded-full shrink-0"
+                              style={{ backgroundColor: ps?.color || "#6B7280" }}
+                            />
+                            <span className="text-sm font-medium flex-1">{rule.rule_value}</span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              disabled={setRoutingRulesMutation.isPending}
+                              onClick={() => handleRemovePrepStation(rule.rule_value)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {addingPrepStation ? (
+                      <div className="flex items-center gap-2">
+                        <Select onValueChange={(v) => handleAddPrepStation(v)}>
+                          <SelectTrigger className="flex-1">
+                            <SelectValue placeholder="Select a prep station..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availablePrepStations.map((ps) => (
+                              <SelectItem key={ps.id} value={ps.name}>
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className="h-2.5 w-2.5 rounded-full"
+                                    style={{ backgroundColor: ps.color || "#6B7280" }}
+                                  />
+                                  {ps.name}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setAddingPrepStation(false)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      availablePrepStations.length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setAddingPrepStation(true)}
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Prep Station
+                        </Button>
+                      )
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {kdsDisplay.routing_mode === "category" && (
+              <p className="text-sm text-muted-foreground">
+                This display receives items from specific categories. Configure category routing rules in the display settings.
+              </p>
+            )}
+
+            {kdsDisplay.routing_mode === "order_type" && (
+              <p className="text-sm text-muted-foreground">
+                This display receives items from specific order types. Configure order type routing rules in the display settings.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Device Summary */}
       <Card>

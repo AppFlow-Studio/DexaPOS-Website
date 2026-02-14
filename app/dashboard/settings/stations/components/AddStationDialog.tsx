@@ -19,19 +19,29 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState, useEffect } from "react";
 import {
   useCreateStation,
   useUpdateStation,
+  useUpdateKdsDisplay,
   useNextStationNumber,
+  useKdsDisplay,
+  useKdsRoutingRules,
+  useSetKdsRoutingRules,
   Station,
   StationType,
   SyncRole,
   ViewScope,
+  KdsDisplayMode,
+  KdsRoutingMode,
   getStationTypeIcon,
 } from "../hooks/useStations";
-import { Loader2 } from "lucide-react";
+import { usePrepStations } from "@/app/dashboard/hooks/usePrepStations";
+import { ColorSwatchPicker } from "./ColorSwatchPicker";
+import { Loader2, Info, ChefHat } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
 export interface AddStationDialogProps {
@@ -86,6 +96,7 @@ export function AddStationDialog({
 }: AddStationDialogProps) {
   const createMutation = useCreateStation();
   const updateMutation = useUpdateStation();
+  const updateKdsMutation = useUpdateKdsDisplay();
 
   const [activeTab, setActiveTab] = useState("basic");
 
@@ -110,8 +121,54 @@ export function AddStationDialog({
   const [canApplyDiscounts, setCanApplyDiscounts] = useState(true);
   const [canUpdateKitchenStatus, setCanUpdateKitchenStatus] = useState(false);
 
+  // KDS Display Settings
+  const [kdsDisplayName, setKdsDisplayName] = useState("");
+  const [kdsDisplayColor, setKdsDisplayColor] = useState("#3B82F6");
+  const [kdsDisplayMode, setKdsDisplayMode] = useState<KdsDisplayMode>("ticket");
+  const [kdsColumns, setKdsColumns] = useState(4);
+  const [kdsFontScale, setKdsFontScale] = useState(1.0);
+  const [kdsRoutingMode, setKdsRoutingMode] = useState<KdsRoutingMode>("all");
+  const [kdsShowAllItems, setKdsShowAllItems] = useState(false);
+
+  // KDS Behavior Settings
+  const [kdsWarningMinutes, setKdsWarningMinutes] = useState(5);
+  const [kdsAlertMinutes, setKdsAlertMinutes] = useState(10);
+  const [kdsAutoBumpMinutes, setKdsAutoBumpMinutes] = useState<number | null>(null);
+  const [kdsSoundOnNewOrder, setKdsSoundOnNewOrder] = useState(true);
+  const [kdsSoundOnRush, setKdsSoundOnRush] = useState(true);
+  const [kdsShowOrderSource, setKdsShowOrderSource] = useState(true);
+  const [kdsShowServerName, setKdsShowServerName] = useState(true);
+  const [kdsShowOrderNotes, setKdsShowOrderNotes] = useState(true);
+  const [kdsShowAllergyFlags, setKdsShowAllergyFlags] = useState(true);
+  const [kdsShowOnlineOrders, setKdsShowOnlineOrders] = useState(true);
+  const [kdsOnlineOrderPriority, setKdsOnlineOrderPriority] = useState(true);
+  const [kdsShowReadyByCountdown, setKdsShowReadyByCountdown] = useState(true);
+
   // Get next station number
   const { data: nextNumber } = useNextStationNumber(locationId, stationType);
+
+  // Load KDS display config in edit mode
+  const { data: existingKdsDisplay } = useKdsDisplay(
+    stationToEdit?.station_type === "kds" ? stationToEdit?.id : undefined
+  );
+
+  // KDS routing rules
+  const { data: existingRoutingRules } = useKdsRoutingRules(existingKdsDisplay?.id);
+  const setRoutingRulesMutation = useSetKdsRoutingRules();
+  const [selectedPrepStationNames, setSelectedPrepStationNames] = useState<string[]>([]);
+
+  // Prep stations for the location
+  const { data: prepStations } = usePrepStations(locationId);
+  const activePrepStations = prepStations?.filter((ps) => ps.is_active) || [];
+
+  const isKds = stationType === "kds";
+
+  // Tab safety: redirect away from KDS tabs if type changes away from KDS
+  useEffect(() => {
+    if (!isKds && (activeTab === "kds-display" || activeTab === "kds-behavior")) {
+      setActiveTab("basic");
+    }
+  }, [isKds, activeTab]);
 
   // Reset form when dialog opens/closes
   useEffect(() => {
@@ -136,6 +193,41 @@ export function AddStationDialog({
       }
     }
   }, [open, stationToEdit]);
+
+  // Populate selected prep stations from existing routing rules
+  useEffect(() => {
+    if (existingRoutingRules && stationToEdit) {
+      const prepNames = existingRoutingRules
+        .filter((r) => r.rule_type === "prep_station")
+        .map((r) => r.rule_value);
+      setSelectedPrepStationNames(prepNames);
+    }
+  }, [existingRoutingRules, stationToEdit]);
+
+  // Populate KDS fields from existing display config in edit mode
+  useEffect(() => {
+    if (existingKdsDisplay && stationToEdit) {
+      setKdsDisplayName(existingKdsDisplay.display_name);
+      setKdsDisplayColor(existingKdsDisplay.display_color || "#3B82F6");
+      setKdsDisplayMode((existingKdsDisplay.display_mode as KdsDisplayMode) || "ticket");
+      setKdsColumns(existingKdsDisplay.columns ?? 4);
+      setKdsFontScale(existingKdsDisplay.font_scale ?? 1.0);
+      setKdsRoutingMode((existingKdsDisplay.routing_mode as KdsRoutingMode) || "all");
+      setKdsShowAllItems(existingKdsDisplay.show_all_items ?? false);
+      setKdsWarningMinutes(existingKdsDisplay.warning_minutes ?? 5);
+      setKdsAlertMinutes(existingKdsDisplay.alert_minutes ?? 10);
+      setKdsAutoBumpMinutes(existingKdsDisplay.auto_bump_minutes ?? null);
+      setKdsSoundOnNewOrder(existingKdsDisplay.sound_on_new_order ?? true);
+      setKdsSoundOnRush(existingKdsDisplay.sound_on_rush ?? true);
+      setKdsShowOrderSource(existingKdsDisplay.show_order_source ?? true);
+      setKdsShowServerName(existingKdsDisplay.show_server_name ?? true);
+      setKdsShowOrderNotes(existingKdsDisplay.show_order_notes ?? true);
+      setKdsShowAllergyFlags(existingKdsDisplay.show_allergy_flags ?? true);
+      setKdsShowOnlineOrders(existingKdsDisplay.show_online_orders ?? true);
+      setKdsOnlineOrderPriority(existingKdsDisplay.online_order_priority ?? true);
+      setKdsShowReadyByCountdown(existingKdsDisplay.show_ready_by_countdown ?? true);
+    }
+  }, [existingKdsDisplay, stationToEdit]);
 
   // Set default capabilities based on station type
   useEffect(() => {
@@ -181,6 +273,29 @@ export function AddStationDialog({
     }
   }, [stationType, stationToEdit, nextNumber]);
 
+  const resetKdsFields = () => {
+    setKdsDisplayName("");
+    setKdsDisplayColor("#3B82F6");
+    setKdsDisplayMode("ticket");
+    setKdsColumns(4);
+    setKdsFontScale(1.0);
+    setKdsRoutingMode("all");
+    setKdsShowAllItems(false);
+    setKdsWarningMinutes(5);
+    setKdsAlertMinutes(10);
+    setKdsAutoBumpMinutes(null);
+    setKdsSoundOnNewOrder(true);
+    setKdsSoundOnRush(true);
+    setKdsShowOrderSource(true);
+    setKdsShowServerName(true);
+    setKdsShowOrderNotes(true);
+    setKdsShowAllergyFlags(true);
+    setKdsShowOnlineOrders(true);
+    setKdsOnlineOrderPriority(true);
+    setKdsShowReadyByCountdown(true);
+    setSelectedPrepStationNames([]);
+  };
+
   const resetForm = () => {
     setStationName("");
     setStationCode("");
@@ -195,11 +310,36 @@ export function AddStationDialog({
     setCanVoidOrders(false);
     setCanApplyDiscounts(true);
     setCanUpdateKitchenStatus(false);
+    resetKdsFields();
     setActiveTab("basic");
   };
 
   const handleSave = async () => {
     if (!stationName.trim()) return;
+
+    const kdsConfig = isKds
+      ? {
+          display_name: kdsDisplayName.trim() || stationName.trim(),
+          display_color: kdsDisplayColor,
+          display_mode: kdsDisplayMode,
+          columns: kdsColumns,
+          font_scale: kdsFontScale,
+          routing_mode: kdsRoutingMode,
+          show_all_items: kdsShowAllItems,
+          warning_minutes: kdsWarningMinutes,
+          alert_minutes: kdsAlertMinutes,
+          auto_bump_minutes: kdsAutoBumpMinutes,
+          sound_on_new_order: kdsSoundOnNewOrder,
+          sound_on_rush: kdsSoundOnRush,
+          show_order_source: kdsShowOrderSource,
+          show_server_name: kdsShowServerName,
+          show_order_notes: kdsShowOrderNotes,
+          show_allergy_flags: kdsShowAllergyFlags,
+          show_online_orders: kdsShowOnlineOrders,
+          online_order_priority: kdsOnlineOrderPriority,
+          show_ready_by_countdown: kdsShowReadyByCountdown,
+        }
+      : undefined;
 
     const stationData = {
       location_id: locationId,
@@ -216,6 +356,7 @@ export function AddStationDialog({
       can_void_orders: canVoidOrders,
       can_apply_discounts: canApplyDiscounts,
       can_update_kitchen_status: canUpdateKitchenStatus,
+      kds_config: kdsConfig,
     };
 
     try {
@@ -224,11 +365,44 @@ export function AddStationDialog({
           stationId: stationToEdit.id,
           input: stationData,
         });
+        // Update KDS display config separately if editing a KDS station
+        if (isKds && existingKdsDisplay && kdsConfig) {
+          await updateKdsMutation.mutateAsync({
+            kdsDisplayId: existingKdsDisplay.id,
+            input: kdsConfig,
+          });
+          // Save routing rules for prep_station mode
+          if (kdsRoutingMode === "prep_station") {
+            await setRoutingRulesMutation.mutateAsync({
+              kdsDisplayId: existingKdsDisplay.id,
+              rules: selectedPrepStationNames.map((name) => ({
+                rule_type: "prep_station",
+                rule_value: name,
+              })),
+            });
+          }
+        }
       } else {
-        await createMutation.mutateAsync({
+        const created = await createMutation.mutateAsync({
           clerkOrgId,
           input: stationData,
         });
+        // After creating a KDS station, fetch its display and save routing rules
+        if (isKds && created && kdsRoutingMode === "prep_station" && selectedPrepStationNames.length > 0) {
+          // The KDS display was created in the createStation action
+          // We need to fetch it to get the display ID
+          const { getKdsDisplayByStationId } = await import("@/app/dashboard/actions/stations");
+          const displayResult = await getKdsDisplayByStationId(created.id);
+          if (displayResult.success && displayResult.data) {
+            await setRoutingRulesMutation.mutateAsync({
+              kdsDisplayId: displayResult.data.id,
+              rules: selectedPrepStationNames.map((name) => ({
+                rule_type: "prep_station",
+                rule_value: name,
+              })),
+            });
+          }
+        }
       }
       handleClose();
     } catch (error) {
@@ -241,12 +415,12 @@ export function AddStationDialog({
     setTimeout(resetForm, 200);
   };
 
-  const isLoading = createMutation.isPending || updateMutation.isPending;
+  const isLoading = createMutation.isPending || updateMutation.isPending || updateKdsMutation.isPending || setRoutingRulesMutation.isPending;
   const canSave = stationName.trim().length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className={cn("sm:max-w-[600px]", isKds && "sm:max-w-[700px]")}>
         <DialogHeader>
           <DialogTitle>
             {stationToEdit ? "Edit Station" : "Add New Station"}
@@ -259,9 +433,11 @@ export function AddStationDialog({
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className={cn("grid w-full", isKds ? "grid-cols-5" : "grid-cols-3")}>
             <TabsTrigger value="basic">Basic Info</TabsTrigger>
             <TabsTrigger value="device">Device</TabsTrigger>
+            {isKds && <TabsTrigger value="kds-display">Display</TabsTrigger>}
+            {isKds && <TabsTrigger value="kds-behavior">Behavior</TabsTrigger>}
             <TabsTrigger value="capabilities">Capabilities</TabsTrigger>
           </TabsList>
 
@@ -396,6 +572,358 @@ export function AddStationDialog({
               </div>
             </div>
           </TabsContent>
+
+          {/* KDS Display Tab */}
+          {isKds && (
+            <TabsContent value="kds-display" className="space-y-4 py-4">
+              <div className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="kdsDisplayName">Display Name</Label>
+                  <Input
+                    id="kdsDisplayName"
+                    value={kdsDisplayName}
+                    onChange={(e) => setKdsDisplayName(e.target.value)}
+                    placeholder={stationName || "e.g., Grill Station"}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Defaults to station name if left empty
+                  </p>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Display Color</Label>
+                  <ColorSwatchPicker value={kdsDisplayColor} onChange={setKdsDisplayColor} />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label htmlFor="kdsDisplayMode">Display Mode</Label>
+                    <Select
+                      value={kdsDisplayMode}
+                      onValueChange={(v) => setKdsDisplayMode(v as KdsDisplayMode)}
+                    >
+                      <SelectTrigger id="kdsDisplayMode">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ticket">Ticket View</SelectItem>
+                        <SelectItem value="list">List View</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {kdsDisplayMode === "ticket" && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="kdsColumns">Columns</Label>
+                      <Select
+                        value={String(kdsColumns)}
+                        onValueChange={(v) => setKdsColumns(Number(v))}
+                      >
+                        <SelectTrigger id="kdsColumns">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="2">2 Columns</SelectItem>
+                          <SelectItem value="3">3 Columns</SelectItem>
+                          <SelectItem value="4">4 Columns</SelectItem>
+                          <SelectItem value="5">5 Columns</SelectItem>
+                          <SelectItem value="6">6 Columns</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="kdsFontScale">Font Scale</Label>
+                  <Select
+                    value={String(kdsFontScale)}
+                    onValueChange={(v) => setKdsFontScale(Number(v))}
+                  >
+                    <SelectTrigger id="kdsFontScale">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0.8">0.8x - Compact</SelectItem>
+                      <SelectItem value="1">1.0x - Normal</SelectItem>
+                      <SelectItem value="1.25">1.25x - Large</SelectItem>
+                      <SelectItem value="1.5">1.5x - Extra Large</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Separator />
+
+                <div className="grid gap-2">
+                  <Label htmlFor="kdsRoutingMode">Routing Mode</Label>
+                  <Select
+                    value={kdsRoutingMode}
+                    onValueChange={(v) => setKdsRoutingMode(v as KdsRoutingMode)}
+                  >
+                    <SelectTrigger id="kdsRoutingMode">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Items</SelectItem>
+                      <SelectItem value="category">By Category</SelectItem>
+                      <SelectItem value="prep_station">By Prep Station</SelectItem>
+                      <SelectItem value="order_type">By Order Type</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Prep Station Selection - shown when routing mode is prep_station */}
+                {kdsRoutingMode === "prep_station" && (
+                  <div className="grid gap-2">
+                    <Label>Assigned Prep Stations</Label>
+                    {activePrepStations.length === 0 ? (
+                      <div className="flex items-start gap-2 rounded-lg bg-muted/50 border p-3">
+                        <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                        <p className="text-xs text-muted-foreground">
+                          No prep stations found for this location. Create prep stations in Settings &gt; Prep Stations first.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {activePrepStations.map((ps) => {
+                          const isSelected = selectedPrepStationNames.includes(ps.name);
+                          return (
+                            <label
+                              key={ps.id}
+                              className={cn(
+                                "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors",
+                                isSelected
+                                  ? "border-primary bg-primary/5"
+                                  : "border-border hover:bg-muted/50"
+                              )}
+                            >
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setSelectedPrepStationNames((prev) => [...prev, ps.name]);
+                                  } else {
+                                    setSelectedPrepStationNames((prev) =>
+                                      prev.filter((n) => n !== ps.name)
+                                    );
+                                  }
+                                }}
+                              />
+                              <div
+                                className="h-3 w-3 rounded-full shrink-0"
+                                style={{ backgroundColor: ps.color || "#6B7280" }}
+                              />
+                              <span className="text-sm font-medium">{ps.name}</span>
+                            </label>
+                          );
+                        })}
+                        <p className="text-xs text-muted-foreground">
+                          Select which prep stations this KDS display should show items for.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="kdsShowAllItems" className="cursor-pointer">
+                      Show All Items
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Display all order items even if not routed here
+                    </p>
+                  </div>
+                  <Switch
+                    id="kdsShowAllItems"
+                    checked={kdsShowAllItems}
+                    onCheckedChange={setKdsShowAllItems}
+                  />
+                </div>
+
+                {kdsRoutingMode !== "prep_station" && (
+                  <div className="flex items-start gap-2 rounded-lg bg-muted/50 border p-3">
+                    <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <p className="text-xs text-muted-foreground">
+                      Routing rules for specific categories can be configured on the station detail page after creation.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+          )}
+
+          {/* KDS Behavior Tab */}
+          {isKds && (
+            <TabsContent value="kds-behavior" className="space-y-4 py-4">
+              <div className="grid gap-4">
+                {/* Timing & Alerts */}
+                <div>
+                  <p className="text-sm font-medium mb-3">Timing & Alerts</p>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="grid gap-2">
+                      <Label htmlFor="kdsWarningMinutes">Warning (min)</Label>
+                      <Input
+                        id="kdsWarningMinutes"
+                        type="number"
+                        min={1}
+                        max={60}
+                        value={kdsWarningMinutes}
+                        onChange={(e) => setKdsWarningMinutes(Number(e.target.value) || 5)}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="kdsAlertMinutes">Alert (min)</Label>
+                      <Input
+                        id="kdsAlertMinutes"
+                        type="number"
+                        min={1}
+                        max={120}
+                        value={kdsAlertMinutes}
+                        onChange={(e) => setKdsAlertMinutes(Number(e.target.value) || 10)}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="kdsAutoBumpMinutes">Auto-Bump (min)</Label>
+                      <Input
+                        id="kdsAutoBumpMinutes"
+                        type="number"
+                        min={0}
+                        max={120}
+                        value={kdsAutoBumpMinutes ?? ""}
+                        onChange={(e) =>
+                          setKdsAutoBumpMinutes(
+                            e.target.value ? Number(e.target.value) : null
+                          )
+                        }
+                        placeholder="Off"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Leave empty to disable
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Sounds */}
+                <div>
+                  <p className="text-sm font-medium mb-3">Sounds</p>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="kdsSoundOnNewOrder" className="cursor-pointer">
+                        Sound on New Order
+                      </Label>
+                      <Switch
+                        id="kdsSoundOnNewOrder"
+                        checked={kdsSoundOnNewOrder}
+                        onCheckedChange={setKdsSoundOnNewOrder}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="kdsSoundOnRush" className="cursor-pointer">
+                        Sound on Rush
+                      </Label>
+                      <Switch
+                        id="kdsSoundOnRush"
+                        checked={kdsSoundOnRush}
+                        onCheckedChange={setKdsSoundOnRush}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Display Info */}
+                <div>
+                  <p className="text-sm font-medium mb-3">Display Information</p>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="kdsShowOrderSource" className="cursor-pointer">
+                        Show Order Source
+                      </Label>
+                      <Switch
+                        id="kdsShowOrderSource"
+                        checked={kdsShowOrderSource}
+                        onCheckedChange={setKdsShowOrderSource}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="kdsShowServerName" className="cursor-pointer">
+                        Show Server Name
+                      </Label>
+                      <Switch
+                        id="kdsShowServerName"
+                        checked={kdsShowServerName}
+                        onCheckedChange={setKdsShowServerName}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="kdsShowOrderNotes" className="cursor-pointer">
+                        Show Order Notes
+                      </Label>
+                      <Switch
+                        id="kdsShowOrderNotes"
+                        checked={kdsShowOrderNotes}
+                        onCheckedChange={setKdsShowOrderNotes}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="kdsShowAllergyFlags" className="cursor-pointer">
+                        Show Allergy Flags
+                      </Label>
+                      <Switch
+                        id="kdsShowAllergyFlags"
+                        checked={kdsShowAllergyFlags}
+                        onCheckedChange={setKdsShowAllergyFlags}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Online Orders */}
+                <div>
+                  <p className="text-sm font-medium mb-3">Online Orders</p>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="kdsShowOnlineOrders" className="cursor-pointer">
+                        Show Online Orders
+                      </Label>
+                      <Switch
+                        id="kdsShowOnlineOrders"
+                        checked={kdsShowOnlineOrders}
+                        onCheckedChange={setKdsShowOnlineOrders}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="kdsOnlineOrderPriority" className="cursor-pointer">
+                        Online Order Priority
+                      </Label>
+                      <Switch
+                        id="kdsOnlineOrderPriority"
+                        checked={kdsOnlineOrderPriority}
+                        onCheckedChange={setKdsOnlineOrderPriority}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="kdsShowReadyByCountdown" className="cursor-pointer">
+                        Show Ready-by Countdown
+                      </Label>
+                      <Switch
+                        id="kdsShowReadyByCountdown"
+                        checked={kdsShowReadyByCountdown}
+                        onCheckedChange={setKdsShowReadyByCountdown}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+          )}
 
           <TabsContent value="capabilities" className="space-y-4 py-4">
             <div className="space-y-4">

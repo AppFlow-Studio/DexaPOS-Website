@@ -463,6 +463,9 @@ export interface UpdateItemParams {
   displayOrder?: number | null;
   isFeatured?: boolean | null;
 
+  // Prep Station (KDS Routing - migration 022)
+  prepStationId?: string | null;
+
   // Modifier linking
   modifier_group_ids?: string[];
 }
@@ -835,7 +838,13 @@ export async function updateItemOverride(
         changesLog.available_channels = params.availableChannels;
       }
 
-      // Only upsert if we have tax/channel fields to update
+      // Prep Station override (migration 022)
+      if (params.prepStationId !== undefined) {
+        overrideData.prep_station_id = params.prepStationId;
+        changesLog.prep_station_id = params.prepStationId;
+      }
+
+      // Only upsert if we have fields to update
       if (Object.keys(overrideData).length > 1) {
         // > 1 because updated_at is always included
         const { error } = await supabase.from("location_item_overrides").upsert(
@@ -853,6 +862,34 @@ export async function updateItemOverride(
           return { success: false, error: error.message };
         }
       }
+    }
+  }
+
+  // Prep Station assignment — always writes to location_item_overrides (location-only)
+  // This is separate because prep stations apply at any level (L2/L4/L5) but
+  // always persist in location_item_overrides regardless of category/menu context.
+  if (
+    params.prepStationId !== undefined &&
+    locationId &&
+    // Skip if already handled in the L2 base fields block above
+    (params.menuId || params.categoryId)
+  ) {
+    const { error } = await supabase.from("location_item_overrides").upsert(
+      {
+        location_id: locationId,
+        menu_item_id: params.menuItemId,
+        prep_station_id: params.prepStationId,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: "location_id,menu_item_id",
+      },
+    );
+
+    if (error) {
+      console.error("[updateItemOverride] Prep station upsert error:", error);
+    } else {
+      changesLog.prep_station_id = params.prepStationId;
     }
   }
 
