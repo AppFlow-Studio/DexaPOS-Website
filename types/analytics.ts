@@ -576,3 +576,315 @@ export function getComparisonDateRange(
 export function formatDateForAPI(date: Date): string {
   return date.toISOString().split("T")[0];
 }
+
+// ============================================================================
+// Order Analytics Types (Phase 1)
+// ============================================================================
+
+/** A1 — Revenue Breakdown Card */
+export interface RevenueBreakdown {
+  subtotal: number;
+  tax: number;
+  tips: number;
+  serviceCharges: number;
+  discounts: number;
+  netRevenue: number;
+  byDate: Array<{
+    date: string;
+    subtotal: number;
+    tax: number;
+    tips: number;
+    serviceCharges: number;
+    discounts: number;
+  }>;
+}
+
+/** A2 — Dual Pricing Comparison */
+export interface DualPricingComparison {
+  cardRevenue: number;
+  cashRevenue: number;
+  cardTransactions: number;
+  cashTransactions: number;
+  cashDiscountSavings: number;
+  hasDualPricing: boolean;
+  byDate: Array<{
+    date: string;
+    cardRevenue: number;
+    cashRevenue: number;
+  }>;
+}
+
+/** A3 — Discount Impact Card */
+export interface DiscountImpact {
+  totalDiscounts: number;
+  discountedOrderCount: number;
+  totalOrderCount: number;
+  discountedOrderPercent: number;
+  avgDiscountPerOrder: number;
+  bySource: Array<{ source: string; amount: number; count: number }>;
+  topDiscounts: Array<{ name: string; amount: number; count: number }>;
+}
+
+/** Sales Summary Report Row */
+export interface SalesSummaryRow {
+  date: string;
+  orderCount: number;
+  grossSales: number;
+  discounts: number;
+  netSales: number;
+  tax: number;
+  tips: number;
+  refunds: number;
+}
+
+/** Hourly Sales Report Row */
+export interface HourlySalesRow {
+  hour: number;
+  hourLabel: string;
+  orderCount: number;
+  grossSales: number;
+  avgOrderValue: number;
+}
+
+// ============================================================================
+// Kitchen Performance Analytics Types (Phase 2)
+// ============================================================================
+
+/** Station Performance Stats */
+export interface KitchenStationStats {
+  station_id: string;
+  display_name: string;
+  total_items: number;
+  avg_prep_minutes: number;
+  auto_bumped: number;
+  manual_completed: number;
+  alert_threshold_minutes: number;
+  auto_bump_threshold_minutes: number;
+}
+
+/** Kitchen Heatmap Cell (hour x day of week) */
+export interface KitchenHeatmapCell {
+  hour_of_day: number;
+  day_of_week: number;
+  avg_ticket_minutes: number;
+}
+
+/** Rush Order Statistics */
+export interface RushStats {
+  rush_items: number;
+  total_items: number;
+  rush_percentage: number;
+  avg_rush_time_minutes: number;
+  avg_normal_time_minutes: number;
+}
+
+/** Auto-Bump Statistics */
+export interface AutoBumpStats {
+  auto_bumped: number;
+  manual_completed: number;
+  total_items: number;
+  auto_bump_rate: number;
+}
+
+/** Daily Trend Data Point */
+export interface DailyTrend {
+  date: string;
+  avg_ticket_minutes: number;
+}
+
+/** K1 — Kitchen Performance Stats (RPC Response) */
+export interface KitchenPerformanceStats {
+  avg_ticket_time_minutes: number;
+  total_items_processed: number;
+  by_station: KitchenStationStats[];
+  by_hour_and_day: KitchenHeatmapCell[];
+  rush_stats: RushStats;
+  auto_bump_stats: AutoBumpStats;
+  daily_trend: DailyTrend[];
+}
+
+// ============================================================================
+// Table & Dine-In Performance Analytics Types (Phase 3)
+// ============================================================================
+
+/** Party Size Bucket for Turn Time Analysis */
+export interface TableTurnBucket {
+  bucket: '1-2' | '3-4' | '5-6' | '7+';
+  avg_turn_time_minutes: number;
+  sessions: number;
+}
+
+/** Service Phase Timing Data */
+export interface ServicePhase {
+  phase: 'seated_to_order' | 'order_to_food' | 'food_to_check' | 'check_to_payment' | 'payment_to_cleared';
+  avg_minutes: number;
+  sessions: number;
+}
+
+/** Revenue Per Available Seat Hour (RevPASH) by Hour */
+export interface RevPASHByHour {
+  hour: number;
+  revpash: number;
+  covers: number;
+}
+
+/** Per-Table Utilization Statistics */
+export interface TableUtilizationRow {
+  table_id: string;
+  table_name: string;
+  capacity: number;
+  section_name: string;
+  total_sessions: number;
+  avg_turn_time_minutes: number;
+  total_revenue: number;
+  total_covers: number;
+  revpash: number;
+}
+
+/** Per-Section Statistics */
+export interface SectionStatsRow {
+  section_name: string;
+  total_sessions: number;
+  total_revenue: number;
+  avg_turn_time_minutes: number;
+}
+
+/** C1-C6 — Table Performance Stats (RPC Response) */
+export interface TablePerformanceStats {
+  avg_turn_time_minutes: number;
+  total_sessions: number;
+  total_covers: number;
+  by_party_size: TableTurnBucket[];
+  daily_trend: Array<{
+    date: string;
+    avg_turn_time_minutes: number;
+    sessions: number;
+  }>;
+  service_phases: ServicePhase[];
+  hourly_revpash: RevPASHByHour[];
+  table_utilization: TableUtilizationRow[];
+  section_stats: SectionStatsRow[];
+}
+
+// ============================================================================
+// Staff Performance Analytics Types (Phase 4)
+// ============================================================================
+
+/** D1 — Per-server leaderboard row */
+export interface ServerLeaderboardRow {
+  staff_id: string;
+  staff_name: string;
+  role: string;
+  total_sales: number;
+  avg_check_size: number;
+  total_tips: number;
+  avg_tip_pct: number;
+  tables_turned: number;
+  avg_table_turn_minutes: number;
+  order_count: number;
+}
+
+/** D2 — Tips analysis summary */
+export interface TipsAnalysis {
+  total_tips: number;
+  avg_tip_pct: number;
+  cash_tips: number;
+  card_tips: number;
+  tip_distribution: Array<{ bucket: string; count: number }>;
+  by_staff: Array<{ staff_id: string; staff_name: string; total_tips: number; avg_tip_pct: number }>;
+}
+
+/** D3 — Staff order activity row */
+export interface StaffOrderActivityRow {
+  staff_id: string;
+  staff_name: string;
+  orders_created: number;
+  payments_processed: number;
+  voids_count: number;
+  void_amount: number;
+  refunds_count: number;
+  refund_amount: number;
+}
+
+/** D1-D3 — Staff Performance Stats (RPC response root) */
+export interface StaffPerformanceStats {
+  total_active_staff: number;
+  total_orders: number;
+  total_tips: number;
+  avg_tip_pct: number;
+  leaderboard: ServerLeaderboardRow[];
+  tips_analysis: TipsAnalysis;
+  order_activity: StaffOrderActivityRow[];
+}
+
+// ============================================================================
+// Order Flow & Issues Analytics Types (Phase 5)
+// ============================================================================
+
+/** E1 — A single step in the order lifecycle funnel */
+export interface OrderFunnelStep {
+  status: string;
+  label: string;
+  count: number;
+  pct_of_total: number;
+}
+
+/** E2 — Per-reason breakdown for refunds */
+export interface RefundReasonRow {
+  reason: string;
+  count: number;
+  total_amount: number;
+}
+
+/** E2 — Per-item void/refund attribution */
+export interface TopVoidedItem {
+  item_name: string;
+  void_count: number;
+  void_amount: number;
+}
+
+/** E2 — Per-staff void attribution */
+export interface StaffVoidRow {
+  staff_id: string;
+  staff_name: string;
+  void_count: number;
+  void_amount: number;
+}
+
+/** E3 — Revenue/count per order type */
+export interface OrderTypeStats {
+  order_type: string;
+  count: number;
+  total_revenue: number;
+  avg_order_value: number;
+  pct_of_total: number;
+}
+
+/** E4 — Avg completion time per order type */
+export interface CompletionTimeRow {
+  order_type: string;
+  avg_minutes: number;
+  order_count: number;
+  min_minutes: number;
+  max_minutes: number;
+}
+
+/** E1-E4 — Order Flow Stats (RPC response root) */
+export interface OrderFlowStats {
+  total_orders: number;
+  completion_rate: number;
+  cancellation_rate: number;
+  void_rate: number;
+  funnel: OrderFunnelStep[];
+  void_refund: {
+    total_voids: number;
+    void_amount: number;
+    total_refunds: number;
+    refund_amount: number;
+    by_reason: RefundReasonRow[];
+    top_voided_items: TopVoidedItem[];
+    staff_voids: StaffVoidRow[];
+  };
+  order_types: OrderTypeStats[];
+  completion_times: CompletionTimeRow[];
+}

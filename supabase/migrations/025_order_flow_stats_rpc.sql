@@ -32,7 +32,7 @@ BEGIN
       AND o.created_at >= p_start_date
       AND o.created_at <= p_end_date
   ),
-
+   
   -- Funnel stages: count orders at each status
   funnel_counts AS (
     SELECT
