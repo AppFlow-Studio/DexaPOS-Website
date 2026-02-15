@@ -6,6 +6,7 @@ import {
 } from '@/app/manage/actions/hq-platform/analytics'
 import {
   getPlatformTransactionDetails,
+  getPlatformTransactionStats,
   getPlatformTransactions,
   PlatformTransactionFilters
 } from '@/app/manage/actions/hq-platform/transactions'
@@ -16,6 +17,7 @@ export const platformKeys = {
   salesTrend: () => [...platformKeys.all, 'sales-trend'] as const,
   topMerchants: () => [...platformKeys.all, 'top-merchants'] as const,
   transactions: (limit: number, offset: number, filters?: PlatformTransactionFilters) => [...platformKeys.all, 'transactions', { limit, offset, ...filters }] as const,
+  transactionStats: (filters?: PlatformTransactionFilters) => [...platformKeys.all, 'transaction-stats', filters] as const,
   transactionDetails: (transactionId: string | null) => [...platformKeys.all, 'transaction-details', transactionId] as const,
 }
 
@@ -44,6 +46,13 @@ export function usePlatformTransactions(limit: number = 50, offset: number = 0, 
   return useQuery({
     queryKey: platformKeys.transactions(limit, offset, filters),
     queryFn: () => getPlatformTransactions(limit, offset, filters),
+  })
+}
+
+export function usePlatformTransactionStats(filters?: PlatformTransactionFilters) {
+  return useQuery({
+    queryKey: platformKeys.transactionStats(filters),
+    queryFn: () => getPlatformTransactionStats(filters),
   })
 }
 
