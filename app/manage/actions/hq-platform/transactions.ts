@@ -2,6 +2,7 @@
 
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { refundAdminOrder } from '@/app/manage/actions/admin-merchant/transactions'
 
 // Types
 
@@ -96,6 +97,42 @@ function sanitizeSearchTerm(term: string): string {
   return term.trim().replace(/[(),]/g, ' ')
 }
 
+const CARD_TYPE_EQUIVALENTS: Record<string, string[]> = {
+  visa: ['visa'],
+  mastercard: ['mastercard', 'master card', 'mc'],
+  amex: ['amex', 'american express'],
+  discover: ['discover'],
+  other: ['other', 'unknown'],
+}
+
+function applyCardTypeFilter(query: any, cardTypes?: string[]) {
+  if (!cardTypes || cardTypes.length === 0) return query
+
+  const normalized = Array.from(
+    new Set(
+      cardTypes
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  )
+
+  const tokens = Array.from(
+    new Set(normalized.flatMap((value) => CARD_TYPE_EQUIVALENTS[value] ?? [value]))
+  )
+
+  if (tokens.length === 0) return query
+
+  const cardTypeOr = tokens
+    .map((token) => sanitizeSearchTerm(token))
+    .filter(Boolean)
+    .map((token) => `card_type.ilike.%${token}%`)
+    .join(',')
+
+  if (!cardTypeOr) return query
+
+  return query.or(cardTypeOr)
+}
+
 function mapViewRowToTransaction(row: PlatformTransactionViewRow): PlatformTransaction {
   return {
     id: row.id,
@@ -141,9 +178,7 @@ function applyPlatformTransactionFilters(query: any, filters?: PlatformTransacti
     query = query.in('payment_method', filters.paymentMethods)
   }
 
-  if (filters?.cardTypes && filters.cardTypes.length > 0) {
-    query = query.in('card_type', filters.cardTypes)
-  }
+  query = applyCardTypeFilter(query, filters?.cardTypes)
 
   if (filters?.minAmount !== undefined) {
     query = query.gte('total_amount', filters.minAmount)
@@ -272,9 +307,7 @@ async function getPlatformTransactionsLegacy(
     query = query.in('payment_method', filters.paymentMethods)
   }
 
-  if (filters?.cardTypes && filters.cardTypes.length > 0) {
-    query = query.in('card_type', filters.cardTypes)
-  }
+  query = applyCardTypeFilter(query, filters?.cardTypes)
 
   if (filters?.minAmount !== undefined) {
     query = query.gte('total_amount', filters.minAmount)
@@ -355,6 +388,286 @@ export async function getPlatformTransactions(
     `[getPlatformTransactions] Falling back to legacy query path due to view error (${fromView.errorCode}).`
   )
   return getPlatformTransactionsLegacy(limit, offset, filters)
+}
+
+// Transaction detail drawer
+
+export interface PlatformTransactionLineItem {
+  id: string
+  item_name: string
+  quantity: number
+  unit_price: number
+  subtotal: number
+  special_instructions?: string
+}
+
+export interface PlatformTransactionDetails {
+  id: string
+  order_id: string
+  order_number?: string
+  display_number?: string
+  merchant_id: string
+  merchant_name: string
+  location_id?: string
+  location_name?: string
+  customer_name?: string
+  customer_phone?: string
+  customer_email?: string
+  order_type?: string
+  order_status?: string
+  payment_status?: string
+  table_number?: string
+  staff_name?: string
+  notes?: string
+  payment_method: string
+  status: string
+  amount: number
+  tip_amount: number
+  total_amount: number
+  order_subtotal: number
+  order_tax_amount: number
+  order_tip_amount: number
+  order_discount_amount: number
+  order_service_charge: number
+  order_total_amount: number
+  card_type?: string
+  card_last_four?: string
+  authorization_code?: string
+  reference_number?: string
+  transaction_id?: string
+  processor_name?: string
+  terminal_id?: string
+  terminal_type?: string
+  gateway_fee?: number
+  original_amount?: number
+  refunded_amount?: number
+  refund_reason?: string
+  return_amount?: number
+  return_reason?: string
+  is_voided: boolean
+  void_reason?: string
+  error_code?: string
+  error_message?: string
+  created_at: string
+  initiated_at?: string
+  authorized_at?: string
+  approved_at?: string
+  captured_at?: string
+  refunded_at?: string
+  returned_at?: string
+  voided_at?: string
+  failed_at?: string
+  completed_at?: string
+  metadata?: Record<string, unknown>
+  items: PlatformTransactionLineItem[]
+}
+
+export async function getPlatformTransactionDetails(
+  transactionId: string
+): Promise<PlatformTransactionDetails | null> {
+  await assertHQPermission('hq.merchant.transactions')
+
+  const supabase = createServerSupabaseClient()
+
+  const { data, error } = await supabase
+    .from('order_payments')
+    .select(
+      `
+      id,
+      order_id,
+      payment_method,
+      status,
+      amount,
+      tip_amount,
+      total_amount,
+      card_type,
+      card_last_four,
+      authorization_code,
+      reference_number,
+      transaction_id,
+      processor_name,
+      terminal_id,
+      terminal_type,
+      gateway_fee,
+      original_amount,
+      refunded_amount,
+      refund_reason,
+      refunded_at,
+      return_amount,
+      return_reason,
+      returned_at,
+      is_voided,
+      void_reason,
+      voided_at,
+      initiated_at,
+      authorized_at,
+      approved_at,
+      captured_at,
+      failed_at,
+      error_code,
+      error_message,
+      metadata,
+      orders!inner(
+        id,
+        order_number,
+        display_number,
+        merchant_id,
+        location_id,
+        customer_name,
+        customer_phone,
+        customer_email,
+        order_type,
+        status,
+        payment_status,
+        table_number,
+        subtotal,
+        tax_amount,
+        tip_amount,
+        discount_amount,
+        service_charge,
+        total_amount,
+        created_at,
+        completed_at,
+        special_instructions,
+        internal_notes,
+        merchants!inner(name),
+        locations(name),
+        staff_profiles!orders_created_by_staff_id_fkey(first_name, last_name),
+        order_items(
+          id,
+          item_name,
+          quantity,
+          unit_price,
+          subtotal,
+          special_instructions
+        )
+      )
+    `
+    )
+    .eq('id', transactionId)
+    .single()
+
+  if (error || !data) {
+    console.error('[getPlatformTransactionDetails] Error:', error)
+    return null
+  }
+
+  const order = (data as any).orders
+  if (!order) return null
+
+  const staffFirst = order.staff_profiles?.first_name || ''
+  const staffLast = order.staff_profiles?.last_name || ''
+  const staffName = `${staffFirst} ${staffLast}`.trim() || undefined
+
+  return {
+    id: data.id,
+    order_id: data.order_id,
+    order_number: order.order_number || undefined,
+    display_number: order.display_number || undefined,
+    merchant_id: order.merchant_id,
+    merchant_name: order.merchants?.name || 'Unknown',
+    location_id: order.location_id || undefined,
+    location_name: order.locations?.name || undefined,
+    customer_name: order.customer_name || undefined,
+    customer_phone: order.customer_phone || undefined,
+    customer_email: order.customer_email || undefined,
+    order_type: order.order_type || undefined,
+    order_status: order.status || undefined,
+    payment_status: order.payment_status || undefined,
+    table_number: order.table_number || undefined,
+    staff_name: staffName,
+    notes: order.special_instructions || order.internal_notes || undefined,
+    payment_method: data.payment_method || 'unknown',
+    status: data.status || 'unknown',
+    amount: Number(data.amount || 0),
+    tip_amount: Number(data.tip_amount || 0),
+    total_amount: Number(data.total_amount || 0),
+    order_subtotal: Number(order.subtotal || 0),
+    order_tax_amount: Number(order.tax_amount || 0),
+    order_tip_amount: Number(order.tip_amount || 0),
+    order_discount_amount: Number(order.discount_amount || 0),
+    order_service_charge: Number(order.service_charge || 0),
+    order_total_amount: Number(order.total_amount || 0),
+    card_type: data.card_type || undefined,
+    card_last_four: data.card_last_four || undefined,
+    authorization_code: data.authorization_code || undefined,
+    reference_number: data.reference_number || undefined,
+    transaction_id: data.transaction_id || undefined,
+    processor_name: data.processor_name || undefined,
+    terminal_id: data.terminal_id || undefined,
+    terminal_type: data.terminal_type || undefined,
+    gateway_fee: data.gateway_fee !== null ? Number(data.gateway_fee) : undefined,
+    original_amount: data.original_amount !== null ? Number(data.original_amount) : undefined,
+    refunded_amount: data.refunded_amount !== null ? Number(data.refunded_amount) : undefined,
+    refund_reason: data.refund_reason || undefined,
+    return_amount: data.return_amount !== null ? Number(data.return_amount) : undefined,
+    return_reason: data.return_reason || undefined,
+    is_voided: Boolean(data.is_voided),
+    void_reason: data.void_reason || undefined,
+    error_code: data.error_code || undefined,
+    error_message: data.error_message || undefined,
+    created_at: data.captured_at || data.initiated_at || order.created_at || new Date(0).toISOString(),
+    initiated_at: data.initiated_at || undefined,
+    authorized_at: data.authorized_at || undefined,
+    approved_at: data.approved_at || undefined,
+    captured_at: data.captured_at || undefined,
+    refunded_at: data.refunded_at || undefined,
+    returned_at: data.returned_at || undefined,
+    voided_at: data.voided_at || undefined,
+    failed_at: data.failed_at || undefined,
+    completed_at: order.completed_at || undefined,
+    metadata: (data.metadata as Record<string, unknown>) || undefined,
+    items: (order.order_items || []).map((item: any) => ({
+      id: item.id,
+      item_name: item.item_name || 'Item',
+      quantity: Number(item.quantity || 0),
+      unit_price: Number(item.unit_price || 0),
+      subtotal: Number(item.subtotal || 0),
+      special_instructions: item.special_instructions || undefined,
+    })),
+  }
+}
+
+export async function refundPlatformTransaction(
+  transactionId: string,
+  reason: string = 'HQ refund from platform transactions'
+): Promise<{ success: boolean; error?: string }> {
+  await assertHQPermission('hq.merchant.update')
+
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from('order_payments')
+    .select(
+      `
+      id,
+      order_id,
+      status,
+      orders!inner(
+        merchant_id
+      )
+    `
+    )
+    .eq('id', transactionId)
+    .single()
+
+  if (error || !data) {
+    console.error('[refundPlatformTransaction] Lookup error:', error)
+    return { success: false, error: 'Transaction not found' }
+  }
+
+  if (data.status !== 'captured') {
+    return {
+      success: false,
+      error: `Only captured payments can be refunded (current status: ${data.status})`,
+    }
+  }
+
+  const merchantId = (data as any).orders?.merchant_id as string | undefined
+  if (!merchantId) {
+    return { success: false, error: 'Missing merchant context for refund' }
+  }
+
+  return refundAdminOrder(merchantId, data.order_id, reason)
 }
 
 // Merchants for filter dropdown

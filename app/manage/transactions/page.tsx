@@ -2,6 +2,7 @@
 
 import { Suspense, useMemo, useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -22,8 +23,20 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
     CreditCard,
     Download,
+    RefreshCcwDot,
+    ArrowUpDown,
     MoreHorizontal,
     CheckCircle,
     Clock,
@@ -33,12 +46,19 @@ import {
     Banknote,
 } from 'lucide-react'
 import { usePlatformKPIs, usePlatformTransactions } from '@/lib/queries/use-platform-analytics'
-import { getPlatformTransactions, PlatformTransaction, PlatformTransactionFilters } from '@/app/manage/actions/hq-platform/transactions'
+import {
+    getPlatformTransactions,
+    PlatformTransaction,
+    PlatformTransactionFilters,
+    refundPlatformTransaction,
+} from '@/app/manage/actions/hq-platform/transactions'
 import { format } from 'date-fns'
 import { Skeleton } from '@/components/ui/skeleton'
 import Link from 'next/link'
 import { TransactionFilterSheet } from './components/TransactionFilterSheet'
 import { TransactionSearchBar, highlightText } from './components/TransactionSearchBar'
+import { TransactionDetailSheet } from './components/TransactionDetailSheet'
+import { CardBrandIcon } from '@/app/dashboard/payments/components/CardBrandIcon'
 import { toast } from 'sonner'
 
 // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -130,13 +150,24 @@ function parseList(val: string | null): string[] {
     return val.split(',').filter(Boolean)
 }
 
+type TableSortKey = 'order' | 'date'
+type TableSortDirection = 'asc' | 'desc'
+
 // â”€â”€â”€ Inner page (needs useSearchParams) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function TransactionsPageInner() {
     const searchParams = useSearchParams()
     const router = useRouter()
+    const queryClient = useQueryClient()
     const pageSize = 50
     const [isExporting, startExportTransition] = useTransition()
+    const [isRefreshing, startRefreshTransition] = useTransition()
+    const [isRefunding, startRefundTransition] = useTransition()
+    const [isDetailOpen, setIsDetailOpen] = useState(false)
+    const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null)
+    const [refundTarget, setRefundTarget] = useState<PlatformTransaction | null>(null)
+    const [sortKey, setSortKey] = useState<TableSortKey>('date')
+    const [sortDirection, setSortDirection] = useState<TableSortDirection>('desc')
 
     // Parse page from URL
     const page = Number(searchParams.get('page') ?? '1')
@@ -159,12 +190,35 @@ function TransactionsPageInner() {
     // Search state â€” local, communicated via URL
     const [searchValue, setSearchValue] = useState(searchParams.get('search') ?? '')
 
-    const { data: kpis, isLoading: kpisLoading } = usePlatformKPIs()
-    const { data: transactionsData, isLoading: transactionsLoading, error: transactionsError } = usePlatformTransactions(pageSize, (page - 1) * pageSize, filters)
+    const { data: kpis, isLoading: kpisLoading, refetch: refetchKPIs } = usePlatformKPIs()
+    const {
+        data: transactionsData,
+        isLoading: transactionsLoading,
+        error: transactionsError,
+        refetch: refetchTransactions,
+    } = usePlatformTransactions(pageSize, (page - 1) * pageSize, filters)
 
     const transactions = transactionsData?.data || []
     const totalTransactions = transactionsData?.total || 0
     const totalPages = Math.max(1, Math.ceil(totalTransactions / pageSize))
+
+    const sortedTransactions = useMemo(() => {
+        const sorted = [...transactions]
+        sorted.sort((a, b) => {
+            let comparison = 0
+            if (sortKey === 'order') {
+                const left = a.order_number || ''
+                const right = b.order_number || ''
+                comparison = left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' })
+            } else {
+                const left = a.created_at ? new Date(a.created_at).getTime() : 0
+                const right = b.created_at ? new Date(b.created_at).getTime() : 0
+                comparison = left - right
+            }
+            return sortDirection === 'asc' ? comparison : -comparison
+        })
+        return sorted
+    }, [transactions, sortKey, sortDirection])
 
     const setPage = (p: number) => {
         const params = new URLSearchParams(searchParams.toString())
@@ -179,6 +233,64 @@ function TransactionsPageInner() {
         else params.delete('search')
         params.delete('page')
         router.push(`?${params.toString()}`)
+    }
+
+    const toggleSort = (key: TableSortKey) => {
+        if (sortKey === key) {
+            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+            return
+        }
+        setSortKey(key)
+        setSortDirection(key === 'date' ? 'desc' : 'asc')
+    }
+
+    const handleRefresh = () => {
+        startRefreshTransition(() => {
+            void (async () => {
+                try {
+                    await Promise.all([refetchTransactions(), refetchKPIs()])
+                    toast.success('Transactions refreshed')
+                } catch {
+                    toast.error('Failed to refresh transactions')
+                }
+            })()
+        })
+    }
+
+    const openTransactionDetails = (transactionId: string) => {
+        setSelectedTransactionId(transactionId)
+        setIsDetailOpen(true)
+    }
+
+    const handleDetailOpenChange = (open: boolean) => {
+        setIsDetailOpen(open)
+        if (!open) {
+            setSelectedTransactionId(null)
+        }
+    }
+
+    const handleConfirmRefund = () => {
+        if (!refundTarget) return
+
+        const target = refundTarget
+        startRefundTransition(() => {
+            void (async () => {
+                const result = await refundPlatformTransaction(
+                    target.id,
+                    `Refund initiated from HQ transactions list (${target.order_number || target.order_id})`
+                )
+
+                if (!result.success) {
+                    toast.error(result.error || 'Failed to refund transaction')
+                    return
+                }
+
+                toast.success('Refund completed successfully')
+                setRefundTarget(null)
+                await queryClient.invalidateQueries({ queryKey: ['platform', 'transactions'] })
+                await queryClient.invalidateQueries({ queryKey: ['platform', 'kpis'] })
+            })()
+        })
     }
 
     const stats = [
@@ -249,14 +361,24 @@ function TransactionsPageInner() {
                     <h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
                     <p className="text-muted-foreground">Monitor and manage all transaction activity</p>
                 </div>
-                <Button
-                    variant="outline"
-                    onClick={() => startExportTransition(() => { void exportAllFilteredRows() })}
-                    disabled={isExporting}
-                >
-                    <Download className="mr-2 h-4 w-4" />
-                    {isExporting ? 'Exporting...' : 'Export CSV'}
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        onClick={handleRefresh}
+                        disabled={isRefreshing}
+                    >
+                        <RefreshCcwDot className="mr-2 h-4 w-4" />
+                        {isRefreshing ? 'Refreshing...' : 'Refresh'}
+                    </Button>
+                    <Button
+                        variant="outline"
+                        onClick={() => startExportTransition(() => { void exportAllFilteredRows() })}
+                        disabled={isExporting}
+                    >
+                        <Download className="mr-2 h-4 w-4" />
+                        {isExporting ? 'Exporting...' : 'Export CSV'}
+                    </Button>
+                </div>
             </div>
 
             {/* Stats Cards */}
@@ -306,7 +428,16 @@ function TransactionsPageInner() {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Order #</TableHead>
+                                <TableHead>
+                                    <Button
+                                        variant="ghost"
+                                        onClick={() => toggleSort('order')}
+                                        className="h-8 px-2"
+                                    >
+                                        Order #
+                                        <ArrowUpDown className="ml-2 h-3 w-3" />
+                                    </Button>
+                                </TableHead>
                                 <TableHead>Merchant</TableHead>
                                 <TableHead>Customer</TableHead>
                                 <TableHead>Method</TableHead>
@@ -314,7 +445,16 @@ function TransactionsPageInner() {
                                 <TableHead>Total</TableHead>
                                 <TableHead>Pay Status</TableHead>
                                 <TableHead>Order Status</TableHead>
-                                <TableHead>Date</TableHead>
+                                <TableHead>
+                                    <Button
+                                        variant="ghost"
+                                        onClick={() => toggleSort('date')}
+                                        className="h-8 px-2"
+                                    >
+                                        Date
+                                        <ArrowUpDown className="ml-2 h-3 w-3" />
+                                    </Button>
+                                </TableHead>
                                 <TableHead className="w-15" />
                             </TableRow>
                         </TableHeader>
@@ -339,7 +479,7 @@ function TransactionsPageInner() {
                                         No transactions found. Try adjusting your filters.
                                     </TableCell>
                                 </TableRow>
-                            ) : transactions.map((tx) => (
+                            ) : sortedTransactions.map((tx) => (
                                 <TableRow key={tx.id}>
                                     <TableCell className="font-mono text-xs">
                                         {tx.order_number
@@ -360,12 +500,12 @@ function TransactionsPageInner() {
                                     </TableCell>
                                     <TableCell>
                                         {tx.card_last_four ? (
-                                            <span className="font-mono text-xs">
-                                                ****{highlightText(tx.card_last_four, searchQuery)}
-                                                {tx.card_type && <span className="text-muted-foreground ml-1">({tx.card_type})</span>}
+                                            <span className="inline-flex items-center gap-1.5 font-mono text-xs">
+                                                <CardBrandIcon brand={tx.card_type} className="h-5 w-auto" />
+                                                <span>****{highlightText(tx.card_last_four, searchQuery)}</span>
                                             </span>
                                         ) : (
-                                            <span className="text-muted-foreground">â€”</span>
+                                            <span className="text-muted-foreground">-</span>
                                         )}
                                     </TableCell>
                                     <TableCell className="font-mono font-semibold">
@@ -394,10 +534,18 @@ function TransactionsPageInner() {
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
                                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                <DropdownMenuItem onClick={() => openTransactionDetails(tx.id)}>
+                                                    View Details
+                                                </DropdownMenuItem>
                                                 <Link href={`/manage/merchants/${tx.merchant_id}/transactions`}>
                                                     <DropdownMenuItem>View in Merchant</DropdownMenuItem>
                                                 </Link>
-                                                <DropdownMenuItem>Refund</DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    onClick={() => setRefundTarget(tx)}
+                                                    disabled={tx.status !== 'captured'}
+                                                >
+                                                    Refund
+                                                </DropdownMenuItem>
                                                 <DropdownMenuSeparator />
                                                 <DropdownMenuItem onClick={() => exportToCSV([tx])}>
                                                     Export Row
@@ -440,6 +588,38 @@ function TransactionsPageInner() {
                     )}
                 </CardContent>
             </Card>
+
+            <TransactionDetailSheet
+                open={isDetailOpen}
+                onOpenChange={handleDetailOpenChange}
+                transactionId={selectedTransactionId}
+            />
+
+            <AlertDialog open={!!refundTarget} onOpenChange={(open) => !open && setRefundTarget(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Confirm Refund</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            You are about to refund order{' '}
+                            <span className="font-semibold">{refundTarget?.order_number || refundTarget?.order_id}</span>{' '}
+                            for <span className="font-semibold">${refundTarget?.total_amount.toFixed(2)}</span>.
+                            This will update the order and related payments as refunded.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isRefunding}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={(event) => {
+                                event.preventDefault()
+                                handleConfirmRefund()
+                            }}
+                            disabled={isRefunding}
+                        >
+                            {isRefunding ? 'Refunding...' : 'Confirm Refund'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     )
 }
@@ -453,3 +633,4 @@ export default function TransactionsPage() {
         </Suspense>
     )
 }
+
