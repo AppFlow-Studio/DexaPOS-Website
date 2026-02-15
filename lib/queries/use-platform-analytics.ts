@@ -1,17 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
-import { 
-  getPlatformKPIs, 
-  getPlatformSalesTrend, 
-  getTopMerchants 
+import {
+  getPlatformKPIs,
+  getPlatformSalesTrend,
+  getTopMerchants
 } from '@/app/manage/actions/hq-platform/analytics'
-import { getPlatformTransactions } from '@/app/manage/actions/hq-platform/transactions'
+import { getPlatformTransactions, PlatformTransactionFilters } from '@/app/manage/actions/hq-platform/transactions'
 
 export const platformKeys = {
   all: ['platform'] as const,
   kpis: () => [...platformKeys.all, 'kpis'] as const,
   salesTrend: () => [...platformKeys.all, 'sales-trend'] as const,
   topMerchants: () => [...platformKeys.all, 'top-merchants'] as const,
-  transactions: (limit: number, offset: number) => [...platformKeys.all, 'transactions', { limit, offset }] as const,
+  transactions: (limit: number, offset: number, filters?: PlatformTransactionFilters) => [...platformKeys.all, 'transactions', { limit, offset, ...filters }] as const,
 }
 
 export function usePlatformKPIs() {
@@ -35,10 +35,10 @@ export function useTopMerchants(limit: number = 5) {
   })
 }
 
-export function usePlatformTransactions(limit: number = 50, offset: number = 0) {
+export function usePlatformTransactions(limit: number = 50, offset: number = 0, filters?: PlatformTransactionFilters) {
   return useQuery({
-    queryKey: platformKeys.transactions(limit, offset),
-    queryFn: () => getPlatformTransactions(limit, offset),
+    queryKey: platformKeys.transactions(limit, offset, filters),
+    queryFn: () => getPlatformTransactions(limit, offset, filters),
   })
 }
 
