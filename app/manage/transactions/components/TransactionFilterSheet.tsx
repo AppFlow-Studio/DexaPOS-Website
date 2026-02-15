@@ -271,20 +271,24 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
             </Button>
 
             <Sheet open={open} onOpenChange={setOpen}>
-            <SheetContent side="right" className="w-96 overflow-y-auto">
-                <SheetHeader>
-                    <div className="flex items-center justify-between">
+            <SheetContent side="right" className="w-[420px] max-w-[92vw] overflow-hidden">
+                <div className="flex h-full flex-col">
+                <SheetHeader className="pr-14">
+                    <div className="flex items-center justify-between gap-2">
                         <SheetTitle>Filter Transactions</SheetTitle>
-                        {activeCount > 0 && (
+                    </div>
+                    {activeCount > 0 && (
+                        <div className="pt-1">
                             <Button variant="ghost" size="sm" onClick={clearAll} className="text-muted-foreground h-7 px-2">
                                 <X className="h-3 w-3 mr-1" />
                                 Clear all
                             </Button>
-                        )}
-                    </div>
+                        </div>
+                    )}
                 </SheetHeader>
 
-                <div className="mt-6 space-y-6">
+                <div className="flex-1 overflow-y-auto px-4 pb-4">
+                <div className="pt-2 space-y-6">
 
                     {/* Date Range */}
                     <div className="space-y-2">
@@ -412,15 +416,17 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
                     </div>
 
                 </div>
+                </div>
 
                 {/* Footer actions */}
-                <div className="sticky bottom-0 bg-background pt-4 pb-6 mt-6 border-t flex gap-2">
+                <div className="border-t bg-background p-4 flex gap-2">
                     <Button onClick={applyFilters} className="flex-1">
                         Apply Filters
                     </Button>
                     <Button variant="outline" onClick={() => setOpen(false)} className="flex-1">
                         Cancel
                     </Button>
+                </div>
                 </div>
             </SheetContent>
             </Sheet>

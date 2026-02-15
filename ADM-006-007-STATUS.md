@@ -1,77 +1,91 @@
-# ADM-006 + ADM-007 — Implementation Status
+# ADM Transactions Tickets - Implementation Status
 > Last updated: 2026-02-15
 
 ---
 
-## ADM-006 — Advanced Filter Panel
+## ADM-001 - Transaction Detail Drawer
 
-### ✅ Done
+### Done
 | Feature | Notes |
 |---------|-------|
-| Slide-out Sheet panel (right side) | `TransactionFilterSheet.tsx` |
-| Merchant multi-select | Loads from `getPlatformMerchants()` |
-| Location multi-select (cascading) | Loads from `getPlatformLocations()`, disabled until merchant selected |
-| Date Range with presets | Reused `<DateRangePicker />` — Today, Last 7d, Last 30d, This Month, Last Month, Custom |
-| Payment Method multi-select | Cash, Card, Card (SpinAPI), Card (DVPay), Gift Card, House Account |
-| Card Type multi-select | Visa, Mastercard, Amex, Discover, Other |
-| Order Status multi-select | Draft, Pending, Preparing, Ready, Completed, Cancelled, Refunded, Void |
-| Payment Status multi-select | Captured, Authorized, Refunded, Partial Refund, Declined, Void |
-| Amount Range (min/max) | Two number inputs with `$` prefix |
-| Apply Filters button | Writes all selections to URL params, closes sheet |
-| Cancel button | Closes sheet without applying |
-| Clear All Filters | Resets URL to `?` |
-| Active filter count badge | Shows count of active filter groups on the Filters button |
-| URL param sync | Filters survive page refresh + are shareable via URL |
-| Re-sync on open | Sheet always reflects currently-applied filters when reopened |
-| Filters return correct data | **User confirmed ✅** |
-
-### ❌ Not Done
-| Feature | Reason |
-|---------|--------|
-| Staff filter | Not implemented — requires fetching staff per merchant/location; deferred |
+| Detail sheet component | Added `app/manage/transactions/components/TransactionDetailSheet.tsx` |
+| Row action wiring | Added `View Details` in transaction row actions |
+| Server detail action | Added `getPlatformTransactionDetails(transactionId)` in `app/manage/actions/hq-platform/transactions.ts` |
+| Query hook | Added `usePlatformTransactionDetails` in `lib/queries/use-platform-analytics.ts` |
+| Data coverage | Merchant/location/customer, payment fields, order totals, line items, timeline, notes, and error flags |
+| UX behavior | Loading/error/empty states in drawer and header spacing to avoid close-icon overlap |
 
 ---
 
-## ADM-007 — Global Search Bar
+## ADM-004 - Refund Action from Row Menu
 
-### ✅ Done
+### Done
 | Feature | Notes |
 |---------|-------|
-| `TransactionSearchBar` component | Replaces the old plain `<Input>` |
-| 300ms debounce | Uses `useDebounce()` from `lib/hooks/useDebounce.ts` |
-| Min 2 chars before triggering | Passes empty string to parent if < 2 chars |
-| × Clear button | Clears query and re-fetches |
-| Cmd+K / Ctrl+K focus shortcut | Keyboard shortcut to jump to search |
-| URL sync | Search term in `?search=` param (shareable, back-button safe) |
-| `highlightText()` helper | Exported — wraps matches in `<mark>` in table cells |
-| Text highlighting in table | Applied to Order #, Merchant, Customer, Card last 4 columns |
-| Placeholder | "Search by order #, auth code, card last 4, customer..." |
+| Refund confirmation dialog | Added `AlertDialog` confirmation flow on `/manage/transactions` |
+| Refund action wiring | `Refund` menu item now opens confirmation and executes server action |
+| Platform refund server action | Added `refundPlatformTransaction(transactionId, reason)` in `app/manage/actions/hq-platform/transactions.ts` |
+| Reuse existing refund pipeline | Delegates to `refundAdminOrder(merchantId, orderId, reason)` for order/payment updates + audit logging |
+| Post-refund refresh | Invalidates platform transactions + KPI query caches |
+| Safety guard | Refund option is enabled only for `captured` statuses |
 
-### ⚠️ Partially Done
-| Feature | Current State | What's Missing |
-|---------|--------------|----------------|
-| Search actually finds results | Only searches `card_last_four`, `authorization_code`, `reference_number` | Cannot search `customer_name` or `order_number` — these are on the `orders` embedded table; PostgREST `.or()` can't span primary + related table columns in a single query |
+---
 
-### Fix Required
-To search `customer_name` and `order_number`, a **Supabase flat view** is needed:
+## ADM-006 - Advanced Filter Panel
 
-```sql
-CREATE OR REPLACE VIEW vw_platform_transactions AS
-SELECT
-  op.id, op.order_id, op.payment_method, op.amount, op.tip_amount,
-  op.total_amount, op.status, op.card_type, op.card_last_four,
-  op.authorization_code, op.reference_number, op.captured_at, op.initiated_at,
-  o.order_number, o.display_number, o.merchant_id, o.location_id,
-  o.customer_name, o.status AS order_status, o.created_at,
-  m.name AS merchant_name,
-  l.name AS location_name
-FROM order_payments op
-JOIN orders    o ON o.id = op.order_id
-JOIN merchants m ON m.id = o.merchant_id
-LEFT JOIN locations l ON l.id = o.location_id;
-```
+### Done
+| Feature | Notes |
+|---------|-------|
+| Slide-out filter sheet | `app/manage/transactions/components/TransactionFilterSheet.tsx` |
+| Merchant + Location filter | Cascading locations based on selected merchants |
+| Date range + presets | Uses existing `DateRangePicker` |
+| Payment method + card type filters | Multi-select |
+| Order status + payment status filters | Multi-select |
+| Amount range (min/max) | Numeric min/max inputs |
+| Apply / Cancel / Clear all | URL-driven filter state |
+| Active filter count badge | Visible on trigger button |
+| URL sync | Filter state survives refresh/shareable URL |
+| Filter sheet re-sync on open | Local state matches current URL |
+| UX polish on sheet spacing | Added inner padding and structured layout |
+| Fixed close icon overlap | Header layout updated so close X no longer overlaps "Clear all" |
+| Dropdown layering fix | `z-200` -> `z-[200]` |
 
-Then the server action queries `vw_platform_transactions` directly instead of `order_payments` with embedded joins — enabling full `.or()` search across all columns.
+### Not Done
+| Feature | Reason |
+|---------|--------|
+| Staff filter | Deferred (needs staff source and scope rules) |
+
+---
+
+## ADM-007 - Global Search Bar
+
+### Done
+| Feature | Notes |
+|---------|-------|
+| Search bar component | `TransactionSearchBar` |
+| 300ms debounce + min 2 chars | Prevents noisy refetching |
+| Clear button + Cmd/Ctrl+K | UX shortcuts implemented |
+| URL sync + highlight | Search term is URL source of truth |
+| Full-column search via view | Added `vw_platform_transactions` query path |
+| Search by customer/order fields | `customer_name`, `order_number`, plus card/auth/ref and merchant/location |
+| Safe fallback | If view is missing, action falls back to legacy join query |
+
+### Migration
+- Added migration: `supabase/migrations/021_platform_transactions_view.sql`
+- View must be applied in each environment (staging/prod/local DBs).
+
+---
+
+## Related Improvements (During ADM Work)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| ADM-005 export behavior | Done | Export now fetches all filtered rows in batches, not only current page |
+| Refund data fix | Partial hardening | Removed incorrect `refunded_amount: 0` placeholder write in admin refund update |
+| Card type filter compatibility | Partial (deferred revisit) | `Visa` works; `Mastercard`/others still inconsistent in some data patterns and needs exact DB value mapping |
+| Card brand display parity | Done | Reused dashboard `CardBrandIcon` in manage table + detail drawer |
+| Table sorting parity | Done | Added sortable headers for `Order #` and `Date` in manage transactions table |
+| Manual refresh | Done | Added refresh button to re-fetch transactions + KPI data |
 
 ---
 
@@ -79,10 +93,18 @@ Then the server action queries `vw_platform_transactions` directly instead of `o
 
 | Ticket | Status | Description |
 |--------|--------|-------------|
-| ADM-001 | ❌ Not started | Transaction detail drawer (click row → side panel with full details) |
-| ADM-002 | ❌ Not started | Stats cards with real DB aggregates (total volume, avg order, etc.) |
-| ADM-003 | ❌ Not started | Revenue / volume charts |
-| ADM-004 | ❌ Not started | Refund action from transaction row |
-| ADM-005 | ❌ Not started | Export with filters applied (currently exports current page only) |
-| **ADM-006** | **✅ Done** | Advanced Filter Panel |
-| **ADM-007** | **~90% Done** | Global Search — search bar ✅, full-column search needs DB view ❌ |
+| ADM-001 | Done | Transaction detail drawer |
+| ADM-002 | Not started | Stats cards with real DB aggregates |
+| ADM-003 | Not started | Revenue/volume charts |
+| ADM-004 | Done | Refund action from row menu |
+| ADM-005 | Done | Export with filters applied (all filtered rows) |
+| ADM-006 | Done | Advanced filter panel |
+| ADM-007 | Done | Global search with full-column support via view |
+
+---
+
+## Suggested Next Work Order
+1. ADM-002 - Real DB aggregate cards
+2. ADM-003 - Revenue/volume charts
+
+
