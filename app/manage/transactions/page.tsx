@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useMemo, useState } from 'react'
+import { Suspense, useMemo, useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -33,14 +33,15 @@ import {
     Banknote,
 } from 'lucide-react'
 import { usePlatformKPIs, usePlatformTransactions } from '@/lib/queries/use-platform-analytics'
-import { PlatformTransaction, PlatformTransactionFilters } from '@/app/manage/actions/hq-platform/transactions'
+import { getPlatformTransactions, PlatformTransaction, PlatformTransactionFilters } from '@/app/manage/actions/hq-platform/transactions'
 import { format } from 'date-fns'
 import { Skeleton } from '@/components/ui/skeleton'
 import Link from 'next/link'
 import { TransactionFilterSheet } from './components/TransactionFilterSheet'
 import { TransactionSearchBar, highlightText } from './components/TransactionSearchBar'
+import { toast } from 'sonner'
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function getOrderStatusBadge(status?: string) {
     if (!status) return null
@@ -122,19 +123,20 @@ function exportToCSV(transactions: PlatformTransaction[]) {
     URL.revokeObjectURL(url)
 }
 
-// ─── URL param parser helpers ─────────────────────────────────────────────────
+// â”€â”€â”€ URL param parser helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function parseList(val: string | null): string[] {
     if (!val) return []
     return val.split(',').filter(Boolean)
 }
 
-// ─── Inner page (needs useSearchParams) ──────────────────────────────────────
+// â”€â”€â”€ Inner page (needs useSearchParams) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function TransactionsPageInner() {
     const searchParams = useSearchParams()
     const router = useRouter()
     const pageSize = 50
+    const [isExporting, startExportTransition] = useTransition()
 
     // Parse page from URL
     const page = Number(searchParams.get('page') ?? '1')
@@ -154,7 +156,7 @@ function TransactionsPageInner() {
         dateTo: searchParams.get('dateTo') ? `${searchParams.get('dateTo')}T23:59:59` : undefined,
     }), [searchParams])
 
-    // Search state — local, communicated via URL
+    // Search state â€” local, communicated via URL
     const [searchValue, setSearchValue] = useState(searchParams.get('search') ?? '')
 
     const { data: kpis, isLoading: kpisLoading } = usePlatformKPIs()
@@ -212,6 +214,33 @@ function TransactionsPageInner() {
 
     const searchQuery = filters.search ?? ''
 
+    const exportAllFilteredRows = async () => {
+        const batchSize = 1000
+        let offset = 0
+        const allRows: PlatformTransaction[] = []
+
+        while (true) {
+            const response = await getPlatformTransactions(batchSize, offset, filters)
+            if (!response.data || response.data.length === 0) break
+
+            allRows.push(...response.data)
+
+            if (response.data.length < batchSize) break
+            offset += batchSize
+
+            // Safety break to avoid accidental unbounded loops on bad pagination state.
+            if (offset > 50000) break
+        }
+
+        if (allRows.length === 0) {
+            toast.info('No rows to export for current filters.')
+            return
+        }
+
+        exportToCSV(allRows)
+        toast.success(`Exported ${allRows.length.toLocaleString()} rows`)
+    }
+
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             {/* Header */}
@@ -222,11 +251,11 @@ function TransactionsPageInner() {
                 </div>
                 <Button
                     variant="outline"
-                    onClick={() => exportToCSV(transactions)}
-                    disabled={transactions.length === 0}
+                    onClick={() => startExportTransition(() => { void exportAllFilteredRows() })}
+                    disabled={isExporting}
                 >
                     <Download className="mr-2 h-4 w-4" />
-                    Export CSV
+                    {isExporting ? 'Exporting...' : 'Export CSV'}
                 </Button>
             </div>
 
@@ -315,7 +344,7 @@ function TransactionsPageInner() {
                                     <TableCell className="font-mono text-xs">
                                         {tx.order_number
                                             ? highlightText(tx.order_number, searchQuery)
-                                            : <span className="text-muted-foreground">—</span>}
+                                            : <span className="text-muted-foreground">â€”</span>}
                                     </TableCell>
                                     <TableCell className="font-medium">
                                         {highlightText(tx.merchant_name, searchQuery)}
@@ -336,7 +365,7 @@ function TransactionsPageInner() {
                                                 {tx.card_type && <span className="text-muted-foreground ml-1">({tx.card_type})</span>}
                                             </span>
                                         ) : (
-                                            <span className="text-muted-foreground">—</span>
+                                            <span className="text-muted-foreground">â€”</span>
                                         )}
                                     </TableCell>
                                     <TableCell className="font-mono font-semibold">
@@ -354,7 +383,7 @@ function TransactionsPageInner() {
                                         {getOrderStatusBadge(tx.order_status)}
                                     </TableCell>
                                     <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                                        {tx.created_at ? format(new Date(tx.created_at), 'MMM d, h:mm a') : '—'}
+                                        {tx.created_at ? format(new Date(tx.created_at), 'MMM d, h:mm a') : 'â€”'}
                                     </TableCell>
                                     <TableCell>
                                         <DropdownMenu>
@@ -415,7 +444,7 @@ function TransactionsPageInner() {
     )
 }
 
-// ─── Export (wrapped in Suspense for useSearchParams) ─────────────────────────
+// â”€â”€â”€ Export (wrapped in Suspense for useSearchParams) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function TransactionsPage() {
     return (

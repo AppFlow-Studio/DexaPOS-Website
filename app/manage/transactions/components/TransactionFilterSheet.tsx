@@ -27,7 +27,7 @@ import { Filter, ChevronDown, X } from 'lucide-react'
 import { getPlatformMerchants, getPlatformLocations, PlatformMerchant, PlatformLocation } from '@/app/manage/actions/hq-platform/transactions'
 import { cn } from '@/lib/utils'
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const ORDER_STATUSES = [
     { value: 'draft', label: 'Draft' },
@@ -66,13 +66,13 @@ const CARD_TYPES = [
     { value: 'other', label: 'Other' },
 ]
 
-// ─── Helper: parse comma-separated URL param ──────────────────────────────────
+// â”€â”€â”€ Helper: parse comma-separated URL param â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function parseList(val: string | null): string[] {
     if (!val) return []
     return val.split(',').filter(Boolean)
 }
 
-// ─── Multi-select dropdown ─────────────────────────────────────────────────────
+// â”€â”€â”€ Multi-select dropdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 interface MultiSelectProps {
     label: string
     options: { value: string; label: string }[]
@@ -102,7 +102,7 @@ function MultiSelect({ label, options, selected, onChange, disabled, placeholder
                         : <ChevronDown className="ml-1 h-4 w-4 text-muted-foreground" />}
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56 z-200">
+            <DropdownMenuContent className="w-56 z-[200]">
                 <DropdownMenuLabel>{label}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {options.map(opt => (
@@ -131,7 +131,7 @@ function MultiSelect({ label, options, selected, onChange, disabled, placeholder
     )
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface TransactionFilterSheetProps {
     searchParams: ReadonlyURLSearchParams
@@ -199,7 +199,7 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
         getPlatformLocations(selectedMerchants).then(setLocations)
     }, [selectedMerchants])
 
-    // ── URL sync helper ──
+    // â”€â”€ URL sync helper â”€â”€
     const updateParams = (updates: Record<string, string | null>) => {
         const params = new URLSearchParams(searchParams.toString())
         Object.entries(updates).forEach(([k, v]) => {
@@ -211,7 +211,7 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
         startTransition(() => router.push(`?${params.toString()}`))
     }
 
-    // ── Apply all local state to URL ──
+    // â”€â”€ Apply all local state to URL â”€â”€
     const applyFilters = () => {
         updateParams({
             merchants: selectedMerchants.join(',') || null,
@@ -229,7 +229,7 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
         setOpen(false)
     }
 
-    // ── Clear all ──
+    // â”€â”€ Clear all â”€â”€
     const clearAll = () => {
         setSelectedMerchants([])
         setSelectedLocations([])
@@ -246,7 +246,7 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
         setOpen(false)
     }
 
-    // ── Active filter count (for badge on trigger button) ──
+    // â”€â”€ Active filter count (for badge on trigger button) â”€â”€
     const activeCount = [
         selectedMerchants.length > 0,
         selectedLocations.length > 0,
@@ -259,7 +259,7 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
 
     return (
         <>
-            {/* Trigger button — not using SheetTrigger asChild to avoid focus/event issues */}
+            {/* Trigger button â€” not using SheetTrigger asChild to avoid focus/event issues */}
             <Button variant="outline" className="relative" onClick={() => setOpen(true)}>
                 <Filter className="mr-2 h-4 w-4" />
                 Filters
@@ -396,7 +396,7 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
                                     min={0}
                                 />
                             </div>
-                            <span className="text-muted-foreground text-sm">–</span>
+                            <span className="text-muted-foreground text-sm">â€“</span>
                             <div className="relative flex-1">
                                 <span className="absolute left-2.5 top-2.5 text-sm text-muted-foreground">$</span>
                                 <Input
