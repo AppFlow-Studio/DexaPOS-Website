@@ -155,7 +155,7 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
     const [cardTypes, setCardTypes] = useState<string[]>(() => parseList(searchParams.get('cardType')))
     const [minAmount, setMinAmount] = useState(searchParams.get('minAmount') ?? '')
     const [maxAmount, setMaxAmount] = useState(searchParams.get('maxAmount') ?? '')
-    const [datePreset, setDatePreset] = useState<DatePreset>((searchParams.get('datePreset') as DatePreset) ?? 'last_30_days')
+    const [datePreset, setDatePreset] = useState<DatePreset>((searchParams.get('datePreset') as DatePreset) ?? 'custom')
     const [dateFrom, setDateFrom] = useState<Date | null>(() => {
         const v = searchParams.get('dateFrom')
         return v ? new Date(v) : null
@@ -177,7 +177,7 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
         setCardTypes(parseList(searchParams.get('cardType')))
         setMinAmount(searchParams.get('minAmount') ?? '')
         setMaxAmount(searchParams.get('maxAmount') ?? '')
-        setDatePreset((searchParams.get('datePreset') as DatePreset) ?? 'last_30_days')
+        setDatePreset((searchParams.get('datePreset') as DatePreset) ?? 'custom')
         const dfVal = searchParams.get('dateFrom')
         const dtVal = searchParams.get('dateTo')
         setDateFrom(dfVal ? new Date(dfVal) : null)
@@ -224,7 +224,7 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
             maxAmount: maxAmount || null,
             dateFrom: dateFrom ? dateFrom.toISOString().slice(0, 10) : null,
             dateTo: dateTo ? dateTo.toISOString().slice(0, 10) : null,
-            datePreset,
+            datePreset: dateFrom || dateTo ? datePreset : null,
         })
         setOpen(false)
     }
@@ -239,7 +239,7 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
         setCardTypes([])
         setMinAmount('')
         setMaxAmount('')
-        setDatePreset('last_30_days')
+        setDatePreset('custom')
         setDateFrom(null)
         setDateTo(null)
         startTransition(() => router.push('?'))
@@ -255,6 +255,7 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
         paymentMethods.length > 0,
         cardTypes.length > 0,
         !!minAmount || !!maxAmount,
+        !!dateFrom || !!dateTo,
     ].filter(Boolean).length
 
     return (
@@ -299,6 +300,7 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
                             preset={datePreset}
                             onDateRangeChange={(from, to) => { setDateFrom(from); setDateTo(to) }}
                             onPresetChange={setDatePreset}
+                            initializeWhenEmpty={false}
                         />
                     </div>
 
