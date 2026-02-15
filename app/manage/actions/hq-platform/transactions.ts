@@ -4,6 +4,8 @@ import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { refundAdminOrder } from '@/app/manage/actions/admin-merchant/transactions'
 
+const USE_PLATFORM_TX_VIEW = process.env.USE_PLATFORM_TX_VIEW === 'true'
+
 // Types
 
 export interface PlatformTransaction {
@@ -25,11 +27,16 @@ export interface PlatformTransaction {
   amount: number
   tip_amount: number
   total_amount: number
+  subtotal_amount?: number
+  tax_amount?: number
+  discount_amount?: number
   // Status
   status: string
   order_status?: string
   // Staff
   staff_name?: string
+  // Card entry
+  entry_mode?: string
   // Timestamps
   created_at: string
 }
@@ -66,8 +73,13 @@ interface PlatformTransactionViewRow {
   amount: number | string | null
   tip_amount: number | string | null
   total_amount: number | string | null
+  subtotal_amount?: number | string | null
+  tax_amount?: number | string | null
+  discount_amount?: number | string | null
   status: string | null
   order_status: string | null
+  staff_name?: string | null
+  entry_mode?: string | null
   created_at: string | null
 }
 
@@ -134,6 +146,16 @@ function applyCardTypeFilter(query: any, cardTypes?: string[]) {
 }
 
 function mapViewRowToTransaction(row: PlatformTransactionViewRow): PlatformTransaction {
+  const subtotal = row.subtotal_amount !== undefined && row.subtotal_amount !== null
+    ? Number(row.subtotal_amount)
+    : undefined
+  const tax = row.tax_amount !== undefined && row.tax_amount !== null
+    ? Number(row.tax_amount)
+    : undefined
+  const discount = row.discount_amount !== undefined && row.discount_amount !== null
+    ? Number(row.discount_amount)
+    : undefined
+
   return {
     id: row.id,
     order_id: row.order_id,
@@ -151,8 +173,13 @@ function mapViewRowToTransaction(row: PlatformTransactionViewRow): PlatformTrans
     amount: Number(row.amount || 0),
     tip_amount: Number(row.tip_amount || 0),
     total_amount: Number(row.total_amount || 0),
+    subtotal_amount: subtotal,
+    tax_amount: tax,
+    discount_amount: discount,
     status: row.status || 'unknown',
     order_status: row.order_status || undefined,
+    staff_name: row.staff_name || undefined,
+    entry_mode: row.entry_mode || undefined,
     created_at: row.created_at || new Date(0).toISOString(),
   }
 }
@@ -264,6 +291,7 @@ async function getPlatformTransactionsLegacy(
       status,
       card_type,
       card_last_four,
+      processor_response,
       authorization_code,
       reference_number,
       captured_at,
@@ -277,7 +305,11 @@ async function getPlatformTransactionsLegacy(
         customer_name,
         status,
         payment_status,
+        subtotal,
+        tax_amount,
+        discount_amount,
         created_at,
+        staff_profiles!orders_created_by_staff_id_fkey(first_name, last_name),
         merchants!inner(name),
         locations(name)
       )
@@ -341,27 +373,58 @@ async function getPlatformTransactionsLegacy(
     return { data: [], total: 0 }
   }
 
-  const formattedData: PlatformTransaction[] = (data ?? []).map((payment: any) => ({
-    id: payment.id,
-    order_id: payment.order_id,
-    merchant_name: payment.orders?.merchants?.name || 'Unknown',
-    merchant_id: payment.orders?.merchant_id || '',
-    location_name: payment.orders?.locations?.name,
-    location_id: payment.orders?.location_id,
-    customer_name: payment.orders?.customer_name,
-    order_number: payment.orders?.order_number || payment.orders?.display_number,
-    payment_method: payment.payment_method || 'unknown',
-    card_type: payment.card_type,
-    card_last_four: payment.card_last_four,
-    authorization_code: payment.authorization_code,
-    reference_number: payment.reference_number,
-    amount: Number(payment.amount || 0),
-    tip_amount: Number(payment.tip_amount || 0),
-    total_amount: Number(payment.total_amount || 0),
-    status: payment.status,
-    order_status: payment.orders?.status,
-    created_at: payment.captured_at || payment.initiated_at || payment.orders?.created_at,
-  }))
+  const formattedData: PlatformTransaction[] = (data ?? []).map((payment: any) => {
+    const processorResponse =
+      payment.processor_response && typeof payment.processor_response === 'object'
+        ? (payment.processor_response as Record<string, unknown>)
+        : null
+    const processorEntryCandidates = [
+      processorResponse?.entry_type,
+      processorResponse?.entryType,
+      processorResponse?.entry_mode,
+      processorResponse?.entryMode,
+    ]
+    const processorEntry = processorEntryCandidates.find((value) => typeof value === 'string') as string | undefined
+    const staffFirst = payment.orders?.staff_profiles?.first_name || ''
+    const staffLast = payment.orders?.staff_profiles?.last_name || ''
+    const staffName = `${staffFirst} ${staffLast}`.trim()
+
+    return {
+      id: payment.id,
+      order_id: payment.order_id,
+      merchant_name: payment.orders?.merchants?.name || 'Unknown',
+      merchant_id: payment.orders?.merchant_id || '',
+      location_name: payment.orders?.locations?.name,
+      location_id: payment.orders?.location_id,
+      customer_name: payment.orders?.customer_name,
+      order_number: payment.orders?.order_number || payment.orders?.display_number,
+      payment_method: payment.payment_method || 'unknown',
+      card_type: payment.card_type,
+      card_last_four: payment.card_last_four,
+      authorization_code: payment.authorization_code,
+      reference_number: payment.reference_number,
+      amount: Number(payment.amount || 0),
+      tip_amount: Number(payment.tip_amount || 0),
+      total_amount: Number(payment.total_amount || 0),
+      subtotal_amount:
+        payment.orders?.subtotal !== null && payment.orders?.subtotal !== undefined
+          ? Number(payment.orders.subtotal)
+          : undefined,
+      tax_amount:
+        payment.orders?.tax_amount !== null && payment.orders?.tax_amount !== undefined
+          ? Number(payment.orders.tax_amount)
+          : undefined,
+      discount_amount:
+        payment.orders?.discount_amount !== null && payment.orders?.discount_amount !== undefined
+          ? Number(payment.orders.discount_amount)
+          : undefined,
+      status: payment.status,
+      order_status: payment.orders?.status,
+      staff_name: staffName || undefined,
+      entry_mode: processorEntry || undefined,
+      created_at: payment.captured_at || payment.initiated_at || payment.orders?.created_at,
+    }
+  })
 
   return {
     data: formattedData,
@@ -377,6 +440,11 @@ export async function getPlatformTransactions(
   filters?: PlatformTransactionFilters
 ): Promise<{ data: PlatformTransaction[]; total: number }> {
   await assertHQPermission('hq.merchant.transactions')
+
+  // Legacy is the stable default until view parity is guaranteed in every environment.
+  if (!USE_PLATFORM_TX_VIEW) {
+    return getPlatformTransactionsLegacy(limit, offset, filters)
+  }
 
   const fromView = await getPlatformTransactionsFromView(limit, offset, filters)
   if (!fromView.errorCode) {
@@ -407,7 +475,7 @@ export async function getPlatformTransactionStats(
 
   const batchSize = 1000
   let offset = 0
-  let source: 'view' | 'legacy' = 'view'
+  let source: 'view' | 'legacy' = USE_PLATFORM_TX_VIEW ? 'view' : 'legacy'
 
   let totalTransactions = 0
   let capturedTransactions = 0

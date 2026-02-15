@@ -15,7 +15,7 @@
 | ADM-005 | Partial | No | Transaction detail is implemented via server action + drawer, but not full RPC output (events/settlement schema parity not complete). |
 | ADM-006 | Partial | No | Advanced filter panel implemented; `Staff` filter and exact debounce behavior from AC are still pending. |
 | ADM-007 | Done | Yes | Global search bar + URL sync + debounce + highlight + clear + keyboard shortcut implemented. |
-| ADM-008 | Partial | No | Several columns/features done (including card brand icons), but column visibility toggle/sticky header/alternate rows and remaining fields are incomplete. |
+| ADM-008 | Partial | No | Remaining UI set completed: Customer/Entry/Subtotal/Tax/Tip/Discount/Staff columns, column visibility toggle defaults, sticky header, alternating rows. Keep partial until final ticket-wide QA/spec pass. |
 | ADM-009 | Partial | No | Pagination exists; sorting currently client-side in manage table (not full server-side sort contract + page size selector + URL sort persistence). |
 | ADM-010 | Not started (spec parity) | No | Current behavior is side drawer, not inline expandable row with full 2x2 layout/copy actions. |
 | ADM-011 | Not started | No | Payment event timeline UI not implemented. |
@@ -30,6 +30,7 @@
 - Card brand visuals now reuse dashboard payment card icon component.
 - Manual refresh button added.
 - Client-side sortable headers added for `Order #` and `Date`.
+- Added remaining ADM-008 table UX items: `Walk-in` customer fallback, Entry/Subtotal/Tax/Tip/Discount/Staff columns, column visibility menu (default hidden: Entry/Tax/Discount/Staff), sticky header, zebra rows.
 
 2. Detail and actions
 - Transaction detail side sheet (not inline expansion) with order/payment/context sections.
@@ -48,8 +49,7 @@
 3. ADM-005 (formal transaction detail RPC contract)
 4. ADM-006 remaining items (Staff filter + exact debounce semantics)
 5. ADM-009 (server-side sorting/page-size/URL sort)
-6. ADM-008 remaining table deliverables
-7. ADM-010, ADM-011, ADM-012
+6. ADM-010, ADM-011, ADM-012
 
 ---
 

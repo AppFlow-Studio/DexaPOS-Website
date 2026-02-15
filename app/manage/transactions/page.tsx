@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/table'
 import {
     DropdownMenu,
+    DropdownMenuCheckboxItem,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuLabel,
@@ -44,6 +45,7 @@ import {
     ChevronLeft,
     ChevronRight,
     Banknote,
+    Columns3,
 } from 'lucide-react'
 import { usePlatformTransactionStats, usePlatformTransactions } from '@/lib/queries/use-platform-analytics'
 import {
@@ -101,7 +103,7 @@ function getPaymentStatusBadge(status: string) {
 }
 
 function getMethodBadge(method: string) {
-    const isCard = method === 'card' || method.startsWith('card_')
+    const isCard = isCardMethod(method)
     return (
         <Badge variant="outline" className="gap-1 text-xs">
             {isCard ? <CreditCard className="h-3 w-3" /> : <Banknote className="h-3 w-3" />}
@@ -117,7 +119,7 @@ function exportToCSV(transactions: PlatformTransaction[]) {
         t.order_number || '',
         t.merchant_name,
         t.location_name || '',
-        t.customer_name || 'Anonymous',
+        getCustomerLabel(t.customer_name),
         t.payment_method,
         t.card_last_four ? `****${t.card_last_four}` : '',
         `$${t.amount.toFixed(2)}`,
@@ -150,8 +152,118 @@ function parseList(val: string | null): string[] {
     return val.split(',').filter(Boolean)
 }
 
+function isCardMethod(method: string): boolean {
+    return method === 'card' || method.startsWith('card_')
+}
+
+function getCustomerLabel(customerName?: string): string {
+    if (!customerName) return 'Walk-in'
+    const trimmed = customerName.trim()
+    return trimmed.length > 0 ? trimmed : 'Walk-in'
+}
+
+function formatCurrency(amount?: number): string {
+    if (amount === undefined || amount === null) return '-'
+    return `$${amount.toFixed(2)}`
+}
+
+function getTipLabel(amount?: number): string {
+    if (!amount) return '-'
+    return `$${amount.toFixed(2)}`
+}
+
+function getDiscountLabel(amount?: number): string {
+    if (!amount) return '-'
+    return `$${amount.toFixed(2)}`
+}
+
+function getEntryModeLabel(tx: PlatformTransaction): string {
+    if (!isCardMethod(tx.payment_method)) return 'N/A'
+
+    const raw = tx.entry_mode?.toLowerCase().trim()
+    if (!raw) return 'N/A'
+
+    if (raw.includes('contact') || raw.includes('tap')) return 'Contactless'
+    if (raw.includes('chip') || raw.includes('emv') || raw.includes('insert')) return 'Chip'
+    if (raw.includes('swipe') || raw.includes('magstripe') || raw.includes('mag')) return 'Swipe'
+    if (raw.includes('manual') || raw.includes('keyed') || raw.includes('key')) return 'Manual'
+
+    return 'N/A'
+}
+
 type TableSortKey = 'order' | 'date'
 type TableSortDirection = 'asc' | 'desc'
+
+type TransactionColumnKey =
+    | 'order'
+    | 'merchant'
+    | 'customer'
+    | 'method'
+    | 'card'
+    | 'entry'
+    | 'subtotal'
+    | 'tax'
+    | 'tip'
+    | 'discount'
+    | 'total'
+    | 'payStatus'
+    | 'orderStatus'
+    | 'staff'
+    | 'date'
+
+const DEFAULT_COLUMN_VISIBILITY: Record<TransactionColumnKey, boolean> = {
+    order: true,
+    merchant: true,
+    customer: true,
+    method: true,
+    card: true,
+    entry: false,
+    subtotal: true,
+    tax: false,
+    tip: true,
+    discount: false,
+    total: true,
+    payStatus: true,
+    orderStatus: true,
+    staff: false,
+    date: true,
+}
+
+const COLUMN_LABELS: Record<TransactionColumnKey, string> = {
+    order: 'Order #',
+    merchant: 'Merchant',
+    customer: 'Customer',
+    method: 'Method',
+    card: 'Card',
+    entry: 'Entry',
+    subtotal: 'Subtotal',
+    tax: 'Tax',
+    tip: 'Tip',
+    discount: 'Discount',
+    total: 'Total',
+    payStatus: 'Pay Status',
+    orderStatus: 'Order Status',
+    staff: 'Staff',
+    date: 'Date',
+}
+
+const COLUMN_TOGGLE_ORDER: TransactionColumnKey[] = [
+    'order',
+    'merchant',
+    'customer',
+    'method',
+    'card',
+    'entry',
+    'subtotal',
+    'tax',
+    'tip',
+    'discount',
+    'total',
+    'payStatus',
+    'orderStatus',
+    'staff',
+    'date',
+]
 
 // â”€â”€â”€ Inner page (needs useSearchParams) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -168,6 +280,7 @@ function TransactionsPageInner() {
     const [refundTarget, setRefundTarget] = useState<PlatformTransaction | null>(null)
     const [sortKey, setSortKey] = useState<TableSortKey>('date')
     const [sortDirection, setSortDirection] = useState<TableSortDirection>('desc')
+    const [columnVisibility, setColumnVisibility] = useState<Record<TransactionColumnKey, boolean>>(DEFAULT_COLUMN_VISIBILITY)
 
     // Parse page from URL
     const page = Number(searchParams.get('page') ?? '1')
@@ -224,6 +337,9 @@ function TransactionsPageInner() {
         return sorted
     }, [transactions, sortKey, sortDirection])
 
+    const totalVisibleColumns = Object.values(columnVisibility).filter(Boolean).length + 1
+    const stickyHeadClass = 'sticky top-0 z-20 bg-card'
+
     const setPage = (p: number) => {
         const params = new URLSearchParams(searchParams.toString())
         params.set('page', String(p))
@@ -259,6 +375,10 @@ function TransactionsPageInner() {
                 }
             })()
         })
+    }
+
+    const toggleColumnVisibility = (key: TransactionColumnKey) => {
+        setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
     }
 
     const openTransactionDetails = (transactionId: string) => {
@@ -424,143 +544,199 @@ function TransactionsPageInner() {
                             onChange={handleSearchChange}
                             className="flex-1 min-w-64"
                         />
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm" className="gap-2">
+                                    <Columns3 className="h-4 w-4" />
+                                    Columns
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56">
+                                <DropdownMenuLabel>Visible Columns</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                {COLUMN_TOGGLE_ORDER.map((columnKey) => (
+                                    <DropdownMenuCheckboxItem
+                                        key={columnKey}
+                                        checked={columnVisibility[columnKey]}
+                                        onCheckedChange={() => toggleColumnVisibility(columnKey)}
+                                    >
+                                        {COLUMN_LABELS[columnKey]}
+                                    </DropdownMenuCheckboxItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                         <TransactionFilterSheet searchParams={searchParams} />
                     </div>
                 </CardHeader>
 
                 <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>
-                                    <Button
-                                        variant="ghost"
-                                        onClick={() => toggleSort('order')}
-                                        className="h-8 px-2"
-                                    >
-                                        Order #
-                                        <ArrowUpDown className="ml-2 h-3 w-3" />
-                                    </Button>
-                                </TableHead>
-                                <TableHead>Merchant</TableHead>
-                                <TableHead>Customer</TableHead>
-                                <TableHead>Method</TableHead>
-                                <TableHead>Card</TableHead>
-                                <TableHead>Total</TableHead>
-                                <TableHead>Pay Status</TableHead>
-                                <TableHead>Order Status</TableHead>
-                                <TableHead>
-                                    <Button
-                                        variant="ghost"
-                                        onClick={() => toggleSort('date')}
-                                        className="h-8 px-2"
-                                    >
-                                        Date
-                                        <ArrowUpDown className="ml-2 h-3 w-3" />
-                                    </Button>
-                                </TableHead>
-                                <TableHead className="w-15" />
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {transactionsLoading ? (
-                                Array.from({ length: 6 }).map((_, i) => (
-                                    <TableRow key={i}>
-                                        {Array.from({ length: 10 }).map((_, j) => (
-                                            <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
-                                        ))}
+                    <Table containerClassName="max-h-[70vh] overflow-auto rounded-md border">
+                            <TableHeader className="sticky top-0 z-30 bg-card">
+                                <TableRow>
+                                    {columnVisibility.order && (
+                                        <TableHead className={stickyHeadClass}>
+                                            <Button
+                                                variant="ghost"
+                                                onClick={() => toggleSort('order')}
+                                                className="h-8 px-2"
+                                            >
+                                                Order #
+                                                <ArrowUpDown className="ml-2 h-3 w-3" />
+                                            </Button>
+                                        </TableHead>
+                                    )}
+                                    {columnVisibility.merchant && <TableHead className={stickyHeadClass}>Merchant</TableHead>}
+                                    {columnVisibility.customer && <TableHead className={stickyHeadClass}>Customer</TableHead>}
+                                    {columnVisibility.method && <TableHead className={stickyHeadClass}>Method</TableHead>}
+                                    {columnVisibility.card && <TableHead className={stickyHeadClass}>Card</TableHead>}
+                                    {columnVisibility.entry && <TableHead className={stickyHeadClass}>Entry</TableHead>}
+                                    {columnVisibility.subtotal && <TableHead className={stickyHeadClass}>Subtotal</TableHead>}
+                                    {columnVisibility.tax && <TableHead className={stickyHeadClass}>Tax</TableHead>}
+                                    {columnVisibility.tip && <TableHead className={stickyHeadClass}>Tip</TableHead>}
+                                    {columnVisibility.discount && <TableHead className={stickyHeadClass}>Discount</TableHead>}
+                                    {columnVisibility.total && <TableHead className={stickyHeadClass}>Total</TableHead>}
+                                    {columnVisibility.payStatus && <TableHead className={stickyHeadClass}>Pay Status</TableHead>}
+                                    {columnVisibility.orderStatus && <TableHead className={stickyHeadClass}>Order Status</TableHead>}
+                                    {columnVisibility.staff && <TableHead className={stickyHeadClass}>Staff</TableHead>}
+                                    {columnVisibility.date && (
+                                        <TableHead className={stickyHeadClass}>
+                                            <Button
+                                                variant="ghost"
+                                                onClick={() => toggleSort('date')}
+                                                className="h-8 px-2"
+                                            >
+                                                Date
+                                                <ArrowUpDown className="ml-2 h-3 w-3" />
+                                            </Button>
+                                        </TableHead>
+                                    )}
+                                    <TableHead className={`${stickyHeadClass} w-15`} />
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {transactionsLoading ? (
+                                    Array.from({ length: 6 }).map((_, i) => (
+                                        <TableRow key={i}>
+                                            {Array.from({ length: totalVisibleColumns }).map((_, j) => (
+                                                <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
+                                            ))}
+                                        </TableRow>
+                                    ))
+                                ) : transactionsError ? (
+                                    <TableRow>
+                                        <TableCell colSpan={totalVisibleColumns} className="text-center py-12 text-destructive">
+                                            Error loading transactions: {(transactionsError as Error).message}
+                                        </TableCell>
                                     </TableRow>
-                                ))
-                            ) : transactionsError ? (
-                                <TableRow>
-                                    <TableCell colSpan={10} className="text-center py-12 text-destructive">
-                                        Error loading transactions: {(transactionsError as Error).message}
-                                    </TableCell>
-                                </TableRow>
-                            ) : transactions.length === 0 ? (
-                                <TableRow>
-                                    <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
-                                        No transactions found. Try adjusting your filters.
-                                    </TableCell>
-                                </TableRow>
-                            ) : sortedTransactions.map((tx) => (
-                                <TableRow key={tx.id}>
-                                    <TableCell className="font-mono text-xs">
-                                        {tx.order_number
-                                            ? highlightText(tx.order_number, searchQuery)
-                                            : <span className="text-muted-foreground">â€”</span>}
-                                    </TableCell>
-                                    <TableCell className="font-medium">
-                                        {highlightText(tx.merchant_name, searchQuery)}
-                                        {tx.location_name && (
-                                            <div className="text-xs text-muted-foreground">{tx.location_name}</div>
+                                ) : transactions.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={totalVisibleColumns} className="text-center py-12 text-muted-foreground">
+                                            No transactions found. Try adjusting your filters.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : sortedTransactions.map((tx, index) => (
+                                    <TableRow key={tx.id} className={index % 2 === 1 ? 'bg-muted/20' : undefined}>
+                                        {columnVisibility.order && (
+                                            <TableCell className="font-mono text-xs">
+                                                {tx.order_number
+                                                    ? highlightText(tx.order_number, searchQuery)
+                                                    : <span className="text-muted-foreground">-</span>}
+                                            </TableCell>
                                         )}
-                                    </TableCell>
-                                    <TableCell>
-                                        {highlightText(tx.customer_name || 'Anonymous', searchQuery)}
-                                    </TableCell>
-                                    <TableCell>
-                                        {getMethodBadge(tx.payment_method)}
-                                    </TableCell>
-                                    <TableCell>
-                                        {tx.card_last_four ? (
-                                            <span className="inline-flex items-center gap-1.5 font-mono text-xs">
-                                                <CardBrandIcon brand={tx.card_type} className="h-5 w-auto" />
-                                                <span>****{highlightText(tx.card_last_four, searchQuery)}</span>
-                                            </span>
-                                        ) : (
-                                            <span className="text-muted-foreground">-</span>
+                                        {columnVisibility.merchant && (
+                                            <TableCell className="font-medium">
+                                                {highlightText(tx.merchant_name, searchQuery)}
+                                                {tx.location_name && (
+                                                    <div className="text-xs text-muted-foreground">{tx.location_name}</div>
+                                                )}
+                                            </TableCell>
                                         )}
-                                    </TableCell>
-                                    <TableCell className="font-mono font-semibold">
-                                        ${tx.total_amount.toFixed(2)}
-                                        {tx.tip_amount > 0 && (
-                                            <div className="text-xs text-muted-foreground font-normal">
-                                                +${tx.tip_amount.toFixed(2)} tip
-                                            </div>
+                                        {columnVisibility.customer && (
+                                            <TableCell>{highlightText(getCustomerLabel(tx.customer_name), searchQuery)}</TableCell>
                                         )}
-                                    </TableCell>
-                                    <TableCell>
-                                        {getPaymentStatusBadge(tx.status)}
-                                    </TableCell>
-                                    <TableCell>
-                                        {getOrderStatusBadge(tx.order_status)}
-                                    </TableCell>
-                                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                                        {tx.created_at ? format(new Date(tx.created_at), 'MMM d, h:mm a') : 'â€”'}
-                                    </TableCell>
-                                    <TableCell>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" className="h-8 w-8 p-0">
-                                                    <MoreHorizontal className="h-4 w-4" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                <DropdownMenuItem onClick={() => openTransactionDetails(tx.id)}>
-                                                    View Details
-                                                </DropdownMenuItem>
-                                                <Link href={`/manage/merchants/${tx.merchant_id}/transactions`}>
-                                                    <DropdownMenuItem>View in Merchant</DropdownMenuItem>
-                                                </Link>
-                                                <DropdownMenuItem
-                                                    onClick={() => setRefundTarget(tx)}
-                                                    disabled={tx.status !== 'captured'}
-                                                >
-                                                    Refund
-                                                </DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuItem onClick={() => exportToCSV([tx])}>
-                                                    Export Row
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                                        {columnVisibility.method && (
+                                            <TableCell>{getMethodBadge(tx.payment_method)}</TableCell>
+                                        )}
+                                        {columnVisibility.card && (
+                                            <TableCell>
+                                                {tx.card_last_four ? (
+                                                    <span className="inline-flex items-center gap-1.5 font-mono text-xs">
+                                                        <CardBrandIcon brand={tx.card_type} className="h-5 w-auto" />
+                                                        <span>****{highlightText(tx.card_last_four, searchQuery)}</span>
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-muted-foreground">-</span>
+                                                )}
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.entry && (
+                                            <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                                                {getEntryModeLabel(tx)}
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.subtotal && (
+                                            <TableCell className="font-mono">{formatCurrency(tx.subtotal_amount)}</TableCell>
+                                        )}
+                                        {columnVisibility.tax && (
+                                            <TableCell className="font-mono">{formatCurrency(tx.tax_amount)}</TableCell>
+                                        )}
+                                        {columnVisibility.tip && (
+                                            <TableCell className="font-mono">{getTipLabel(tx.tip_amount)}</TableCell>
+                                        )}
+                                        {columnVisibility.discount && (
+                                            <TableCell className="font-mono">{getDiscountLabel(tx.discount_amount)}</TableCell>
+                                        )}
+                                        {columnVisibility.total && (
+                                            <TableCell className="font-mono font-semibold">
+                                                ${tx.total_amount.toFixed(2)}
+                                            </TableCell>
+                                        )}
+                                        {columnVisibility.payStatus && (
+                                            <TableCell>{getPaymentStatusBadge(tx.status)}</TableCell>
+                                        )}
+                                        {columnVisibility.orderStatus && (
+                                            <TableCell>{getOrderStatusBadge(tx.order_status)}</TableCell>
+                                        )}
+                                        {columnVisibility.staff && (
+                                            <TableCell>{tx.staff_name || <span className="text-muted-foreground">-</span>}</TableCell>
+                                        )}
+                                        {columnVisibility.date && (
+                                            <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                                                {tx.created_at ? format(new Date(tx.created_at), 'MMM d, h:mm a') : '-'}
+                                            </TableCell>
+                                        )}
+                                        <TableCell>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                    <DropdownMenuItem onClick={() => openTransactionDetails(tx.id)}>
+                                                        View Details
+                                                    </DropdownMenuItem>
+                                                    <Link href={`/manage/merchants/${tx.merchant_id}/transactions`}>
+                                                        <DropdownMenuItem>View in Merchant</DropdownMenuItem>
+                                                    </Link>
+                                                    <DropdownMenuItem
+                                                        onClick={() => setRefundTarget(tx)}
+                                                        disabled={tx.status !== 'captured'}
+                                                    >
+                                                        Refund
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem onClick={() => exportToCSV([tx])}>
+                                                        Export Row
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
 
                     {/* Pagination */}
                     {totalPages > 1 && (
@@ -637,4 +813,5 @@ export default function TransactionsPage() {
         </Suspense>
     )
 }
+
 
