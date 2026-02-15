@@ -45,7 +45,7 @@ import {
     ChevronRight,
     Banknote,
 } from 'lucide-react'
-import { usePlatformKPIs, usePlatformTransactions } from '@/lib/queries/use-platform-analytics'
+import { usePlatformTransactionStats, usePlatformTransactions } from '@/lib/queries/use-platform-analytics'
 import {
     getPlatformTransactions,
     PlatformTransaction,
@@ -190,7 +190,11 @@ function TransactionsPageInner() {
     // Search state â€” local, communicated via URL
     const [searchValue, setSearchValue] = useState(searchParams.get('search') ?? '')
 
-    const { data: kpis, isLoading: kpisLoading, refetch: refetchKPIs } = usePlatformKPIs()
+    const {
+        data: transactionStats,
+        isLoading: statsLoading,
+        refetch: refetchTransactionStats,
+    } = usePlatformTransactionStats(filters)
     const {
         data: transactionsData,
         isLoading: transactionsLoading,
@@ -248,7 +252,7 @@ function TransactionsPageInner() {
         startRefreshTransition(() => {
             void (async () => {
                 try {
-                    await Promise.all([refetchTransactions(), refetchKPIs()])
+                    await Promise.all([refetchTransactions(), refetchTransactionStats()])
                     toast.success('Transactions refreshed')
                 } catch {
                     toast.error('Failed to refresh transactions')
@@ -288,7 +292,7 @@ function TransactionsPageInner() {
                 toast.success('Refund completed successfully')
                 setRefundTarget(null)
                 await queryClient.invalidateQueries({ queryKey: ['platform', 'transactions'] })
-                await queryClient.invalidateQueries({ queryKey: ['platform', 'kpis'] })
+                await queryClient.invalidateQueries({ queryKey: ['platform', 'transaction-stats'] })
             })()
         })
     }
@@ -296,31 +300,31 @@ function TransactionsPageInner() {
     const stats = [
         {
             title: 'Total Payments',
-            value: totalTransactions.toLocaleString(),
+            value: (transactionStats?.totalTransactions || 0).toLocaleString(),
             icon: CreditCard,
             color: 'text-muted-foreground',
             sub: 'Matching current filters',
         },
         {
             title: 'Captured',
-            value: transactions.filter(t => t.status === 'captured').length.toLocaleString(),
+            value: (transactionStats?.capturedTransactions || 0).toLocaleString(),
             icon: CheckCircle,
             color: 'text-green-600',
-            sub: 'On this page',
+            sub: 'Matching current filters',
         },
         {
-            title: 'Pending',
-            value: transactions.filter(t => t.status === 'authorized').length.toLocaleString(),
+            title: 'Authorized',
+            value: (transactionStats?.authorizedTransactions || 0).toLocaleString(),
             icon: Clock,
             color: 'text-yellow-600',
-            sub: 'On this page',
+            sub: 'Matching current filters',
         },
         {
-            title: 'Total Revenue (30d)',
-            value: kpis ? `$${kpis.totalRevenue.toLocaleString()}` : '$0',
+            title: 'Total Revenue',
+            value: `$${(transactionStats?.totalRevenue || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
             icon: DollarSign,
             color: 'text-blue-600',
-            sub: 'Platform aggregate',
+            sub: 'Matching current filters',
         },
     ]
 
@@ -390,7 +394,7 @@ function TransactionsPageInner() {
                             <stat.icon className={`h-4 w-4 ${stat.color}`} />
                         </CardHeader>
                         <CardContent>
-                            {kpisLoading || transactionsLoading ? (
+                            {statsLoading || transactionsLoading ? (
                                 <Skeleton className="h-8 w-24" />
                             ) : (
                                 <>

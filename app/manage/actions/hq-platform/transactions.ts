@@ -390,6 +390,80 @@ export async function getPlatformTransactions(
   return getPlatformTransactionsLegacy(limit, offset, filters)
 }
 
+export interface PlatformTransactionStats {
+  totalTransactions: number
+  capturedTransactions: number
+  authorizedTransactions: number
+  refundedTransactions: number
+  totalRevenue: number
+  totalTips: number
+  averageTicket: number
+}
+
+export async function getPlatformTransactionStats(
+  filters?: PlatformTransactionFilters
+): Promise<PlatformTransactionStats> {
+  await assertHQPermission('hq.merchant.transactions')
+
+  const batchSize = 1000
+  let offset = 0
+  let source: 'view' | 'legacy' = 'view'
+
+  let totalTransactions = 0
+  let capturedTransactions = 0
+  let authorizedTransactions = 0
+  let refundedTransactions = 0
+  let totalRevenue = 0
+  let totalTips = 0
+
+  while (true) {
+    let rows: PlatformTransaction[] = []
+
+    if (source === 'view') {
+      const fromView = await getPlatformTransactionsFromView(batchSize, offset, filters)
+      if (fromView.errorCode) {
+        console.warn(
+          `[getPlatformTransactionStats] Falling back to legacy query path due to view error (${fromView.errorCode}).`
+        )
+        source = 'legacy'
+        continue
+      }
+      rows = fromView.data
+    } else {
+      const fromLegacy = await getPlatformTransactionsLegacy(batchSize, offset, filters)
+      rows = fromLegacy.data
+    }
+
+    if (!rows || rows.length === 0) break
+
+    for (const tx of rows) {
+      totalTransactions += 1
+      totalRevenue += tx.total_amount
+      totalTips += tx.tip_amount
+
+      if (tx.status === 'captured') capturedTransactions += 1
+      if (tx.status === 'authorized') authorizedTransactions += 1
+      if (tx.status === 'refunded' || tx.status === 'partially_refunded') refundedTransactions += 1
+    }
+
+    if (rows.length < batchSize) break
+    offset += batchSize
+
+    // Safety guard against runaway loops.
+    if (offset > 100000) break
+  }
+
+  return {
+    totalTransactions,
+    capturedTransactions,
+    authorizedTransactions,
+    refundedTransactions,
+    totalRevenue,
+    totalTips,
+    averageTicket: totalTransactions > 0 ? totalRevenue / totalTransactions : 0,
+  }
+}
+
 // Transaction detail drawer
 
 export interface PlatformTransactionLineItem {
