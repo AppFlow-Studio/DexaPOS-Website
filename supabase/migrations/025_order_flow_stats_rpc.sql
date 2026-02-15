@@ -112,24 +112,26 @@ BEGIN
   -- Order type breakdown
   order_type_stats_calc AS (
     SELECT
-      COALESCE(ao.order_type, 'unknown') as order_type_val,
+      ao.order_type as order_type_val,
       COUNT(*) as count_val,
       COALESCE(SUM(ao.total_amount), 0) as total_rev,
       COALESCE(AVG(ao.total_amount), 0) as avg_val
     FROM all_orders ao
+    WHERE ao.order_type IS NOT NULL
     GROUP BY ao.order_type
   ),
 
   -- Completion time per order type
   completion_time_calc AS (
     SELECT
-      COALESCE(ao.order_type, 'unknown') as order_type_val,
+      ao.order_type as order_type_val,
       AVG(EXTRACT(EPOCH FROM (ao.completed_at - ao.created_at)) / 60) as avg_min,
       MIN(EXTRACT(EPOCH FROM (ao.completed_at - ao.created_at)) / 60) as min_min,
       MAX(EXTRACT(EPOCH FROM (ao.completed_at - ao.created_at)) / 60) as max_min,
       COUNT(*) as count_val
     FROM all_orders ao
     WHERE ao.completed_at IS NOT NULL
+      AND ao.order_type IS NOT NULL
     GROUP BY ao.order_type
   ),
 
