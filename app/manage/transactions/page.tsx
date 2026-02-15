@@ -1,11 +1,12 @@
 'use client'
 
-import { Suspense, useMemo, useState, useTransition } from 'react'
+import { Suspense, useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import {
     Table,
     TableBody,
@@ -37,6 +38,8 @@ import {
     CreditCard,
     Download,
     RefreshCcwDot,
+    ArrowDown,
+    ArrowUp,
     ArrowUpDown,
     MoreHorizontal,
     CheckCircle,
@@ -191,8 +194,9 @@ function getEntryModeLabel(tx: PlatformTransaction): string {
     return 'N/A'
 }
 
-type TableSortKey = 'order' | 'date'
-type TableSortDirection = 'asc' | 'desc'
+type TransactionSortBy = 'created_at' | 'order_number' | 'total_amount'
+type TransactionSortDirection = 'asc' | 'desc'
+const PAGE_SIZE_OPTIONS = [25, 50, 100] as const
 
 type TransactionColumnKey =
     | 'order'
@@ -271,19 +275,28 @@ function TransactionsPageInner() {
     const searchParams = useSearchParams()
     const router = useRouter()
     const queryClient = useQueryClient()
-    const pageSize = 50
     const [isExporting, startExportTransition] = useTransition()
     const [isRefreshing, startRefreshTransition] = useTransition()
     const [isRefunding, startRefundTransition] = useTransition()
     const [isDetailOpen, setIsDetailOpen] = useState(false)
     const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null)
     const [refundTarget, setRefundTarget] = useState<PlatformTransaction | null>(null)
-    const [sortKey, setSortKey] = useState<TableSortKey>('date')
-    const [sortDirection, setSortDirection] = useState<TableSortDirection>('desc')
     const [columnVisibility, setColumnVisibility] = useState<Record<TransactionColumnKey, boolean>>(DEFAULT_COLUMN_VISIBILITY)
 
+    const rawPageSize = Number(searchParams.get('pageSize') ?? '25')
+    const pageSize = PAGE_SIZE_OPTIONS.includes(rawPageSize as (typeof PAGE_SIZE_OPTIONS)[number]) ? rawPageSize : 25
+
     // Parse page from URL
-    const page = Number(searchParams.get('page') ?? '1')
+    const rawPage = Number(searchParams.get('page') ?? '1')
+    const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1
+
+    const sortBy = (searchParams.get('sortBy') as TransactionSortBy) || 'created_at'
+    const sortDirection = (searchParams.get('sortDir') as TransactionSortDirection) || 'desc'
+    const normalizedSortBy: TransactionSortBy =
+        sortBy === 'order_number' || sortBy === 'total_amount' || sortBy === 'created_at'
+            ? sortBy
+            : 'created_at'
+    const normalizedSortDirection: TransactionSortDirection = sortDirection === 'asc' ? 'asc' : 'desc'
 
     // Parse all filter params from URL
     const filters: PlatformTransactionFilters = useMemo(() => ({
@@ -294,10 +307,13 @@ function TransactionsPageInner() {
         paymentStatuses: parseList(searchParams.get('paymentStatus')).length > 0 ? parseList(searchParams.get('paymentStatus')) : undefined,
         paymentMethods: parseList(searchParams.get('method')).length > 0 ? parseList(searchParams.get('method')) : undefined,
         cardTypes: parseList(searchParams.get('cardType')).length > 0 ? parseList(searchParams.get('cardType')) : undefined,
+        staffId: searchParams.get('staffId') ?? undefined,
         minAmount: searchParams.get('minAmount') ? Number(searchParams.get('minAmount')) : undefined,
         maxAmount: searchParams.get('maxAmount') ? Number(searchParams.get('maxAmount')) : undefined,
         dateFrom: searchParams.get('dateFrom') ? `${searchParams.get('dateFrom')}T00:00:00` : undefined,
         dateTo: searchParams.get('dateTo') ? `${searchParams.get('dateTo')}T23:59:59` : undefined,
+        sortBy: normalizedSortBy,
+        sortDir: normalizedSortDirection,
     }), [searchParams])
 
     // Search state â€” local, communicated via URL
@@ -311,6 +327,7 @@ function TransactionsPageInner() {
     const {
         data: transactionsData,
         isLoading: transactionsLoading,
+        isFetching: transactionsFetching,
         error: transactionsError,
         refetch: refetchTransactions,
     } = usePlatformTransactions(pageSize, (page - 1) * pageSize, filters)
@@ -318,51 +335,91 @@ function TransactionsPageInner() {
     const transactions = transactionsData?.data || []
     const totalTransactions = transactionsData?.total || 0
     const totalPages = Math.max(1, Math.ceil(totalTransactions / pageSize))
+    const showingFrom = totalTransactions === 0 ? 0 : (page - 1) * pageSize + 1
+    const showingTo = totalTransactions === 0 ? 0 : Math.min((page - 1) * pageSize + transactions.length, totalTransactions)
+    const [pageInput, setPageInput] = useState(String(page))
 
-    const sortedTransactions = useMemo(() => {
-        const sorted = [...transactions]
-        sorted.sort((a, b) => {
-            let comparison = 0
-            if (sortKey === 'order') {
-                const left = a.order_number || ''
-                const right = b.order_number || ''
-                comparison = left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' })
-            } else {
-                const left = a.created_at ? new Date(a.created_at).getTime() : 0
-                const right = b.created_at ? new Date(b.created_at).getTime() : 0
-                comparison = left - right
-            }
-            return sortDirection === 'asc' ? comparison : -comparison
-        })
-        return sorted
-    }, [transactions, sortKey, sortDirection])
+    useEffect(() => {
+        setPageInput(String(page))
+    }, [page])
 
     const totalVisibleColumns = Object.values(columnVisibility).filter(Boolean).length + 1
     const stickyHeadClass = 'sticky top-0 z-20 bg-card'
 
-    const setPage = (p: number) => {
+    const updateUrlParams = (mutate: (params: URLSearchParams) => void) => {
         const params = new URLSearchParams(searchParams.toString())
-        params.set('page', String(p))
-        router.push(`?${params.toString()}`)
+        mutate(params)
+        const next = params.toString()
+        router.push(next ? `?${next}` : '?')
+    }
+
+    const setPage = (p: number) => {
+        const nextPage = Math.min(Math.max(1, p), totalPages)
+        if (nextPage === page) return
+        updateUrlParams((params) => {
+            params.set('page', String(nextPage))
+        })
     }
 
     const handleSearchChange = (val: string) => {
         setSearchValue(val)
-        const params = new URLSearchParams(searchParams.toString())
-        if (val) params.set('search', val)
-        else params.delete('search')
-        params.delete('page')
-        router.push(`?${params.toString()}`)
+        updateUrlParams((params) => {
+            if (val) params.set('search', val)
+            else params.delete('search')
+            params.delete('page')
+        })
     }
 
-    const toggleSort = (key: TableSortKey) => {
-        if (sortKey === key) {
-            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    const toggleSort = (columnSortBy: TransactionSortBy) => {
+        const nextDirection: TransactionSortDirection =
+            normalizedSortBy === columnSortBy
+                ? normalizedSortDirection === 'asc'
+                    ? 'desc'
+                    : 'asc'
+                : columnSortBy === 'created_at'
+                    ? 'desc'
+                    : 'asc'
+
+        updateUrlParams((params) => {
+            params.set('sortBy', columnSortBy)
+            params.set('sortDir', nextDirection)
+            params.delete('page')
+        })
+    }
+
+    const getSortIndicator = (columnSortBy: TransactionSortBy) => {
+        if (normalizedSortBy !== columnSortBy) {
+            return <ArrowUpDown className="ml-2 h-3 w-3 opacity-50" />
+        }
+        if (normalizedSortDirection === 'asc') {
+            return <ArrowUp className="ml-2 h-3 w-3" />
+        }
+        return <ArrowDown className="ml-2 h-3 w-3" />
+    }
+
+    const handlePageSizeChange = (nextPageSize: number) => {
+        if (!PAGE_SIZE_OPTIONS.includes(nextPageSize as (typeof PAGE_SIZE_OPTIONS)[number])) return
+        if (nextPageSize === pageSize) return
+        updateUrlParams((params) => {
+            params.set('pageSize', String(nextPageSize))
+            params.delete('page')
+        })
+    }
+
+    const handlePageInputCommit = () => {
+        const parsed = Number(pageInput)
+        if (!Number.isFinite(parsed) || parsed < 1) {
+            setPageInput(String(page))
             return
         }
-        setSortKey(key)
-        setSortDirection(key === 'date' ? 'desc' : 'asc')
+        setPage(Math.floor(parsed))
     }
+
+    useEffect(() => {
+        if (page > totalPages) {
+            setPage(totalPages)
+        }
+    }, [page, totalPages])
 
     const handleRefresh = () => {
         startRefreshTransition(() => {
@@ -449,6 +506,7 @@ function TransactionsPageInner() {
     ]
 
     const searchQuery = filters.search ?? ''
+    const isTableLoading = transactionsLoading || transactionsFetching
 
     const exportAllFilteredRows = async () => {
         const batchSize = 1000
@@ -577,11 +635,11 @@ function TransactionsPageInner() {
                                         <TableHead className={stickyHeadClass}>
                                             <Button
                                                 variant="ghost"
-                                                onClick={() => toggleSort('order')}
+                                                onClick={() => toggleSort('order_number')}
                                                 className="h-8 px-2"
                                             >
                                                 Order #
-                                                <ArrowUpDown className="ml-2 h-3 w-3" />
+                                                {getSortIndicator('order_number')}
                                             </Button>
                                         </TableHead>
                                     )}
@@ -594,7 +652,18 @@ function TransactionsPageInner() {
                                     {columnVisibility.tax && <TableHead className={stickyHeadClass}>Tax</TableHead>}
                                     {columnVisibility.tip && <TableHead className={stickyHeadClass}>Tip</TableHead>}
                                     {columnVisibility.discount && <TableHead className={stickyHeadClass}>Discount</TableHead>}
-                                    {columnVisibility.total && <TableHead className={stickyHeadClass}>Total</TableHead>}
+                                    {columnVisibility.total && (
+                                        <TableHead className={stickyHeadClass}>
+                                            <Button
+                                                variant="ghost"
+                                                onClick={() => toggleSort('total_amount')}
+                                                className="h-8 px-2"
+                                            >
+                                                Total
+                                                {getSortIndicator('total_amount')}
+                                            </Button>
+                                        </TableHead>
+                                    )}
                                     {columnVisibility.payStatus && <TableHead className={stickyHeadClass}>Pay Status</TableHead>}
                                     {columnVisibility.orderStatus && <TableHead className={stickyHeadClass}>Order Status</TableHead>}
                                     {columnVisibility.staff && <TableHead className={stickyHeadClass}>Staff</TableHead>}
@@ -602,11 +671,11 @@ function TransactionsPageInner() {
                                         <TableHead className={stickyHeadClass}>
                                             <Button
                                                 variant="ghost"
-                                                onClick={() => toggleSort('date')}
+                                                onClick={() => toggleSort('created_at')}
                                                 className="h-8 px-2"
                                             >
                                                 Date
-                                                <ArrowUpDown className="ml-2 h-3 w-3" />
+                                                {getSortIndicator('created_at')}
                                             </Button>
                                         </TableHead>
                                     )}
@@ -614,7 +683,7 @@ function TransactionsPageInner() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {transactionsLoading ? (
+                                {isTableLoading ? (
                                     Array.from({ length: 6 }).map((_, i) => (
                                         <TableRow key={i}>
                                             {Array.from({ length: totalVisibleColumns }).map((_, j) => (
@@ -634,7 +703,7 @@ function TransactionsPageInner() {
                                             No transactions found. Try adjusting your filters.
                                         </TableCell>
                                     </TableRow>
-                                ) : sortedTransactions.map((tx, index) => (
+                                ) : transactions.map((tx, index) => (
                                     <TableRow key={tx.id} className={index % 2 === 1 ? 'bg-muted/20' : undefined}>
                                         {columnVisibility.order && (
                                             <TableCell className="font-mono text-xs">
@@ -739,33 +808,63 @@ function TransactionsPageInner() {
                         </Table>
 
                     {/* Pagination */}
-                    {totalPages > 1 && (
-                        <div className="flex items-center justify-between pt-4 text-sm text-muted-foreground">
-                            <span>
-                                Page {page} of {totalPages} &middot; {totalTransactions.toLocaleString()} total
-                            </span>
-                            <div className="flex items-center gap-2">
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() => setPage(Math.max(1, page - 1))}
-                                    disabled={page === 1}
+                    <div className="flex flex-col gap-3 pt-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+                        <span>
+                            Showing {showingFrom.toLocaleString()}-{showingTo.toLocaleString()} of {totalTransactions.toLocaleString()}
+                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <label className="flex items-center gap-2">
+                                <span>Rows</span>
+                                <select
+                                    className="h-8 rounded-md border bg-background px-2 text-foreground"
+                                    value={pageSize}
+                                    onChange={(event) => handlePageSizeChange(Number(event.target.value))}
                                 >
-                                    <ChevronLeft className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() => setPage(Math.min(totalPages, page + 1))}
-                                    disabled={page === totalPages}
-                                >
-                                    <ChevronRight className="h-4 w-4" />
-                                </Button>
-                            </div>
+                                    {PAGE_SIZE_OPTIONS.map((size) => (
+                                        <option key={size} value={size}>
+                                            {size}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                            <label className="flex items-center gap-2">
+                                <span>Page</span>
+                                <Input
+                                    className="h-8 w-16 text-center"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    value={pageInput}
+                                    onChange={(event) => setPageInput(event.target.value.replace(/[^0-9]/g, ''))}
+                                    onBlur={handlePageInputCommit}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter') {
+                                            event.preventDefault()
+                                            handlePageInputCommit()
+                                        }
+                                    }}
+                                />
+                                <span>of {totalPages.toLocaleString()}</span>
+                            </label>
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => setPage(page - 1)}
+                                disabled={page <= 1}
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => setPage(page + 1)}
+                                disabled={page >= totalPages}
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </Button>
                         </div>
-                    )}
+                    </div>
                 </CardContent>
             </Card>
 
@@ -813,5 +912,4 @@ export default function TransactionsPage() {
         </Suspense>
     )
 }
-
 

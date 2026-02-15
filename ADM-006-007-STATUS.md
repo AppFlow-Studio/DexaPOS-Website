@@ -13,10 +13,10 @@
 | ADM-003 | Done (User-confirmed) | Yes | You marked it crossed out already. |
 | ADM-004 | Partial | No | Functional list/filter/search endpoint exists, but not as the exact `get_admin_transactions(...)` RPC contract. |
 | ADM-005 | Partial | No | Transaction detail is implemented via server action + drawer, but not full RPC output (events/settlement schema parity not complete). |
-| ADM-006 | Partial | No | Advanced filter panel implemented; `Staff` filter and exact debounce behavior from AC are still pending. |
+| ADM-006 | Done | Yes | Advanced filter panel complete including staff searchable dropdown, URL-persisted params, and 300ms debounced filter sync. |
 | ADM-007 | Done | Yes | Global search bar + URL sync + debounce + highlight + clear + keyboard shortcut implemented. |
-| ADM-008 | Partial | No | Remaining UI set completed: Customer/Entry/Subtotal/Tax/Tip/Discount/Staff columns, column visibility toggle defaults, sticky header, alternating rows. Keep partial until final ticket-wide QA/spec pass. |
-| ADM-009 | Partial | No | Pagination exists; sorting currently client-side in manage table (not full server-side sort contract + page size selector + URL sort persistence). |
+| ADM-008 | Done (User-confirmed) | Yes | You confirmed it scratched after the remaining UI column/sticky/zebra work. |
+| ADM-009 | Done | Yes | Server-side sorting + pagination complete with URL-persisted sort/page/pageSize and fetch skeleton state. |
 | ADM-010 | Not started (spec parity) | No | Current behavior is side drawer, not inline expandable row with full 2x2 layout/copy actions. |
 | ADM-011 | Not started | No | Payment event timeline UI not implemented. |
 | ADM-012 | Partial | No | Basic items shown in detail view, but full modifier/void/open-item/tax-exempt/order-discount breakdown is incomplete. |
@@ -29,8 +29,10 @@
 - Global transactions table with filters, search, row actions, export, pagination.
 - Card brand visuals now reuse dashboard payment card icon component.
 - Manual refresh button added.
-- Client-side sortable headers added for `Order #` and `Date`.
+- Server-side sortable headers wired for `Order #`, `Total`, and `Date` with URL-persisted sort state.
 - Added remaining ADM-008 table UX items: `Walk-in` customer fallback, Entry/Subtotal/Tax/Tip/Discount/Staff columns, column visibility menu (default hidden: Entry/Tax/Discount/Staff), sticky header, zebra rows.
+- Completed ADM-006 remainder: staff filter (searchable), filter URL persistence verification, and 300ms debounced re-fetch behavior.
+- Completed ADM-009: Previous/Next pagination, page input, "Showing x-y of z", page size selector (25/50/100), server-side sorting, page reset on search/filter/sort/page-size changes, and loading skeleton during refetch.
 
 2. Detail and actions
 - Transaction detail side sheet (not inline expansion) with order/payment/context sections.
@@ -47,9 +49,9 @@
 1. ADM-002 (RLS + access enforcement)
 2. ADM-004 (formal admin transactions RPC contract)
 3. ADM-005 (formal transaction detail RPC contract)
-4. ADM-006 remaining items (Staff filter + exact debounce semantics)
-5. ADM-009 (server-side sorting/page-size/URL sort)
-6. ADM-010, ADM-011, ADM-012
+4. ADM-010
+5. ADM-011
+6. ADM-012
 
 ---
 
@@ -58,3 +60,6 @@
 1. ADM-001
 2. ADM-003
 3. ADM-007
+4. ADM-006
+5. ADM-008 (user-confirmed)
+6. ADM-009

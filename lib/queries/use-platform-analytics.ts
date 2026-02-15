@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
   getPlatformKPIs,
   getPlatformSalesTrend,
@@ -46,6 +46,7 @@ export function usePlatformTransactions(limit: number = 50, offset: number = 0, 
   return useQuery({
     queryKey: platformKeys.transactions(limit, offset, filters),
     queryFn: () => getPlatformTransactions(limit, offset, filters),
+    placeholderData: keepPreviousData,
   })
 }
 
