@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import type { ReadonlyURLSearchParams } from 'next/navigation'
 import {
@@ -18,14 +18,23 @@ import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
     DropdownMenuContent,
+    DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { DateRangePicker, DatePreset } from '@/components/dashboard/orders/DateRangePicker'
 import { Filter, ChevronDown, X } from 'lucide-react'
-import { getPlatformMerchants, getPlatformLocations, PlatformMerchant, PlatformLocation } from '@/app/manage/actions/hq-platform/transactions'
+import {
+    getPlatformLocations,
+    getPlatformMerchants,
+    getPlatformStaff,
+    PlatformLocation,
+    PlatformMerchant,
+    PlatformStaff,
+} from '@/app/manage/actions/hq-platform/transactions'
 import { cn } from '@/lib/utils'
+import { useDebounce } from '@/lib/hooks/useDebounce'
 
 // â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -131,6 +140,78 @@ function MultiSelect({ label, options, selected, onChange, disabled, placeholder
     )
 }
 
+interface SearchableSingleSelectProps {
+    label: string
+    options: { value: string; label: string }[]
+    selected: string | null
+    onChange: (value: string | null) => void
+    disabled?: boolean
+    placeholder?: string
+    searchPlaceholder?: string
+}
+
+function SearchableSingleSelect({
+    label,
+    options,
+    selected,
+    onChange,
+    disabled,
+    placeholder,
+    searchPlaceholder,
+}: SearchableSingleSelectProps) {
+    const [search, setSearch] = useState('')
+    const selectedLabel = selected
+        ? options.find((option) => option.value === selected)?.label
+        : null
+
+    const filteredOptions = useMemo(() => {
+        const query = search.trim().toLowerCase()
+        if (!query) return options
+        return options.filter((option) => option.label.toLowerCase().includes(query))
+    }, [options, search])
+
+    return (
+        <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild disabled={disabled}>
+                <Button variant="outline" className="w-full justify-between font-normal" size="sm">
+                    <span className="truncate">{selectedLabel || placeholder || `All ${label}`}</span>
+                    <ChevronDown className="ml-1 h-4 w-4 text-muted-foreground" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-72 z-[200]">
+                <DropdownMenuLabel>{label}</DropdownMenuLabel>
+                <div className="p-2">
+                    <Input
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                        placeholder={searchPlaceholder || `Search ${label.toLowerCase()}...`}
+                        onKeyDown={(event) => event.stopPropagation()}
+                    />
+                </div>
+                <DropdownMenuSeparator />
+                {selected && (
+                    <DropdownMenuItem onSelect={() => onChange(null)}>
+                        All {label}
+                    </DropdownMenuItem>
+                )}
+                {filteredOptions.length === 0 ? (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">No results</div>
+                ) : (
+                    filteredOptions.map((option) => (
+                        <DropdownMenuItem
+                            key={option.value}
+                            onSelect={() => onChange(option.value)}
+                            className={cn(selected === option.value && 'bg-accent')}
+                        >
+                            {option.label}
+                        </DropdownMenuItem>
+                    ))
+                )}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    )
+}
+
 // â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface TransactionFilterSheetProps {
@@ -145,6 +226,7 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
     // Remote data for dropdowns
     const [merchants, setMerchants] = useState<PlatformMerchant[]>([])
     const [locations, setLocations] = useState<PlatformLocation[]>([])
+    const [staffOptions, setStaffOptions] = useState<PlatformStaff[]>([])
 
     // Local filter state (mirrors URL params)
     const [selectedMerchants, setSelectedMerchants] = useState<string[]>(() => parseList(searchParams.get('merchants')))
@@ -153,6 +235,7 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
     const [paymentStatuses, setPaymentStatuses] = useState<string[]>(() => parseList(searchParams.get('paymentStatus')))
     const [paymentMethods, setPaymentMethods] = useState<string[]>(() => parseList(searchParams.get('method')))
     const [cardTypes, setCardTypes] = useState<string[]>(() => parseList(searchParams.get('cardType')))
+    const [selectedStaffId, setSelectedStaffId] = useState<string | null>(() => searchParams.get('staffId'))
     const [minAmount, setMinAmount] = useState(searchParams.get('minAmount') ?? '')
     const [maxAmount, setMaxAmount] = useState(searchParams.get('maxAmount') ?? '')
     const [datePreset, setDatePreset] = useState<DatePreset>((searchParams.get('datePreset') as DatePreset) ?? 'custom')
@@ -175,6 +258,7 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
         setPaymentStatuses(parseList(searchParams.get('paymentStatus')))
         setPaymentMethods(parseList(searchParams.get('method')))
         setCardTypes(parseList(searchParams.get('cardType')))
+        setSelectedStaffId(searchParams.get('staffId'))
         setMinAmount(searchParams.get('minAmount') ?? '')
         setMaxAmount(searchParams.get('maxAmount') ?? '')
         setDatePreset((searchParams.get('datePreset') as DatePreset) ?? 'custom')
@@ -199,34 +283,96 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
         getPlatformLocations(selectedMerchants).then(setLocations)
     }, [selectedMerchants])
 
+    useEffect(() => {
+        if (!open) return
+        getPlatformStaff(
+            selectedMerchants.length > 0 ? selectedMerchants : undefined,
+            selectedLocations.length > 0 ? selectedLocations : undefined
+        ).then(setStaffOptions)
+    }, [open, selectedMerchants, selectedLocations])
+
+    useEffect(() => {
+        if (!selectedStaffId) return
+        if (staffOptions.some((staff) => staff.id === selectedStaffId)) return
+        setSelectedStaffId(null)
+    }, [staffOptions, selectedStaffId])
+
     // â”€â”€ URL sync helper â”€â”€
-    const updateParams = (updates: Record<string, string | null>) => {
+    const updateParams = (
+        updates: Record<string, string | null>,
+        options?: { closeSheet?: boolean; resetPage?: boolean }
+    ) => {
         const params = new URLSearchParams(searchParams.toString())
+        const previous = params.toString()
+
         Object.entries(updates).forEach(([k, v]) => {
             if (v === null || v === '') params.delete(k)
             else params.set(k, v)
         })
-        // Always reset to page 1 when filters change
-        params.delete('page')
-        startTransition(() => router.push(`?${params.toString()}`))
+
+        if (options?.resetPage ?? true) {
+            // Always reset to page 1 when filters change
+            params.delete('page')
+        }
+
+        const next = params.toString()
+        if (next === previous) return
+
+        startTransition(() => router.push(`?${next}`))
+        if (options?.closeSheet) {
+            setOpen(false)
+        }
     }
 
-    // â”€â”€ Apply all local state to URL â”€â”€
-    const applyFilters = () => {
-        updateParams({
+    const buildFilterUpdates = useMemo<Record<string, string | null>>(() => ({
             merchants: selectedMerchants.join(',') || null,
             locations: selectedLocations.join(',') || null,
             orderStatus: orderStatuses.join(',') || null,
             paymentStatus: paymentStatuses.join(',') || null,
             method: paymentMethods.join(',') || null,
             cardType: cardTypes.join(',') || null,
+            staffId: selectedStaffId || null,
             minAmount: minAmount || null,
             maxAmount: maxAmount || null,
             dateFrom: dateFrom ? dateFrom.toISOString().slice(0, 10) : null,
             dateTo: dateTo ? dateTo.toISOString().slice(0, 10) : null,
             datePreset: dateFrom || dateTo ? datePreset : null,
-        })
-        setOpen(false)
+        }), [
+            selectedMerchants,
+            selectedLocations,
+            orderStatuses,
+            paymentStatuses,
+            paymentMethods,
+            cardTypes,
+            selectedStaffId,
+            minAmount,
+            maxAmount,
+            dateFrom,
+            dateTo,
+            datePreset,
+        ])
+
+    const debouncedFilterUpdates = useDebounce(buildFilterUpdates, 300)
+    const shouldSkipNextAutoApply = useRef(true)
+
+    useEffect(() => {
+        if (!open) return
+        if (shouldSkipNextAutoApply.current) {
+            shouldSkipNextAutoApply.current = false
+            return
+        }
+        updateParams(debouncedFilterUpdates, { closeSheet: false, resetPage: true })
+    }, [debouncedFilterUpdates, open])
+
+    useEffect(() => {
+        if (open) {
+            shouldSkipNextAutoApply.current = true
+        }
+    }, [open])
+
+    // â”€â”€ Optional immediate apply button â”€â”€
+    const applyFilters = () => {
+        updateParams(buildFilterUpdates, { closeSheet: true, resetPage: true })
     }
 
     // â”€â”€ Clear all â”€â”€
@@ -237,6 +383,7 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
         setPaymentStatuses([])
         setPaymentMethods([])
         setCardTypes([])
+        setSelectedStaffId(null)
         setMinAmount('')
         setMaxAmount('')
         setDatePreset('custom')
@@ -254,6 +401,7 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
         paymentStatuses.length > 0,
         paymentMethods.length > 0,
         cardTypes.length > 0,
+        !!selectedStaffId,
         !!minAmount || !!maxAmount,
         !!dateFrom || !!dateTo,
     ].filter(Boolean).length
@@ -359,6 +507,19 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
                         />
                     </div>
 
+                    {/* Staff */}
+                    <div className="space-y-2">
+                        <Label className="text-sm font-semibold">Staff</Label>
+                        <SearchableSingleSelect
+                            label="Staff"
+                            options={staffOptions.map((staff) => ({ value: staff.id, label: staff.name }))}
+                            selected={selectedStaffId}
+                            onChange={setSelectedStaffId}
+                            placeholder="All Staff"
+                            searchPlaceholder="Search staff..."
+                        />
+                    </div>
+
                     <Separator />
 
                     {/* Order Status */}
@@ -402,7 +563,7 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
                                     min={0}
                                 />
                             </div>
-                            <span className="text-muted-foreground text-sm">â€“</span>
+                            <span className="text-muted-foreground text-sm">~</span>
                             <div className="relative flex-1">
                                 <span className="absolute left-2.5 top-2.5 text-sm text-muted-foreground">$</span>
                                 <Input

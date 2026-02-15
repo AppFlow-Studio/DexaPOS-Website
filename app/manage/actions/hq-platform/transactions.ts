@@ -54,6 +54,8 @@ export interface PlatformTransactionFilters {
   staffId?: string
   dateFrom?: string
   dateTo?: string
+  sortBy?: 'created_at' | 'order_number' | 'total_amount'
+  sortDir?: 'asc' | 'desc'
 }
 
 interface PlatformTransactionViewRow {
@@ -145,6 +147,14 @@ function applyCardTypeFilter(query: any, cardTypes?: string[]) {
   return query.or(cardTypeOr)
 }
 
+function normalizeSort(
+  filters?: PlatformTransactionFilters
+): { sortBy: 'created_at' | 'order_number' | 'total_amount'; ascending: boolean } {
+  const sortBy = filters?.sortBy ?? 'created_at'
+  const sortDir = filters?.sortDir ?? 'desc'
+  return { sortBy, ascending: sortDir === 'asc' }
+}
+
 function mapViewRowToTransaction(row: PlatformTransactionViewRow): PlatformTransaction {
   const subtotal = row.subtotal_amount !== undefined && row.subtotal_amount !== null
     ? Number(row.subtotal_amount)
@@ -205,6 +215,10 @@ function applyPlatformTransactionFilters(query: any, filters?: PlatformTransacti
     query = query.in('payment_method', filters.paymentMethods)
   }
 
+  if (filters?.staffId) {
+    query = query.eq('staff_id', filters.staffId)
+  }
+
   query = applyCardTypeFilter(query, filters?.cardTypes)
 
   if (filters?.minAmount !== undefined) {
@@ -253,9 +267,10 @@ async function getPlatformTransactionsFromView(
     .from('vw_platform_transactions')
     .select(PLATFORM_TX_SELECT, { count: 'exact' })
     .not('status', 'in', '(pending,failed)')
-    .order('created_at', { ascending: false, nullsFirst: false })
 
   query = applyPlatformTransactionFilters(query, filters)
+  const { sortBy, ascending } = normalizeSort(filters)
+  query = query.order(sortBy, { ascending, nullsFirst: false })
   query = query.range(offset, offset + limit - 1)
 
   const { data, error, count } = await query
@@ -302,6 +317,7 @@ async function getPlatformTransactionsLegacy(
         display_number,
         merchant_id,
         location_id,
+        created_by_staff_id,
         customer_name,
         status,
         payment_status,
@@ -317,7 +333,6 @@ async function getPlatformTransactionsLegacy(
       { count: 'exact' }
     )
     .not('status', 'in', '(pending,failed)')
-    .order('captured_at', { ascending: false, nullsFirst: false })
 
   if (filters?.merchantIds && filters.merchantIds.length > 0) {
     query = query.in('orders.merchant_id', filters.merchantIds)
@@ -337,6 +352,10 @@ async function getPlatformTransactionsLegacy(
 
   if (filters?.paymentMethods && filters.paymentMethods.length > 0) {
     query = query.in('payment_method', filters.paymentMethods)
+  }
+
+  if (filters?.staffId) {
+    query = query.eq('orders.created_by_staff_id', filters.staffId)
   }
 
   query = applyCardTypeFilter(query, filters?.cardTypes)
@@ -362,6 +381,15 @@ async function getPlatformTransactionsLegacy(
     query = query.or(
       `card_last_four.ilike.%${term}%,authorization_code.ilike.%${term}%,reference_number.ilike.%${term}%`
     )
+  }
+
+  const { sortBy, ascending } = normalizeSort(filters)
+  if (sortBy === 'order_number') {
+    query = query.order('order_number', { ascending, nullsFirst: false, foreignTable: 'orders' as any })
+  } else if (sortBy === 'total_amount') {
+    query = query.order('total_amount', { ascending, nullsFirst: false })
+  } else {
+    query = query.order('captured_at', { ascending, nullsFirst: false })
   }
 
   query = query.range(offset, offset + limit - 1)
@@ -867,4 +895,79 @@ export async function getPlatformLocations(merchantIds?: string[]): Promise<Plat
   }
 
   return (data ?? []).map((l: any) => ({ id: l.id, name: l.name, merchant_id: l.merchant_id }))
+}
+
+// Staff for filter dropdown
+
+export interface PlatformStaff {
+  id: string
+  name: string
+  merchant_id?: string
+  location_id?: string
+}
+
+export async function getPlatformStaff(
+  merchantIds?: string[],
+  locationIds?: string[]
+): Promise<PlatformStaff[]> {
+  await assertHQPermission('hq.merchant.view')
+
+  const supabase = createServerSupabaseClient()
+
+  let query = supabase
+    .from('orders')
+    .select(
+      `
+      created_by_staff_id,
+      merchant_id,
+      location_id,
+      created_at,
+      staff_profiles!orders_created_by_staff_id_fkey(
+        id,
+        first_name,
+        last_name
+      )
+    `
+    )
+    .not('created_by_staff_id', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(5000)
+
+  if (merchantIds && merchantIds.length > 0) {
+    query = query.in('merchant_id', merchantIds)
+  }
+
+  if (locationIds && locationIds.length > 0) {
+    query = query.in('location_id', locationIds)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    console.error('[getPlatformStaff] Error:', error)
+    return []
+  }
+
+  const unique = new Map<string, PlatformStaff>()
+
+  for (const row of data ?? []) {
+    const profileRaw = (row as any).staff_profiles
+    const profile = Array.isArray(profileRaw) ? profileRaw[0] : profileRaw
+    const staffId = row.created_by_staff_id || profile?.id
+    const first = profile?.first_name || ''
+    const last = profile?.last_name || ''
+    const name = `${first} ${last}`.trim()
+
+    if (!staffId || !name) continue
+    if (unique.has(staffId)) continue
+
+    unique.set(staffId, {
+      id: staffId,
+      name,
+      merchant_id: row.merchant_id || undefined,
+      location_id: row.location_id || undefined,
+    })
+  }
+
+  return Array.from(unique.values()).sort((a, b) => a.name.localeCompare(b.name))
 }
