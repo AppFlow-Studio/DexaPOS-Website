@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
-import { 
-  getPlatformKPIs, 
-  getPlatformSalesTrend, 
-  getTopMerchants 
+import {
+  getPlatformKPIs,
+  getPlatformSalesTrend,
+  getTopMerchants,
+  getGPVConcentration
 } from '@/app/manage/actions/hq-platform/analytics'
 import { getPlatformTransactions } from '@/app/manage/actions/hq-platform/transactions'
 
@@ -11,6 +12,7 @@ export const platformKeys = {
   kpis: () => [...platformKeys.all, 'kpis'] as const,
   salesTrend: () => [...platformKeys.all, 'sales-trend'] as const,
   topMerchants: () => [...platformKeys.all, 'top-merchants'] as const,
+  gpvConcentration: (days: number) => [...platformKeys.all, 'gpv-concentration', days] as const,
   transactions: (limit: number, offset: number) => [...platformKeys.all, 'transactions', { limit, offset }] as const,
 }
 
@@ -32,6 +34,13 @@ export function useTopMerchants(limit: number = 5) {
   return useQuery({
     queryKey: [...platformKeys.topMerchants(), limit],
     queryFn: () => getTopMerchants(limit),
+  })
+}
+
+export function useGPVConcentration(days: number = 30) {
+  return useQuery({
+    queryKey: platformKeys.gpvConcentration(days),
+    queryFn: () => getGPVConcentration(days),
   })
 }
 
