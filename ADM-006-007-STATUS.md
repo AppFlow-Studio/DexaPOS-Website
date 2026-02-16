@@ -17,8 +17,8 @@
 | ADM-007 | Done | Yes | Global search bar + URL sync + debounce + highlight + clear + keyboard shortcut implemented. |
 | ADM-008 | Done (User-confirmed) | Yes | You confirmed it scratched after the remaining UI column/sticky/zebra work. |
 | ADM-009 | Done | Yes | Server-side sorting + pagination complete with URL-persisted sort/page/pageSize and fetch skeleton state. |
-| ADM-010 | Not started (spec parity) | No | Current behavior is side drawer, not inline expandable row with full 2x2 layout/copy actions. |
-| ADM-011 | Not started | No | Payment event timeline UI not implemented. |
+| ADM-010 | Partial | No | Inline expandable row + 2x2 detail panel + copy actions are implemented; remaining parity items include split-payment segment view and full field/event completeness. |
+| ADM-011 | Partial | No | Timeline section added in expanded transaction view with icons, status transitions, relative/absolute time, and collapsible raw JSON; final parity depends on payment_events dataset availability and full field coverage. |
 | ADM-012 | Partial | No | Basic items shown in detail view, but full modifier/void/open-item/tax-exempt/order-discount breakdown is incomplete. |
 
 ---

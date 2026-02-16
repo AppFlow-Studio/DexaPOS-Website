@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useMemo, useState, useTransition } from 'react'
+import { Fragment, Suspense, useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -62,7 +62,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import Link from 'next/link'
 import { TransactionFilterSheet } from './components/TransactionFilterSheet'
 import { TransactionSearchBar, highlightText } from './components/TransactionSearchBar'
-import { TransactionDetailSheet } from './components/TransactionDetailSheet'
+import { TransactionDetailInlinePanel } from './components/TransactionDetailInlinePanel'
 import { CardBrandIcon } from '@/app/dashboard/payments/components/CardBrandIcon'
 import { toast } from 'sonner'
 
@@ -278,8 +278,7 @@ function TransactionsPageInner() {
     const [isExporting, startExportTransition] = useTransition()
     const [isRefreshing, startRefreshTransition] = useTransition()
     const [isRefunding, startRefundTransition] = useTransition()
-    const [isDetailOpen, setIsDetailOpen] = useState(false)
-    const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null)
+    const [expandedTransactionId, setExpandedTransactionId] = useState<string | null>(null)
     const [refundTarget, setRefundTarget] = useState<PlatformTransaction | null>(null)
     const [columnVisibility, setColumnVisibility] = useState<Record<TransactionColumnKey, boolean>>(DEFAULT_COLUMN_VISIBILITY)
 
@@ -421,6 +420,13 @@ function TransactionsPageInner() {
         }
     }, [page, totalPages])
 
+    useEffect(() => {
+        if (!expandedTransactionId) return
+        if (!transactions.some((tx) => tx.id === expandedTransactionId)) {
+            setExpandedTransactionId(null)
+        }
+    }, [transactions, expandedTransactionId])
+
     const handleRefresh = () => {
         startRefreshTransition(() => {
             void (async () => {
@@ -439,15 +445,7 @@ function TransactionsPageInner() {
     }
 
     const openTransactionDetails = (transactionId: string) => {
-        setSelectedTransactionId(transactionId)
-        setIsDetailOpen(true)
-    }
-
-    const handleDetailOpenChange = (open: boolean) => {
-        setIsDetailOpen(open)
-        if (!open) {
-            setSelectedTransactionId(null)
-        }
+        setExpandedTransactionId((current) => (current === transactionId ? null : transactionId))
     }
 
     const handleConfirmRefund = () => {
@@ -704,7 +702,11 @@ function TransactionsPageInner() {
                                         </TableCell>
                                     </TableRow>
                                 ) : transactions.map((tx, index) => (
-                                    <TableRow key={tx.id} className={index % 2 === 1 ? 'bg-muted/20' : undefined}>
+                                    <Fragment key={tx.id}>
+                                    <TableRow
+                                        className={`${index % 2 === 1 ? 'bg-muted/20' : ''} cursor-pointer ${expandedTransactionId === tx.id ? 'bg-muted/30' : ''}`}
+                                        onClick={() => openTransactionDetails(tx.id)}
+                                    >
                                         {columnVisibility.order && (
                                             <TableCell className="font-mono text-xs">
                                                 {tx.order_number
@@ -774,7 +776,7 @@ function TransactionsPageInner() {
                                                 {tx.created_at ? format(new Date(tx.created_at), 'MMM d, h:mm a') : '-'}
                                             </TableCell>
                                         )}
-                                        <TableCell>
+                                        <TableCell onClick={(event) => event.stopPropagation()}>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button variant="ghost" className="h-8 w-8 p-0">
@@ -783,7 +785,7 @@ function TransactionsPageInner() {
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
                                                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                    <DropdownMenuItem onClick={() => openTransactionDetails(tx.id)}>
+                                                    <DropdownMenuItem onSelect={() => openTransactionDetails(tx.id)}>
                                                         View Details
                                                     </DropdownMenuItem>
                                                     <Link href={`/manage/merchants/${tx.merchant_id}/transactions`}>
@@ -803,6 +805,14 @@ function TransactionsPageInner() {
                                             </DropdownMenu>
                                         </TableCell>
                                     </TableRow>
+                                    {expandedTransactionId === tx.id && (
+                                        <TableRow className={index % 2 === 1 ? 'bg-muted/20' : undefined}>
+                                            <TableCell colSpan={totalVisibleColumns} className="p-0">
+                                                <TransactionDetailInlinePanel transactionId={tx.id} />
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                    </Fragment>
                                 ))}
                             </TableBody>
                         </Table>
@@ -867,12 +877,6 @@ function TransactionsPageInner() {
                     </div>
                 </CardContent>
             </Card>
-
-            <TransactionDetailSheet
-                open={isDetailOpen}
-                onOpenChange={handleDetailOpenChange}
-                transactionId={selectedTransactionId}
-            />
 
             <AlertDialog open={!!refundTarget} onOpenChange={(open) => !open && setRefundTarget(null)}>
                 <AlertDialogContent>
