@@ -541,7 +541,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow>
-              <TableHead className="w-[180px]">
+              <TableHead className="w-45">
                 <div className="flex items-center gap-2">
                   <Clock className="h-3.5 w-3.5" />
                   Timestamp
@@ -552,7 +552,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
               <TableHead>Actor</TableHead>
               {isAllLocations && <TableHead>Location</TableHead>}
               <TableHead>Severity</TableHead>
-              <TableHead className="w-[50px]"></TableHead>
+              <TableHead className="w-12.5"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -653,7 +653,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center shrink-0 ring-2 ring-primary/10">
+                        <div className="h-8 w-8 rounded-full bg-linear-to-br from-primary/20 to-primary/10 flex items-center justify-center shrink-0 ring-2 ring-primary/10">
                           <User className="h-3.5 w-3.5 text-primary" />
                         </div>
                         <span className="text-sm font-medium">

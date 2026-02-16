@@ -105,7 +105,7 @@ function StationHeatmapGrid({ merchant }: { merchant: MerchantTerminalUtilizatio
                                     aria-label={`${station.stationName}: ${label}`}
                                 />
                             </TooltipTrigger>
-                            <TooltipContent side="top" className="text-xs max-w-[220px]">
+                            <TooltipContent side="top" className="text-xs max-w-55">
                                 <p className="font-semibold">{station.stationName}</p>
                                 <p className="text-muted-foreground">{station.stationType}</p>
                                 <p className="mt-1">{label}</p>
@@ -136,7 +136,7 @@ function ZombieInsightBanner({ merchants }: { merchants: MerchantTerminalUtiliza
     if (!worstMerchant) return null
 
     return (
-        <Card className="border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50">
+        <Card className="border-amber-200 bg-linear-to-r from-amber-50 to-orange-50">
             <CardContent className="py-4">
                 <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-amber-100">
@@ -258,7 +258,7 @@ export default function TerminalUtilizationHeatmap() {
                     )}
                 </div>
                 <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
-                    <SelectTrigger className="w-[130px]">
+                    <SelectTrigger className="w-32.5">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -418,7 +418,7 @@ export default function TerminalUtilizationHeatmap() {
                                         </BarChart>
                                     </ResponsiveContainer>
                                 ) : (
-                                    <div className="h-[260px] flex items-center justify-center text-muted-foreground text-sm">
+                                    <div className="h-65 flex items-center justify-center text-muted-foreground text-sm">
                                         No data available
                                     </div>
                                 )}
@@ -438,7 +438,7 @@ export default function TerminalUtilizationHeatmap() {
                                         </CardDescription>
                                     </div>
                                     <Select value={filterTier} onValueChange={(v) => setFilterTier(v as typeof filterTier)}>
-                                        <SelectTrigger className="w-[150px]">
+                                        <SelectTrigger className="w-37.5">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -451,7 +451,7 @@ export default function TerminalUtilizationHeatmap() {
                                 </div>
                             </CardHeader>
                             <CardContent>
-                                <div className="max-h-[450px] overflow-auto">
+                                <div className="max-h-112.5 overflow-auto">
                                     <Table>
                                         <TableHeader>
                                             <TableRow className="bg-muted/50">
@@ -657,7 +657,7 @@ export default function TerminalUtilizationHeatmap() {
 
                     {/* All-Healthy State */}
                     {data.summary.totalStations > 0 && data.summary.underutilizedMerchantCount === 0 && data.summary.totalZombieStations === 0 && (
-                        <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50">
+                        <Card className="border-green-200 bg-linear-to-r from-green-50 to-emerald-50">
                             <CardContent className="py-8">
                                 <div className="flex flex-col items-center justify-center text-center gap-3">
                                     <div className="p-3 rounded-full bg-green-100">

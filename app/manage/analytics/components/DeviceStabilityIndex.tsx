@@ -70,7 +70,7 @@ export default function DeviceStabilityIndex() {
                     )}
                 </div>
                 <Select value={String(days)} onValueChange={(v) => { setDays(Number(v)); setSelectedVersion(null) }}>
-                    <SelectTrigger className="w-[130px]">
+                    <SelectTrigger className="w-32.5">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -83,7 +83,7 @@ export default function DeviceStabilityIndex() {
 
             {/* Rollout Warning Banner */}
             {!isLoading && stabilityData?.rolloutWarning && (
-                <Card className="border-red-200 bg-gradient-to-r from-red-50 to-orange-50">
+                <Card className="border-red-200 bg-linear-to-r from-red-50 to-orange-50">
                     <CardContent className="py-4">
                         <div className="flex items-center gap-3">
                             <div className="p-2 rounded-lg bg-red-100">
@@ -104,7 +104,7 @@ export default function DeviceStabilityIndex() {
             {/* All Clear State — fleet is stable, no versions at risk */}
             {!isLoading && stabilityData && !stabilityData.rolloutWarning && stabilityData.versionBars.length > 0 &&
                 stabilityData.versionBars.every(v => v.instabilityRate <= INSTABILITY_THRESHOLD) && (
-                <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50">
+                <Card className="border-green-200 bg-linear-to-r from-green-50 to-emerald-50">
                     <CardContent className="py-4">
                         <div className="flex items-center gap-3">
                             <div className="p-2 rounded-lg bg-green-100">
@@ -203,7 +203,7 @@ export default function DeviceStabilityIndex() {
                     </CardHeader>
                     <CardContent>
                         {isLoading ? (
-                            <Skeleton className="h-[350px] w-full" />
+                            <Skeleton className="h-87.5 w-full" />
                         ) : stabilityData && stabilityData.versionBars.length > 0 ? (
                             <ResponsiveContainer width="100%" height={350}>
                                 <BarChart
@@ -298,7 +298,7 @@ export default function DeviceStabilityIndex() {
                                 </BarChart>
                             </ResponsiveContainer>
                         ) : (
-                            <div className="h-[350px] flex flex-col items-center justify-center text-muted-foreground gap-3">
+                            <div className="h-87.5 flex flex-col items-center justify-center text-muted-foreground gap-3">
                                 <Smartphone className="h-10 w-10 opacity-30" />
                                 <div className="text-center">
                                     <p className="text-sm font-medium">No device heartbeat data</p>
@@ -354,7 +354,7 @@ export default function DeviceStabilityIndex() {
                                     ))}
                                 </div>
                             ) : stabilityData && stabilityData.versionBars.length > 0 ? (
-                                <div className="max-h-[380px] overflow-auto">
+                                <div className="max-h-95 overflow-auto">
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
@@ -398,7 +398,7 @@ export default function DeviceStabilityIndex() {
                                     </Table>
                                 </div>
                             ) : (
-                                <div className="h-[300px] flex flex-col items-center justify-center text-muted-foreground gap-3">
+                                <div className="h-75 flex flex-col items-center justify-center text-muted-foreground gap-3">
                                     <Smartphone className="h-10 w-10 opacity-30" />
                                     <p className="text-sm font-medium">No version data available</p>
                                 </div>
@@ -428,7 +428,7 @@ export default function DeviceStabilityIndex() {
                                     </div>
 
                                     {/* Model breakdown table */}
-                                    <div className="max-h-[300px] overflow-auto">
+                                    <div className="max-h-75 overflow-auto">
                                         <Table>
                                             <TableHeader>
                                                 <TableRow>
@@ -469,7 +469,7 @@ export default function DeviceStabilityIndex() {
                                     </div>
                                 </div>
                             ) : (
-                                <div className="h-[300px] flex flex-col items-center justify-center text-muted-foreground gap-3">
+                                <div className="h-75 flex flex-col items-center justify-center text-muted-foreground gap-3">
                                     <Smartphone className="h-10 w-10 opacity-30" />
                                     <p className="text-sm font-medium">No hardware data for this version</p>
                                 </div>

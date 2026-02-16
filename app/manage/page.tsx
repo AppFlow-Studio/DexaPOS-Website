@@ -141,11 +141,11 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="pl-2">
             {salesLoading ? (
-              <div className="h-[300px] flex items-center justify-center">
-                <Skeleton className="h-[280px] w-full" />
+              <div className="h-75 flex items-center justify-center">
+                <Skeleton className="h-70 w-full" />
               </div>
             ) : chartData.length > 0 ? (
-              <ChartContainer config={chartConfig} className="h-[300px] w-full">
+              <ChartContainer config={chartConfig} className="h-75 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -163,7 +163,7 @@ export default function Dashboard() {
                 </ResponsiveContainer>
               </ChartContainer>
             ) : (
-              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+              <div className="h-75 flex items-center justify-center text-muted-foreground">
                 No transaction data found for the last 30 days.
               </div>
             )}
@@ -177,8 +177,8 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             {merchantsLoading ? (
-              <div className="h-[300px] flex items-center justify-center">
-                <Skeleton className="h-[280px] w-full" />
+              <div className="h-75 flex items-center justify-center">
+                <Skeleton className="h-70 w-full" />
               </div>
             ) : merchantChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
@@ -210,7 +210,7 @@ export default function Dashboard() {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+              <div className="h-75 flex items-center justify-center text-muted-foreground">
                 No active merchants found.
               </div>
             )}

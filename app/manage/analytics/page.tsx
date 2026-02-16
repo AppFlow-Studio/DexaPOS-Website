@@ -215,7 +215,7 @@ export default function AnalyticsPage() {
             {/* ================================================================ */}
 
             {!churnLoading && churnData && churnData.totalAtRisk > 0 && (
-                <Card className="border-red-200 bg-gradient-to-r from-red-50 to-orange-50">
+                <Card className="border-red-200 bg-linear-to-r from-red-50 to-orange-50">
                     <CardHeader className="pb-4">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
@@ -371,7 +371,7 @@ export default function AnalyticsPage() {
 
             {/* No Churn Risk State */}
             {!churnLoading && churnData && churnData.totalAtRisk === 0 && (
-                <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50">
+                <Card className="border-green-200 bg-linear-to-r from-green-50 to-emerald-50">
                     <CardContent className="py-8">
                         <div className="flex flex-col items-center justify-center text-center gap-3">
                             <div className="p-3 rounded-full bg-green-100">
@@ -571,7 +571,7 @@ export default function AnalyticsPage() {
                     )}
                 </div>
                 <Select value={String(whaleWatchDays)} onValueChange={(v) => setWhaleWatchDays(Number(v))}>
-                    <SelectTrigger className="w-[130px]">
+                    <SelectTrigger className="w-32.5">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -668,11 +668,11 @@ export default function AnalyticsPage() {
                     </CardHeader>
                     <CardContent className="pl-2">
                         {gpvLoading ? (
-                            <div className="h-[320px] flex items-center justify-center">
-                                <Skeleton className="h-[300px] w-full" />
+                            <div className="h-80 flex items-center justify-center">
+                                <Skeleton className="h-75 w-full" />
                             </div>
                         ) : gpvData && gpvData.totalMerchants >= 2 ? (
-                            <ChartContainer config={whaleChartConfig} className="h-[320px] w-full">
+                            <ChartContainer config={whaleChartConfig} className="h-80 w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={gpvData.lorenzCurve}>
                                         <defs>
@@ -742,7 +742,7 @@ export default function AnalyticsPage() {
                                 </ResponsiveContainer>
                             </ChartContainer>
                         ) : (
-                            <div className="h-[320px] flex flex-col items-center justify-center text-muted-foreground gap-3">
+                            <div className="h-80 flex flex-col items-center justify-center text-muted-foreground gap-3">
                                 <AlertTriangle className="h-10 w-10 opacity-30" />
                                 <div className="text-center">
                                     <p className="text-sm font-medium">Insufficient data for concentration analysis</p>
@@ -773,7 +773,7 @@ export default function AnalyticsPage() {
                                 ))}
                             </div>
                         ) : sortedWhaleList.length > 0 ? (
-                            <div className="max-h-[380px] overflow-auto">
+                            <div className="max-h-95 overflow-auto">
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
@@ -851,7 +851,7 @@ export default function AnalyticsPage() {
                                 </Table>
                             </div>
                         ) : (
-                            <div className="h-[300px] flex flex-col items-center justify-center text-muted-foreground gap-3">
+                            <div className="h-75 flex flex-col items-center justify-center text-muted-foreground gap-3">
                                 <Crown className="h-10 w-10 opacity-30" />
                                 <div className="text-center">
                                     <p className="text-sm font-medium">No whale merchants detected</p>
