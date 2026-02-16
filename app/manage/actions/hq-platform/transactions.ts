@@ -593,6 +593,45 @@ export interface PlatformTransactionPaymentEvent {
   raw_response?: Record<string, unknown> | null
 }
 
+export interface PlatformTransactionSegment {
+  id: string
+  payment_method: string
+  status: string
+  amount: number
+  tip_amount: number
+  total_amount: number
+  card_type?: string
+  card_last_four?: string
+  authorization_code?: string
+  reference_number?: string
+  transaction_id?: string
+  terminal_type?: string
+  terminal_id?: string
+  card_entry_mode?: string
+  batch_number?: string
+  invoice_number?: string
+  split_sequence?: number
+  is_split_payment?: boolean
+  is_voided: boolean
+  void_reason?: string
+  voided_at?: string
+  voided_by?: string
+  is_returned?: boolean
+  return_amount?: number
+  return_reason?: string
+  returned_at?: string
+  returned_by?: string
+  refunded_amount?: number
+  refund_reason?: string
+  refunded_at?: string
+  original_tip_amount?: number
+  tip_adjusted_at?: string
+  tip_adjusted_by?: string
+  initiated_at?: string
+  authorized_at?: string
+  captured_at?: string
+}
+
 export interface PlatformTransactionDetails {
   id: string
   order_id: string
@@ -645,8 +684,14 @@ export interface PlatformTransactionDetails {
   refund_reason?: string
   return_amount?: number
   return_reason?: string
+  returned_by?: string
+  is_returned?: boolean
   is_voided: boolean
   void_reason?: string
+  voided_by?: string
+  original_tip_amount?: number
+  tip_adjusted_at?: string
+  tip_adjusted_by?: string
   error_code?: string
   error_message?: string
   created_at: string
@@ -665,6 +710,7 @@ export interface PlatformTransactionDetails {
   items: PlatformTransactionLineItem[]
   paid_items: PlatformTransactionPaidItem[]
   payment_events: PlatformTransactionPaymentEvent[]
+  payment_segments: PlatformTransactionSegment[]
 }
 
 export async function getPlatformTransactionDetails(
@@ -810,6 +856,86 @@ export async function getPlatformTransactionDetails(
     })
   }
 
+  const { data: segmentRows, error: segmentsError } = await supabase
+    .from('order_payments')
+    .select('*')
+    .eq('order_id', data.order_id)
+    .order('initiated_at', { ascending: true })
+
+  if (segmentsError) {
+    console.error('[getPlatformTransactionDetails:segments] Error:', segmentsError)
+  }
+
+  const paymentSegments: PlatformTransactionSegment[] = (segmentRows ?? []).map((segment: any) => {
+    const segmentProcessorResponse =
+      segment.processor_response && typeof segment.processor_response === 'object'
+        ? (segment.processor_response as Record<string, unknown>)
+        : null
+    const segmentEntry = [
+      segment.card_entry_mode,
+      segmentProcessorResponse?.entry_type,
+      segmentProcessorResponse?.entryType,
+      segmentProcessorResponse?.entry_mode,
+      segmentProcessorResponse?.entryMode,
+    ].find((value) => typeof value === 'string') as string | undefined
+
+    const splitSequence =
+      segment.split_sequence !== null && segment.split_sequence !== undefined
+        ? Number(segment.split_sequence)
+        : segment.split_index !== null && segment.split_index !== undefined
+          ? Number(segment.split_index)
+          : segment.split_portion_index !== null && segment.split_portion_index !== undefined
+            ? Number(segment.split_portion_index)
+            : undefined
+
+    return {
+      id: segment.id,
+      payment_method: segment.payment_method || 'unknown',
+      status: segment.status || 'unknown',
+      amount: Number(segment.amount || 0),
+      tip_amount: Number(segment.tip_amount || 0),
+      total_amount: Number(segment.total_amount || 0),
+      card_type: segment.card_type || undefined,
+      card_last_four: segment.card_last_four || undefined,
+      authorization_code: segment.authorization_code || undefined,
+      reference_number: segment.reference_number || undefined,
+      transaction_id: segment.transaction_id || undefined,
+      terminal_type: segment.terminal_type || undefined,
+      terminal_id: segment.terminal_id || undefined,
+      card_entry_mode: segmentEntry,
+      batch_number: segment.batch_number || segment.dejavoo_batch_number || undefined,
+      invoice_number: segment.invoice_number || segment.dejavoo_invoice_number || undefined,
+      split_sequence: splitSequence,
+      is_split_payment:
+        segment.is_split_payment ?? (
+          segment.split_total !== null &&
+          segment.split_total !== undefined &&
+          Number(segment.split_total) > 1
+            ? true
+            : undefined
+        ),
+      is_voided: Boolean(segment.is_voided),
+      void_reason: segment.void_reason || undefined,
+      voided_at: segment.voided_at || undefined,
+      voided_by: segment.voided_by || undefined,
+      is_returned: segment.is_returned ?? (segment.returned_at ? true : undefined),
+      return_amount: segment.return_amount !== null ? Number(segment.return_amount) : undefined,
+      return_reason: segment.return_reason || undefined,
+      returned_at: segment.returned_at || undefined,
+      returned_by: segment.returned_by || undefined,
+      refunded_amount: segment.refunded_amount !== null ? Number(segment.refunded_amount) : undefined,
+      refund_reason: segment.refund_reason || undefined,
+      refunded_at: segment.refunded_at || undefined,
+      original_tip_amount:
+        segment.original_tip_amount !== null ? Number(segment.original_tip_amount) : undefined,
+      tip_adjusted_at: segment.tip_adjusted_at || undefined,
+      tip_adjusted_by: segment.tip_adjusted_by || undefined,
+      initiated_at: segment.initiated_at || undefined,
+      authorized_at: segment.authorized_at || undefined,
+      captured_at: segment.captured_at || undefined,
+    }
+  })
+
   return {
     id: data.id,
     order_id: data.order_id,
@@ -876,8 +1002,14 @@ export async function getPlatformTransactionDetails(
     refund_reason: data.refund_reason || undefined,
     return_amount: data.return_amount !== null ? Number(data.return_amount) : undefined,
     return_reason: data.return_reason || undefined,
+    returned_by: data.returned_by || undefined,
+    is_returned: data.is_returned ?? (data.returned_at ? true : undefined),
     is_voided: Boolean(data.is_voided),
     void_reason: data.void_reason || undefined,
+    voided_by: data.voided_by || undefined,
+    original_tip_amount: data.original_tip_amount !== null ? Number(data.original_tip_amount) : undefined,
+    tip_adjusted_at: data.tip_adjusted_at || undefined,
+    tip_adjusted_by: data.tip_adjusted_by || undefined,
     error_code: data.error_code || undefined,
     error_message: data.error_message || undefined,
     created_at: data.captured_at || data.initiated_at || order.created_at || new Date(0).toISOString(),
@@ -911,6 +1043,7 @@ export async function getPlatformTransactionDetails(
       tax_paid: Number(item.tax_paid || 0),
     })),
     payment_events: paymentEvents,
+    payment_segments: paymentSegments,
   }
 }
 

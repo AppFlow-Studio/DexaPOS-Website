@@ -17,7 +17,7 @@
 | ADM-007 | Done | Yes | Global search bar + URL sync + debounce + highlight + clear + keyboard shortcut implemented. |
 | ADM-008 | Done (User-confirmed) | Yes | You confirmed it scratched after the remaining UI column/sticky/zebra work. |
 | ADM-009 | Done | Yes | Server-side sorting + pagination complete with URL-persisted sort/page/pageSize and fetch skeleton state. |
-| ADM-010 | Partial | No | Inline expandable row + 2x2 detail panel + copy actions are implemented; remaining parity items include split-payment segment view and full field/event completeness. |
+| ADM-010 | Done (Pending QA) | No | Inline expandable row now includes 2x2 detail panel, split-payment segment cards, void/return/tip-adjustment details, loading spinner, and copy actions. |
 | ADM-011 | Partial | No | Timeline section added in expanded transaction view with icons, status transitions, relative/absolute time, and collapsible raw JSON; final parity depends on payment_events dataset availability and full field coverage. |
 | ADM-012 | Partial | No | Basic items shown in detail view, but full modifier/void/open-item/tax-exempt/order-discount breakdown is incomplete. |
 
@@ -35,7 +35,9 @@
 - Completed ADM-009: Previous/Next pagination, page input, "Showing x-y of z", page size selector (25/50/100), server-side sorting, page reset on search/filter/sort/page-size changes, and loading skeleton during refetch.
 
 2. Detail and actions
-- Transaction detail side sheet (not inline expansion) with order/payment/context sections.
+- Transaction detail is now inline expandable (one row at a time) with a 2x2 payment detail grid.
+- Added split-payment segment rendering and adjustment/reversal details (void/return/refund/tip-adjustment).
+- Added payment timeline section with event icons, status transitions, relative+absolute timestamp behavior, and raw JSON collapsible.
 - Refund action from row menu with confirmation and refresh.
 
 3. Data/query layer
@@ -49,9 +51,8 @@
 1. ADM-002 (RLS + access enforcement)
 2. ADM-004 (formal admin transactions RPC contract)
 3. ADM-005 (formal transaction detail RPC contract)
-4. ADM-010
-5. ADM-011
-6. ADM-012
+4. ADM-011
+5. ADM-012
 
 ---
 
