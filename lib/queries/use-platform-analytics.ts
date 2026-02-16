@@ -62,6 +62,7 @@ export function usePlatformTransactionDetails(transactionId: string | null, enab
     queryKey: platformKeys.transactionDetails(transactionId),
     queryFn: () => getPlatformTransactionDetails(transactionId!),
     enabled: enabled && !!transactionId,
+    staleTime: 30_000,
   })
 }
 

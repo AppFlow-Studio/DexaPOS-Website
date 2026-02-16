@@ -571,6 +571,28 @@ export interface PlatformTransactionLineItem {
   special_instructions?: string
 }
 
+export interface PlatformTransactionPaidItem {
+  id: string
+  order_item_id?: string
+  item_name?: string
+  quantity_paid: number
+  unit_price_paid: number
+  subtotal_paid: number
+  tax_paid: number
+}
+
+export interface PlatformTransactionPaymentEvent {
+  id: string
+  event_type: string
+  previous_status?: string
+  new_status?: string
+  timestamp?: string
+  terminal_id?: string
+  result_code?: string
+  response_message?: string
+  raw_response?: Record<string, unknown> | null
+}
+
 export interface PlatformTransactionDetails {
   id: string
   order_id: string
@@ -608,6 +630,15 @@ export interface PlatformTransactionDetails {
   processor_name?: string
   terminal_id?: string
   terminal_type?: string
+  device_id?: string
+  card_entry_mode?: string
+  dejavoo_response_code?: string
+  batch_number?: string
+  invoice_number?: string
+  is_split_payment?: boolean
+  split_sequence?: number
+  settled_at?: string
+  settlement_batch_id?: string
   gateway_fee?: number
   original_amount?: number
   refunded_amount?: number
@@ -629,7 +660,11 @@ export interface PlatformTransactionDetails {
   failed_at?: string
   completed_at?: string
   metadata?: Record<string, unknown>
+  emv_data?: Record<string, unknown> | null
+  processor_response?: Record<string, unknown> | null
   items: PlatformTransactionLineItem[]
+  paid_items: PlatformTransactionPaidItem[]
+  payment_events: PlatformTransactionPaymentEvent[]
 }
 
 export async function getPlatformTransactionDetails(
@@ -643,40 +678,19 @@ export async function getPlatformTransactionDetails(
     .from('order_payments')
     .select(
       `
-      id,
-      order_id,
-      payment_method,
-      status,
-      amount,
-      tip_amount,
-      total_amount,
-      card_type,
-      card_last_four,
-      authorization_code,
-      reference_number,
-      transaction_id,
-      processor_name,
-      terminal_id,
-      terminal_type,
-      gateway_fee,
-      original_amount,
-      refunded_amount,
-      refund_reason,
-      refunded_at,
-      return_amount,
-      return_reason,
-      returned_at,
-      is_voided,
-      void_reason,
-      voided_at,
-      initiated_at,
-      authorized_at,
-      approved_at,
-      captured_at,
-      failed_at,
-      error_code,
-      error_message,
-      metadata,
+      *,
+      order_payment_items(
+        id,
+        order_item_id,
+        quantity_paid,
+        unit_price_paid,
+        subtotal_paid,
+        tax_paid,
+        order_items(
+          id,
+          item_name
+        )
+      ),
       orders!inner(
         id,
         order_number,
@@ -728,6 +742,73 @@ export async function getPlatformTransactionDetails(
   const staffFirst = order.staff_profiles?.first_name || ''
   const staffLast = order.staff_profiles?.last_name || ''
   const staffName = `${staffFirst} ${staffLast}`.trim() || undefined
+  const processorResponse =
+    data.processor_response && typeof data.processor_response === 'object'
+      ? (data.processor_response as Record<string, unknown>)
+      : null
+  const entryFromProcessor = [
+    processorResponse?.entry_type,
+    processorResponse?.entryType,
+    processorResponse?.entry_mode,
+    processorResponse?.entryMode,
+  ].find((value) => typeof value === 'string') as string | undefined
+
+  let paymentEvents: PlatformTransactionPaymentEvent[] = []
+  const { data: eventsData, error: eventsError } = await supabase
+    .from('payment_events')
+    .select('*')
+    .eq('payment_id', transactionId)
+    .order('created_at', { ascending: true })
+
+  if (eventsError) {
+    // Backward compatibility for environments where payment_events is not provisioned yet.
+    if (eventsError.code !== 'PGRST205' && eventsError.code !== '42P01') {
+      console.error('[getPlatformTransactionDetails:payment_events] Error:', eventsError)
+    }
+  } else {
+    paymentEvents = (eventsData ?? []).map((event: any, index: number) => {
+      const timestamp =
+        event.created_at ||
+        event.occurred_at ||
+        event.event_at ||
+        event.timestamp ||
+        undefined
+
+      const previousStatus =
+        event.previous_status ||
+        event.from_status ||
+        event.old_status ||
+        undefined
+
+      const newStatus =
+        event.new_status ||
+        event.to_status ||
+        event.status ||
+        undefined
+
+      const rawResponse = (
+        event.raw_response ||
+        event.processor_response ||
+        event.response_json ||
+        event.payload ||
+        null
+      ) as Record<string, unknown> | null
+
+      const fallbackId = `${transactionId}-${timestamp || 'event'}-${index}`
+
+      return {
+        id: event.id || fallbackId,
+        event_type: event.event_type || event.type || event.action || 'event',
+        previous_status: previousStatus,
+        new_status: newStatus,
+        timestamp,
+        terminal_id: event.terminal_id || event.device_id || undefined,
+        result_code: event.result_code || event.response_code || event.code || undefined,
+        response_message: event.response_message || event.result_message || event.message || event.error_message || undefined,
+        raw_response: rawResponse,
+      }
+    })
+  }
 
   return {
     id: data.id,
@@ -766,6 +847,29 @@ export async function getPlatformTransactionDetails(
     processor_name: data.processor_name || undefined,
     terminal_id: data.terminal_id || undefined,
     terminal_type: data.terminal_type || undefined,
+    device_id: data.device_id || undefined,
+    card_entry_mode: data.card_entry_mode || entryFromProcessor || undefined,
+    dejavoo_response_code: data.dejavoo_response_code || data.result_code || undefined,
+    batch_number: data.batch_number || data.dejavoo_batch_number || undefined,
+    invoice_number: data.invoice_number || data.dejavoo_invoice_number || undefined,
+    is_split_payment:
+      data.is_split_payment ?? (
+        data.split_total !== null &&
+        data.split_total !== undefined &&
+        Number(data.split_total) > 1
+      ? true
+      : undefined
+      ),
+    split_sequence:
+      data.split_sequence !== null && data.split_sequence !== undefined
+        ? Number(data.split_sequence)
+        : data.split_index !== null && data.split_index !== undefined
+          ? Number(data.split_index)
+          : data.split_portion_index !== null && data.split_portion_index !== undefined
+            ? Number(data.split_portion_index)
+        : undefined,
+    settled_at: data.settled_at || undefined,
+    settlement_batch_id: data.settlement_batch_id || undefined,
     gateway_fee: data.gateway_fee !== null ? Number(data.gateway_fee) : undefined,
     original_amount: data.original_amount !== null ? Number(data.original_amount) : undefined,
     refunded_amount: data.refunded_amount !== null ? Number(data.refunded_amount) : undefined,
@@ -786,6 +890,8 @@ export async function getPlatformTransactionDetails(
     voided_at: data.voided_at || undefined,
     failed_at: data.failed_at || undefined,
     completed_at: order.completed_at || undefined,
+    emv_data: (data.emv_data as Record<string, unknown> | null) || null,
+    processor_response: processorResponse,
     metadata: (data.metadata as Record<string, unknown>) || undefined,
     items: (order.order_items || []).map((item: any) => ({
       id: item.id,
@@ -795,6 +901,16 @@ export async function getPlatformTransactionDetails(
       subtotal: Number(item.subtotal || 0),
       special_instructions: item.special_instructions || undefined,
     })),
+    paid_items: ((data as any).order_payment_items || []).map((item: any) => ({
+      id: item.id,
+      order_item_id: item.order_item_id || undefined,
+      item_name: item.order_items?.item_name || undefined,
+      quantity_paid: Number(item.quantity_paid || 0),
+      unit_price_paid: Number(item.unit_price_paid || 0),
+      subtotal_paid: Number(item.subtotal_paid || 0),
+      tax_paid: Number(item.tax_paid || 0),
+    })),
+    payment_events: paymentEvents,
   }
 }
 
