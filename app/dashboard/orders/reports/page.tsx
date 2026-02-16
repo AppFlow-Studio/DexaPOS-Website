@@ -9,6 +9,12 @@ import { MapPin, Globe } from 'lucide-react'
 import { DateRangePicker, DatePreset } from '@/components/dashboard/orders/DateRangePicker'
 import { SalesSummaryReport } from '@/components/dashboard/orders/reports/SalesSummaryReport'
 import { HourlySalesReport } from '@/components/dashboard/orders/reports/HourlySalesReport'
+import { ItemSalesReport } from '@/components/dashboard/orders/reports/ItemSalesReport'
+import { PaymentSummaryReport } from '@/components/dashboard/orders/reports/PaymentSummaryReport'
+import { KitchenPerformanceReport } from '@/components/dashboard/orders/reports/KitchenPerformanceReport'
+import { TableTurnsReport } from '@/components/dashboard/orders/reports/TableTurnsReport'
+import { ServerPerformanceReport } from '@/components/dashboard/orders/reports/ServerPerformanceReport'
+import { VoidsReport } from '@/components/dashboard/orders/reports/VoidsReport'
 
 export default function ReportsPage() {
   const selectedLocation = useSelectedLocation()
@@ -72,12 +78,12 @@ export default function ReportsPage() {
         <TabsList className="flex-wrap">
           <TabsTrigger value="sales-summary">Sales Summary</TabsTrigger>
           <TabsTrigger value="hourly-sales">Hourly Sales</TabsTrigger>
-          <TabsTrigger value="item-sales" disabled>Item Sales</TabsTrigger>
-          <TabsTrigger value="payments" disabled>Payments</TabsTrigger>
-          <TabsTrigger value="kitchen" disabled>Kitchen Performance</TabsTrigger>
-          <TabsTrigger value="table-turns" disabled>Table Turns</TabsTrigger>
-          <TabsTrigger value="server" disabled>Server Performance</TabsTrigger>
-          <TabsTrigger value="voids" disabled>Voids & Refunds</TabsTrigger>
+          <TabsTrigger value="item-sales">Item Sales</TabsTrigger>
+          <TabsTrigger value="payments">Payments</TabsTrigger>
+          <TabsTrigger value="kitchen">Kitchen Performance</TabsTrigger>
+          <TabsTrigger value="table-turns">Table Turns</TabsTrigger>
+          <TabsTrigger value="server">Server Performance</TabsTrigger>
+          <TabsTrigger value="voids">Voids & Refunds</TabsTrigger>
         </TabsList>
 
         {/* Sales Summary Report */}
@@ -98,51 +104,56 @@ export default function ReportsPage() {
           </Card>
         </TabsContent>
 
-        {/* Placeholder tabs for future reports */}
+        {/* Item Sales Report */}
         <TabsContent value="item-sales">
           <Card>
-            <CardContent className="pt-6 text-center text-muted-foreground">
-              Item Sales Report coming soon
+            <CardContent className="pt-6">
+              <ItemSalesReport dateFrom={dateFrom} dateTo={dateTo} />
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* Payment Summary Report */}
         <TabsContent value="payments">
           <Card>
-            <CardContent className="pt-6 text-center text-muted-foreground">
-              Payment Summary Report coming soon
+            <CardContent className="pt-6">
+              <PaymentSummaryReport dateFrom={dateFrom} dateTo={dateTo} />
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* Kitchen Performance Report */}
         <TabsContent value="kitchen">
           <Card>
-            <CardContent className="pt-6 text-center text-muted-foreground">
-              Kitchen Performance Report coming soon
+            <CardContent className="pt-6">
+              <KitchenPerformanceReport dateFrom={dateFrom} dateTo={dateTo} />
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* Table Turns Report */}
         <TabsContent value="table-turns">
           <Card>
-            <CardContent className="pt-6 text-center text-muted-foreground">
-              Table Turns Report coming soon
+            <CardContent className="pt-6">
+              <TableTurnsReport dateFrom={dateFrom} dateTo={dateTo} />
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* Server Performance Report */}
         <TabsContent value="server">
           <Card>
-            <CardContent className="pt-6 text-center text-muted-foreground">
-              Server Performance Report coming soon
+            <CardContent className="pt-6">
+              <ServerPerformanceReport dateFrom={dateFrom} dateTo={dateTo} />
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* Voids & Refunds Report */}
         <TabsContent value="voids">
           <Card>
-            <CardContent className="pt-6 text-center text-muted-foreground">
-              Voids & Refunds Report coming soon
+            <CardContent className="pt-6">
+              <VoidsReport dateFrom={dateFrom} dateTo={dateTo} />
             </CardContent>
           </Card>
         </TabsContent>

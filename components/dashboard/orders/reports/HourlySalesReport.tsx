@@ -1,10 +1,12 @@
 'use client'
 
+import { useMemo, useState } from 'react'
 import { useHourlySalesReport } from '@/app/dashboard/hooks/useOrderAnalytics'
-import { DataTable } from '@/components/ui/data-table'
-import { ExportButton } from '../analytics/ExportButton'
+import { ReportDataTable } from './ReportDataTable'
+import { ReportToolbar } from './ReportToolbar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
+import { formatReportDateRange } from '@/utils/export'
 import type { HourlySalesRow } from '@/types/analytics'
 import type { ColumnDef } from '@tanstack/react-table'
 
@@ -15,6 +17,14 @@ interface HourlySalesReportProps {
 
 export function HourlySalesReport({ dateFrom, dateTo }: HourlySalesReportProps) {
   const { data, isLoading } = useHourlySalesReport(dateFrom, dateTo)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const filteredData = useMemo(() => {
+    if (!data) return []
+    return data.filter((row) =>
+      String(row.hourLabel).toLowerCase().includes(searchQuery.toLowerCase())
+    )
+  }, [data, searchQuery])
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', {
@@ -70,14 +80,17 @@ export function HourlySalesReport({ dateFrom, dateTo }: HourlySalesReportProps) 
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <ExportButton
-          data={data}
-          columns={exportColumns}
-          filename={`hourly-sales-${dateFrom.toISOString().split('T')[0]}`}
-        />
-      </div>
-      <DataTable columns={columns} data={data} />
+      <ReportToolbar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        filteredCount={filteredData.length}
+        totalCount={data.length}
+        data={filteredData}
+        exportColumns={exportColumns}
+        filename={`Hourly Sales - ${formatReportDateRange(dateFrom, dateTo)}`}
+        searchPlaceholder="Search by hour..."
+      />
+      <ReportDataTable columns={columns} data={filteredData} />
     </div>
   )
 }

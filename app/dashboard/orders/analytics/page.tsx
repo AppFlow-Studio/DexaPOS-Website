@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useIsAllLocations, useSelectedLocation } from '@/stores/location-store'
 import {
   useOrderAnalytics,
@@ -26,6 +26,13 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 import {
   DollarSign,
@@ -54,9 +61,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
 } from 'recharts'
 
 import { Empty } from '@/components/ui/empty'
@@ -115,10 +119,11 @@ export default function AnalyticsPage() {
   })
   const [dateTo, setDateTo] = useState<Date>(new Date())
 
-  const [comparePrevious, setComparePrevious] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [activeTab, setActiveTab] = useState('sales')
   const [leaderboardMetric, setLeaderboardMetric] = useState<'total_sales' | 'avg_check_size' | 'total_tips' | 'avg_tip_pct' | 'tables_turned' | 'avg_table_turn_minutes'>('total_sales')
+  const [showSettings, setShowSettings] = useState(false)
+  const [refreshInterval, setRefreshInterval] = useState<number | null>(null)
 
   const handleDateRangeChange = (from: Date | null, to: Date | null) => {
     if (from && to) {
@@ -126,6 +131,18 @@ export default function AnalyticsPage() {
       setDateTo(to)
     }
   }
+
+  /* ---------------- Auto-Refresh Logic ---------------- */
+
+  useEffect(() => {
+    if (!autoRefresh || !refreshInterval) return
+
+    const interval = setInterval(() => {
+      setDateTo(new Date())
+    }, refreshInterval)
+
+    return () => clearInterval(interval)
+  }, [autoRefresh, refreshInterval])
 
   /* ---------------- Data Hooks ---------------- */
 
@@ -153,22 +170,6 @@ export default function AnalyticsPage() {
     )
   }, [analytics?.salesByDate])
 
-  const previousSalesMap = useMemo(() => {
-    if (!comparePrevious || !analytics?.salesByDate) return new Map()
-
-    const map = new Map<string, number>()
-    analytics.salesByDate.forEach((item, index) => {
-      const prevIndex = index - analytics.salesByDate.length
-      map.set(
-        item.date,
-        prevIndex >= 0
-          ? analytics.salesByDate[prevIndex]?.sales ?? 0
-          : 0
-      )
-    })
-    return map
-  }, [analytics?.salesByDate, comparePrevious])
-
   const chartData = useMemo(() => {
     if (!analytics?.salesByDate) return []
 
@@ -179,9 +180,8 @@ export default function AnalyticsPage() {
       }),
       sales: item.sales,
       orders: item.orders,
-      previousSales: previousSalesMap.get(item.date) ?? 0,
     }))
-  }, [analytics?.salesByDate, previousSalesMap])
+  }, [analytics?.salesByDate])
 
   const orderTypeData = useMemo(() => {
     if (!analytics?.orderTypeBreakdown) return []
@@ -248,25 +248,73 @@ export default function AnalyticsPage() {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <Switch
-              checked={comparePrevious}
-              onCheckedChange={setComparePrevious}
-            />
-            <Label>Compare: Previous period</Label>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Switch
               checked={autoRefresh}
               onCheckedChange={setAutoRefresh}
             />
             <Label>Auto-refresh</Label>
           </div>
 
-          <Button variant="outline" size="icon">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setShowSettings(true)}
+          >
             <Settings className="h-4 w-4" />
           </Button>
         </div>
       </div>
+
+      {/* Settings Dialog */}
+      <Dialog open={showSettings} onOpenChange={setShowSettings}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Analytics Settings</DialogTitle>
+            <DialogDescription>
+              Configure auto-refresh interval for real-time updates
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-3">
+              <Label className="text-base font-semibold">Auto-Refresh Interval</Label>
+
+              {[
+                { value: null, label: 'Manual (No auto-refresh)' },
+                { value: 30000, label: '30 seconds' },
+                { value: 60000, label: '1 minute' },
+                { value: 300000, label: '5 minutes' },
+                { value: 600000, label: '10 minutes' },
+              ].map(({ value, label }) => (
+                <div key={value ?? 'manual'} className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id={`interval-${value}`}
+                    name="refresh-interval"
+                    value={value ?? ''}
+                    checked={refreshInterval === value}
+                    onChange={() => setRefreshInterval(value)}
+                    className="h-4 w-4"
+                  />
+                  <Label
+                    htmlFor={`interval-${value}`}
+                    className="font-normal cursor-pointer"
+                  >
+                    {label}
+                  </Label>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-4 border-t">
+              <p className="text-sm text-muted-foreground">
+                {autoRefresh && refreshInterval
+                  ? `Auto-refreshing every ${refreshInterval / 1000}s`
+                  : 'Auto-refresh is disabled'}
+              </p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -370,7 +418,7 @@ export default function AnalyticsPage() {
         <TabsContent value="kitchen" className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <AvgTicketTimeCard
-              data={kitchenPerformance}
+              data={kitchenPerformance ?? undefined}
               isLoading={isLoadingKitchen}
             />
             <RushTrackingCard
