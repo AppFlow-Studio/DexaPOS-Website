@@ -3,7 +3,8 @@ import {
   getPlatformKPIs,
   getPlatformSalesTrend,
   getTopMerchants,
-  getGPVConcentration
+  getGPVConcentration,
+  getChurnWarnings
 } from '@/app/manage/actions/hq-platform/analytics'
 import { getPlatformTransactions } from '@/app/manage/actions/hq-platform/transactions'
 
@@ -14,6 +15,7 @@ export const platformKeys = {
   topMerchants: () => [...platformKeys.all, 'top-merchants'] as const,
   gpvConcentration: (days: number) => [...platformKeys.all, 'gpv-concentration', days] as const,
   transactions: (limit: number, offset: number) => [...platformKeys.all, 'transactions', { limit, offset }] as const,
+  churnWarnings: () => [...platformKeys.all, 'churn-warnings'] as const,
 }
 
 export function usePlatformKPIs() {
@@ -55,5 +57,13 @@ export function usePlatformAuditLogs(filters?: any, limit: number = 50, offset: 
   return useQuery({
     queryKey: [...platformKeys.all, 'audit-logs', filters, limit, offset],
     queryFn: () => import('@/app/manage/actions/hq-platform/analytics').then(m => m.getPlatformAuditLogs(filters, limit, offset)),
+  })
+}
+
+export function useChurnWarnings() {
+  return useQuery({
+    queryKey: platformKeys.churnWarnings(),
+    queryFn: () => getChurnWarnings(),
+    refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
   })
 }

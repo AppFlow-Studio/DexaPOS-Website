@@ -24,6 +24,11 @@ import {
     Minus,
     AlertTriangle,
     Building2,
+    Siren,
+    Phone,
+    Mail,
+    ExternalLink,
+    Clock,
 } from 'lucide-react'
 import {
     AreaChart,
@@ -45,8 +50,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart'
-import { useGPVConcentration } from '@/lib/queries/use-platform-analytics'
-import type { ConcentrationRisk } from '../actions/hq-platform/analytics'
+import { useGPVConcentration, useChurnWarnings } from '@/lib/queries/use-platform-analytics'
+import type { ConcentrationRisk, ChurnSeverity } from '../actions/hq-platform/analytics'
 import Link from 'next/link'
 
 const revenueData = [
@@ -101,6 +106,7 @@ export default function AnalyticsPage() {
     const [whaleSortDir, setWhaleSortDir] = useState<'asc' | 'desc'>('desc')
 
     const { data: gpvData, isLoading: gpvLoading } = useGPVConcentration(whaleWatchDays)
+    const { data: churnData, isLoading: churnLoading } = useChurnWarnings()
 
     const riskConfig: Record<ConcentrationRisk, { label: string; variant: 'default' | 'secondary' | 'destructive'; icon: typeof ShieldCheck; colorClass: string }> = {
         low: { label: 'Low Risk', variant: 'default', icon: ShieldCheck, colorClass: 'text-green-600' },
@@ -126,6 +132,12 @@ export default function AnalyticsPage() {
             setWhaleSortKey(key)
             setWhaleSortDir('desc')
         }
+    }
+
+    const churnSeverityConfig: Record<ChurnSeverity, { label: string; variant: 'default' | 'secondary' | 'destructive'; colorClass: string; bgClass: string }> = {
+        critical: { label: 'Critical', variant: 'destructive', colorClass: 'text-red-600', bgClass: 'bg-red-50 border-red-200' },
+        high: { label: 'High', variant: 'destructive', colorClass: 'text-orange-600', bgClass: 'bg-orange-50 border-orange-200' },
+        medium: { label: 'Medium', variant: 'secondary', colorClass: 'text-yellow-600', bgClass: 'bg-yellow-50 border-yellow-200' },
     }
 
     return (
@@ -195,6 +207,206 @@ export default function AnalyticsPage() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* ================================================================ */}
+            {/* TICKET-002: Churn Warning Radar — SaaS "At Risk" Detection      */}
+            {/* ================================================================ */}
+
+            {!churnLoading && churnData && churnData.totalAtRisk > 0 && (
+                <Card className="border-red-200 bg-gradient-to-r from-red-50 to-orange-50">
+                    <CardHeader className="pb-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-lg bg-red-100">
+                                    <Siren className="h-5 w-5 text-red-600" />
+                                </div>
+                                <div>
+                                    <CardTitle className="flex items-center gap-2">
+                                        Churn Risk Alert
+                                        <Badge variant="destructive" className="text-xs">
+                                            {churnData.totalAtRisk} At Risk
+                                        </Badge>
+                                    </CardTitle>
+                                    <CardDescription className="mt-1">
+                                        Merchants with significant GPV drop (Week-over-Week comparison)
+                                    </CardDescription>
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-xs text-muted-foreground">Total GPV at Risk</p>
+                                <p className="text-2xl font-bold text-red-600">${churnData.totalGPVAtRisk.toLocaleString()}</p>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {/* Summary Stats */}
+                        <div className="grid grid-cols-3 gap-4 mb-6">
+                            <div className="flex items-center gap-3 p-3 rounded-lg bg-white border border-red-100">
+                                <div className="p-2 rounded-full bg-red-100">
+                                    <AlertTriangle className="h-4 w-4 text-red-600" />
+                                </div>
+                                <div>
+                                    <p className="text-xs text-muted-foreground">Critical (&gt;70% drop)</p>
+                                    <p className="text-xl font-bold text-red-600">{churnData.criticalCount}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3 p-3 rounded-lg bg-white border border-orange-100">
+                                <div className="p-2 rounded-full bg-orange-100">
+                                    <TrendingDown className="h-4 w-4 text-orange-600" />
+                                </div>
+                                <div>
+                                    <p className="text-xs text-muted-foreground">High (50-70% drop)</p>
+                                    <p className="text-xl font-bold text-orange-600">{churnData.highCount}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3 p-3 rounded-lg bg-white border border-yellow-100">
+                                <div className="p-2 rounded-full bg-yellow-100">
+                                    <ArrowDownRight className="h-4 w-4 text-yellow-600" />
+                                </div>
+                                <div>
+                                    <p className="text-xs text-muted-foreground">Medium (30-50% drop)</p>
+                                    <p className="text-xl font-bold text-yellow-600">{churnData.mediumCount}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* At-Risk Merchant Table */}
+                        <div className="rounded-lg border bg-white overflow-hidden">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-muted/50">
+                                        <TableHead>Merchant</TableHead>
+                                        <TableHead>Severity</TableHead>
+                                        <TableHead className="text-right">Prev 7 Days GPV</TableHead>
+                                        <TableHead className="text-right">Last 7 Days GPV</TableHead>
+                                        <TableHead className="text-right">Drop %</TableHead>
+                                        <TableHead className="text-right">Last Order</TableHead>
+                                        <TableHead className="text-right">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {churnData.atRiskMerchants.slice(0, 10).map((merchant) => {
+                                        const config = churnSeverityConfig[merchant.severity]
+                                        const daysSinceLastOrder = Math.floor(
+                                            (Date.now() - new Date(merchant.lastOrderDate).getTime()) / (1000 * 60 * 60 * 24)
+                                        )
+                                        return (
+                                            <TableRow key={merchant.id} className={config.bgClass}>
+                                                <TableCell>
+                                                    <Link
+                                                        href={`/manage/merchants/${merchant.id}`}
+                                                        className="hover:underline font-medium text-sm flex items-center gap-2"
+                                                    >
+                                                        {merchant.name}
+                                                        <ExternalLink className="h-3 w-3 opacity-50" />
+                                                    </Link>
+                                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                                        {merchant.transactionsLast7Days} txns (was {merchant.transactionsPrev7Days})
+                                                    </p>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge variant={config.variant} className="flex items-center gap-1 w-fit">
+                                                        <AlertTriangle className="h-3 w-3" />
+                                                        {config.label}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-right font-medium text-sm">
+                                                    ${merchant.prevSevenDaysGPV.toLocaleString()}
+                                                </TableCell>
+                                                <TableCell className="text-right font-medium text-sm">
+                                                    ${merchant.lastSevenDaysGPV.toLocaleString()}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <span className={`font-bold text-sm ${config.colorClass}`}>
+                                                        -{merchant.dropPercentage}%
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex items-center justify-end gap-1 text-xs text-muted-foreground">
+                                                        <Clock className="h-3 w-3" />
+                                                        {daysSinceLastOrder === 0 ? 'Today' : `${daysSinceLastOrder}d ago`}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-7 text-xs"
+                                                            onClick={() => window.open(`tel:`, '_self')}
+                                                        >
+                                                            <Phone className="h-3 w-3 mr-1" />
+                                                            Call
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-7 text-xs"
+                                                            onClick={() => window.open(`mailto:`, '_self')}
+                                                        >
+                                                            <Mail className="h-3 w-3 mr-1" />
+                                                            Email
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        )
+                                    })}
+                                </TableBody>
+                            </Table>
+                        </div>
+
+                        {churnData.atRiskMerchants.length > 10 && (
+                            <div className="mt-3 text-center">
+                                <Button variant="outline" size="sm">
+                                    View All {churnData.totalAtRisk} At-Risk Merchants
+                                </Button>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* No Churn Risk State */}
+            {!churnLoading && churnData && churnData.totalAtRisk === 0 && (
+                <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50">
+                    <CardContent className="py-8">
+                        <div className="flex flex-col items-center justify-center text-center gap-3">
+                            <div className="p-3 rounded-full bg-green-100">
+                                <ShieldCheck className="h-8 w-8 text-green-600" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-semibold text-green-900">All Clear</h3>
+                                <p className="text-sm text-green-700 mt-1">
+                                    No merchants showing significant GPV decline. Churn risk is minimal.
+                                </p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Churn Loading State */}
+            {churnLoading && (
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center gap-3">
+                            <Skeleton className="h-10 w-10 rounded-lg" />
+                            <div className="space-y-2">
+                                <Skeleton className="h-5 w-48" />
+                                <Skeleton className="h-4 w-64" />
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-3">
+                            {Array.from({ length: 3 }).map((_, i) => (
+                                <Skeleton key={i} className="h-16 w-full" />
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Analytics Tabs */}
             <Tabs defaultValue="overview" className="space-y-4">

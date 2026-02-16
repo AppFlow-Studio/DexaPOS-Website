@@ -63,6 +63,29 @@ export interface GPVConcentrationData {
   periodDays: number
 }
 
+export type ChurnSeverity = 'critical' | 'high' | 'medium'
+
+export interface ChurnWarningMerchant {
+  id: string
+  name: string
+  lastSevenDaysGPV: number
+  prevSevenDaysGPV: number
+  dropPercentage: number
+  severity: ChurnSeverity
+  lastOrderDate: string
+  transactionsLast7Days: number
+  transactionsPrev7Days: number
+}
+
+export interface ChurnWarningData {
+  atRiskMerchants: ChurnWarningMerchant[]
+  totalAtRisk: number
+  criticalCount: number
+  highCount: number
+  mediumCount: number
+  totalGPVAtRisk: number
+}
+
 // ============================================================================
 // PLATFORM ACTIONS
 // ============================================================================
@@ -372,5 +395,161 @@ export async function getGPVConcentration(days: number = 30): Promise<GPVConcent
     averageGPV: Math.round(averageGPV * 100) / 100,
     medianGPV: Math.round(medianGPV * 100) / 100,
     periodDays: days,
+  }
+}
+
+/**
+ * TICKET-002: Get merchants with significant GPV drops (churn warning)
+ * Compares Last 7 Days vs Previous 7 Days GPV
+ * Flags merchants with >30% drop as "At Risk"
+ */
+export async function getChurnWarnings(): Promise<ChurnWarningData> {
+  await assertHQPermission('hq.org.view')
+
+  const supabase = createServerSupabaseClient()
+
+  const now = new Date()
+  const last7DaysStart = new Date(now)
+  last7DaysStart.setDate(last7DaysStart.getDate() - 7)
+
+  const prev7DaysStart = new Date(now)
+  prev7DaysStart.setDate(prev7DaysStart.getDate() - 14)
+
+  const emptyResult: ChurnWarningData = {
+    atRiskMerchants: [],
+    totalAtRisk: 0,
+    criticalCount: 0,
+    highCount: 0,
+    mediumCount: 0,
+    totalGPVAtRisk: 0,
+  }
+
+  // Fetch orders for last 14 days
+  const { data: orders, error } = await supabase
+    .from('orders')
+    .select('merchant_id, total_amount, created_at')
+    .not('status', 'in', '(draft,cancelled,void)')
+    .gte('created_at', prev7DaysStart.toISOString())
+
+  if (error || !orders || orders.length === 0) return emptyResult
+
+  // Aggregate by merchant for both periods
+  const last7DaysData = new Map<string, { gpv: number; txCount: number; lastOrderDate: string }>()
+  const prev7DaysData = new Map<string, { gpv: number; txCount: number }>()
+
+  orders.forEach(order => {
+    const orderDate = new Date(order.created_at)
+    const amount = Number(order.total_amount)
+    const isLast7Days = orderDate >= last7DaysStart
+
+    if (isLast7Days) {
+      const existing = last7DaysData.get(order.merchant_id)
+      if (existing) {
+        existing.gpv += amount
+        existing.txCount += 1
+        if (orderDate > new Date(existing.lastOrderDate)) {
+          existing.lastOrderDate = order.created_at
+        }
+      } else {
+        last7DaysData.set(order.merchant_id, {
+          gpv: amount,
+          txCount: 1,
+          lastOrderDate: order.created_at,
+        })
+      }
+    } else {
+      const existing = prev7DaysData.get(order.merchant_id)
+      if (existing) {
+        existing.gpv += amount
+        existing.txCount += 1
+      } else {
+        prev7DaysData.set(order.merchant_id, { gpv: amount, txCount: 1 })
+      }
+    }
+  })
+
+  // Calculate drops and filter at-risk merchants
+  const atRiskMerchantIds: string[] = []
+  const merchantDropData = new Map<string, {
+    lastGPV: number
+    prevGPV: number
+    dropPct: number
+    lastOrderDate: string
+    lastTx: number
+    prevTx: number
+  }>()
+
+  last7DaysData.forEach((lastStats, merchantId) => {
+    const prevStats = prev7DaysData.get(merchantId)
+
+    // Only compare if merchant had activity in previous period
+    if (prevStats && prevStats.gpv > 0) {
+      const dropAmount = prevStats.gpv - lastStats.gpv
+      const dropPercentage = Math.round((dropAmount / prevStats.gpv) * 1000) / 10
+
+      // Flag if drop > 30%
+      if (dropPercentage > 30) {
+        atRiskMerchantIds.push(merchantId)
+        merchantDropData.set(merchantId, {
+          lastGPV: lastStats.gpv,
+          prevGPV: prevStats.gpv,
+          dropPct: dropPercentage,
+          lastOrderDate: lastStats.lastOrderDate,
+          lastTx: lastStats.txCount,
+          prevTx: prevStats.txCount,
+        })
+      }
+    }
+  })
+
+  if (atRiskMerchantIds.length === 0) return emptyResult
+
+  // Fetch merchant details (only active merchants)
+  const { data: merchants } = await supabase
+    .from('merchants')
+    .select('id, business_name, status')
+    .in('id', atRiskMerchantIds)
+    .eq('status', 'active')
+
+  if (!merchants || merchants.length === 0) return emptyResult
+
+  // Build final result
+  const atRiskMerchants: ChurnWarningMerchant[] = merchants
+    .map(merchant => {
+      const dropData = merchantDropData.get(merchant.id)
+      if (!dropData) return null
+
+      // Classify severity
+      let severity: ChurnSeverity = 'medium'
+      if (dropData.dropPct >= 70) severity = 'critical'
+      else if (dropData.dropPct >= 50) severity = 'high'
+
+      return {
+        id: merchant.id,
+        name: merchant.business_name || 'Unknown Merchant',
+        lastSevenDaysGPV: Math.round(dropData.lastGPV * 100) / 100,
+        prevSevenDaysGPV: Math.round(dropData.prevGPV * 100) / 100,
+        dropPercentage: dropData.dropPct,
+        severity,
+        lastOrderDate: dropData.lastOrderDate,
+        transactionsLast7Days: dropData.lastTx,
+        transactionsPrev7Days: dropData.prevTx,
+      }
+    })
+    .filter((m): m is ChurnWarningMerchant => m !== null)
+    .sort((a, b) => b.dropPercentage - a.dropPercentage) // Sort by severity
+
+  const criticalCount = atRiskMerchants.filter(m => m.severity === 'critical').length
+  const highCount = atRiskMerchants.filter(m => m.severity === 'high').length
+  const mediumCount = atRiskMerchants.filter(m => m.severity === 'medium').length
+  const totalGPVAtRisk = atRiskMerchants.reduce((sum, m) => sum + m.prevSevenDaysGPV, 0)
+
+  return {
+    atRiskMerchants,
+    totalAtRisk: atRiskMerchants.length,
+    criticalCount,
+    highCount,
+    mediumCount,
+    totalGPVAtRisk: Math.round(totalGPVAtRisk * 100) / 100,
   }
 }
