@@ -53,6 +53,7 @@ import { ChartContainer, ChartTooltip } from '@/components/ui/chart'
 import { useGPVConcentration, useChurnWarnings } from '@/lib/queries/use-platform-analytics'
 import type { ConcentrationRisk, ChurnSeverity } from '../actions/hq-platform/analytics'
 import DeviceStabilityIndex from './components/DeviceStabilityIndex'
+import TerminalUtilizationHeatmap from './components/TerminalUtilizationHeatmap'
 import Link from 'next/link'
 
 const revenueData = [
@@ -413,6 +414,11 @@ export default function AnalyticsPage() {
             {/* TICKET-003: LANDI Device Stability Index                        */}
             {/* ================================================================ */}
             <DeviceStabilityIndex />
+
+            {/* ================================================================ */}
+            {/* TICKET-004: Terminal Utilization Heatmap                         */}
+            {/* ================================================================ */}
+            <TerminalUtilizationHeatmap />
 
             {/* Analytics Tabs */}
             <Tabs defaultValue="overview" className="space-y-4">

@@ -6,7 +6,8 @@ import {
   getGPVConcentration,
   getChurnWarnings,
   getDeviceStabilityIndex,
-  getVersionDrillDown
+  getVersionDrillDown,
+  getTerminalUtilization,
 } from '@/app/manage/actions/hq-platform/analytics'
 import { getPlatformTransactions } from '@/app/manage/actions/hq-platform/transactions'
 
@@ -20,6 +21,7 @@ export const platformKeys = {
   churnWarnings: () => [...platformKeys.all, 'churn-warnings'] as const,
   deviceStability: (days: number) => [...platformKeys.all, 'device-stability', days] as const,
   versionDrillDown: (version: string, days: number) => [...platformKeys.all, 'version-drilldown', version, days] as const,
+  terminalUtilization: (days: number) => [...platformKeys.all, 'terminal-utilization', days] as const,
 }
 
 export function usePlatformKPIs() {
@@ -85,5 +87,13 @@ export function useVersionDrillDown(version: string | null, days: number = 30) {
     queryKey: platformKeys.versionDrillDown(version || '', days),
     queryFn: () => getVersionDrillDown(version!, days),
     enabled: !!version,
+  })
+}
+
+export function useTerminalUtilization(days: number = 30) {
+  return useQuery({
+    queryKey: platformKeys.terminalUtilization(days),
+    queryFn: () => getTerminalUtilization(days),
+    refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
   })
 }

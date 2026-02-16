@@ -100,6 +100,57 @@ export interface DeviceStabilityData {
   periodDays: number
 }
 
+// ============================================================================
+// TICKET-004: Terminal Utilization Heatmap Types
+// ============================================================================
+
+export type UtilizationTier = 'healthy' | 'underutilized' | 'critical'
+
+/** A single station (tablet) with its usage data */
+export interface StationUtilization {
+  stationId: string
+  stationName: string
+  stationType: string
+  locationId: string
+  merchantId: string
+  totalOrders: number          // in the period
+  activeDays: number           // days with ≥1 txn
+  lastTransactionAt: string | null
+  daysSinceLastTxn: number | null
+  isZombie: boolean            // no txn in ≥30 days
+  avgOrdersPerActiveDay: number
+}
+
+/** Per-merchant summary */
+export interface MerchantTerminalUtilization {
+  merchantId: string
+  merchantName: string
+  totalStations: number
+  activeStations: number       // stations with ≥1 txn/day average
+  zombieStations: number       // stations with no txn in ≥30 days
+  utilizationRate: number      // pct: activeStations / totalStations * 100
+  tier: UtilizationTier
+  stations: StationUtilization[]
+  totalOrders: number
+  reclaimableStations: number  // zombie stations that could be reclaimed
+}
+
+/** Top-level response */
+export interface TerminalUtilizationData {
+  merchants: MerchantTerminalUtilization[]
+  summary: {
+    totalMerchants: number
+    totalStations: number
+    totalActiveStations: number
+    totalZombieStations: number
+    overallUtilizationRate: number
+    underutilizedMerchantCount: number  // utilization < 50%
+    criticalMerchantCount: number       // utilization < 25%
+    totalReclaimableStations: number
+  }
+  periodDays: number
+}
+
 export type ChurnSeverity = 'critical' | 'high' | 'medium'
 
 export interface ChurnWarningMerchant {
@@ -880,5 +931,191 @@ export async function getVersionDrillDown(version: string, days: number = 30): P
     overallInstabilityRate: totalSignals > 0
       ? Math.round((totalUnhealthy / totalSignals) * 10000) / 100
       : 0,
+  }
+}
+
+// ============================================================================
+// TICKET-004: Terminal Utilization Heatmap
+// ============================================================================
+// Goal: Identify merchants paying for N terminals but only using a fraction.
+// Metric: Active Utilization Rate = (Stations with ≥1 txn/day avg) / Total Stations
+// Zombie: Station with 0 transactions in the last 30 days
+// ============================================================================
+
+/**
+ * Get terminal (station) utilization data across all merchants.
+ * Joins stations → orders to calculate per-station activity, then rolls up per merchant.
+ */
+export async function getTerminalUtilization(days: number = 30): Promise<TerminalUtilizationData> {
+  await assertHQPermission('hq.org.view')
+
+  const supabase = createServerSupabaseClient()
+
+  const periodStart = new Date()
+  periodStart.setDate(periodStart.getDate() - days)
+
+  const emptyResult: TerminalUtilizationData = {
+    merchants: [],
+    summary: {
+      totalMerchants: 0,
+      totalStations: 0,
+      totalActiveStations: 0,
+      totalZombieStations: 0,
+      overallUtilizationRate: 0,
+      underutilizedMerchantCount: 0,
+      criticalMerchantCount: 0,
+      totalReclaimableStations: 0,
+    },
+    periodDays: days,
+  }
+
+  // 1. Fetch all active stations (tablets) across all merchants
+  const allStations = await fetchAllRows<{
+    id: string
+    station_name: string
+    station_type: string
+    merchant_id: string
+    location_id: string
+    is_active: boolean
+  }>(supabase, 'stations', 'id, station_name, station_type, merchant_id, location_id, is_active', (q) =>
+    q.eq('is_active', true)
+  )
+
+  if (allStations.length === 0) return emptyResult
+
+  // 2. Fetch all orders within the period that have a station_id (paginated)
+  const orders = await fetchAllRows<{
+    station_id: string
+    created_at: string
+    merchant_id: string
+  }>(supabase, 'orders', 'station_id, created_at, merchant_id', (q) =>
+    q
+      .not('status', 'in', '(draft,cancelled,void)')
+      .not('station_id', 'is', null)
+      .gte('created_at', periodStart.toISOString())
+  )
+
+  // 3. Aggregate orders per station: total count + distinct active days
+  const stationOrderMap = new Map<string, { totalOrders: number; activeDays: Set<string>; lastTxnAt: string }>()
+
+  orders.forEach(order => {
+    if (!order.station_id) return
+    const dateKey = new Date(order.created_at).toISOString().split('T')[0]
+
+    if (!stationOrderMap.has(order.station_id)) {
+      stationOrderMap.set(order.station_id, { totalOrders: 0, activeDays: new Set(), lastTxnAt: order.created_at })
+    }
+    const entry = stationOrderMap.get(order.station_id)!
+    entry.totalOrders += 1
+    entry.activeDays.add(dateKey)
+    if (new Date(order.created_at) > new Date(entry.lastTxnAt)) {
+      entry.lastTxnAt = order.created_at
+    }
+  })
+
+  // 4. Fetch merchant names in one batch
+  const merchantIds = [...new Set(allStations.map(s => s.merchant_id))]
+  const { data: merchantRows } = await supabase
+    .from('merchants')
+    .select('id, business_name')
+    .in('id', merchantIds)
+
+  const merchantNameMap = new Map(merchantRows?.map(m => [m.id, m.business_name || 'Unknown Merchant']) || [])
+
+  // 5. Build per-station utilization
+  const now = new Date()
+  const ZOMBIE_THRESHOLD_DAYS = 30
+
+  const stationUtils: StationUtilization[] = allStations.map(station => {
+    const orderData = stationOrderMap.get(station.id)
+    const totalOrders = orderData?.totalOrders || 0
+    const activeDays = orderData?.activeDays.size || 0
+    const lastTxnAt = orderData?.lastTxnAt || null
+
+    let daysSinceLastTxn: number | null = null
+    if (lastTxnAt) {
+      daysSinceLastTxn = Math.floor((now.getTime() - new Date(lastTxnAt).getTime()) / (1000 * 60 * 60 * 24))
+    }
+
+    const isZombie = lastTxnAt === null || (daysSinceLastTxn !== null && daysSinceLastTxn >= ZOMBIE_THRESHOLD_DAYS)
+
+    return {
+      stationId: station.id,
+      stationName: station.station_name,
+      stationType: station.station_type,
+      locationId: station.location_id,
+      merchantId: station.merchant_id,
+      totalOrders,
+      activeDays,
+      lastTransactionAt: lastTxnAt,
+      daysSinceLastTxn,
+      isZombie,
+      avgOrdersPerActiveDay: activeDays > 0 ? Math.round((totalOrders / activeDays) * 10) / 10 : 0,
+    }
+  })
+
+  // 6. Group by merchant and calculate utilization
+  const merchantGroupMap = new Map<string, StationUtilization[]>()
+  stationUtils.forEach(su => {
+    if (!merchantGroupMap.has(su.merchantId)) {
+      merchantGroupMap.set(su.merchantId, [])
+    }
+    merchantGroupMap.get(su.merchantId)!.push(su)
+  })
+
+  // A station is "active" if it averaged ≥1 txn/day over the period
+  const merchantUtilizations: MerchantTerminalUtilization[] = Array.from(merchantGroupMap.entries())
+    .filter(([, stations]) => stations.length > 0)
+    .map(([merchantId, stations]) => {
+      const totalStations = stations.length
+      // Active = station processed orders on average at least 1/day
+      // More practically: station was active on at least 1 day (had any txn)
+      const activeStations = stations.filter(s => s.activeDays > 0 && s.avgOrdersPerActiveDay >= 1).length
+      const zombieStations = stations.filter(s => s.isZombie).length
+      const utilizationRate = totalStations > 0 ? Math.round((activeStations / totalStations) * 1000) / 10 : 0
+      const totalOrders = stations.reduce((sum, s) => sum + s.totalOrders, 0)
+
+      let tier: UtilizationTier = 'healthy'
+      if (utilizationRate < 25) tier = 'critical'
+      else if (utilizationRate < 50) tier = 'underutilized'
+
+      return {
+        merchantId,
+        merchantName: merchantNameMap.get(merchantId) || 'Unknown Merchant',
+        totalStations,
+        activeStations,
+        zombieStations,
+        utilizationRate,
+        tier,
+        stations: stations.sort((a, b) => b.totalOrders - a.totalOrders), // most active first
+        totalOrders,
+        reclaimableStations: zombieStations,
+      }
+    })
+    .sort((a, b) => a.utilizationRate - b.utilizationRate) // worst first
+
+  // 7. Build summary
+  const totalStations = stationUtils.length
+  const totalActiveStations = stationUtils.filter(s => s.activeDays > 0 && s.avgOrdersPerActiveDay >= 1).length
+  const totalZombieStations = stationUtils.filter(s => s.isZombie).length
+  const underutilizedMerchantCount = merchantUtilizations.filter(m => m.utilizationRate < 50).length
+  const criticalMerchantCount = merchantUtilizations.filter(m => m.utilizationRate < 25).length
+  const totalReclaimableStations = merchantUtilizations.reduce((sum, m) => sum + m.reclaimableStations, 0)
+
+  return {
+    merchants: merchantUtilizations,
+    summary: {
+      totalMerchants: merchantUtilizations.length,
+      totalStations,
+      totalActiveStations,
+      totalZombieStations,
+      overallUtilizationRate: totalStations > 0
+        ? Math.round((totalActiveStations / totalStations) * 1000) / 10
+        : 0,
+      underutilizedMerchantCount,
+      criticalMerchantCount,
+      totalReclaimableStations,
+    },
+    periodDays: days,
   }
 }
