@@ -110,13 +110,24 @@ export function TransactionDetailInlinePanel({ transactionId }: TransactionDetai
 
   const serialFromProcessor = (data.processor_response?.serial_number as string | undefined) || undefined
   const terminalTpn = (data.processor_response?.tpn as string | undefined) || undefined
+  const connectionType = (data.processor_response?.connection_type as string | undefined) || undefined
+  const apiEnvironment = (data.processor_response?.api_environment as string | undefined) || undefined
   const paymentEvents = data.payment_events ?? []
+  const paymentSegments = data.payment_segments ?? []
   const paymentTimeline = [
     { label: 'Initiated', value: data.initiated_at },
     { label: 'Authorized', value: data.authorized_at },
     { label: 'Approved', value: data.approved_at },
     { label: 'Captured', value: data.captured_at },
   ].filter((step) => Boolean(step.value))
+  const hasAdjustments =
+    data.is_voided ||
+    Boolean(data.voided_at) ||
+    Boolean(data.returned_at) ||
+    Boolean(data.return_amount && data.return_amount > 0) ||
+    Boolean(data.refunded_amount && data.refunded_amount > 0) ||
+    Boolean(data.tip_adjusted_at) ||
+    Boolean(data.original_tip_amount !== undefined && data.original_tip_amount !== null)
 
   return (
     <div className="space-y-4 p-4">
@@ -126,6 +137,87 @@ export function TransactionDetailInlinePanel({ transactionId }: TransactionDetai
         <Badge variant="outline">Method: {toLabel(data.payment_method)}</Badge>
         {data.is_split_payment && <Badge variant="secondary">Split #{data.split_sequence ?? '?'}</Badge>}
       </div>
+
+      <section className="rounded-md border p-3">
+        <h4 className="mb-3 text-sm font-semibold">Payment Segments</h4>
+        {paymentSegments.length === 0 ? (
+          <div className="text-xs text-muted-foreground">No payment segments found for this order.</div>
+        ) : (
+          <>
+            {paymentSegments.length === 1 && !paymentSegments[0]?.is_split_payment && (
+              <div className="mb-3 text-xs text-muted-foreground">
+                This order has a single payment segment (not split).
+              </div>
+            )}
+            <div className="grid gap-3 md:grid-cols-2">
+              {paymentSegments.map((segment, index) => (
+                <div key={segment.id} className="rounded-md border bg-muted/10 p-3 text-xs">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <div className="font-medium">
+                      Segment {segment.split_sequence ?? index + 1}
+                    </div>
+                    <Badge variant="outline">{toLabel(segment.status)}</Badge>
+                  </div>
+                  <div className="grid gap-1">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Method</span>
+                      <span>{toLabel(segment.payment_method)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total</span>
+                      <span className="font-mono">{formatCurrency(segment.total_amount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Amount</span>
+                      <span className="font-mono">{formatCurrency(segment.amount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Tip</span>
+                      <span className="font-mono">{formatCurrency(segment.tip_amount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Card</span>
+                      <span className="font-mono">
+                        {segment.card_last_four ? `${toLabel(segment.card_type)} ****${segment.card_last_four}` : '-'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Entry</span>
+                      <span>{getEntryModeLabel(segment.card_entry_mode)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Auth</span>
+                      <span className="font-mono">{segment.authorization_code || '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Ref #</span>
+                      <span className="font-mono">{segment.reference_number || '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Txn ID</span>
+                      <span className="font-mono">{segment.transaction_id || '-'}</span>
+                    </div>
+                    {(segment.is_voided || segment.is_returned) && (
+                      <div className="mt-1 rounded border border-amber-300 bg-amber-50 p-2 text-[11px]">
+                        {segment.is_voided && (
+                          <div>
+                            Voided{segment.voided_at ? ` at ${formatDateTime(segment.voided_at)}` : ''}{segment.void_reason ? ` (${segment.void_reason})` : ''}
+                          </div>
+                        )}
+                        {segment.is_returned && (
+                          <div>
+                            Returned {segment.return_amount ? formatCurrency(segment.return_amount) : ''}{segment.returned_at ? ` at ${formatDateTime(segment.returned_at)}` : ''}{segment.return_reason ? ` (${segment.return_reason})` : ''}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
 
       <div className="grid gap-4 md:grid-cols-2">
         <section className="rounded-md border p-3">
@@ -146,6 +238,10 @@ export function TransactionDetailInlinePanel({ transactionId }: TransactionDetai
             <div className="flex justify-between">
               <span className="text-muted-foreground">Response Code</span>
               <span className="font-mono">{data.dejavoo_response_code || data.error_code || '-'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Payment Method</span>
+              <span>{toLabel(data.payment_method)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Batch #</span>
@@ -194,6 +290,14 @@ export function TransactionDetailInlinePanel({ transactionId }: TransactionDetai
             <div className="flex justify-between">
               <span className="text-muted-foreground">Settlement Batch</span>
               <span className="font-mono">{data.settlement_batch_id || '-'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Connection</span>
+              <span>{connectionType || '-'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">API Env</span>
+              <span>{apiEnvironment || '-'}</span>
             </div>
           </div>
         </section>
@@ -260,6 +364,45 @@ export function TransactionDetailInlinePanel({ transactionId }: TransactionDetai
           )}
         </section>
       </div>
+
+      <section className="rounded-md border p-3">
+        <h4 className="mb-3 text-sm font-semibold">Adjustments & Reversals</h4>
+        {!hasAdjustments && (
+          <div className="mb-3 text-xs text-muted-foreground">
+            No reversals or tip adjustments were recorded for this payment.
+          </div>
+        )}
+        <div className="grid gap-2 text-xs md:grid-cols-2">
+          <div className="rounded border bg-muted/10 p-2">
+            <div className="mb-1 font-medium">Void</div>
+            <div>Voided: {data.is_voided ? 'Yes' : 'No'}</div>
+            <div>At: {formatDateTime(data.voided_at)}</div>
+            <div>By: {data.voided_by || '-'}</div>
+            <div>Reason: {data.void_reason || '-'}</div>
+          </div>
+          <div className="rounded border bg-muted/10 p-2">
+            <div className="mb-1 font-medium">Return</div>
+            <div>Returned: {data.is_returned ? 'Yes' : 'No'}</div>
+            <div>Amount: {data.return_amount ? formatCurrency(data.return_amount) : '-'}</div>
+            <div>At: {formatDateTime(data.returned_at)}</div>
+            <div>By: {data.returned_by || '-'}</div>
+            <div>Reason: {data.return_reason || '-'}</div>
+          </div>
+          <div className="rounded border bg-muted/10 p-2">
+            <div className="mb-1 font-medium">Refund</div>
+            <div>Amount: {data.refunded_amount ? formatCurrency(data.refunded_amount) : '-'}</div>
+            <div>At: {formatDateTime(data.refunded_at)}</div>
+            <div>Reason: {data.refund_reason || '-'}</div>
+          </div>
+          <div className="rounded border bg-muted/10 p-2">
+            <div className="mb-1 font-medium">Tip Adjustment</div>
+            <div>Original Tip: {data.original_tip_amount ? formatCurrency(data.original_tip_amount) : '-'}</div>
+            <div>Current Tip: {formatCurrency(data.tip_amount)}</div>
+            <div>Adjusted At: {formatDateTime(data.tip_adjusted_at)}</div>
+            <div>Adjusted By: {data.tip_adjusted_by || '-'}</div>
+          </div>
+        </div>
+      </section>
 
       <section className="rounded-md border p-3">
         <h4 className="mb-3 text-sm font-semibold">Payment Timeline</h4>
