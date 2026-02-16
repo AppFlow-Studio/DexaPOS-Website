@@ -63,6 +63,43 @@ export interface GPVConcentrationData {
   periodDays: number
 }
 
+// ============================================================================
+// TICKET-003: LANDI Device Stability Index Types
+// ============================================================================
+
+export interface VersionStabilityBar {
+  version: string
+  healthy: number
+  unhealthy: number
+  total: number
+  instabilityRate: number // percentage
+}
+
+export interface HardwareModelBreakdown {
+  model: string
+  healthy: number
+  unhealthy: number
+  total: number
+  instabilityRate: number
+  deviceCount: number
+}
+
+export interface VersionDrillDown {
+  version: string
+  models: HardwareModelBreakdown[]
+  totalDevices: number
+  overallInstabilityRate: number
+}
+
+export interface DeviceStabilityData {
+  versionBars: VersionStabilityBar[]
+  totalDevices: number
+  totalHeartbeats: number
+  overallInstabilityRate: number
+  rolloutWarning: string | null // e.g. "v2.1.9 has 2.3% instability — do not roll out v2.2.0"
+  periodDays: number
+}
+
 export type ChurnSeverity = 'critical' | 'high' | 'medium'
 
 export interface ChurnWarningMerchant {
@@ -551,5 +588,297 @@ export async function getChurnWarnings(): Promise<ChurnWarningData> {
     highCount,
     mediumCount,
     totalGPVAtRisk: Math.round(totalGPVAtRisk * 100) / 100,
+  }
+}
+
+// ============================================================================
+// TICKET-003: LANDI Device Stability Index
+// ============================================================================
+// Uses existing tables as proxy signals:
+//   device_heartbeats.is_online = false  → "unhealthy" signal
+//   station_sessions.session_status = 'kicked' → "unhealthy" signal
+//   Grouped by app_version from heartbeats + stations for hardware_model
+// ============================================================================
+
+/**
+ * Paginated fetch to bypass Supabase's default 1000-row limit.
+ * Fetches all matching rows in batches.
+ */
+async function fetchAllRows<T extends Record<string, unknown>>(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  table: string,
+  selectCols: string,
+  filters: (query: any) => any,
+  pageSize: number = 1000
+): Promise<T[]> {
+  const allRows: T[] = []
+  let offset = 0
+  let hasMore = true
+
+  while (hasMore) {
+    let query = supabase.from(table).select(selectCols)
+    query = filters(query)
+    query = query.range(offset, offset + pageSize - 1)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error }: { data: any[] | null; error: any } = await query
+    if (error || !data || data.length === 0) {
+      hasMore = false
+    } else {
+      allRows.push(...(data as T[]))
+      offset += pageSize
+      if (data.length < pageSize) hasMore = false
+    }
+  }
+
+  return allRows
+}
+
+/**
+ * Get device stability data grouped by app version.
+ * Healthy = online heartbeats, Unhealthy = offline heartbeats + kicked sessions.
+ */
+export async function getDeviceStabilityIndex(days: number = 30): Promise<DeviceStabilityData> {
+  await assertHQPermission('hq.org.view')
+
+  const supabase = createServerSupabaseClient()
+
+  const periodStart = new Date()
+  periodStart.setDate(periodStart.getDate() - days)
+
+  const emptyResult: DeviceStabilityData = {
+    versionBars: [],
+    totalDevices: 0,
+    totalHeartbeats: 0,
+    overallInstabilityRate: 0,
+    rolloutWarning: null,
+    periodDays: days,
+  }
+
+  // 1. Fetch ALL heartbeats within period (paginated to avoid 1000-row truncation)
+  const heartbeats = await fetchAllRows<{
+    station_id: string; is_online: boolean; app_version: string | null
+  }>(supabase, 'device_heartbeats', 'station_id, is_online, app_version', (q) =>
+    q.gte('heartbeat_at', periodStart.toISOString())
+  )
+
+  if (heartbeats.length === 0) return emptyResult
+
+  // 2. Fetch kicked sessions within period as additional instability signal (paginated)
+  const kickedSessions = await fetchAllRows<{
+    station_id: string; app_version: string | null
+  }>(supabase, 'station_sessions', 'station_id, app_version', (q) =>
+    q.eq('session_status', 'kicked').gte('started_at', periodStart.toISOString())
+  )
+
+  // 3. Get station details for hardware model mapping
+  const stationIds = [...new Set(heartbeats.map(h => h.station_id))]
+  const { data: stations } = await supabase
+    .from('stations')
+    .select('id, device_model, hardware_model, device_manufacturer')
+    .in('id', stationIds)
+
+  const stationMap = new Map(
+    stations?.map(s => [s.id, {
+      device_model: s.device_model || 'Unknown',
+      hardware_model: s.hardware_model || s.device_model || 'Unknown',
+      manufacturer: s.device_manufacturer || 'Unknown',
+    }]) || []
+  )
+
+  // 4. Aggregate heartbeats by version
+  const versionMap = new Map<string, { healthy: number; unhealthy: number; devices: Set<string> }>()
+
+  heartbeats.forEach(hb => {
+    const version = hb.app_version || 'Unknown'
+    if (!versionMap.has(version)) {
+      versionMap.set(version, { healthy: 0, unhealthy: 0, devices: new Set() })
+    }
+    const entry = versionMap.get(version)!
+    entry.devices.add(hb.station_id)
+    if (hb.is_online) {
+      entry.healthy += 1
+    } else {
+      entry.unhealthy += 1
+    }
+  })
+
+  // Add kicked sessions as unhealthy signals
+  kickedSessions?.forEach(sess => {
+    const version = sess.app_version || 'Unknown'
+    if (!versionMap.has(version)) {
+      versionMap.set(version, { healthy: 0, unhealthy: 0, devices: new Set() })
+    }
+    const entry = versionMap.get(version)!
+    entry.devices.add(sess.station_id)
+    entry.unhealthy += 1
+  })
+
+  // 5. Build version bars sorted by version descending
+  const versionBars: VersionStabilityBar[] = Array.from(versionMap.entries())
+    .map(([version, data]) => {
+      const total = data.healthy + data.unhealthy
+      return {
+        version,
+        healthy: data.healthy,
+        unhealthy: data.unhealthy,
+        total,
+        instabilityRate: total > 0 ? Math.round((data.unhealthy / total) * 10000) / 100 : 0,
+      }
+    })
+    .sort((a, b) => {
+      // Sort semantically by version if possible, fallback to string sort
+      const parseVersion = (v: string) => {
+        const parts = v.replace(/^v/i, '').split('.').map(Number)
+        return parts[0] * 10000 + (parts[1] || 0) * 100 + (parts[2] || 0)
+      }
+      const aNum = parseVersion(a.version)
+      const bNum = parseVersion(b.version)
+      if (isNaN(aNum) || isNaN(bNum)) return a.version.localeCompare(b.version)
+      return aNum - bNum
+    })
+
+  const totalDevices = new Set(heartbeats.map(h => h.station_id)).size
+  const totalHeartbeats = heartbeats.length + (kickedSessions?.length || 0)
+  const totalUnhealthy = versionBars.reduce((sum, v) => sum + v.unhealthy, 0)
+  const overallInstabilityRate = totalHeartbeats > 0
+    ? Math.round((totalUnhealthy / totalHeartbeats) * 10000) / 100
+    : 0
+
+  // 6. Check rollout warning — flag ANY version above 1% threshold (worst first)
+  let rolloutWarning: string | null = null
+  if (versionBars.length > 0) {
+    const riskyVersions = versionBars
+      .filter(v => v.instabilityRate > 1 && v.version !== 'Unknown')
+      .sort((a, b) => b.instabilityRate - a.instabilityRate)
+
+    if (riskyVersions.length === 1) {
+      rolloutWarning = `${riskyVersions[0].version} has ${riskyVersions[0].instabilityRate}% instability rate — hold rollout of next version`
+    } else if (riskyVersions.length > 1) {
+      const worst = riskyVersions[0]
+      rolloutWarning = `${riskyVersions.length} versions above 1% threshold — ${worst.version} is worst at ${worst.instabilityRate}%. Hold rollout until resolved.`
+    }
+  }
+
+  return {
+    versionBars,
+    totalDevices,
+    totalHeartbeats,
+    overallInstabilityRate,
+    rolloutWarning,
+    periodDays: days,
+  }
+}
+
+/**
+ * Get hardware model breakdown for a specific app version (drill-down).
+ */
+export async function getVersionDrillDown(version: string, days: number = 30): Promise<VersionDrillDown> {
+  await assertHQPermission('hq.org.view')
+
+  const supabase = createServerSupabaseClient()
+
+  const periodStart = new Date()
+  periodStart.setDate(periodStart.getDate() - days)
+
+  const emptyResult: VersionDrillDown = {
+    version,
+    models: [],
+    totalDevices: 0,
+    overallInstabilityRate: 0,
+  }
+
+  // 1. Get heartbeats for this version (paginated)
+  const heartbeats = await fetchAllRows<{
+    station_id: string; is_online: boolean
+  }>(supabase, 'device_heartbeats', 'station_id, is_online', (q) =>
+    q.eq('app_version', version).gte('heartbeat_at', periodStart.toISOString())
+  )
+
+  if (heartbeats.length === 0) return emptyResult
+
+  // 2. Get kicked sessions for this version (paginated)
+  const kickedSessions = await fetchAllRows<{
+    station_id: string
+  }>(supabase, 'station_sessions', 'station_id', (q) =>
+    q.eq('app_version', version).eq('session_status', 'kicked').gte('started_at', periodStart.toISOString())
+  )
+
+  // 3. Get station hardware info (with manufacturer for "Landi C20" style labels)
+  const stationIds = [...new Set([
+    ...heartbeats.map(h => h.station_id),
+    ...kickedSessions.map(s => s.station_id),
+  ])]
+
+  const { data: stations } = await supabase
+    .from('stations')
+    .select('id, device_model, hardware_model, device_manufacturer')
+    .in('id', stationIds)
+
+  const stationModelMap = new Map(
+    stations?.map(s => {
+      const model = s.hardware_model || s.device_model || 'Unknown Model'
+      const manufacturer = s.device_manufacturer
+      // Produce labels like "Landi C20" instead of just "C20"
+      const label = manufacturer && !model.toLowerCase().startsWith(manufacturer.toLowerCase())
+        ? `${manufacturer} ${model}`
+        : model
+      return [s.id, label]
+    }) || []
+  )
+
+  // 4. Aggregate by hardware model
+  const modelMap = new Map<string, { healthy: number; unhealthy: number; devices: Set<string> }>()
+
+  heartbeats.forEach(hb => {
+    const model = stationModelMap.get(hb.station_id) || 'Unknown Model'
+    if (!modelMap.has(model)) {
+      modelMap.set(model, { healthy: 0, unhealthy: 0, devices: new Set() })
+    }
+    const entry = modelMap.get(model)!
+    entry.devices.add(hb.station_id)
+    if (hb.is_online) {
+      entry.healthy += 1
+    } else {
+      entry.unhealthy += 1
+    }
+  })
+
+  kickedSessions.forEach(sess => {
+    const model = stationModelMap.get(sess.station_id) || 'Unknown Model'
+    if (!modelMap.has(model)) {
+      modelMap.set(model, { healthy: 0, unhealthy: 0, devices: new Set() })
+    }
+    const entry = modelMap.get(model)!
+    entry.devices.add(sess.station_id)
+    entry.unhealthy += 1
+  })
+
+  // 5. Build model breakdown
+  const models: HardwareModelBreakdown[] = Array.from(modelMap.entries())
+    .map(([model, data]) => {
+      const total = data.healthy + data.unhealthy
+      return {
+        model,
+        healthy: data.healthy,
+        unhealthy: data.unhealthy,
+        total,
+        instabilityRate: total > 0 ? Math.round((data.unhealthy / total) * 10000) / 100 : 0,
+        deviceCount: data.devices.size,
+      }
+    })
+    .sort((a, b) => b.instabilityRate - a.instabilityRate) // Worst first
+
+  const totalDevices = stationIds.length
+  const totalSignals = models.reduce((sum, m) => sum + m.total, 0)
+  const totalUnhealthy = models.reduce((sum, m) => sum + m.unhealthy, 0)
+
+  return {
+    version,
+    models,
+    totalDevices,
+    overallInstabilityRate: totalSignals > 0
+      ? Math.round((totalUnhealthy / totalSignals) * 10000) / 100
+      : 0,
   }
 }

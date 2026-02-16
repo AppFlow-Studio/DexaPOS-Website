@@ -52,6 +52,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart'
 import { useGPVConcentration, useChurnWarnings } from '@/lib/queries/use-platform-analytics'
 import type { ConcentrationRisk, ChurnSeverity } from '../actions/hq-platform/analytics'
+import DeviceStabilityIndex from './components/DeviceStabilityIndex'
 import Link from 'next/link'
 
 const revenueData = [
@@ -407,6 +408,11 @@ export default function AnalyticsPage() {
                     </CardContent>
                 </Card>
             )}
+
+            {/* ================================================================ */}
+            {/* TICKET-003: LANDI Device Stability Index                        */}
+            {/* ================================================================ */}
+            <DeviceStabilityIndex />
 
             {/* Analytics Tabs */}
             <Tabs defaultValue="overview" className="space-y-4">

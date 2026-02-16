@@ -4,7 +4,9 @@ import {
   getPlatformSalesTrend,
   getTopMerchants,
   getGPVConcentration,
-  getChurnWarnings
+  getChurnWarnings,
+  getDeviceStabilityIndex,
+  getVersionDrillDown
 } from '@/app/manage/actions/hq-platform/analytics'
 import { getPlatformTransactions } from '@/app/manage/actions/hq-platform/transactions'
 
@@ -16,6 +18,8 @@ export const platformKeys = {
   gpvConcentration: (days: number) => [...platformKeys.all, 'gpv-concentration', days] as const,
   transactions: (limit: number, offset: number) => [...platformKeys.all, 'transactions', { limit, offset }] as const,
   churnWarnings: () => [...platformKeys.all, 'churn-warnings'] as const,
+  deviceStability: (days: number) => [...platformKeys.all, 'device-stability', days] as const,
+  versionDrillDown: (version: string, days: number) => [...platformKeys.all, 'version-drilldown', version, days] as const,
 }
 
 export function usePlatformKPIs() {
@@ -65,5 +69,21 @@ export function useChurnWarnings() {
     queryKey: platformKeys.churnWarnings(),
     queryFn: () => getChurnWarnings(),
     refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
+  })
+}
+
+export function useDeviceStability(days: number = 30) {
+  return useQuery({
+    queryKey: platformKeys.deviceStability(days),
+    queryFn: () => getDeviceStabilityIndex(days),
+    refetchInterval: 5 * 60 * 1000,
+  })
+}
+
+export function useVersionDrillDown(version: string | null, days: number = 30) {
+  return useQuery({
+    queryKey: platformKeys.versionDrillDown(version || '', days),
+    queryFn: () => getVersionDrillDown(version!, days),
+    enabled: !!version,
   })
 }
