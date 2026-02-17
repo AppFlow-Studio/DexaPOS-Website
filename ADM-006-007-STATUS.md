@@ -22,7 +22,7 @@
 | ADM-012 | Done (Ready for QA) | After QA | Full order breakdown with modifiers/flags/totals implemented. |
 | ADM-013 | Implemented (Pending Migration Apply + QA) | After QA | Added summary RPC migration + 6 dynamic cards with prior-period deltas and card-click filter actions. |
 | ADM-014 | Not Started | No | Needs merchant breakdown RPC + collapsible sortable mini-table + sparklines. |
-| ADM-015 | Done (User-confirmed) | Yes | CSV/XLSX export verified after migration fix and function type alignment patch. |
+| ADM-015 | QA Awaiting | After QA | CSV/XLSX export verified after migration fix and function type alignment patch. |
 | ADM-016 | Not Started | No | Batch reconciliation section with discrepancy detection and export. |
 | ADM-017 | Not Started | No | Chargeback dashboard with deadline urgency, badge, and alert banner. |
 | ADM-018 | Not Started | No | Audit log viewer UI and filters/search. |
@@ -108,13 +108,20 @@ These were explicitly decided during planning, and implementation follows them:
 - Chosen: reset payment `method` filter to all, preserve all other filters.
 
 8. ADM-015 tracker status
-- Chosen: mark as **Done (User-confirmed)**.
+- Updated: **QA Awaiting**.
 
 ---
 
 ## UX Fix Logged Today
 
 - `Apply Filters` now closes the filter sheet even when URL params are unchanged (previously it stayed open in no-change apply cases).
+
+---
+
+## Experimental Feature Status
+
+- Transactions Trend Graph in `/manage/transactions`: **Done (Awaiting QA)**.
+- Implemented using live 30-day sales trend feed with loading + empty fallback states.
 
 ---
 
