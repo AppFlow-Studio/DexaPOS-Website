@@ -1,4 +1,4 @@
-# ADM Official Tickets Status (001-012)
+# ADM Tasks Status (001-019)
 > Last updated: 2026-02-17
 > Baseline: compared against your official acceptance criteria list in chat.
 
@@ -8,53 +8,27 @@
 
 | Ticket | Status | Scratch Now? | Notes |
 |--------|--------|--------------|-------|
-| ADM-001 | Done (User-confirmed) | Yes | You marked it crossed out already. |
-| ADM-002 | Implemented (Pending Migration Apply + QA) | After QA | Added migration with `get_admin_merchant_ids()` + admin-scoped SELECT RLS policies for orders/payment tables and supporting indexes. |
-| ADM-003 | Done (User-confirmed) | Yes | You marked it crossed out already. |
-| ADM-004 | Implemented (Pending Migration Apply + QA) | After QA | Added `get_admin_transactions(...)` RPC migration and wired manage transactions action to use RPC-first with fallback. |
-| ADM-005 | Implemented (Pending Migration Apply + QA) | After QA | Added `get_admin_transaction_detail(p_order_id)` RPC migration and wired detail action to use RPC-first with fallback. |
-| ADM-006 | Done | Yes | Advanced filter panel complete including staff searchable dropdown, URL-persisted params, and 300ms debounced filter sync. |
-| ADM-007 | Done | Yes | Global search bar + URL sync + debounce + highlight + clear + keyboard shortcut implemented. |
-| ADM-008 | Done (User-confirmed) | Yes | You confirmed it scratched after the remaining UI column/sticky/zebra work. |
-| ADM-009 | Done | Yes | Server-side sorting + pagination complete with URL-persisted sort/page/pageSize and fetch skeleton state. |
-| ADM-010 | Done (User-confirmed) | Yes | Inline expandable row now includes 2x2 detail panel, split-payment segment cards, adjustment/reversal details, loading spinner, and copy actions. |
-| ADM-011 | Done (Ready for QA) | After QA | Timeline section added with event icons, status transitions, relative+absolute timestamp behavior, and collapsible raw JSON per event. |
-| ADM-012 | Done (Ready for QA) | After QA | Full order breakdown now includes all order items, modifiers, void/open/tax-exempt flags, order-level discounts, and totals row. |
+| ADM-001 | Done (User-confirmed) | Yes | User marked it crossed out. |
+| ADM-002 | Implemented (Pending Migration Apply + QA) | After QA | Migration includes `get_admin_merchant_ids()` and admin SELECT RLS policies. |
+| ADM-003 | Done (User-confirmed) | Yes | User marked it crossed out. |
+| ADM-004 | Implemented (Pending Migration Apply + QA) | After QA | `get_admin_transactions(...)` RPC added and wired RPC-first with fallback. |
+| ADM-005 | Implemented (Pending Migration Apply + QA) | After QA | `get_admin_transaction_detail(p_order_id)` RPC added and wired RPC-first with fallback. |
+| ADM-006 | Done | Yes | Filter sheet + URL sync + debounce complete. |
+| ADM-007 | Done | Yes | Global search complete (debounce, highlight, clear, shortcut). |
+| ADM-008 | Done (User-confirmed) | Yes | Remaining table/column UX completed and user scratched it. |
+| ADM-009 | Done | Yes | Server-side sort + pagination + URL state complete. |
+| ADM-010 | Done (User-confirmed) | Yes | Expandable detail view complete, including split segments and copy actions. |
+| ADM-011 | Done (Ready for QA) | After QA | Payment timeline section implemented. |
+| ADM-012 | Done (Ready for QA) | After QA | Full order breakdown with modifiers/flags/totals implemented. |
+| ADM-013 | Not Started | No | Needs new summary RPC + richer live metric cards + clickable card filters. |
+| ADM-014 | Not Started | No | Needs merchant breakdown RPC + collapsible sortable mini-table + sparklines. |
+| ADM-015 | Implemented (Pending Migration Apply + QA) | After QA | Added export RPC migration + frontend export dropdown (CSV/XLSX), all required columns, 10k cap warning, and ticket filename format. |
+| ADM-016 | Not Started | No | Batch reconciliation section with discrepancy detection and export. |
+| ADM-017 | Not Started | No | Chargeback dashboard with deadline urgency, badge, and alert banner. |
+| ADM-018 | Not Started | No | Audit log viewer UI and filters/search. |
+| ADM-019 | Not Started | No | Backend audit logging for list/detail/export/search events. |
 
 ---
-
-## What Is Implemented Now (Cross-ticket)
-
-1. Manage transactions core
-- Global transactions table with filters, search, row actions, export, pagination.
-- Card brand visuals now reuse dashboard payment card icon component.
-- Manual refresh button added.
-- Server-side sortable headers wired for `Order #`, `Total`, and `Date` with URL-persisted sort state.
-- Added remaining ADM-008 table UX items: `Walk-in` customer fallback, Entry/Subtotal/Tax/Tip/Discount/Staff columns, column visibility menu (default hidden: Entry/Tax/Discount/Staff), sticky header, zebra rows.
-- Completed ADM-006 remainder: staff filter (searchable), filter URL persistence verification, and 300ms debounced re-fetch behavior.
-- Completed ADM-009: Previous/Next pagination, page input, "Showing x-y of z", page size selector (25/50/100), server-side sorting, page reset on search/filter/sort/page-size changes, and loading skeleton during refetch.
-
-2. Detail and actions
-- Transaction detail is now inline expandable (one row at a time) with a 2x2 payment detail grid.
-- Added split-payment segment rendering and adjustment/reversal details (void/return/refund/tip-adjustment).
-- Added payment timeline section with event icons, status transitions, relative+absolute timestamp behavior, and raw JSON collapsible.
-- Added full order breakdown section for all order items with:
-  - item size/qty/unit/subtotal/tax/discount
-  - modifier breakdown under each item
-  - void/open-item/tax-exempt indicators
-  - order-level discounts and totals row
-- Refund action from row menu with confirmation and refresh.
-
-3. Data/query layer
-- View-first data path (`vw_platform_transactions`) with legacy fallback.
-- Aggregate stats action for cards based on full filtered dataset.
-- Added backend migrations for ADM-002/004/005:
-  - `supabase/migrations/022_adm_002_admin_rls.sql`
-  - `supabase/migrations/023_adm_004_admin_transactions_rpc.sql`
-  - `supabase/migrations/024_adm_005_admin_transaction_detail_rpc.sql`
-- Updated `app/manage/actions/hq-platform/transactions.ts` to:
-  - call `get_admin_transactions` RPC first (with legacy/view fallback),
-  - call `get_admin_transaction_detail` RPC first for expanded row details (with legacy fallback).
 
 ## Data Volume Note (1119 -> 200)
 
@@ -64,38 +38,56 @@ Observed change:
 - Transaction total shown in manage transactions dropped from `1119` to `200`.
 
 Why this happened:
-1. **ADM-002 scoping is now active**:
-- Results are restricted to merchants returned by `get_admin_merchant_ids()` (via `admin_merchant_access`) unless the user is `hq.super_admin`.
-2. **ADM-004 default payment-status behavior**:
-- When no `paymentStatus` filter is selected, query defaults exclude `pending` and `failed` payments.
+1. ADM-002 scoping is active:
+- Results are restricted to merchants returned by `get_admin_merchant_ids()` (via `admin_merchant_access`) unless user is `hq.super_admin`.
+2. ADM-004 default payment-status behavior:
+- When no `paymentStatus` filter is selected, query excludes `pending` and `failed`.
 
 Net effect:
-- The new total (`200`) reflects **assigned-merchant scope + non-pending/non-failed statuses**, not data deletion.
+- The new total (`200`) is scoped/filtered output, not deleted records.
 
 ---
 
-## Recommended Next Execution Order
+## New Plan (013-019)
 
-1. Apply DB migrations `022`, `023`, `024` in dev/staging.
-2. Run QA for ADM-002/004/005 using scoped admin and super-admin test users.
-3. Scratch ADM-011 and ADM-012 after final UI data verification.
+1. ADM-015 Export and reconciliation export baseline
+- Added dedicated export RPC with full dataset fields and 10k hard cap.
+- Added export dropdown: CSV and Excel.
+- Export respects active filters/search and shows loading state.
+- Added filename format: `DEXA_Transactions_{merchant}_{date_from}_to_{date_to}.{ext}`.
+
+2. ADM-013 Enhanced summary cards
+- Add lightweight aggregate RPC `get_admin_transaction_summary(...)`.
+- Return totals, averages, splits, void/return rates, and prior-period deltas.
+- Make cards clickable to apply related filters.
+
+3. ADM-014 Merchant comparison mini-table
+- Add breakdown RPC with merchant-level metrics for selected period.
+- Add collapsible section with sortable table and daily revenue sparkline.
+
+4. ADM-019 Audit logging foundation (backend)
+- Log list/detail/export/search sensitive access paths asynchronously to `payment_audit_log`.
+
+5. ADM-018 Audit log viewer (frontend)
+- Add audit tab with filters, search, and failed-row highlighting.
+
+6. ADM-016 Batch reconciliation
+- Add batch section with discrepancy checks and batch detail export.
+
+7. ADM-017 Chargeback dashboard
+- Add chargeback table, urgent deadline indicators, and nav badge.
 
 ---
 
-## Already Safe To Scratch Off
+## UX Fix Logged Today
 
-1. ADM-001
-2. ADM-003
-3. ADM-007
-4. ADM-006
-5. ADM-008 (user-confirmed)
-6. ADM-009
-7. ADM-010 (user-confirmed)
+- `Apply Filters` now closes the filter sheet even when URL params are unchanged (previously it stayed open in no-change apply cases).
 
-## QA Before Scratching (ADM-011 / ADM-012)
+---
 
-1. Expand a transaction and confirm `Payment Timeline` renders at least one event with icon, `old -> new` status, relative timestamp, and absolute timestamp on hover.
-2. Open `Raw response JSON` on one event and verify it expands/collapses correctly.
-3. In `Order Breakdown (All Items)`, verify at least one item shows expected qty/unit/subtotal and any available modifiers.
-4. Confirm voided/open-item/tax-exempt badges appear correctly where data exists.
-5. Confirm `Order-level Discounts` and totals row values match order totals shown in POS data.
+## Remaining Immediate QA (Before Scratch ADM-011/012)
+
+1. Expand transaction and verify timeline events render (`old -> new` status, relative timestamp, absolute hover value).
+2. Expand raw event JSON and verify collapse/expand behavior.
+3. In order breakdown, verify item/modifier/totals values against known POS order sample.
+4. Verify void/open-item/tax-exempt badges on sample data where available.

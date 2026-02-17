@@ -316,12 +316,12 @@ export function TransactionFilterSheet({ searchParams }: TransactionFilterSheetP
         }
 
         const next = params.toString()
-        if (next === previous) return
-
-        startTransition(() => router.push(`?${next}`))
         if (options?.closeSheet) {
             setOpen(false)
         }
+        if (next === previous) return
+
+        startTransition(() => router.push(`?${next}`))
     }
 
     const buildFilterUpdates = useMemo<Record<string, string | null>>(() => ({
