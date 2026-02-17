@@ -16,6 +16,19 @@ function formatCurrency(value?: number) {
   return `$${Number(value || 0).toFixed(2)}`
 }
 
+function formatNegativeCurrency(value?: number) {
+  const amount = Math.abs(Number(value || 0))
+  if (!amount) return '$0.00'
+  return `-${formatCurrency(amount)}`
+}
+
+function formatSignedCurrency(value?: number) {
+  const amount = Number(value || 0)
+  if (!amount) return '-'
+  const sign = amount > 0 ? '+' : '-'
+  return `${sign}${formatCurrency(Math.abs(amount))}`
+}
+
 function formatDateTime(value?: string) {
   if (!value) return '-'
   return format(new Date(value), 'MMM d, yyyy h:mm a')
@@ -114,6 +127,8 @@ export function TransactionDetailInlinePanel({ transactionId }: TransactionDetai
   const apiEnvironment = (data.processor_response?.api_environment as string | undefined) || undefined
   const paymentEvents = data.payment_events ?? []
   const paymentSegments = data.payment_segments ?? []
+  const orderItems = data.order_items_full ?? []
+  const orderDiscounts = data.order_discounts ?? []
   const paymentTimeline = [
     { label: 'Initiated', value: data.initiated_at },
     { label: 'Authorized', value: data.authorized_at },
@@ -364,6 +379,119 @@ export function TransactionDetailInlinePanel({ transactionId }: TransactionDetai
           )}
         </section>
       </div>
+
+      <section className="rounded-md border p-3">
+        <h4 className="mb-3 text-sm font-semibold">Order Breakdown (All Items)</h4>
+        {orderItems.length === 0 ? (
+          <div className="text-xs text-muted-foreground">No order items found.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b text-muted-foreground">
+                  <th className="p-1.5 text-left font-medium">Item</th>
+                  <th className="p-1.5 text-left font-medium">Size</th>
+                  <th className="p-1.5 text-right font-medium">Qty</th>
+                  <th className="p-1.5 text-right font-medium">Unit</th>
+                  <th className="p-1.5 text-right font-medium">Subtotal</th>
+                  <th className="p-1.5 text-right font-medium">Tax</th>
+                  <th className="p-1.5 text-right font-medium">Discount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orderItems.map((item) => (
+                  <tr key={item.id} className="border-b last:border-0">
+                    <td className="p-1.5 align-top">
+                      <div className={item.is_voided ? 'line-through text-muted-foreground' : ''}>
+                        {item.item_name}
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {item.is_voided && <Badge variant="destructive" className="h-4 px-1 text-[10px]">Voided</Badge>}
+                        {item.is_open_item && <Badge variant="outline" className="h-4 px-1 text-[10px]">Open Item</Badge>}
+                        {item.is_tax_exempt && <Badge variant="secondary" className="h-4 px-1 text-[10px]">Tax Exempt</Badge>}
+                      </div>
+                      {item.is_voided && item.void_reason && (
+                        <div className="mt-1 text-[11px] text-muted-foreground">
+                          Reason: {item.void_reason}
+                        </div>
+                      )}
+                      {item.modifiers.length > 0 && (
+                        <div className="mt-1 space-y-1 border-l pl-2">
+                          {item.modifiers.map((modifier) => (
+                            <div key={modifier.id} className="text-[11px] text-muted-foreground">
+                              {modifier.modifier_group_name ? `${modifier.modifier_group_name}: ` : ''}
+                              {modifier.modifier_name || 'Modifier'}
+                              {modifier.quantity > 1 ? ` x${modifier.quantity}` : ''}
+                              {modifier.price_modifier !== 0 ? ` (${formatSignedCurrency(modifier.price_modifier)})` : ''}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="p-1.5 align-top">{item.size_name || '-'}</td>
+                    <td className="p-1.5 text-right font-mono align-top">{item.quantity}</td>
+                    <td className="p-1.5 text-right font-mono align-top">{formatCurrency(item.unit_price)}</td>
+                    <td className="p-1.5 text-right font-mono align-top">{formatCurrency(item.subtotal)}</td>
+                    <td className="p-1.5 text-right font-mono align-top">
+                      {item.tax !== undefined ? formatCurrency(item.tax) : '-'}
+                    </td>
+                    <td className="p-1.5 text-right font-mono align-top">
+                      {item.discount !== undefined && item.discount !== 0 ? formatCurrency(item.discount) : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="mt-3 space-y-2 border-t pt-3">
+          <div className="text-xs font-medium">Order-level Discounts</div>
+          {orderDiscounts.length === 0 ? (
+            <div className="text-xs text-muted-foreground">No order-level discounts recorded.</div>
+          ) : (
+            <div className="space-y-1">
+              {orderDiscounts.map((discount) => (
+                <div key={discount.id} className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">
+                    {discount.discount_name || 'Discount'}
+                    {discount.discount_type ? ` (${toLabel(discount.discount_type)})` : ''}
+                    {discount.discount_value !== undefined ? ` ${discount.discount_value}` : ''}
+                  </span>
+                  <span className="font-mono">{formatNegativeCurrency(discount.amount)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-3 grid gap-1 border-t pt-3 text-xs md:grid-cols-2">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Subtotal</span>
+            <span className="font-mono">{formatCurrency(data.order_subtotal)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Tax</span>
+            <span className="font-mono">{formatCurrency(data.order_tax_amount)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Tip</span>
+            <span className="font-mono">{formatCurrency(data.order_tip_amount)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Discount</span>
+            <span className="font-mono">{formatNegativeCurrency(data.order_discount_amount)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Service Charge</span>
+            <span className="font-mono">{formatCurrency(data.order_service_charge)}</span>
+          </div>
+          <div className="flex justify-between font-semibold">
+            <span>Total</span>
+            <span className="font-mono">{formatCurrency(data.order_total_amount)}</span>
+          </div>
+        </div>
+      </section>
 
       <section className="rounded-md border p-3">
         <h4 className="mb-3 text-sm font-semibold">Adjustments & Reversals</h4>

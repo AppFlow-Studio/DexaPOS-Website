@@ -85,6 +85,44 @@ interface PlatformTransactionViewRow {
   created_at: string | null
 }
 
+interface PlatformTransactionRpcRow {
+  id: string
+  order_id: string
+  order_number: string | null
+  display_number: string | null
+  merchant_id: string | null
+  merchant_name: string | null
+  location_id: string | null
+  location_name: string | null
+  customer_name: string | null
+  payment_method: string | null
+  card_type: string | null
+  card_last_four: string | null
+  authorization_code: string | null
+  reference_number: string | null
+  amount: number | string | null
+  tip_amount: number | string | null
+  total_amount: number | string | null
+  subtotal_amount: number | string | null
+  tax_amount: number | string | null
+  discount_amount: number | string | null
+  status: string | null
+  order_status: string | null
+  payment_status: string | null
+  staff_id: string | null
+  staff_name: string | null
+  entry_mode: string | null
+  created_at: string | null
+  total_count: number | string | null
+}
+
+interface PlatformTransactionDetailsRpcPayload {
+  order?: unknown
+  payments?: unknown
+  order_items?: unknown
+  order_discounts?: unknown
+}
+
 const PLATFORM_TX_SELECT = `
   id,
   order_id,
@@ -109,6 +147,26 @@ const PLATFORM_TX_SELECT = `
 
 function sanitizeSearchTerm(term: string): string {
   return term.trim().replace(/[(),]/g, ' ')
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return value as Record<string, unknown>
+}
+
+function asArray<T = unknown>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : []
+}
+
+function toBoolean(value: unknown): boolean {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value === 1
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    if (['true', 't', '1', 'yes', 'y'].includes(normalized)) return true
+    if (['false', 'f', '0', 'no', 'n', ''].includes(normalized)) return false
+  }
+  return Boolean(value)
 }
 
 const CARD_TYPE_EQUIVALENTS: Record<string, string[]> = {
@@ -194,6 +252,67 @@ function mapViewRowToTransaction(row: PlatformTransactionViewRow): PlatformTrans
   }
 }
 
+function mapRpcRowToTransaction(row: PlatformTransactionRpcRow): PlatformTransaction {
+  return {
+    id: row.id,
+    order_id: row.order_id,
+    merchant_name: row.merchant_name || 'Unknown',
+    merchant_id: row.merchant_id || '',
+    location_name: row.location_name || undefined,
+    location_id: row.location_id || undefined,
+    customer_name: row.customer_name || undefined,
+    order_number: row.order_number || row.display_number || undefined,
+    payment_method: row.payment_method || 'unknown',
+    card_type: row.card_type || undefined,
+    card_last_four: row.card_last_four || undefined,
+    authorization_code: row.authorization_code || undefined,
+    reference_number: row.reference_number || undefined,
+    amount: Number(row.amount || 0),
+    tip_amount: Number(row.tip_amount || 0),
+    total_amount: Number(row.total_amount || 0),
+    subtotal_amount:
+      row.subtotal_amount !== null && row.subtotal_amount !== undefined
+        ? Number(row.subtotal_amount)
+        : undefined,
+    tax_amount:
+      row.tax_amount !== null && row.tax_amount !== undefined
+        ? Number(row.tax_amount)
+        : undefined,
+    discount_amount:
+      row.discount_amount !== null && row.discount_amount !== undefined
+        ? Number(row.discount_amount)
+        : undefined,
+    status: row.status || 'unknown',
+    order_status: row.order_status || undefined,
+    staff_name: row.staff_name || undefined,
+    entry_mode: row.entry_mode || undefined,
+    created_at: row.created_at || new Date(0).toISOString(),
+  }
+}
+
+function normalizeSortByForRpc(
+  filters?: PlatformTransactionFilters
+): 'initiated_at' | 'order_number' | 'total_amount' {
+  if (filters?.sortBy === 'order_number') return 'order_number'
+  if (filters?.sortBy === 'total_amount') return 'total_amount'
+  return 'initiated_at'
+}
+
+function normalizeCardTypeFilterForRpc(cardTypes?: string[]): string | null {
+  if (!cardTypes || cardTypes.length === 0) return null
+  const normalized = Array.from(
+    new Set(
+      cardTypes
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  )
+  const tokens = Array.from(
+    new Set(normalized.flatMap((value) => CARD_TYPE_EQUIVALENTS[value] ?? [value]))
+  )
+  return tokens.length > 0 ? tokens.join(',') : null
+}
+
 function applyPlatformTransactionFilters(query: any, filters?: PlatformTransactionFilters) {
   if (filters?.merchantIds && filters.merchantIds.length > 0) {
     query = query.in('merchant_id', filters.merchantIds)
@@ -254,6 +373,53 @@ function applyPlatformTransactionFilters(query: any, filters?: PlatformTransacti
   }
 
   return query
+}
+
+async function getPlatformTransactionsFromRpc(
+  limit: number,
+  offset: number,
+  filters?: PlatformTransactionFilters
+): Promise<{ data: PlatformTransaction[]; total: number; errorCode?: string }> {
+  if (limit <= 0) return { data: [], total: 0 }
+
+  const supabase = createServerSupabaseClient()
+  const page = Math.floor(offset / limit) + 1
+  const search = filters?.search?.trim()
+
+  const { data, error } = await supabase.rpc('get_admin_transactions', {
+    p_merchant_ids: filters?.merchantIds ?? null,
+    p_location_ids: filters?.locationIds ?? null,
+    p_status: filters?.orderStatuses ?? null,
+    p_payment_status: filters?.paymentStatuses ?? null,
+    p_payment_method: filters?.paymentMethods ?? null,
+    p_date_from: filters?.dateFrom ?? null,
+    p_date_to: filters?.dateTo ?? null,
+    p_min_amount: filters?.minAmount ?? null,
+    p_max_amount: filters?.maxAmount ?? null,
+    p_search: search && search.length >= 2 ? search : null,
+    p_card_type: normalizeCardTypeFilterForRpc(filters?.cardTypes),
+    p_staff_id: filters?.staffId ?? null,
+    p_sort_by: normalizeSortByForRpc(filters),
+    p_sort_dir: filters?.sortDir ?? 'desc',
+    p_page: page,
+    p_page_size: limit,
+  })
+
+  if (error) {
+    console.error('[getPlatformTransactions:rpc] Error:', error)
+    return { data: [], total: 0, errorCode: error.code }
+  }
+
+  const rows = (data ?? []) as PlatformTransactionRpcRow[]
+  const total =
+    rows.length > 0 && rows[0].total_count !== null && rows[0].total_count !== undefined
+      ? Number(rows[0].total_count)
+      : 0
+
+  return {
+    data: rows.map(mapRpcRowToTransaction),
+    total,
+  }
 }
 
 async function getPlatformTransactionsFromView(
@@ -469,20 +635,26 @@ export async function getPlatformTransactions(
 ): Promise<{ data: PlatformTransaction[]; total: number }> {
   await assertHQPermission('hq.merchant.transactions')
 
-  // Legacy is the stable default until view parity is guaranteed in every environment.
-  if (!USE_PLATFORM_TX_VIEW) {
-    return getPlatformTransactionsLegacy(limit, offset, filters)
+  const fromRpc = await getPlatformTransactionsFromRpc(limit, offset, filters)
+  if (!fromRpc.errorCode) {
+    return { data: fromRpc.data, total: fromRpc.total }
   }
 
-  const fromView = await getPlatformTransactionsFromView(limit, offset, filters)
-  if (!fromView.errorCode) {
-    return { data: fromView.data, total: fromView.total }
-  }
-
-  // Backward compatibility until the DB view exists in all environments.
   console.warn(
-    `[getPlatformTransactions] Falling back to legacy query path due to view error (${fromView.errorCode}).`
+    `[getPlatformTransactions] Falling back from RPC to query path due to rpc error (${fromRpc.errorCode}).`
   )
+
+  if (USE_PLATFORM_TX_VIEW) {
+    const fromView = await getPlatformTransactionsFromView(limit, offset, filters)
+    if (!fromView.errorCode) {
+      return { data: fromView.data, total: fromView.total }
+    }
+
+    console.warn(
+      `[getPlatformTransactions] Falling back to legacy query path due to view error (${fromView.errorCode}).`
+    )
+  }
+
   return getPlatformTransactionsLegacy(limit, offset, filters)
 }
 
@@ -503,7 +675,7 @@ export async function getPlatformTransactionStats(
 
   const batchSize = 1000
   let offset = 0
-  let source: 'view' | 'legacy' = USE_PLATFORM_TX_VIEW ? 'view' : 'legacy'
+  let source: 'rpc' | 'view' | 'legacy' = 'rpc'
 
   let totalTransactions = 0
   let capturedTransactions = 0
@@ -515,7 +687,17 @@ export async function getPlatformTransactionStats(
   while (true) {
     let rows: PlatformTransaction[] = []
 
-    if (source === 'view') {
+    if (source === 'rpc') {
+      const fromRpc = await getPlatformTransactionsFromRpc(batchSize, offset, filters)
+      if (fromRpc.errorCode) {
+        console.warn(
+          `[getPlatformTransactionStats] Falling back from rpc due to error (${fromRpc.errorCode}).`
+        )
+        source = USE_PLATFORM_TX_VIEW ? 'view' : 'legacy'
+        continue
+      }
+      rows = fromRpc.data
+    } else if (source === 'view') {
       const fromView = await getPlatformTransactionsFromView(batchSize, offset, filters)
       if (fromView.errorCode) {
         console.warn(
@@ -579,6 +761,39 @@ export interface PlatformTransactionPaidItem {
   unit_price_paid: number
   subtotal_paid: number
   tax_paid: number
+}
+
+export interface PlatformTransactionOrderItemModifier {
+  id: string
+  modifier_group_name?: string
+  modifier_name?: string
+  quantity: number
+  price_modifier: number
+  total_price: number
+}
+
+export interface PlatformTransactionOrderItem {
+  id: string
+  item_name: string
+  size_name?: string
+  quantity: number
+  unit_price: number
+  subtotal: number
+  tax?: number
+  discount?: number
+  is_voided: boolean
+  void_reason?: string
+  is_open_item: boolean
+  is_tax_exempt: boolean
+  modifiers: PlatformTransactionOrderItemModifier[]
+}
+
+export interface PlatformTransactionOrderDiscount {
+  id: string
+  discount_name?: string
+  discount_type?: string
+  discount_value?: number
+  amount: number
 }
 
 export interface PlatformTransactionPaymentEvent {
@@ -709,14 +924,368 @@ export interface PlatformTransactionDetails {
   processor_response?: Record<string, unknown> | null
   items: PlatformTransactionLineItem[]
   paid_items: PlatformTransactionPaidItem[]
+  order_items_full: PlatformTransactionOrderItem[]
+  order_discounts: PlatformTransactionOrderDiscount[]
   payment_events: PlatformTransactionPaymentEvent[]
   payment_segments: PlatformTransactionSegment[]
+}
+
+function mapRpcPaymentEvent(event: any, fallbackId: string): PlatformTransactionPaymentEvent {
+  const timestamp =
+    event?.event_timestamp ||
+    event?.created_at ||
+    event?.occurred_at ||
+    event?.event_at ||
+    event?.timestamp ||
+    undefined
+
+  return {
+    id: String(event?.id || fallbackId),
+    event_type: event?.event_type || event?.type || event?.action || 'event',
+    previous_status: event?.previous_status || event?.from_status || event?.old_status || undefined,
+    new_status: event?.new_status || event?.to_status || event?.status || undefined,
+    timestamp,
+    terminal_id: event?.terminal_id || event?.device_id || undefined,
+    result_code: event?.result_code || event?.response_code || event?.code || undefined,
+    response_message:
+      event?.response_message || event?.result_message || event?.message || event?.error_message || undefined,
+    raw_response: asRecord(event?.raw_response || event?.processor_response || event?.response_json || event?.payload),
+  }
+}
+
+function mapRpcSegment(segment: any, index: number): PlatformTransactionSegment {
+  const processorResponse = asRecord(segment?.processor_response)
+  const segmentEntry = [
+    segment?.card_entry_mode,
+    processorResponse?.entry_type,
+    processorResponse?.entryType,
+    processorResponse?.entry_mode,
+    processorResponse?.entryMode,
+  ].find((value) => typeof value === 'string') as string | undefined
+
+  const splitSequence =
+    segment?.split_sequence !== null && segment?.split_sequence !== undefined
+      ? Number(segment.split_sequence)
+      : segment?.split_index !== null && segment?.split_index !== undefined
+        ? Number(segment.split_index)
+        : segment?.split_portion_index !== null && segment?.split_portion_index !== undefined
+          ? Number(segment.split_portion_index)
+          : index + 1
+
+  return {
+    id: String(segment?.id || `segment-${index + 1}`),
+    payment_method: segment?.payment_method || 'unknown',
+    status: segment?.status || 'unknown',
+    amount: Number(segment?.amount || 0),
+    tip_amount: Number(segment?.tip_amount || 0),
+    total_amount: Number(segment?.total_amount || 0),
+    card_type: segment?.card_type || undefined,
+    card_last_four: segment?.card_last_four || undefined,
+    authorization_code: segment?.authorization_code || segment?.auth_code || undefined,
+    reference_number: segment?.reference_number || undefined,
+    transaction_id: segment?.transaction_id || undefined,
+    terminal_type: segment?.terminal_type || undefined,
+    terminal_id: segment?.terminal_id || undefined,
+    card_entry_mode: segmentEntry,
+    batch_number: segment?.batch_number || segment?.dejavoo_batch_number || undefined,
+    invoice_number: segment?.invoice_number || segment?.dejavoo_invoice_number || undefined,
+    split_sequence: splitSequence,
+    is_split_payment:
+      segment?.is_split_payment ??
+      (segment?.split_total !== null && segment?.split_total !== undefined
+        ? Number(segment.split_total) > 1
+        : undefined),
+    is_voided: toBoolean(segment?.is_voided),
+    void_reason: segment?.void_reason || undefined,
+    voided_at: segment?.voided_at || undefined,
+    voided_by: segment?.voided_by || undefined,
+    is_returned: segment?.is_returned ?? (segment?.returned_at ? true : undefined),
+    return_amount: segment?.return_amount !== null ? Number(segment?.return_amount) : undefined,
+    return_reason: segment?.return_reason || undefined,
+    returned_at: segment?.returned_at || undefined,
+    returned_by: segment?.returned_by || undefined,
+    refunded_amount: segment?.refunded_amount !== null ? Number(segment?.refunded_amount) : undefined,
+    refund_reason: segment?.refund_reason || undefined,
+    refunded_at: segment?.refunded_at || undefined,
+    original_tip_amount: segment?.original_tip_amount !== null ? Number(segment?.original_tip_amount) : undefined,
+    tip_adjusted_at: segment?.tip_adjusted_at || undefined,
+    tip_adjusted_by: segment?.tip_adjusted_by || undefined,
+    initiated_at: segment?.initiated_at || undefined,
+    authorized_at: segment?.authorized_at || undefined,
+    captured_at: segment?.captured_at || undefined,
+  }
+}
+
+async function getPlatformTransactionDetailsFromRpc(
+  transactionId: string
+): Promise<{ data: PlatformTransactionDetails | null; errorCode?: string }> {
+  const supabase = createServerSupabaseClient()
+
+  const { data: paymentLookup, error: paymentLookupError } = await supabase
+    .from('order_payments')
+    .select('id, order_id')
+    .eq('id', transactionId)
+    .single()
+
+  if (paymentLookupError || !paymentLookup) {
+    if (paymentLookupError) {
+      console.error('[getPlatformTransactionDetails:rpc:lookup] Error:', paymentLookupError)
+      return { data: null, errorCode: paymentLookupError.code }
+    }
+    return { data: null }
+  }
+
+  const { data: rpcData, error: rpcError } = await supabase.rpc('get_admin_transaction_detail', {
+    p_order_id: paymentLookup.order_id,
+  })
+
+  if (rpcError) {
+    console.error('[getPlatformTransactionDetails:rpc] Error:', rpcError)
+    return { data: null, errorCode: rpcError.code }
+  }
+
+  if (!rpcData) return { data: null }
+
+  const payload = asRecord(rpcData) as PlatformTransactionDetailsRpcPayload | null
+  if (!payload) return { data: null, errorCode: 'INVALID_RPC_PAYLOAD' }
+
+  const order = (asRecord(payload.order) || {}) as any
+  const payments = asArray<any>(payload.payments)
+  const orderItemsAll = asArray<any>(payload.order_items)
+  const orderDiscountsRaw = asArray<any>(payload.order_discounts)
+
+  if (payments.length === 0) {
+    return { data: null }
+  }
+
+  const selectedPayment = payments.find((payment) => String(payment?.id || '') === transactionId) || payments[0]
+  const selectedSettlement = asRecord(selectedPayment?.settlement) || null
+  const processorResponse = asRecord(selectedPayment?.processor_response)
+
+  const entryFromProcessor = [
+    selectedPayment?.card_entry_mode,
+    processorResponse?.entry_type,
+    processorResponse?.entryType,
+    processorResponse?.entry_mode,
+    processorResponse?.entryMode,
+  ].find((value) => typeof value === 'string') as string | undefined
+
+  const primaryEvents = asArray<any>(selectedPayment?.payment_events)
+  const fallbackEvents = payments.flatMap((payment, paymentIndex) =>
+    asArray<any>(payment?.payment_events).map((event: any, eventIndex: number) => ({
+      ...event,
+      _fallback_id: `${payment?.id || transactionId}-event-${paymentIndex}-${eventIndex}`,
+    }))
+  )
+  const paymentEventsSource = primaryEvents.length > 0 ? primaryEvents : fallbackEvents
+  const paymentEvents = paymentEventsSource.map((event: any, index: number) =>
+    mapRpcPaymentEvent(event, String(event?._fallback_id || `${transactionId}-event-${index}`))
+  )
+
+  const paymentSegments = payments.map((segment, index) => mapRpcSegment(segment, index))
+
+  const paidItems = asArray<any>(selectedPayment?.items_paid).map((item: any, index: number) => {
+    const nestedItem = asRecord(item?.item) || null
+    return {
+      id: String(item?.id || `${transactionId}-paid-${index}`),
+      order_item_id: item?.order_item_id || undefined,
+      item_name: (nestedItem?.item_name as string | undefined) || item?.item_name || undefined,
+      quantity_paid: Number(item?.quantity_paid || 0),
+      unit_price_paid: Number(item?.unit_price_paid || 0),
+      subtotal_paid: Number(item?.subtotal_paid || 0),
+      tax_paid: Number(item?.tax_paid || 0),
+    }
+  })
+
+  const items = orderItemsAll.map((item: any, index: number) => ({
+    id: String(item?.id || `${paymentLookup.order_id}-item-${index}`),
+    item_name: item?.item_name || 'Item',
+    quantity: Number(item?.quantity || 0),
+    unit_price: Number(item?.unit_price || 0),
+    subtotal: Number(item?.subtotal || 0),
+    special_instructions: item?.special_instructions || undefined,
+  }))
+
+  const orderItemsFull = orderItemsAll.map((item: any, index: number) => {
+    const metadata = asRecord(item?.metadata)
+    const taxValue = item?.tax_amount ?? item?.tax_paid ?? item?.tax ?? metadata?.tax_amount ?? undefined
+    const discountValue =
+      item?.discount_amount ?? item?.discount ?? metadata?.discount_amount ?? undefined
+    const taxExemptFlag =
+      item?.is_tax_exempt ??
+      item?.effective_is_tax_exempt ??
+      metadata?.is_tax_exempt ??
+      metadata?.tax_exempt ??
+      false
+    const openItemFlag =
+      item?.is_open_item ??
+      metadata?.is_open_item ??
+      metadata?.open_item ??
+      (item?.menu_item_id === null && item?.location_exclusive_item_id === null)
+
+    return {
+      id: String(item?.id || `${paymentLookup.order_id}-full-item-${index}`),
+      item_name: item?.item_name || 'Item',
+      size_name: item?.selected_size_name || undefined,
+      quantity: Number(item?.quantity || 0),
+      unit_price: Number(item?.unit_price || 0),
+      subtotal: Number(item?.subtotal || 0),
+      tax: taxValue !== null && taxValue !== undefined ? Number(taxValue) : undefined,
+      discount: discountValue !== null && discountValue !== undefined ? Number(discountValue) : undefined,
+      is_voided: toBoolean(item?.is_voided),
+      void_reason: item?.void_reason || undefined,
+      is_open_item: toBoolean(openItemFlag),
+      is_tax_exempt: toBoolean(taxExemptFlag),
+      modifiers: asArray<any>(item?.modifiers).map((modifier: any, modifierIndex: number) => ({
+        id: String(modifier?.id || `${item?.id || index}-modifier-${modifierIndex}`),
+        modifier_group_name: modifier?.modifier_group_name || undefined,
+        modifier_name: modifier?.modifier_name || undefined,
+        quantity: Number(modifier?.quantity || 1),
+        price_modifier: Number(modifier?.price_modifier || 0),
+        total_price: Number(modifier?.total_price || 0),
+      })),
+    }
+  })
+
+  const orderDiscounts = orderDiscountsRaw.map((discount: any, index: number) => ({
+    id: String(discount?.id || `${paymentLookup.order_id}-discount-${index}`),
+    discount_name: discount?.discount_name || discount?.name || undefined,
+    discount_type: discount?.discount_type || undefined,
+    discount_value:
+      discount?.discount_value !== null && discount?.discount_value !== undefined
+        ? Number(discount.discount_value)
+        : undefined,
+    amount: Number(discount?.calculated_amount || discount?.amount || discount?.discount_amount || 0),
+  }))
+
+  const splitSequence =
+    selectedPayment?.split_sequence !== null && selectedPayment?.split_sequence !== undefined
+      ? Number(selectedPayment.split_sequence)
+      : selectedPayment?.split_index !== null && selectedPayment?.split_index !== undefined
+        ? Number(selectedPayment.split_index)
+        : selectedPayment?.split_portion_index !== null && selectedPayment?.split_portion_index !== undefined
+          ? Number(selectedPayment.split_portion_index)
+          : undefined
+
+  const data: PlatformTransactionDetails = {
+    id: String(selectedPayment?.id || transactionId),
+    order_id: String(selectedPayment?.order_id || order?.id || paymentLookup.order_id),
+    order_number: order?.order_number || undefined,
+    display_number: order?.display_number || undefined,
+    merchant_id: String(selectedPayment?.merchant_id || order?.merchant_id || ''),
+    merchant_name: order?.merchant_name || 'Unknown',
+    location_id: selectedPayment?.location_id || order?.location_id || undefined,
+    location_name: order?.location_name || undefined,
+    customer_name: order?.customer_name || undefined,
+    customer_phone: order?.customer_phone || undefined,
+    customer_email: order?.customer_email || undefined,
+    order_type: order?.order_type || undefined,
+    order_status: order?.status || undefined,
+    payment_status: order?.payment_status || undefined,
+    table_number: order?.table_number || undefined,
+    staff_name: selectedPayment?.staff_name || order?.staff_name || undefined,
+    notes: order?.special_instructions || order?.internal_notes || undefined,
+    payment_method: selectedPayment?.payment_method || 'unknown',
+    status: selectedPayment?.status || 'unknown',
+    amount: Number(selectedPayment?.amount || 0),
+    tip_amount: Number(selectedPayment?.tip_amount || 0),
+    total_amount: Number(selectedPayment?.total_amount || 0),
+    order_subtotal: Number(order?.subtotal || 0),
+    order_tax_amount: Number(order?.tax_amount || 0),
+    order_tip_amount: Number(order?.tip_amount || 0),
+    order_discount_amount: Number(order?.discount_amount || 0),
+    order_service_charge: Number(order?.service_charge || 0),
+    order_total_amount: Number(order?.total_amount || 0),
+    card_type: selectedPayment?.card_type || undefined,
+    card_last_four: selectedPayment?.card_last_four || undefined,
+    authorization_code: selectedPayment?.authorization_code || selectedPayment?.auth_code || undefined,
+    reference_number: selectedPayment?.reference_number || undefined,
+    transaction_id: selectedPayment?.transaction_id || undefined,
+    processor_name: selectedPayment?.processor_name || undefined,
+    terminal_id: selectedPayment?.terminal_id || undefined,
+    terminal_type: selectedPayment?.terminal_type || undefined,
+    device_id: selectedPayment?.device_id || undefined,
+    card_entry_mode: selectedPayment?.card_entry_mode || entryFromProcessor || undefined,
+    dejavoo_response_code: selectedPayment?.dejavoo_response_code || selectedPayment?.result_code || undefined,
+    batch_number: selectedPayment?.batch_number || selectedPayment?.dejavoo_batch_number || undefined,
+    invoice_number: selectedPayment?.invoice_number || selectedPayment?.dejavoo_invoice_number || undefined,
+    is_split_payment:
+      selectedPayment?.is_split_payment ??
+      (selectedPayment?.split_total !== null && selectedPayment?.split_total !== undefined
+        ? Number(selectedPayment.split_total) > 1
+        : undefined),
+    split_sequence: splitSequence,
+    settled_at: selectedPayment?.settled_at || (selectedSettlement as any)?.settled_at || undefined,
+    settlement_batch_id:
+      selectedPayment?.settlement_batch_id || (selectedSettlement as any)?.settlement_batch_id || undefined,
+    gateway_fee: selectedPayment?.gateway_fee !== null ? Number(selectedPayment?.gateway_fee) : undefined,
+    original_amount: selectedPayment?.original_amount !== null ? Number(selectedPayment?.original_amount) : undefined,
+    refunded_amount: selectedPayment?.refunded_amount !== null ? Number(selectedPayment?.refunded_amount) : undefined,
+    refund_reason: selectedPayment?.refund_reason || undefined,
+    return_amount: selectedPayment?.return_amount !== null ? Number(selectedPayment?.return_amount) : undefined,
+    return_reason: selectedPayment?.return_reason || undefined,
+    returned_by: selectedPayment?.returned_by || undefined,
+    is_returned: selectedPayment?.is_returned ?? (selectedPayment?.returned_at ? true : undefined),
+    is_voided: toBoolean(selectedPayment?.is_voided),
+    void_reason: selectedPayment?.void_reason || undefined,
+    voided_by: selectedPayment?.voided_by || undefined,
+    original_tip_amount:
+      selectedPayment?.original_tip_amount !== null ? Number(selectedPayment?.original_tip_amount) : undefined,
+    tip_adjusted_at: selectedPayment?.tip_adjusted_at || undefined,
+    tip_adjusted_by: selectedPayment?.tip_adjusted_by || undefined,
+    error_code: selectedPayment?.error_code || undefined,
+    error_message: selectedPayment?.error_message || undefined,
+    created_at:
+      selectedPayment?.captured_at ||
+      selectedPayment?.initiated_at ||
+      order?.created_at ||
+      new Date(0).toISOString(),
+    initiated_at: selectedPayment?.initiated_at || undefined,
+    authorized_at: selectedPayment?.authorized_at || undefined,
+    approved_at: selectedPayment?.approved_at || undefined,
+    captured_at: selectedPayment?.captured_at || undefined,
+    refunded_at: selectedPayment?.refunded_at || undefined,
+    returned_at: selectedPayment?.returned_at || undefined,
+    voided_at: selectedPayment?.voided_at || undefined,
+    failed_at: selectedPayment?.failed_at || undefined,
+    completed_at: order?.completed_at || undefined,
+    emv_data: asRecord(selectedPayment?.emv_data),
+    processor_response: processorResponse,
+    metadata: asRecord(selectedPayment?.metadata) || undefined,
+    items,
+    paid_items: paidItems,
+    order_items_full: orderItemsFull,
+    order_discounts: orderDiscounts,
+    payment_events: paymentEvents,
+    payment_segments: paymentSegments,
+  }
+
+  return { data }
 }
 
 export async function getPlatformTransactionDetails(
   transactionId: string
 ): Promise<PlatformTransactionDetails | null> {
   await assertHQPermission('hq.merchant.transactions')
+
+  const fromRpc = await getPlatformTransactionDetailsFromRpc(transactionId)
+  if (!fromRpc.errorCode) {
+    return fromRpc.data
+  }
+
+  console.warn(
+    `[getPlatformTransactionDetails] Falling back to legacy query path due to rpc error (${fromRpc.errorCode}).`
+  )
+  return getPlatformTransactionDetailsLegacy(transactionId, true)
+}
+
+async function getPlatformTransactionDetailsLegacy(
+  transactionId: string,
+  skipPermissionCheck: boolean = false
+): Promise<PlatformTransactionDetails | null> {
+  if (!skipPermissionCheck) {
+    await assertHQPermission('hq.merchant.transactions')
+  }
 
   const supabase = createServerSupabaseClient()
 
@@ -764,12 +1333,8 @@ export async function getPlatformTransactionDetails(
         locations(name),
         staff_profiles!orders_created_by_staff_id_fkey(first_name, last_name),
         order_items(
-          id,
-          item_name,
-          quantity,
-          unit_price,
-          subtotal,
-          special_instructions
+          *,
+          order_item_modifiers(*)
         )
       )
     `
@@ -854,6 +1419,31 @@ export async function getPlatformTransactionDetails(
         raw_response: rawResponse,
       }
     })
+  }
+
+  let orderDiscounts: PlatformTransactionOrderDiscount[] = []
+  const { data: discountsData, error: discountsError } = await supabase
+    .from('order_discounts')
+    .select('*')
+    .eq('order_id', data.order_id)
+    .order('created_at', { ascending: true })
+
+  if (discountsError) {
+    // Backward compatibility for environments where order_discounts is not provisioned yet.
+    if (discountsError.code !== 'PGRST205' && discountsError.code !== '42P01') {
+      console.error('[getPlatformTransactionDetails:order_discounts] Error:', discountsError)
+    }
+  } else {
+    orderDiscounts = (discountsData ?? []).map((discount: any, index: number) => ({
+      id: discount.id || `${data.order_id}-discount-${index}`,
+      discount_name: discount.discount_name || discount.name || undefined,
+      discount_type: discount.discount_type || undefined,
+      discount_value:
+        discount.discount_value !== null && discount.discount_value !== undefined
+          ? Number(discount.discount_value)
+          : undefined,
+      amount: Number(discount.amount || discount.discount_amount || 0),
+    }))
   }
 
   const { data: segmentRows, error: segmentsError } = await supabase
@@ -1042,6 +1632,62 @@ export async function getPlatformTransactionDetails(
       subtotal_paid: Number(item.subtotal_paid || 0),
       tax_paid: Number(item.tax_paid || 0),
     })),
+    order_items_full: (order.order_items || []).map((item: any) => {
+      const metadata = item.metadata && typeof item.metadata === 'object'
+        ? (item.metadata as Record<string, unknown>)
+        : null
+      const taxValue =
+        item.tax_amount ??
+        item.tax_paid ??
+        item.tax ??
+        metadata?.tax_amount ??
+        undefined
+      const discountValue =
+        item.discount_amount ??
+        item.discount ??
+        metadata?.discount_amount ??
+        undefined
+      const taxExemptFlag =
+        item.is_tax_exempt ??
+        item.effective_is_tax_exempt ??
+        metadata?.is_tax_exempt ??
+        metadata?.tax_exempt ??
+        false
+      const openItemFlag =
+        metadata?.is_open_item ??
+        metadata?.open_item ??
+        (item.menu_item_id === null && item.location_exclusive_item_id === null)
+
+      return {
+        id: item.id,
+        item_name: item.item_name || 'Item',
+        size_name: item.selected_size_name || undefined,
+        quantity: Number(item.quantity || 0),
+        unit_price: Number(item.unit_price || 0),
+        subtotal: Number(item.subtotal || 0),
+        tax:
+          taxValue !== null && taxValue !== undefined
+            ? Number(taxValue)
+            : undefined,
+        discount:
+          discountValue !== null && discountValue !== undefined
+            ? Number(discountValue)
+            : undefined,
+        is_voided: toBoolean(item.is_voided),
+        void_reason: item.void_reason || undefined,
+        is_open_item: toBoolean(openItemFlag),
+        is_tax_exempt: toBoolean(taxExemptFlag),
+        modifiers: (item.order_item_modifiers || []).map((modifier: any) => ({
+          id: modifier.id,
+          modifier_group_name: modifier.modifier_group_name || undefined,
+          modifier_name: modifier.modifier_name || undefined,
+          quantity: Number(modifier.quantity || 1),
+          price_modifier: Number(modifier.price_modifier || 0),
+          total_price: Number(modifier.total_price || 0),
+        })),
+      }
+    }),
+    order_discounts: orderDiscounts,
     payment_events: paymentEvents,
     payment_segments: paymentSegments,
   }
