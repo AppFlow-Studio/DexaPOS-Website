@@ -5,13 +5,17 @@ import {
   getTopMerchants
 } from '@/app/manage/actions/hq-platform/analytics'
 import {
+  getPlatformChargebacks,
   getPlatformMerchantBreakdown,
+  getPlatformPaymentAuditLogs,
   getPlatformSettlementBatchPayments,
   getPlatformSettlementBatches,
   getPlatformTransactionDetails,
   getPlatformTransactionSummary,
   getPlatformTransactionStats,
   getPlatformTransactions,
+  PlatformChargebackFilters,
+  PlatformPaymentAuditLogFilters,
   PlatformMerchantBreakdownFilters,
   PlatformSettlementBatchFilters,
   PlatformTransactionFilters
@@ -29,6 +33,10 @@ export const platformKeys = {
   settlementBatches: (filters?: PlatformSettlementBatchFilters) => [...platformKeys.all, 'settlement-batches', filters] as const,
   settlementBatchPayments: (batchId: string | null, merchantId?: string) =>
     [...platformKeys.all, 'settlement-batch-payments', batchId, merchantId] as const,
+  chargebacks: (filters?: PlatformChargebackFilters, limit: number = 50, offset: number = 0) =>
+    [...platformKeys.all, 'chargebacks', filters, limit, offset] as const,
+  paymentAuditLogs: (filters?: PlatformPaymentAuditLogFilters, limit: number = 50, offset: number = 0) =>
+    [...platformKeys.all, 'payment-audit-logs', filters, limit, offset] as const,
   transactionDetails: (transactionId: string | null) => [...platformKeys.all, 'transaction-details', transactionId] as const,
 }
 
@@ -99,6 +107,30 @@ export function usePlatformSettlementBatchPayments(
     queryFn: () => getPlatformSettlementBatchPayments(batchId!, merchantId),
     enabled: enabled && !!batchId,
     staleTime: 30_000,
+  })
+}
+
+export function usePlatformChargebacks(
+  filters?: PlatformChargebackFilters,
+  limit: number = 50,
+  offset: number = 0
+) {
+  return useQuery({
+    queryKey: platformKeys.chargebacks(filters, limit, offset),
+    queryFn: () => getPlatformChargebacks(filters, limit, offset),
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function usePlatformPaymentAuditLogs(
+  filters?: PlatformPaymentAuditLogFilters,
+  limit: number = 50,
+  offset: number = 0
+) {
+  return useQuery({
+    queryKey: platformKeys.paymentAuditLogs(filters, limit, offset),
+    queryFn: () => getPlatformPaymentAuditLogs(filters, limit, offset),
+    placeholderData: keepPreviousData,
   })
 }
 

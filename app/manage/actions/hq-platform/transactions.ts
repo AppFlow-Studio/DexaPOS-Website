@@ -4,6 +4,10 @@ import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { refundAdminOrder } from '@/app/manage/actions/admin-merchant/transactions'
 import { headers } from 'next/headers'
+import type {
+  PlatformChargebackStatus,
+  PlatformPaymentAuditActionType,
+} from './transactions-shared'
 
 const USE_PLATFORM_TX_VIEW = process.env.USE_PLATFORM_TX_VIEW === 'true'
 const DEFAULT_AUDIT_REQUEST_PATH = '/manage/transactions'
@@ -368,6 +372,163 @@ export interface PlatformMerchantBreakdown {
   daily_revenue_trend: PlatformMerchantBreakdownDailyPoint[]
 }
 
+export interface PlatformPaymentAuditLogFilters {
+  search?: string
+  user?: string
+  action?: PlatformPaymentAuditActionType
+  merchantIds?: string[]
+  dateFrom?: string
+  dateTo?: string
+  outcome?: 'success' | 'failed'
+}
+
+interface PlatformPaymentAuditLogDbRow {
+  id: string
+  event_timestamp: string | null
+  user_email: string | null
+  user_role: string | null
+  action: string | null
+  resource_type: string | null
+  resource_id: string | null
+  success: boolean | number | string | null
+  ip_address: string | null
+  fields_accessed: string[] | null
+  merchant_id: string | null
+  location_id: string | null
+  request_path: string | null
+  error_message: string | null
+}
+
+export interface PlatformPaymentAuditLogRow {
+  id: string
+  event_timestamp?: string
+  user_email?: string
+  user_role?: string
+  action: string
+  resource_type: string
+  resource_id?: string
+  success: boolean
+  ip_address?: string
+  fields_accessed: string[]
+  merchant_id?: string
+  merchant_name?: string
+  location_id?: string
+  request_path?: string
+  error_message?: string
+}
+
+export interface PlatformPaymentAuditLogsResult {
+  data: PlatformPaymentAuditLogRow[]
+  total: number
+  errorCode?: string
+}
+
+export interface PlatformChargebackFilters {
+  merchantIds?: string[]
+  statuses?: PlatformChargebackStatus[]
+  cardNetworks?: string[]
+  dateFrom?: string
+  dateTo?: string
+}
+
+interface PlatformChargebackDbRow {
+  id: string
+  original_payment_id: string | null
+  dispute_psp_reference: string | null
+  merchant_id: string | null
+  location_id: string | null
+  amount: number | string | null
+  reason_code: string | null
+  reason_description: string | null
+  card_network: string | null
+  status: string | null
+  defendable: boolean | number | string | null
+  defense_deadline: string | null
+  defense_submitted_at: string | null
+  defense_documents: unknown
+  resolved_at: string | null
+  resolution: string | null
+  resolution_amount: number | string | null
+  received_at: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+interface PlatformChargebackPaymentDbRow {
+  id: string
+  order_id: string | null
+  payment_method: string | null
+  status: string | null
+  total_amount: number | string | null
+  card_last_four: string | null
+  authorization_code: string | null
+  reference_number: string | null
+  initiated_at: string | null
+  captured_at: string | null
+}
+
+interface PlatformChargebackOrderDbRow {
+  id: string
+  order_number: string | null
+  display_number: string | null
+  customer_name: string | null
+}
+
+export interface PlatformChargebackDocument {
+  name: string
+  url?: string
+  uploaded_at?: string
+}
+
+export interface PlatformChargebackOriginalPaymentInfo {
+  payment_id: string
+  order_id?: string
+  order_number?: string
+  customer_name?: string
+  payment_method?: string
+  payment_status?: string
+  total_amount: number
+  card_last_four?: string
+  authorization_code?: string
+  reference_number?: string
+  initiated_at?: string
+  captured_at?: string
+}
+
+export interface PlatformChargebackRow {
+  id: string
+  original_payment_id: string
+  dispute_psp_reference?: string
+  merchant_id: string
+  merchant_name?: string
+  location_id?: string
+  amount: number
+  reason_code: string
+  reason_description?: string
+  card_network?: string
+  status: PlatformChargebackStatus | string
+  defendable: boolean
+  defense_deadline?: string
+  defense_submitted_at?: string
+  defense_documents: PlatformChargebackDocument[]
+  defense_documents_raw?: unknown
+  resolved_at?: string
+  resolution?: string
+  resolution_amount: number
+  received_at?: string
+  created_at?: string
+  updated_at?: string
+  original_payment?: PlatformChargebackOriginalPaymentInfo
+}
+
+export interface PlatformChargebacksResult {
+  data: PlatformChargebackRow[]
+  total: number
+  pendingCount: number
+  urgentCount: number
+  errorCode?: string
+}
+
 interface PlatformTransactionViewRow {
   id: string
   order_id: string
@@ -479,11 +640,7 @@ function toBoolean(value: unknown): boolean {
   return Boolean(value)
 }
 
-type PlatformPaymentAuditAction =
-  | 'view_transaction_list'
-  | 'view_payment_detail'
-  | 'export_data'
-  | 'search_card_last_four'
+type PlatformPaymentAuditAction = PlatformPaymentAuditActionType
 
 interface PlatformPaymentAuditLogInput {
   action: PlatformPaymentAuditAction
@@ -603,6 +760,36 @@ function applyCardTypeFilter(query: any, cardTypes?: string[]) {
   if (!cardTypeOr) return query
 
   return query.or(cardTypeOr)
+}
+
+function applyChargebackFilters(
+  query: any,
+  filters?: PlatformChargebackFilters,
+  includeStatus: boolean = true
+) {
+  let next = query
+
+  if (filters?.merchantIds && filters.merchantIds.length > 0) {
+    next = next.in('merchant_id', filters.merchantIds)
+  }
+
+  if (includeStatus && filters?.statuses && filters.statuses.length > 0) {
+    next = next.in('status', filters.statuses)
+  }
+
+  if (filters?.cardNetworks && filters.cardNetworks.length > 0) {
+    next = next.in('card_network', filters.cardNetworks)
+  }
+
+  if (filters?.dateFrom) {
+    next = next.gte('received_at', `${filters.dateFrom}T00:00:00`)
+  }
+
+  if (filters?.dateTo) {
+    next = next.lte('received_at', `${filters.dateTo}T23:59:59`)
+  }
+
+  return next
 }
 
 function normalizeSort(
@@ -841,6 +1028,149 @@ function mapRpcRowToMerchantBreakdown(
     void_count: Number(row.void_count || 0),
     void_rate_pct: Number(row.void_rate_pct || 0),
     daily_revenue_trend: trend,
+  }
+}
+
+function mapDbRowToPaymentAuditLog(
+  row: PlatformPaymentAuditLogDbRow,
+  merchantNameById: Map<string, string>
+): PlatformPaymentAuditLogRow {
+  const merchantId = row.merchant_id || undefined
+  return {
+    id: row.id,
+    event_timestamp: row.event_timestamp || undefined,
+    user_email: row.user_email || undefined,
+    user_role: row.user_role || undefined,
+    action: row.action || 'unknown_action',
+    resource_type: row.resource_type || 'payment_data',
+    resource_id: row.resource_id || undefined,
+    success: toBoolean(row.success),
+    ip_address: row.ip_address || undefined,
+    fields_accessed: Array.isArray(row.fields_accessed) ? row.fields_accessed : [],
+    merchant_id: merchantId,
+    merchant_name: merchantId ? merchantNameById.get(merchantId) : undefined,
+    location_id: row.location_id || undefined,
+    request_path: row.request_path || undefined,
+    error_message: row.error_message || undefined,
+  }
+}
+
+function normalizeChargebackDocuments(input: unknown): PlatformChargebackDocument[] {
+  if (!input) return []
+
+  if (Array.isArray(input)) {
+    return input
+      .map((entry, index) => {
+        if (typeof entry === 'string') {
+          const name = entry.trim()
+          if (!name) return null
+          return { name }
+        }
+
+        const record = asRecord(entry)
+        if (!record) return null
+
+        const urlValue = typeof record.url === 'string' ? record.url.trim() : ''
+        const nameValue =
+          typeof record.name === 'string'
+            ? record.name.trim()
+            : typeof record.filename === 'string'
+              ? record.filename.trim()
+              : urlValue
+                ? `Document ${index + 1}`
+                : ''
+        const uploadedAt =
+          typeof record.uploaded_at === 'string'
+            ? record.uploaded_at
+            : typeof record.created_at === 'string'
+              ? record.created_at
+              : undefined
+
+        if (!nameValue && !urlValue) return null
+
+        return {
+          name: nameValue || `Document ${index + 1}`,
+          url: urlValue || undefined,
+          uploaded_at: uploadedAt,
+        }
+      })
+      .filter((entry): entry is PlatformChargebackDocument => Boolean(entry))
+  }
+
+  const record = asRecord(input)
+  if (!record) return []
+
+  const urlValue = typeof record.url === 'string' ? record.url.trim() : ''
+  const nameValue =
+    typeof record.name === 'string'
+      ? record.name.trim()
+      : typeof record.filename === 'string'
+        ? record.filename.trim()
+        : urlValue
+          ? 'Document'
+          : ''
+  const uploadedAt =
+    typeof record.uploaded_at === 'string'
+      ? record.uploaded_at
+      : typeof record.created_at === 'string'
+        ? record.created_at
+        : undefined
+
+  if (!nameValue && !urlValue) return []
+  return [{ name: nameValue || 'Document', url: urlValue || undefined, uploaded_at: uploadedAt }]
+}
+
+function mapDbRowToChargeback(
+  row: PlatformChargebackDbRow,
+  merchantNameById: Map<string, string>,
+  paymentById: Map<string, PlatformChargebackPaymentDbRow>,
+  orderById: Map<string, PlatformChargebackOrderDbRow>
+): PlatformChargebackRow {
+  const merchantId = row.merchant_id || ''
+  const paymentId = row.original_payment_id || ''
+  const payment = paymentById.get(paymentId)
+  const order = payment?.order_id ? orderById.get(payment.order_id) : undefined
+  const orderNumber = order?.order_number || order?.display_number || undefined
+
+  return {
+    id: row.id,
+    original_payment_id: paymentId,
+    dispute_psp_reference: row.dispute_psp_reference || undefined,
+    merchant_id: merchantId,
+    merchant_name: merchantId ? merchantNameById.get(merchantId) : undefined,
+    location_id: row.location_id || undefined,
+    amount: Number(row.amount || 0),
+    reason_code: row.reason_code || 'unknown',
+    reason_description: row.reason_description || undefined,
+    card_network: row.card_network || undefined,
+    status: row.status || 'notified',
+    defendable: toBoolean(row.defendable),
+    defense_deadline: row.defense_deadline || undefined,
+    defense_submitted_at: row.defense_submitted_at || undefined,
+    defense_documents: normalizeChargebackDocuments(row.defense_documents),
+    defense_documents_raw: row.defense_documents ?? undefined,
+    resolved_at: row.resolved_at || undefined,
+    resolution: row.resolution || undefined,
+    resolution_amount: Number(row.resolution_amount || 0),
+    received_at: row.received_at || undefined,
+    created_at: row.created_at || undefined,
+    updated_at: row.updated_at || undefined,
+    original_payment: payment
+      ? {
+          payment_id: payment.id,
+          order_id: payment.order_id || undefined,
+          order_number: orderNumber,
+          customer_name: order?.customer_name || undefined,
+          payment_method: payment.payment_method || undefined,
+          payment_status: payment.status || undefined,
+          total_amount: Number(payment.total_amount || 0),
+          card_last_four: payment.card_last_four || undefined,
+          authorization_code: payment.authorization_code || undefined,
+          reference_number: payment.reference_number || undefined,
+          initiated_at: payment.initiated_at || undefined,
+          captured_at: payment.captured_at || undefined,
+        }
+      : undefined,
   }
 }
 
@@ -1519,6 +1849,300 @@ export async function getPlatformMerchantBreakdown(
 
   const rows = (data ?? []) as PlatformMerchantBreakdownRpcRow[]
   return rows.map(mapRpcRowToMerchantBreakdown)
+}
+
+export async function getPlatformPaymentAuditLogs(
+  filters?: PlatformPaymentAuditLogFilters,
+  limit: number = 50,
+  offset: number = 0
+): Promise<PlatformPaymentAuditLogsResult> {
+  await assertHQPermission('hq.merchant.transactions')
+
+  const supabase = createServerSupabaseClient()
+  const safeLimit = Math.min(Math.max(limit, 1), 200)
+  const safeOffset = Math.max(offset, 0)
+
+  let query = supabase
+    .from('payment_audit_log')
+    .select(
+      `
+      id,
+      event_timestamp,
+      user_email,
+      user_role,
+      action,
+      resource_type,
+      resource_id,
+      success,
+      ip_address,
+      fields_accessed,
+      merchant_id,
+      location_id,
+      request_path,
+      error_message
+      `,
+      { count: 'exact' }
+    )
+    .order('event_timestamp', { ascending: false })
+
+  if (filters?.merchantIds && filters.merchantIds.length > 0) {
+    query = query.in('merchant_id', filters.merchantIds)
+  }
+
+  if (filters?.action) {
+    query = query.eq('action', filters.action)
+  }
+
+  if (filters?.outcome === 'success') {
+    query = query.eq('success', true)
+  } else if (filters?.outcome === 'failed') {
+    query = query.eq('success', false)
+  }
+
+  if (filters?.user && filters.user.trim().length > 0) {
+    const userTerm = sanitizeSearchTerm(filters.user).trim()
+    if (userTerm.length > 0) {
+      query = query.ilike('user_email', `%${userTerm}%`)
+    }
+  }
+
+  if (filters?.dateFrom) {
+    query = query.gte('event_timestamp', `${filters.dateFrom}T00:00:00`)
+  }
+
+  if (filters?.dateTo) {
+    query = query.lte('event_timestamp', `${filters.dateTo}T23:59:59`)
+  }
+
+  const searchTerm = filters?.search?.trim() || ''
+  if (searchTerm.length >= 2) {
+    if (UUID_REGEX.test(searchTerm)) {
+      query = query.eq('resource_id', searchTerm)
+    } else if (searchTerm.includes('@')) {
+      const normalized = sanitizeSearchTerm(searchTerm)
+      query = query.ilike('user_email', `%${normalized}%`)
+    } else {
+      const normalized = sanitizeSearchTerm(searchTerm)
+      query = query.or(
+        `user_email.ilike.%${normalized}%,action.ilike.%${normalized}%,resource_type.ilike.%${normalized}%`
+      )
+    }
+  }
+
+  query = query.range(safeOffset, safeOffset + safeLimit - 1)
+
+  const { data, error, count } = await query
+
+  if (error) {
+    console.error('[getPlatformPaymentAuditLogs] Error:', error)
+    return {
+      data: [],
+      total: 0,
+      errorCode: error.code,
+    }
+  }
+
+  const rows = (data ?? []) as PlatformPaymentAuditLogDbRow[]
+  const merchantIds = Array.from(
+    new Set(rows.map((row) => row.merchant_id).filter((value): value is string => Boolean(value)))
+  )
+
+  const merchantNameById = new Map<string, string>()
+  if (merchantIds.length > 0) {
+    const { data: merchantsData, error: merchantsError } = await supabase
+      .from('merchants')
+      .select('id, name')
+      .in('id', merchantIds)
+
+    if (merchantsError) {
+      console.error('[getPlatformPaymentAuditLogs:merchants] Error:', merchantsError)
+    } else {
+      for (const merchant of merchantsData ?? []) {
+        if (merchant.id) {
+          merchantNameById.set(merchant.id, merchant.name || 'Unknown')
+        }
+      }
+    }
+  }
+
+  return {
+    data: rows.map((row) => mapDbRowToPaymentAuditLog(row, merchantNameById)),
+    total: count || 0,
+  }
+}
+
+export async function getPlatformChargebacks(
+  filters?: PlatformChargebackFilters,
+  limit: number = 50,
+  offset: number = 0
+): Promise<PlatformChargebacksResult> {
+  await assertHQPermission('hq.merchant.transactions')
+
+  const supabase = createServerSupabaseClient()
+  const safeLimit = Math.min(Math.max(limit, 1), 200)
+  const safeOffset = Math.max(offset, 0)
+
+  let baseQuery = supabase
+    .from('chargebacks')
+    .select(
+      `
+      id,
+      original_payment_id,
+      dispute_psp_reference,
+      merchant_id,
+      location_id,
+      amount,
+      reason_code,
+      reason_description,
+      card_network,
+      status,
+      defendable,
+      defense_deadline,
+      defense_submitted_at,
+      defense_documents,
+      resolved_at,
+      resolution,
+      resolution_amount,
+      received_at,
+      created_at,
+      updated_at
+      `,
+      { count: 'exact' }
+    )
+    .order('defense_deadline', { ascending: true, nullsFirst: false })
+    .order('received_at', { ascending: false })
+
+  baseQuery = applyChargebackFilters(baseQuery, filters, true)
+  baseQuery = baseQuery.range(safeOffset, safeOffset + safeLimit - 1)
+
+  const { data, error, count } = await baseQuery
+
+  if (error) {
+    console.error('[getPlatformChargebacks] Error:', error)
+    return {
+      data: [],
+      total: 0,
+      pendingCount: 0,
+      urgentCount: 0,
+      errorCode: error.code,
+    }
+  }
+
+  const rows = (data ?? []) as PlatformChargebackDbRow[]
+
+  const merchantIds = Array.from(
+    new Set(rows.map((row) => row.merchant_id).filter((value): value is string => Boolean(value)))
+  )
+  const paymentIds = Array.from(
+    new Set(rows.map((row) => row.original_payment_id).filter((value): value is string => Boolean(value)))
+  )
+
+  const merchantNameById = new Map<string, string>()
+  if (merchantIds.length > 0) {
+    const { data: merchantsData, error: merchantsError } = await supabase
+      .from('merchants')
+      .select('id, name')
+      .in('id', merchantIds)
+
+    if (merchantsError) {
+      console.error('[getPlatformChargebacks:merchants] Error:', merchantsError)
+    } else {
+      for (const merchant of merchantsData ?? []) {
+        if (merchant.id) {
+          merchantNameById.set(merchant.id, merchant.name || 'Unknown')
+        }
+      }
+    }
+  }
+
+  const paymentById = new Map<string, PlatformChargebackPaymentDbRow>()
+  if (paymentIds.length > 0) {
+    const { data: paymentsData, error: paymentsError } = await supabase
+      .from('order_payments')
+      .select(
+        `
+        id,
+        order_id,
+        payment_method,
+        status,
+        total_amount,
+        card_last_four,
+        authorization_code,
+        reference_number,
+        initiated_at,
+        captured_at
+        `
+      )
+      .in('id', paymentIds)
+
+    if (paymentsError) {
+      console.error('[getPlatformChargebacks:payments] Error:', paymentsError)
+    } else {
+      for (const payment of (paymentsData ?? []) as PlatformChargebackPaymentDbRow[]) {
+        paymentById.set(payment.id, payment)
+      }
+    }
+  }
+
+  const orderIds = Array.from(
+    new Set(
+      Array.from(paymentById.values())
+        .map((payment) => payment.order_id)
+        .filter((value): value is string => Boolean(value))
+    )
+  )
+  const orderById = new Map<string, PlatformChargebackOrderDbRow>()
+  if (orderIds.length > 0) {
+    const { data: ordersData, error: ordersError } = await supabase
+      .from('orders')
+      .select('id, order_number, display_number, customer_name')
+      .in('id', orderIds)
+
+    if (ordersError) {
+      console.error('[getPlatformChargebacks:orders] Error:', ordersError)
+    } else {
+      for (const order of (ordersData ?? []) as PlatformChargebackOrderDbRow[]) {
+        orderById.set(order.id, order)
+      }
+    }
+  }
+
+  const pendingStatuses: PlatformChargebackStatus[] = ['notified', 'under_review']
+
+  let pendingQuery = supabase
+    .from('chargebacks')
+    .select('id', { count: 'exact', head: true })
+    .in('status', pendingStatuses)
+  pendingQuery = applyChargebackFilters(pendingQuery, filters, false)
+
+  const { count: pendingCountRaw, error: pendingCountError } = await pendingQuery
+  if (pendingCountError) {
+    console.error('[getPlatformChargebacks:pendingCount] Error:', pendingCountError)
+  }
+
+  const now = new Date()
+  const cutoff = new Date(now.getTime() + 72 * 60 * 60 * 1000)
+
+  let urgentQuery = supabase
+    .from('chargebacks')
+    .select('id', { count: 'exact', head: true })
+    .in('status', pendingStatuses)
+    .not('defense_deadline', 'is', null)
+    .gte('defense_deadline', now.toISOString())
+    .lte('defense_deadline', cutoff.toISOString())
+  urgentQuery = applyChargebackFilters(urgentQuery, filters, false)
+
+  const { count: urgentCountRaw, error: urgentCountError } = await urgentQuery
+  if (urgentCountError) {
+    console.error('[getPlatformChargebacks:urgentCount] Error:', urgentCountError)
+  }
+
+  return {
+    data: rows.map((row) => mapDbRowToChargeback(row, merchantNameById, paymentById, orderById)),
+    total: count || 0,
+    pendingCount: pendingCountRaw || 0,
+    urgentCount: urgentCountRaw || 0,
+  }
 }
 
 export interface PlatformTransactionStats {

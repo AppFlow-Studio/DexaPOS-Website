@@ -66,6 +66,8 @@ import { TransactionSearchBar, highlightText } from './components/TransactionSea
 import { TransactionDetailInlinePanel } from './components/TransactionDetailInlinePanel'
 import { BatchReconciliationSection } from './components/BatchReconciliationSection'
 import { MerchantBreakdownSection } from './components/MerchantBreakdownSection'
+import { ChargebacksSection } from './components/ChargebacksSection'
+import { AuditLogSection } from './components/AuditLogSection'
 import { CardBrandIcon } from '@/app/dashboard/payments/components/CardBrandIcon'
 import { toast } from 'sonner'
 import Papa from 'papaparse'
@@ -1292,6 +1294,8 @@ function TransactionsPageInner() {
             </Card>
 
             <BatchReconciliationSection />
+            <ChargebacksSection />
+            <AuditLogSection />
 
             <AlertDialog open={!!refundTarget} onOpenChange={(open) => !open && setRefundTarget(null)}>
                 <AlertDialogContent>
