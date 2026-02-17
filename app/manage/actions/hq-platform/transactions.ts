@@ -145,6 +145,68 @@ export interface PlatformTransactionExportResult {
   errorCode?: string
 }
 
+interface PlatformTransactionSummaryRpcRow {
+  current_period_from: string | null
+  current_period_to: string | null
+  previous_period_from: string | null
+  previous_period_to: string | null
+  current_total_transactions: number | string | null
+  previous_total_transactions: number | string | null
+  current_card_revenue: number | string | null
+  previous_card_revenue: number | string | null
+  current_card_count: number | string | null
+  previous_card_count: number | string | null
+  current_cash_revenue: number | string | null
+  previous_cash_revenue: number | string | null
+  current_cash_count: number | string | null
+  previous_cash_count: number | string | null
+  current_total_revenue: number | string | null
+  previous_total_revenue: number | string | null
+  current_avg_tip: number | string | null
+  previous_avg_tip: number | string | null
+  current_avg_tip_pct: number | string | null
+  previous_avg_tip_pct: number | string | null
+  current_void_return_count: number | string | null
+  previous_void_return_count: number | string | null
+  current_void_return_amount: number | string | null
+  previous_void_return_amount: number | string | null
+  current_void_rate_pct: number | string | null
+  previous_void_rate_pct: number | string | null
+}
+
+export interface PlatformTransactionSummary {
+  currentPeriodFrom?: string
+  currentPeriodTo?: string
+  previousPeriodFrom?: string
+  previousPeriodTo?: string
+  current: {
+    totalTransactions: number
+    cardRevenue: number
+    cardCount: number
+    cashRevenue: number
+    cashCount: number
+    totalRevenue: number
+    avgTip: number
+    avgTipPct: number
+    voidReturnCount: number
+    voidReturnAmount: number
+    voidRatePct: number
+  }
+  previous: {
+    totalTransactions: number
+    cardRevenue: number
+    cardCount: number
+    cashRevenue: number
+    cashCount: number
+    totalRevenue: number
+    avgTip: number
+    avgTipPct: number
+    voidReturnCount: number
+    voidReturnAmount: number
+    voidRatePct: number
+  }
+}
+
 interface PlatformTransactionViewRow {
   id: string
   order_id: string
@@ -415,6 +477,41 @@ function mapRpcRowToExport(row: PlatformTransactionExportRpcRow): PlatformTransa
     staff_name: row.staff_name || undefined,
     terminal_serial: row.terminal_serial || undefined,
     device_id: row.device_id || undefined,
+  }
+}
+
+function mapRpcRowToSummary(row: PlatformTransactionSummaryRpcRow): PlatformTransactionSummary {
+  return {
+    currentPeriodFrom: row.current_period_from || undefined,
+    currentPeriodTo: row.current_period_to || undefined,
+    previousPeriodFrom: row.previous_period_from || undefined,
+    previousPeriodTo: row.previous_period_to || undefined,
+    current: {
+      totalTransactions: Number(row.current_total_transactions || 0),
+      cardRevenue: Number(row.current_card_revenue || 0),
+      cardCount: Number(row.current_card_count || 0),
+      cashRevenue: Number(row.current_cash_revenue || 0),
+      cashCount: Number(row.current_cash_count || 0),
+      totalRevenue: Number(row.current_total_revenue || 0),
+      avgTip: Number(row.current_avg_tip || 0),
+      avgTipPct: Number(row.current_avg_tip_pct || 0),
+      voidReturnCount: Number(row.current_void_return_count || 0),
+      voidReturnAmount: Number(row.current_void_return_amount || 0),
+      voidRatePct: Number(row.current_void_rate_pct || 0),
+    },
+    previous: {
+      totalTransactions: Number(row.previous_total_transactions || 0),
+      cardRevenue: Number(row.previous_card_revenue || 0),
+      cardCount: Number(row.previous_card_count || 0),
+      cashRevenue: Number(row.previous_cash_revenue || 0),
+      cashCount: Number(row.previous_cash_count || 0),
+      totalRevenue: Number(row.previous_total_revenue || 0),
+      avgTip: Number(row.previous_avg_tip || 0),
+      avgTipPct: Number(row.previous_avg_tip_pct || 0),
+      voidReturnCount: Number(row.previous_void_return_count || 0),
+      voidReturnAmount: Number(row.previous_void_return_amount || 0),
+      voidRatePct: Number(row.previous_void_rate_pct || 0),
+    },
   }
 }
 
@@ -837,6 +934,44 @@ export async function getPlatformTransactionsExport(
     cap: exportCap,
     capped: total > mappedRows.length,
   }
+}
+
+export async function getPlatformTransactionSummary(
+  filters?: PlatformTransactionFilters
+): Promise<PlatformTransactionSummary | null> {
+  await assertHQPermission('hq.merchant.transactions')
+
+  const supabase = createServerSupabaseClient()
+  const search = filters?.search?.trim()
+
+  const { data, error } = await supabase.rpc('get_admin_transaction_summary', {
+    p_merchant_ids: filters?.merchantIds ?? null,
+    p_location_ids: filters?.locationIds ?? null,
+    p_status: filters?.orderStatuses ?? null,
+    p_payment_status: filters?.paymentStatuses ?? null,
+    p_payment_method: filters?.paymentMethods ?? null,
+    p_date_from: filters?.dateFrom ?? null,
+    p_date_to: filters?.dateTo ?? null,
+    p_min_amount: filters?.minAmount ?? null,
+    p_max_amount: filters?.maxAmount ?? null,
+    p_search: search && search.length >= 2 ? search : null,
+    p_card_type: normalizeCardTypeFilterForRpc(filters?.cardTypes),
+    p_staff_id: filters?.staffId ?? null,
+    p_sort_by: normalizeSortByForRpc(filters),
+    p_sort_dir: filters?.sortDir ?? 'desc',
+  })
+
+  if (error) {
+    console.error('[getPlatformTransactionSummary:rpc] Error:', error)
+    return null
+  }
+
+  const row = ((data ?? []) as PlatformTransactionSummaryRpcRow[])[0]
+  if (!row) {
+    return null
+  }
+
+  return mapRpcRowToSummary(row)
 }
 
 export interface PlatformTransactionStats {
