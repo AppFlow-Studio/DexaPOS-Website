@@ -61,14 +61,24 @@ export function formatReportDateRange(dateFrom: Date, dateTo: Date): string {
   return `${fromStr} to ${toStr}`;
 }
 
+export interface SummaryCardData {
+  label: string;
+  value: string | number;
+}
+
 /**
  * Export data to PDF and trigger browser download.
- * Creates a modern, professional PDF table without external plugins.
+ * Creates a professional PDF with DexaPOS branding header.
  */
 export async function exportToPdf<T extends Record<string, any>>(
   data: T[],
   columns: ExportColumn<T>[],
-  filename: string
+  filename: string,
+  merchantName?: string,
+  locationName?: string,
+  dateFrom?: Date,
+  dateTo?: Date,
+  summaryCards?: SummaryCardData[]
 ): Promise<void> {
   try {
     const { jsPDF } = await import("jspdf");
@@ -79,31 +89,108 @@ export async function exportToPdf<T extends Record<string, any>>(
     const margin = 12;
     const contentWidth = pageWidth - 2 * margin;
 
-    // Modern title styling
-    doc.setFillColor(37, 99, 235); // Modern blue
-    doc.rect(margin, 10, contentWidth, 14, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.setTextColor(255, 255, 255);
-    doc.text(filename, margin + 3, 19);
+    // ============ HEADER SECTION ============
+    // White background header with DexaPOS branding
+    const dexaBlue: [number, number, number] = [25, 118, 210]; // DexaPOS blue
+    const dexaDarkBlue: [number, number, number] = [13, 71, 161]; // Darker blue for tables
 
-    // Subtitle with date
+    // White header background
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, pageWidth, 24, "F");
+
+    // Blue accent line at top
+    doc.setFillColor(dexaBlue[0], dexaBlue[1], dexaBlue[2]);
+    doc.rect(0, 0, pageWidth, 2, "F");
+
+    // Blue logo box (left side)
+    doc.setFillColor(dexaBlue[0], dexaBlue[1], dexaBlue[2]);
+    doc.rect(margin, 4, 8, 8, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6);
+    doc.setTextColor(255, 255, 255);
+    doc.text("DEXA", margin + 1, 7);
+    doc.setFontSize(5);
+    doc.text("POS", margin + 1, 9.5);
+
+    // "Dexa POS" text next to logo
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(dexaDarkBlue[0], dexaDarkBlue[1], dexaDarkBlue[2]);
+    doc.text("Dexa POS", margin + 10, 8);
+
+    // Report type and merchant info (right side)
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(100, 100, 100);
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`, margin + 3, 27);
+    doc.text(filename, pageWidth - margin - 50, 6);
+    doc.setFontSize(7);
+    const merchantInfo = merchantName && locationName ? `${merchantName} | ${locationName}` : "Location Information";
+    doc.text(merchantInfo, pageWidth - margin - 50, 10);
+
+    // Blue divider line below header
+    doc.setFillColor(dexaBlue[0], dexaBlue[1], dexaBlue[2]);
+    doc.rect(0, 25, pageWidth, 1.5, "F");
+
+    // Period and Generated info (below divider)
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 100, 100);
+    const periodText = dateFrom && dateTo ? formatReportDateRange(dateFrom, dateTo) : "Period: N/A";
+    doc.text(`Period: ${periodText}`, margin, 30);
+    doc.text(`Generated: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`, pageWidth - margin - 40, 30);
+
+    // Summary Cards Section
+    let yPosition = 35;
+    if (summaryCards && summaryCards.length > 0) {
+      yPosition = 35;
+      const cardWidth = (contentWidth - 8) / 3; // 3 columns with small gaps
+      const cardHeight = 16;
+      const cardGap = 4;
+
+      summaryCards.forEach((card, idx) => {
+        const cardX = margin + idx * (cardWidth + cardGap);
+
+        // Card background (light gray)
+        doc.setFillColor(248, 248, 248);
+        doc.rect(cardX, yPosition, cardWidth, cardHeight, "F");
+
+        // Card border
+        doc.setDrawColor(220, 220, 220);
+        doc.setLineWidth(0.5);
+        doc.rect(cardX, yPosition, cardWidth, cardHeight);
+
+        // Card label
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.setTextColor(120, 120, 120);
+        doc.text(String(card.label), cardX + 2, yPosition + 4, {
+          maxWidth: cardWidth - 4,
+          align: "left",
+        });
+
+        // Card value
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(40, 40, 40);
+        doc.text(String(card.value), cardX + 2, yPosition + 11, {
+          maxWidth: cardWidth - 4,
+          align: "left",
+        });
+      });
+      yPosition += cardHeight + 8;
+    }
 
     // Table setup
-    let yPosition = 32;
+    yPosition = yPosition + 5;
     if (columns.length === 0) return;
     const colWidth = contentWidth / columns.length;
     const rowHeight = 8;
     const headerHeight = 8;
 
-    // Draw headers with modern style
+    // Draw headers with DexaPOS dark blue theme
     const drawHeaders = (y: number) => {
-      doc.setFillColor(37, 99, 235); // Modern blue
-      doc.setDrawColor(37, 99, 235);
+      doc.setFillColor(dexaDarkBlue[0], dexaDarkBlue[1], dexaDarkBlue[2]); // DexaPOS dark blue
+      doc.setDrawColor(dexaDarkBlue[0], dexaDarkBlue[1], dexaDarkBlue[2]);
 
       columns.forEach((_, idx) => {
         const x = margin + idx * colWidth;

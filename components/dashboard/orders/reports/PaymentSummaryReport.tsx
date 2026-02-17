@@ -4,15 +4,19 @@ import { useMemo, useState } from 'react'
 import { useFinancialKPIs } from '@/app/dashboard/hooks/useOrderAnalytics'
 import { ReportDataTable } from './ReportDataTable'
 import { ReportToolbar } from './ReportToolbar'
+import { SummaryCard } from './SummaryCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
 import { formatReportDateRange } from '@/utils/export'
+import { DollarSign, CreditCard, TrendingUp } from 'lucide-react'
 import type { FinancialKPIs } from '@/app/dashboard/actions/order-analytics'
 import type { ColumnDef } from '@tanstack/react-table'
 
 interface PaymentSummaryReportProps {
   dateFrom: Date
   dateTo: Date
+  merchantName?: string
+  locationName?: string
 }
 
 interface PaymentMethodRow {
@@ -21,7 +25,12 @@ interface PaymentMethodRow {
   count: number
 }
 
-export function PaymentSummaryReport({ dateFrom, dateTo }: PaymentSummaryReportProps) {
+export function PaymentSummaryReport({
+  dateFrom,
+  dateTo,
+  merchantName,
+  locationName,
+}: PaymentSummaryReportProps) {
   const { data, isLoading } = useFinancialKPIs(dateFrom, dateTo)
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -77,30 +86,36 @@ export function PaymentSummaryReport({ dateFrom, dateTo }: PaymentSummaryReportP
   const { summary, payment_methods } = data
   const paymentMethodsData = (payment_methods || []) as PaymentMethodRow[]
 
+  // Calculate summary metrics
+  const totalRevenue = paymentMethodsData.reduce((sum, row) => sum + (row.amount || 0), 0)
+  const transactionCount = paymentMethodsData.reduce((sum, row) => sum + (row.count || 0), 0)
+  const avgTransaction = transactionCount > 0 ? totalRevenue / transactionCount : 0
+
+  const summaryCardsData = [
+    { label: 'Total Revenue', value: formatCurrency(totalRevenue) },
+    { label: 'Transaction Count', value: transactionCount.toLocaleString() },
+    { label: 'Avg Transaction', value: formatCurrency(avgTransaction) },
+  ]
+
   return (
     <div className="space-y-6">
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-        <div className="rounded-lg border p-4">
-          <p className="text-sm font-medium text-muted-foreground">Gross Sales</p>
-          <p className="text-xl font-bold">{formatCurrency(summary.gross_sales)}</p>
-        </div>
-        <div className="rounded-lg border p-4">
-          <p className="text-sm font-medium text-muted-foreground">Net Sales</p>
-          <p className="text-xl font-bold">{formatCurrency(summary.net_sales)}</p>
-        </div>
-        <div className="rounded-lg border p-4">
-          <p className="text-sm font-medium text-muted-foreground">Tax</p>
-          <p className="text-xl font-bold">{formatCurrency(summary.tax_total)}</p>
-        </div>
-        <div className="rounded-lg border p-4">
-          <p className="text-sm font-medium text-muted-foreground">Tips</p>
-          <p className="text-xl font-bold">{formatCurrency(summary.tip_total)}</p>
-        </div>
-        <div className="rounded-lg border p-4">
-          <p className="text-sm font-medium text-muted-foreground">Refunds</p>
-          <p className="text-xl font-bold">{formatCurrency(summary.refunds_total)}</p>
-        </div>
+      {/* Summary Cards */}
+      <div className="grid grid-cols-3 gap-4">
+        <SummaryCard
+          label="Total Revenue"
+          value={formatCurrency(totalRevenue)}
+          icon={<DollarSign className="h-5 w-5" />}
+        />
+        <SummaryCard
+          label="Transaction Count"
+          value={transactionCount.toLocaleString()}
+          icon={<CreditCard className="h-5 w-5" />}
+        />
+        <SummaryCard
+          label="Avg Transaction"
+          value={formatCurrency(avgTransaction)}
+          icon={<TrendingUp className="h-5 w-5" />}
+        />
       </div>
 
       {/* Payment Methods Table */}
@@ -115,6 +130,11 @@ export function PaymentSummaryReport({ dateFrom, dateTo }: PaymentSummaryReportP
             exportColumns={exportColumns}
             filename={`Payment Summary - ${formatReportDateRange(dateFrom, dateTo)}`}
             searchPlaceholder="Search by payment method..."
+            merchantName={merchantName}
+            locationName={locationName}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            summaryCards={summaryCardsData}
           />
           <ReportDataTable columns={columns} data={filteredMethodsData} />
         </>

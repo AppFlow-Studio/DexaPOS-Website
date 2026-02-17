@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useAuth } from '@clerk/nextjs'
 import { useIsAllLocations, useSelectedLocation } from '@/stores/location-store'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -17,6 +18,7 @@ import { ServerPerformanceReport } from '@/components/dashboard/orders/reports/S
 import { VoidsReport } from '@/components/dashboard/orders/reports/VoidsReport'
 
 export default function ReportsPage() {
+  const { orgSlug } = useAuth()
   const selectedLocation = useSelectedLocation()
   const isAllLocations = useIsAllLocations()
 
@@ -29,6 +31,10 @@ export default function ReportsPage() {
   })
   const [dateTo, setDateTo] = useState<Date>(new Date())
   const [activeTab, setActiveTab] = useState('sales-summary')
+
+  // Get merchant and location names for PDF exports
+  const merchantName = orgSlug || 'Merchant'
+  const locationName = isAllLocations ? 'All Locations' : selectedLocation?.name
 
   const handleDateRangeChange = (from: Date | null, to: Date | null) => {
     if (from && to) {
@@ -90,7 +96,7 @@ export default function ReportsPage() {
         <TabsContent value="sales-summary">
           <Card>
             <CardContent className="pt-6">
-              <SalesSummaryReport dateFrom={dateFrom} dateTo={dateTo} />
+              <SalesSummaryReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -99,7 +105,7 @@ export default function ReportsPage() {
         <TabsContent value="hourly-sales">
           <Card>
             <CardContent className="pt-6">
-              <HourlySalesReport dateFrom={dateFrom} dateTo={dateTo} />
+              <HourlySalesReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -108,7 +114,7 @@ export default function ReportsPage() {
         <TabsContent value="item-sales">
           <Card>
             <CardContent className="pt-6">
-              <ItemSalesReport dateFrom={dateFrom} dateTo={dateTo} />
+              <ItemSalesReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -117,7 +123,7 @@ export default function ReportsPage() {
         <TabsContent value="payments">
           <Card>
             <CardContent className="pt-6">
-              <PaymentSummaryReport dateFrom={dateFrom} dateTo={dateTo} />
+              <PaymentSummaryReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -126,7 +132,7 @@ export default function ReportsPage() {
         <TabsContent value="kitchen">
           <Card>
             <CardContent className="pt-6">
-              <KitchenPerformanceReport dateFrom={dateFrom} dateTo={dateTo} />
+              <KitchenPerformanceReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -135,7 +141,7 @@ export default function ReportsPage() {
         <TabsContent value="table-turns">
           <Card>
             <CardContent className="pt-6">
-              <TableTurnsReport dateFrom={dateFrom} dateTo={dateTo} />
+              <TableTurnsReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -144,7 +150,7 @@ export default function ReportsPage() {
         <TabsContent value="server">
           <Card>
             <CardContent className="pt-6">
-              <ServerPerformanceReport dateFrom={dateFrom} dateTo={dateTo} />
+              <ServerPerformanceReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -153,7 +159,7 @@ export default function ReportsPage() {
         <TabsContent value="voids">
           <Card>
             <CardContent className="pt-6">
-              <VoidsReport dateFrom={dateFrom} dateTo={dateTo} />
+              <VoidsReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
             </CardContent>
           </Card>
         </TabsContent>

@@ -4,18 +4,27 @@ import { useMemo, useState } from 'react'
 import { useSalesByItemReport } from '@/app/dashboard/hooks/useOrderAnalytics'
 import { ReportDataTable } from './ReportDataTable'
 import { ReportToolbar } from './ReportToolbar'
+import { SummaryCard } from './SummaryCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
 import { formatReportDateRange } from '@/utils/export'
+import { DollarSign, ShoppingBag, TrendingUp } from 'lucide-react'
 import type { SalesByItemReportItem } from '@/app/dashboard/actions/order-analytics'
 import type { ColumnDef } from '@tanstack/react-table'
 
 interface ItemSalesReportProps {
   dateFrom: Date
   dateTo: Date
+  merchantName?: string
+  locationName?: string
 }
 
-export function ItemSalesReport({ dateFrom, dateTo }: ItemSalesReportProps) {
+export function ItemSalesReport({
+  dateFrom,
+  dateTo,
+  merchantName,
+  locationName,
+}: ItemSalesReportProps) {
   const { data, isLoading } = useSalesByItemReport(dateFrom, dateTo)
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -84,6 +93,19 @@ export function ItemSalesReport({ dateFrom, dateTo }: ItemSalesReportProps) {
     return <Empty description="No item sales data for selected period" />
   }
 
+  // Calculate summary metrics
+  const topItemRow = data.reduce((max, row) => (row.gross_sales || 0) > (max.gross_sales || 0) ? row : max)
+  const topItemName = topItemRow?.item_name || 'N/A'
+  const totalItemsSold = data.reduce((sum, row) => sum + (row.quantity_sold || 0), 0)
+  const totalRevenue = data.reduce((sum, row) => sum + (row.gross_sales || 0), 0)
+  const avgItemPrice = totalItemsSold > 0 ? totalRevenue / totalItemsSold : 0
+
+  const summaryCardsData = [
+    { label: 'Top Item', value: topItemName },
+    { label: 'Total Items Sold', value: totalItemsSold.toLocaleString() },
+    { label: 'Avg Item Price', value: formatCurrency(avgItemPrice) },
+  ]
+
   return (
     <div className="space-y-4">
       <ReportToolbar
@@ -95,7 +117,32 @@ export function ItemSalesReport({ dateFrom, dateTo }: ItemSalesReportProps) {
         exportColumns={exportColumns}
         filename={`Item Sales - ${formatReportDateRange(dateFrom, dateTo)}`}
         searchPlaceholder="Search by item or category..."
+        merchantName={merchantName}
+        locationName={locationName}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        summaryCards={summaryCardsData}
       />
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-3 gap-4">
+        <SummaryCard
+          label="Top Item"
+          value={topItemName}
+          icon={<TrendingUp className="h-5 w-5" />}
+        />
+        <SummaryCard
+          label="Total Items Sold"
+          value={totalItemsSold.toLocaleString()}
+          icon={<ShoppingBag className="h-5 w-5" />}
+        />
+        <SummaryCard
+          label="Avg Item Price"
+          value={formatCurrency(avgItemPrice)}
+          icon={<DollarSign className="h-5 w-5" />}
+        />
+      </div>
+
       <ReportDataTable columns={columns} data={filteredData} />
     </div>
   )

@@ -4,19 +4,28 @@ import { useMemo, useState } from 'react'
 import { useVoidsReport } from '@/app/dashboard/hooks/useOrderAnalytics'
 import { ReportDataTable } from './ReportDataTable'
 import { ReportToolbar } from './ReportToolbar'
+import { SummaryCard } from './SummaryCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { formatReportDateRange } from '@/utils/export'
+import { DollarSign, AlertCircle, TrendingDown } from 'lucide-react'
 import type { VoidItem, RefundItem } from '@/app/dashboard/actions/order-analytics'
 import type { ColumnDef } from '@tanstack/react-table'
 
 interface VoidsReportProps {
   dateFrom: Date
   dateTo: Date
+  merchantName?: string
+  locationName?: string
 }
 
-export function VoidsReport({ dateFrom, dateTo }: VoidsReportProps) {
+export function VoidsReport({
+  dateFrom,
+  dateTo,
+  merchantName,
+  locationName,
+}: VoidsReportProps) {
   const { data, isLoading } = useVoidsReport(dateFrom, dateTo)
   const [activeTab, setActiveTab] = useState('voids')
   const [voidsSearchQuery, setVoidsSearchQuery] = useState('')
@@ -172,6 +181,25 @@ export function VoidsReport({ dateFrom, dateTo }: VoidsReportProps) {
     return <Empty description="No void or refund data for selected period" />
   }
 
+  // Calculate summary metrics
+  const totalVoidAmount = data.voids?.reduce((sum, v) => sum + (v.amount || 0), 0) || 0
+  const totalVoids = data.voids?.length || 0
+  const totalRefundAmount = data.refunds?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0
+  const totalRefunds = data.refunds?.length || 0
+  const combinedTotal = totalVoidAmount + totalRefundAmount
+
+  const voidsSummaryCards = [
+    { label: 'Total Voids', value: totalVoids.toLocaleString() },
+    { label: 'Total Void Amount', value: formatCurrency(totalVoidAmount) },
+    { label: 'Avg Void Amount', value: formatCurrency(totalVoids > 0 ? totalVoidAmount / totalVoids : 0) },
+  ]
+
+  const refundsSummaryCards = [
+    { label: 'Total Refunds', value: totalRefunds.toLocaleString() },
+    { label: 'Total Refund Amount', value: formatCurrency(totalRefundAmount) },
+    { label: 'Avg Refund Amount', value: formatCurrency(totalRefunds > 0 ? totalRefundAmount / totalRefunds : 0) },
+  ]
+
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
       <TabsList>
@@ -182,6 +210,25 @@ export function VoidsReport({ dateFrom, dateTo }: VoidsReportProps) {
       <TabsContent value="voids">
         {data.voids && data.voids.length > 0 ? (
           <div className="space-y-4">
+            {/* Summary Cards */}
+            <div className="grid grid-cols-3 gap-4">
+              <SummaryCard
+                label="Total Voids"
+                value={totalVoids.toLocaleString()}
+                icon={<AlertCircle className="h-5 w-5" />}
+              />
+              <SummaryCard
+                label="Total Void Amount"
+                value={formatCurrency(totalVoidAmount)}
+                icon={<DollarSign className="h-5 w-5" />}
+              />
+              <SummaryCard
+                label="Avg Void Amount"
+                value={formatCurrency(totalVoids > 0 ? totalVoidAmount / totalVoids : 0)}
+                icon={<TrendingDown className="h-5 w-5" />}
+              />
+            </div>
+
             <ReportToolbar
               searchQuery={voidsSearchQuery}
               onSearchChange={setVoidsSearchQuery}
@@ -191,6 +238,11 @@ export function VoidsReport({ dateFrom, dateTo }: VoidsReportProps) {
               exportColumns={voidExportColumns}
               filename={`Voids - ${formatReportDateRange(dateFrom, dateTo)}`}
               searchPlaceholder="Search by order, item, reason, or staff..."
+              merchantName={merchantName}
+              locationName={locationName}
+              dateFrom={dateFrom}
+              dateTo={dateTo}
+              summaryCards={voidsSummaryCards}
             />
             <ReportDataTable columns={voidColumns} data={filteredVoids} />
           </div>
@@ -202,6 +254,25 @@ export function VoidsReport({ dateFrom, dateTo }: VoidsReportProps) {
       <TabsContent value="refunds">
         {data.refunds && data.refunds.length > 0 ? (
           <div className="space-y-4">
+            {/* Summary Cards */}
+            <div className="grid grid-cols-3 gap-4">
+              <SummaryCard
+                label="Total Refunds"
+                value={totalRefunds.toLocaleString()}
+                icon={<AlertCircle className="h-5 w-5" />}
+              />
+              <SummaryCard
+                label="Total Refund Amount"
+                value={formatCurrency(totalRefundAmount)}
+                icon={<DollarSign className="h-5 w-5" />}
+              />
+              <SummaryCard
+                label="Avg Refund Amount"
+                value={formatCurrency(totalRefunds > 0 ? totalRefundAmount / totalRefunds : 0)}
+                icon={<TrendingDown className="h-5 w-5" />}
+              />
+            </div>
+
             <ReportToolbar
               searchQuery={refundsSearchQuery}
               onSearchChange={setRefundsSearchQuery}
@@ -211,6 +282,11 @@ export function VoidsReport({ dateFrom, dateTo }: VoidsReportProps) {
               exportColumns={refundExportColumns}
               filename={`Refunds - ${formatReportDateRange(dateFrom, dateTo)}`}
               searchPlaceholder="Search by order, reason, or staff..."
+              merchantName={merchantName}
+              locationName={locationName}
+              dateFrom={dateFrom}
+              dateTo={dateTo}
+              summaryCards={refundsSummaryCards}
             />
             <ReportDataTable columns={refundColumns} data={filteredRefunds} />
           </div>

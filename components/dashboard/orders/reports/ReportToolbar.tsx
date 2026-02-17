@@ -4,7 +4,7 @@ import { Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Download } from 'lucide-react'
-import { exportToCsv, exportToPdf, type ExportColumn } from '@/utils/export'
+import { exportToCsv, exportToPdf, type ExportColumn, type SummaryCardData } from '@/utils/export'
 
 interface ReportToolbarProps<T extends Record<string, any>> {
   searchQuery: string
@@ -15,6 +15,11 @@ interface ReportToolbarProps<T extends Record<string, any>> {
   exportColumns: ExportColumn<T>[]
   filename: string
   searchPlaceholder?: string
+  merchantName?: string
+  locationName?: string
+  dateFrom?: Date
+  dateTo?: Date
+  summaryCards?: SummaryCardData[]
 }
 
 export function ReportToolbar<T extends Record<string, any>>({
@@ -26,6 +31,11 @@ export function ReportToolbar<T extends Record<string, any>>({
   exportColumns,
   filename,
   searchPlaceholder = 'Search...',
+  merchantName,
+  locationName,
+  dateFrom,
+  dateTo,
+  summaryCards,
 }: ReportToolbarProps<T>) {
   const isFiltered = filteredCount < totalCount
   const isExportDisabled = data.length === 0
@@ -35,7 +45,7 @@ export function ReportToolbar<T extends Record<string, any>>({
   }
 
   const handleExportPdf = async () => {
-    await exportToPdf(data, exportColumns, filename)
+    await exportToPdf(data, exportColumns, filename, merchantName, locationName, dateFrom, dateTo, summaryCards)
   }
 
   return (

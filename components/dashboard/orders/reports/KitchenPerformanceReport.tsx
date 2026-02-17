@@ -13,9 +13,16 @@ import type { ColumnDef } from '@tanstack/react-table'
 interface KitchenPerformanceReportProps {
   dateFrom: Date
   dateTo: Date
+  merchantName?: string
+  locationName?: string
 }
 
-export function KitchenPerformanceReport({ dateFrom, dateTo }: KitchenPerformanceReportProps) {
+export function KitchenPerformanceReport({
+  dateFrom,
+  dateTo,
+  merchantName,
+  locationName,
+}: KitchenPerformanceReportProps) {
   const { data, isLoading } = useKitchenPerformance(dateFrom, dateTo)
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -73,30 +80,8 @@ export function KitchenPerformanceReport({ dateFrom, dateTo }: KitchenPerformanc
     return <Empty description="No kitchen performance data for selected period" />
   }
 
-  const formatMinutes = (minutes: number) => Math.round(minutes).toString()
-  const autoBumpRate = data.auto_bump_stats
-    ? ((data.auto_bump_stats.auto_bumped / data.auto_bump_stats.total_items) * 100).toFixed(1)
-    : '0'
-
   return (
     <div className="space-y-4">
-      {/* Summary Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="rounded-lg border p-4">
-          <p className="text-sm font-medium text-muted-foreground">Avg Ticket Time</p>
-          <p className="text-2xl font-bold">{formatMinutes(data.avg_ticket_time_minutes)} min</p>
-        </div>
-        <div className="rounded-lg border p-4">
-          <p className="text-sm font-medium text-muted-foreground">Total Items</p>
-          <p className="text-2xl font-bold">{data.total_items_processed.toLocaleString()}</p>
-        </div>
-        <div className="rounded-lg border p-4">
-          <p className="text-sm font-medium text-muted-foreground">Auto-Bump Rate</p>
-          <p className="text-2xl font-bold">{autoBumpRate}%</p>
-        </div>
-      </div>
-
-      {/* Stations Table */}
       <ReportToolbar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -106,6 +91,10 @@ export function KitchenPerformanceReport({ dateFrom, dateTo }: KitchenPerformanc
         exportColumns={exportColumns}
         filename={`Kitchen Performance - ${formatReportDateRange(dateFrom, dateTo)}`}
         searchPlaceholder="Search by station..."
+        merchantName={merchantName}
+        locationName={locationName}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
       />
       <ReportDataTable columns={columns} data={filteredData} />
     </div>

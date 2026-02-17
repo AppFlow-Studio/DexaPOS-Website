@@ -4,18 +4,27 @@ import { useMemo, useState } from 'react'
 import { useTablePerformance } from '@/app/dashboard/hooks/useOrderAnalytics'
 import { ReportDataTable } from './ReportDataTable'
 import { ReportToolbar } from './ReportToolbar'
+import { SummaryCard } from './SummaryCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
 import { formatReportDateRange } from '@/utils/export'
+import { Clock, Table, Users } from 'lucide-react'
 import type { TableUtilizationRow } from '@/types/analytics'
 import type { ColumnDef } from '@tanstack/react-table'
 
 interface TableTurnsReportProps {
   dateFrom: Date
   dateTo: Date
+  merchantName?: string
+  locationName?: string
 }
 
-export function TableTurnsReport({ dateFrom, dateTo }: TableTurnsReportProps) {
+export function TableTurnsReport({
+  dateFrom,
+  dateTo,
+  merchantName,
+  locationName,
+}: TableTurnsReportProps) {
   const { data, isLoading } = useTablePerformance(dateFrom, dateTo)
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -95,32 +104,33 @@ export function TableTurnsReport({ dateFrom, dateTo }: TableTurnsReportProps) {
   }
 
   const formatMinutes = (minutes: number) => Math.round(minutes).toString()
+  const avgRevPASH = data.table_utilization.reduce((sum, t) => sum + t.revpash, 0) / data.table_utilization.length
+
+  const summaryCardsData = [
+    { label: 'Avg Turn Time', value: `${formatMinutes(data.avg_turn_time_minutes)} min` },
+    { label: 'Total Covers', value: data.total_covers.toLocaleString() },
+    { label: 'Avg RevPASH', value: formatCurrency(avgRevPASH) },
+  ]
 
   return (
     <div className="space-y-4">
-      {/* Summary Stats */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="rounded-lg border p-4">
-          <p className="text-sm font-medium text-muted-foreground">Avg Turn Time</p>
-          <p className="text-2xl font-bold">{formatMinutes(data.avg_turn_time_minutes)} min</p>
-        </div>
-        <div className="rounded-lg border p-4">
-          <p className="text-sm font-medium text-muted-foreground">Total Sessions</p>
-          <p className="text-2xl font-bold">{data.total_sessions.toLocaleString()}</p>
-        </div>
-        <div className="rounded-lg border p-4">
-          <p className="text-sm font-medium text-muted-foreground">Total Covers</p>
-          <p className="text-2xl font-bold">{data.total_covers.toLocaleString()}</p>
-        </div>
-        <div className="rounded-lg border p-4">
-          <p className="text-sm font-medium text-muted-foreground">RevPASH Avg</p>
-          <p className="text-2xl font-bold">
-            {formatCurrency(
-              data.table_utilization.reduce((sum, t) => sum + t.revpash, 0) /
-                data.table_utilization.length
-            )}
-          </p>
-        </div>
+      {/* Summary Cards */}
+      <div className="grid grid-cols-3 gap-4">
+        <SummaryCard
+          label="Avg Turn Time"
+          value={`${formatMinutes(data.avg_turn_time_minutes)} min`}
+          icon={<Clock className="h-5 w-5" />}
+        />
+        <SummaryCard
+          label="Total Covers"
+          value={data.total_covers.toLocaleString()}
+          icon={<Users className="h-5 w-5" />}
+        />
+        <SummaryCard
+          label="Avg RevPASH"
+          value={formatCurrency(avgRevPASH)}
+          icon={<Table className="h-5 w-5" />}
+        />
       </div>
 
       {/* Tables Table */}
@@ -133,6 +143,11 @@ export function TableTurnsReport({ dateFrom, dateTo }: TableTurnsReportProps) {
         exportColumns={exportColumns}
         filename={`Table Turns - ${formatReportDateRange(dateFrom, dateTo)}`}
         searchPlaceholder="Search by table..."
+        merchantName={merchantName}
+        locationName={locationName}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        summaryCards={summaryCardsData}
       />
       <ReportDataTable columns={columns} data={filteredData} />
     </div>

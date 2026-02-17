@@ -4,18 +4,27 @@ import { useMemo, useState } from 'react'
 import { useStaffPerformance } from '@/app/dashboard/hooks/useOrderAnalytics'
 import { ReportDataTable } from './ReportDataTable'
 import { ReportToolbar } from './ReportToolbar'
+import { SummaryCard } from './SummaryCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
 import { formatReportDateRange } from '@/utils/export'
+import { DollarSign, ShoppingBag } from 'lucide-react'
 import type { ServerLeaderboardRow } from '@/types/analytics'
 import type { ColumnDef } from '@tanstack/react-table'
 
 interface ServerPerformanceReportProps {
   dateFrom: Date
   dateTo: Date
+  merchantName?: string
+  locationName?: string
 }
 
-export function ServerPerformanceReport({ dateFrom, dateTo }: ServerPerformanceReportProps) {
+export function ServerPerformanceReport({
+  dateFrom,
+  dateTo,
+  merchantName,
+  locationName,
+}: ServerPerformanceReportProps) {
   const { data, isLoading } = useStaffPerformance(dateFrom, dateTo)
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -121,6 +130,17 @@ export function ServerPerformanceReport({ dateFrom, dateTo }: ServerPerformanceR
     return <Empty description="No server performance data for selected period" />
   }
 
+  // Calculate summary metrics
+  const topServerRow = data.leaderboard.reduce((max, row) => (row.total_sales || 0) > (max.total_sales || 0) ? row : max)
+  const topServerName = topServerRow?.staff_name || 'N/A'
+  const totalTips = data.leaderboard.reduce((sum, row) => sum + (row.total_tips || 0), 0)
+  const totalSales = data.leaderboard.reduce((sum, row) => sum + (row.total_sales || 0), 0)
+
+  const summaryCardsData = [
+    { label: 'Top Server', value: topServerName },
+    { label: 'Total Tips', value: formatCurrency(totalTips) },
+  ]
+
   return (
     <div className="space-y-4">
       <ReportToolbar
@@ -132,7 +152,27 @@ export function ServerPerformanceReport({ dateFrom, dateTo }: ServerPerformanceR
         exportColumns={exportColumns}
         filename={`Server Performance - ${formatReportDateRange(dateFrom, dateTo)}`}
         searchPlaceholder="Search by server..."
+        merchantName={merchantName}
+        locationName={locationName}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        summaryCards={summaryCardsData}
       />
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 gap-4">
+        <SummaryCard
+          label="Top Server"
+          value={topServerName}
+          icon={<ShoppingBag className="h-5 w-5" />}
+        />
+        <SummaryCard
+          label="Total Tips"
+          value={formatCurrency(totalTips)}
+          icon={<DollarSign className="h-5 w-5" />}
+        />
+      </div>
+
       <ReportDataTable columns={columns} data={filteredData} />
     </div>
   )
