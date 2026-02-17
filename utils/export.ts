@@ -92,8 +92,8 @@ export async function exportToPdf<T extends Record<string, any>>(
     const contentWidth = pageWidth - margin * 2;
 
     // Darker blue for header background (was [25, 118, 210])
-    const dexaBlue: [number, number, number] = [0, 70, 140];
-    const dexaDark: [number, number, number] = [0, 70, 140];
+    const dexaBlue: [number, number, number] = [0, 120, 215];
+    const dexaDark: [number, number, number] = [0, 120, 215];
 
     // ================= HEADER BACKGROUND =================
     doc.setFillColor(...dexaBlue);
