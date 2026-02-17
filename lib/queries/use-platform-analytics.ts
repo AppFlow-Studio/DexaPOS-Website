@@ -5,10 +5,15 @@ import {
   getTopMerchants
 } from '@/app/manage/actions/hq-platform/analytics'
 import {
+  getPlatformMerchantBreakdown,
+  getPlatformSettlementBatchPayments,
+  getPlatformSettlementBatches,
   getPlatformTransactionDetails,
   getPlatformTransactionSummary,
   getPlatformTransactionStats,
   getPlatformTransactions,
+  PlatformMerchantBreakdownFilters,
+  PlatformSettlementBatchFilters,
   PlatformTransactionFilters
 } from '@/app/manage/actions/hq-platform/transactions'
 
@@ -20,6 +25,10 @@ export const platformKeys = {
   transactions: (limit: number, offset: number, filters?: PlatformTransactionFilters) => [...platformKeys.all, 'transactions', { limit, offset, ...filters }] as const,
   transactionStats: (filters?: PlatformTransactionFilters) => [...platformKeys.all, 'transaction-stats', filters] as const,
   transactionSummary: (filters?: PlatformTransactionFilters) => [...platformKeys.all, 'transaction-summary', filters] as const,
+  merchantBreakdown: (filters?: PlatformMerchantBreakdownFilters) => [...platformKeys.all, 'merchant-breakdown', filters] as const,
+  settlementBatches: (filters?: PlatformSettlementBatchFilters) => [...platformKeys.all, 'settlement-batches', filters] as const,
+  settlementBatchPayments: (batchId: string | null, merchantId?: string) =>
+    [...platformKeys.all, 'settlement-batch-payments', batchId, merchantId] as const,
   transactionDetails: (transactionId: string | null) => [...platformKeys.all, 'transaction-details', transactionId] as const,
 }
 
@@ -63,6 +72,33 @@ export function usePlatformTransactionSummary(filters?: PlatformTransactionFilte
   return useQuery({
     queryKey: platformKeys.transactionSummary(filters),
     queryFn: () => getPlatformTransactionSummary(filters),
+  })
+}
+
+export function usePlatformMerchantBreakdown(filters?: PlatformMerchantBreakdownFilters) {
+  return useQuery({
+    queryKey: platformKeys.merchantBreakdown(filters),
+    queryFn: () => getPlatformMerchantBreakdown(filters),
+  })
+}
+
+export function usePlatformSettlementBatches(filters?: PlatformSettlementBatchFilters) {
+  return useQuery({
+    queryKey: platformKeys.settlementBatches(filters),
+    queryFn: () => getPlatformSettlementBatches(filters),
+  })
+}
+
+export function usePlatformSettlementBatchPayments(
+  batchId: string | null,
+  merchantId?: string,
+  enabled: boolean = true
+) {
+  return useQuery({
+    queryKey: platformKeys.settlementBatchPayments(batchId, merchantId),
+    queryFn: () => getPlatformSettlementBatchPayments(batchId!, merchantId),
+    enabled: enabled && !!batchId,
+    staleTime: 30_000,
   })
 }
 

@@ -21,9 +21,9 @@
 | ADM-011 | Done (Ready for QA) | After QA | Payment timeline section implemented. |
 | ADM-012 | Done (Ready for QA) | After QA | Full order breakdown with modifiers/flags/totals implemented. |
 | ADM-013 | Implemented (Pending Migration Apply + QA) | After QA | Added summary RPC migration + 6 dynamic cards with prior-period deltas and card-click filter actions. |
-| ADM-014 | Not Started | No | Needs merchant breakdown RPC + collapsible sortable mini-table + sparklines. |
+| ADM-014 | Implemented (Pending Migration Approval + QA) | After QA | Use `supabase/migrations/028_adm_014_merchant_breakdown_rpc.sql` (approved baseline). Team v2 SQL is pending approval because it changes metric semantics and can break current UI mapping without coordinated code updates. |
 | ADM-015 | QA Awaiting | After QA | CSV/XLSX export verified after migration fix and function type alignment patch. |
-| ADM-016 | Not Started | No | Batch reconciliation section with discrepancy detection and export. |
+| ADM-016 | Implemented (Pending Migration Apply + QA) | After QA | Added Batch Reconciliation section, linked payment drill-down, discrepancy flags, and batch CSV export. |
 | ADM-017 | Not Started | No | Chargeback dashboard with deadline urgency, badge, and alert banner. |
 | ADM-018 | Not Started | No | Audit log viewer UI and filters/search. |
 | ADM-019 | Not Started | No | Backend audit logging for list/detail/export/search events. |
@@ -63,8 +63,12 @@ Net effect:
 - Added fallback state when summary RPC is unavailable: `Summary unavailable (apply migration 026)`.
 
 2. ADM-014 Merchant comparison mini-table
-- Add breakdown RPC with merchant-level metrics for selected period.
-- Add collapsible section with sortable table and daily revenue sparkline.
+- Implemented in code; pending migration approval + QA verification.
+- Migration file to apply (current approved baseline): `supabase/migrations/028_adm_014_merchant_breakdown_rpc.sql`.
+- Team-proposed v2 SQL is currently blocked pending approval because:
+  - it changes output/metric semantics versus current UI expectations,
+  - it narrows card revenue logic to `payment_method = 'card'` (can miss other card-family values),
+  - it may undercount legacy rows if `order_payments.merchant_id/location_id` are null and no fallback join is used.
 
 3. ADM-019 Audit logging foundation (backend)
 - Log list/detail/export/search sensitive access paths asynchronously to `payment_audit_log`.
@@ -73,7 +77,7 @@ Net effect:
 - Add audit tab with filters, search, and failed-row highlighting.
 
 5. ADM-016 Batch reconciliation
-- Add batch section with discrepancy checks and batch detail export.
+- Implemented in code; pending migration apply + QA verification.
 
 6. ADM-017 Chargeback dashboard
 - Add chargeback table, urgent deadline indicators, and nav badge.
@@ -122,6 +126,60 @@ These were explicitly decided during planning, and implementation follows them:
 
 - Transactions Trend Graph in `/manage/transactions`: **Done (Awaiting QA)**.
 - Implemented using live 30-day sales trend feed with loading + empty fallback states.
+
+---
+
+## ADM-016 Implementation (Today)
+
+- Added migration `supabase/migrations/027_adm_016_batch_reconciliation_rpc.sql`:
+  - `get_admin_settlement_batches(...)`
+  - `get_admin_settlement_batch_payments(...)`
+  - supporting indexes for settlement and batch lookup.
+- Added server actions:
+  - `getPlatformSettlementBatches(filters)`
+  - `getPlatformSettlementBatchPayments(batchId, merchantId?)`
+- Added React Query hooks for batch list and selected-batch payment detail.
+- Added new UI section in `/manage/transactions`:
+  - Batch list with merchant/date/status filters.
+  - Discrepancy badge when linked payment sum differs from batch gross.
+  - Click row to load linked payment rows.
+  - `Export Selected Batch` CSV.
+- Added runbook: `ADM-016-APPLY-QA.md`.
+
+---
+
+## ADM-014 Implementation (Today)
+
+- Added migration `supabase/migrations/028_adm_014_merchant_breakdown_rpc.sql`:
+  - `get_admin_merchant_breakdown(...)`
+  - returns merchant-level metrics + daily trend JSON for sparkline rendering.
+- Added server action:
+  - `getPlatformMerchantBreakdown(filters)`
+- Added React Query hook:
+  - `usePlatformMerchantBreakdown(filters)`
+- Added new UI section in `/manage/transactions`:
+  - Collapsible `Merchant Breakdown` (hidden by default).
+  - Sortable columns for all required metrics.
+  - Per-merchant sparkline trend.
+  - Reacts to date range and active merchant/location/payment-status filters.
+- Added runbook: `ADM-014-APPLY-QA.md`.
+
+### ADM-014 Migration Approval Note (v2 Review)
+
+- Apply now only after approval using: `supabase/migrations/028_adm_014_merchant_breakdown_rpc.sql`.
+- Do not paste/apply the team v2 function directly yet in shared environments.
+- Reason: v2 includes good improvements, but introduces behavioral changes that require aligned frontend/type mapping and agreed metric definitions first.
+
+---
+
+## RLS Audit Reference
+
+- Added reusable runbook: `ADM-RLS-AUDIT-CHECKLIST.md`.
+- Use it before any RLS migration to confirm:
+  - merchant policies are still present,
+  - HQ policies stay additive/read-only,
+  - no over-broad policies accidentally grant/deny access.
+- This was added after the reported merchant-access regression concern so we can validate policy shape before/after any RLS change.
 
 ---
 

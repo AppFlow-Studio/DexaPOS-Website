@@ -64,6 +64,8 @@ import Link from 'next/link'
 import { TransactionFilterSheet } from './components/TransactionFilterSheet'
 import { TransactionSearchBar, highlightText } from './components/TransactionSearchBar'
 import { TransactionDetailInlinePanel } from './components/TransactionDetailInlinePanel'
+import { BatchReconciliationSection } from './components/BatchReconciliationSection'
+import { MerchantBreakdownSection } from './components/MerchantBreakdownSection'
 import { CardBrandIcon } from '@/app/dashboard/payments/components/CardBrandIcon'
 import { toast } from 'sonner'
 import Papa from 'papaparse'
@@ -625,7 +627,10 @@ function TransactionsPageInner() {
                 setRefundTarget(null)
                 await queryClient.invalidateQueries({ queryKey: ['platform', 'transactions'] })
                 await queryClient.invalidateQueries({ queryKey: ['platform', 'transaction-summary'] })
+                await queryClient.invalidateQueries({ queryKey: ['platform', 'merchant-breakdown'] })
                 await queryClient.invalidateQueries({ queryKey: ['platform', 'sales-trend'] })
+                await queryClient.invalidateQueries({ queryKey: ['platform', 'settlement-batches'] })
+                await queryClient.invalidateQueries({ queryKey: ['platform', 'settlement-batch-payments'] })
             })()
         })
     }
@@ -784,6 +789,17 @@ function TransactionsPageInner() {
     const trendRevenueDailyAvg =
         trendChartData.length > 0 ? trendRevenueTotal / trendChartData.length : 0
 
+    const merchantBreakdownFilters = useMemo(
+        () => ({
+            merchantIds: filters.merchantIds,
+            locationIds: filters.locationIds,
+            paymentStatuses: filters.paymentStatuses,
+            dateFrom: filters.dateFrom,
+            dateTo: filters.dateTo,
+        }),
+        [filters.merchantIds, filters.locationIds, filters.paymentStatuses, filters.dateFrom, filters.dateTo]
+    )
+
     const searchQuery = filters.search ?? ''
     const isTableLoading = transactionsLoading || transactionsFetching
 
@@ -909,6 +925,8 @@ function TransactionsPageInner() {
                     </Card>
                 ))}
             </div>
+
+            <MerchantBreakdownSection filters={merchantBreakdownFilters} />
 
             {/* Experimental Trend Graph */}
             <Card>
@@ -1272,6 +1290,8 @@ function TransactionsPageInner() {
                     </div>
                 </CardContent>
             </Card>
+
+            <BatchReconciliationSection />
 
             <AlertDialog open={!!refundTarget} onOpenChange={(open) => !open && setRefundTarget(null)}>
                 <AlertDialogContent>
