@@ -328,22 +328,43 @@ from public.get_admin_settlement_batches(null, null, null, null, 10);
 ---
 
 ## ADM-017: Chargeback Dashboard
-- Status: Not Started
+- Status: Implemented (Pending QA)
 - What this ticket is about:
 - Central chargeback/dispute management with deadline urgency and workflow visibility.
 - What is done:
-- Not started.
+- Added section component:
+- `app/manage/transactions/components/ChargebacksSection.tsx`
+- Added server action:
+- `getPlatformChargebacks(filters, limit, offset)`
+- Added query hook:
+- `usePlatformChargebacks(filters, limit, offset)`
+- Added UI behavior:
+- filters for status/merchant/date/card network
+- defense-deadline-first ordering
+- pending/notified count badge
+- 72-hour urgency alert banner
+- expandable detail with original payment info, defense docs, and resolution details
 - Runbook:
 - No runbook file exists yet.
 
 ---
 
 ## ADM-018: Payment Audit Log Viewer
-- Status: Not Started
+- Status: Implemented (Pending ADM-019 Migration Approval + QA)
 - What this ticket is about:
 - Frontend viewer for payment audit trail, filters, search, and failed-action highlighting.
 - What is done:
-- Not started.
+- Added section component:
+- `app/manage/transactions/components/AuditLogSection.tsx`
+- Added server action:
+- `getPlatformPaymentAuditLogs(filters, limit, offset)`
+- Added query hook:
+- `usePlatformPaymentAuditLogs(filters, limit, offset)`
+- Added UI behavior:
+- filter by user, action, merchant, outcome, and date range
+- search by user email or resource id
+- failed rows highlighted in red
+- required ticket columns + `fields_accessed` shown
 - Runbook:
 - No runbook file exists yet.
 - Dependency note:
@@ -352,7 +373,7 @@ from public.get_admin_settlement_batches(null, null, null, null, 10);
 ---
 
 ## ADM-019: Audit Logging for Admin Data Access
-- Status: Implemented (Pending Migration Apply + QA)
+- Status: Implemented (Pending Migration Approval + QA)
 - What this ticket is about:
 - Automatically log sensitive admin payment data access (list/detail/export/search) for compliance trail.
 - What is done:
@@ -367,6 +388,8 @@ from public.get_admin_settlement_batches(null, null, null, null, 10);
 - `ADM-019-APPLY-QA.md`
 - Migration to apply:
 - `supabase/migrations/029_adm_019_admin_payment_audit_logging.sql`
+- Current state:
+- Pending team approval before apply in shared/prod-like environments.
 - DB smoke check:
 ```sql
 select proname
@@ -413,9 +436,10 @@ limit 50;
 - ADM-013
 - ADM-014 (approval first, then migration apply + QA)
 - ADM-016
-- ADM-019
+- ADM-019 (approval first, then migration apply + QA)
 2. QA awaiting:
 - ADM-015
-3. Not started:
+3. Implemented but dependency-gated QA:
+- ADM-018 (depends on ADM-019 migration approval/apply for data)
+4. Implemented pending QA:
 - ADM-017
-- ADM-018

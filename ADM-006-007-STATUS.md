@@ -24,9 +24,9 @@
 | ADM-014 | Implemented (Pending Migration Approval + QA) | After QA | Use `supabase/migrations/028_adm_014_merchant_breakdown_rpc.sql` (approved baseline). Team v2 SQL is pending approval because it changes metric semantics and can break current UI mapping without coordinated code updates. |
 | ADM-015 | QA Awaiting | After QA | CSV/XLSX export verified after migration fix and function type alignment patch. |
 | ADM-016 | Implemented (Pending Migration Apply + QA) | After QA | Added Batch Reconciliation section, linked payment drill-down, discrepancy flags, and batch CSV export. |
-| ADM-017 | Not Started | No | Chargeback dashboard with deadline urgency, badge, and alert banner. |
-| ADM-018 | Not Started | No | Audit log viewer UI and filters/search. |
-| ADM-019 | Implemented (Pending Migration Apply + QA) | After QA | Added payment audit logging RPC + non-blocking list/detail/export/search log hooks in server actions. |
+| ADM-017 | Implemented (Pending QA) | After QA | Added Chargebacks section in `/manage/transactions` with filters, urgency banner, expandable dispute detail, and pending/notified badge. |
+| ADM-018 | Implemented (Pending ADM-019 Migration Approval + QA) | After QA | Added Payment Audit Log section in `/manage/transactions` with filters/search, status highlighting, and sensitive-field visibility. |
+| ADM-019 | Implemented (Pending Migration Approval + QA) | After QA | Migration `029_adm_019_admin_payment_audit_logging.sql` is pending team approval before apply; server-action audit hooks are already implemented. |
 
 ---
 
@@ -71,7 +71,7 @@ Net effect:
   - it may undercount legacy rows if `order_payments.merchant_id/location_id` are null and no fallback join is used.
 
 3. ADM-019 Audit logging foundation (backend)
-- Implemented in code; pending migration apply + QA verification.
+- Implemented in code; pending migration approval + QA verification.
 - Added migration `supabase/migrations/029_adm_019_admin_payment_audit_logging.sql`.
 - Added non-blocking logging hooks for:
   - transaction list view,
@@ -81,13 +81,20 @@ Net effect:
 - Added runbook: `ADM-019-APPLY-QA.md`.
 
 4. ADM-018 Audit log viewer (frontend)
-- Add audit tab with filters, search, and failed-row highlighting.
+- Implemented in code; pending ADM-019 migration approval + QA verification.
+- Added Payment Audit Log section with:
+  - required table columns (timestamp/user/action/resource/status/ip),
+  - filter controls (user/action/date range/merchant),
+  - search by user email or resource id,
+  - sensitive `fields_accessed` display,
+  - failed row highlighting.
 
 5. ADM-016 Batch reconciliation
 - Implemented in code; pending migration apply + QA verification.
 
 6. ADM-017 Chargeback dashboard
-- Add chargeback table, urgent deadline indicators, and nav badge.
+- Implemented in code; pending QA verification.
+- Added chargebacks table with required columns, filters, urgency alert banner, expandable detail, and pending/notified badge.
 
 ---
 
@@ -194,6 +201,47 @@ These were explicitly decided during planning, and implementation follows them:
   - list/export: `['card_last_four', 'auth_code']`,
   - detail: `['card_last_four', 'auth_code', 'emv_data']`.
 - Added runbook: `ADM-019-APPLY-QA.md`.
+
+---
+
+## ADM-018 Implementation (Today)
+
+- Added new section component: `app/manage/transactions/components/AuditLogSection.tsx`.
+- Added data fetch action in `app/manage/actions/hq-platform/transactions.ts`:
+  - `getPlatformPaymentAuditLogs(filters, limit, offset)`
+  - reads from `payment_audit_log` with user/action/date/merchant/outcome filters.
+- Added React Query hook in `lib/queries/use-platform-analytics.ts`:
+  - `usePlatformPaymentAuditLogs(filters, limit, offset)`
+- Wired section into page:
+  - `app/manage/transactions/page.tsx` now renders `<AuditLogSection />` below batch reconciliation.
+- UI behavior delivered:
+  - filter by user, action type, date range, merchant,
+  - search by user email or resource id,
+  - table includes required columns + `fields_accessed`,
+  - failed actions are highlighted in red.
+- Dependency note:
+  - data is unavailable until ADM-019 migration `029_adm_019_admin_payment_audit_logging.sql` is approved/applied.
+
+---
+
+## ADM-017 Implementation (Today)
+
+- Added new section component: `app/manage/transactions/components/ChargebacksSection.tsx`.
+- Added data fetch action in `app/manage/actions/hq-platform/transactions.ts`:
+  - `getPlatformChargebacks(filters, limit, offset)`
+  - fetches chargebacks with server-side filtering by merchant/status/card network/date range.
+  - enriches rows with original payment + order context for expandable detail.
+  - returns `pendingCount` and `urgentCount` (deadlines due within 72 hours) for badge/alert UI.
+- Added React Query hook in `lib/queries/use-platform-analytics.ts`:
+  - `usePlatformChargebacks(filters, limit, offset)`.
+- Wired section into page:
+  - `app/manage/transactions/page.tsx` now renders `<ChargebacksSection />`.
+- UI behavior delivered:
+  - required table columns (original payment, merchant, amount, reason, network, status, defendable, defense deadline, received date),
+  - expandable row with original payment details, defense documents, and resolution info,
+  - filter controls (status, merchant, date range, card network),
+  - default defense-deadline-first ordering (urgent first),
+  - pending/notified count badge and 72-hour urgency alert banner.
 
 ---
 
