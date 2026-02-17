@@ -207,6 +207,159 @@ export interface PlatformTransactionSummary {
   }
 }
 
+export interface PlatformSettlementBatchFilters {
+  merchantIds?: string[]
+  statuses?: string[]
+  dateFrom?: string
+  dateTo?: string
+  limit?: number
+}
+
+interface PlatformSettlementBatchRpcRow {
+  id: string
+  batch_id: string | null
+  merchant_id: string | null
+  merchant_name: string | null
+  location_id: string | null
+  location_name: string | null
+  business_date: string | null
+  opened_at: string | null
+  closed_at: string | null
+  settlement_date: string | null
+  funded_date: string | null
+  transaction_count: number | string | null
+  sales_count: number | string | null
+  refund_count: number | string | null
+  void_count: number | string | null
+  gross_amount: number | string | null
+  tip_amount: number | string | null
+  refund_amount: number | string | null
+  net_deposit: number | string | null
+  status: string | null
+  linked_payment_count: number | string | null
+  linked_payment_amount: number | string | null
+  discrepancy_amount: number | string | null
+  has_discrepancy: boolean | number | string | null
+}
+
+export interface PlatformSettlementBatch {
+  id: string
+  batch_id: string
+  merchant_id: string
+  merchant_name: string
+  location_id?: string
+  location_name?: string
+  business_date: string
+  opened_at?: string
+  closed_at?: string
+  settlement_date?: string
+  funded_date?: string
+  transaction_count: number
+  sales_count: number
+  refund_count: number
+  void_count: number
+  gross_amount: number
+  tip_amount: number
+  refund_amount: number
+  net_deposit: number
+  status: string
+  linked_payment_count: number
+  linked_payment_amount: number
+  discrepancy_amount: number
+  has_discrepancy: boolean
+}
+
+interface PlatformSettlementBatchPaymentRpcRow {
+  payment_id: string
+  order_id: string
+  order_number: string | null
+  merchant_id: string | null
+  merchant_name: string | null
+  location_id: string | null
+  location_name: string | null
+  payment_method: string | null
+  payment_status: string | null
+  total_amount: number | string | null
+  tip_amount: number | string | null
+  refund_amount: number | string | null
+  is_voided: boolean | number | string | null
+  is_returned: boolean | number | string | null
+  initiated_at: string | null
+  captured_at: string | null
+}
+
+export interface PlatformSettlementBatchPayment {
+  payment_id: string
+  order_id: string
+  order_number?: string
+  merchant_id?: string
+  merchant_name?: string
+  location_id?: string
+  location_name?: string
+  payment_method: string
+  payment_status: string
+  total_amount: number
+  tip_amount: number
+  refund_amount: number
+  is_voided: boolean
+  is_returned: boolean
+  initiated_at?: string
+  captured_at?: string
+}
+
+export interface PlatformSettlementBatchResult {
+  data: PlatformSettlementBatch[]
+  errorCode?: string
+}
+
+export interface PlatformSettlementBatchPaymentsResult {
+  data: PlatformSettlementBatchPayment[]
+  errorCode?: string
+}
+
+export interface PlatformMerchantBreakdownFilters {
+  merchantIds?: string[]
+  locationIds?: string[]
+  paymentStatuses?: string[]
+  dateFrom?: string
+  dateTo?: string
+}
+
+interface PlatformMerchantBreakdownRpcRow {
+  merchant_id: string | null
+  merchant_name: string | null
+  location_count: number | string | null
+  transaction_count: number | string | null
+  card_revenue: number | string | null
+  cash_revenue: number | string | null
+  total_revenue: number | string | null
+  avg_ticket: number | string | null
+  tip_total: number | string | null
+  void_count: number | string | null
+  void_rate_pct: number | string | null
+  daily_revenue_trend: unknown
+}
+
+export interface PlatformMerchantBreakdownDailyPoint {
+  date: string
+  revenue: number
+}
+
+export interface PlatformMerchantBreakdown {
+  merchant_id: string
+  merchant_name: string
+  location_count: number
+  transaction_count: number
+  card_revenue: number
+  cash_revenue: number
+  total_revenue: number
+  avg_ticket: number
+  tip_total: number
+  void_count: number
+  void_rate_pct: number
+  daily_revenue_trend: PlatformMerchantBreakdownDailyPoint[]
+}
+
 interface PlatformTransactionViewRow {
   id: string
   order_id: string
@@ -512,6 +665,84 @@ function mapRpcRowToSummary(row: PlatformTransactionSummaryRpcRow): PlatformTran
       voidReturnAmount: Number(row.previous_void_return_amount || 0),
       voidRatePct: Number(row.previous_void_rate_pct || 0),
     },
+  }
+}
+
+function mapRpcRowToSettlementBatch(row: PlatformSettlementBatchRpcRow): PlatformSettlementBatch {
+  return {
+    id: row.id,
+    batch_id: row.batch_id || '',
+    merchant_id: row.merchant_id || '',
+    merchant_name: row.merchant_name || 'Unknown',
+    location_id: row.location_id || undefined,
+    location_name: row.location_name || undefined,
+    business_date: row.business_date || '',
+    opened_at: row.opened_at || undefined,
+    closed_at: row.closed_at || undefined,
+    settlement_date: row.settlement_date || undefined,
+    funded_date: row.funded_date || undefined,
+    transaction_count: Number(row.transaction_count || 0),
+    sales_count: Number(row.sales_count || 0),
+    refund_count: Number(row.refund_count || 0),
+    void_count: Number(row.void_count || 0),
+    gross_amount: Number(row.gross_amount || 0),
+    tip_amount: Number(row.tip_amount || 0),
+    refund_amount: Number(row.refund_amount || 0),
+    net_deposit: Number(row.net_deposit || 0),
+    status: row.status || 'unknown',
+    linked_payment_count: Number(row.linked_payment_count || 0),
+    linked_payment_amount: Number(row.linked_payment_amount || 0),
+    discrepancy_amount: Number(row.discrepancy_amount || 0),
+    has_discrepancy: toBoolean(row.has_discrepancy),
+  }
+}
+
+function mapRpcRowToSettlementBatchPayment(
+  row: PlatformSettlementBatchPaymentRpcRow
+): PlatformSettlementBatchPayment {
+  return {
+    payment_id: row.payment_id,
+    order_id: row.order_id,
+    order_number: row.order_number || undefined,
+    merchant_id: row.merchant_id || undefined,
+    merchant_name: row.merchant_name || undefined,
+    location_id: row.location_id || undefined,
+    location_name: row.location_name || undefined,
+    payment_method: row.payment_method || 'unknown',
+    payment_status: row.payment_status || 'unknown',
+    total_amount: Number(row.total_amount || 0),
+    tip_amount: Number(row.tip_amount || 0),
+    refund_amount: Number(row.refund_amount || 0),
+    is_voided: toBoolean(row.is_voided),
+    is_returned: toBoolean(row.is_returned),
+    initiated_at: row.initiated_at || undefined,
+    captured_at: row.captured_at || undefined,
+  }
+}
+
+function mapRpcRowToMerchantBreakdown(
+  row: PlatformMerchantBreakdownRpcRow
+): PlatformMerchantBreakdown {
+  const trend = asArray<any>(row.daily_revenue_trend)
+    .map((point) => ({
+      date: typeof point?.date === 'string' ? point.date : '',
+      revenue: Number(point?.revenue || 0),
+    }))
+    .filter((point) => point.date.length > 0)
+
+  return {
+    merchant_id: row.merchant_id || '',
+    merchant_name: row.merchant_name || 'Unknown',
+    location_count: Number(row.location_count || 0),
+    transaction_count: Number(row.transaction_count || 0),
+    card_revenue: Number(row.card_revenue || 0),
+    cash_revenue: Number(row.cash_revenue || 0),
+    total_revenue: Number(row.total_revenue || 0),
+    avg_ticket: Number(row.avg_ticket || 0),
+    tip_total: Number(row.tip_total || 0),
+    void_count: Number(row.void_count || 0),
+    void_rate_pct: Number(row.void_rate_pct || 0),
+    daily_revenue_trend: trend,
   }
 }
 
@@ -972,6 +1203,90 @@ export async function getPlatformTransactionSummary(
   }
 
   return mapRpcRowToSummary(row)
+}
+
+export async function getPlatformSettlementBatches(
+  filters?: PlatformSettlementBatchFilters
+): Promise<PlatformSettlementBatchResult> {
+  await assertHQPermission('hq.merchant.transactions')
+
+  const supabase = createServerSupabaseClient()
+
+  const { data, error } = await supabase.rpc('get_admin_settlement_batches', {
+    p_merchant_ids: filters?.merchantIds ?? null,
+    p_status: filters?.statuses ?? null,
+    p_date_from: filters?.dateFrom ?? null,
+    p_date_to: filters?.dateTo ?? null,
+    p_limit: filters?.limit ?? 200,
+  })
+
+  if (error) {
+    console.error('[getPlatformSettlementBatches:rpc] Error:', error)
+    return {
+      data: [],
+      errorCode: error.code,
+    }
+  }
+
+  const rows = (data ?? []) as PlatformSettlementBatchRpcRow[]
+  return {
+    data: rows.map(mapRpcRowToSettlementBatch),
+  }
+}
+
+export async function getPlatformSettlementBatchPayments(
+  batchId: string,
+  merchantId?: string
+): Promise<PlatformSettlementBatchPaymentsResult> {
+  await assertHQPermission('hq.merchant.transactions')
+
+  const normalizedBatchId = batchId.trim()
+  if (!normalizedBatchId) {
+    return { data: [] }
+  }
+
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase.rpc('get_admin_settlement_batch_payments', {
+    p_batch_id: normalizedBatchId,
+    p_merchant_id: merchantId ?? null,
+  })
+
+  if (error) {
+    console.error('[getPlatformSettlementBatchPayments:rpc] Error:', error)
+    return {
+      data: [],
+      errorCode: error.code,
+    }
+  }
+
+  const rows = (data ?? []) as PlatformSettlementBatchPaymentRpcRow[]
+  return {
+    data: rows.map(mapRpcRowToSettlementBatchPayment),
+  }
+}
+
+export async function getPlatformMerchantBreakdown(
+  filters?: PlatformMerchantBreakdownFilters
+): Promise<PlatformMerchantBreakdown[]> {
+  await assertHQPermission('hq.merchant.transactions')
+
+  const supabase = createServerSupabaseClient()
+
+  const { data, error } = await supabase.rpc('get_admin_merchant_breakdown', {
+    p_merchant_ids: filters?.merchantIds ?? null,
+    p_location_ids: filters?.locationIds ?? null,
+    p_payment_status: filters?.paymentStatuses ?? null,
+    p_date_from: filters?.dateFrom ?? null,
+    p_date_to: filters?.dateTo ?? null,
+  })
+
+  if (error) {
+    console.error('[getPlatformMerchantBreakdown:rpc] Error:', error)
+    return []
+  }
+
+  const rows = (data ?? []) as PlatformMerchantBreakdownRpcRow[]
+  return rows.map(mapRpcRowToMerchantBreakdown)
 }
 
 export interface PlatformTransactionStats {
