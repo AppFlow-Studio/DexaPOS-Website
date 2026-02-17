@@ -23,11 +23,20 @@ export function SalesSummaryReport({ dateFrom, dateTo, merchantName, locationNam
   const { data, isLoading } = useSalesSummaryReport(dateFrom, dateTo)
   const [searchQuery, setSearchQuery] = useState('')
 
+  // Improved date search – matches the formatted date shown in the table
   const filteredData = useMemo(() => {
     if (!data) return []
-    return data.filter((row) =>
-      String(row.date).toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    const query = searchQuery.toLowerCase().trim()
+    if (!query) return data
+
+    return data.filter((row) => {
+      const formattedDate = new Date(row.date).toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      }).toLowerCase()
+      return formattedDate.includes(query)
+    })
   }, [data, searchQuery])
 
   const formatCurrency = (amount: number) =>
@@ -149,7 +158,7 @@ export function SalesSummaryReport({ dateFrom, dateTo, merchantName, locationNam
         data={filteredData}
         exportColumns={exportColumns}
         filename={`Sales Summary - ${formatReportDateRange(dateFrom, dateTo)}`}
-        searchPlaceholder="Search by date..."
+        searchPlaceholder="Search by date (e.g., Mon, Jan 15)..."
         merchantName={merchantName}
         locationName={locationName}
         dateFrom={dateFrom}

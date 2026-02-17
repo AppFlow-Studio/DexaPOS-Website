@@ -29,17 +29,17 @@ export function ChartCard({
   children,
 }: ChartCardProps) {
   return (
-    <Card className={`transition-all hover:shadow-md ${className ?? ''}`}>
+    <Card className={`bg-white border-gray-200 transition-all hover:shadow-md ${className ?? ''}`}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <div className="space-y-0.5">
-          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+          <CardTitle className="text-sm font-medium text-gray-900">{title}</CardTitle>
           {subtitle && (
-            <p className="text-xs text-muted-foreground">{subtitle}</p>
+            <p className="text-xs text-gray-500">{subtitle}</p>
           )}
         </div>
         <div className="flex items-center gap-2">
           {action}
-          {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
+          {Icon && <Icon className="h-4 w-4 text-gray-400" />}
         </div>
       </CardHeader>
       <CardContent>

@@ -21,17 +21,17 @@ interface OrderStatusFunnelProps {
 }
 
 /**
- * Softer but more distinct palette
+ * Distinct palette for order statuses
  */
 const STATUS_COLOR_MAP: Record<string, string> = {
-  pending: '#3b82f6',
-  sent_to_kitchen: '#6366f1',
-  preparing: '#8b5cf6',
+  pending: '#000000',
+  sent_to_kitchen: '#8b5cf6',
+  preparing: '#f59e0b',
   ready: '#06b6d4',
   completed: '#10b981',
   cancelled: '#ef4444',
-  refunded: '#f59e0b',
-  void: '#dc2626',
+  refunded: '#f97316',
+  void: '#b91c1c',
 }
 
 export function OrderStatusFunnel({
@@ -104,78 +104,76 @@ export function OrderStatusFunnel({
 
         {/* Donut + Legend */}
         {chartData.length > 0 && (
-  <div className="grid md:grid-cols-2 gap-12 items-center">
-    <ChartContainer
-  config={{ pie: { label: 'Orders' } }}
-  className="h-[340px] w-full"
->
-  <div className="relative h-full w-full">
-    <ResponsiveContainer width="100%" height="100%">
-      <PieChart>
-        <Tooltip content={<ChartTooltipContent />} />
-        <Pie
-          data={chartData}
-          dataKey="count"
-          nameKey="label"
-          innerRadius={90}
-          outerRadius={130}
-          paddingAngle={4}
-        >
-          {chartData.map((entry) => (
-            <Cell
-              key={entry.status}
-              fill={
-                STATUS_COLOR_MAP[entry.status] ?? '#3b82f6'
-              }
-            />
-          ))}
-        </Pie>
-      </PieChart>
-    </ResponsiveContainer>
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <ChartContainer
+              config={{ pie: { label: 'Orders' } }}
+              className="h-[340px] w-full"
+            >
+              <div className="relative h-full w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Tooltip content={<ChartTooltipContent />} />
+                    <Pie
+                      data={chartData}
+                      dataKey="count"
+                      nameKey="label"
+                      innerRadius={90}
+                      outerRadius={130}
+                      paddingAngle={4}
+                    >
+                      {chartData.map((entry) => (
+                        <Cell
+                          key={entry.status}
+                          fill={
+                            STATUS_COLOR_MAP[entry.status] ?? '#3b82f6'
+                          }
+                        />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
 
-    {/* Center Label */}
-    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-      <div className="text-4xl font-bold leading-none">
-        {totalOrders}
-      </div>
-      <div className="text-sm text-muted-foreground mt-1">
-        Total Orders
-      </div>
-    </div>
-  </div>
-</ChartContainer>
+                {/* Center Label */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <div className="text-4xl font-bold leading-none">
+                    {totalOrders}
+                  </div>
+                  <div className="text-sm text-muted-foreground mt-1">
+                    Total Orders
+                  </div>
+                </div>
+              </div>
+            </ChartContainer>
 
+            {/* Legend */}
+            <div className="space-y-4">
+              {chartData.map((step) => (
+                <div
+                  key={step.status}
+                  className="flex justify-between items-center rounded-lg px-4 py-3 bg-muted/30 hover:bg-muted/50 transition"
+                >
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="w-3 h-3 rounded-full"
+                      style={{
+                        backgroundColor:
+                          STATUS_COLOR_MAP[step.status] ??
+                          '#3b82f6',
+                      }}
+                    />
+                    <span className="font-medium">
+                      {step.label}
+                    </span>
+                  </div>
 
-    {/* Legend */}
-    <div className="space-y-4">
-      {chartData.map((step) => (
-        <div
-          key={step.status}
-          className="flex justify-between items-center rounded-lg px-4 py-3 bg-muted/30 hover:bg-muted/50 transition"
-        >
-          <div className="flex items-center gap-3">
-            <span
-              className="w-3 h-3 rounded-full"
-              style={{
-                backgroundColor:
-                  STATUS_COLOR_MAP[step.status] ??
-                  '#3b82f6',
-              }}
-            />
-            <span className="font-medium">
-              {step.label}
-            </span>
+                  <div className="text-sm text-muted-foreground">
+                    {step.count} ({step.percentage}%)
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-
-          <div className="text-sm text-muted-foreground">
-            {step.count} ({step.percentage}%)
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-)}
-
+        )}
 
         {/* Drop-offs */}
         {data && (

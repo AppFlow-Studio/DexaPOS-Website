@@ -1,13 +1,13 @@
 'use client'
 
 import { ChartCard } from './ChartCard'
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
+import { ChartContainer, type ChartConfig } from '@/components/ui/chart'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { DollarSign } from 'lucide-react'
 import type { RevenueBreakdown } from '@/types/analytics'
 
 const COLORS = {
-  subtotal: '#3B82F6',    // Blue
+  subtotal: '#0A5C9E',    // Dexa blue
   tax: '#EF4444',         // Red
   tips: '#10B981',        // Emerald
   serviceCharges: '#F59E0B', // Amber
@@ -73,29 +73,31 @@ export function RevenueBreakdownCard({ data, isLoading }: RevenueBreakdownCardPr
     >
       {data && (
         <>
+          {/* Stat boxes – DexaPOS themed */}
           <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="space-y-1 bg-slate-50 dark:bg-slate-900 p-2 rounded">
-              <p className="text-xs text-muted-foreground">Subtotal</p>
-              <p className="text-lg font-bold">{formatCurrency(data.subtotal)}</p>
+            <div className="bg-gray-50 border border-gray-200 p-2 rounded space-y-1">
+              <p className="text-xs text-gray-500">Subtotal</p>
+              <p className="text-lg font-bold text-gray-900">{formatCurrency(data.subtotal)}</p>
             </div>
-            <div className="space-y-1 bg-slate-50 dark:bg-slate-900 p-2 rounded">
-              <p className="text-xs text-muted-foreground">Net Revenue</p>
-              <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+            <div className="bg-gray-50 border border-gray-200 p-2 rounded space-y-1">
+              <p className="text-xs text-gray-500">Net Revenue</p>
+              <p className="text-lg font-bold text-[#0A5C9E]">
                 {formatCurrency(data.netRevenue)}
               </p>
             </div>
-            <div className="space-y-1 bg-slate-50 dark:bg-slate-900 p-2 rounded">
-              <p className="text-xs text-muted-foreground">Tax + Charges</p>
-              <p className="text-lg font-bold">
+            <div className="bg-gray-50 border border-gray-200 p-2 rounded space-y-1">
+              <p className="text-xs text-gray-500">Tax + Charges</p>
+              <p className="text-lg font-bold text-gray-900">
                 {formatCurrency(data.tax + data.serviceCharges)}
               </p>
             </div>
-            <div className="space-y-1 bg-slate-50 dark:bg-slate-900 p-2 rounded">
-              <p className="text-xs text-muted-foreground">Tips</p>
-              <p className="text-lg font-bold">{formatCurrency(data.tips)}</p>
+            <div className="bg-gray-50 border border-gray-200 p-2 rounded space-y-1">
+              <p className="text-xs text-gray-500">Tips</p>
+              <p className="text-lg font-bold text-gray-900">{formatCurrency(data.tips)}</p>
             </div>
           </div>
 
+          {/* Stacked bar chart */}
           <div className="w-full h-[350px]">
             <ChartContainer config={chartConfig} className="w-full h-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -148,6 +150,7 @@ export function RevenueBreakdownCard({ data, isLoading }: RevenueBreakdownCardPr
             </ChartContainer>
           </div>
 
+          {/* Legend – matches chart colors */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4 text-xs">
             {Object.entries(chartConfig).map(([key, config]) => (
               <div key={key} className="flex items-center gap-2">
@@ -155,7 +158,7 @@ export function RevenueBreakdownCard({ data, isLoading }: RevenueBreakdownCardPr
                   className="w-3 h-3 rounded-sm flex-shrink-0"
                   style={{ backgroundColor: config.color }}
                 />
-                <span className="text-muted-foreground truncate">{config.label}</span>
+                <span className="text-gray-500 truncate">{config.label}</span>
               </div>
             ))}
           </div>

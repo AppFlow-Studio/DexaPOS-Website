@@ -3,14 +3,14 @@
 import {
   BarChart,
   Bar,
-  ErrorBar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
   ResponsiveContainer,
 } from 'recharts'
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
+import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
 import { ChartCard } from './ChartCard'
 import { DataTable } from '@/components/ui/data-table'
 import { ColumnDef } from '@tanstack/react-table'
@@ -23,18 +23,27 @@ interface AvgCompletionTimeProps {
 }
 
 const chartConfig = {
-  avg_minutes: {
-    label: 'Avg Minutes',
-    color: '#3b82f6',
+  avg: {
+    label: 'Average',
+    color: '#0A5C9E', // Dexa blue
+  },
+  min: {
+    label: 'Minimum',
+    color: '#10B981', // emerald green
+  },
+  max: {
+    label: 'Maximum',
+    color: '#EF4444', // red
   },
 } satisfies ChartConfig
 
 export function AvgCompletionTime({ data, isLoading }: AvgCompletionTimeProps) {
   const isEmpty = !data || data.completion_times.length === 0
 
+  // Transform data for grouped bar chart
   const chartData = data?.completion_times?.map((row) => ({
     name: row.order_type.replace(/_/g, ' ').toUpperCase(),
-    value: row.avg_minutes,
+    avg: row.avg_minutes,
     min: row.min_minutes,
     max: row.max_minutes,
   })) || []
@@ -87,35 +96,70 @@ export function AvgCompletionTime({ data, isLoading }: AvgCompletionTimeProps) {
       emptyMessage="No completion time data available"
     >
       <div className="space-y-6">
-        {/* Bar Chart with Error Bars */}
+        {/* Grouped Bar Chart */}
         {chartData.length > 0 && (
           <ChartContainer config={chartConfig} className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
+              <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
-                <YAxis label={{ value: 'Minutes', angle: -90, position: 'insideLeft' }} />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="value" fill="#3b82f6" radius={[8, 8, 0, 0]}>
-                  <ErrorBar
-                    dataKey="max"
-                    width={4}
-                    strokeWidth={2}
-                    stroke="#ef4444"
-                    direction="y"
-                  />
-                </Bar>
+                <YAxis
+                  label={{ value: 'Minutes', angle: -90, position: 'insideLeft' }}
+                  domain={[0, 'auto']}
+                />
+                <ChartTooltip
+                  content={({ active, payload, label }) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div className="bg-white dark:bg-slate-950 p-3 rounded border border-slate-200 dark:border-slate-700 shadow-lg">
+                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
+                            {label}
+                          </p>
+                          {payload.map((item, index) => (
+                            <div key={index} className="flex items-center justify-between gap-2">
+                              <span className="text-xs text-slate-700 dark:text-slate-300">
+                                {item.name}:
+                              </span>
+                              <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                                {Number(item.value).toFixed(1)} min
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    }
+                    return null
+                  }}
+                />
+                <Legend />
+                <Bar
+                  dataKey="avg"
+                  fill={chartConfig.avg.color}
+                  radius={[4, 4, 0, 0]}
+                  barSize={20}
+                />
+                <Bar
+                  dataKey="min"
+                  fill={chartConfig.min.color}
+                  radius={[4, 4, 0, 0]}
+                  barSize={20}
+                />
+                <Bar
+                  dataKey="max"
+                  fill={chartConfig.max.color}
+                  radius={[4, 4, 0, 0]}
+                  barSize={20}
+                />
               </BarChart>
             </ResponsiveContainer>
           </ChartContainer>
         )}
 
-        {/* Info Box */}
-        <div className="rounded-lg bg-blue-50 dark:bg-blue-950 p-4 flex gap-3">
-          <InfoIcon className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-blue-900 dark:text-blue-200">
-            Dine-in orders naturally take longer due to table service. Error bars show minimum to maximum times
-            observed.
+        {/* Info Box - DexaPOS themed */}
+        <div className="rounded-lg bg-[#0A5C9E]/10 p-4 flex gap-3">
+          <InfoIcon className="h-4 w-4 text-[#0A5C9E] flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-[#0A5C9E]">
+            Dine-in orders naturally take longer due to table service. Bars show average (blue), minimum (green), and maximum (red) times.
           </p>
         </div>
 

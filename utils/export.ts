@@ -82,195 +82,181 @@ export async function exportToPdf<T extends Record<string, any>>(
 ): Promise<void> {
   try {
     const { jsPDF } = await import("jspdf");
-    const doc = new jsPDF();
+    const autoTable = (await import("jspdf-autotable")).default;
+
+    const doc = new jsPDF({ unit: "pt" });
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 12;
-    const contentWidth = pageWidth - 2 * margin;
+    const margin = 40;
+    const contentWidth = pageWidth - margin * 2;
 
-    // ============ HEADER SECTION ============
-    // White background header with DexaPOS branding
-    const dexaBlue: [number, number, number] = [25, 118, 210]; // DexaPOS blue
-    const dexaDarkBlue: [number, number, number] = [13, 71, 161]; // Darker blue for tables
+    // Darker blue for header background (was [25, 118, 210])
+    const dexaBlue: [number, number, number] = [0, 70, 140];
+    const dexaDark: [number, number, number] = [0, 70, 140];
 
-    // White header background
-    doc.setFillColor(255, 255, 255);
-    doc.rect(0, 0, pageWidth, 24, "F");
+    // ================= HEADER BACKGROUND =================
+    doc.setFillColor(...dexaBlue);
+    doc.rect(0, 0, pageWidth, 70, "F");
 
-    // Blue accent line at top
-    doc.setFillColor(dexaBlue[0], dexaBlue[1], dexaBlue[2]);
-    doc.rect(0, 0, pageWidth, 2, "F");
+    // ================= RED UNDERLINE =================
+    const dexaRed: [number, number, number] = [220, 38, 38];
+    doc.setDrawColor(...dexaRed);
+    doc.setLineWidth(2);
+    doc.line(0, 70, pageWidth, 70);
 
-    // Blue logo box (left side)
-    doc.setFillColor(dexaBlue[0], dexaBlue[1], dexaBlue[2]);
-    doc.rect(margin, 4, 8, 8, "F");
+    // ================= LOGO & BRANDING =================
+    // Logo box (top left) - Red background with white text
+    doc.setFillColor(...dexaRed);
+    doc.roundedRect(margin, 15, 40, 40, 5, 5, "F");
+
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(6);
+    doc.setFontSize(13);
     doc.setTextColor(255, 255, 255);
-    doc.text("DEXA", margin + 1, 7);
-    doc.setFontSize(5);
-    doc.text("POS", margin + 1, 9.5);
-
-    // "Dexa POS" text next to logo
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.setTextColor(dexaDarkBlue[0], dexaDarkBlue[1], dexaDarkBlue[2]);
-    doc.text("Dexa POS", margin + 10, 8);
-
-    // Report type and merchant info (right side)
-    doc.setFont("helvetica", "normal");
+    doc.text("DEXA", margin + 20, 36, { align: "center" });
     doc.setFontSize(9);
-    doc.setTextColor(100, 100, 100);
-    doc.text(filename, pageWidth - margin - 50, 6);
-    doc.setFontSize(7);
-    const merchantInfo = merchantName && locationName ? `${merchantName} | ${locationName}` : "Location Information";
-    doc.text(merchantInfo, pageWidth - margin - 50, 10);
+    doc.text("POS", margin + 20, 47, { align: "center" });
 
-    // Blue divider line below header
-    doc.setFillColor(dexaBlue[0], dexaBlue[1], dexaBlue[2]);
-    doc.rect(0, 25, pageWidth, 1.5, "F");
+    // Title and merchant info (top right)
+    // Remove date from filename for display
+    const displayFilename = filename.replace(/ - \d{4}-\d{2}-\d{2}.*/, "");
 
-    // Period and Generated info (below divider)
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20);
+    doc.setTextColor(255, 255, 255);
+    doc.text(displayFilename, pageWidth - margin, 25, { align: "right" });
+
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
+    doc.setFontSize(10);
+    doc.setTextColor(220, 220, 220);
+    const merchantInfo =
+      merchantName && locationName
+        ? `${merchantName} | ${locationName}`
+        : "Report";
+    doc.text(merchantInfo, pageWidth - margin, 45, { align: "right" });
+
+    // Period and Generated info below header (left and right)
+    const periodText =
+      dateFrom && dateTo
+        ? formatReportDateRange(dateFrom, dateTo)
+        : "N/A";
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
     doc.setTextColor(100, 100, 100);
-    const periodText = dateFrom && dateTo ? formatReportDateRange(dateFrom, dateTo) : "Period: N/A";
-    doc.text(`Period: ${periodText}`, margin, 30);
-    doc.text(`Generated: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`, pageWidth - margin - 40, 30);
+    doc.text(`period: ${periodText}`, margin, 115);
 
-    // Summary Cards Section
-    let yPosition = 35;
+    doc.text(
+      `generated: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`,
+      pageWidth - margin,
+      115,
+      { align: "right" }
+    );
+
+    let yPosition = 130;
+
+    // ================= SUMMARY CARDS =================
     if (summaryCards && summaryCards.length > 0) {
-      yPosition = 35;
-      const cardWidth = (contentWidth - 8) / 3; // 3 columns with small gaps
-      const cardHeight = 16;
-      const cardGap = 4;
+      const cardWidth = (contentWidth - 20) / 3;
+      const cardHeight = 60;
+      const gap = 10;
 
-      summaryCards.forEach((card, idx) => {
-        const cardX = margin + idx * (cardWidth + cardGap);
+      summaryCards.forEach((card, index) => {
+        const x = margin + index * (cardWidth + gap);
 
-        // Card background (light gray)
+        // Card background
         doc.setFillColor(248, 248, 248);
-        doc.rect(cardX, yPosition, cardWidth, cardHeight, "F");
-
-        // Card border
         doc.setDrawColor(220, 220, 220);
         doc.setLineWidth(0.5);
-        doc.rect(cardX, yPosition, cardWidth, cardHeight);
+        doc.roundedRect(x, yPosition, cardWidth, cardHeight, 3, 3, "FD");
 
-        // Card label
+        // Label
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(7);
+        doc.setFontSize(9);
         doc.setTextColor(120, 120, 120);
-        doc.text(String(card.label), cardX + 2, yPosition + 4, {
-          maxWidth: cardWidth - 4,
-          align: "left",
+        doc.text(card.label, x + 8, yPosition + 16, {
+          maxWidth: cardWidth - 16,
         });
 
-        // Card value
+        // Value
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(9);
-        doc.setTextColor(40, 40, 40);
-        doc.text(String(card.value), cardX + 2, yPosition + 11, {
-          maxWidth: cardWidth - 4,
-          align: "left",
+        doc.setFontSize(14);
+        doc.setTextColor(...dexaBlue);
+        doc.text(String(card.value), x + 8, yPosition + 45, {
+          maxWidth: cardWidth - 16,
         });
       });
-      yPosition += cardHeight + 8;
+
+      yPosition += cardHeight + 25;
     }
 
-    // Table setup
-    yPosition = yPosition + 5;
-    if (columns.length === 0) return;
-    const colWidth = contentWidth / columns.length;
-    const rowHeight = 8;
-    const headerHeight = 8;
+    // ================= TABLE =================
+    autoTable(doc, {
+      startY: yPosition,
+      margin: { left: margin, right: margin },
+      head: [columns.map((c) => c.header)],
+      body: data.map((row) =>
+        columns.map((col) => {
+          const value = row[col.key as keyof T];
+          return col.format
+            ? col.format(value, row)
+            : String(value ?? "");
+        })
+      ),
+      theme: "striped",
+      styles: {
+        font: "helvetica",
+        fontSize: 9,
+        cellPadding: 8,
+        overflow: "linebreak",
+        valign: "middle",
+        textColor: 60,
+      },
+      headStyles: {
+        fillColor: dexaDark,
+        textColor: 255,
+        fontStyle: "bold",
+        fontSize: 10,
+        lineColor: dexaBlue,
+        lineWidth: 0.5,
+      },
+      alternateRowStyles: {
+        fillColor: [245, 248, 255],
+      },
+      rowPageBreak: "avoid",
+      columnStyles: Object.fromEntries(
+        columns.map((_, i) => [
+          i,
+          { cellWidth: contentWidth / columns.length },
+        ])
+      ),
+      didDrawPage: (data: any) => {
+        // Repeating header on new pages
+        if (data.pageNumber > 1) {
+          doc.setFillColor(...dexaBlue);
+          doc.rect(0, 0, pageWidth, 25, "F");
 
-    // Draw headers with DexaPOS dark blue theme
-    const drawHeaders = (y: number) => {
-      doc.setFillColor(dexaDarkBlue[0], dexaDarkBlue[1], dexaDarkBlue[2]); // DexaPOS dark blue
-      doc.setDrawColor(dexaDarkBlue[0], dexaDarkBlue[1], dexaDarkBlue[2]);
-
-      columns.forEach((_, idx) => {
-        const x = margin + idx * colWidth;
-        doc.rect(x, y, colWidth, headerHeight, "FD");
-      });
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(9);
-      doc.setTextColor(255, 255, 255);
-
-      columns.forEach((col, idx) => {
-        const x = margin + idx * colWidth;
-        const headerText = col.header;
-        doc.text(headerText, x + 2, y + 5.5, {
-          maxWidth: colWidth - 4,
-          align: "left",
-        });
-      });
-    };
-
-    drawHeaders(yPosition);
-    yPosition += headerHeight;
-
-    // Data rows
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-    let rowCount = 0;
-    const footerY = pageHeight - margin - 5;
-
-    data.forEach((row) => {
-      // Check if new page needed
-      if (yPosition + rowHeight > footerY) {
-        // Add footer
-        doc.setFontSize(8);
-        doc.setTextColor(150, 150, 150);
-        doc.text(`Page ${doc.internal.pages.length - 1}`, pageWidth - margin - 10, footerY);
-
-        doc.addPage();
-        yPosition = margin;
-        drawHeaders(yPosition);
-        yPosition += headerHeight;
-      }
-
-      // Subtle alternating background
-      if (rowCount % 2 === 0) {
-        doc.setFillColor(248, 248, 248);
-        columns.forEach((_, idx) => {
-          const x = margin + idx * colWidth;
-          doc.rect(x, yPosition, colWidth, rowHeight, "F");
-        });
-      }
-
-      // Cell borders with subtle gray
-      doc.setDrawColor(235, 235, 235);
-      columns.forEach((_, idx) => {
-        const x = margin + idx * colWidth;
-        doc.rect(x, yPosition, colWidth, rowHeight);
-      });
-
-      // Cell content
-      doc.setTextColor(40, 40, 40);
-      columns.forEach((col, idx) => {
-        const x = margin + idx * colWidth;
-        const value = row[col.key as keyof T];
-        const formatted = col.format ? col.format(value, row) : String(value ?? "");
-
-        doc.text(formatted.substring(0, 25), x + 2, yPosition + 5.5, {
-          maxWidth: colWidth - 4,
-          align: "left",
-        });
-      });
-
-      yPosition += rowHeight;
-      rowCount++;
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(12);
+          doc.setTextColor(255, 255, 255);
+          doc.text(displayFilename, margin, 16);
+        }
+      },
     });
 
-    // Final footer
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
-    doc.text(`Page ${doc.internal.pages.length}`, pageWidth - margin - 10, footerY);
+    // Add page numbers to all pages
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      doc.text(
+        `Page ${i} of ${pageCount}`,
+        pageWidth - margin,
+        doc.internal.pageSize.getHeight() - 15,
+        { align: "right" }
+      );
+    }
 
     doc.save(`${filename}.pdf`);
   } catch (error) {

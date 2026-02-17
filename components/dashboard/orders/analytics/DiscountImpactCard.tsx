@@ -43,26 +43,28 @@ export function DiscountImpactCard({ data, isLoading }: DiscountImpactCardProps)
     >
       {data && (
         <>
+          {/* Stat boxes – DexaPOS themed */}
           <div className="mt-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Total Discounts</p>
-                <p className="text-2xl font-bold">{formatCurrency(data.totalDiscounts)}</p>
+              <div className="bg-gray-50 border border-gray-200 p-2 rounded space-y-1">
+                <p className="text-xs text-gray-500">Total Discounts</p>
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(data.totalDiscounts)}</p>
               </div>
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Discounted Orders</p>
-                <p className="text-2xl font-bold">
+              <div className="bg-gray-50 border border-gray-200 p-2 rounded space-y-1">
+                <p className="text-xs text-gray-500">Discounted Orders</p>
+                <p className="text-2xl font-bold text-gray-900">
                   {data.discountedOrderCount} / {data.totalOrderCount}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-gray-500">
                   {data.discountedOrderPercent.toFixed(1)}%
                 </p>
               </div>
             </div>
 
-            <div className="bg-blue-50 dark:bg-blue-950 p-2 rounded border border-blue-200 dark:border-blue-800">
-              <p className="text-xs text-muted-foreground">Avg Discount per Order</p>
-              <p className="text-lg font-semibold text-blue-600 dark:text-blue-400">
+            {/* Highlight box – Dexa blue */}
+            <div className="bg-[#0A5C9E]/10 border border-[#0A5C9E]/20 p-2 rounded">
+              <p className="text-xs text-gray-500">Avg Discount per Order</p>
+              <p className="text-lg font-semibold text-[#0A5C9E]">
                 {formatCurrency(data.avgDiscountPerOrder)}
               </p>
             </div>
@@ -71,8 +73,8 @@ export function DiscountImpactCard({ data, isLoading }: DiscountImpactCardProps)
           {data.bySource.length > 0 && (
             <div className="mt-6">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-semibold">By Source</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs font-semibold text-gray-900">By Source</p>
+                <p className="text-xs text-gray-500">
                   {data.bySource.reduce((sum, s) => sum + s.amount, 0) > 0 ? '' : 'No data'}
                 </p>
               </div>
@@ -124,7 +126,7 @@ export function DiscountImpactCard({ data, isLoading }: DiscountImpactCardProps)
                                 <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
                                   {formatCurrency(Number(item.value))}
                                 </p>
-                                <p className="text-xs text-muted-foreground">
+                                <p className="text-xs text-gray-500">
                                   {percent}% of total
                                 </p>
                               </div>
@@ -154,14 +156,14 @@ export function DiscountImpactCard({ data, isLoading }: DiscountImpactCardProps)
                         className="w-3 h-3 rounded-sm flex-shrink-0"
                         style={{ backgroundColor: COLORS[idx % COLORS.length] }}
                       />
-                      <span className="text-muted-foreground truncate">
+                      <span className="text-gray-500 truncate">
                         {String(source.source)
                           .replace(/_/g, ' ')
                           .split(' ')
                           .map(w => w.charAt(0).toUpperCase() + w.slice(1))
                           .join(' ')}
                       </span>
-                      <span className="font-semibold ml-auto flex-shrink-0">
+                      <span className="font-semibold text-gray-900 ml-auto flex-shrink-0">
                         {percent}%
                       </span>
                     </div>
@@ -172,17 +174,17 @@ export function DiscountImpactCard({ data, isLoading }: DiscountImpactCardProps)
           )}
 
           {data.topDiscounts.length > 0 && (
-            <div className="mt-6 pt-4 border-t">
-              <p className="text-xs font-semibold mb-2">Top Discounts</p>
+            <div className="mt-6 pt-4 border-t border-gray-200">
+              <p className="text-xs font-semibold text-gray-900 mb-2">Top Discounts</p>
               <div className="space-y-2">
                 {data.topDiscounts.slice(0, 5).map((discount, idx) => (
                   <div key={idx} className="flex items-center justify-between text-xs">
-                    <span className="truncate text-muted-foreground">{discount.name}</span>
+                    <span className="truncate text-gray-500">{discount.name}</span>
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant="outline" className="text-xs border-gray-300 text-gray-700">
                         {discount.count}x
                       </Badge>
-                      <span className="font-semibold w-16 text-right">
+                      <span className="font-semibold text-gray-900 w-16 text-right">
                         {formatCurrency(discount.amount)}
                       </span>
                     </div>

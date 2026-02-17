@@ -16,7 +16,6 @@ import {
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
@@ -49,19 +48,8 @@ import {
 } from '@/components/dashboard/orders/DateRangePicker'
 
 import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
+  ChartConfig,
 } from '@/components/ui/chart'
-
-import {
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
-} from 'recharts'
 
 import { Empty } from '@/components/ui/empty'
 
@@ -96,8 +84,6 @@ const chartConfig = {
   aov: { label: 'Average Order Value', color: 'var(--chart-1)' },
 } satisfies ChartConfig
 
-const PIE_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8']
-
 const currencyFormatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: 'USD',
@@ -123,7 +109,8 @@ export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState('sales')
   const [leaderboardMetric, setLeaderboardMetric] = useState<'total_sales' | 'avg_check_size' | 'total_tips' | 'avg_tip_pct' | 'tables_turned' | 'avg_table_turn_minutes'>('total_sales')
   const [showSettings, setShowSettings] = useState(false)
-  const [refreshInterval, setRefreshInterval] = useState<number | null>(null)
+  // Default interval: 1 minute (60000 ms)
+  const [refreshInterval, setRefreshInterval] = useState<number>(60000)
 
   const handleDateRangeChange = (from: Date | null, to: Date | null) => {
     if (from && to) {
@@ -135,7 +122,7 @@ export default function AnalyticsPage() {
   /* ---------------- Auto-Refresh Logic ---------------- */
 
   useEffect(() => {
-    if (!autoRefresh || !refreshInterval) return
+    if (!autoRefresh) return
 
     const interval = setInterval(() => {
       setDateTo(new Date())
@@ -268,29 +255,28 @@ export default function AnalyticsPage() {
       <Dialog open={showSettings} onOpenChange={setShowSettings}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle>Analytics Settings</DialogTitle>
+            <DialogTitle>Auto-Refresh Settings</DialogTitle>
             <DialogDescription>
-              Configure auto-refresh interval for real-time updates
+              Choose how often the data should refresh when auto-refresh is on.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             <div className="space-y-3">
-              <Label className="text-base font-semibold">Auto-Refresh Interval</Label>
+              <Label className="text-base font-semibold">Refresh Interval</Label>
 
               {[
-                { value: null, label: 'Manual (No auto-refresh)' },
                 { value: 30000, label: '30 seconds' },
                 { value: 60000, label: '1 minute' },
                 { value: 300000, label: '5 minutes' },
                 { value: 600000, label: '10 minutes' },
               ].map(({ value, label }) => (
-                <div key={value ?? 'manual'} className="flex items-center space-x-2">
+                <div key={value} className="flex items-center space-x-2">
                   <input
                     type="radio"
                     id={`interval-${value}`}
                     name="refresh-interval"
-                    value={value ?? ''}
+                    value={value}
                     checked={refreshInterval === value}
                     onChange={() => setRefreshInterval(value)}
                     className="h-4 w-4"
@@ -307,9 +293,9 @@ export default function AnalyticsPage() {
 
             <div className="pt-4 border-t">
               <p className="text-sm text-muted-foreground">
-                {autoRefresh && refreshInterval
-                  ? `Auto-refreshing every ${refreshInterval / 1000}s`
-                  : 'Auto-refresh is disabled'}
+                {autoRefresh
+                  ? `Auto-refresh is ON (every ${refreshInterval / 1000}s)`
+                  : 'Auto-refresh is OFF'}
               </p>
             </div>
           </div>
@@ -318,16 +304,35 @@ export default function AnalyticsPage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="sales">Sales & Revenue</TabsTrigger>
-          <TabsTrigger value="kitchen">Kitchen</TabsTrigger>
-          <TabsTrigger value="tables">
+        <TabsList className="flex-wrap h-auto gap-2 bg-transparent border-b-2 border-slate-200 rounded-none p-0 pb-2">
+          <TabsTrigger
+            value="sales"
+            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 hover:text-slate-900 rounded-none"
+          >
+            Sales & Revenue
+          </TabsTrigger>
+          <TabsTrigger
+            value="kitchen"
+            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 hover:text-slate-900 rounded-none"
+          >
+            Kitchen
+          </TabsTrigger>
+          <TabsTrigger
+            value="tables"
+            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 hover:text-slate-900 rounded-none"
+          >
             Tables
           </TabsTrigger>
-          <TabsTrigger value="staff">
+          <TabsTrigger
+            value="staff"
+            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 hover:text-slate-900 rounded-none"
+          >
             Staff
           </TabsTrigger>
-          <TabsTrigger value="orders">
+          <TabsTrigger
+            value="orders"
+            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 hover:text-slate-900 rounded-none"
+          >
             Order Flow
           </TabsTrigger>
         </TabsList>
@@ -338,12 +343,9 @@ export default function AnalyticsPage() {
             {/* Total Sales */}
             <Card>
               <CardHeader className="flex justify-between pb-2">
-                <CardTitle className="text-sm">
-                  Total Sales
-                </CardTitle>
+                <CardTitle className="text-sm">Total Sales</CardTitle>
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-
               <CardContent>
                 {isLoading ? (
                   <Skeleton className="h-8 w-24" />
@@ -358,12 +360,9 @@ export default function AnalyticsPage() {
             {/* Total Orders */}
             <Card>
               <CardHeader className="flex justify-between pb-2">
-                <CardTitle className="text-sm">
-                  Total Orders
-                </CardTitle>
+                <CardTitle className="text-sm">Total Orders</CardTitle>
                 <ShoppingBag className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-
               <CardContent>
                 {isLoading ? (
                   <Skeleton className="h-8 w-16" />
@@ -378,107 +377,51 @@ export default function AnalyticsPage() {
             {/* AOV */}
             <Card>
               <CardHeader className="flex justify-between pb-2">
-                <CardTitle className="text-sm">
-                  Average Order Value
-                </CardTitle>
+                <CardTitle className="text-sm">Average Order Value</CardTitle>
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-
               <CardContent>
                 {isLoading ? (
                   <Skeleton className="h-8 w-24" />
                 ) : (
                   <div className="text-2xl font-bold">
-                    {formatCurrency(
-                      analytics?.avgOrderValue ?? 0
-                    )}
+                    {formatCurrency(analytics?.avgOrderValue ?? 0)}
                   </div>
                 )}
               </CardContent>
             </Card>
           </div>
 
-          <RevenueBreakdownCard
-            data={revenueBreakdown}
-            isLoading={isLoadingRevenue}
-          />
-
-          <DualPricingCard
-            data={dualPricing}
-            isLoading={isLoadingDualPricing}
-          />
-
-          <DiscountImpactCard
-            data={discountImpact}
-            isLoading={isLoadingDiscount}
-          />
+          <RevenueBreakdownCard data={revenueBreakdown} isLoading={isLoadingRevenue} />
+          <DualPricingCard data={dualPricing} isLoading={isLoadingDualPricing} />
+          <DiscountImpactCard data={discountImpact} isLoading={isLoadingDiscount} />
         </TabsContent>
 
         {/* KITCHEN TAB */}
         <TabsContent value="kitchen" className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <AvgTicketTimeCard
-              data={kitchenPerformance ?? undefined}
-              isLoading={isLoadingKitchen}
-            />
-            <RushTrackingCard
-              data={kitchenPerformance?.rush_stats}
-              isLoading={isLoadingKitchen}
-            />
-            <AutoBumpRateCard
-              data={kitchenPerformance?.auto_bump_stats}
-              isLoading={isLoadingKitchen}
-            />
+            <AvgTicketTimeCard data={kitchenPerformance ?? undefined} isLoading={isLoadingKitchen} />
+            <RushTrackingCard data={kitchenPerformance?.rush_stats} isLoading={isLoadingKitchen} />
+            <AutoBumpRateCard data={kitchenPerformance?.auto_bump_stats} isLoading={isLoadingKitchen} />
           </div>
 
-          <StationPerformanceCard
-            stations={kitchenPerformance?.by_station}
-            isLoading={isLoadingKitchen}
-          />
-
-          <KitchenSpeedHeatmap
-            data={kitchenPerformance?.by_hour_and_day}
-            isLoading={isLoadingKitchen}
-          />
+          <StationPerformanceCard stations={kitchenPerformance?.by_station} isLoading={isLoadingKitchen} />
+          <KitchenSpeedHeatmap data={kitchenPerformance?.by_hour_and_day} isLoading={isLoadingKitchen} />
         </TabsContent>
 
         {/* TABLES TAB */}
-        <TabsContent value="tables" className="space-y-6 ">
-           <AvgTableTurnTime
-              data={tablePerformance}
-              isLoading={isLoadingTable}
-            />
-          {/* Row 1 — 3 col */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2 ">
-           
-            <CoversTracker
-              data={tablePerformance}
-              isLoading={isLoadingTable}
-            />
-            <RevenueSeatHour
-              data={tablePerformance?.hourly_revpash}
-              isLoading={isLoadingTable}
-            />
+        <TabsContent value="tables" className="space-y-6">
+          <AvgTableTurnTime data={tablePerformance} isLoading={isLoadingTable} />
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
+            <CoversTracker data={tablePerformance} isLoading={isLoadingTable} />
+            <RevenueSeatHour data={tablePerformance?.hourly_revpash} isLoading={isLoadingTable} />
           </div>
-
-          {/* Row 2 — full width */}
-          <ServiceTimelineBreakdown
-            phases={tablePerformance?.service_phases}
-            isLoading={isLoadingTable}
-          />
-
-          {/* Row 3 — 2/3 + 1/3 */}
+          <ServiceTimelineBreakdown phases={tablePerformance?.service_phases} isLoading={isLoadingTable} />
           <div className="grid gap-4 md:grid-cols-3">
             <div className="md:col-span-2">
-              <TableUtilization
-                tables={tablePerformance?.table_utilization}
-                isLoading={isLoadingTable}
-              />
+              <TableUtilization tables={tablePerformance?.table_utilization} isLoading={isLoadingTable} />
             </div>
-            <SectionHeatmap
-              sections={tablePerformance?.section_stats}
-              isLoading={isLoadingTable}
-            />
+            <SectionHeatmap sections={tablePerformance?.section_stats} isLoading={isLoadingTable} />
           </div>
         </TabsContent>
 
@@ -490,14 +433,8 @@ export default function AnalyticsPage() {
             metric={leaderboardMetric}
             onMetricChange={setLeaderboardMetric}
           />
-          <TipsAnalysisCard
-            data={staffPerformance}
-            isLoading={isLoadingStaff}
-          />
-          <StaffOrderActivityCard
-            data={staffPerformance}
-            isLoading={isLoadingStaff}
-          />
+          <TipsAnalysisCard data={staffPerformance} isLoading={isLoadingStaff} />
+          <StaffOrderActivityCard data={staffPerformance} isLoading={isLoadingStaff} />
         </TabsContent>
 
         {/* ORDER FLOW TAB */}

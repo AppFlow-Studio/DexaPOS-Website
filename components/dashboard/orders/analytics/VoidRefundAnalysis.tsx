@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   BarChart,
   Bar,
@@ -10,17 +10,16 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
-  Legend,
   ResponsiveContainer,
 } from 'recharts'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { ChartCard } from './ChartCard'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { SummaryCard } from '../reports/SummaryCard'
 import { DataTable } from '@/components/ui/data-table'
+import { Input } from '@/components/ui/input'
 import { ColumnDef } from '@tanstack/react-table'
-import { AlertTriangle, DollarSign } from 'lucide-react'
-import type { OrderFlowStats, TopVoidedItem, RefundReasonRow, StaffVoidRow } from '@/types/analytics'
+import { AlertTriangle, DollarSign, Search } from 'lucide-react'
+import type { OrderFlowStats, TopVoidedItem } from '@/types/analytics'
 
 interface VoidRefundAnalysisProps {
   data?: OrderFlowStats | null
@@ -38,11 +37,9 @@ const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4
 
 interface TopVoidedItemRow extends TopVoidedItem {}
 
-interface RefundReasonRowType extends RefundReasonRow {}
-
-interface StaffVoidRowType extends StaffVoidRow {}
-
 export function VoidRefundAnalysis({ data, isLoading }: VoidRefundAnalysisProps) {
+  const [voidSearchQuery, setVoidSearchQuery] = useState('')
+
   const isEmpty =
     !data ||
     ((data.void_refund?.total_voids ?? 0) + (data.void_refund?.total_refunds ?? 0) === 0)
@@ -87,6 +84,23 @@ export function VoidRefundAnalysis({ data, isLoading }: VoidRefundAnalysisProps)
     },
   ]
 
+  // Filter top voided items by search query
+  const filteredVoidedItems = useMemo(() => {
+    if (!data?.void_refund?.top_voided_items) return []
+    const query = voidSearchQuery.toLowerCase().trim()
+    if (!query) return data.void_refund.top_voided_items
+    return data.void_refund.top_voided_items.filter((item) =>
+      item.item_name.toLowerCase().includes(query)
+    )
+  }, [data?.void_refund?.top_voided_items, voidSearchQuery])
+
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+    }).format(amount)
+
   return (
     <ChartCard
       title="Void & Refund Analysis"
@@ -97,59 +111,28 @@ export function VoidRefundAnalysis({ data, isLoading }: VoidRefundAnalysisProps)
       emptyMessage="No void or refund data available"
     >
       <div className="space-y-6">
-        {/* Stat Cards */}
+        {/* Stat Cards – DexaPOS themed SummaryCards */}
         <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Voids</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-red-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {data?.void_refund?.total_voids ?? 0}
-              </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                ${(data?.void_refund?.void_amount ?? 0).toFixed(2)}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Refunds</CardTitle>
-              <DollarSign className="h-4 w-4 text-orange-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {data?.void_refund?.total_refunds ?? 0}
-              </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                ${(data?.void_refund?.refund_amount ?? 0).toFixed(2)}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Void Loss</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                ${(data?.void_refund?.void_amount ?? 0).toFixed(0)}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Refund Loss</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                ${(data?.void_refund?.refund_amount ?? 0).toFixed(0)}
-              </div>
-            </CardContent>
-          </Card>
+          <SummaryCard
+            label="Total Voids"
+            value={data?.void_refund?.total_voids ?? 0}
+            icon={<AlertTriangle className="h-5 w-5 text-red-500" />}
+          />
+          <SummaryCard
+            label="Total Refunds"
+            value={data?.void_refund?.total_refunds ?? 0}
+            icon={<DollarSign className="h-5 w-5 text-orange-500" />}
+          />
+          <SummaryCard
+            label="Void Loss"
+            value={formatCurrency(data?.void_refund?.void_amount ?? 0)}
+            icon={<AlertTriangle className="h-5 w-5 text-red-500" />}
+          />
+          <SummaryCard
+            label="Refund Loss"
+            value={formatCurrency(data?.void_refund?.refund_amount ?? 0)}
+            icon={<DollarSign className="h-5 w-5 text-orange-500" />}
+          />
         </div>
 
         {/* Charts Grid */}
@@ -199,11 +182,30 @@ export function VoidRefundAnalysis({ data, isLoading }: VoidRefundAnalysisProps)
           )}
         </div>
 
-        {/* Top Voided Items Table */}
+        {/* Top Voided Items Table with Search */}
         {data?.void_refund?.top_voided_items && data.void_refund.top_voided_items.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold mb-4">Top Voided Items</h3>
-            <DataTable columns={voidedItemsColumns} data={data.void_refund.top_voided_items} />
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-900">Top Voided Items</h3>
+              {filteredVoidedItems.length < data.void_refund.top_voided_items.length && (
+                <p className="text-xs text-gray-500">
+                  Showing {filteredVoidedItems.length} of {data.void_refund.top_voided_items.length}
+                </p>
+              )}
+            </div>
+
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input
+                placeholder="Search items..."
+                value={voidSearchQuery}
+                onChange={(e) => setVoidSearchQuery(e.target.value)}
+                className="pl-10 border-gray-200"
+              />
+            </div>
+
+            <DataTable columns={voidedItemsColumns} data={filteredVoidedItems} />
           </div>
         )}
       </div>

@@ -42,7 +42,7 @@ export function AvgTicketTimeCard({
   })) || []
 
   const currentTime = data?.avg_ticket_time_minutes || 0
-  const benchmark = benchmarkMinutes || 8 // Default to 8 minutes if not provided
+  const benchmark = benchmarkMinutes || 20 // Default to 8 minutes if not provided
 
   return (
     <ChartCard

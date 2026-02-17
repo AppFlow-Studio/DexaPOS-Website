@@ -1,13 +1,13 @@
 'use client'
 
 import { ChartCard } from './ChartCard'
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
+import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer } from 'recharts'
 import { CreditCard } from 'lucide-react'
 import type { DualPricingComparison } from '@/types/analytics'
 
 const COLORS = {
-  cardRevenue: '#3B82F6',  // Blue
+  cardRevenue: '#0A5C9E', // Dexa blue
   cashRevenue: '#10B981',  // Emerald
 }
 
@@ -61,9 +61,9 @@ export function DualPricingCard({ data, isLoading }: DualPricingCardProps) {
       {data && (
         <>
           <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="space-y-1 bg-blue-50 dark:bg-blue-950 p-2 rounded">
+            <div className="space-y-1 bg-[#0A5C9E]/10 p-2 rounded">
               <p className="text-xs text-muted-foreground">Card Revenue</p>
-              <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+              <p className="text-lg font-bold text-[#0A5C9E]">
                 {formatCurrency(data.cardRevenue)}
               </p>
               <p className="text-xs text-muted-foreground">{data.cardTransactions} transactions</p>
@@ -125,6 +125,13 @@ export function DualPricingCard({ data, isLoading }: DualPricingCardProps) {
                       }
                       return null
                     }}
+                  />
+                  {/* Legend added here */}
+                  <Legend
+                    verticalAlign="top"
+                    height={36}
+                    iconType="circle"
+                    formatter={(value) => <span className="text-xs text-gray-700">{value}</span>}
                   />
                   <Bar dataKey="cardRevenue" fill={COLORS.cardRevenue} name="Card Revenue" />
                   <Bar dataKey="cashRevenue" fill={COLORS.cashRevenue} name="Cash Revenue" />

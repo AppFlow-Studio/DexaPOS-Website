@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useAuth } from '@clerk/nextjs'
 import { useIsAllLocations, useSelectedLocation } from '@/stores/location-store'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { MapPin, Globe } from 'lucide-react'
 import { DateRangePicker, DatePreset } from '@/components/dashboard/orders/DateRangePicker'
@@ -45,56 +45,91 @@ export default function ReportsPage() {
 
   return (
     <main className="space-y-6 animate-in fade-in duration-500">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
-            {isAllLocations ? (
-              <Badge variant="outline" className="gap-1">
-                <Globe className="h-3 w-3" />
-                All Locations
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="gap-1">
-                <MapPin className="h-3 w-3" />
-                {selectedLocation?.name}
-              </Badge>
-            )}
+      {/* Header with Blue Theme */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900">Reports</h1>
+             
+            </div>
+            <p className="text-base text-slate-600">
+              Download and analyze detailed reports for your business
+            </p>
           </div>
-          <p className="text-muted-foreground">
-            Download and analyze detailed reports for your business
-          </p>
         </div>
+
+        {/* Divider */}
+        <div className="h-1 bg-gradient-to-r rounded-full w-24"></div>
       </div>
 
-      {/* Controls */}
-      <div className="flex items-center justify-between gap-4">
-        <DateRangePicker
-          dateFrom={dateFrom}
-          dateTo={dateTo}
-          onDateRangeChange={handleDateRangeChange}
-          preset={preset}
-          onPresetChange={setPreset}
-        />
-      </div>
+      {/* Controls with Blue Styling */}
+      
+          <DateRangePicker
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateRangeChange={handleDateRangeChange}
+            preset={preset}
+            onPresetChange={setPreset}
+          />
+      
 
       {/* Tab Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="flex-wrap">
-          <TabsTrigger value="sales-summary">Sales Summary</TabsTrigger>
-          <TabsTrigger value="hourly-sales">Hourly Sales</TabsTrigger>
-          <TabsTrigger value="item-sales">Item Sales</TabsTrigger>
-          <TabsTrigger value="payments">Payments</TabsTrigger>
-          <TabsTrigger value="kitchen">Kitchen Performance</TabsTrigger>
-          <TabsTrigger value="table-turns">Table Turns</TabsTrigger>
-          <TabsTrigger value="server">Server Performance</TabsTrigger>
-          <TabsTrigger value="voids">Voids & Refunds</TabsTrigger>
-        </TabsList>
+      <TabsList className="flex-wrap h-auto gap-2 bg-transparent border-b-2 border-slate-200 rounded-none p-0 pb-2">
+  <TabsTrigger
+    value="sales-summary"
+    className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 hover:text-slate-900 rounded-none"
+  >
+    Sales Summary
+  </TabsTrigger>
+  <TabsTrigger
+    value="hourly-sales"
+    className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 hover:text-slate-900 rounded-none"
+  >
+    Hourly Sales
+  </TabsTrigger>
+  <TabsTrigger
+    value="item-sales"
+    className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 hover:text-slate-900 rounded-none"
+  >
+    Item Sales
+  </TabsTrigger>
+  <TabsTrigger
+    value="payments"
+    className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 hover:text-slate-900 rounded-none"
+  >
+    Payments
+  </TabsTrigger>
+  <TabsTrigger
+    value="kitchen"
+    className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 hover:text-slate-900 rounded-none"
+  >
+    Kitchen Performance
+  </TabsTrigger>
+  <TabsTrigger
+    value="table-turns"
+    className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 hover:text-slate-900 rounded-none"
+  >
+    Table Turns
+  </TabsTrigger>
+  <TabsTrigger
+    value="server"
+    className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 hover:text-slate-900 rounded-none"
+  >
+    Server Performance
+  </TabsTrigger>
+  <TabsTrigger
+    value="voids"
+    className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 hover:text-slate-900 rounded-none"
+  >
+    Voids & Refunds
+  </TabsTrigger>
+</TabsList>
 
         {/* Sales Summary Report */}
         <TabsContent value="sales-summary">
-          <Card>
+          <Card className="border-blue-200 shadow-lg">
             <CardContent className="pt-6">
               <SalesSummaryReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
             </CardContent>
@@ -103,7 +138,7 @@ export default function ReportsPage() {
 
         {/* Hourly Sales Report */}
         <TabsContent value="hourly-sales">
-          <Card>
+          <Card className="border-blue-200 shadow-lg">
             <CardContent className="pt-6">
               <HourlySalesReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
             </CardContent>
@@ -112,7 +147,7 @@ export default function ReportsPage() {
 
         {/* Item Sales Report */}
         <TabsContent value="item-sales">
-          <Card>
+          <Card className="border-blue-200 shadow-lg">
             <CardContent className="pt-6">
               <ItemSalesReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
             </CardContent>
@@ -121,7 +156,7 @@ export default function ReportsPage() {
 
         {/* Payment Summary Report */}
         <TabsContent value="payments">
-          <Card>
+          <Card className="border-blue-200 shadow-lg">
             <CardContent className="pt-6">
               <PaymentSummaryReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
             </CardContent>
@@ -130,7 +165,7 @@ export default function ReportsPage() {
 
         {/* Kitchen Performance Report */}
         <TabsContent value="kitchen">
-          <Card>
+          <Card className="border-blue-200 shadow-lg">
             <CardContent className="pt-6">
               <KitchenPerformanceReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
             </CardContent>
@@ -139,7 +174,7 @@ export default function ReportsPage() {
 
         {/* Table Turns Report */}
         <TabsContent value="table-turns">
-          <Card>
+          <Card className="border-blue-200 shadow-lg">
             <CardContent className="pt-6">
               <TableTurnsReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
             </CardContent>
@@ -148,7 +183,7 @@ export default function ReportsPage() {
 
         {/* Server Performance Report */}
         <TabsContent value="server">
-          <Card>
+          <Card className="border-blue-200 shadow-lg">
             <CardContent className="pt-6">
               <ServerPerformanceReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
             </CardContent>
@@ -157,7 +192,7 @@ export default function ReportsPage() {
 
         {/* Voids & Refunds Report */}
         <TabsContent value="voids">
-          <Card>
+          <Card className="border-blue-200 shadow-lg">
             <CardContent className="pt-6">
               <VoidsReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
             </CardContent>

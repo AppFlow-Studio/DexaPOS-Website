@@ -27,10 +27,6 @@ interface ReportDataTableProps<TData, TValue> {
   loading?: boolean
 }
 
-/**
- * DataTable for reports with 20 rows per page (vs default 10)
- * Used only in report components to show more data at once
- */
 export function ReportDataTable<TData, TValue>({
   columns,
   data,
@@ -57,23 +53,24 @@ export function ReportDataTable<TData, TValue>({
 
   return (
     <div>
-      <div className="rounded-md border">
+      <div className="rounded-md border border-gray-200 overflow-hidden">
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-[#0A5C9E]">
             {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead key={header.id}>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                    </TableHead>
-                  )
-                })}
+              <TableRow key={headerGroup.id} className="hover:bg-transparent border-none">
+                {headerGroup.headers.map((header) => (
+                  <TableHead
+                    key={header.id}
+                    className="text-white font-semibold py-3"
+                  >
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
+                  </TableHead>
+                ))}
               </TableRow>
             ))}
           </TableHeader>
@@ -82,19 +79,20 @@ export function ReportDataTable<TData, TValue>({
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
-                  className="h-24 text-center"
+                  className="h-24 text-center text-gray-500"
                 >
                   Loading...
                 </TableCell>
               </TableRow>
             ) : table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
+              table.getRowModel().rows.map((row, index) => (
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && 'selected'}
+                  className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} className="py-3">
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
@@ -107,7 +105,7 @@ export function ReportDataTable<TData, TValue>({
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
-                  className="h-24 text-center"
+                  className="h-24 text-center text-gray-500"
                 >
                   No results.
                 </TableCell>
@@ -122,6 +120,7 @@ export function ReportDataTable<TData, TValue>({
           size="sm"
           onClick={() => table.previousPage()}
           disabled={!table.getCanPreviousPage()}
+          className="border-[#0A5C9E] text-[#0A5C9E] hover:bg-[#0A5C9E]/10 disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent"
         >
           Previous
         </Button>
@@ -130,6 +129,7 @@ export function ReportDataTable<TData, TValue>({
           size="sm"
           onClick={() => table.nextPage()}
           disabled={!table.getCanNextPage()}
+          className="border-[#0A5C9E] text-[#0A5C9E] hover:bg-[#0A5C9E]/10 disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent"
         >
           Next
         </Button>

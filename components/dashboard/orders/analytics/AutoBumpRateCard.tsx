@@ -15,7 +15,7 @@ interface AutoBumpRateCardProps {
 const chartConfig = {
   auto_bump_rate: {
     label: 'Auto-Bump Rate',
-    color: '#3B82F6',
+    color: '#0A5C9E', // Dexa blue
   },
   threshold: {
     label: 'High Alert (50%)',
@@ -55,11 +55,11 @@ export function AutoBumpRateCard({
     >
       {data && (
         <div className="space-y-4">
-          {/* Stats Cards */}
+          {/* Stats Cards - DexaPOS theme */}
           <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1 bg-blue-50 dark:bg-blue-950 p-2 rounded">
+            <div className="space-y-1 bg-[#0A5C9E]/10 p-2 rounded">
               <p className="text-xs text-muted-foreground">Auto-Bumped</p>
-              <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+              <p className="text-lg font-bold text-[#0A5C9E]">
                 {data.auto_bumped}
               </p>
               <p className="text-xs text-muted-foreground">
@@ -75,7 +75,7 @@ export function AutoBumpRateCard({
                 {((data.manual_completed / (data.total_items || 1)) * 100).toFixed(1)}%
               </p>
             </div>
-            <div className="space-y-1 bg-slate-50 dark:bg-slate-900 p-2 rounded">
+            <div className="space-y-1 bg-gray-50 dark:bg-gray-900 p-2 rounded">
               <p className="text-xs text-muted-foreground">Total Items</p>
               <p className="text-lg font-bold">{data.total_items}</p>
             </div>
@@ -92,7 +92,7 @@ export function AutoBumpRateCard({
           )}
 
           {/* Rate Badge */}
-          <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded border border-slate-200 dark:border-slate-800">
+          <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded border border-gray-200 dark:border-gray-800">
             <p className="text-xs text-muted-foreground mb-1">Current Auto-Bump Rate</p>
             <p className="text-lg font-bold">{currentRate.toFixed(1)}%</p>
           </div>
