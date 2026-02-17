@@ -48,6 +48,7 @@
     "motion": "^12.34.0",
     "next": "^15.5.12",
     "next-themes": "^0.4.6",
+    "papaparse": "^5.5.3",
     "react": "19.1.0",
     "react-day-picker": "^8.10.1",
     "react-dom": "19.1.0",
@@ -59,6 +60,7 @@
     "supabase": "^2.76.8",
     "tailwind-merge": "^3.4.1",
     "uuid": "^13.0.0",
+    "xlsx": "^0.18.5",
     "zod": "^3.25.76",
     "zustand": "^5.0.11"
   },
@@ -66,6 +68,7 @@
     "@tailwindcss/postcss": "^4.1.18",
     "@tanstack/eslint-plugin-query": "^5.91.4",
     "@types/node": "^20.19.33",
+    "@types/papaparse": "^5.5.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "eslint": "^8.57.1",

@@ -58,6 +58,93 @@ export interface PlatformTransactionFilters {
   sortDir?: 'asc' | 'desc'
 }
 
+interface PlatformTransactionExportRpcRow {
+  payment_id: string
+  order_id: string
+  order_number: string | null
+  display_number: string | null
+  created_at: string | null
+  merchant_id: string | null
+  merchant_name: string | null
+  location_id: string | null
+  location_name: string | null
+  customer_name: string | null
+  order_type: string | null
+  order_status: string | null
+  payment_method: string | null
+  card_type: string | null
+  card_last_four: string | null
+  entry_mode: string | null
+  authorization_code: string | null
+  reference_number: string | null
+  batch_number: string | null
+  subtotal_amount: number | string | null
+  tax_amount: number | string | null
+  tip_amount: number | string | null
+  discount_amount: number | string | null
+  service_charge_amount: number | string | null
+  total_amount: number | string | null
+  amount_tendered: number | string | null
+  change_given: number | string | null
+  payment_status: string | null
+  is_voided: boolean | number | string | null
+  void_reason: string | null
+  is_returned: boolean | number | string | null
+  return_amount: number | string | null
+  return_reason: string | null
+  staff_name: string | null
+  terminal_serial: string | null
+  device_id: string | null
+  total_count: number | string | null
+}
+
+export interface PlatformTransactionExportRow {
+  payment_id: string
+  order_id: string
+  order_number?: string
+  display_number?: string
+  created_at: string
+  merchant_id?: string
+  merchant_name?: string
+  location_id?: string
+  location_name?: string
+  customer_name?: string
+  order_type?: string
+  order_status?: string
+  payment_method?: string
+  card_type?: string
+  card_last_four?: string
+  entry_mode?: string
+  authorization_code?: string
+  reference_number?: string
+  batch_number?: string
+  subtotal_amount: number
+  tax_amount: number
+  tip_amount: number
+  discount_amount: number
+  service_charge_amount: number
+  total_amount: number
+  amount_tendered: number
+  change_given: number
+  payment_status?: string
+  is_voided: boolean
+  void_reason?: string
+  is_returned: boolean
+  return_amount: number
+  return_reason?: string
+  staff_name?: string
+  terminal_serial?: string
+  device_id?: string
+}
+
+export interface PlatformTransactionExportResult {
+  rows: PlatformTransactionExportRow[]
+  total: number
+  cap: number
+  capped: boolean
+  errorCode?: string
+}
+
 interface PlatformTransactionViewRow {
   id: string
   order_id: string
@@ -287,6 +374,47 @@ function mapRpcRowToTransaction(row: PlatformTransactionRpcRow): PlatformTransac
     staff_name: row.staff_name || undefined,
     entry_mode: row.entry_mode || undefined,
     created_at: row.created_at || new Date(0).toISOString(),
+  }
+}
+
+function mapRpcRowToExport(row: PlatformTransactionExportRpcRow): PlatformTransactionExportRow {
+  return {
+    payment_id: row.payment_id,
+    order_id: row.order_id,
+    order_number: row.order_number || undefined,
+    display_number: row.display_number || undefined,
+    created_at: row.created_at || new Date(0).toISOString(),
+    merchant_id: row.merchant_id || undefined,
+    merchant_name: row.merchant_name || undefined,
+    location_id: row.location_id || undefined,
+    location_name: row.location_name || undefined,
+    customer_name: row.customer_name || undefined,
+    order_type: row.order_type || undefined,
+    order_status: row.order_status || undefined,
+    payment_method: row.payment_method || undefined,
+    card_type: row.card_type || undefined,
+    card_last_four: row.card_last_four || undefined,
+    entry_mode: row.entry_mode || undefined,
+    authorization_code: row.authorization_code || undefined,
+    reference_number: row.reference_number || undefined,
+    batch_number: row.batch_number || undefined,
+    subtotal_amount: Number(row.subtotal_amount || 0),
+    tax_amount: Number(row.tax_amount || 0),
+    tip_amount: Number(row.tip_amount || 0),
+    discount_amount: Number(row.discount_amount || 0),
+    service_charge_amount: Number(row.service_charge_amount || 0),
+    total_amount: Number(row.total_amount || 0),
+    amount_tendered: Number(row.amount_tendered || 0),
+    change_given: Number(row.change_given || 0),
+    payment_status: row.payment_status || undefined,
+    is_voided: toBoolean(row.is_voided),
+    void_reason: row.void_reason || undefined,
+    is_returned: toBoolean(row.is_returned),
+    return_amount: Number(row.return_amount || 0),
+    return_reason: row.return_reason || undefined,
+    staff_name: row.staff_name || undefined,
+    terminal_serial: row.terminal_serial || undefined,
+    device_id: row.device_id || undefined,
   }
 }
 
@@ -656,6 +784,59 @@ export async function getPlatformTransactions(
   }
 
   return getPlatformTransactionsLegacy(limit, offset, filters)
+}
+
+export async function getPlatformTransactionsExport(
+  filters?: PlatformTransactionFilters
+): Promise<PlatformTransactionExportResult> {
+  await assertHQPermission('hq.merchant.transactions')
+
+  const supabase = createServerSupabaseClient()
+  const exportCap = 10000
+  const search = filters?.search?.trim()
+
+  const { data, error } = await supabase.rpc('get_admin_transactions_export', {
+    p_merchant_ids: filters?.merchantIds ?? null,
+    p_location_ids: filters?.locationIds ?? null,
+    p_status: filters?.orderStatuses ?? null,
+    p_payment_status: filters?.paymentStatuses ?? null,
+    p_payment_method: filters?.paymentMethods ?? null,
+    p_date_from: filters?.dateFrom ?? null,
+    p_date_to: filters?.dateTo ?? null,
+    p_min_amount: filters?.minAmount ?? null,
+    p_max_amount: filters?.maxAmount ?? null,
+    p_search: search && search.length >= 2 ? search : null,
+    p_card_type: normalizeCardTypeFilterForRpc(filters?.cardTypes),
+    p_staff_id: filters?.staffId ?? null,
+    p_sort_by: normalizeSortByForRpc(filters),
+    p_sort_dir: filters?.sortDir ?? 'desc',
+    p_limit: exportCap,
+  })
+
+  if (error) {
+    console.error('[getPlatformTransactionsExport:rpc] Error:', error)
+    return {
+      rows: [],
+      total: 0,
+      cap: exportCap,
+      capped: false,
+      errorCode: error.code,
+    }
+  }
+
+  const rows = (data ?? []) as PlatformTransactionExportRpcRow[]
+  const mappedRows = rows.map(mapRpcRowToExport)
+  const total =
+    rows.length > 0 && rows[0].total_count !== null && rows[0].total_count !== undefined
+      ? Number(rows[0].total_count)
+      : 0
+
+  return {
+    rows: mappedRows,
+    total,
+    cap: exportCap,
+    capped: total > mappedRows.length,
+  }
 }
 
 export interface PlatformTransactionStats {

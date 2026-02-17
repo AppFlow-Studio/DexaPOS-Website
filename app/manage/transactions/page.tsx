@@ -52,8 +52,9 @@ import {
 } from 'lucide-react'
 import { usePlatformTransactionStats, usePlatformTransactions } from '@/lib/queries/use-platform-analytics'
 import {
-    getPlatformTransactions,
+    getPlatformTransactionsExport,
     PlatformTransaction,
+    PlatformTransactionExportRow,
     PlatformTransactionFilters,
     refundPlatformTransaction,
 } from '@/app/manage/actions/hq-platform/transactions'
@@ -65,6 +66,8 @@ import { TransactionSearchBar, highlightText } from './components/TransactionSea
 import { TransactionDetailInlinePanel } from './components/TransactionDetailInlinePanel'
 import { CardBrandIcon } from '@/app/dashboard/payments/components/CardBrandIcon'
 import { toast } from 'sonner'
+import Papa from 'papaparse'
+import * as XLSX from 'xlsx'
 
 // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -146,6 +149,114 @@ function exportToCSV(transactions: PlatformTransaction[]) {
     link.download = `transactions-${format(new Date(), 'yyyy-MM-dd')}.csv`
     link.click()
     URL.revokeObjectURL(url)
+}
+
+type ExportFormat = 'csv' | 'xlsx'
+type TransactionExportRecord = Record<string, string | number>
+
+function formatIsoDateTimeForExport(value?: string): string {
+    if (!value) return ''
+    return format(new Date(value), 'yyyy-MM-dd HH:mm:ss')
+}
+
+function toFileToken(input: string): string {
+    return input
+        .trim()
+        .replace(/[^a-zA-Z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .toLowerCase() || 'all'
+}
+
+function buildExportFilename(
+    filters: PlatformTransactionFilters,
+    rows: PlatformTransactionExportRow[],
+    formatType: ExportFormat
+): string {
+    const merchantToken =
+        filters.merchantIds && filters.merchantIds.length === 1
+            ? toFileToken(rows[0]?.merchant_name || 'merchant')
+            : filters.merchantIds && filters.merchantIds.length > 1
+                ? 'multi'
+                : 'all'
+
+    const dateFromToken = filters.dateFrom ? filters.dateFrom.slice(0, 10) : 'all'
+    const dateToToken = filters.dateTo ? filters.dateTo.slice(0, 10) : 'all'
+    const extension = formatType === 'xlsx' ? 'xlsx' : 'csv'
+
+    return `DEXA_Transactions_${merchantToken}_${dateFromToken}_to_${dateToToken}.${extension}`
+}
+
+function buildTransactionExportRecords(rows: PlatformTransactionExportRow[]): TransactionExportRecord[] {
+    return rows.map((row) => ({
+        'Order #': row.order_number || row.display_number || '',
+        'Date/Time': formatIsoDateTimeForExport(row.created_at),
+        Merchant: row.merchant_name || '',
+        Location: row.location_name || '',
+        Customer: row.customer_name || 'Walk-in',
+        'Order Type': row.order_type || '',
+        'Order Status': row.order_status || '',
+        'Payment Method': row.payment_method || '',
+        'Card Type': row.card_type || '',
+        'Card Last 4': row.card_last_four || '',
+        'Entry Mode': row.entry_mode || '',
+        'Auth Code': row.authorization_code || '',
+        'Reference #': row.reference_number || '',
+        'Batch #': row.batch_number || '',
+        Subtotal: row.subtotal_amount,
+        Tax: row.tax_amount,
+        Tip: row.tip_amount,
+        Discount: row.discount_amount,
+        'Service Charge': row.service_charge_amount,
+        Total: row.total_amount,
+        'Amount Tendered': row.amount_tendered,
+        'Change Given': row.change_given,
+        'Payment Status': row.payment_status || '',
+        'Is Voided': row.is_voided ? 'Yes' : 'No',
+        'Void Reason': row.void_reason || '',
+        'Is Returned': row.is_returned ? 'Yes' : 'No',
+        'Return Amount': row.return_amount,
+        'Return Reason': row.return_reason || '',
+        'Staff Name': row.staff_name || '',
+        'Terminal Serial': row.terminal_serial || '',
+        'Device ID': row.device_id || '',
+    }))
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.click()
+    URL.revokeObjectURL(url)
+}
+
+function exportRecordsToCSV(records: TransactionExportRecord[], filename: string) {
+    const csv = Papa.unparse(records)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    downloadBlob(blob, filename)
+}
+
+function autoColumnWidths(records: TransactionExportRecord[]): { wch: number }[] {
+    if (records.length === 0) return []
+    const headers = Object.keys(records[0])
+    return headers.map((header) => {
+        const cellLengths = records.map((row) => String(row[header] ?? '').length)
+        const maxDataLen = cellLengths.length > 0 ? Math.max(...cellLengths) : 0
+        return { wch: Math.min(Math.max(header.length, maxDataLen) + 2, 48) }
+    })
+}
+
+function exportRecordsToExcel(records: TransactionExportRecord[], filename: string) {
+    const worksheet = XLSX.utils.json_to_sheet(records)
+    worksheet['!cols'] = autoColumnWidths(records)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Transactions')
+    const fileBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+    const blob = new Blob([fileBuffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    downloadBlob(blob, filename)
 }
 
 // â”€â”€â”€ URL param parser helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -275,7 +386,8 @@ function TransactionsPageInner() {
     const searchParams = useSearchParams()
     const router = useRouter()
     const queryClient = useQueryClient()
-    const [isExporting, startExportTransition] = useTransition()
+    const [isExporting, setIsExporting] = useState(false)
+    const [exportFormat, setExportFormat] = useState<ExportFormat | null>(null)
     const [isRefreshing, startRefreshTransition] = useTransition()
     const [isRefunding, startRefundTransition] = useTransition()
     const [expandedTransactionId, setExpandedTransactionId] = useState<string | null>(null)
@@ -506,31 +618,49 @@ function TransactionsPageInner() {
     const searchQuery = filters.search ?? ''
     const isTableLoading = transactionsLoading || transactionsFetching
 
-    const exportAllFilteredRows = async () => {
-        const batchSize = 1000
-        let offset = 0
-        const allRows: PlatformTransaction[] = []
+    const handleExportRequest = async (formatType: ExportFormat) => {
+        if (isExporting) return
 
-        while (true) {
-            const response = await getPlatformTransactions(batchSize, offset, filters)
-            if (!response.data || response.data.length === 0) break
+        setIsExporting(true)
+        setExportFormat(formatType)
+        try {
+            const exportResult = await getPlatformTransactionsExport(filters)
 
-            allRows.push(...response.data)
+            if (exportResult.errorCode) {
+                if (exportResult.errorCode === 'PGRST202' || exportResult.errorCode === '42883') {
+                    toast.error('Export RPC is not available yet. Apply migration 025 first.')
+                } else {
+                    toast.error(`Export failed (${exportResult.errorCode}).`)
+                }
+                return
+            }
 
-            if (response.data.length < batchSize) break
-            offset += batchSize
+            if (exportResult.rows.length === 0) {
+                toast.info('No rows to export for current filters.')
+                return
+            }
 
-            // Safety break to avoid accidental unbounded loops on bad pagination state.
-            if (offset > 50000) break
+            const records = buildTransactionExportRecords(exportResult.rows)
+            const filename = buildExportFilename(filters, exportResult.rows, formatType)
+
+            if (formatType === 'xlsx') {
+                exportRecordsToExcel(records, filename)
+            } else {
+                exportRecordsToCSV(records, filename)
+            }
+
+            if (exportResult.capped) {
+                toast.warning(`Export capped at ${exportResult.cap.toLocaleString()} rows. Contact support for bulk exports.`)
+            }
+
+            toast.success(`Exported ${exportResult.rows.length.toLocaleString()} rows (${formatType.toUpperCase()})`)
+        } catch (error) {
+            console.error('[TransactionsPage] Export error:', error)
+            toast.error('Failed to generate export file.')
+        } finally {
+            setExportFormat(null)
+            setIsExporting(false)
         }
-
-        if (allRows.length === 0) {
-            toast.info('No rows to export for current filters.')
-            return
-        }
-
-        exportToCSV(allRows)
-        toast.success(`Exported ${allRows.length.toLocaleString()} rows`)
     }
 
     return (
@@ -550,14 +680,38 @@ function TransactionsPageInner() {
                         <RefreshCcwDot className="mr-2 h-4 w-4" />
                         {isRefreshing ? 'Refreshing...' : 'Refresh'}
                     </Button>
-                    <Button
-                        variant="outline"
-                        onClick={() => startExportTransition(() => { void exportAllFilteredRows() })}
-                        disabled={isExporting}
-                    >
-                        <Download className="mr-2 h-4 w-4" />
-                        {isExporting ? 'Exporting...' : 'Export CSV'}
-                    </Button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" disabled={isExporting}>
+                                <Download className="mr-2 h-4 w-4" />
+                                {isExporting
+                                    ? `Exporting ${exportFormat === 'xlsx' ? 'Excel' : 'CSV'}...`
+                                    : 'Export'}
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Export Format</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                disabled={isExporting}
+                                onSelect={(event) => {
+                                    event.preventDefault()
+                                    void handleExportRequest('csv')
+                                }}
+                            >
+                                Export CSV
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                disabled={isExporting}
+                                onSelect={(event) => {
+                                    event.preventDefault()
+                                    void handleExportRequest('xlsx')
+                                }}
+                            >
+                                Export Excel (.xlsx)
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </div>
 
