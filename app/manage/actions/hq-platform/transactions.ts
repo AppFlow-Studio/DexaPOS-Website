@@ -3,8 +3,16 @@
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { refundAdminOrder } from '@/app/manage/actions/admin-merchant/transactions'
+import { headers } from 'next/headers'
 
 const USE_PLATFORM_TX_VIEW = process.env.USE_PLATFORM_TX_VIEW === 'true'
+const DEFAULT_AUDIT_REQUEST_PATH = '/manage/transactions'
+const AUDIT_LOG_FIELDS_TRANSACTION_LIST = ['card_last_four', 'auth_code'] as const
+const AUDIT_LOG_FIELDS_TRANSACTION_DETAIL = ['card_last_four', 'auth_code', 'emv_data'] as const
+const CARD_LAST_FOUR_SEARCH_REGEX = /^\d{4}$/
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+let hasLoggedMissingPaymentAuditFunction = false
 
 // Types
 
@@ -469,6 +477,96 @@ function toBoolean(value: unknown): boolean {
     if (['false', 'f', '0', 'no', 'n', ''].includes(normalized)) return false
   }
   return Boolean(value)
+}
+
+type PlatformPaymentAuditAction =
+  | 'view_transaction_list'
+  | 'view_payment_detail'
+  | 'export_data'
+  | 'search_card_last_four'
+
+interface PlatformPaymentAuditLogInput {
+  action: PlatformPaymentAuditAction
+  resourceType: string
+  resourceId?: string | null
+  merchantId?: string | null
+  locationId?: string | null
+  fieldsAccessed?: readonly string[]
+  success: boolean
+  errorMessage?: string
+  requestPath?: string
+}
+
+function normalizeAuditErrorMessage(error: unknown): string | undefined {
+  if (error instanceof Error) {
+    const message = error.message.trim()
+    return message ? message.slice(0, 400) : undefined
+  }
+  if (typeof error === 'string') {
+    const message = error.trim()
+    return message ? message.slice(0, 400) : undefined
+  }
+  return undefined
+}
+
+function normalizeAuditUuid(value?: string | null): string | null {
+  if (!value) return null
+  const normalized = value.trim()
+  if (!normalized || !UUID_REGEX.test(normalized)) return null
+  return normalized
+}
+
+function getSingleUuidFilterValue(values?: string[]): string | null {
+  if (!values || values.length !== 1) return null
+  return normalizeAuditUuid(values[0])
+}
+
+function getCardLastFourSearchTerm(filters?: PlatformTransactionFilters): string | null {
+  const search = filters?.search?.trim() ?? ''
+  if (!search || !CARD_LAST_FOUR_SEARCH_REGEX.test(search)) return null
+  return search
+}
+
+async function logPlatformPaymentAuditEvent(input: PlatformPaymentAuditLogInput): Promise<void> {
+  try {
+    const supabase = createServerSupabaseClient()
+    const requestHeaders = await headers()
+
+    const forwardedFor = requestHeaders.get('x-forwarded-for')
+    const realIp = requestHeaders.get('x-real-ip')
+    const candidateIp = forwardedFor?.split(',')[0]?.trim() || realIp?.trim() || null
+    const userAgent = requestHeaders.get('user-agent')
+
+    const { error } = await supabase.rpc('log_admin_payment_audit_event', {
+      p_action: input.action,
+      p_resource_type: input.resourceType,
+      p_resource_id: input.resourceId ?? null,
+      p_merchant_id: input.merchantId ?? null,
+      p_location_id: input.locationId ?? null,
+      p_fields_accessed: input.fieldsAccessed ?? null,
+      p_success: input.success,
+      p_error_message: input.errorMessage ?? null,
+      p_request_path: input.requestPath ?? DEFAULT_AUDIT_REQUEST_PATH,
+      p_ip_address: candidateIp,
+      p_user_agent: userAgent,
+    })
+
+    if (!error) return
+
+    if (error.code === 'PGRST202' || error.code === '42883') {
+      if (!hasLoggedMissingPaymentAuditFunction) {
+        hasLoggedMissingPaymentAuditFunction = true
+        console.warn(
+          '[logPlatformPaymentAuditEvent] RPC log_admin_payment_audit_event not found. Apply migration 029_adm_019_admin_payment_audit_logging.sql.'
+        )
+      }
+      return
+    }
+
+    console.error('[logPlatformPaymentAuditEvent:rpc] Error:', error)
+  } catch (error) {
+    console.error('[logPlatformPaymentAuditEvent] Unexpected error:', error)
+  }
 }
 
 const CARD_TYPE_EQUIVALENTS: Record<string, string[]> = {
@@ -1091,27 +1189,86 @@ export async function getPlatformTransactions(
 ): Promise<{ data: PlatformTransaction[]; total: number }> {
   await assertHQPermission('hq.merchant.transactions')
 
-  const fromRpc = await getPlatformTransactionsFromRpc(limit, offset, filters)
-  if (!fromRpc.errorCode) {
-    return { data: fromRpc.data, total: fromRpc.total }
-  }
+  const auditMerchantId = getSingleUuidFilterValue(filters?.merchantIds)
+  const auditLocationId = getSingleUuidFilterValue(filters?.locationIds)
+  const cardLastFourSearchTerm = getCardLastFourSearchTerm(filters)
 
-  console.warn(
-    `[getPlatformTransactions] Falling back from RPC to query path due to rpc error (${fromRpc.errorCode}).`
-  )
+  try {
+    let result: { data: PlatformTransaction[]; total: number } | null = null
 
-  if (USE_PLATFORM_TX_VIEW) {
-    const fromView = await getPlatformTransactionsFromView(limit, offset, filters)
-    if (!fromView.errorCode) {
-      return { data: fromView.data, total: fromView.total }
+    const fromRpc = await getPlatformTransactionsFromRpc(limit, offset, filters)
+    if (!fromRpc.errorCode) {
+      result = { data: fromRpc.data, total: fromRpc.total }
+    } else {
+      console.warn(
+        `[getPlatformTransactions] Falling back from RPC to query path due to rpc error (${fromRpc.errorCode}).`
+      )
+
+      if (USE_PLATFORM_TX_VIEW) {
+        const fromView = await getPlatformTransactionsFromView(limit, offset, filters)
+        if (!fromView.errorCode) {
+          result = { data: fromView.data, total: fromView.total }
+        } else {
+          console.warn(
+            `[getPlatformTransactions] Falling back to legacy query path due to view error (${fromView.errorCode}).`
+          )
+        }
+      }
+
+      if (!result) {
+        const legacyResult = await getPlatformTransactionsLegacy(limit, offset, filters)
+        result = { data: legacyResult.data, total: legacyResult.total }
+      }
     }
 
-    console.warn(
-      `[getPlatformTransactions] Falling back to legacy query path due to view error (${fromView.errorCode}).`
-    )
-  }
+    void logPlatformPaymentAuditEvent({
+      action: 'view_transaction_list',
+      resourceType: 'transaction_list',
+      merchantId: auditMerchantId,
+      locationId: auditLocationId,
+      fieldsAccessed: AUDIT_LOG_FIELDS_TRANSACTION_LIST,
+      success: true,
+    })
 
-  return getPlatformTransactionsLegacy(limit, offset, filters)
+    if (cardLastFourSearchTerm) {
+      void logPlatformPaymentAuditEvent({
+        action: 'search_card_last_four',
+        resourceType: 'transaction_search',
+        merchantId: auditMerchantId,
+        locationId: auditLocationId,
+        fieldsAccessed: ['card_last_four'],
+        success: true,
+      })
+    }
+
+    return result
+  } catch (error) {
+    const errorMessage = normalizeAuditErrorMessage(error)
+
+    void logPlatformPaymentAuditEvent({
+      action: 'view_transaction_list',
+      resourceType: 'transaction_list',
+      merchantId: auditMerchantId,
+      locationId: auditLocationId,
+      fieldsAccessed: AUDIT_LOG_FIELDS_TRANSACTION_LIST,
+      success: false,
+      errorMessage,
+    })
+
+    if (cardLastFourSearchTerm) {
+      void logPlatformPaymentAuditEvent({
+        action: 'search_card_last_four',
+        resourceType: 'transaction_search',
+        merchantId: auditMerchantId,
+        locationId: auditLocationId,
+        fieldsAccessed: ['card_last_four'],
+        success: false,
+        errorMessage,
+      })
+    }
+
+    throw error
+  }
 }
 
 export async function getPlatformTransactionsExport(
@@ -1122,48 +1279,123 @@ export async function getPlatformTransactionsExport(
   const supabase = createServerSupabaseClient()
   const exportCap = 10000
   const search = filters?.search?.trim()
+  const auditMerchantId = getSingleUuidFilterValue(filters?.merchantIds)
+  const auditLocationId = getSingleUuidFilterValue(filters?.locationIds)
+  const cardLastFourSearchTerm = getCardLastFourSearchTerm(filters)
 
-  const { data, error } = await supabase.rpc('get_admin_transactions_export', {
-    p_merchant_ids: filters?.merchantIds ?? null,
-    p_location_ids: filters?.locationIds ?? null,
-    p_status: filters?.orderStatuses ?? null,
-    p_payment_status: filters?.paymentStatuses ?? null,
-    p_payment_method: filters?.paymentMethods ?? null,
-    p_date_from: filters?.dateFrom ?? null,
-    p_date_to: filters?.dateTo ?? null,
-    p_min_amount: filters?.minAmount ?? null,
-    p_max_amount: filters?.maxAmount ?? null,
-    p_search: search && search.length >= 2 ? search : null,
-    p_card_type: normalizeCardTypeFilterForRpc(filters?.cardTypes),
-    p_staff_id: filters?.staffId ?? null,
-    p_sort_by: normalizeSortByForRpc(filters),
-    p_sort_dir: filters?.sortDir ?? 'desc',
-    p_limit: exportCap,
-  })
+  try {
+    const { data, error } = await supabase.rpc('get_admin_transactions_export', {
+      p_merchant_ids: filters?.merchantIds ?? null,
+      p_location_ids: filters?.locationIds ?? null,
+      p_status: filters?.orderStatuses ?? null,
+      p_payment_status: filters?.paymentStatuses ?? null,
+      p_payment_method: filters?.paymentMethods ?? null,
+      p_date_from: filters?.dateFrom ?? null,
+      p_date_to: filters?.dateTo ?? null,
+      p_min_amount: filters?.minAmount ?? null,
+      p_max_amount: filters?.maxAmount ?? null,
+      p_search: search && search.length >= 2 ? search : null,
+      p_card_type: normalizeCardTypeFilterForRpc(filters?.cardTypes),
+      p_staff_id: filters?.staffId ?? null,
+      p_sort_by: normalizeSortByForRpc(filters),
+      p_sort_dir: filters?.sortDir ?? 'desc',
+      p_limit: exportCap,
+    })
 
-  if (error) {
-    console.error('[getPlatformTransactionsExport:rpc] Error:', error)
-    return {
-      rows: [],
-      total: 0,
-      cap: exportCap,
-      capped: false,
-      errorCode: error.code,
+    if (error) {
+      console.error('[getPlatformTransactionsExport:rpc] Error:', error)
+
+      const errorMessage = normalizeAuditErrorMessage(error.message ?? error.details ?? error.code)
+      void logPlatformPaymentAuditEvent({
+        action: 'export_data',
+        resourceType: 'transaction_export',
+        merchantId: auditMerchantId,
+        locationId: auditLocationId,
+        fieldsAccessed: AUDIT_LOG_FIELDS_TRANSACTION_LIST,
+        success: false,
+        errorMessage,
+      })
+
+      if (cardLastFourSearchTerm) {
+        void logPlatformPaymentAuditEvent({
+          action: 'search_card_last_four',
+          resourceType: 'transaction_search',
+          merchantId: auditMerchantId,
+          locationId: auditLocationId,
+          fieldsAccessed: ['card_last_four'],
+          success: false,
+          errorMessage,
+        })
+      }
+
+      return {
+        rows: [],
+        total: 0,
+        cap: exportCap,
+        capped: false,
+        errorCode: error.code,
+      }
     }
-  }
 
-  const rows = (data ?? []) as PlatformTransactionExportRpcRow[]
-  const mappedRows = rows.map(mapRpcRowToExport)
-  const total =
-    rows.length > 0 && rows[0].total_count !== null && rows[0].total_count !== undefined
-      ? Number(rows[0].total_count)
-      : 0
+    const rows = (data ?? []) as PlatformTransactionExportRpcRow[]
+    const mappedRows = rows.map(mapRpcRowToExport)
+    const total =
+      rows.length > 0 && rows[0].total_count !== null && rows[0].total_count !== undefined
+        ? Number(rows[0].total_count)
+        : 0
 
-  return {
-    rows: mappedRows,
-    total,
-    cap: exportCap,
-    capped: total > mappedRows.length,
+    void logPlatformPaymentAuditEvent({
+      action: 'export_data',
+      resourceType: 'transaction_export',
+      merchantId: auditMerchantId,
+      locationId: auditLocationId,
+      fieldsAccessed: AUDIT_LOG_FIELDS_TRANSACTION_LIST,
+      success: true,
+    })
+
+    if (cardLastFourSearchTerm) {
+      void logPlatformPaymentAuditEvent({
+        action: 'search_card_last_four',
+        resourceType: 'transaction_search',
+        merchantId: auditMerchantId,
+        locationId: auditLocationId,
+        fieldsAccessed: ['card_last_four'],
+        success: true,
+      })
+    }
+
+    return {
+      rows: mappedRows,
+      total,
+      cap: exportCap,
+      capped: total > mappedRows.length,
+    }
+  } catch (error) {
+    const errorMessage = normalizeAuditErrorMessage(error)
+
+    void logPlatformPaymentAuditEvent({
+      action: 'export_data',
+      resourceType: 'transaction_export',
+      merchantId: auditMerchantId,
+      locationId: auditLocationId,
+      fieldsAccessed: AUDIT_LOG_FIELDS_TRANSACTION_LIST,
+      success: false,
+      errorMessage,
+    })
+
+    if (cardLastFourSearchTerm) {
+      void logPlatformPaymentAuditEvent({
+        action: 'search_card_last_four',
+        resourceType: 'transaction_search',
+        merchantId: auditMerchantId,
+        locationId: auditLocationId,
+        fieldsAccessed: ['card_last_four'],
+        success: false,
+        errorMessage,
+      })
+    }
+
+    throw error
   }
 }
 
@@ -1899,15 +2131,51 @@ export async function getPlatformTransactionDetails(
 ): Promise<PlatformTransactionDetails | null> {
   await assertHQPermission('hq.merchant.transactions')
 
-  const fromRpc = await getPlatformTransactionDetailsFromRpc(transactionId)
-  if (!fromRpc.errorCode) {
-    return fromRpc.data
-  }
+  const auditTransactionId = normalizeAuditUuid(transactionId)
 
-  console.warn(
-    `[getPlatformTransactionDetails] Falling back to legacy query path due to rpc error (${fromRpc.errorCode}).`
-  )
-  return getPlatformTransactionDetailsLegacy(transactionId, true)
+  try {
+    const fromRpc = await getPlatformTransactionDetailsFromRpc(transactionId)
+    if (!fromRpc.errorCode) {
+      void logPlatformPaymentAuditEvent({
+        action: 'view_payment_detail',
+        resourceType: 'order_payment',
+        resourceId: auditTransactionId,
+        merchantId: normalizeAuditUuid(fromRpc.data?.merchant_id),
+        locationId: normalizeAuditUuid(fromRpc.data?.location_id),
+        fieldsAccessed: AUDIT_LOG_FIELDS_TRANSACTION_DETAIL,
+        success: Boolean(fromRpc.data),
+        errorMessage: fromRpc.data ? undefined : 'Transaction detail not found',
+      })
+      return fromRpc.data
+    }
+
+    console.warn(
+      `[getPlatformTransactionDetails] Falling back to legacy query path due to rpc error (${fromRpc.errorCode}).`
+    )
+
+    const fromLegacy = await getPlatformTransactionDetailsLegacy(transactionId, true)
+    void logPlatformPaymentAuditEvent({
+      action: 'view_payment_detail',
+      resourceType: 'order_payment',
+      resourceId: auditTransactionId,
+      merchantId: normalizeAuditUuid(fromLegacy?.merchant_id),
+      locationId: normalizeAuditUuid(fromLegacy?.location_id),
+      fieldsAccessed: AUDIT_LOG_FIELDS_TRANSACTION_DETAIL,
+      success: Boolean(fromLegacy),
+      errorMessage: fromLegacy ? undefined : `Transaction detail fallback failed (${fromRpc.errorCode})`,
+    })
+    return fromLegacy
+  } catch (error) {
+    void logPlatformPaymentAuditEvent({
+      action: 'view_payment_detail',
+      resourceType: 'order_payment',
+      resourceId: auditTransactionId,
+      fieldsAccessed: AUDIT_LOG_FIELDS_TRANSACTION_DETAIL,
+      success: false,
+      errorMessage: normalizeAuditErrorMessage(error),
+    })
+    throw error
+  }
 }
 
 async function getPlatformTransactionDetailsLegacy(

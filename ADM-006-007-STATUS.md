@@ -26,7 +26,7 @@
 | ADM-016 | Implemented (Pending Migration Apply + QA) | After QA | Added Batch Reconciliation section, linked payment drill-down, discrepancy flags, and batch CSV export. |
 | ADM-017 | Not Started | No | Chargeback dashboard with deadline urgency, badge, and alert banner. |
 | ADM-018 | Not Started | No | Audit log viewer UI and filters/search. |
-| ADM-019 | Not Started | No | Backend audit logging for list/detail/export/search events. |
+| ADM-019 | Implemented (Pending Migration Apply + QA) | After QA | Added payment audit logging RPC + non-blocking list/detail/export/search log hooks in server actions. |
 
 ---
 
@@ -71,7 +71,14 @@ Net effect:
   - it may undercount legacy rows if `order_payments.merchant_id/location_id` are null and no fallback join is used.
 
 3. ADM-019 Audit logging foundation (backend)
-- Log list/detail/export/search sensitive access paths asynchronously to `payment_audit_log`.
+- Implemented in code; pending migration apply + QA verification.
+- Added migration `supabase/migrations/029_adm_019_admin_payment_audit_logging.sql`.
+- Added non-blocking logging hooks for:
+  - transaction list view,
+  - transaction detail expand (`view_payment_detail`),
+  - export action (`export_data`),
+  - card-last-four search (`search_card_last_four`).
+- Added runbook: `ADM-019-APPLY-QA.md`.
 
 4. ADM-018 Audit log viewer (frontend)
 - Add audit tab with filters, search, and failed-row highlighting.
@@ -169,6 +176,24 @@ These were explicitly decided during planning, and implementation follows them:
 - Apply now only after approval using: `supabase/migrations/028_adm_014_merchant_breakdown_rpc.sql`.
 - Do not paste/apply the team v2 function directly yet in shared environments.
 - Reason: v2 includes good improvements, but introduces behavioral changes that require aligned frontend/type mapping and agreed metric definitions first.
+
+---
+
+## ADM-019 Implementation (Today)
+
+- Added migration `supabase/migrations/029_adm_019_admin_payment_audit_logging.sql`:
+  - creates/ensures `payment_audit_log`,
+  - adds audit indexes,
+  - adds RPC `log_admin_payment_audit_event(...)`.
+- Added non-blocking server-action logging in `app/manage/actions/hq-platform/transactions.ts` for:
+  - `view_transaction_list`,
+  - `view_payment_detail`,
+  - `export_data`,
+  - `search_card_last_four` (when search term is exactly 4 digits).
+- `fields_accessed` is now populated by action context:
+  - list/export: `['card_last_four', 'auth_code']`,
+  - detail: `['card_last_four', 'auth_code', 'emv_data']`.
+- Added runbook: `ADM-019-APPLY-QA.md`.
 
 ---
 
