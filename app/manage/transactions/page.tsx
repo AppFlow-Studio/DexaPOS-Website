@@ -50,7 +50,7 @@ import {
     Banknote,
     Columns3,
 } from 'lucide-react'
-import { usePlatformTransactionStats, usePlatformTransactions } from '@/lib/queries/use-platform-analytics'
+import { usePlatformSalesTrend, usePlatformTransactionSummary, usePlatformTransactions } from '@/lib/queries/use-platform-analytics'
 import {
     getPlatformTransactionsExport,
     PlatformTransaction,
@@ -58,7 +58,7 @@ import {
     PlatformTransactionFilters,
     refundPlatformTransaction,
 } from '@/app/manage/actions/hq-platform/transactions'
-import { format } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import { Skeleton } from '@/components/ui/skeleton'
 import Link from 'next/link'
 import { TransactionFilterSheet } from './components/TransactionFilterSheet'
@@ -68,6 +68,8 @@ import { CardBrandIcon } from '@/app/dashboard/payments/components/CardBrandIcon
 import { toast } from 'sonner'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 
 // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -305,6 +307,42 @@ function getEntryModeLabel(tx: PlatformTransaction): string {
     return 'N/A'
 }
 
+const CARD_FAMILY_METHODS = ['card', 'card_spinapi', 'card_dvpaylite'] as const
+const VOID_RETURN_STATUS_FILTERS = ['void', 'refunded', 'partially_refunded'] as const
+const compactNumberFormatter = new Intl.NumberFormat('en-US', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+})
+
+const transactionsTrendChartConfig = {
+    revenue: {
+        label: 'Revenue',
+        color: 'hsl(var(--chart-1))',
+    },
+}
+
+function formatCurrencyValue(amount: number): string {
+    return `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+function formatCompactCurrencyValue(amount: number): string {
+    return `$${compactNumberFormatter.format(amount)}`
+}
+
+function formatSignedDeltaPercent(current: number, previous: number): string {
+    if (previous === 0) {
+        if (current === 0) return '0.0% vs previous period'
+        return 'New vs previous period'
+    }
+    const delta = ((current - previous) / previous) * 100
+    const sign = delta > 0 ? '+' : ''
+    return `${sign}${delta.toFixed(1)}% vs previous period`
+}
+
+function toPercentLabel(value: number): string {
+    return `${value.toFixed(1)}%`
+}
+
 type TransactionSortBy = 'created_at' | 'order_number' | 'total_amount'
 type TransactionSortDirection = 'asc' | 'desc'
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const
@@ -431,10 +469,17 @@ function TransactionsPageInner() {
     const [searchValue, setSearchValue] = useState(searchParams.get('search') ?? '')
 
     const {
-        data: transactionStats,
-        isLoading: statsLoading,
-        refetch: refetchTransactionStats,
-    } = usePlatformTransactionStats(filters)
+        data: transactionSummary,
+        isLoading: summaryLoading,
+        isFetching: summaryFetching,
+        refetch: refetchTransactionSummary,
+    } = usePlatformTransactionSummary(filters)
+    const {
+        data: salesTrend,
+        isLoading: trendLoading,
+        isFetching: trendFetching,
+        refetch: refetchSalesTrend,
+    } = usePlatformSalesTrend()
     const {
         data: transactionsData,
         isLoading: transactionsLoading,
@@ -543,7 +588,7 @@ function TransactionsPageInner() {
         startRefreshTransition(() => {
             void (async () => {
                 try {
-                    await Promise.all([refetchTransactions(), refetchTransactionStats()])
+                    await Promise.all([refetchTransactions(), refetchTransactionSummary(), refetchSalesTrend()])
                     toast.success('Transactions refreshed')
                 } catch {
                     toast.error('Failed to refresh transactions')
@@ -579,41 +624,165 @@ function TransactionsPageInner() {
                 toast.success('Refund completed successfully')
                 setRefundTarget(null)
                 await queryClient.invalidateQueries({ queryKey: ['platform', 'transactions'] })
-                await queryClient.invalidateQueries({ queryKey: ['platform', 'transaction-stats'] })
+                await queryClient.invalidateQueries({ queryKey: ['platform', 'transaction-summary'] })
+                await queryClient.invalidateQueries({ queryKey: ['platform', 'sales-trend'] })
             })()
         })
     }
 
-    const stats = [
+    type SummaryCardId =
+        | 'total_transactions'
+        | 'card_revenue'
+        | 'cash_revenue'
+        | 'total_revenue'
+        | 'avg_tip'
+        | 'voided_returned'
+
+    const handleSummaryCardClick = (cardId: SummaryCardId) => {
+        if (!transactionSummary) return
+
+        updateUrlParams((params) => {
+            if (cardId === 'total_transactions' || cardId === 'total_revenue') {
+                params.delete('method')
+            } else if (cardId === 'card_revenue' || cardId === 'avg_tip') {
+                const currentMethods = parseList(params.get('method'))
+                const hasAllCardMethods = CARD_FAMILY_METHODS.every((method) => currentMethods.includes(method))
+                const nextMethods = hasAllCardMethods
+                    ? currentMethods.filter((method) => !CARD_FAMILY_METHODS.includes(method as (typeof CARD_FAMILY_METHODS)[number]))
+                    : Array.from(new Set([...currentMethods, ...CARD_FAMILY_METHODS]))
+                if (nextMethods.length > 0) params.set('method', nextMethods.join(','))
+                else params.delete('method')
+            } else if (cardId === 'cash_revenue') {
+                const currentMethods = parseList(params.get('method'))
+                const hasCash = currentMethods.includes('cash')
+                const nextMethods = hasCash
+                    ? currentMethods.filter((method) => method !== 'cash')
+                    : Array.from(new Set([...currentMethods, 'cash']))
+                if (nextMethods.length > 0) params.set('method', nextMethods.join(','))
+                else params.delete('method')
+            } else if (cardId === 'voided_returned') {
+                const currentStatuses = parseList(params.get('paymentStatus'))
+                const hasAllVoidReturnStatuses = VOID_RETURN_STATUS_FILTERS.every((status) => currentStatuses.includes(status))
+                const nextStatuses = hasAllVoidReturnStatuses
+                    ? currentStatuses.filter((status) => !VOID_RETURN_STATUS_FILTERS.includes(status as (typeof VOID_RETURN_STATUS_FILTERS)[number]))
+                    : Array.from(new Set([...currentStatuses, ...VOID_RETURN_STATUS_FILTERS]))
+                if (nextStatuses.length > 0) params.set('paymentStatus', nextStatuses.join(','))
+                else params.delete('paymentStatus')
+            }
+
+            params.delete('page')
+        })
+    }
+
+    const summaryUnavailable = !transactionSummary
+    const currentSummary = transactionSummary?.current
+    const previousSummary = transactionSummary?.previous
+
+    const currentCardAvgTicket =
+        currentSummary && currentSummary.cardCount > 0
+            ? currentSummary.cardRevenue / currentSummary.cardCount
+            : 0
+    const currentCashAvgTicket =
+        currentSummary && currentSummary.cashCount > 0
+            ? currentSummary.cashRevenue / currentSummary.cashCount
+            : 0
+    const currentCardSplit =
+        currentSummary && currentSummary.totalRevenue > 0
+            ? (currentSummary.cardRevenue / currentSummary.totalRevenue) * 100
+            : 0
+    const currentCashSplit =
+        currentSummary && currentSummary.totalRevenue > 0
+            ? (currentSummary.cashRevenue / currentSummary.totalRevenue) * 100
+            : 0
+
+    const summaryCards = [
         {
-            title: 'Total Payments',
-            value: (transactionStats?.totalTransactions || 0).toLocaleString(),
+            id: 'total_transactions' as const,
+            title: 'Total Transactions',
+            value: currentSummary ? currentSummary.totalTransactions.toLocaleString() : '-',
             icon: CreditCard,
             color: 'text-muted-foreground',
-            sub: 'Matching current filters',
+            sub:
+                currentSummary && previousSummary
+                    ? formatSignedDeltaPercent(currentSummary.totalTransactions, previousSummary.totalTransactions)
+                    : 'Summary unavailable (apply migration 026)',
         },
         {
-            title: 'Captured',
-            value: (transactionStats?.capturedTransactions || 0).toLocaleString(),
-            icon: CheckCircle,
-            color: 'text-green-600',
-            sub: 'Matching current filters',
-        },
-        {
-            title: 'Authorized',
-            value: (transactionStats?.authorizedTransactions || 0).toLocaleString(),
-            icon: Clock,
-            color: 'text-yellow-600',
-            sub: 'Matching current filters',
-        },
-        {
-            title: 'Total Revenue',
-            value: `$${(transactionStats?.totalRevenue || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
-            icon: DollarSign,
+            id: 'card_revenue' as const,
+            title: 'Card Revenue',
+            value: currentSummary ? formatCurrencyValue(currentSummary.cardRevenue) : '-',
+            icon: CreditCard,
             color: 'text-blue-600',
-            sub: 'Matching current filters',
+            sub:
+                currentSummary
+                    ? `Avg ticket ${formatCurrencyValue(currentCardAvgTicket)}`
+                    : 'Summary unavailable (apply migration 026)',
+        },
+        {
+            id: 'cash_revenue' as const,
+            title: 'Cash Revenue',
+            value: currentSummary ? formatCurrencyValue(currentSummary.cashRevenue) : '-',
+            icon: Banknote,
+            color: 'text-emerald-600',
+            sub:
+                currentSummary
+                    ? `Avg ticket ${formatCurrencyValue(currentCashAvgTicket)}`
+                    : 'Summary unavailable (apply migration 026)',
+        },
+        {
+            id: 'total_revenue' as const,
+            title: 'Total Revenue',
+            value: currentSummary ? formatCurrencyValue(currentSummary.totalRevenue) : '-',
+            icon: DollarSign,
+            color: 'text-indigo-600',
+            sub:
+                currentSummary
+                    ? `Card ${toPercentLabel(currentCardSplit)} / Cash ${toPercentLabel(currentCashSplit)}`
+                    : 'Summary unavailable (apply migration 026)',
+        },
+        {
+            id: 'avg_tip' as const,
+            title: 'Avg Tip',
+            value: currentSummary ? formatCurrencyValue(currentSummary.avgTip) : '-',
+            icon: CheckCircle,
+            color: 'text-amber-600',
+            sub:
+                currentSummary
+                    ? `Avg tip ${toPercentLabel(currentSummary.avgTipPct)}`
+                    : 'Summary unavailable (apply migration 026)',
+        },
+        {
+            id: 'voided_returned' as const,
+            title: 'Voided/Returned',
+            value: currentSummary
+                ? `${currentSummary.voidReturnCount.toLocaleString()} • ${formatCurrencyValue(currentSummary.voidReturnAmount)}`
+                : '-',
+            icon: Clock,
+            color: 'text-rose-600',
+            sub:
+                currentSummary
+                    ? `Void rate ${toPercentLabel(currentSummary.voidRatePct)}`
+                    : 'Summary unavailable (apply migration 026)',
         },
     ]
+
+    const trendChartData = useMemo(() => {
+        if (!salesTrend || salesTrend.length === 0) return []
+        return [...salesTrend]
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .map((point) => ({
+                date: point.date,
+                label: format(parseISO(point.date), 'MMM d'),
+                revenue: Number(point.revenue) || 0,
+            }))
+    }, [salesTrend])
+
+    const trendRevenueTotal = useMemo(
+        () => trendChartData.reduce((sum, point) => sum + point.revenue, 0),
+        [trendChartData]
+    )
+    const trendRevenueDailyAvg =
+        trendChartData.length > 0 ? trendRevenueTotal / trendChartData.length : 0
 
     const searchQuery = filters.search ?? ''
     const isTableLoading = transactionsLoading || transactionsFetching
@@ -716,15 +885,19 @@ function TransactionsPageInner() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {stats.map((stat) => (
-                    <Card key={stat.title}>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {summaryCards.map((stat) => (
+                    <Card
+                        key={stat.id}
+                        className={summaryUnavailable ? '' : 'cursor-pointer transition-colors hover:bg-muted/30'}
+                        onClick={summaryUnavailable ? undefined : () => handleSummaryCardClick(stat.id)}
+                    >
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
                             <stat.icon className={`h-4 w-4 ${stat.color}`} />
                         </CardHeader>
                         <CardContent>
-                            {statsLoading || transactionsLoading ? (
+                            {summaryLoading || summaryFetching ? (
                                 <Skeleton className="h-8 w-24" />
                             ) : (
                                 <>
@@ -736,6 +909,74 @@ function TransactionsPageInner() {
                     </Card>
                 ))}
             </div>
+
+            {/* Experimental Trend Graph */}
+            <Card>
+                <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <CardTitle>Transactions Trend</CardTitle>
+                        <CardDescription>
+                            Experimental: live 30-day revenue trend from analytics feed
+                        </CardDescription>
+                    </div>
+                    <Badge variant="secondary">Experimental</Badge>
+                </CardHeader>
+                <CardContent>
+                    {trendLoading || trendFetching ? (
+                        <Skeleton className="h-[260px] w-full" />
+                    ) : trendChartData.length === 0 ? (
+                        <div className="flex h-[260px] items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
+                            No trend data available.
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+                                <span>30-day revenue: {formatCurrencyValue(trendRevenueTotal)}</span>
+                                <span>Daily average: {formatCurrencyValue(trendRevenueDailyAvg)}</span>
+                            </div>
+                            <ChartContainer config={transactionsTrendChartConfig} className="h-[260px] w-full">
+                                <AreaChart data={trendChartData}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                    <XAxis
+                                        dataKey="label"
+                                        tickLine={false}
+                                        axisLine={false}
+                                        tickMargin={8}
+                                        minTickGap={24}
+                                    />
+                                    <YAxis
+                                        tickLine={false}
+                                        axisLine={false}
+                                        tickFormatter={formatCompactCurrencyValue}
+                                    />
+                                    <ChartTooltip
+                                        content={
+                                            <ChartTooltipContent
+                                                formatter={(value) => (
+                                                    <span className="font-mono">
+                                                        {formatCurrencyValue(Number(value) || 0)}
+                                                    </span>
+                                                )}
+                                                labelFormatter={(_, payload) => {
+                                                    const rawDate = payload?.[0]?.payload?.date
+                                                    return rawDate ? format(parseISO(rawDate), 'MMM d, yyyy') : ''
+                                                }}
+                                            />
+                                        }
+                                    />
+                                    <Area
+                                        type="monotone"
+                                        dataKey="revenue"
+                                        stroke="var(--color-revenue)"
+                                        fill="var(--color-revenue)"
+                                        fillOpacity={0.2}
+                                    />
+                                </AreaChart>
+                            </ChartContainer>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
 
             {/* Transactions Table */}
             <Card>
