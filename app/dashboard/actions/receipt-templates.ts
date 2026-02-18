@@ -15,9 +15,8 @@ import { LogAuditEvent } from "./audit-logs";
 export type TemplateType =
   | "sale"
   | "kitchen"
-  | "bar"
-  | "void"
-  | "refund"
+  | "void_refund"
+  | "no_sale"
   | "end_of_day"
   | "cash_drawer"
   | "online_order";
@@ -145,9 +144,8 @@ export async function getReceiptTemplate(
 const ALL_TEMPLATE_TYPES: TemplateType[] = [
   "sale",
   "kitchen",
-  "bar",
-  "void",
-  "refund",
+  "void_refund",
+  "no_sale",
   "end_of_day",
   "cash_drawer",
   "online_order",
@@ -156,9 +154,8 @@ const ALL_TEMPLATE_TYPES: TemplateType[] = [
 const TEMPLATE_TYPE_NAMES: Record<TemplateType, string> = {
   sale: "Sale Receipt",
   kitchen: "Kitchen Ticket",
-  bar: "Bar Ticket",
-  void: "Void Receipt",
-  refund: "Refund Receipt",
+  void_refund: "Void / Refund",
+  no_sale: "No Sale",
   end_of_day: "End of Day Report",
   cash_drawer: "Cash Drawer Report",
   online_order: "Online Order Ticket",
@@ -202,24 +199,7 @@ const DEFAULT_TEMPLATE_VALUES: Record<
     show_allergy_alert: true,
     show_ready_by_time: true,
   },
-  bar: {
-    show_logo: false,
-    header_text: "",
-    footer_text: "",
-    show_item_modifiers: true,
-    show_tax_breakdown: false,
-    show_tip_line: false,
-    show_server_name: true,
-    show_order_type: true,
-    show_barcode: false,
-    show_qr_code: false,
-    large_item_text: true,
-    show_mods_large: true,
-    group_by_station: false,
-    show_allergy_alert: true,
-    show_ready_by_time: true,
-  },
-  void: {
+  void_refund: {
     show_logo: true,
     header_text: "",
     footer_text: "",
@@ -236,15 +216,15 @@ const DEFAULT_TEMPLATE_VALUES: Record<
     show_allergy_alert: false,
     show_ready_by_time: false,
   },
-  refund: {
+  no_sale: {
     show_logo: true,
     header_text: "",
     footer_text: "",
-    show_item_modifiers: true,
-    show_tax_breakdown: true,
+    show_item_modifiers: false,
+    show_tax_breakdown: false,
     show_tip_line: false,
     show_server_name: true,
-    show_order_type: true,
+    show_order_type: false,
     show_barcode: false,
     show_qr_code: false,
     large_item_text: false,

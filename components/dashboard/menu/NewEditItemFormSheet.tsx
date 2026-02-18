@@ -68,6 +68,7 @@ import {
   Grip,
   Search,
   Loader2,
+  Flame,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -110,6 +111,10 @@ import {
 } from "@/app/dashboard/actions/menu-items-rpc";
 import { RecipeManager } from "@/app/dashboard/menu/components/RecipeManager";
 import { PriceInputGroup } from "@/components/dashboard/locations/PriceInputGroup";
+import {
+  usePrepStations,
+  useCategoryPrepDefaults,
+} from "@/app/dashboard/hooks/usePrepStations";
 
 // ============================================================================
 // TYPES
@@ -128,6 +133,12 @@ interface PriceLevels {
   level_4_location_category_cash?: number | null;
   level_5_location_menu: number | null; // NEW: Location + Menu + Category
   level_5_location_menu_cash?: number | null;
+  // Delivery pricing
+  level_1_delivery: number | null;
+  level_2_location_item_delivery?: number | null;
+  level_3_category_delivery?: number | null;
+  level_4_location_category_delivery?: number | null;
+  level_5_location_menu_delivery?: number | null;
 }
 
 export interface EditItemWithOverrides {
@@ -208,7 +219,14 @@ export interface EditItemWithOverrides {
   price_levels?: PriceLevels;
   effective_price?: number;
   effective_cash_price?: number | null;
+  effective_delivery_price?: number | null;
   current_level?: 1 | 2 | 3 | 4 | 5;
+
+  // Delivery pricing
+  delivery_price?: number | null;
+
+  // Prep Station (KDS Routing - migration 022)
+  prep_station_id?: string | null;
 
   // Override flags for 5-level cascade
   has_location_item_override?: boolean;
@@ -276,6 +294,7 @@ const itemSchema = z.object({
     .min(0, "Cash price must be positive")
     .optional()
     .nullable(),
+  delivery_price: z.number().min(0).optional().nullable(),
   image_url: z.string().optional(),
   availability: z.boolean().default(true),
   allergens: z.array(z.string()).default([]),
@@ -292,6 +311,9 @@ const itemSchema = z.object({
   available_channels: z
     .array(z.enum(["pos", "online", "kiosk"]))
     .default(["pos", "online"]),
+
+  // Prep Station (KDS Routing - migration 022)
+  prep_station_id: z.string().nullable().optional(),
 });
 
 type ItemFormValues = z.infer<typeof itemSchema>;
@@ -743,6 +765,14 @@ export function NewEditItemFormSheet({
   const { data: taxRatesData } = useLocationTaxRates();
   const taxRates = taxRatesData?.data || [];
 
+  // Prep stations for current location (KDS routing)
+  const { data: prepStations = [] } = usePrepStations(
+    isAllLocations ? null : selectedLocationId,
+  );
+  const { data: categoryPrepDefaults = [] } = useCategoryPrepDefaults(
+    isAllLocations ? null : selectedLocationId,
+  );
+
   const [selectedCategories, setSelectedCategories] = React.useState<string[]>(
     [],
   );
@@ -874,6 +904,8 @@ export function NewEditItemFormSheet({
       tax_category: "standard",
       is_tax_exempt: false,
       available_channels: ["pos", "online"],
+      // Prep Station (migration 022)
+      prep_station_id: null,
     },
   });
 
@@ -887,6 +919,7 @@ export function NewEditItemFormSheet({
         description: editItem.description || "",
         price: price,
         cash_price: cashPrice ?? undefined,
+        delivery_price: editItem.delivery_price ?? null,
         image_url: editItem.image || editItem.image_url || "",
         availability: editItem.availability ?? true,
         allergens: editItem.allergens || [],
@@ -903,6 +936,8 @@ export function NewEditItemFormSheet({
           "pos",
           "online",
         ]) as any,
+        // Prep Station (migration 022)
+        prep_station_id: editItem.prep_station_id ?? null,
       });
 
       // Support both old menu_item_categories and new category_items
@@ -934,11 +969,13 @@ export function NewEditItemFormSheet({
         description: "",
         price: 0,
         cash_price: undefined,
+        delivery_price: null,
         image_url: "",
         availability: true,
         allergens: [],
         card_bg_color: "",
         stock_tracking_mode: "in_stock",
+        prep_station_id: null,
       });
       setSelectedCategories([]);
       setSelectedModifiers([]);
@@ -1057,6 +1094,7 @@ export function NewEditItemFormSheet({
           locationId: isAllLocations ? null : selectedLocationId,
           price: values.price,
           cashPrice: values.cash_price ?? null,
+          deliveryPrice: values.delivery_price ?? null,
           availability: values.availability,
         };
 
@@ -1074,6 +1112,11 @@ export function NewEditItemFormSheet({
           updateParams.availableChannels = values.available_channels;
           updateParams.isTaxExempt = values.is_tax_exempt;
           updateParams.availableChannels = values.available_channels;
+        }
+
+        // Prep Station — only include when a location is selected (location-only field)
+        if (!isAllLocations && values.prep_station_id !== undefined) {
+          updateParams.prepStationId = values.prep_station_id;
         }
 
         // Modifier groups are structure updates; only include when allowed
@@ -1175,6 +1218,7 @@ export function NewEditItemFormSheet({
           icon={<Globe className="h-3 w-3" />}
           price={levels.level_1_base}
           cashPrice={levels.level_1_cash}
+          deliveryPrice={levels.level_1_delivery}
           isCurrentLevel={currentLevel === 1}
           isActive={levels.level_1_base !== null}
         />
@@ -1187,6 +1231,7 @@ export function NewEditItemFormSheet({
             icon={<Building2 className="h-3 w-3" />}
             price={levels.level_2_location_item}
             cashPrice={levels.level_2_location_item_cash}
+            deliveryPrice={levels.level_2_location_item_delivery}
             modifier={levels.level_2_modifier}
             modifierType={levels.level_2_modifier_type}
             isCurrentLevel={currentLevel === 2}
@@ -1206,6 +1251,7 @@ export function NewEditItemFormSheet({
             icon={<Tag className="h-3 w-3" />}
             price={levels.level_3_category}
             cashPrice={levels.level_3_category_cash}
+            deliveryPrice={levels.level_3_category_delivery}
             isCurrentLevel={currentLevel === 3}
             isActive={levels.level_3_category !== null}
             isOverride
@@ -1220,6 +1266,7 @@ export function NewEditItemFormSheet({
             icon={<MapPin className="h-3 w-3" />}
             price={levels.level_4_location_category}
             cashPrice={levels.level_4_location_category_cash}
+            deliveryPrice={levels.level_4_location_category_delivery}
             isCurrentLevel={currentLevel === 4}
             isActive={levels.level_4_location_category !== null}
             isOverride
@@ -1234,6 +1281,7 @@ export function NewEditItemFormSheet({
             icon={<MenuIcon className="h-3 w-3" />}
             price={levels.level_5_location_menu}
             cashPrice={levels.level_5_location_menu_cash}
+            deliveryPrice={levels.level_5_location_menu_delivery}
             isCurrentLevel={currentLevel === 5}
             isActive={levels.level_5_location_menu !== null}
             isOverride
@@ -1248,6 +1296,15 @@ export function NewEditItemFormSheet({
               ${editItem.effective_price?.toFixed(2)}
             </span>
           </div>
+          {/* Effective Delivery Price */}
+          {editItem.effective_delivery_price != null && (
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-sm font-medium text-amber-700">Delivery Price:</span>
+              <span className="text-lg font-bold text-amber-600">
+                ${editItem.effective_delivery_price.toFixed(2)}
+              </span>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1604,6 +1661,39 @@ export function NewEditItemFormSheet({
                               </div>
                           </div>
                       </div>
+
+                      {/* Delivery Pricing */}
+                      {editItem && (
+                        <div className="space-y-3">
+                          {/* Delivery price input — always shown */}
+                          <div className="p-3 rounded-lg border border-amber-200 bg-amber-50/30 space-y-2">
+                            <label className="text-sm font-medium text-amber-800">
+                              {editingContext.priceLabel} (Delivery)
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-600 font-medium">$</span>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="0.00"
+                                className="pl-7 border-amber-300 focus:ring-amber-500"
+                                value={form.watch("delivery_price") ?? ""}
+                                onChange={(e) => {
+                                  const val = e.target.value === "" ? null : parseFloat(e.target.value);
+                                  form.setValue("delivery_price", val, { shouldValidate: true });
+                                }}
+                              />
+                            </div>
+                            {/* Fallback display */}
+                            {(form.watch("delivery_price") === null || form.watch("delivery_price") === undefined) && (
+                              <p className="text-xs text-muted-foreground">
+                                No delivery price set — card price will be used as fallback
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Reset Button */}
                       {editItem && editingContext.resetLabel && (
@@ -2337,6 +2427,87 @@ export function NewEditItemFormSheet({
                         )}
                       />
 
+                      {/* Kitchen Routing (Prep Station) Section - Location only */}
+                      {!isAllLocations ? (
+                        <FormField
+                          control={form.control}
+                          name="prep_station_id"
+                          render={({ field }) => {
+                            // Find the category default for this item's first category
+                            const itemCategoryId =
+                              selectedCategories.length > 0
+                                ? selectedCategories[0]
+                                : null;
+                            const categoryDefault = itemCategoryId
+                              ? categoryPrepDefaults.find(
+                                  (d) => d.category_id === itemCategoryId,
+                                )
+                              : null;
+                            const inheritLabel = categoryDefault?.prep_station_name
+                              ? `Inherit from Category (${categoryDefault.prep_station_name})`
+                              : "None (routes to Expo)";
+
+                            return (
+                              <FormItem>
+                                <div className="flex items-center gap-2">
+                                  <Flame className="h-4 w-4 text-orange-500" />
+                                  <FormLabel>Kitchen Routing</FormLabel>
+                                </div>
+                                <Select
+                                  value={field.value || "__inherit__"}
+                                  onValueChange={(val) =>
+                                    field.onChange(
+                                      val === "__inherit__" ? null : val,
+                                    )
+                                  }
+                                >
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select prep station" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="__inherit__">
+                                      {inheritLabel}
+                                    </SelectItem>
+                                    {prepStations
+                                      .filter((ps) => ps.is_active)
+                                      .map((ps) => (
+                                        <SelectItem key={ps.id} value={ps.id}>
+                                          <div className="flex items-center gap-2">
+                                            <div
+                                              className="h-3 w-3 rounded-full flex-shrink-0"
+                                              style={{
+                                                backgroundColor: ps.color,
+                                              }}
+                                            />
+                                            {ps.name}
+                                          </div>
+                                        </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormDescription>
+                                  Items without a prep station route to Expo
+                                  (catch-all) by default.
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            );
+                          }}
+                        />
+                      ) : (
+                        editItem && (
+                          <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm dark:bg-blue-950/30 dark:border-blue-900">
+                            <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0 dark:text-blue-400" />
+                            <p className="text-blue-800 dark:text-blue-300">
+                              Prep stations are location-specific. Select a
+                              location to assign a prep station to this item.
+                            </p>
+                          </div>
+                        )
+                      )}
+
                       {/* Categories Section */}
                       <div className="space-y-3">
                         <div className="flex items-center gap-2">
@@ -2580,6 +2751,7 @@ interface PriceLevelRowProps {
   icon: React.ReactNode;
   price: number | null;
   cashPrice?: number | null;
+  deliveryPrice?: number | null;
   modifier?: number | null;
   modifierType?: "add" | "percent" | null;
   isCurrentLevel: boolean;
@@ -2593,6 +2765,7 @@ function PriceLevelRow({
   icon,
   price,
   cashPrice,
+  deliveryPrice,
   modifier,
   modifierType,
   isCurrentLevel,
@@ -2626,7 +2799,7 @@ function PriceLevelRow({
           </Badge>
         )}
       </div>
-      <div className="text-right">
+      <div className="flex items-center gap-3 text-right">
         {price !== null ? (
           <span
             className={cn("font-medium", isCurrentLevel && "text-blue-600")}
@@ -2641,6 +2814,11 @@ function PriceLevelRow({
           </span>
         ) : (
           <span className="text-muted-foreground">—</span>
+        )}
+        {deliveryPrice !== null && deliveryPrice !== undefined && (
+          <div className="text-amber-600 text-xs">
+            <span className="text-muted-foreground">Del:</span> ${deliveryPrice.toFixed(2)}
+          </div>
         )}
       </div>
     </div>

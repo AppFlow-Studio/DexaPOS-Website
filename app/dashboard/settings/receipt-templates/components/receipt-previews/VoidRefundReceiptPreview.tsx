@@ -1,11 +1,11 @@
 import type { ReceiptTemplateFormData } from "../../types";
 import { ReceiptPaper, DottedLine, DoubleLine } from "./ReceiptPaper";
 
-interface RefundReceiptPreviewProps {
+interface VoidRefundReceiptPreviewProps {
   formState: ReceiptTemplateFormData;
 }
 
-export function RefundReceiptPreview({ formState }: RefundReceiptPreviewProps) {
+export function VoidRefundReceiptPreview({ formState }: VoidRefundReceiptPreviewProps) {
   return (
     <ReceiptPaper>
       {formState.show_logo && (
@@ -14,9 +14,9 @@ export function RefundReceiptPreview({ formState }: RefundReceiptPreviewProps) {
         </div>
       )}
 
-      {/* REFUND Banner */}
-      <div className="text-center font-bold text-xl border-2 border-amber-500 text-amber-600 dark:text-amber-400 py-1 mb-2">
-        REFUND
+      {/* VOID / REFUND Banner */}
+      <div className="text-center font-bold text-xl border-2 border-red-500 text-red-600 dark:text-red-400 py-1 mb-2">
+        VOID / REFUND
       </div>
 
       <div className="text-center font-bold text-sm">Sample Restaurant</div>
@@ -41,20 +41,24 @@ export function RefundReceiptPreview({ formState }: RefundReceiptPreviewProps) {
 
       <DottedLine />
 
-      {/* Refunded items */}
+      {/* Affected items */}
       <div className="font-semibold text-[10px] uppercase mb-1">
-        Refunded Items:
+        Affected Items:
       </div>
       <div className="space-y-1">
-        <div className="flex justify-between">
+        <div className="flex justify-between line-through opacity-60">
           <span>1x Cheeseburger</span>
-          <span>-$12.99</span>
+          <span>$12.99</span>
         </div>
         {formState.show_item_modifiers && (
-          <div className="text-zinc-500 pl-3 text-[10px]">
+          <div className="text-zinc-500 pl-3 text-[10px] line-through opacity-60">
             + Extra Cheese
           </div>
         )}
+        <div className="flex justify-between line-through opacity-60">
+          <span>1x Caesar Salad</span>
+          <span>$9.50</span>
+        </div>
       </div>
 
       <DottedLine />
@@ -63,32 +67,34 @@ export function RefundReceiptPreview({ formState }: RefundReceiptPreviewProps) {
         <>
           <div className="flex justify-between text-zinc-500">
             <span>Subtotal</span>
-            <span>-$12.99</span>
+            <span>-$22.49</span>
           </div>
           <div className="flex justify-between text-zinc-500">
-            <span>Tax Refund</span>
-            <span>-$1.07</span>
+            <span>Tax (8.25%)</span>
+            <span>-$1.86</span>
           </div>
         </>
       )}
 
       <DoubleLine />
-      <div className="flex justify-between font-bold text-sm text-amber-600 dark:text-amber-400">
-        <span>Refund Total</span>
-        <span>-$14.06</span>
+      <div className="flex justify-between font-bold text-sm text-red-600 dark:text-red-400">
+        <span>Total</span>
+        <span>-$24.35</span>
       </div>
 
       <DottedLine />
 
       <div className="text-[10px]">
-        <div className="flex justify-between">
-          <span>Refunded to:</span>
-          <span>Visa ending 4242</span>
+        <div className="font-semibold">Reason:</div>
+        <div className="text-zinc-500">Customer changed mind</div>
+        <div className="flex justify-between mt-1">
+          <span className="text-zinc-500">Refunded to:</span>
+          <span className="text-zinc-500">Visa ending 4242</span>
         </div>
         <div className="text-zinc-500 mt-1">
           Processed by: Manager (John D.)
         </div>
-        <div className="text-zinc-500">01/15/2026 1:15 PM</div>
+        <div className="text-zinc-500">01/15/2026 12:45 PM</div>
       </div>
 
       {formState.footer_text && (

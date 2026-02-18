@@ -56,6 +56,7 @@ import { StationDevicesTab } from "./components/StationDevicesTab";
 import { PaymentTerminalTab } from "./components/PaymentTerminalTab";
 import { StationConnectionTab } from "./components/StationConnectionTab";
 import { StationActivityTab } from "./components/StationActivityTab";
+import { RemoteActionsPanel } from "./components/RemoteActionsPanel";
 
 // Tab configuration
 const TABS = [
@@ -63,6 +64,7 @@ const TABS = [
   { id: "devices", label: "Devices" },
   { id: "terminal", label: "Payment Terminal" },
   { id: "connection", label: "Connection" },
+  { id: "remote", label: "Remote Actions" },
   { id: "activity", label: "Activity" },
 ];
 
@@ -378,6 +380,7 @@ export default function StationDetailPage() {
         {activeTab === "connection" && (
           <StationConnectionTab station={station} />
         )}
+        {activeTab === "remote" && <RemoteActionsPanel station={station} />}
         {activeTab === "activity" && (
           <StationActivityTab station={station} timeFilter={timeFilter} />
         )}

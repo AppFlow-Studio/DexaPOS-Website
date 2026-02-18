@@ -192,11 +192,11 @@ export function ReceiptSettingsForm({
         <Separator />
       )}
 
-      {/* Kitchen/Bar Section */}
+      {/* Kitchen Section */}
       {showKitchenSection && (
         <div className="space-y-4">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Kitchen / Bar
+            Kitchen
           </h3>
 
           {visibility.large_item_text && (
