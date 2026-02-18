@@ -1844,7 +1844,7 @@ export async function getPlatformMerchantBreakdown(
 
   if (error) {
     console.error('[getPlatformMerchantBreakdown:rpc] Error:', error)
-    return []
+    throw new Error(`MERCHANT_BREAKDOWN_RPC_${error.code || 'unknown'}`)
   }
 
   const rows = (data ?? []) as PlatformMerchantBreakdownRpcRow[]
