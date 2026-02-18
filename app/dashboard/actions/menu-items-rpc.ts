@@ -442,6 +442,7 @@ export interface UpdateItemParams {
   description?: string;
   price?: number | null;
   cashPrice?: number | null;
+  deliveryPrice?: number | null;
   image?: string;
   availability?: boolean;
   allergens?: string[];
@@ -462,6 +463,9 @@ export interface UpdateItemParams {
   // Category-specific fields
   displayOrder?: number | null;
   isFeatured?: boolean | null;
+
+  // Prep Station (KDS Routing - migration 022)
+  prepStationId?: string | null;
 
   // Modifier linking
   modifier_group_ids?: string[];
@@ -805,7 +809,6 @@ export async function updateItemOverride(
         updateData.available_channels = params.availableChannels;
         changesLog.available_channels = params.availableChannels;
       }
-
       const { error } = await supabase
         .from("menu_items")
         .update(updateData)
@@ -835,7 +838,13 @@ export async function updateItemOverride(
         changesLog.available_channels = params.availableChannels;
       }
 
-      // Only upsert if we have tax/channel fields to update
+      // Prep Station override (migration 022)
+      if (params.prepStationId !== undefined) {
+        overrideData.prep_station_id = params.prepStationId;
+        changesLog.prep_station_id = params.prepStationId;
+      }
+
+      // Only upsert if we have fields to update
       if (Object.keys(overrideData).length > 1) {
         // > 1 because updated_at is always included
         const { error } = await supabase.from("location_item_overrides").upsert(
@@ -856,10 +865,39 @@ export async function updateItemOverride(
     }
   }
 
+  // Prep Station assignment — always writes to location_item_overrides (location-only)
+  // This is separate because prep stations apply at any level (L2/L4/L5) but
+  // always persist in location_item_overrides regardless of category/menu context.
+  if (
+    params.prepStationId !== undefined &&
+    locationId &&
+    // Skip if already handled in the L2 base fields block above
+    (params.menuId || params.categoryId)
+  ) {
+    const { error } = await supabase.from("location_item_overrides").upsert(
+      {
+        location_id: locationId,
+        menu_item_id: params.menuItemId,
+        prep_station_id: params.prepStationId,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: "location_id,menu_item_id",
+      },
+    );
+
+    if (error) {
+      console.error("[updateItemOverride] Prep station upsert error:", error);
+    } else {
+      changesLog.prep_station_id = params.prepStationId;
+    }
+  }
+
   // If updating price/availability - use the new category-centric function
   if (
     params.price !== undefined ||
     params.cashPrice !== undefined ||
+    params.deliveryPrice !== undefined ||
     params.availability !== undefined ||
     params.priceModifier !== undefined ||
     params.displayOrder !== undefined ||
@@ -876,6 +914,7 @@ export async function updateItemOverride(
         p_location_id: locationId || null,
         p_custom_price: params.price,
         p_custom_cash_price: params.cashPrice,
+        p_custom_delivery_price: params.deliveryPrice,
         p_is_available: params.availability,
         p_price_modifier: params.priceModifier,
         p_price_modifier_type: params.priceModifierType,
@@ -896,6 +935,8 @@ export async function updateItemOverride(
       if (params.price !== undefined) changesLog.price = params.price;
       if (params.cashPrice !== undefined)
         changesLog.cash_price = params.cashPrice;
+      if (params.deliveryPrice !== undefined)
+        changesLog.delivery_price = params.deliveryPrice;
       if (params.availability !== undefined)
         changesLog.availability = params.availability;
       if (params.priceModifier !== undefined)

@@ -1,9 +1,8 @@
 export type TemplateType =
   | "sale"
   | "kitchen"
-  | "bar"
-  | "void"
-  | "refund"
+  | "void_refund"
+  | "no_sale"
   | "end_of_day"
   | "cash_drawer"
   | "online_order";
@@ -31,7 +30,7 @@ export interface ReceiptTemplate {
   show_barcode: boolean;
   show_qr_code: boolean;
 
-  // Kitchen/Bar specific
+  // Kitchen specific
   large_item_text: boolean;
   show_mods_large: boolean;
   group_by_station: boolean;

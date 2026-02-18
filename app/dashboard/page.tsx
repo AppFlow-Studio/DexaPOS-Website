@@ -37,11 +37,16 @@ import {
   useOrderAnalytics,
   useOrderStats,
   useFinancialKPIs,
+  useWaterfallReport,
+  useRevenueByCategoryReport,
+  useTransactionVolumeReport,
+  useNetCollectedBySourceReport,
+  useTaxableRevenueByTenderReport,
 } from "./hooks/useOrderAnalytics";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   ChartContainer,
   ChartTooltip,
@@ -60,6 +65,14 @@ import {
   Tooltip,
 } from "recharts";
 import { useUnifiedStaff } from "./hooks/useStaff";
+import { DashboardWaterfallCard } from "./components/DashboardWaterfallCard";
+import {
+  NetRevenueByCategoryCard,
+  type DateRangeOption,
+} from "./components/NetRevenueByCategoryCard";
+import { TransactionVolumeCard } from "./components/TransactionVolumeCard";
+import { NetCollectedBySourceCard } from "./components/NetCollectedBySourceCard";
+import { TaxableRevenueByTenderCard } from "./components/TaxableRevenueByTenderCard";
 
 export default function MerchantDashboardPage() {
   const { selectedLocationId, locations } = useLocationStore();
@@ -114,6 +127,39 @@ export default function MerchantDashboardPage() {
     last30Days,
     now
   );
+
+  // Waterfall report for dashboard card
+  const { data: waterfallReport, isLoading: waterfallLoading } =
+    useWaterfallReport(last30Days, now);
+
+  // Transaction volume report (Credits vs Debits by payment type)
+  const { data: transactionVolumeReport, isLoading: transactionVolumeLoading } =
+    useTransactionVolumeReport(last30Days, now);
+
+  // Net Collected by Order Source (TICKET-005)
+  const { data: netCollectedBySourceReport, isLoading: netCollectedBySourceLoading } =
+    useNetCollectedBySourceReport(last30Days, now);
+
+  // Taxable Revenue by Tender Type (TICKET-002)
+  const { data: taxableRevenueByTenderReport, isLoading: taxableRevenueByTenderLoading } =
+    useTaxableRevenueByTenderReport(last30Days, now);
+
+  // Revenue by Category tree map
+  const [categoryDateRange, setCategoryDateRange] =
+    useState<DateRangeOption>("7d");
+
+  const categoryDateFrom = useMemo(() => {
+    const date = new Date();
+    const days = categoryDateRange === "7d" ? 7 : categoryDateRange === "30d" ? 30 : 90;
+    date.setDate(date.getDate() - days);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  }, [categoryDateRange]);
+
+  const {
+    data: revenueByCategoryReport,
+    isLoading: revenueByCategoryLoading,
+  } = useRevenueByCategoryReport(categoryDateFrom, now);
 
   const menusList = Array.isArray(menus) ? menus : [];
   const itemsList = Array.isArray(menuItems) ? menuItems : [];
@@ -292,7 +338,7 @@ export default function MerchantDashboardPage() {
           className="relative overflow-hidden border-none shadow-lg transition-all hover:shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-300"
           style={{ animationDelay: "0ms" }}
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 via-transparent to-transparent opacity-50" />
+          <div className="absolute inset-0  from-blue-600/10 via-transparent to-transparent opacity-50" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
               Total Revenue
@@ -326,7 +372,7 @@ export default function MerchantDashboardPage() {
             </div>
 
             {revenueChartData.length > 0 && (
-              <div className="mt-4 h-[60px] w-full overflow-hidden">
+              <div className="mt-4  w-full overflow-hidden">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart
                     data={revenueChartData}
@@ -377,7 +423,7 @@ export default function MerchantDashboardPage() {
           className="relative overflow-hidden border-none shadow-lg transition-all hover:shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-300"
           style={{ animationDelay: "50ms" }}
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-600/10 via-transparent to-transparent opacity-50" />
+          <div className="absolute inset-0  from-emerald-600/10 via-transparent to-transparent opacity-50" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
               Orders Today
@@ -406,7 +452,7 @@ export default function MerchantDashboardPage() {
           className="relative overflow-hidden border-none shadow-lg transition-all hover:shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-300"
           style={{ animationDelay: "100ms" }}
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-purple-600/10 via-transparent to-transparent opacity-50" />
+          <div className="absolute inset-0  from-purple-600/10 via-transparent to-transparent opacity-50" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
               {isAllLocations ? "Active Locations" : "Team Members"}
@@ -440,7 +486,7 @@ export default function MerchantDashboardPage() {
           className="relative overflow-hidden border-none shadow-lg transition-all hover:shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-300"
           style={{ animationDelay: "150ms" }}
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-orange-600/10 via-transparent to-transparent opacity-50" />
+          <div className="absolute inset-0  from-orange-600/10 via-transparent to-transparent opacity-50" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
             <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
               Growth
@@ -679,7 +725,7 @@ export default function MerchantDashboardPage() {
             </CardHeader>
             <CardContent>
               {analyticsLoading7Days ? (
-                <Skeleton className="h-[200px] w-full" />
+                <Skeleton className=" w-full" />
               ) : revenueChartData.length > 0 ? (
                 <div className="">
                   <ChartContainer config={chartConfig}>
@@ -741,7 +787,7 @@ export default function MerchantDashboardPage() {
             </CardHeader>
             <CardContent>
               {analyticsLoading7Days ? (
-                <Skeleton className="h-[200px] w-full" />
+                <Skeleton className=" w-full" />
               ) : analytics7Days.orderTypeBreakdown ? (
                 <div className="space-y-3">
                   {Object.entries(analytics7Days.orderTypeBreakdown).map(
@@ -798,6 +844,14 @@ export default function MerchantDashboardPage() {
         </div>
       )}
 
+      {/* Net Revenue by Category Tree Map */}
+      <NetRevenueByCategoryCard
+        report={revenueByCategoryReport}
+        isLoading={revenueByCategoryLoading}
+        dateRange={categoryDateRange}
+        onDateRangeChange={setCategoryDateRange}
+      />
+
       {/* Best Selling Items */}
       {analytics7Days?.bestSellingItems &&
         analytics7Days.bestSellingItems.length > 0 && (
@@ -843,7 +897,25 @@ export default function MerchantDashboardPage() {
           </Card>
         )}
 
-      {/* Recent Activity */}
+      {/* Transaction Volume Analysis (Credits vs Debits) */}
+      <TransactionVolumeCard
+        report={transactionVolumeReport}
+        isLoading={transactionVolumeLoading}
+      />
+
+      {/* Net Collected by Channel (TICKET-005) */}
+      <NetCollectedBySourceCard
+        report={netCollectedBySourceReport}
+        isLoading={netCollectedBySourceLoading}
+      />
+
+      {/* Taxable Revenue by Tender Type (TICKET-002) */}
+      <TaxableRevenueByTenderCard
+        report={taxableRevenueByTenderReport}
+        isLoading={taxableRevenueByTenderLoading}
+      />
+
+      {/* Recent Orders */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Recent Orders</CardTitle>
@@ -918,6 +990,13 @@ export default function MerchantDashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Waterfall Report / Net Collect Statement */}
+      <DashboardWaterfallCard
+        report={waterfallReport}
+        isLoading={waterfallLoading}
+      />
     </div>
   );
 }
+// 

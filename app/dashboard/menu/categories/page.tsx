@@ -31,6 +31,8 @@ import {
   DollarSign,
   Edit2,
   Save,
+  Flame,
+  Check,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import {
@@ -84,7 +86,18 @@ import {
   EditItemWithOverrides,
 } from "@/components/dashboard/menu/NewEditItemFormSheet";
 import { AddItemToCategoryWizard } from "@/components/dashboard/menu/categories/AddItemToCategoryWizard";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  usePrepStations,
+  useCategoryPrepDefaults,
+  useSetCategoryPrepDefault,
+  useRemoveCategoryPrepDefault,
+} from "@/app/dashboard/hooks/usePrepStations";
 import {
   DndContext,
   closestCenter,
@@ -114,6 +127,13 @@ export default function CategoriesPage() {
   const queryClient = useQueryClient();
   const { selectedLocationId } = useLocationStore();
   const isAllLocations = selectedLocationId === "all" || !selectedLocationId;
+
+  // Prep station hooks (location-scoped)
+  const { data: prepStations = [] } = usePrepStations(selectedLocationId);
+  const { data: categoryPrepDefaults = [] } =
+    useCategoryPrepDefaults(selectedLocationId);
+  const setCategoryPrepDefaultMutation = useSetCategoryPrepDefault();
+  const removeCategoryPrepDefaultMutation = useRemoveCategoryPrepDefault();
 
   // Primary data source: RPC with full category + items data
   const {
@@ -254,6 +274,11 @@ export default function CategoriesPage() {
         item.menu_item.location_category_override?.custom_cash_price ?? null,
       level_5_location_menu: null,
       level_5_location_menu_cash: null,
+      level_1_delivery: null,
+      level_2_location_item_delivery: null,
+      level_3_category_delivery: null,
+      level_4_location_category_delivery: null,
+      level_5_location_menu_delivery: null,
     },
     effective_price: item.menu_item.effective_price,
     effective_cash_price: item.menu_item.effective_cash_price,
@@ -863,6 +888,142 @@ export default function CategoriesPage() {
                                   </Tooltip>
                                 </TooltipProvider>
                               )}
+
+                              {/* Prep station quick-assign button - location only */}
+                              {!isAllLocations && (() => {
+                                const categoryPrepDefault = categoryPrepDefaults.find(
+                                  (d) => d.category_id === category.id,
+                                );
+                                const assignedStation = categoryPrepDefault
+                                  ? prepStations.find(
+                                      (ps) => ps.id === categoryPrepDefault.prep_station_id,
+                                    )
+                                  : null;
+
+                                return (
+                                  <Popover>
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <PopoverTrigger asChild>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-8 w-8 relative border border-dashed border-muted-foreground/50 rounded-full"
+                                              onClick={(e) => e.stopPropagation()}
+                                            >
+                                              <Flame
+                                                className={cn(
+                                                  "h-4 w-4",
+                                                  assignedStation
+                                                    ? "text-orange-500"
+                                                    : "text-muted-foreground",
+                                                )}
+                                              />
+                                              {assignedStation && (
+                                                <span
+                                                  className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background"
+                                                  style={{
+                                                    backgroundColor: assignedStation.color,
+                                                  }}
+                                                />
+                                              )}
+                                            </Button>
+                                          </PopoverTrigger>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p>
+                                            {assignedStation
+                                              ? `Prep: ${assignedStation.name}`
+                                              : "Assign prep station"}
+                                          </p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                    <PopoverContent
+                                      className="w-56 p-2"
+                                      align="end"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <p className="text-xs font-medium text-muted-foreground px-2 pb-2">
+                                        Default Prep Station
+                                      </p>
+                                      {prepStations.filter((ps) => ps.is_active).length === 0 ? (
+                                        <div className="px-2 py-3 text-center text-sm text-muted-foreground">
+                                          <p>No prep stations configured.</p>
+                                          <Button
+                                            variant="link"
+                                            size="sm"
+                                            className="mt-1 h-auto p-0 text-xs"
+                                            onClick={() =>
+                                              router.push("/dashboard/settings/prep-stations")
+                                            }
+                                          >
+                                            Go to Settings
+                                          </Button>
+                                        </div>
+                                      ) : (
+                                        <div className="space-y-0.5">
+                                          {/* None option */}
+                                          <button
+                                            className={cn(
+                                              "flex items-center gap-2 w-full rounded-md px-2 py-1.5 text-sm hover:bg-muted transition-colors",
+                                              !assignedStation && "bg-muted",
+                                            )}
+                                            onClick={() => {
+                                              if (categoryPrepDefault) {
+                                                removeCategoryPrepDefaultMutation.mutate({
+                                                  locationId: selectedLocationId!,
+                                                  categoryId: category.id,
+                                                });
+                                              }
+                                            }}
+                                          >
+                                            <div className="h-3 w-3 rounded-full border border-dashed border-muted-foreground/50 flex-shrink-0" />
+                                            <span className="flex-1 text-left">
+                                              None (routes to Expo)
+                                            </span>
+                                            {!assignedStation && (
+                                              <Check className="h-3.5 w-3.5 text-primary" />
+                                            )}
+                                          </button>
+                                          {/* Active prep stations */}
+                                          {prepStations
+                                            .filter((ps) => ps.is_active)
+                                            .map((ps) => (
+                                              <button
+                                                key={ps.id}
+                                                className={cn(
+                                                  "flex items-center gap-2 w-full rounded-md px-2 py-1.5 text-sm hover:bg-muted transition-colors",
+                                                  assignedStation?.id === ps.id && "bg-muted",
+                                                )}
+                                                onClick={() => {
+                                                  setCategoryPrepDefaultMutation.mutate({
+                                                    locationId: selectedLocationId!,
+                                                    categoryId: category.id,
+                                                    prepStationId: ps.id,
+                                                    merchantId: ps.merchant_id,
+                                                  });
+                                                }}
+                                              >
+                                                <div
+                                                  className="h-3 w-3 rounded-full flex-shrink-0"
+                                                  style={{ backgroundColor: ps.color }}
+                                                />
+                                                <span className="flex-1 text-left truncate">
+                                                  {ps.name}
+                                                </span>
+                                                {assignedStation?.id === ps.id && (
+                                                  <Check className="h-3.5 w-3.5 text-primary" />
+                                                )}
+                                              </button>
+                                            ))}
+                                        </div>
+                                      )}
+                                    </PopoverContent>
+                                  </Popover>
+                                );
+                              })()}
 
                               {/* Edit button - only for global view */}
                               {isAllLocations && (
