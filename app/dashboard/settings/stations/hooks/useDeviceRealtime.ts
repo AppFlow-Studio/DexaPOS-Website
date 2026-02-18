@@ -47,27 +47,27 @@ export function useDeviceRealtime(locationId: string) {
             app_version: string | null;
           };
 
-          // Optimistically update the TanStack Query cache
+          const updatedHeartbeat: LatestHeartbeat = {
+            heartbeat_at: newHeartbeat.heartbeat_at,
+            is_online: newHeartbeat.is_online,
+            cpu_usage: newHeartbeat.cpu_usage,
+            battery_level: newHeartbeat.battery_level,
+            ram_free_mb: newHeartbeat.ram_free_mb,
+            storage_free_mb: newHeartbeat.storage_free_mb,
+            network_type: newHeartbeat.network_type,
+            printer_status: newHeartbeat.printer_status,
+            cfd_connected: newHeartbeat.cfd_connected,
+            app_version: newHeartbeat.app_version,
+          };
+
+          // Update stations-with-heartbeats cache
           queryClient.setQueryData<StationWithHeartbeat[]>(
-            ["devices-hardware", locationId],
+            ["stations-with-heartbeats", locationId],
             (oldData) => {
               if (!oldData) return oldData;
 
               return oldData.map((station) => {
                 if (station.id !== newHeartbeat.station_id) return station;
-
-                const updatedHeartbeat: LatestHeartbeat = {
-                  heartbeat_at: newHeartbeat.heartbeat_at,
-                  is_online: newHeartbeat.is_online,
-                  cpu_usage: newHeartbeat.cpu_usage,
-                  battery_level: newHeartbeat.battery_level,
-                  ram_free_mb: newHeartbeat.ram_free_mb,
-                  storage_free_mb: newHeartbeat.storage_free_mb,
-                  network_type: newHeartbeat.network_type,
-                  printer_status: newHeartbeat.printer_status,
-                  cfd_connected: newHeartbeat.cfd_connected,
-                  app_version: newHeartbeat.app_version,
-                };
 
                 return {
                   ...station,

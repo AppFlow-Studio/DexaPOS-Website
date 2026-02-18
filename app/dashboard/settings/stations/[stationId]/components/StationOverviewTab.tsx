@@ -33,6 +33,12 @@ import {
   Plus,
   X,
   Router,
+  Smartphone,
+  Battery,
+  HardDrive,
+  MemoryStick,
+  Nfc,
+  TabletSmartphone,
 } from "lucide-react";
 import {
   Select,
@@ -119,6 +125,92 @@ function StatCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function HardwareFeatureChip({
+  icon: Icon,
+  label,
+  available,
+}: {
+  icon: React.ElementType;
+  label: string;
+  available: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2 px-3 py-2 rounded-lg border text-sm",
+        available
+          ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900"
+          : "bg-muted/50 border-muted"
+      )}
+    >
+      <Icon
+        className={cn(
+          "h-4 w-4 shrink-0",
+          available ? "text-green-600" : "text-muted-foreground"
+        )}
+      />
+      <span
+        className={cn(
+          "font-medium",
+          available ? "text-green-700 dark:text-green-400" : "text-muted-foreground"
+        )}
+      >
+        {label}
+      </span>
+      {available ? (
+        <CheckCircle className="h-3.5 w-3.5 text-green-500 ml-auto shrink-0" />
+      ) : (
+        <XCircle className="h-3.5 w-3.5 text-muted-foreground ml-auto shrink-0" />
+      )}
+    </div>
+  );
+}
+
+function ResourceBar({
+  icon: Icon,
+  label,
+  value,
+  max,
+  unit,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: number | null;
+  max: number;
+  unit: string;
+}) {
+  if (value === null) return null;
+
+  const percentage = Math.min((value / max) * 100, 100);
+  const barColor =
+    percentage > 50
+      ? "bg-green-500"
+      : percentage > 20
+        ? "bg-yellow-500"
+        : "bg-red-500";
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Icon className="h-4 w-4" />
+          <span>{label}</span>
+        </div>
+        <span className="font-medium">
+          {value}
+          {unit}
+        </span>
+      </div>
+      <div className="h-2 rounded-full bg-muted overflow-hidden">
+        <div
+          className={cn("h-full rounded-full transition-all", barColor)}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -213,12 +305,180 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
         />
       </div>
 
-      {/* Station Details & Capabilities */}
+      {/* Logged-in Device & Hardware */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Smartphone className="h-5 w-5" />
+            Logged-in Device & Hardware
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {station.device_id ? (
+            <div className="space-y-0">
+              {/* Device Identity */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Device Name</p>
+                  <p className="font-medium">{station.device_name || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Manufacturer</p>
+                  <p className="font-medium">{station.device_manufacturer || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Device Model</p>
+                  <p className="font-medium">{station.device_model || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Hardware Model</p>
+                  <p className="font-medium">{station.hardware_model || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">OS Version</p>
+                  <p className="font-medium">{station.os_version || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">App Version</p>
+                  <p className="font-medium">{station.app_version || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Android SDK</p>
+                  <p className="font-medium">
+                    {station.android_sdk_version != null
+                      ? `API ${station.android_sdk_version}`
+                      : "—"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Hardware Features */}
+              <div className="border-t pt-4 mt-4">
+                <p className="text-sm font-medium text-muted-foreground mb-3">
+                  Hardware Features
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <HardwareFeatureChip
+                    icon={Nfc}
+                    label="NFC"
+                    available={station.has_nfc}
+                  />
+                  <HardwareFeatureChip
+                    icon={Printer}
+                    label="Built-in Printer"
+                    available={station.has_builtin_printer}
+                  />
+                  <HardwareFeatureChip
+                    icon={Monitor}
+                    label="Built-in CFD"
+                    available={station.has_builtin_cfd}
+                  />
+                  <HardwareFeatureChip
+                    icon={TabletSmartphone}
+                    label="Cash Drawer Port"
+                    available={station.has_cash_drawer_port}
+                  />
+                </div>
+              </div>
+
+              {/* System Resources */}
+              {(station.battery_level != null ||
+                station.ram_free_mb != null ||
+                station.storage_free_mb != null) && (
+                <div className="border-t pt-4 mt-4">
+                  <p className="text-sm font-medium text-muted-foreground mb-3">
+                    System Resources
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <ResourceBar
+                      icon={Battery}
+                      label="Battery"
+                      value={station.battery_level}
+                      max={100}
+                      unit="%"
+                    />
+                    <ResourceBar
+                      icon={MemoryStick}
+                      label="Free RAM"
+                      value={station.ram_free_mb}
+                      max={4096}
+                      unit=" MB"
+                    />
+                    <ResourceBar
+                      icon={HardDrive}
+                      label="Free Storage"
+                      value={station.storage_free_mb}
+                      max={32768}
+                      unit=" MB"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Display & Network */}
+              <div className="border-t pt-4 mt-4">
+                <p className="text-sm font-medium text-muted-foreground mb-3">
+                  Display & Network
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Screen Resolution</p>
+                    <p className="font-medium">
+                      {station.screen_width != null && station.screen_height != null
+                        ? `${station.screen_width} x ${station.screen_height}`
+                        : "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Screen Density</p>
+                    <p className="font-medium">
+                      {station.screen_density != null
+                        ? `${station.screen_density} dpi`
+                        : "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Network Type</p>
+                    <p className="font-medium capitalize">
+                      {station.network_type || "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Wi-Fi SSID</p>
+                    <p className="font-medium">{station.network_ssid || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Local IP</p>
+                    <p className="font-mono text-sm">
+                      {station.local_ip_address || station.ip_address || "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">MAC Address</p>
+                    <p className="font-mono text-sm">{station.mac_address || "—"}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <Smartphone className="h-10 w-10 text-muted-foreground mb-3" />
+              <p className="font-medium">No device registered</p>
+              <p className="text-sm text-muted-foreground mb-3">
+                This station has not been linked to a physical device yet.
+              </p>
+              <Badge variant="secondary">Awaiting device registration</Badge>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Station Configuration & Capabilities */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Station Details */}
+        {/* Station Configuration */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Station Details</CardTitle>
+            <CardTitle className="text-lg">Station Configuration</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -243,14 +503,6 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
               <div>
                 <p className="text-sm text-muted-foreground">View Scope</p>
                 <p className="font-medium">{getViewScopeLabel(station.view_scope)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Device Name</p>
-                <p className="font-medium">{station.device_name || "—"}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Hardware Model</p>
-                <p className="font-medium">{station.hardware_model || "—"}</p>
               </div>
             </div>
           </CardContent>

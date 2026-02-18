@@ -442,6 +442,7 @@ export interface UpdateItemParams {
   description?: string;
   price?: number | null;
   cashPrice?: number | null;
+  deliveryPrice?: number | null;
   image?: string;
   availability?: boolean;
   allergens?: string[];
@@ -808,7 +809,6 @@ export async function updateItemOverride(
         updateData.available_channels = params.availableChannels;
         changesLog.available_channels = params.availableChannels;
       }
-
       const { error } = await supabase
         .from("menu_items")
         .update(updateData)
@@ -897,6 +897,7 @@ export async function updateItemOverride(
   if (
     params.price !== undefined ||
     params.cashPrice !== undefined ||
+    params.deliveryPrice !== undefined ||
     params.availability !== undefined ||
     params.priceModifier !== undefined ||
     params.displayOrder !== undefined ||
@@ -913,6 +914,7 @@ export async function updateItemOverride(
         p_location_id: locationId || null,
         p_custom_price: params.price,
         p_custom_cash_price: params.cashPrice,
+        p_custom_delivery_price: params.deliveryPrice,
         p_is_available: params.availability,
         p_price_modifier: params.priceModifier,
         p_price_modifier_type: params.priceModifierType,
@@ -933,6 +935,8 @@ export async function updateItemOverride(
       if (params.price !== undefined) changesLog.price = params.price;
       if (params.cashPrice !== undefined)
         changesLog.cash_price = params.cashPrice;
+      if (params.deliveryPrice !== undefined)
+        changesLog.delivery_price = params.deliveryPrice;
       if (params.availability !== undefined)
         changesLog.availability = params.availability;
       if (params.priceModifier !== undefined)
