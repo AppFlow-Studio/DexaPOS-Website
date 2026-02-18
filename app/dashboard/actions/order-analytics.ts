@@ -1518,3 +1518,732 @@ export async function GetFinancialKPIs(
 
   return kpis as FinancialKPIs;
 }
+
+// ============================================================================
+// Phase 1: New Server Actions
+// ============================================================================
+
+import type {
+  RevenueBreakdown,
+  DualPricingComparison,
+  DiscountImpact,
+  SalesSummaryRow,
+  HourlySalesRow,
+  KitchenPerformanceStats,
+  TablePerformanceStats,
+  ServerLeaderboardRow,
+  TipsAnalysis,
+  StaffOrderActivityRow,
+  StaffPerformanceStats,
+  OrderFlowStats,
+} from "@/types/analytics";
+
+/**
+ * A1 — Revenue Breakdown (subtotal, tax, tips, service charges, discounts)
+ */
+export async function GetRevenueBreakdown(
+  clerkOrgId: string,
+  locationId: string | null,
+  dateFrom: Date,
+  dateTo: Date
+): Promise<RevenueBreakdown> {
+  const empty: RevenueBreakdown = {
+    subtotal: 0,
+    tax: 0,
+    tips: 0,
+    serviceCharges: 0,
+    discounts: 0,
+    netRevenue: 0,
+    byDate: [],
+  };
+
+  const merchantId = await getMerchantId(clerkOrgId);
+  if (!merchantId) return empty;
+
+  const supabase = createServerSupabaseClient();
+
+  let query = supabase
+    .from("orders")
+    .select(
+      "created_at, subtotal, tax_amount, tip_amount, service_charge, discount_amount, total_amount"
+    )
+    .eq("merchant_id", merchantId)
+    .not("status", "in", "(draft,cancelled,void)")
+    .gte("created_at", dateFrom.toISOString())
+    .lte("created_at", dateTo.toISOString());
+
+  if (locationId && locationId !== "all") {
+    query = query.eq("location_id", locationId);
+  }
+
+  const { data: orders, error } = await query;
+  if (error || !orders) {
+    console.error("[GetRevenueBreakdown] Error:", error);
+    return empty;
+  }
+
+  let subtotal = 0;
+  let tax = 0;
+  let tips = 0;
+  let serviceCharges = 0;
+  let discounts = 0;
+
+  const byDateMap = new Map<
+    string,
+    {
+      subtotal: number;
+      tax: number;
+      tips: number;
+      serviceCharges: number;
+      discounts: number;
+    }
+  >();
+
+  for (const o of orders) {
+    const s = Number(o.subtotal || 0);
+    const t = Number(o.tax_amount || 0);
+    const tp = Number(o.tip_amount || 0);
+    const sc = Number(o.service_charge || 0);
+    const d = Number(o.discount_amount || 0);
+
+    subtotal += s;
+    tax += t;
+    tips += tp;
+    serviceCharges += sc;
+    discounts += d;
+
+    const date = new Date(o.created_at).toISOString().split("T")[0];
+    const existing = byDateMap.get(date) || {
+      subtotal: 0,
+      tax: 0,
+      tips: 0,
+      serviceCharges: 0,
+      discounts: 0,
+    };
+    byDateMap.set(date, {
+      subtotal: existing.subtotal + s,
+      tax: existing.tax + t,
+      tips: existing.tips + tp,
+      serviceCharges: existing.serviceCharges + sc,
+      discounts: existing.discounts + d,
+    });
+  }
+
+  const byDate = Array.from(byDateMap.entries())
+    .map(([date, data]) => ({ date, ...data }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  return {
+    subtotal,
+    tax,
+    tips,
+    serviceCharges,
+    discounts,
+    netRevenue: subtotal + tax + tips + serviceCharges - discounts,
+    byDate,
+  };
+}
+
+/**
+ * A2 — Dual Pricing Comparison (card vs cash revenue)
+ */
+export async function GetDualPricingComparison(
+  clerkOrgId: string,
+  locationId: string | null,
+  dateFrom: Date,
+  dateTo: Date
+): Promise<DualPricingComparison> {
+  const empty: DualPricingComparison = {
+    cardRevenue: 0,
+    cashRevenue: 0,
+    cardTransactions: 0,
+    cashTransactions: 0,
+    cashDiscountSavings: 0,
+    hasDualPricing: false,
+    byDate: [],
+  };
+
+  const merchantId = await getMerchantId(clerkOrgId);
+  if (!merchantId) return empty;
+
+  const supabase = createServerSupabaseClient();
+
+  let query = supabase
+    .from("orders")
+    .select(
+      "created_at, total_amount, card_total, cash_total, cash_discount_applied, payment_pricing_mode"
+    )
+    .eq("merchant_id", merchantId)
+    .not("status", "in", "(draft,cancelled,void)")
+    .gte("created_at", dateFrom.toISOString())
+    .lte("created_at", dateTo.toISOString());
+
+  if (locationId && locationId !== "all") {
+    query = query.eq("location_id", locationId);
+  }
+
+  const { data: orders, error } = await query;
+  if (error || !orders) {
+    console.error("[GetDualPricingComparison] Error:", error);
+    return empty;
+  }
+
+  const hasDualPricing = orders.some(
+    (o: any) => o.cash_discount_applied === true
+  );
+  if (!hasDualPricing) return { ...empty, hasDualPricing: false };
+
+  let cardRevenue = 0;
+  let cashRevenue = 0;
+  let cardTransactions = 0;
+  let cashTransactions = 0;
+  let cashDiscountSavings = 0;
+
+  const byDateMap = new Map<
+    string,
+    { cardRevenue: number; cashRevenue: number }
+  >();
+
+  for (const o of orders as any[]) {
+    const cardAmt = Number(o.card_total || 0);
+    const cashAmt = Number(o.cash_total || 0);
+    const total = Number(o.total_amount || 0);
+
+    if (o.cash_discount_applied) {
+      cashRevenue += cashAmt || total;
+      cashTransactions++;
+      cashDiscountSavings += cardAmt > 0 ? cardAmt - (cashAmt || total) : 0;
+    } else {
+      cardRevenue += cardAmt || total;
+      cardTransactions++;
+    }
+
+    const date = new Date(o.created_at).toISOString().split("T")[0];
+    const existing = byDateMap.get(date) || {
+      cardRevenue: 0,
+      cashRevenue: 0,
+    };
+    if (o.cash_discount_applied) {
+      existing.cashRevenue += cashAmt || total;
+    } else {
+      existing.cardRevenue += cardAmt || total;
+    }
+    byDateMap.set(date, existing);
+  }
+
+  const byDate = Array.from(byDateMap.entries())
+    .map(([date, data]) => ({ date, ...data }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  return {
+    cardRevenue,
+    cashRevenue,
+    cardTransactions,
+    cashTransactions,
+    cashDiscountSavings,
+    hasDualPricing: true,
+    byDate,
+  };
+}
+
+/**
+ * A3 — Discount Impact
+ */
+export async function GetDiscountImpact(
+  clerkOrgId: string,
+  locationId: string | null,
+  dateFrom: Date,
+  dateTo: Date
+): Promise<DiscountImpact> {
+  const empty: DiscountImpact = {
+    totalDiscounts: 0,
+    discountedOrderCount: 0,
+    totalOrderCount: 0,
+    discountedOrderPercent: 0,
+    avgDiscountPerOrder: 0,
+    bySource: [],
+    topDiscounts: [],
+  };
+
+  const merchantId = await getMerchantId(clerkOrgId);
+  if (!merchantId) return empty;
+
+  const supabase = createServerSupabaseClient();
+
+  // Get total order count for the period
+  let orderCountQuery = supabase
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("merchant_id", merchantId)
+    .not("status", "in", "(draft,cancelled,void)")
+    .gte("created_at", dateFrom.toISOString())
+    .lte("created_at", dateTo.toISOString());
+
+  if (locationId && locationId !== "all") {
+    orderCountQuery = orderCountQuery.eq("location_id", locationId);
+  }
+
+  const { count: totalOrderCount } = await orderCountQuery;
+
+  // Get discount data
+  let discountQuery = supabase
+    .from("order_discounts")
+    .select(
+      "order_id, discount_name, source, calculated_amount, orders!inner(merchant_id, location_id, created_at, status)"
+    )
+    .eq("orders.merchant_id", merchantId)
+    .not("orders.status", "in", "(draft,cancelled,void)")
+    .gte("orders.created_at", dateFrom.toISOString())
+    .lte("orders.created_at", dateTo.toISOString())
+    .is("voided_at", null);
+
+  if (locationId && locationId !== "all") {
+    discountQuery = discountQuery.eq("orders.location_id", locationId);
+  }
+
+  const { data: discounts, error } = await discountQuery;
+  if (error) {
+    console.error("[GetDiscountImpact] Error:", error);
+    return { ...empty, totalOrderCount: totalOrderCount || 0 };
+  }
+
+  if (!discounts || discounts.length === 0) {
+    return { ...empty, totalOrderCount: totalOrderCount || 0 };
+  }
+
+  let totalDiscounts = 0;
+  const uniqueOrderIds = new Set<string>();
+  const sourceMap = new Map<string, { amount: number; count: number }>();
+  const nameMap = new Map<string, { amount: number; count: number }>();
+
+  for (const d of discounts) {
+    const amount = Number(d.calculated_amount || 0);
+    totalDiscounts += amount;
+    uniqueOrderIds.add(d.order_id);
+
+    // By source
+    const source = (d as any).source || "unknown";
+    const srcEntry = sourceMap.get(source) || { amount: 0, count: 0 };
+    srcEntry.amount += amount;
+    srcEntry.count++;
+    sourceMap.set(source, srcEntry);
+
+    // By name
+    const name = d.discount_name || "Unknown";
+    const nameEntry = nameMap.get(name) || { amount: 0, count: 0 };
+    nameEntry.amount += amount;
+    nameEntry.count++;
+    nameMap.set(name, nameEntry);
+  }
+
+  const discountedOrderCount = uniqueOrderIds.size;
+  const total = totalOrderCount || 0;
+
+  return {
+    totalDiscounts,
+    discountedOrderCount,
+    totalOrderCount: total,
+    discountedOrderPercent:
+      total > 0 ? (discountedOrderCount / total) * 100 : 0,
+    avgDiscountPerOrder:
+      discountedOrderCount > 0 ? totalDiscounts / discountedOrderCount : 0,
+    bySource: Array.from(sourceMap.entries())
+      .map(([source, data]) => ({ source, ...data }))
+      .sort((a, b) => b.amount - a.amount),
+    topDiscounts: Array.from(nameMap.entries())
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5),
+  };
+}
+
+/**
+ * Sales Summary Report — aggregated by date
+ */
+export async function GetSalesSummaryReport(
+  clerkOrgId: string,
+  locationId: string | null,
+  dateFrom: Date,
+  dateTo: Date
+): Promise<SalesSummaryRow[]> {
+  const merchantId = await getMerchantId(clerkOrgId);
+  if (!merchantId) return [];
+
+  const supabase = createServerSupabaseClient();
+
+  let query = supabase
+    .from("orders")
+    .select(
+      "created_at, subtotal, tax_amount, tip_amount, discount_amount, total_amount, status"
+    )
+    .eq("merchant_id", merchantId)
+    .not("status", "in", "(draft,cancelled,void)")
+    .gte("created_at", dateFrom.toISOString())
+    .lte("created_at", dateTo.toISOString());
+
+  if (locationId && locationId !== "all") {
+    query = query.eq("location_id", locationId);
+  }
+
+  const { data: orders, error } = await query;
+  if (error || !orders) {
+    console.error("[GetSalesSummaryReport] Error:", error);
+    return [];
+  }
+
+  const byDateMap = new Map<
+    string,
+    {
+      orderCount: number;
+      grossSales: number;
+      discounts: number;
+      tax: number;
+      tips: number;
+      refunds: number;
+    }
+  >();
+
+  for (const o of orders) {
+    const date = new Date(o.created_at).toISOString().split("T")[0];
+    const existing = byDateMap.get(date) || {
+      orderCount: 0,
+      grossSales: 0,
+      discounts: 0,
+      tax: 0,
+      tips: 0,
+      refunds: 0,
+    };
+
+    existing.orderCount++;
+    existing.grossSales += Number(o.subtotal || 0);
+    existing.discounts += Number(o.discount_amount || 0);
+    existing.tax += Number(o.tax_amount || 0);
+    existing.tips += Number(o.tip_amount || 0);
+    if ((o as any).status === "refunded") {
+      existing.refunds += Number(o.total_amount || 0);
+    }
+
+    byDateMap.set(date, existing);
+  }
+
+  return Array.from(byDateMap.entries())
+    .map(([date, data]) => ({
+      date,
+      ...data,
+      netSales: data.grossSales - data.discounts,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * Hourly Sales Report — aggregated by hour of day
+ */
+export async function GetHourlySalesReport(
+  clerkOrgId: string,
+  locationId: string | null,
+  dateFrom: Date,
+  dateTo: Date
+): Promise<HourlySalesRow[]> {
+  const merchantId = await getMerchantId(clerkOrgId);
+  if (!merchantId) return [];
+
+  const supabase = createServerSupabaseClient();
+
+  let query = supabase
+    .from("orders")
+    .select("created_at, total_amount")
+    .eq("merchant_id", merchantId)
+    .not("status", "in", "(draft,cancelled,void)")
+    .gte("created_at", dateFrom.toISOString())
+    .lte("created_at", dateTo.toISOString());
+
+  if (locationId && locationId !== "all") {
+    query = query.eq("location_id", locationId);
+  }
+
+  const { data: orders, error } = await query;
+  if (error || !orders) {
+    console.error("[GetHourlySalesReport] Error:", error);
+    return [];
+  }
+
+  const hourMap = new Map<number, { count: number; sales: number }>();
+
+  for (const o of orders) {
+    const hour = new Date(o.created_at).getHours();
+    const amount = Number(o.total_amount || 0);
+    const existing = hourMap.get(hour) || { count: 0, sales: 0 };
+    existing.count++;
+    existing.sales += amount;
+    hourMap.set(hour, existing);
+  }
+
+  const hourLabels = [
+    "12 AM", "1 AM", "2 AM", "3 AM", "4 AM", "5 AM",
+    "6 AM", "7 AM", "8 AM", "9 AM", "10 AM", "11 AM",
+    "12 PM", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM",
+    "6 PM", "7 PM", "8 PM", "9 PM", "10 PM", "11 PM",
+  ];
+
+  return Array.from({ length: 24 }, (_, hour) => {
+    const data = hourMap.get(hour) || { count: 0, sales: 0 };
+    return {
+      hour,
+      hourLabel: hourLabels[hour],
+      orderCount: data.count,
+      grossSales: data.sales,
+      avgOrderValue: data.count > 0 ? data.sales / data.count : 0,
+    };
+  });
+}
+
+// ============================================================================
+// Phase 2: Kitchen Performance Analytics
+// ============================================================================
+
+/**
+ * K1 — Kitchen Performance Stats
+ * Calls RPC function for comprehensive kitchen analytics
+ */
+export async function GetKitchenPerformance(
+  clerkOrgId: string,
+  locationId: string | null,
+  dateFrom: Date,
+  dateTo: Date
+): Promise<KitchenPerformanceStats | null> {
+  const empty: KitchenPerformanceStats = {
+    avg_ticket_time_minutes: 0,
+    total_items_processed: 0,
+    by_station: [],
+    by_hour_and_day: [],
+    rush_stats: {
+      rush_items: 0,
+      total_items: 0,
+      rush_percentage: 0,
+      avg_rush_time_minutes: 0,
+      avg_normal_time_minutes: 0,
+    },
+    auto_bump_stats: {
+      auto_bumped: 0,
+      manual_completed: 0,
+      total_items: 0,
+      auto_bump_rate: 0,
+    },
+    daily_trend: [],
+  };
+
+  const merchantId = await getMerchantId(clerkOrgId);
+  if (!merchantId) return empty;
+
+  const supabase = createServerSupabaseClient();
+
+  const { data, error } = await supabase.rpc("get_kitchen_performance_stats", {
+    p_merchant_id: merchantId,
+    p_location_id: locationId === "all" ? null : locationId,
+    p_start_date: dateFrom.toISOString(),
+    p_end_date: dateTo.toISOString(),
+  });
+
+  if (error) {
+    console.error("[GetKitchenPerformance] Error:", error);
+    return empty;
+  }
+
+  // Sanitize nulls from RPC response — PostgreSQL NULLIF / division can produce nulls
+  const raw = data as Record<string, unknown>;
+  const rushStats = (raw.rush_stats as Record<string, unknown>) || {};
+  const autoBumpStats = (raw.auto_bump_stats as Record<string, unknown>) || {};
+
+  return {
+    avg_ticket_time_minutes: (raw.avg_ticket_time_minutes as number) ?? 0,
+    total_items_processed: (raw.total_items_processed as number) ?? 0,
+    by_station: (raw.by_station as KitchenPerformanceStats["by_station"]) ?? [],
+    by_hour_and_day: (raw.by_hour_and_day as KitchenPerformanceStats["by_hour_and_day"]) ?? [],
+    rush_stats: {
+      rush_items: (rushStats.rush_items as number) ?? 0,
+      total_items: (rushStats.total_items as number) ?? 0,
+      rush_percentage: (rushStats.rush_percentage as number) ?? 0,
+      avg_rush_time_minutes: (rushStats.avg_rush_time_minutes as number) ?? 0,
+      avg_normal_time_minutes: (rushStats.avg_normal_time_minutes as number) ?? 0,
+    },
+    auto_bump_stats: {
+      auto_bumped: (autoBumpStats.auto_bumped as number) ?? 0,
+      manual_completed: (autoBumpStats.manual_completed as number) ?? 0,
+      total_items: (autoBumpStats.total_items as number) ?? 0,
+      auto_bump_rate: (autoBumpStats.auto_bump_rate as number) ?? 0,
+    },
+    daily_trend: (raw.daily_trend as KitchenPerformanceStats["daily_trend"]) ?? [],
+  };
+}
+
+/**
+ * C1-C6 — Table & Dine-In Performance Stats
+ * Calls RPC function for comprehensive dine-in analytics
+ */
+export async function GetTablePerformance(
+  clerkOrgId: string,
+  locationId: string | null,
+  dateFrom: Date,
+  dateTo: Date
+): Promise<TablePerformanceStats | null> {
+  const empty: TablePerformanceStats = {
+    avg_turn_time_minutes: 0,
+    total_sessions: 0,
+    total_covers: 0,
+    by_party_size: [],
+    daily_trend: [],
+    service_phases: [],
+    hourly_revpash: [],
+    table_utilization: [],
+    section_stats: [],
+  };
+
+  const merchantId = await getMerchantId(clerkOrgId);
+  if (!merchantId) return empty;
+
+  const supabase = createServerSupabaseClient();
+
+  const { data, error } = await supabase.rpc("get_table_performance_stats", {
+    p_merchant_id: merchantId,
+    p_location_id: locationId === "all" ? null : locationId,
+    p_start_date: dateFrom.toISOString(),
+    p_end_date: dateTo.toISOString(),
+  });
+
+  if (error) {
+    console.error("[GetTablePerformance] Error:", error);
+    return empty;
+  }
+
+  // Sanitize nulls from RPC response
+  const raw = data as Record<string, unknown>;
+
+  return {
+    avg_turn_time_minutes: (raw.avg_turn_time_minutes as number) ?? 0,
+    total_sessions: (raw.total_sessions as number) ?? 0,
+    total_covers: (raw.total_covers as number) ?? 0,
+    by_party_size: (raw.by_party_size as TablePerformanceStats["by_party_size"]) ?? [],
+    daily_trend: (raw.daily_trend as TablePerformanceStats["daily_trend"]) ?? [],
+    service_phases: (raw.service_phases as TablePerformanceStats["service_phases"]) ?? [],
+    hourly_revpash: (raw.hourly_revpash as TablePerformanceStats["hourly_revpash"]) ?? [],
+    table_utilization: (raw.table_utilization as TablePerformanceStats["table_utilization"]) ?? [],
+    section_stats: (raw.section_stats as TablePerformanceStats["section_stats"]) ?? [],
+  };
+}
+
+/**
+ * D1-D3 — Staff Performance Stats (leaderboard, tips analysis, order activity)
+ */
+export async function GetStaffPerformance(
+  clerkOrgId: string,
+  locationId: string | null,
+  dateFrom: Date,
+  dateTo: Date
+): Promise<StaffPerformanceStats | null> {
+  const empty: StaffPerformanceStats = {
+    total_active_staff: 0,
+    total_orders: 0,
+    total_tips: 0,
+    avg_tip_pct: 0,
+    leaderboard: [],
+    tips_analysis: {
+      total_tips: 0,
+      avg_tip_pct: 0,
+      cash_tips: 0,
+      card_tips: 0,
+      tip_distribution: [],
+      by_staff: [],
+    },
+    order_activity: [],
+  };
+
+  const merchantId = await getMerchantId(clerkOrgId);
+  if (!merchantId) return empty;
+
+  const supabase = createServerSupabaseClient();
+
+  const { data, error } = await supabase.rpc("get_staff_performance_stats", {
+    p_merchant_id: merchantId,
+    p_location_id: locationId === "all" ? null : locationId,
+    p_start_date: dateFrom.toISOString(),
+    p_end_date: dateTo.toISOString(),
+  });
+
+  if (error) {
+    console.error("[GetStaffPerformance] Error:", error);
+    return empty;
+  }
+
+  // Sanitize nulls from RPC response
+  const raw = data as Record<string, unknown>;
+
+  return {
+    total_active_staff: (raw.total_active_staff as number) ?? 0,
+    total_orders: (raw.total_orders as number) ?? 0,
+    total_tips: (raw.total_tips as number) ?? 0,
+    avg_tip_pct: (raw.avg_tip_pct as number) ?? 0,
+    leaderboard: (raw.leaderboard as ServerLeaderboardRow[]) ?? [],
+    tips_analysis: (raw.tips_analysis as TipsAnalysis) ?? empty.tips_analysis,
+    order_activity: (raw.order_activity as StaffOrderActivityRow[]) ?? [],
+  };
+}
+
+/**
+ * E1-E4 — Order Flow Stats (funnel, voids/refunds, order type breakdown, completion times)
+ */
+export async function GetOrderFlow(
+  clerkOrgId: string,
+  locationId: string | null,
+  dateFrom: Date,
+  dateTo: Date
+): Promise<OrderFlowStats | null> {
+  const empty: OrderFlowStats = {
+    total_orders: 0,
+    completion_rate: 0,
+    cancellation_rate: 0,
+    void_rate: 0,
+    funnel: [],
+    void_refund: {
+      total_voids: 0,
+      void_amount: 0,
+      total_refunds: 0,
+      refund_amount: 0,
+      by_reason: [],
+      top_voided_items: [],
+      staff_voids: [],
+    },
+    order_types: [],
+    completion_times: [],
+  };
+
+  const merchantId = await getMerchantId(clerkOrgId);
+  if (!merchantId) return empty;
+
+  const supabase = createServerSupabaseClient();
+
+  const { data, error } = await supabase.rpc("get_order_flow_stats", {
+    p_merchant_id: merchantId,
+    p_location_id: locationId === "all" ? null : locationId,
+    p_start_date: dateFrom.toISOString(),
+    p_end_date: dateTo.toISOString(),
+  });
+
+  if (error) {
+    console.error("[GetOrderFlow] Error:", error);
+    return empty;
+  }
+
+  // Sanitize nulls from RPC response
+  const raw = data as Record<string, unknown>;
+
+  return {
+    total_orders: (raw.total_orders as number) ?? 0,
+    completion_rate: (raw.completion_rate as number) ?? 0,
+    cancellation_rate: (raw.cancellation_rate as number) ?? 0,
+    void_rate: (raw.void_rate as number) ?? 0,
+    funnel: (raw.funnel as OrderFlowStats["funnel"]) ?? [],
+    void_refund: (raw.void_refund as OrderFlowStats["void_refund"]) ?? empty.void_refund,
+    order_types: (raw.order_types as OrderFlowStats["order_types"]) ?? [],
+    completion_times: (raw.completion_times as OrderFlowStats["completion_times"]) ?? [],
+  };
+}

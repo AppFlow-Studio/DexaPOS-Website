@@ -11346,6 +11346,119 @@ export type Database = {
         Args: { p_days: number }
         Returns: number
       }
+      get_admin_merchant_ids: { Args: never; Returns: string[] }
+      get_admin_transaction_detail: {
+        Args: { p_order_id: string }
+        Returns: Json
+      }
+      get_admin_transactions: {
+        Args: {
+          p_card_type?: string
+          p_date_from?: string
+          p_date_to?: string
+          p_location_ids?: string[]
+          p_max_amount?: number
+          p_merchant_ids?: string[]
+          p_min_amount?: number
+          p_page?: number
+          p_page_size?: number
+          p_payment_method?: string[]
+          p_payment_status?: string[]
+          p_search?: string
+          p_sort_by?: string
+          p_sort_dir?: string
+          p_staff_id?: string
+          p_status?: string[]
+        }
+        Returns: {
+          amount: number
+          authorization_code: string
+          card_last_four: string
+          card_type: string
+          created_at: string
+          customer_name: string
+          discount_amount: number
+          display_number: string
+          entry_mode: string
+          id: string
+          location_id: string
+          location_name: string
+          merchant_id: string
+          merchant_name: string
+          order_id: string
+          order_number: string
+          order_status: string
+          payment_method: string
+          payment_status: string
+          reference_number: string
+          staff_id: string
+          staff_name: string
+          status: string
+          subtotal_amount: number
+          tax_amount: number
+          tip_amount: number
+          total_amount: number
+          total_count: number
+        }[]
+      }
+      get_admin_transactions_export: {
+        Args: {
+          p_card_type?: string
+          p_date_from?: string
+          p_date_to?: string
+          p_limit?: number
+          p_location_ids?: string[]
+          p_max_amount?: number
+          p_merchant_ids?: string[]
+          p_min_amount?: number
+          p_payment_method?: string[]
+          p_payment_status?: string[]
+          p_search?: string
+          p_sort_by?: string
+          p_sort_dir?: string
+          p_staff_id?: string
+          p_status?: string[]
+        }
+        Returns: {
+          amount_tendered: number
+          authorization_code: string
+          batch_number: string
+          card_last_four: string
+          card_type: string
+          change_given: number
+          created_at: string
+          customer_name: string
+          device_id: string
+          discount_amount: number
+          display_number: string
+          entry_mode: string
+          is_returned: boolean
+          is_voided: boolean
+          location_id: string
+          location_name: string
+          merchant_id: string
+          merchant_name: string
+          order_id: string
+          order_number: string
+          order_status: string
+          order_type: string
+          payment_id: string
+          payment_method: string
+          payment_status: string
+          reference_number: string
+          return_amount: number
+          return_reason: string
+          service_charge_amount: number
+          staff_name: string
+          subtotal_amount: number
+          tax_amount: number
+          terminal_serial: string
+          tip_amount: number
+          total_amount: number
+          total_count: number
+          void_reason: string
+        }[]
+      }
       get_aggregate_stock: {
         Args: { p_inventory_item_id: string }
         Returns: Json
