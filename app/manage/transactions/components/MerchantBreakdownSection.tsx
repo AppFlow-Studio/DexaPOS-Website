@@ -131,6 +131,8 @@ export function MerchantBreakdownSection({ filters }: MerchantBreakdownSectionPr
     data: breakdown,
     isLoading,
     isFetching,
+    isError,
+    error,
   } = usePlatformMerchantBreakdown(filters)
 
   const sortedRows = useMemo(() => {
@@ -153,6 +155,12 @@ export function MerchantBreakdownSection({ filters }: MerchantBreakdownSectionPr
   }, [breakdown, sortBy, sortDirection])
 
   const rangeLabel = useMemo(() => formatRangeLabel(filters), [filters])
+  const hasActiveFilters =
+    Boolean(filters.dateFrom) ||
+    Boolean(filters.dateTo) ||
+    Boolean(filters.merchantIds && filters.merchantIds.length > 0) ||
+    Boolean(filters.locationIds && filters.locationIds.length > 0) ||
+    Boolean(filters.paymentStatuses && filters.paymentStatuses.length > 0)
 
   const toggleSort = (key: MerchantBreakdownSortKey) => {
     if (sortBy === key) {
@@ -208,6 +216,13 @@ export function MerchantBreakdownSection({ filters }: MerchantBreakdownSectionPr
               <span>Total revenue: {formatCurrency(totalRevenue)}</span>
               <span>Total transactions: {totalTransactions.toLocaleString()}</span>
             </div>
+
+            {isError && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                Merchant breakdown is unavailable right now.
+                {` ${error instanceof Error ? error.message : 'Unknown error.'}`}
+              </div>
+            )}
 
             <Table containerClassName="max-h-[46vh] overflow-auto rounded-md border">
               <TableHeader className="sticky top-0 z-20 bg-card">
@@ -290,7 +305,9 @@ export function MerchantBreakdownSection({ filters }: MerchantBreakdownSectionPr
                 ) : sortedRows.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={11} className="py-8 text-center text-muted-foreground">
-                      No merchant data available for this period.
+                      {hasActiveFilters
+                        ? 'No merchant data for the current filters/date range.'
+                        : 'No merchant data available for this period.'}
                     </TableCell>
                   </TableRow>
                 ) : (
