@@ -73,27 +73,27 @@ export function RevenueBreakdownCard({ data, isLoading }: RevenueBreakdownCardPr
     >
       {data && (
         <>
-          {/* Stat boxes – DexaPOS themed */}
+          {/* Stat boxes – DexaPOS themed with dark mode support */}
           <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="bg-gray-50 border border-gray-200 p-2 rounded space-y-1">
-              <p className="text-xs text-gray-500">Subtotal</p>
-              <p className="text-lg font-bold text-gray-900">{formatCurrency(data.subtotal)}</p>
+            <div className="bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-gray-700 p-2 rounded space-y-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400">Subtotal</p>
+              <p className="text-lg font-bold text-gray-900 dark:text-white">{formatCurrency(data.subtotal)}</p>
             </div>
-            <div className="bg-gray-50 border border-gray-200 p-2 rounded space-y-1">
-              <p className="text-xs text-gray-500">Net Revenue</p>
-              <p className="text-lg font-bold text-[#0A5C9E]">
+            <div className="bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-gray-700 p-2 rounded space-y-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400">Net Revenue</p>
+              <p className="text-lg font-bold text-[#0A5C9E] dark:text-[#0A7AB8]">
                 {formatCurrency(data.netRevenue)}
               </p>
             </div>
-            <div className="bg-gray-50 border border-gray-200 p-2 rounded space-y-1">
-              <p className="text-xs text-gray-500">Tax + Charges</p>
-              <p className="text-lg font-bold text-gray-900">
+            <div className="bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-gray-700 p-2 rounded space-y-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400">Tax + Charges</p>
+              <p className="text-lg font-bold text-gray-900 dark:text-white">
                 {formatCurrency(data.tax + data.serviceCharges)}
               </p>
             </div>
-            <div className="bg-gray-50 border border-gray-200 p-2 rounded space-y-1">
-              <p className="text-xs text-gray-500">Tips</p>
-              <p className="text-lg font-bold text-gray-900">{formatCurrency(data.tips)}</p>
+            <div className="bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-gray-700 p-2 rounded space-y-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400">Tips</p>
+              <p className="text-lg font-bold text-gray-900 dark:text-white">{formatCurrency(data.tips)}</p>
             </div>
           </div>
 
@@ -102,33 +102,45 @@ export function RevenueBreakdownCard({ data, isLoading }: RevenueBreakdownCardPr
             <ChartContainer config={chartConfig} className="w-full h-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ left: 0, right: 10, top: 5, bottom: 20 }}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <CartesianGrid 
+                    vertical={false} 
+                    strokeDasharray="3 3" 
+                    stroke="hsl(var(--border))"
+                  />
                   <XAxis
                     dataKey="date"
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fontSize: 12 }}
+                    tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
                   />
                   <YAxis
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fontSize: 12 }}
+                    tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
                     tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
                   />
                   <Tooltip
-                    cursor={{ fill: 'rgba(0, 0, 0, 0.1)' }}
+                    cursor={{ fill: 'hsl(var(--muted)/0.3)' }}
                     content={({ active, payload, label }) => {
                       if (active && payload && payload.length) {
                         return (
-                          <div className="bg-white dark:bg-slate-950 p-3 rounded border border-slate-200 dark:border-slate-700 shadow-lg">
-                            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
+                          <div className="bg-white dark:bg-slate-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-lg">
+                            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">
                               {label}
                             </p>
-                            <div className="space-y-1">
+                            <div className="space-y-1.5">
                               {payload.map((item, index) => (
-                                <div key={index} className="flex items-center justify-between gap-2">
-                                  <span className="text-xs text-slate-700 dark:text-slate-300">{item.name}:</span>
-                                  <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                                <div key={index} className="flex items-center justify-between gap-4">
+                                  <div className="flex items-center gap-2">
+                                    <div 
+                                      className="w-2 h-2 rounded-full" 
+                                      style={{ backgroundColor: item.color }}
+                                    />
+                                    <span className="text-xs text-gray-600 dark:text-gray-300">
+                                      {item.name}:
+                                    </span>
+                                  </div>
+                                  <span className="text-xs font-medium text-gray-900 dark:text-white">
                                     {formatCurrency(Number(item.value))}
                                   </span>
                                 </div>
@@ -158,7 +170,7 @@ export function RevenueBreakdownCard({ data, isLoading }: RevenueBreakdownCardPr
                   className="w-3 h-3 rounded-sm flex-shrink-0"
                   style={{ backgroundColor: config.color }}
                 />
-                <span className="text-gray-500 truncate">{config.label}</span>
+                <span className="text-gray-500 dark:text-gray-400 truncate">{config.label}</span>
               </div>
             ))}
           </div>

@@ -51,8 +51,6 @@ import {
   ChartConfig,
 } from '@/components/ui/chart'
 
-
-
 import { RevenueBreakdownCard } from '@/components/dashboard/orders/analytics/RevenueBreakdownCard'
 import { DualPricingCard } from '@/components/dashboard/orders/analytics/DualPricingCard'
 import { DiscountImpactCard } from '@/components/dashboard/orders/analytics/DiscountImpactCard'
@@ -199,24 +197,24 @@ export default function AnalyticsPage() {
       <div className="flex items-center justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
               Analytics
             </h1>
 
             {isAllLocations ? (
-              <Badge variant="outline" className="gap-1">
+              <Badge variant="outline" className="gap-1 dark:border-slate-600 dark:text-slate-300">
                 <Globe className="h-3 w-3" />
                 All Locations
               </Badge>
             ) : (
-              <Badge variant="outline" className="gap-1">
+              <Badge variant="outline" className="gap-1 dark:border-slate-600 dark:text-slate-300">
                 <MapPin className="h-3 w-3" />
                 {selectedLocation?.name}
               </Badge>
             )}
           </div>
 
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground dark:text-slate-400">
             View detailed analytics and insights for your orders
           </p>
         </div>
@@ -237,14 +235,16 @@ export default function AnalyticsPage() {
             <Switch
               checked={autoRefresh}
               onCheckedChange={setAutoRefresh}
+              className="data-[state=checked]:bg-[#0A5C9E] dark:data-[state=checked]:bg-[#0A7AB8]"
             />
-            <Label>Auto-refresh</Label>
+            <Label className="dark:text-slate-300">Auto-refresh</Label>
           </div>
 
           <Button
             variant="outline"
             size="icon"
             onClick={() => setShowSettings(true)}
+            className="dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
           >
             <Settings className="h-4 w-4" />
           </Button>
@@ -253,17 +253,17 @@ export default function AnalyticsPage() {
 
       {/* Settings Dialog */}
       <Dialog open={showSettings} onOpenChange={setShowSettings}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[400px] dark:bg-slate-900 dark:border-slate-700">
           <DialogHeader>
-            <DialogTitle>Auto-Refresh Settings</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="dark:text-white">Auto-Refresh Settings</DialogTitle>
+            <DialogDescription className="dark:text-slate-400">
               Choose how often the data should refresh when auto-refresh is on.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             <div className="space-y-3">
-              <Label className="text-base font-semibold">Refresh Interval</Label>
+              <Label className="text-base font-semibold dark:text-slate-300">Refresh Interval</Label>
 
               {[
                 { value: 30000, label: '30 seconds' },
@@ -279,11 +279,11 @@ export default function AnalyticsPage() {
                     value={value}
                     checked={refreshInterval === value}
                     onChange={() => setRefreshInterval(value)}
-                    className="h-4 w-4"
+                    className="h-4 w-4 accent-[#0A5C9E] dark:accent-[#0A7AB8]"
                   />
                   <Label
                     htmlFor={`interval-${value}`}
-                    className="font-normal cursor-pointer"
+                    className="font-normal cursor-pointer dark:text-slate-300"
                   >
                     {label}
                   </Label>
@@ -291,8 +291,8 @@ export default function AnalyticsPage() {
               ))}
             </div>
 
-            <div className="pt-4 border-t">
-              <p className="text-sm text-muted-foreground">
+            <div className="pt-4 border-t dark:border-slate-700">
+              <p className="text-sm text-muted-foreground dark:text-slate-400">
                 {autoRefresh
                   ? `Auto-refresh is ON (every ${refreshInterval / 1000}s)`
                   : 'Auto-refresh is OFF'}
@@ -304,34 +304,34 @@ export default function AnalyticsPage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="flex-wrap h-auto gap-2 bg-transparent border-b-2 border-slate-200 rounded-none p-0 pb-2">
+        <TabsList className="flex-wrap h-auto gap-2 bg-transparent border-b-2 border-slate-200 dark:border-slate-700 rounded-none p-0 pb-2">
           <TabsTrigger
             value="sales"
-            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 hover:text-slate-900 rounded-none"
+            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] dark:data-[state=active]:border-[#0A7AB8] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-none"
           >
             Sales & Revenue
           </TabsTrigger>
           <TabsTrigger
             value="kitchen"
-            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 hover:text-slate-900 rounded-none"
+            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] dark:data-[state=active]:border-[#0A7AB8] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-none"
           >
             Kitchen
           </TabsTrigger>
           <TabsTrigger
             value="tables"
-            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 hover:text-slate-900 rounded-none"
+            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] dark:data-[state=active]:border-[#0A7AB8] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-none"
           >
             Tables
           </TabsTrigger>
           <TabsTrigger
             value="staff"
-            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 hover:text-slate-900 rounded-none"
+            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] dark:data-[state=active]:border-[#0A7AB8] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-none"
           >
             Staff
           </TabsTrigger>
           <TabsTrigger
             value="orders"
-            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 hover:text-slate-900 rounded-none"
+            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] dark:data-[state=active]:border-[#0A7AB8] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-none"
           >
             Order Flow
           </TabsTrigger>
@@ -341,16 +341,16 @@ export default function AnalyticsPage() {
         <TabsContent value="sales" className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {/* Total Sales */}
-            <Card>
+            <Card className="dark:bg-slate-900 dark:border-slate-700">
               <CardHeader className="flex justify-between pb-2">
-                <CardTitle className="text-sm">Total Sales</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm dark:text-slate-300">Total Sales</CardTitle>
+                <DollarSign className="h-4 w-4 text-muted-foreground dark:text-slate-500" />
               </CardHeader>
               <CardContent>
                 {isLoading ? (
-                  <Skeleton className="h-8 w-24" />
+                  <Skeleton className="h-8 w-24 dark:bg-slate-800" />
                 ) : (
-                  <div className="text-2xl font-bold">
+                  <div className="text-2xl font-bold dark:text-white">
                     {formatCurrency(totalSales)}
                   </div>
                 )}
@@ -358,16 +358,16 @@ export default function AnalyticsPage() {
             </Card>
 
             {/* Total Orders */}
-            <Card>
+            <Card className="dark:bg-slate-900 dark:border-slate-700">
               <CardHeader className="flex justify-between pb-2">
-                <CardTitle className="text-sm">Total Orders</CardTitle>
-                <ShoppingBag className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm dark:text-slate-300">Total Orders</CardTitle>
+                <ShoppingBag className="h-4 w-4 text-muted-foreground dark:text-slate-500" />
               </CardHeader>
               <CardContent>
                 {isLoading ? (
-                  <Skeleton className="h-8 w-16" />
+                  <Skeleton className="h-8 w-16 dark:bg-slate-800" />
                 ) : (
-                  <div className="text-2xl font-bold">
+                  <div className="text-2xl font-bold dark:text-white">
                     {analytics?.totalOrders ?? 0}
                   </div>
                 )}
@@ -375,16 +375,16 @@ export default function AnalyticsPage() {
             </Card>
 
             {/* AOV */}
-            <Card>
+            <Card className="dark:bg-slate-900 dark:border-slate-700">
               <CardHeader className="flex justify-between pb-2">
-                <CardTitle className="text-sm">Average Order Value</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm dark:text-slate-300">Average Order Value</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground dark:text-slate-500" />
               </CardHeader>
               <CardContent>
                 {isLoading ? (
-                  <Skeleton className="h-8 w-24" />
+                  <Skeleton className="h-8 w-24 dark:bg-slate-800" />
                 ) : (
-                  <div className="text-2xl font-bold">
+                  <div className="text-2xl font-bold dark:text-white">
                     {formatCurrency(analytics?.avgOrderValue ?? 0)}
                   </div>
                 )}

@@ -53,9 +53,9 @@ export function ReportDataTable<TData, TValue>({
 
   return (
     <div>
-      <div className="rounded-md border border-gray-200 overflow-hidden">
+      <div className="rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
         <Table>
-          <TableHeader className="bg-[#0A5C9E]">
+          <TableHeader className="bg-[#0A5C9E] dark:bg-[#0A4A7E]">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="hover:bg-transparent border-none">
                 {headerGroup.headers.map((header) => (
@@ -79,7 +79,7 @@ export function ReportDataTable<TData, TValue>({
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
-                  className="h-24 text-center text-gray-500"
+                  className="h-24 text-center text-gray-500 dark:text-gray-400"
                 >
                   Loading...
                 </TableCell>
@@ -89,10 +89,15 @@ export function ReportDataTable<TData, TValue>({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && 'selected'}
-                  className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                  className={
+                    (index % 2 === 0 
+                      ? 'bg-white dark:bg-slate-900' 
+                      : 'bg-gray-50 dark:bg-slate-800/50'
+                    ) + ' hover:bg-gray-100 dark:hover:bg-slate-800'
+                  }
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="py-3">
+                    <TableCell key={cell.id} className="py-3 text-gray-900 dark:text-gray-100">
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
@@ -105,7 +110,7 @@ export function ReportDataTable<TData, TValue>({
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
-                  className="h-24 text-center text-gray-500"
+                  className="h-24 text-center text-gray-500 dark:text-gray-400"
                 >
                   No results.
                 </TableCell>
@@ -120,7 +125,7 @@ export function ReportDataTable<TData, TValue>({
           size="sm"
           onClick={() => table.previousPage()}
           disabled={!table.getCanPreviousPage()}
-          className="border-[#0A5C9E] text-[#0A5C9E] hover:bg-[#0A5C9E]/10 disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent"
+          className="border-[#0A5C9E] dark:border-[#0A7AB8] text-[#0A5C9E] dark:text-[#0A7AB8] hover:bg-[#0A5C9E]/10 dark:hover:bg-[#0A7AB8]/20 disabled:border-gray-300 dark:disabled:border-gray-600 disabled:text-gray-400 dark:disabled:text-gray-500 disabled:hover:bg-transparent dark:disabled:hover:bg-transparent"
         >
           Previous
         </Button>
@@ -129,7 +134,7 @@ export function ReportDataTable<TData, TValue>({
           size="sm"
           onClick={() => table.nextPage()}
           disabled={!table.getCanNextPage()}
-          className="border-[#0A5C9E] text-[#0A5C9E] hover:bg-[#0A5C9E]/10 disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent"
+          className="border-[#0A5C9E] dark:border-[#0A7AB8] text-[#0A5C9E] dark:text-[#0A7AB8] hover:bg-[#0A5C9E]/10 dark:hover:bg-[#0A7AB8]/20 disabled:border-gray-300 dark:disabled:border-gray-600 disabled:text-gray-400 dark:disabled:text-gray-500 disabled:hover:bg-transparent dark:disabled:hover:bg-transparent"
         >
           Next
         </Button>
