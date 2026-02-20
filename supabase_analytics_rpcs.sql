@@ -22,93 +22,142 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION get_merchant_retention(p_from TIMESTAMPTZ, p_to TIMESTAMPTZ)
-RETURNS TABLE(retained BIGINT, churned BIGINT, new_merchants BIGINT, retention_rate NUMERIC) AS $$
+CREATE OR REPLACE FUNCTION get_merchant_retention(
+  p_from TIMESTAMPTZ,
+  p_to   TIMESTAMPTZ
+)
+RETURNS TABLE(
+  retained BIGINT,
+  churned BIGINT,
+  new_merchants BIGINT,
+  retention_rate NUMERIC
+) AS $$
 DECLARE
   v_window_days INT;
-  v_period_start TIMESTAMPTZ;
-  v_period_end TIMESTAMPTZ;
-  v_prev_start TIMESTAMPTZ;
-  v_prev_end TIMESTAMPTZ;
+  v_prev_start  TIMESTAMPTZ;
+  v_prev_end    TIMESTAMPTZ;
 BEGIN
-  v_window_days := (p_to - p_from)::INT;
-  v_period_start := p_from;
-  v_period_end := p_to;
-  v_prev_start := p_from - (v_window_days || ' days')::INTERVAL;
-  v_prev_end := p_from;
+  -- Calculate window size
+  v_window_days := EXTRACT(DAY FROM (p_to - p_from));
+  v_prev_start  := p_from - (v_window_days || ' days')::INTERVAL;
+  v_prev_end    := p_from;
 
   RETURN QUERY
   WITH current_active AS (
-    SELECT DISTINCT merchant_id FROM orders
-    WHERE created_at >= v_period_start AND created_at < v_period_end
+    SELECT DISTINCT merchant_id
+    FROM orders
+    WHERE created_at >= p_from
+      AND created_at < p_to
   ),
   previous_active AS (
-    SELECT DISTINCT merchant_id FROM orders
-    WHERE created_at >= v_prev_start AND created_at < v_prev_end
+    SELECT DISTINCT merchant_id
+    FROM orders
+    WHERE created_at >= v_prev_start
+      AND created_at < v_prev_end
   ),
-  current_new AS (
-    SELECT DISTINCT merchant_id FROM merchants
-    WHERE created_at >= v_period_start AND created_at < v_period_end
+  new_merchants_cte AS (
+    SELECT COUNT(*)::BIGINT AS cnt
+    FROM merchants
+    WHERE created_at >= p_from
+      AND created_at < p_to
   )
+
   SELECT
-    COUNT(DISTINCT CASE WHEN ca.merchant_id IS NOT NULL THEN pa.merchant_id END)::BIGINT as retained,
-    COUNT(DISTINCT CASE WHEN ca.merchant_id IS NULL THEN pa.merchant_id END)::BIGINT as churned,
-    COUNT(DISTINCT cn.merchant_id)::BIGINT as new_merchants,
+    -- Retained = active in both periods
+    COUNT(DISTINCT pa.merchant_id)
+      FILTER (WHERE ca.merchant_id IS NOT NULL)::BIGINT AS retained,
+
+    -- Churned = active before but not now
+    COUNT(DISTINCT pa.merchant_id)
+      FILTER (WHERE ca.merchant_id IS NULL)::BIGINT AS churned,
+
+    -- Newly created merchants in current window
+    (SELECT cnt FROM new_merchants_cte) AS new_merchants,
+
+    -- Retention %
     CASE
-      WHEN COUNT(DISTINCT pa.merchant_id) > 0
-      THEN (COUNT(DISTINCT CASE WHEN ca.merchant_id IS NOT NULL THEN pa.merchant_id END)::NUMERIC / COUNT(DISTINCT pa.merchant_id) * 100)::NUMERIC(5,2)
+      WHEN COUNT(DISTINCT pa.merchant_id) > 0 THEN
+        (
+          COUNT(DISTINCT pa.merchant_id)
+          FILTER (WHERE ca.merchant_id IS NOT NULL)::NUMERIC
+          / COUNT(DISTINCT pa.merchant_id)
+        * 100
+        )::NUMERIC(5,2)
       ELSE 0::NUMERIC
-    END as retention_rate
+    END AS retention_rate
+
   FROM previous_active pa
-  FULL OUTER JOIN current_active ca ON pa.merchant_id = ca.merchant_id
-  CROSS JOIN (SELECT * FROM current_new LIMIT 1) cn;
+  LEFT JOIN current_active ca
+    ON pa.merchant_id = ca.merchant_id;
+
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION get_churn_risk_merchants(p_from TIMESTAMPTZ, p_to TIMESTAMPTZ)
-RETURNS TABLE(merchant_id UUID, merchant_name TEXT, last_period_revenue NUMERIC, current_revenue NUMERIC, change_pct NUMERIC) AS $$
+CREATE OR REPLACE FUNCTION get_churn_risk_merchants(
+  p_from TIMESTAMPTZ,
+  p_to   TIMESTAMPTZ
+)
+RETURNS TABLE(
+  merchant_id UUID,
+  merchant_name TEXT,
+  last_period_revenue NUMERIC,
+  current_revenue NUMERIC,
+  change_pct NUMERIC
+) AS $$
 DECLARE
   v_window_days INT;
-  v_period_start TIMESTAMPTZ;
-  v_period_end TIMESTAMPTZ;
-  v_prev_start TIMESTAMPTZ;
-  v_prev_end TIMESTAMPTZ;
+  v_prev_start  TIMESTAMPTZ;
+  v_prev_end    TIMESTAMPTZ;
 BEGIN
-  v_window_days := (p_to - p_from)::INT;
-  v_period_start := p_from;
-  v_period_end := p_to;
-  v_prev_start := p_from - (v_window_days || ' days')::INTERVAL;
-  v_prev_end := p_from;
+  -- Calculate window size correctly
+  v_window_days := EXTRACT(DAY FROM (p_to - p_from));
+  v_prev_start  := p_from - (v_window_days || ' days')::INTERVAL;
+  v_prev_end    := p_from;
 
   RETURN QUERY
   WITH current_rev AS (
-    SELECT merchant_id, COALESCE(SUM(total_amount), 0) as revenue
-    FROM orders
-    WHERE created_at >= v_period_start AND created_at < v_period_end
-      AND status NOT IN ('draft', 'cancelled', 'void')
-    GROUP BY merchant_id
+    SELECT 
+      o.merchant_id,
+      COALESCE(SUM(o.total_amount), 0) AS revenue
+    FROM orders o
+    WHERE o.created_at >= p_from
+      AND o.created_at < p_to
+      AND o.status NOT IN ('draft', 'cancelled', 'void')
+    GROUP BY o.merchant_id
   ),
   previous_rev AS (
-    SELECT merchant_id, COALESCE(SUM(total_amount), 0) as revenue
-    FROM orders
-    WHERE created_at >= v_prev_start AND created_at < v_prev_end
-      AND status NOT IN ('draft', 'cancelled', 'void')
-    GROUP BY merchant_id
+    SELECT 
+      o.merchant_id,
+      COALESCE(SUM(o.total_amount), 0) AS revenue
+    FROM orders o
+    WHERE o.created_at >= v_prev_start
+      AND o.created_at < v_prev_end
+      AND o.status NOT IN ('draft', 'cancelled', 'void')
+    GROUP BY o.merchant_id
   )
+
   SELECT
     cr.merchant_id,
     m.name::TEXT,
-    pr.revenue::NUMERIC,
-    cr.revenue::NUMERIC,
+    pr.revenue::NUMERIC AS last_period_revenue,
+    cr.revenue::NUMERIC AS current_revenue,
     CASE
-      WHEN pr.revenue > 0 THEN ((cr.revenue - pr.revenue) / pr.revenue * 100)::NUMERIC(5,2)
+      WHEN pr.revenue > 0
+      THEN ((cr.revenue - pr.revenue) / pr.revenue * 100)::NUMERIC(5,2)
       ELSE 0::NUMERIC
-    END as change_pct
+    END AS change_pct
+
   FROM current_rev cr
-  LEFT JOIN previous_rev pr ON cr.merchant_id = pr.merchant_id
-  JOIN merchants m ON cr.merchant_id = m.id
-  WHERE pr.revenue > 0 AND ((cr.revenue - pr.revenue) / pr.revenue) < -0.5
+  JOIN previous_rev pr
+    ON cr.merchant_id = pr.merchant_id
+  JOIN merchants m
+    ON cr.merchant_id = m.id
+
+  WHERE pr.revenue > 0
+    AND ((cr.revenue - pr.revenue) / pr.revenue) < -0.5
+
   ORDER BY change_pct;
+
 END;
 $$ LANGUAGE plpgsql;
 
@@ -224,16 +273,24 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION get_payment_method_mix(p_from TIMESTAMPTZ, p_to TIMESTAMPTZ)
-RETURNS TABLE(payment_method TEXT, txn_count BIGINT, total_amount NUMERIC) AS $$
+CREATE OR REPLACE FUNCTION get_payment_method_mix(
+  p_from TIMESTAMPTZ,
+  p_to   TIMESTAMPTZ
+)
+RETURNS TABLE(
+  payment_method TEXT,
+  txn_count BIGINT,
+  total_amount NUMERIC
+) AS $$
 BEGIN
   RETURN QUERY
   SELECT
     op.payment_method::TEXT,
-    COUNT(*)::BIGINT as txn_count,
-    COALESCE(SUM(op.total_amount), 0)::NUMERIC as total_amount
+    COUNT(*)::BIGINT AS txn_count,
+    COALESCE(SUM(op.total_amount), 0)::NUMERIC AS total_amount
   FROM order_payments op
-  WHERE op.created_at >= p_from AND op.created_at < p_to
+  WHERE op.initiated_at >= p_from
+    AND op.initiated_at < p_to
   GROUP BY op.payment_method
   ORDER BY txn_count DESC;
 END;
@@ -270,38 +327,50 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION get_tip_rate_by_day(p_from TIMESTAMPTZ, p_to TIMESTAMPTZ)
+CREATE OR REPLACE FUNCTION get_tip_rate_by_day(
+  p_from TIMESTAMPTZ,
+  p_to   TIMESTAMPTZ
+)
 RETURNS TABLE(date DATE, tip_rate_pct NUMERIC) AS $$
 BEGIN
   RETURN QUERY
   SELECT
-    DATE(op.created_at) as date,
+    DATE(op.initiated_at) AS date,
     CASE
       WHEN SUM(op.total_amount) > 0
       THEN (SUM(op.tip_amount)::NUMERIC / SUM(op.total_amount) * 100)::NUMERIC(5,2)
       ELSE 0::NUMERIC
-    END as tip_rate_pct
+    END AS tip_rate_pct
   FROM order_payments op
-  WHERE op.created_at >= p_from AND op.created_at < p_to
-  GROUP BY DATE(op.created_at)
+  WHERE op.initiated_at >= p_from
+    AND op.initiated_at < p_to
+  GROUP BY DATE(op.initiated_at)
   ORDER BY date;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION get_refund_rate_by_day(p_from TIMESTAMPTZ, p_to TIMESTAMPTZ)
+CREATE OR REPLACE FUNCTION get_refund_rate_by_day(
+  p_from TIMESTAMPTZ,
+  p_to   TIMESTAMPTZ
+)
 RETURNS TABLE(date DATE, refund_rate_pct NUMERIC) AS $$
 BEGIN
   RETURN QUERY
   SELECT
-    DATE(op.created_at) as date,
+    DATE(op.initiated_at) AS date,
     CASE
       WHEN SUM(op.total_amount) > 0
-      THEN (SUM(CASE WHEN op.status IN ('refunded', 'partially_refunded') THEN op.amount ELSE 0 END)::NUMERIC / SUM(op.total_amount) * 100)::NUMERIC(5,2)
+      THEN (
+        SUM(CASE WHEN op.status IN ('refunded', 'partially_refunded')
+                 THEN op.amount ELSE 0 END)::NUMERIC
+        / SUM(op.total_amount) * 100
+      )::NUMERIC(5,2)
       ELSE 0::NUMERIC
-    END as refund_rate_pct
+    END AS refund_rate_pct
   FROM order_payments op
-  WHERE op.created_at >= p_from AND op.created_at < p_to
-  GROUP BY DATE(op.created_at)
+  WHERE op.initiated_at >= p_from
+    AND op.initiated_at < p_to
+  GROUP BY DATE(op.initiated_at)
   ORDER BY date;
 END;
 $$ LANGUAGE plpgsql;
@@ -342,54 +411,92 @@ BEGIN
   LIMIT 10;
 END;
 $$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION get_avg_kitchen_time(p_from TIMESTAMPTZ, p_to TIMESTAMPTZ)
-RETURNS TABLE(date DATE, avg_minutes NUMERIC, overall_avg NUMERIC) AS $$
+--sda
+CCREATE OR REPLACE FUNCTION get_avg_kitchen_time(
+  p_from TIMESTAMPTZ,
+  p_to   TIMESTAMPTZ
+)
+RETURNS TABLE(
+  date DATE,
+  avg_minutes NUMERIC,
+  overall_avg NUMERIC
+) AS $$
 BEGIN
   RETURN QUERY
   WITH daily_avg AS (
     SELECT
-      DATE(kis.created_at) as date,
-      AVG(EXTRACT(EPOCH FROM (kis.bumped_at - kis.created_at)) / 60)::NUMERIC(5,2) as avg_min
+      DATE(kis.created_at) AS kitchen_date,
+      AVG(EXTRACT(EPOCH FROM (kis.bumped_at - kis.created_at)) / 60)::NUMERIC(10,2) AS avg_min
     FROM kds_item_status kis
-    WHERE kis.created_at >= p_from AND kis.created_at < p_to
+    WHERE kis.created_at >= p_from
+      AND kis.created_at < p_to
       AND kis.bumped_at IS NOT NULL
     GROUP BY DATE(kis.created_at)
   )
   SELECT
-    date,
-    avg_min,
-    (SELECT AVG(EXTRACT(EPOCH FROM (kis.bumped_at - kis.created_at)) / 60)::NUMERIC(5,2)
-     FROM kds_item_status kis
-     WHERE kis.created_at >= p_from AND kis.created_at < p_to
-       AND kis.bumped_at IS NOT NULL) as overall_avg
-  FROM daily_avg
-  ORDER BY date;
+    d.kitchen_date AS date,
+    d.avg_min AS avg_minutes,
+    (
+      SELECT AVG(EXTRACT(EPOCH FROM (kis.bumped_at - kis.created_at)) / 60)::NUMERIC(10,2)
+      FROM kds_item_status kis
+      WHERE kis.created_at >= p_from
+        AND kis.created_at < p_to
+        AND kis.bumped_at IS NOT NULL
+    ) AS overall_avg
+  FROM daily_avg d
+  ORDER BY d.kitchen_date;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION get_avg_table_turn_time(p_from TIMESTAMPTZ, p_to TIMESTAMPTZ)
-RETURNS TABLE(date DATE, avg_minutes NUMERIC, overall_avg NUMERIC) AS $$
+CREATE OR REPLACE FUNCTION get_avg_table_turn_time(
+  p_from TIMESTAMPTZ,
+  p_to   TIMESTAMPTZ
+)
+RETURNS TABLE(
+  date DATE,
+  avg_minutes NUMERIC,
+  overall_avg NUMERIC
+) AS $$
 BEGIN
   RETURN QUERY
   WITH daily_avg AS (
     SELECT
-      DATE(ts.seated_at) as date,
-      AVG(COALESCE(ts.actual_duration, EXTRACT(EPOCH FROM (ts.closed_at - ts.seated_at)) / 60))::NUMERIC(5,2) as avg_min
+      DATE(ts.seated_at) AS session_date,
+      ROUND(
+        AVG(
+          COALESCE(
+            ts.actual_duration,
+            EXTRACT(EPOCH FROM (ts.closed_at - ts.seated_at)) / 60
+          )
+        ),
+        2
+      ) AS avg_min
     FROM table_sessions ts
-    WHERE ts.seated_at >= p_from AND ts.seated_at < p_to
+    WHERE ts.seated_at >= p_from
+      AND ts.seated_at < p_to
       AND ts.closed_at IS NOT NULL
     GROUP BY DATE(ts.seated_at)
   )
   SELECT
-    date,
-    avg_min,
-    (SELECT AVG(COALESCE(ts.actual_duration, EXTRACT(EPOCH FROM (ts.closed_at - ts.seated_at)) / 60))::NUMERIC(5,2)
-     FROM table_sessions ts
-     WHERE ts.seated_at >= p_from AND ts.seated_at < p_to
-       AND ts.closed_at IS NOT NULL) as overall_avg
-  FROM daily_avg
-  ORDER BY date;
+    d.session_date,
+    d.avg_min,
+    (
+      SELECT ROUND(
+        AVG(
+          COALESCE(
+            ts.actual_duration,
+            EXTRACT(EPOCH FROM (ts.closed_at - ts.seated_at)) / 60
+          )
+        ),
+        2
+      )
+      FROM table_sessions ts
+      WHERE ts.seated_at >= p_from
+        AND ts.seated_at < p_to
+        AND ts.closed_at IS NOT NULL
+    ) AS overall_avg
+  FROM daily_avg d
+  ORDER BY d.session_date;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -524,21 +631,53 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION get_payment_summary_stats(p_from TIMESTAMPTZ, p_to TIMESTAMPTZ)
-RETURNS TABLE(total_transactions BIGINT, total_failed BIGINT, overall_failure_rate NUMERIC, total_chargebacks BIGINT, total_chargeback_amount NUMERIC) AS $$
+CREATE OR REPLACE FUNCTION get_payment_summary_stats(
+  p_from TIMESTAMPTZ,
+  p_to   TIMESTAMPTZ
+)
+RETURNS TABLE(
+  total_transactions BIGINT,
+  total_failed BIGINT,
+  overall_failure_rate NUMERIC,
+  total_chargebacks BIGINT,
+  total_chargeback_amount NUMERIC
+) AS $$
 BEGIN
   RETURN QUERY
   SELECT
-    COUNT(*)::BIGINT as total_transactions,
-    COUNT(CASE WHEN op.status IN ('failed', 'declined') THEN 1 END)::BIGINT as total_failed,
+    COUNT(*)::BIGINT AS total_transactions,
+
+    COUNT(
+      CASE WHEN op.status IN ('failed', 'declined') THEN 1 END
+    )::BIGINT AS total_failed,
+
     CASE
       WHEN COUNT(*) > 0
-      THEN (COUNT(CASE WHEN op.status IN ('failed', 'declined') THEN 1 END)::NUMERIC / COUNT(*) * 100)::NUMERIC(5,2)
-      ELSE 0::NUMERIC
-    END as overall_failure_rate,
-    (SELECT COUNT(*)::BIGINT FROM chargebacks WHERE received_at >= p_from AND received_at < p_to),
-    (SELECT COALESCE(SUM(amount), 0)::NUMERIC FROM chargebacks WHERE received_at >= p_from AND received_at < p_to)
+      THEN ROUND(
+        COUNT(CASE WHEN op.status IN ('failed', 'declined') THEN 1 END)::NUMERIC
+        / COUNT(*) * 100,
+        2
+      )
+      ELSE 0
+    END AS overall_failure_rate,
+
+    (
+      SELECT COUNT(*)::BIGINT
+      FROM chargebacks cb
+      WHERE cb.received_at >= p_from
+        AND cb.received_at < p_to
+    ) AS total_chargebacks,
+
+    (
+      SELECT COALESCE(SUM(cb.amount), 0)
+      FROM chargebacks cb
+      WHERE cb.received_at >= p_from
+        AND cb.received_at < p_to
+    ) AS total_chargeback_amount
+
   FROM order_payments op
-  WHERE op.created_at >= p_from AND op.created_at < p_to;
+  WHERE op.initiated_at >= p_from
+    AND op.initiated_at < p_to;
+
 END;
 $$ LANGUAGE plpgsql;
