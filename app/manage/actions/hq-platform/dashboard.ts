@@ -56,6 +56,15 @@ export interface PlatformAlert {
   createdAt: string
 }
 
+export interface ActivityFeedEvent {
+  id: string
+  emoji: string
+  message: string
+  timestamp: string
+  link?: string
+  resourceType: string
+}
+
 // ============================================================================
 // HELPERS
 // ============================================================================
@@ -233,7 +242,8 @@ export async function getPlatformDashboardKPIs(): Promise<PlatformDashboardKPIs>
  */
 export async function getPlatformStationFleet(): Promise<MerchantStationGroup[]> {
   await assertHQPermission('hq.merchant.view')
-  const supabase = createServerSupabaseClient()
+  // Use service role client to bypass RLS since stations table doesn't have HQ policies yet
+  const supabase = createServiceRoleClient()
 
   // Fetch stations with location and merchant info
   const { data: stationsData, error } = await supabase
@@ -241,7 +251,7 @@ export async function getPlatformStationFleet(): Promise<MerchantStationGroup[]>
     .select(
       `
       id,
-      name,
+      station_name,
       merchant_id,
       location_id,
       is_online,
@@ -257,7 +267,11 @@ export async function getPlatformStationFleet(): Promise<MerchantStationGroup[]>
     .order('merchant_id', { ascending: true })
 
   if (error || !stationsData) {
-    console.error('[getPlatformStationFleet] Error:', error)
+    console.error('[getPlatformStationFleet] Query failed:', error)
+    return []
+  }
+
+  if (stationsData.length === 0) {
     return []
   }
 
@@ -286,7 +300,7 @@ export async function getPlatformStationFleet(): Promise<MerchantStationGroup[]>
 
     grouped.get(merchantId)!.stations.push({
       id: station.id,
-      name: station.name,
+      name: station.station_name,
       locationName: station.locations?.name || 'Unknown',
       merchantName,
       merchantId,
@@ -338,25 +352,29 @@ export async function getPlatformOrdersHeatmap(): Promise<HourlyOrderCount[]> {
  */
 export async function getPlatformAlerts(): Promise<PlatformAlert[]> {
   await assertHQPermission('hq.merchant.view')
-  const supabase = createServerSupabaseClient()
+  // Use service role client to bypass RLS
+  const supabase = createServiceRoleClient()
 
   const alerts: PlatformAlert[] = []
   const now = new Date()
 
   // 1. Stations offline during business hours (8 AM - 10 PM)
+  // A station is considered offline if is_online=false OR last_heartbeat_at > 5 minutes ago
   const currentHour = now.getHours()
   if (currentHour >= 8 && currentHour < 22) {
+    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000)
+
     const { data: offlineStations } = await supabase
       .from('stations')
-      .select('id, name, merchant_id, location_id, merchants(name), locations(name)')
+      .select('id, station_name, merchant_id, location_id, last_heartbeat_at, merchants(name), locations(name)')
       .eq('is_active', true)
-      .eq('is_online', false)
+      .or(`is_online.eq.false,last_heartbeat_at.lt.${fiveMinutesAgo.toISOString()}`)
 
     offlineStations?.forEach((station: any) => {
       alerts.push({
         id: `offline-${station.id}`,
         severity: 'high',
-        message: `Station "${station.name}" at ${station.locations?.name} (${station.merchants?.name}) went offline`,
+        message: `Station "${station.station_name}" at ${station.locations?.name} (${station.merchants?.name}) went offline`,
         resourceType: 'station',
         resourceId: station.id,
         link: `/manage/merchants/${station.merchant_id}?tab=devices`,
@@ -382,10 +400,10 @@ export async function getPlatformAlerts(): Promise<PlatformAlert[]> {
       .select('merchant_id')
       .gte('created_at', yesterday.toISOString())
       .lt('created_at', yesterdayEnd.toISOString())
-      .distinct()
 
     if (merchantsWithOrdersYesterday && merchantsWithOrdersYesterday.length > 0) {
-      const merchantIds = merchantsWithOrdersYesterday.map((o) => (o as any).merchant_id)
+      // Get unique merchant IDs from yesterday
+      const merchantIds = Array.from(new Set(merchantsWithOrdersYesterday.map((o) => (o as any).merchant_id)))
 
       // Get merchants with NO orders today
       const { data: merchantsWithOrdersToday } = await supabase
@@ -394,10 +412,9 @@ export async function getPlatformAlerts(): Promise<PlatformAlert[]> {
         .gte('created_at', today.toISOString())
         .lt('created_at', tomorrow.toISOString())
         .in('merchant_id', merchantIds)
-        .distinct()
 
       const merchantIdsWithOrdersToday = new Set(
-        merchantsWithOrdersToday?.map((o) => (o as any).merchant_id) || []
+        (merchantsWithOrdersToday || []).map((o) => (o as any).merchant_id)
       )
       const inactiveMerchantIds = merchantIds.filter((id) => !merchantIdsWithOrdersToday.has(id))
 
@@ -449,7 +466,7 @@ export async function getPlatformAlerts(): Promise<PlatformAlert[]> {
   const CURRENT_APP_VERSION = '2.4.1'
   const { data: outdatedStations } = await supabase
     .from('stations')
-    .select('id, name, app_version, merchant_id, merchants(name)')
+    .select('id, station_name, app_version, merchant_id, merchants(name)')
     .eq('is_active', true)
     .neq('app_version', CURRENT_APP_VERSION)
     .not('app_version', 'is', null)
@@ -458,7 +475,7 @@ export async function getPlatformAlerts(): Promise<PlatformAlert[]> {
     alerts.push({
       id: `outdated-${station.id}`,
       severity: 'low',
-      message: `Station "${station.name}" running app v${station.app_version} (current: v${CURRENT_APP_VERSION})`,
+      message: `Station "${station.station_name}" running app v${station.app_version} (current: v${CURRENT_APP_VERSION})`,
       resourceType: 'station',
       resourceId: station.id,
       link: `/manage/merchants/${station.merchant_id}?tab=devices`,
@@ -469,7 +486,7 @@ export async function getPlatformAlerts(): Promise<PlatformAlert[]> {
   // 5. Low battery stations < 20%
   const { data: lowBatteryStations } = await supabase
     .from('stations')
-    .select('id, name, battery_level, merchant_id, locations(name), merchants(name)')
+    .select('id, station_name, battery_level, merchant_id, locations(name), merchants(name)')
     .eq('is_active', true)
     .lt('battery_level', 20)
     .not('battery_level', 'is', null)
@@ -478,7 +495,7 @@ export async function getPlatformAlerts(): Promise<PlatformAlert[]> {
     alerts.push({
       id: `low-battery-${station.id}`,
       severity: 'low',
-      message: `Station "${station.name}" at ${station.locations?.name} battery at ${station.battery_level}%`,
+      message: `Station "${station.station_name}" at ${station.locations?.name} battery at ${station.battery_level}%`,
       resourceType: 'station',
       resourceId: station.id,
       link: `/manage/merchants/${station.merchant_id}?tab=devices`,
@@ -536,4 +553,158 @@ export async function getPlatformAlerts(): Promise<PlatformAlert[]> {
   }
 
   return alerts
+}
+
+/**
+ * Get recent activity events for the live feed (last 30 minutes)
+ */
+export async function getPlatformActivityFeed(): Promise<ActivityFeedEvent[]> {
+  await assertHQPermission('hq.merchant.view')
+  const supabase = createServiceRoleClient()
+  const events: ActivityFeedEvent[] = []
+  const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000)
+
+  // 1. New merchants in last 30 minutes
+  const { data: newMerchants } = await supabase
+    .from('merchants')
+    .select('id, name, created_at')
+    .gte('created_at', thirtyMinutesAgo.toISOString())
+    .order('created_at', { ascending: false })
+
+  newMerchants?.forEach((merchant: any) => {
+    events.push({
+      id: `merchant-${merchant.id}`,
+      emoji: '🏪',
+      message: `<strong>${merchant.name}</strong> just joined the platform`,
+      timestamp: merchant.created_at,
+      link: `/manage/merchants/${merchant.id}`,
+      resourceType: 'merchant',
+    })
+  })
+
+  // 2. High-value orders in last 30 minutes
+  const { data: highValueOrders } = await supabase
+    .from('orders')
+    .select('id, total_amount, merchant_id, created_at')
+    .gt('total_amount', 100)
+    .gte('created_at', thirtyMinutesAgo.toISOString())
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  highValueOrders?.forEach((order: any) => {
+    events.push({
+      id: `order-${order.id}`,
+      emoji: '🎉',
+      message: `New order of <strong>$${Number(order.total_amount).toFixed(2)}</strong> placed`,
+      timestamp: order.created_at,
+      link: `/manage/transactions?orderId=${order.id}`,
+      resourceType: 'order',
+    })
+  })
+
+  // 3. Failed payments in last 30 minutes
+  const { data: failedPayments } = await supabase
+    .from('order_payments')
+    .select('id, status, created_at')
+    .in('status', ['failed', 'declined'])
+    .gte('created_at', thirtyMinutesAgo.toISOString())
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  failedPayments?.forEach((payment: any) => {
+    events.push({
+      id: `payment-${payment.id}`,
+      emoji: '⚠️',
+      message: `Payment failed — ${payment.status === 'declined' ? 'card declined' : 'error'}`,
+      timestamp: payment.created_at,
+      link: `/manage/transactions?paymentId=${payment.id}`,
+      resourceType: 'payment',
+    })
+  })
+
+  // 4. Stations went offline in last 30 minutes
+  const { data: offlineStations } = await supabase
+    .from('stations')
+    .select('id, station_name, merchant_id, updated_at')
+    .eq('is_online', false)
+    .gte('updated_at', thirtyMinutesAgo.toISOString())
+    .order('updated_at', { ascending: false })
+    .limit(10)
+
+  offlineStations?.forEach((station: any) => {
+    events.push({
+      id: `station-offline-${station.id}`,
+      emoji: '📡',
+      message: `Station <strong>${station.station_name}</strong> went offline`,
+      timestamp: station.updated_at,
+      link: `/manage/merchants/${station.merchant_id}?tab=devices`,
+      resourceType: 'station',
+    })
+  })
+
+  // 5. Low battery alerts in last 30 minutes
+  const { data: lowBatteryStations } = await supabase
+    .from('stations')
+    .select('id, station_name, battery_level, merchant_id, updated_at')
+    .lt('battery_level', 15)
+    .not('battery_level', 'is', null)
+    .gte('updated_at', thirtyMinutesAgo.toISOString())
+    .order('updated_at', { ascending: false })
+    .limit(10)
+
+  lowBatteryStations?.forEach((station: any) => {
+    events.push({
+      id: `battery-${station.id}`,
+      emoji: '🔋',
+      message: `Station <strong>${station.station_name}</strong> battery critically low (${station.battery_level}%)`,
+      timestamp: station.updated_at,
+      link: `/manage/merchants/${station.merchant_id}?tab=devices`,
+      resourceType: 'station',
+    })
+  })
+
+  // 6. Chargebacks in last 30 minutes
+  const { data: chargebacks } = await supabase
+    .from('chargebacks')
+    .select('id, amount, created_at')
+    .gte('created_at', thirtyMinutesAgo.toISOString())
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  chargebacks?.forEach((chargeback: any) => {
+    events.push({
+      id: `chargeback-${chargeback.id}`,
+      emoji: '🚨',
+      message: `Chargeback received — <strong>$${Number(chargeback.amount).toFixed(2)}</strong>`,
+      timestamp: chargeback.created_at,
+      link: `/manage/transactions`,
+      resourceType: 'payment',
+    })
+  })
+
+  // 7. Voided orders in last 30 minutes
+  const { data: voidedOrders } = await supabase
+    .from('orders')
+    .select('id, total_amount, updated_at')
+    .eq('status', 'void')
+    .gt('total_amount', 50)
+    .gte('updated_at', thirtyMinutesAgo.toISOString())
+    .order('updated_at', { ascending: false })
+    .limit(10)
+
+  voidedOrders?.forEach((order: any) => {
+    events.push({
+      id: `void-${order.id}`,
+      emoji: '🚫',
+      message: `<strong>$${Number(order.total_amount).toFixed(2)}</strong> order voided`,
+      timestamp: order.updated_at,
+      link: `/manage/transactions?orderId=${order.id}`,
+      resourceType: 'order',
+    })
+  })
+
+  // Sort by timestamp descending and limit to 50
+  return events
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    .slice(0, 50)
 }

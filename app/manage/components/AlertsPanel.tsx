@@ -10,7 +10,7 @@ import { PlatformAlert } from '@/app/manage/actions/hq-platform/dashboard'
 import { X, CheckCircle } from 'lucide-react'
 
 export function AlertsPanel() {
-  const { data: allAlerts, isLoading } = usePlatformAlerts()
+  const { data: allAlerts, isLoading, error } = usePlatformAlerts()
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set())
   const [alerts, setAlerts] = useState<PlatformAlert[]>([])
 
@@ -72,6 +72,24 @@ export function AlertsPanel() {
             {Array.from({ length: 5 }).map((_, i) => (
               <Skeleton key={i} className="h-16 w-full" />
             ))}
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Alerts & Actions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center h-32 text-destructive">
+            <div className="text-sm">
+              <p className="font-semibold mb-1">Error loading alerts</p>
+              <p className="text-xs">{(error as Error).message}</p>
+            </div>
           </div>
         </CardContent>
       </Card>

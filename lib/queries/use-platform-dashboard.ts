@@ -4,10 +4,12 @@ import {
   getPlatformStationFleet,
   getPlatformOrdersHeatmap,
   getPlatformAlerts,
+  getPlatformActivityFeed,
   PlatformDashboardKPIs,
   MerchantStationGroup,
   HourlyOrderCount,
   PlatformAlert,
+  ActivityFeedEvent,
 } from '@/app/manage/actions/hq-platform/dashboard'
 
 // Query key factory
@@ -17,6 +19,7 @@ export const platformDashboardKeys = {
   stationFleet: () => [...platformDashboardKeys.all, 'station-fleet'] as const,
   ordersHeatmap: () => [...platformDashboardKeys.all, 'orders-heatmap'] as const,
   alerts: () => [...platformDashboardKeys.all, 'alerts'] as const,
+  activityFeed: () => [...platformDashboardKeys.all, 'activity-feed'] as const,
 }
 
 /**
@@ -64,5 +67,17 @@ export function usePlatformAlerts() {
     queryFn: () => getPlatformAlerts(),
     refetchInterval: 60_000, // Refresh every 60 seconds
     staleTime: 45_000, // Data is fresh for 45 seconds
+  })
+}
+
+/**
+ * Fetch live activity feed with 30-second auto-refresh
+ */
+export function usePlatformActivityFeed() {
+  return useQuery<ActivityFeedEvent[]>({
+    queryKey: platformDashboardKeys.activityFeed(),
+    queryFn: () => getPlatformActivityFeed(),
+    refetchInterval: 30_000, // Refresh every 30 seconds
+    staleTime: 20_000, // Data is fresh for 20 seconds
   })
 }

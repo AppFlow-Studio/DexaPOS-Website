@@ -33,7 +33,7 @@ function getStatusEmoji(status: 'green' | 'yellow' | 'red' | 'grey'): string {
 }
 
 export function DeviceFleetMap() {
-  const { data: fleet, isLoading } = usePlatformStationFleet()
+  const { data: fleet, isLoading, error } = usePlatformStationFleet()
   const router = useRouter()
 
   if (isLoading) {
@@ -47,6 +47,24 @@ export function DeviceFleetMap() {
             {Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} className="h-24 w-full" />
             ))}
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Device Fleet Health</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center h-32 text-destructive">
+            <div className="text-sm">
+              <p className="font-semibold mb-1">Error loading fleet data</p>
+              <p className="text-xs">{(error as Error).message}</p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -71,7 +89,16 @@ export function DeviceFleetMap() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Device Fleet Health</CardTitle>
+        <div className="space-y-2">
+          <CardTitle className="text-base">Device Fleet Health</CardTitle>
+          <div className="text-xs text-muted-foreground space-y-1">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="flex items-center gap-1">🟢 Online & Healthy</span>
+              <span className="flex items-center gap-1">🟡 Warning (stale/low battery)</span>
+              <span className="flex items-center gap-1">🔴 Offline/Critical</span>
+            </div>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="max-h-[500px] overflow-y-auto">
         <div className="space-y-4">
@@ -90,7 +117,7 @@ export function DeviceFleetMap() {
                     <div className="flex items-start gap-2">
                       <span className="text-lg mt-0.5">{getStatusEmoji(station.status)}</span>
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-semibold truncate">{station.name}</div>
+                        <div className="text-sm font-semibold truncate">{station.name}</div>
                         <div className="text-xs text-muted-foreground truncate">
                           {station.locationName}
                         </div>
