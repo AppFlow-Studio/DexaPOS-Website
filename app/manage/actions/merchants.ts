@@ -12,6 +12,7 @@ import type {
   MerchantSettingsUpdate,
   UpdateMerchantResult,
   ToggleLocationResult,
+  MerchantHealthSummary,
 } from '@/types/merchant'
 
 // ============================================================================
@@ -310,4 +311,207 @@ export async function getMerchantStats(): Promise<{
   }
 
   return stats
+}
+
+// ============================================================================
+// GET MERCHANT HEALTH GRID (with computed health scores)
+// ============================================================================
+
+const CURRENT_APP_VERSION = '2.4.1'
+
+export async function getMerchantHealthGrid(
+  accessibleMerchantIds?: string[]
+): Promise<MerchantHealthSummary[]> {
+  await assertHQPermission('hq.merchant.view')
+
+  const supabase = createServerSupabaseClient()
+
+  // 1. Fetch all merchants
+  let merchantQuery = supabase
+    .from('admin_merchant_summary')
+    .select('*')
+
+  if (accessibleMerchantIds !== undefined) {
+    if (accessibleMerchantIds.length === 0) {
+      return []
+    }
+    merchantQuery = merchantQuery.in('id', accessibleMerchantIds)
+  }
+
+  const { data: merchants, error: merchantsError } = await merchantQuery
+
+  if (merchantsError || !merchants) {
+    console.error('[getMerchantHealthGrid] Merchants error:', merchantsError)
+    return []
+  }
+
+  // 2. Fetch station data grouped by merchant
+  const { data: stationsData, error: stationsError } = await supabase
+    .from('stations')
+    .select(`
+      id,
+      merchant_id,
+      is_online,
+      is_active,
+      last_heartbeat_at,
+      app_version
+    `)
+    .eq('is_active', true)
+
+  if (stationsError) {
+    console.error('[getMerchantHealthGrid] Stations error:', stationsError)
+  }
+
+  // Group stations by merchant
+  const stationsByMerchant = new Map<
+    string,
+    Array<{
+      id: string
+      is_online: boolean
+      last_heartbeat_at: string | null
+      app_version: string | null
+    }>
+  >()
+
+  stationsData?.forEach((station: any) => {
+    if (!stationsByMerchant.has(station.merchant_id)) {
+      stationsByMerchant.set(station.merchant_id, [])
+    }
+    stationsByMerchant.get(station.merchant_id)!.push({
+      id: station.id,
+      is_online: station.is_online,
+      last_heartbeat_at: station.last_heartbeat_at,
+      app_version: station.app_version,
+    })
+  })
+
+  // 3. Fetch payment data for today
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+
+  const { data: paymentsData, error: paymentsError } = await supabase
+    .from('order_payments')
+    .select('id, status, orders(merchant_id)')
+    .gte('created_at', today.toISOString())
+    .lt('created_at', tomorrow.toISOString())
+
+  if (paymentsError) {
+    console.error('[getMerchantHealthGrid] Payments error:', paymentsError)
+  }
+
+  // Group payment success rates by merchant
+  const paymentsByMerchant = new Map<
+    string,
+    { total: number; successful: number }
+  >()
+
+  paymentsData?.forEach((payment: any) => {
+    const merchantId = payment.orders?.merchant_id
+    if (!merchantId) return
+
+    if (!paymentsByMerchant.has(merchantId)) {
+      paymentsByMerchant.set(merchantId, { total: 0, successful: 0 })
+    }
+
+    const stats = paymentsByMerchant.get(merchantId)!
+    stats.total++
+    if (payment.status === 'captured' || payment.status === 'succeeded') {
+      stats.successful++
+    }
+  })
+
+  // 4. Compute health scores
+  const healthData: MerchantHealthSummary[] = merchants
+    .map((merchant: MerchantSummary) => {
+      const stationsList = stationsByMerchant.get(merchant.id) || []
+      const totalStations = stationsList.length
+      const onlineStations = stationsList.filter((s) => s.is_online).length
+
+      // Station heartbeat check (within last 15 minutes is good)
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
+      const healthyStations = stationsList.filter((s) => {
+        if (!s.is_online) return false
+        if (!s.last_heartbeat_at) return false
+        const heartbeatTime = new Date(s.last_heartbeat_at)
+        return heartbeatTime > fiveMinutesAgo
+      }).length
+
+      // Calculate individual signals (0-100)
+      const orderActivity = Math.min(100, merchant.orders_today * 5)
+
+      const deviceHealth =
+        totalStations > 0 ? (healthyStations / totalStations) * 100 : 100
+
+      const setupCompleteness =
+        ((merchant.active_staff_count > 0 ? 25 : 0) +
+          (totalStations > 0 ? 25 : 0) +
+          50) /
+        100 // Menu + payment terminal hardcoded to 50
+
+      const paymentStats = paymentsByMerchant.get(merchant.id)
+      const paymentHealth =
+        paymentStats && paymentStats.total > 0
+          ? (paymentStats.successful / paymentStats.total) * 100
+          : 100
+
+      const issueVolume = 80 // Hardcoded: no void table yet
+      const supportActivity = 100 // Hardcoded: no support tickets yet
+
+      const appCurrency =
+        totalStations > 0
+          ? (stationsList.filter((s) => s.app_version === CURRENT_APP_VERSION)
+              .length /
+              totalStations) *
+            100
+          : 100
+
+      // Compute weighted health score
+      const healthScore = Math.round(
+        orderActivity * 0.25 +
+          deviceHealth * 0.2 +
+          setupCompleteness * 0.15 +
+          paymentHealth * 0.15 +
+          issueVolume * 0.1 +
+          supportActivity * 0.1 +
+          appCurrency * 0.05
+      )
+
+      // Determine health tier
+      const healthTier: 'green' | 'yellow' | 'red' =
+        healthScore >= 80 ? 'green' : healthScore >= 60 ? 'yellow' : 'red'
+
+      // Generate alerts
+      const alerts: string[] = []
+      const offlineCount = totalStations - healthyStations
+      if (offlineCount > 0) {
+        alerts.push(`${offlineCount} station${offlineCount !== 1 ? 's' : ''} offline`)
+      }
+
+      const outdatedStations = stationsList.filter(
+        (s) => s.app_version && s.app_version !== CURRENT_APP_VERSION
+      ).length
+      if (outdatedStations > 0) {
+        alerts.push(
+          `App version outdated on ${outdatedStations} station${outdatedStations !== 1 ? 's' : ''}`
+        )
+      }
+
+      if (merchant.orders_today === 0 && merchant.active_locations > 0) {
+        alerts.push('No orders today')
+      }
+
+      return {
+        ...merchant,
+        healthScore,
+        healthTier,
+        alerts,
+        totalStations,
+        onlineStations,
+      }
+    })
+    .sort((a, b) => a.healthScore - b.healthScore) // Sort by health score ascending (worst first)
+
+  return healthData
 }

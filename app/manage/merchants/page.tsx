@@ -26,8 +26,11 @@ import {
     LayoutGrid,
     List,
     ShieldAlert,
+    Activity,
+    AlertTriangle,
+    CheckCircle2,
 } from 'lucide-react'
-import { useMerchants, useMerchantStats } from '@/lib/queries/use-merchants'
+import { useMerchants, useMerchantStats, useMerchantHealthGrid } from '@/lib/queries/use-merchants'
 import { useDebounce } from '@/lib/hooks/useDebounce'
 import { MerchantCard } from '@/components/admin/MerchantCard'
 import { useAdminAuth } from '@/lib/hooks/useAdminAuth'
@@ -42,8 +45,10 @@ export default function MerchantsPage() {
     const { userId } = useAuth()
     const { canCreateMerchants, isSuperAdmin, isLoading: authLoading } = useAdminAuth()
     const [page, setPage] = useState(1)
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+    const [viewMode, setViewMode] = useState<'grid' | 'list' | 'health'>('grid')
     const [filters, setFilters] = useState<MerchantFilters>(DEFAULT_MERCHANT_FILTERS)
+    const [healthFilter, setHealthFilter] = useState<'all' | 'needs-attention' | 'critical'>('all')
+    const [healthSort, setHealthSort] = useState<'score' | 'revenue' | 'orders' | 'activity' | 'name'>('score')
 
     // Fetch accessible merchant IDs for non-super-admins
     const { data: merchantAccess, isLoading: accessLoading } = useAdminMerchantAccess(userId || '')
@@ -61,11 +66,14 @@ export default function MerchantsPage() {
 
     // Fetch data with role-based filtering
     const { data, isLoading, isFetching, refetch } = useMerchants(
-        activeFilters, 
-        page, 
+        activeFilters,
+        page,
         accessibleMerchantIds
     )
     const { data: stats, isLoading: statsLoading } = useMerchantStats()
+    const { data: healthData, isLoading: healthLoading, refetch: refetchHealth } = useMerchantHealthGrid(
+        accessibleMerchantIds
+    )
 
     const pageSize = 20
     const totalPages = data ? Math.ceil(data.total / pageSize) : 0
@@ -139,51 +147,84 @@ export default function MerchantsPage() {
                                 />
                             </div>
 
-                            {/* Status Filter */}
-                            <Select
-                                value={filters.status}
-                                onValueChange={(value) => handleFilterChange('status', value)}
-                            >
-                                <SelectTrigger className="w-36">
-                                    <SelectValue placeholder="Status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Status</SelectItem>
-                                    <SelectItem value="active">Active</SelectItem>
-                                    <SelectItem value="inactive">Inactive</SelectItem>
-                                    <SelectItem value="onboarding">Onboarding</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            {/* Health Filter (only shown in health view) */}
+                            {viewMode === 'health' && (
+                                <Select value={healthFilter} onValueChange={(value) => setHealthFilter(value as typeof healthFilter)}>
+                                    <SelectTrigger className="w-40">
+                                        <SelectValue placeholder="Health Filter" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Merchants</SelectItem>
+                                        <SelectItem value="needs-attention">Needs Attention (&lt;80)</SelectItem>
+                                        <SelectItem value="critical">Critical (&lt;60)</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            )}
+
+                            {/* Status Filter (only shown in grid/list view) */}
+                            {viewMode !== 'health' && (
+                                <Select
+                                    value={filters.status}
+                                    onValueChange={(value) => handleFilterChange('status', value)}
+                                >
+                                    <SelectTrigger className="w-36">
+                                        <SelectValue placeholder="Status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Status</SelectItem>
+                                        <SelectItem value="active">Active</SelectItem>
+                                        <SelectItem value="inactive">Inactive</SelectItem>
+                                        <SelectItem value="onboarding">Onboarding</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            )}
 
                             {/* Sort By */}
-                            <Select
-                                value={filters.sortBy}
-                                onValueChange={(value) => handleFilterChange('sortBy', value)}
-                            >
-                                <SelectTrigger className="w-40">
-                                    <SelectValue placeholder="Sort by" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="name">Name</SelectItem>
-                                    <SelectItem value="created_at">Date Created</SelectItem>
-                                    <SelectItem value="orders_today">Orders Today</SelectItem>
-                                    <SelectItem value="revenue_today">Revenue Today</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            {viewMode === 'health' ? (
+                                <Select value={healthSort} onValueChange={(value) => setHealthSort(value as typeof healthSort)}>
+                                    <SelectTrigger className="w-40">
+                                        <SelectValue placeholder="Sort by" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="score">Health Score</SelectItem>
+                                        <SelectItem value="revenue">Revenue</SelectItem>
+                                        <SelectItem value="orders">Orders</SelectItem>
+                                        <SelectItem value="activity">Last Activity</SelectItem>
+                                        <SelectItem value="name">Alphabetical</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            ) : (
+                                <Select
+                                    value={filters.sortBy}
+                                    onValueChange={(value) => handleFilterChange('sortBy', value)}
+                                >
+                                    <SelectTrigger className="w-40">
+                                        <SelectValue placeholder="Sort by" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="name">Name</SelectItem>
+                                        <SelectItem value="created_at">Date Created</SelectItem>
+                                        <SelectItem value="orders_today">Orders Today</SelectItem>
+                                        <SelectItem value="revenue_today">Revenue Today</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            )}
 
-                            {/* Sort Order */}
-                            <Select
-                                value={filters.sortOrder}
-                                onValueChange={(value) => handleFilterChange('sortOrder', value)}
-                            >
-                                <SelectTrigger className="w-32">
-                                    <SelectValue placeholder="Order" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="asc">Ascending</SelectItem>
-                                    <SelectItem value="desc">Descending</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            {/* Sort Order (only shown for non-health views) */}
+                            {viewMode !== 'health' && (
+                                <Select
+                                    value={filters.sortOrder}
+                                    onValueChange={(value) => handleFilterChange('sortOrder', value)}
+                                >
+                                    <SelectTrigger className="w-32">
+                                        <SelectValue placeholder="Order" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="asc">Ascending</SelectItem>
+                                        <SelectItem value="desc">Descending</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            )}
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -203,16 +244,27 @@ export default function MerchantsPage() {
                                 >
                                     <List className="h-4 w-4" />
                                 </Button>
+                                <Button
+                                    variant={viewMode === 'health' ? 'secondary' : 'ghost'}
+                                    size="icon"
+                                    onClick={() => setViewMode('health')}
+                                    title="Health Grid"
+                                >
+                                    <Activity className="h-4 w-4" />
+                                </Button>
                             </div>
 
                             {/* Refresh */}
                             <Button
                                 variant="outline"
                                 size="icon"
-                                onClick={() => refetch()}
-                                disabled={isFetching}
+                                onClick={() => {
+                                    refetch()
+                                    refetchHealth()
+                                }}
+                                disabled={isFetching || healthLoading}
                             >
-                                <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+                                <RefreshCw className={`h-4 w-4 ${isFetching || healthLoading ? 'animate-spin' : ''}`} />
                             </Button>
                         </div>
                     </div>
@@ -227,6 +279,19 @@ export default function MerchantsPage() {
                     {/* Content */}
                     {isLoading || authLoading || (!isSuperAdmin && accessLoading) ? (
                         <MerchantGridSkeleton />
+                    ) : viewMode === 'health' ? healthLoading ? (
+                        <MerchantHealthGridSkeleton />
+                    ) : healthData && healthData.length > 0 ? (
+                        <MerchantHealthGrid
+                            merchants={healthData}
+                            filter={healthFilter}
+                            sortBy={healthSort}
+                            onMerchantClick={(clerkOrgId) => router.push(`/manage/merchants/${clerkOrgId}`)}
+                        />
+                    ) : (
+                        <div className="text-center py-12">
+                            <p className="text-muted-foreground">No merchants found.</p>
+                        </div>
                     ) : data?.merchants.length === 0 ? (
                         <div className="text-center py-12">
                             {!isSuperAdmin && (!merchantAccess || merchantAccess.length === 0) ? (
@@ -456,5 +521,227 @@ function MerchantListView({
                 ))}
             </TableBody>
         </Table>
+    )
+}
+
+// ============================================================================
+// MERCHANT HEALTH GRID COMPONENTS
+// ============================================================================
+
+import type { MerchantHealthSummary } from '@/types/merchant'
+import { formatDistanceToNow } from 'date-fns'
+
+function MerchantHealthGridSkeleton() {
+    return (
+        <div className="flex flex-col gap-3">
+            {[...Array(5)].map((_, i) => (
+                <Card key={i}>
+                    <CardContent className="p-5">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-start gap-4 flex-1">
+                                <Skeleton className="w-14 h-14 rounded-full" />
+                                <div className="flex-1">
+                                    <Skeleton className="h-5 w-40 mb-2" />
+                                    <Skeleton className="h-4 w-32 mb-3" />
+                                    <div className="flex gap-2">
+                                        <Skeleton className="h-4 w-24" />
+                                        <Skeleton className="h-4 w-24" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <Skeleton className="h-4 w-32 mb-2" />
+                                <Skeleton className="h-4 w-32 mb-2" />
+                                <Skeleton className="h-4 w-32" />
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            ))}
+        </div>
+    )
+}
+
+interface MerchantHealthGridProps {
+    merchants: MerchantHealthSummary[]
+    filter: 'all' | 'needs-attention' | 'critical'
+    sortBy: 'score' | 'revenue' | 'orders' | 'activity' | 'name'
+    onMerchantClick: (clerkOrgId: string) => void
+}
+
+function MerchantHealthGrid({
+    merchants,
+    filter,
+    sortBy,
+    onMerchantClick,
+}: MerchantHealthGridProps) {
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 0,
+        }).format(amount)
+    }
+
+    // Apply filter
+    let filtered = merchants.filter((m) => {
+        if (filter === 'critical') return m.healthScore < 60
+        if (filter === 'needs-attention') return m.healthScore < 80
+        return true
+    })
+
+    // Apply sort
+    filtered = [...filtered].sort((a, b) => {
+        switch (sortBy) {
+            case 'score':
+                return a.healthScore - b.healthScore
+            case 'revenue':
+                return b.revenue_today - a.revenue_today
+            case 'orders':
+                return b.orders_today - a.orders_today
+            case 'activity':
+                if (!a.last_order_at && !b.last_order_at) return 0
+                if (!a.last_order_at) return 1
+                if (!b.last_order_at) return -1
+                return (
+                    new Date(b.last_order_at).getTime() -
+                    new Date(a.last_order_at).getTime()
+                )
+            case 'name':
+                return a.name.localeCompare(b.name)
+            default:
+                return 0
+        }
+    })
+
+    if (filtered.length === 0) {
+        return (
+            <div className="text-center py-12">
+                <p className="text-muted-foreground">No merchants match the selected filter.</p>
+            </div>
+        )
+    }
+
+    return (
+        <div className="flex flex-col gap-3">
+            {filtered.map((merchant) => (
+                <MerchantHealthRow
+                    key={merchant.id}
+                    merchant={merchant}
+                    onClick={() => onMerchantClick(merchant.clerk_org_id)}
+                />
+            ))}
+        </div>
+    )
+}
+
+const healthColors = {
+    green: {
+        bg: 'bg-green-50 dark:bg-green-950/20',
+        text: 'text-green-600 dark:text-green-400',
+        border: 'border-green-200 dark:border-green-800',
+        scoreBg: 'bg-green-100 dark:bg-green-900/40',
+    },
+    yellow: {
+        bg: 'bg-yellow-50 dark:bg-yellow-950/20',
+        text: 'text-yellow-600 dark:text-yellow-400',
+        border: 'border-yellow-200 dark:border-yellow-800',
+        scoreBg: 'bg-yellow-100 dark:bg-yellow-900/40',
+    },
+    red: {
+        bg: 'bg-red-50 dark:bg-red-950/20',
+        text: 'text-red-600 dark:text-red-400',
+        border: 'border-red-200 dark:border-red-800',
+        scoreBg: 'bg-red-100 dark:bg-red-900/40',
+    },
+}
+
+function MerchantHealthRow({
+    merchant,
+    onClick,
+}: {
+    merchant: MerchantHealthSummary
+    onClick: () => void
+}) {
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 0,
+        }).format(amount)
+    }
+
+    const colors = healthColors[merchant.healthTier]
+
+    return (
+        <Card
+            className={`cursor-pointer transition-shadow hover:shadow-md border ${colors.border}`}
+            onClick={onClick}
+        >
+            <CardContent className={`p-5 ${colors.bg}`}>
+                <div className="flex items-center justify-between gap-6">
+                    {/* Left Column: Score, Name, Alerts */}
+                    <div className="flex items-start gap-4 flex-1 min-w-0">
+                        {/* Health Score Circle */}
+                        <div
+                            className={`flex-shrink-0 w-14 h-14 rounded-full flex items-center justify-center font-bold text-lg ${colors.scoreBg} ${colors.text}`}
+                        >
+                            {merchant.healthScore}
+                        </div>
+
+                        {/* Merchant Info */}
+                        <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-foreground truncate">
+                                {merchant.name}
+                            </h3>
+                            {merchant.type && (
+                                <p className="text-sm text-muted-foreground capitalize truncate">
+                                    {merchant.type}
+                                </p>
+                            )}
+
+                            {/* Alerts or All Systems Go */}
+                            <div className="mt-2">
+                                {merchant.alerts.length > 0 ? (
+                                    <div className="flex flex-col gap-1">
+                                        {merchant.alerts.map((alert, idx) => (
+                                            <div key={idx} className="flex items-center gap-2 text-sm">
+                                                <AlertTriangle className={`h-4 w-4 flex-shrink-0 ${colors.text}`} />
+                                                <span className="text-muted-foreground truncate">{alert}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                        <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-green-600 dark:text-green-400" />
+                                        <span>All systems go</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Right Column: Stats */}
+                    <div className="text-right flex-shrink-0 text-sm">
+                        <p className="text-muted-foreground mb-2">
+                            {merchant.total_locations} location{merchant.total_locations !== 1 ? 's' : ''} · {merchant.active_staff_count} staff · {merchant.totalStations} station{merchant.totalStations !== 1 ? 's' : ''}
+                        </p>
+                        <p className="font-semibold text-foreground mb-1">
+                            {formatCurrency(merchant.revenue_today)}
+                        </p>
+                        <p className="text-muted-foreground mb-1">
+                            {merchant.orders_today} order{merchant.orders_today !== 1 ? 's' : ''} today
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            {merchant.last_order_at
+                                ? `Last order ${formatDistanceToNow(new Date(merchant.last_order_at), {
+                                    addSuffix: true,
+                                })}`
+                                : 'No orders yet'}
+                        </p>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
     )
 }

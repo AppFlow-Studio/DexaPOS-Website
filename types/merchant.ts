@@ -95,3 +95,15 @@ export interface UpdateMerchantResult {
   success: boolean
   error?: string
 }
+
+// ============================================================================
+// MERCHANT HEALTH GRID
+// ============================================================================
+
+export interface MerchantHealthSummary extends MerchantSummary {
+  healthScore: number
+  healthTier: 'green' | 'yellow' | 'red'
+  alerts: string[]
+  totalStations: number
+  onlineStations: number
+}
