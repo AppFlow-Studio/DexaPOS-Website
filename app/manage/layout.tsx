@@ -92,12 +92,6 @@ const navMain: NavGroup[] = [
                 icon: Building2,
                 permission: 'hq.merchant.view',
             },
-            {
-                title: 'Health Monitor',
-                url: '/manage/health',
-                icon: TrendingUp,
-                permission: 'hq.merchant.view',
-            },
             // {
             //     title: 'Organizations',
             //     url: '/manage/organizations',
