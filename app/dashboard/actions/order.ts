@@ -2,6 +2,7 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { assertHQPermission } from "@/lib/admin/auth";
 import {
   Order,
@@ -124,7 +125,10 @@ export async function GetOrders(
     return [];
   }
 
-  const supabase = createServerSupabaseClient();
+  // Use service role to bypass RLS on joined tables (staff_profiles, users)
+  // so Staff column can display creator names. Access control is enforced
+  // by filtering orders by merchant_id from the user's clerk org.
+  const supabase = createServiceRoleClient();
 
   // Get merchant ID from clerk org ID
   const { data: merchant, error: merchantError } = await supabase
@@ -144,6 +148,8 @@ export async function GetOrders(
     .select(
       `
             *,
+            created_by_staff:staff_profiles!orders_created_by_staff_id_fkey(first_name, last_name, display_name),
+            created_by_user:users!orders_created_by_user_id_fkey(first_name, last_name),
             order_items(
             *,
             order_item_modifiers(
@@ -205,6 +211,56 @@ export async function GetOrders(
 
   let result = (data as OrderResponse[]) || [];
 
+  // Enrich orders with staff/user names (embedded join can fail; batch fetch is reliable)
+  const staffIds = [...new Set(result.map((o) => o.created_by_staff_id).filter(Boolean))] as string[];
+  const userIds = [...new Set(result.map((o) => o.created_by_user_id).filter(Boolean))] as string[];
+
+  const [staffRes, userRes] = await Promise.all([
+    staffIds.length > 0
+      ? supabase
+          .from("staff_profiles")
+          .select("id, first_name, last_name, display_name")
+          .in("id", staffIds)
+      : Promise.resolve({ data: [] as { id: string; first_name: string | null; last_name: string | null; display_name: string | null }[] }),
+    userIds.length > 0
+      ? supabase
+          .from("users")
+          .select("id, first_name, last_name")
+          .in("id", userIds)
+      : Promise.resolve({ data: [] as { id: string; first_name: string | null; last_name: string | null }[] }),
+  ]);
+
+  const staffById = new Map<string, { first_name?: string | null; last_name?: string | null; display_name?: string | null }>();
+  for (const s of staffRes.data ?? []) {
+    if (s?.id) staffById.set(s.id, s);
+  }
+  const userById = new Map<string, { first_name?: string | null; last_name?: string | null }>();
+  for (const u of userRes.data ?? []) {
+    if (u?.id) userById.set(u.id, u);
+  }
+
+  for (const order of result) {
+    if (!order.created_by_staff && order.created_by_staff_id) {
+      const s = staffById.get(order.created_by_staff_id);
+      if (s) {
+        (order as any).created_by_staff = {
+          first_name: s.first_name ?? undefined,
+          last_name: s.last_name ?? undefined,
+          display_name: s.display_name ?? undefined,
+        };
+      }
+    }
+    if (!order.created_by_user && order.created_by_user_id) {
+      const u = userById.get(order.created_by_user_id);
+      if (u) {
+        (order as any).created_by_user = {
+          first_name: u.first_name ?? undefined,
+          last_name: u.last_name ?? undefined,
+        };
+      }
+    }
+  }
+
   // In-memory filter for Payment Method
   if (filters?.paymentMethod && filters.paymentMethod.length > 0) {
     result = result.filter((order) => {
@@ -240,6 +296,7 @@ export async function GetOrderDetails(
                 *,
                 location:locations!orders_location_id_fkey(name),
                 created_by_staff:staff_profiles!orders_created_by_staff_id_fkey(first_name, last_name, display_name),
+                created_by_user:users!orders_created_by_user_id_fkey(first_name, last_name),
                 assigned_server:staff_profiles!orders_assigned_server_id_fkey(first_name, last_name, display_name),
                 station:stations!orders_station_id_fkey(station_name, device_name),
                 order_items(

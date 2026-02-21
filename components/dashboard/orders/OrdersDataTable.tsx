@@ -154,22 +154,34 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
         }
     }
 
+    const getCreatedByName = (order: OrderResponse): string => {
+        const staff = order.created_by_staff
+        if (staff) {
+            const name = staff.display_name || `${staff.first_name ?? ''} ${staff.last_name ?? ''}`.trim()
+            if (name) return name
+        }
+        const user = order.created_by_user
+        if (user) {
+            const name = `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim()
+            if (name) return name
+        }
+        return '—'
+    }
+
     const columns: ColumnDef<OrderResponse>[] = [
         {
             accessorKey: 'display_number',
             id: 'order_display',
-            header: ({ column }) => {
-                return (
-                    <Button
-                        variant="ghost"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                        className="h-8 px-2"
-                    >
-                        Order
-                        <ArrowUpDown className="ml-2 h-3 w-3" />
-                    </Button>
-                )
-            },
+            header: ({ column }) => (
+                <Button
+                    variant="ghost"
+                    onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                    className="h-8 px-2"
+                >
+                    #ID
+                    <ArrowUpDown className="ml-2 h-3 w-3" />
+                </Button>
+            ),
             accessorFn: (row) => row.display_number || row.order_number || '',
             cell: ({ row }) => {
                 const order = row.original
@@ -186,59 +198,21 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
         },
         {
             accessorKey: 'created_at',
-            header: ({ column }) => {
-                return (
-                    <Button
-                        variant="ghost"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                        className="h-8 px-2"
-                    >
-                        Date
-                        <ArrowUpDown className="ml-2 h-3 w-3" />
-                    </Button>
-                )
-            },
-            cell: ({ row }) => {
-                return (
-                    <div className="text-sm text-muted-foreground">
-                        {formatOrderDate(row.original.created_at)}
-                    </div>
-                )
-            },
-        },
-        {
-            id: 'created_by',
-            header: 'Created by',
-            accessorFn: (row) => {
-                const p = row.created_by_staff
-                if (!p) return ''
-                if (p.display_name) return p.display_name
-                return `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim()
-            },
-            cell: ({ row }) => {
-                const p = row.original.created_by_staff
-                const name = !p ? '—' : p.display_name || `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || '—'
-                return <div className="text-sm text-muted-foreground">{name}</div>
-            },
-        },
-        {
-            accessorKey: 'customer_name',
-            header: 'Customer',
-            cell: ({ row }) => {
-                const order = row.original
-                return (
-                    <div className="flex flex-col">
-                        <span className="text-sm font-medium">
-                            {order.customer_name || 'Walk-in'}
-                        </span>
-                        {order.table_number && (
-                            <span className="text-xs text-muted-foreground">
-                                Table {order.table_number}
-                            </span>
-                        )}
-                    </div>
-                )
-            },
+            header: ({ column }) => (
+                <Button
+                    variant="ghost"
+                    onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                    className="h-8 px-2"
+                >
+                    Date
+                    <ArrowUpDown className="ml-2 h-3 w-3" />
+                </Button>
+            ),
+            cell: ({ row }) => (
+                <div className="text-sm text-muted-foreground">
+                    {formatOrderDate(row.original.created_at)}
+                </div>
+            ),
         },
         {
             accessorKey: 'order_type',
@@ -255,21 +229,17 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
         },
         {
             accessorKey: 'status',
-            header: ({ column }) => {
-                return (
-                    <Button
-                        variant="ghost"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                        className="h-8 px-2"
-                    >
-                        Status
-                        <ArrowUpDown className="ml-2 h-3 w-3" />
-                    </Button>
-                )
-            },
-            cell: ({ row }) => {
-                return <OrderStatusBadge status={row.original.status} />
-            },
+            header: ({ column }) => (
+                <Button
+                    variant="ghost"
+                    onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                    className="h-8 px-2"
+                >
+                    Status
+                    <ArrowUpDown className="ml-2 h-3 w-3" />
+                </Button>
+            ),
+            cell: ({ row }) => <OrderStatusBadge status={row.original.status} />,
         },
         {
             id: 'item_count',
@@ -293,8 +263,27 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
             },
         },
         {
+            accessorKey: 'total_amount',
+            header: ({ column }) => (
+                <Button
+                    variant="ghost"
+                    onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                    className="h-8 px-2"
+                >
+                    Total
+                    <ArrowUpDown className="ml-2 h-3 w-3" />
+                </Button>
+            ),
+            cell: ({ row }) => (
+                <div className="text-sm font-semibold">
+                    {formatCurrency(row.original.total_amount)}
+                </div>
+            ),
+        },
+        {
             accessorKey: 'payment_status',
-            header: 'Payment',
+            id: 'payment_method',
+            header: 'Payment method',
             cell: ({ row }) => {
                 const order = row.original
                 const methods = [...new Set((order.order_payments || []).map((p) => p.payment_method))]
@@ -304,58 +293,28 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                     if (m === 'gift_card') return 'Gift'
                     return String(m ?? '').replace(/_/g, ' ')
                 }).filter(Boolean)
-                const summary = methodLabels.length > 0 ? methodLabels.join(', ') : '—'
+                const summary = methodLabels.length > 0 ? methodLabels.join(', ') : null
                 return (
                     <div className="flex flex-col gap-0.5">
-                        <PaymentStatusBadge status={order.payment_status} />
-                        {summary !== '—' && (
-                            <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">
-                                {summary}
-                            </span>
+                        {summary ? (
+                            <span className="text-sm">{summary}</span>
+                        ) : (
+                            <PaymentStatusBadge status={order.payment_status} />
                         )}
                     </div>
                 )
             },
         },
         {
-            accessorKey: 'total_amount',
-            header: ({ column }) => {
-                return (
-                    <Button
-                        variant="ghost"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                        className="h-8 px-2"
-                    >
-                        Total
-                        <ArrowUpDown className="ml-2 h-3 w-3" />
-                    </Button>
-                )
-            },
-            cell: ({ row }) => {
-                return (
-                    <div className="text-sm font-semibold">
-                        {formatCurrency(row.original.total_amount)}
-                    </div>
-                )
-            },
+            id: 'created_by',
+            header: 'Staff',
+            accessorFn: (row) => getCreatedByName(row),
+            cell: ({ row }) => (
+                <div className="text-sm text-muted-foreground">
+                    {getCreatedByName(row.original)}
+                </div>
+            ),
         },
-        ...(shouldShowLocation
-            ? [
-                {
-                    accessorKey: 'location_id',
-                    header: 'Location',
-                    cell: ({ row }) => {
-                        const name = locationsMap?.get(row.original.location_id)
-                            ?? locations.find(l => l.id === row.original.location_id)?.name
-                        return (
-                            <div className="text-sm">
-                                {name || 'Unknown Location'}
-                            </div>
-                        )
-                    },
-                } as ColumnDef<OrderResponse>,
-            ]
-            : []),
         {
             id: 'actions',
             cell: ({ row }) => {

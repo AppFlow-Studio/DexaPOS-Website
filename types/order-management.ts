@@ -267,6 +267,7 @@ export interface OrderResponse {
   locations?: { name: string };
   station?: { station_name?: string; device_name?: string };
   created_by_staff?: { first_name?: string; last_name?: string; display_name?: string };
+  created_by_user?: { first_name?: string; last_name?: string } | null;
   assigned_server?: { first_name?: string; last_name?: string; display_name?: string };
   subtotal: number;
   tax_amount: number;
