@@ -61,8 +61,8 @@ export default function MerchantsPage() {
 
     // Fetch data with role-based filtering
     const { data, isLoading, isFetching, refetch } = useMerchants(
-        activeFilters, 
-        page, 
+        activeFilters,
+        page,
         accessibleMerchantIds
     )
     const { data: stats, isLoading: statsLoading } = useMerchantStats()
@@ -458,3 +458,10 @@ function MerchantListView({
         </Table>
     )
 }
+
+// ============================================================================
+// MERCHANT HEALTH GRID COMPONENTS
+// ============================================================================
+
+import type { MerchantHealthSummary } from '@/types/merchant'
+import { formatDistanceToNow } from 'date-fns'
