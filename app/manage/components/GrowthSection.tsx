@@ -20,7 +20,7 @@ export function GrowthSection({ from, to }: GrowthSectionProps) {
     return (
       <div className="space-y-6">
         {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-64 w-full" />
+          <Skeleton key={i} className="h-64 w-full rounded-xl" />
         ))}
       </div>
     )
@@ -49,20 +49,43 @@ export function GrowthSection({ from, to }: GrowthSectionProps) {
 
   const colors = ['#3b82f6', '#10b981', '#f59e0b']
 
+  // Custom tooltip for charts
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white/90 backdrop-blur-sm border border-blue-100 rounded-lg p-2 shadow-lg text-xs">
+          <p className="font-semibold text-slate-900 mb-1">{label}</p>
+          {payload.map((entry: any, index: number) => (
+            <p key={index} style={{ color: entry.color }} className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+              {entry.name}: {entry.value.toLocaleString()}
+            </p>
+          ))}
+        </div>
+      )
+    }
+    return null
+  }
+
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-5 md:grid-cols-3">
         {kpiCards.map((card, idx) => {
           const Icon = card.icon
           return (
-            <Card key={idx}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
-                <Icon className={`h-4 w-4 ${card.color}`} />
+            <Card
+              key={idx}
+              className="border border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-all duration-200"
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4">
+                <CardTitle className="text-sm font-medium text-blue-700/70">{card.title}</CardTitle>
+                <div className="p-1.5 bg-blue-50 rounded-lg">
+                  <Icon className={`h-4 w-4 ${card.color}`} />
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className={`text-2xl font-bold ${card.color}`}>{card.value}</div>
+              <CardContent className="px-4 pb-4">
+                <div className={`text-3xl font-bold tracking-tight ${card.color}`}>{card.value}</div>
               </CardContent>
             </Card>
           )
@@ -70,24 +93,33 @@ export function GrowthSection({ from, to }: GrowthSectionProps) {
       </div>
 
       {/* Merchant Acquisition Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Merchant Acquisition Trend</CardTitle>
-          <CardDescription>New merchants and locations per week</CardDescription>
+      <Card className="border border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-all duration-200">
+        <CardHeader className="pb-2 border-b border-blue-100/50">
+          <CardTitle className="text-base font-semibold text-slate-900">Merchant Acquisition Trend</CardTitle>
+          <CardDescription className="text-xs text-muted-foreground/80">
+            New merchants and locations per week
+          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 pt-3">
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={data?.merchantAcquisition || []}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="period" tickFormatter={(v) => v.slice(5)} />
-              <YAxis />
-              <Tooltip />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
+              <XAxis
+                dataKey="period"
+                tickFormatter={(v) => v.slice(5)}
+                tick={{ fontSize: 12, fill: '#64748b' }}
+                tickLine={false}
+                axisLine={false}
+              />
+              <YAxis tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} />
+              <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#94a3b8', strokeWidth: 1 }} />
               <Line
                 type="monotone"
                 dataKey="new_merchants"
                 stroke="#3b82f6"
                 strokeWidth={2}
                 name="New Merchants"
+                dot={false}
               />
               <Line
                 type="monotone"
@@ -95,6 +127,7 @@ export function GrowthSection({ from, to }: GrowthSectionProps) {
                 stroke="#10b981"
                 strokeWidth={2}
                 name="New Locations"
+                dot={false}
               />
             </LineChart>
           </ResponsiveContainer>
@@ -102,18 +135,27 @@ export function GrowthSection({ from, to }: GrowthSectionProps) {
       </Card>
 
       {/* Onboarding Funnel */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Onboarding Funnel</CardTitle>
-          <CardDescription>Merchant progression through setup stages</CardDescription>
+      <Card className="border border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-all duration-200">
+        <CardHeader className="pb-2 border-b border-blue-100/50">
+          <CardTitle className="text-base font-semibold text-slate-900">Onboarding Funnel</CardTitle>
+          <CardDescription className="text-xs text-muted-foreground/80">
+            Merchant progression through setup stages
+          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 pt-3">
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data?.onboardingFunnel || []} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" />
-              <YAxis dataKey="stage" type="category" width={120} tick={{ fontSize: 12 }} />
-              <Tooltip />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} />
+              <YAxis
+                dataKey="stage"
+                type="category"
+                width={120}
+                tick={{ fontSize: 12, fill: '#64748b' }}
+                tickLine={false}
+                axisLine={false}
+              />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(59, 130, 246, 0.1)' }} />
               <Bar dataKey="merchant_count" radius={[0, 4, 4, 0]}>
                 {(data?.onboardingFunnel || []).map((_, index) => (
                   <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
@@ -125,43 +167,49 @@ export function GrowthSection({ from, to }: GrowthSectionProps) {
       </Card>
 
       {/* Churn Risk Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Merchants at Risk (50%+ Revenue Drop)</CardTitle>
-          <CardDescription>Compared to prior period</CardDescription>
+      <Card className="border border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-all duration-200">
+        <CardHeader className="pb-2 border-b border-blue-100/50">
+          <CardTitle className="text-base font-semibold text-slate-900">Merchants at Risk (50%+ Revenue Drop)</CardTitle>
+          <CardDescription className="text-xs text-muted-foreground/80">
+            Compared to prior period
+          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 pt-3">
           {(data?.churnRisk || []).length === 0 ? (
-            <div className="text-center text-muted-foreground py-8">No merchants at churn risk</div>
+            <div className="flex items-center justify-center h-32 bg-green-50/50 rounded-lg border border-green-100">
+              <span className="text-sm text-green-700 font-medium">No merchants at churn risk</span>
+            </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Merchant</TableHead>
-                  <TableHead className="text-right">Last Period</TableHead>
-                  <TableHead className="text-right">Current Period</TableHead>
-                  <TableHead className="text-right">Change</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data?.churnRisk.map((merchant) => (
-                  <TableRow key={merchant.merchant_id}>
-                    <TableCell className="font-medium">{merchant.merchant_name}</TableCell>
-                    <TableCell className="text-right">
-                      ${Number(merchant.last_period_revenue).toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      ${Number(merchant.current_revenue).toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Badge variant="destructive">
-                        {merchant.change_pct.toFixed(1)}%
-                      </Badge>
-                    </TableCell>
+            <div className="rounded-lg border border-blue-100 overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-blue-50/50 hover:bg-blue-50/50">
+                    <TableHead className="text-xs font-medium text-blue-700">Merchant</TableHead>
+                    <TableHead className="text-xs font-medium text-blue-700 text-right">Last Period</TableHead>
+                    <TableHead className="text-xs font-medium text-blue-700 text-right">Current Period</TableHead>
+                    <TableHead className="text-xs font-medium text-blue-700 text-right">Change</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {data?.churnRisk.map((merchant) => (
+                    <TableRow key={merchant.merchant_id} className="hover:bg-blue-50/30 transition-colors">
+                      <TableCell className="text-sm font-medium text-slate-900">{merchant.merchant_name}</TableCell>
+                      <TableCell className="text-sm text-slate-700 text-right">
+                        ${Number(merchant.last_period_revenue).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-sm text-slate-700 text-right">
+                        ${Number(merchant.current_revenue).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant="destructive" className="bg-red-100 text-red-700 border-red-200">
+                          {merchant.change_pct.toFixed(1)}%
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

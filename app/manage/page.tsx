@@ -21,16 +21,21 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('dashboard')
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-gradient-to-b from-white to-blue-50/30 p-6 space-y-8">
       {/* Header with action button */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Mission Control</h1>
-          <p className="text-muted-foreground">Platform dashboard and real-time monitoring</p>
+        <div className="space-y-1">
+          <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-br from-slate-900 to-blue-900 bg-clip-text text-transparent">
+            Mission Control
+          </h1>
+          <p className="text-sm text-muted-foreground/80">
+            Platform dashboard and real-time monitoring
+          </p>
         </div>
         <Button
           size="sm"
           onClick={() => setIsAdminInviteOpen(true)}
+          className="shadow-sm hover:shadow-md transition-all duration-200"
         >
           <UserPlus2 className="h-4 w-4 mr-2" />
           Invite Admin
@@ -39,28 +44,37 @@ export default function Dashboard() {
 
       {/* Tab Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-3">
-          <TabsTrigger value="dashboard" className="gap-2">
+        <TabsList className="inline-flex h-auto p-1 bg-white/80 backdrop-blur-sm border border-blue-100/50 shadow-sm rounded-xl">
+          <TabsTrigger
+            value="dashboard"
+            className="gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-200"
+          >
             <Zap className="h-4 w-4" />
             <span className="hidden sm:inline">Dashboard</span>
           </TabsTrigger>
-          <TabsTrigger value="health" className="gap-2">
+          <TabsTrigger
+            value="health"
+            className="gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-200"
+          >
             <Activity className="h-4 w-4" />
             <span className="hidden sm:inline">Health</span>
           </TabsTrigger>
-          <TabsTrigger value="analytics" className="gap-2">
+          <TabsTrigger
+            value="analytics"
+            className="gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-200"
+          >
             <BarChart3 className="h-4 w-4" />
             <span className="hidden sm:inline">Analytics</span>
           </TabsTrigger>
         </TabsList>
 
         {/* Dashboard Tab */}
-        <TabsContent value="dashboard" className="space-y-6">
+        <TabsContent value="dashboard" className="space-y-6 mt-6">
           {/* Section 1A: Platform Pulse (KPIs) */}
           <PlatformPulseSection />
 
           {/* Section 1B & 1C: Live Feed + Device Fleet (2-column layout) */}
-          <div className="grid gap-4 md:grid-cols-12">
+          <div className="grid gap-6 md:grid-cols-12">
             <div className="md:col-span-5">
               <LiveActivityFeed />
             </div>
@@ -70,7 +84,7 @@ export default function Dashboard() {
           </div>
 
           {/* Section 1D & 1E: Heatmap + Alerts (2-column layout) */}
-          <div className="grid gap-4 md:grid-cols-12">
+          <div className="grid gap-6 md:grid-cols-12">
             <div className="md:col-span-4">
               <OrdersHeatmap />
             </div>
@@ -81,12 +95,12 @@ export default function Dashboard() {
         </TabsContent>
 
         {/* Health Tab */}
-        <TabsContent value="health" className="space-y-6">
+        <TabsContent value="health" className="space-y-6 mt-6">
           <HealthDashboard />
         </TabsContent>
 
         {/* Analytics Tab */}
-        <TabsContent value="analytics" className="space-y-6">
+        <TabsContent value="analytics" className="space-y-6 mt-6">
           <AnalyticsContent />
         </TabsContent>
       </Tabs>

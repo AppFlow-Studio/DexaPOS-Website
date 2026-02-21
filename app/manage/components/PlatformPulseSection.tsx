@@ -38,30 +38,36 @@ function KPICard({
   const isWarning = warningThreshold && typeof value === 'number' && value < warningThreshold
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
+    <Card className="overflow-hidden border border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm hover:shadow-lg transition-all duration-200 rounded-xl">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4">
+        <CardTitle className="text-sm font-semibold text-slate-700">{title}</CardTitle>
+        <div className="p-1.5 bg-blue-50 rounded-lg">
+          <Icon className="h-4 w-4 text-blue-600" />
+        </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 pb-4">
         {isLoading ? (
           <div className="space-y-2">
-            <Skeleton className="h-8 w-24" />
-            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-9 w-28" />
+            <Skeleton className="h-4 w-32" />
           </div>
         ) : (
           <>
-            <div className={`text-2xl font-bold ${isWarning ? 'text-red-600' : ''}`}>{value}</div>
-            <div className="flex items-center space-x-2 text-xs">
-              {change >= 0 ? (
-                <ArrowUpRight className="h-3 w-3 text-green-600" />
-              ) : (
-                <ArrowDownRight className="h-3 w-3 text-red-600" />
-              )}
-              <span className={change >= 0 ? 'text-green-600' : 'text-red-600'}>
+            <div className={`text-3xl font-bold tracking-tight ${isWarning ? 'text-red-600' : 'text-slate-900'}`}>
+              {value}
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <div className={`flex items-center text-xs font-medium px-1.5 py-0.5 rounded-full ${
+                change >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+              }`}>
+                {change >= 0 ? (
+                  <ArrowUpRight className="h-3 w-3 mr-0.5" />
+                ) : (
+                  <ArrowDownRight className="h-3 w-3 mr-0.5" />
+                )}
                 {Math.abs(change).toFixed(1)}%
-              </span>
-              <span className="text-muted-foreground">{description}</span>
+              </div>
+              <span className="text-xs text-muted-foreground">{description}</span>
             </div>
           </>
         )}
@@ -84,13 +90,26 @@ export function PlatformPulseSection() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold">Platform Pulse</h2>
-        <p className="text-sm text-muted-foreground">Real-time platform metrics</p>
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <h2 className="text-2xl font-semibold tracking-tight bg-gradient-to-br from-slate-900 to-blue-900 bg-clip-text text-transparent">
+            Platform Pulse
+          </h2>
+          <p className="text-sm text-muted-foreground/80 flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+            </span>
+            Real-time platform metrics
+          </p>
+        </div>
+        <div className="text-xs text-muted-foreground bg-white/60 px-3 py-1.5 rounded-full border border-blue-100">
+          Updated just now
+        </div>
       </div>
 
       {/* Row 1: Revenue & Volume */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
         <KPICard
           title="Revenue Today"
           value={`$${kpis?.revenueToday.toLocaleString(undefined, { maximumFractionDigits: 0 }) || '0'}`}
@@ -126,7 +145,7 @@ export function PlatformPulseSection() {
       </div>
 
       {/* Row 2: Platform Health */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
         <KPICard
           title="Stations Online"
           value={

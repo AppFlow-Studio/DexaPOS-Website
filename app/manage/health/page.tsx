@@ -47,9 +47,11 @@ export default function HealthDashboardPage() {
         <div className="space-y-6">
             {/* Header */}
             <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Merchant Health Dashboard</h1>
-                    <p className="text-muted-foreground mt-1">
+                <div className="space-y-1">
+                    <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-br from-slate-900 to-blue-900 bg-clip-text text-transparent">
+                        Merchant Health Dashboard
+                    </h1>
+                    <p className="text-sm text-muted-foreground/80">
                         Monitor merchant performance and operational health. Health score is calculated from multiple factors including system uptime, transaction success rates, and activity levels.
                     </p>
                 </div>
@@ -58,42 +60,46 @@ export default function HealthDashboardPage() {
                     size="icon"
                     onClick={() => refetch()}
                     disabled={healthLoading}
+                    className="border-blue-200 hover:border-blue-300 hover:bg-blue-50/50"
                 >
                     <RefreshCw className={`h-4 w-4 ${healthLoading ? 'animate-spin' : ''}`} />
                 </Button>
             </div>
 
             {/* Legend */}
-            <Card className="bg-muted/30 border-dashed">
-                <CardContent className="p-4">
-                    <div className="flex flex-col gap-3">
-                        <h4 className="text-sm font-semibold text-foreground">Health Score Legend</h4>
+            <Card className="border border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden">
+                <CardContent className="p-5">
+                    <div className="flex flex-col gap-4">
+                        <h4 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                            <span className="w-1 h-4 bg-blue-500 rounded-full"></span>
+                            Health Score Legend
+                        </h4>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="flex items-center gap-3">
-                                <div className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 text-sm">
+                            <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50/50 border border-green-100">
+                                <div className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold bg-green-100 text-green-700 text-sm shadow-sm">
                                     80+
                                 </div>
                                 <div className="text-sm">
-                                    <p className="font-medium text-foreground">Healthy</p>
-                                    <p className="text-xs text-muted-foreground">All systems running smoothly</p>
+                                    <p className="font-medium text-green-800">Healthy</p>
+                                    <p className="text-xs text-green-600">All systems running smoothly</p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                                <div className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold bg-yellow-100 dark:bg-yellow-900/40 text-yellow-600 dark:text-yellow-400 text-sm">
+                            <div className="flex items-center gap-3 p-3 rounded-lg bg-yellow-50/50 border border-yellow-100">
+                                <div className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold bg-yellow-100 text-yellow-700 text-sm shadow-sm">
                                     60-79
                                 </div>
                                 <div className="text-sm">
-                                    <p className="font-medium text-foreground">Needs Attention</p>
-                                    <p className="text-xs text-muted-foreground">Some issues detected</p>
+                                    <p className="font-medium text-yellow-800">Needs Attention</p>
+                                    <p className="text-xs text-yellow-600">Some issues detected</p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                                <div className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 text-sm">
+                            <div className="flex items-center gap-3 p-3 rounded-lg bg-red-50/50 border border-red-100">
+                                <div className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold bg-red-100 text-red-700 text-sm shadow-sm">
                                     &lt;60
                                 </div>
                                 <div className="text-sm">
-                                    <p className="font-medium text-foreground">Critical</p>
-                                    <p className="text-xs text-muted-foreground">Urgent action required</p>
+                                    <p className="font-medium text-red-800">Critical</p>
+                                    <p className="text-xs text-red-600">Urgent action required</p>
                                 </div>
                             </div>
                         </div>
@@ -102,52 +108,53 @@ export default function HealthDashboardPage() {
             </Card>
 
             {/* Health Factors */}
-            <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
-                <CardContent className="p-4">
-                    <div className="flex flex-col gap-3">
-                        <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                            <span className="text-lg">ℹ️</span> Health Score Factors
+            <Card className="border border-blue-100/50 bg-gradient-to-br from-blue-50/50 to-white shadow-sm rounded-xl overflow-hidden">
+                <CardContent className="p-5">
+                    <div className="flex flex-col gap-4">
+                        <h4 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                            <span className="text-lg">ℹ️</span>
+                            Health Score Factors
                         </h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                            <div className="flex gap-2">
-                                <span className="text-muted-foreground">•</span>
+                            <div className="flex gap-2 p-2 rounded-md hover:bg-white/50 transition-colors">
+                                <span className="text-blue-500">•</span>
                                 <div>
-                                    <p className="font-medium text-foreground">Device Connectivity</p>
+                                    <p className="font-medium text-slate-800">Device Connectivity</p>
                                     <p className="text-xs text-muted-foreground">POS systems offline or stale heartbeat</p>
                                 </div>
                             </div>
-                            <div className="flex gap-2">
-                                <span className="text-muted-foreground">•</span>
+                            <div className="flex gap-2 p-2 rounded-md hover:bg-white/50 transition-colors">
+                                <span className="text-blue-500">•</span>
                                 <div>
-                                    <p className="font-medium text-foreground">Transaction Success Rate</p>
+                                    <p className="font-medium text-slate-800">Transaction Success Rate</p>
                                     <p className="text-xs text-muted-foreground">Failed or declined payment processing</p>
                                 </div>
                             </div>
-                            <div className="flex gap-2">
-                                <span className="text-muted-foreground">•</span>
+                            <div className="flex gap-2 p-2 rounded-md hover:bg-white/50 transition-colors">
+                                <span className="text-blue-500">•</span>
                                 <div>
-                                    <p className="font-medium text-foreground">Activity Level</p>
+                                    <p className="font-medium text-slate-800">Activity Level</p>
                                     <p className="text-xs text-muted-foreground">Low order volume or extended inactivity</p>
                                 </div>
                             </div>
-                            <div className="flex gap-2">
-                                <span className="text-muted-foreground">•</span>
+                            <div className="flex gap-2 p-2 rounded-md hover:bg-white/50 transition-colors">
+                                <span className="text-blue-500">•</span>
                                 <div>
-                                    <p className="font-medium text-foreground">System Health</p>
+                                    <p className="font-medium text-slate-800">System Health</p>
                                     <p className="text-xs text-muted-foreground">Battery issues, app version outdated, or errors</p>
                                 </div>
                             </div>
-                            <div className="flex gap-2">
-                                <span className="text-muted-foreground">•</span>
+                            <div className="flex gap-2 p-2 rounded-md hover:bg-white/50 transition-colors">
+                                <span className="text-blue-500">•</span>
                                 <div>
-                                    <p className="font-medium text-foreground">Staff Management</p>
+                                    <p className="font-medium text-slate-800">Staff Management</p>
                                     <p className="text-xs text-muted-foreground">Insufficient staff or high turnover</p>
                                 </div>
                             </div>
-                            <div className="flex gap-2">
-                                <span className="text-muted-foreground">•</span>
+                            <div className="flex gap-2 p-2 rounded-md hover:bg-white/50 transition-colors">
+                                <span className="text-blue-500">•</span>
                                 <div>
-                                    <p className="font-medium text-foreground">Location Coverage</p>
+                                    <p className="font-medium text-slate-800">Location Coverage</p>
                                     <p className="text-xs text-muted-foreground">Inactive or underperforming locations</p>
                                 </div>
                             </div>
@@ -157,23 +164,23 @@ export default function HealthDashboardPage() {
             </Card>
 
             {/* Filters */}
-            <Card>
+            <Card className="border border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden">
                 <CardContent className="p-4">
                     <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
                         {/* Search */}
                         <div className="relative flex-1 min-w-[200px] max-w-sm">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-400" />
                             <Input
                                 placeholder="Search merchants..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                className="pl-10"
+                                className="pl-10 border-blue-200 focus-visible:ring-blue-400"
                             />
                         </div>
 
                         {/* Health Filter */}
                         <Select value={healthFilter} onValueChange={(value) => setHealthFilter(value as typeof healthFilter)}>
-                            <SelectTrigger className="w-40">
+                            <SelectTrigger className="w-40 border-blue-200">
                                 <SelectValue placeholder="Health Filter" />
                             </SelectTrigger>
                             <SelectContent>
@@ -185,7 +192,7 @@ export default function HealthDashboardPage() {
 
                         {/* Sort By */}
                         <Select value={healthSort} onValueChange={(value) => setHealthSort(value as typeof healthSort)}>
-                            <SelectTrigger className="w-40">
+                            <SelectTrigger className="w-40 border-blue-200">
                                 <SelectValue placeholder="Sort by" />
                             </SelectTrigger>
                             <SelectContent>
@@ -214,7 +221,7 @@ export default function HealthDashboardPage() {
                     onMerchantClick={(clerkOrgId) => router.push(`/manage/merchants/${clerkOrgId}`)}
                 />
             ) : (
-                <div className="text-center py-12">
+                <div className="text-center py-12 bg-white/50 rounded-xl border border-dashed border-blue-200">
                     <p className="text-muted-foreground">No merchants found.</p>
                 </div>
             )}
@@ -226,7 +233,7 @@ function HealthGridSkeleton() {
     return (
         <div className="flex flex-col gap-3">
             {[...Array(5)].map((_, i) => (
-                <Card key={i}>
+                <Card key={i} className="border border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden">
                     <CardContent className="p-5">
                         <div className="flex items-center justify-between">
                             <div className="flex items-start gap-4 flex-1">
@@ -306,7 +313,7 @@ function HealthGrid({
 
     if (filtered.length === 0) {
         return (
-            <div className="text-center py-12">
+            <div className="text-center py-12 bg-white/50 rounded-xl border border-dashed border-blue-200">
                 <p className="text-muted-foreground">No merchants match the selected filters.</p>
             </div>
         )
@@ -327,22 +334,25 @@ function HealthGrid({
 
 const healthColors = {
     green: {
-        bg: 'bg-green-50 dark:bg-green-950/20',
-        text: 'text-green-600 dark:text-green-400',
-        border: 'border-green-200 dark:border-green-800',
-        scoreBg: 'bg-green-100 dark:bg-green-900/40',
+        bg: 'bg-green-50/50',
+        text: 'text-green-700',
+        border: 'border-green-200',
+        scoreBg: 'bg-green-100',
+        cardBorder: 'hover:border-green-300',
     },
     yellow: {
-        bg: 'bg-yellow-50 dark:bg-yellow-950/20',
-        text: 'text-yellow-600 dark:text-yellow-400',
-        border: 'border-yellow-200 dark:border-yellow-800',
-        scoreBg: 'bg-yellow-100 dark:bg-yellow-900/40',
+        bg: 'bg-yellow-50/50',
+        text: 'text-yellow-700',
+        border: 'border-yellow-200',
+        scoreBg: 'bg-yellow-100',
+        cardBorder: 'hover:border-yellow-300',
     },
     red: {
-        bg: 'bg-red-50 dark:bg-red-950/20',
-        text: 'text-red-600 dark:text-red-400',
-        border: 'border-red-200 dark:border-red-800',
-        scoreBg: 'bg-red-100 dark:bg-red-900/40',
+        bg: 'bg-red-50/50',
+        text: 'text-red-700',
+        border: 'border-red-200',
+        scoreBg: 'bg-red-100',
+        cardBorder: 'hover:border-red-300',
     },
 }
 
@@ -382,7 +392,7 @@ function HealthRow({
 
     return (
         <Card
-            className={`cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 border ${colors.border}`}
+            className={`cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 border ${colors.border} ${colors.cardBorder} bg-white/80 backdrop-blur-sm rounded-xl overflow-hidden`}
             onClick={onClick}
         >
             <CardContent className={`p-5 ${colors.bg}`}>
@@ -397,7 +407,7 @@ function HealthRow({
                                 {merchant.healthScore}
                             </div>
                             {/* Tier Badge */}
-                            <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold ${
+                            <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm ${
                                 merchant.healthTier === 'green' ? 'bg-green-500' :
                                 merchant.healthTier === 'yellow' ? 'bg-yellow-500' :
                                 'bg-red-500'
@@ -408,22 +418,22 @@ function HealthRow({
 
                         {/* Merchant Info */}
                         <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                                <h3 className="font-semibold text-foreground truncate">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                <h3 className="font-semibold text-slate-900 truncate">
                                     {merchant.name}
                                 </h3>
                                 {merchant.healthTier === 'green' && (
-                                    <span className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-green-200 dark:bg-green-900/50 text-green-700 dark:text-green-300 shrink-0">
+                                    <span className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 shrink-0">
                                         Optimal
                                     </span>
                                 )}
                                 {merchant.healthTier === 'yellow' && (
-                                    <span className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-yellow-200 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 shrink-0">
+                                    <span className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 shrink-0">
                                         Monitor
                                     </span>
                                 )}
                                 {merchant.healthTier === 'red' && (
-                                    <span className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-red-200 dark:bg-red-900/50 text-red-700 dark:text-red-300 shrink-0">
+                                    <span className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 shrink-0">
                                         Critical
                                     </span>
                                 )}
@@ -437,7 +447,7 @@ function HealthRow({
 
                             {/* Health Score Bar */}
                             <div className="mb-3">
-                                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                                <div className="h-2 rounded-full bg-muted/30 overflow-hidden">
                                     <div
                                         className={`h-full rounded-full transition-all duration-300 ${
                                             merchant.healthTier === 'green' ? 'bg-green-500' :
@@ -465,7 +475,7 @@ function HealthRow({
                                     )}
                                 </div>
                             ) : (
-                                <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400 font-medium">
+                                <div className="flex items-center gap-2 text-sm text-green-700 font-medium">
                                     <CheckCircle2 className="h-4 w-4 shrink-0" />
                                     <span>All systems optimal</span>
                                 </div>
@@ -478,10 +488,10 @@ function HealthRow({
                         {/* Locations */}
                         <div className="text-sm">
                             <p className="text-muted-foreground text-xs mb-0.5">Locations</p>
-                            <p className="font-semibold text-foreground">
+                            <p className="font-semibold text-slate-900">
                                 {merchant.total_locations}
                                 <span className="text-muted-foreground font-normal ml-1">
-                                    {merchant.active_staff_count > 0 && `(${Math.round((merchant.total_locations / (merchant.total_locations || 1)) * 100)}%)`}
+                                    {merchant.active_staff_count > 0 && `(${Math.round((merchant.active_staff_count / (merchant.total_locations || 1)) * 100)}% active)`}
                                 </span>
                             </p>
                         </div>
@@ -489,13 +499,13 @@ function HealthRow({
                         {/* Stations */}
                         <div className="text-sm">
                             <p className="text-muted-foreground text-xs mb-0.5">Devices</p>
-                            <p className="font-semibold text-foreground">{merchant.totalStations}</p>
+                            <p className="font-semibold text-slate-900">{merchant.totalStations}</p>
                         </div>
 
                         {/* Revenue */}
                         <div className="text-sm">
                             <p className="text-muted-foreground text-xs mb-0.5">Revenue Today</p>
-                            <p className="font-semibold text-foreground">
+                            <p className="font-semibold text-slate-900">
                                 {formatCurrency(merchant.revenue_today)}
                             </p>
                         </div>
@@ -503,7 +513,7 @@ function HealthRow({
                         {/* Orders & Last Activity */}
                         <div className="text-sm">
                             <p className="text-muted-foreground text-xs mb-0.5">Orders Today</p>
-                            <p className="font-semibold text-foreground mb-1">
+                            <p className="font-semibold text-slate-900 mb-1">
                                 {merchant.orders_today}
                             </p>
                             <p className="text-xs text-muted-foreground">

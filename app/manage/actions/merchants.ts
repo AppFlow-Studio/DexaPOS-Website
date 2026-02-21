@@ -394,8 +394,8 @@ export async function getMerchantHealthGrid(
   const { data: paymentsData, error: paymentsError } = await supabase
     .from('order_payments')
     .select('id, status, orders(merchant_id)')
-    .gte('created_at', today.toISOString())
-    .lt('created_at', tomorrow.toISOString())
+    .gte('initiated_at', today.toISOString())
+    .lt('initiated_at', tomorrow.toISOString())
 
   if (paymentsError) {
     console.error('[getMerchantHealthGrid] Payments error:', paymentsError)

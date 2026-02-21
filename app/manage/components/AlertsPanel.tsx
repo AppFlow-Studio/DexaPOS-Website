@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { usePlatformAlerts } from '@/lib/queries/use-platform-dashboard'
 import Link from 'next/link'
 import { PlatformAlert } from '@/app/manage/actions/hq-platform/dashboard'
-import { X, CheckCircle } from 'lucide-react'
+import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react'
 
 export function AlertsPanel() {
   const { data: allAlerts, isLoading, error } = usePlatformAlerts()
@@ -61,16 +61,42 @@ export function AlertsPanel() {
     localStorage.setItem('dismissedAlerts', JSON.stringify(parsed))
   }
 
+  const getSeverityIcon = (severity: string) => {
+    switch (severity) {
+      case 'high':
+        return <AlertCircle className="h-4 w-4 text-red-500" />
+      case 'medium':
+        return <AlertTriangle className="h-4 w-4 text-yellow-500" />
+      case 'low':
+        return <Info className="h-4 w-4 text-blue-500" />
+      default:
+        return <Info className="h-4 w-4 text-gray-500" />
+    }
+  }
+
+  const getSeverityBadge = (severity: string) => {
+    switch (severity) {
+      case 'high':
+        return <Badge variant="destructive" className="bg-red-100 text-red-700 hover:bg-red-200 border-red-200">High</Badge>
+      case 'medium':
+        return <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 hover:bg-yellow-200 border-yellow-200">Medium</Badge>
+      case 'low':
+        return <Badge variant="outline" className="bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200">Low</Badge>
+      default:
+        return <Badge variant="outline">{severity}</Badge>
+    }
+  }
+
   if (isLoading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Alerts & Actions</CardTitle>
+      <Card className="border border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base font-semibold text-slate-900">Alerts & Actions</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 pt-0">
           <div className="space-y-3">
             {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-16 w-full" />
+              <Skeleton key={i} className="h-16 w-full rounded-lg" />
             ))}
           </div>
         </CardContent>
@@ -80,15 +106,15 @@ export function AlertsPanel() {
 
   if (error) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Alerts & Actions</CardTitle>
+      <Card className="border border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base font-semibold text-slate-900">Alerts & Actions</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center h-32 text-destructive">
-            <div className="text-sm">
-              <p className="font-semibold mb-1">Error loading alerts</p>
-              <p className="text-xs">{(error as Error).message}</p>
+        <CardContent className="p-4 pt-0">
+          <div className="flex items-center justify-center h-32 bg-red-50/50 rounded-lg border border-red-100">
+            <div className="text-sm text-center">
+              <p className="font-semibold text-red-700 mb-1">Error loading alerts</p>
+              <p className="text-xs text-red-600">{(error as Error).message}</p>
             </div>
           </div>
         </CardContent>
@@ -97,49 +123,55 @@ export function AlertsPanel() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Alerts & Actions</CardTitle>
+    <Card className="border border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-all duration-200">
+      <CardHeader className="pb-2 border-b border-blue-100/50">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-blue-600" />
+            <CardTitle className="text-base font-semibold text-slate-900">Alerts & Actions</CardTitle>
+          </div>
+          {alerts.length > 0 && (
+            <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200">
+              {alerts.length} active
+            </Badge>
+          )}
+        </div>
       </CardHeader>
-      <CardContent className="max-h-[500px] overflow-y-auto">
+      <CardContent className="max-h-[500px] overflow-y-auto p-4 pt-3 scrollbar-thin scrollbar-thumb-blue-200 scrollbar-track-transparent">
         {alerts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
-            <CheckCircle className="h-8 w-8 text-green-600 mb-2" />
-            <p>No active alerts</p>
+          <div className="flex flex-col items-center justify-center h-32 bg-green-50/50 rounded-lg border border-green-100">
+            <CheckCircle className="h-8 w-8 text-green-500 mb-2" />
+            <p className="text-sm text-green-700 font-medium">All clear! No active alerts</p>
+            <p className="text-xs text-green-600 mt-1">You're up to date</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {alerts.map((alert) => (
               <div
                 key={alert.id}
-                className="flex gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                className="group flex gap-3 p-3 rounded-lg border border-blue-100/50 bg-white/50 hover:bg-white/80 transition-all duration-200 hover:shadow-sm"
               >
+                <div className="flex-shrink-0 mt-0.5">
+                  {getSeverityIcon(alert.severity)}
+                </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <Badge
-                      variant={
-                        alert.severity === 'high'
-                          ? 'destructive'
-                          : alert.severity === 'medium'
-                            ? 'secondary'
-                            : 'outline'
-                      }
-                      className="text-xs"
-                    >
-                      {alert.severity.toUpperCase()}
-                    </Badge>
+                    {getSeverityBadge(alert.severity)}
                   </div>
                   {alert.link ? (
-                    <Link href={alert.link} className="hover:underline text-blue-600 text-sm">
+                    <Link
+                      href={alert.link}
+                      className="text-sm text-slate-700 hover:text-blue-600 hover:underline transition-colors"
+                    >
                       {alert.message}
                     </Link>
                   ) : (
-                    <p className="text-sm">{alert.message}</p>
+                    <p className="text-sm text-slate-700">{alert.message}</p>
                   )}
                 </div>
                 <button
                   onClick={() => dismissAlert(alert.id)}
-                  className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                  className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors hover:bg-blue-100/50 p-1 rounded-md"
                   aria-label="Dismiss alert"
                 >
                   <X className="h-4 w-4" />
