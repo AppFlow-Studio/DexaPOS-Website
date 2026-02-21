@@ -53,6 +53,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
 import { AddStationDialog } from './AddStationDialog'
 import { AddTerminalDialog } from './AddTerminalDialog'
+import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
 
 interface DevicesTabProps {
     merchantInfo: MerchantDetails
@@ -103,6 +104,8 @@ const getTerminalTypeLabel = (type: string): string => {
 
 export function DevicesTab({ merchantInfo }: DevicesTabProps) {
     const merchantId = merchantInfo.id
+    const { hasPermission } = useAdminPermissions()
+    const canManageDevices = hasPermission('users.manage')
     
     // Local state
     const [selectedLocationId, setSelectedLocationId] = useState<string>('all')
@@ -394,13 +397,13 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                 </SelectContent>
                             </Select>
                             {activeTab === 'stations' && (
-                                <Button onClick={() => setIsAddStationOpen(true)}>
+                                <Button onClick={() => setIsAddStationOpen(true)} disabled={!canManageDevices}>
                                     <Plus className="h-4 w-4 mr-2" />
                                     Add Station
                                 </Button>
                             )}
                             {activeTab === 'terminals' && (
-                                <Button onClick={() => setIsAddTerminalOpen(true)}>
+                                <Button onClick={() => setIsAddTerminalOpen(true)} disabled={!canManageDevices}>
                                     <Plus className="h-4 w-4 mr-2" />
                                     Add Terminal
                                 </Button>
@@ -512,36 +515,40 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                             )}
                                                         </TableCell>
                                                         <TableCell>
-                                                            <DropdownMenu>
-                                                                <DropdownMenuTrigger asChild>
-                                                                    <Button variant="ghost" size="icon">
-                                                                        <MoreHorizontal className="h-4 w-4" />
-                                                                    </Button>
-                                                                </DropdownMenuTrigger>
-                                                                <DropdownMenuContent align="end">
-                                                                    <DropdownMenuItem onClick={() => handleToggleStationStatus(station)}>
-                                                                        {station.is_active ? (
-                                                                            <>
-                                                                                <AlertCircle className="h-4 w-4 mr-2" />
-                                                                                Deactivate
-                                                                            </>
-                                                                        ) : (
-                                                                            <>
-                                                                                <CheckCircle2 className="h-4 w-4 mr-2" />
-                                                                                Reactivate
-                                                                            </>
-                                                                        )}
-                                                                    </DropdownMenuItem>
-                                                                    <DropdownMenuSeparator />
-                                                                    <DropdownMenuItem
-                                                                        className="text-destructive"
-                                                                        onClick={() => handleDeleteStation(station)}
-                                                                    >
-                                                                        <Trash2 className="h-4 w-4 mr-2" />
-                                                                        Delete
-                                                                    </DropdownMenuItem>
-                                                                </DropdownMenuContent>
-                                                            </DropdownMenu>
+                                                            {canManageDevices ? (
+                                                                <DropdownMenu>
+                                                                    <DropdownMenuTrigger asChild>
+                                                                        <Button variant="ghost" size="icon">
+                                                                            <MoreHorizontal className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </DropdownMenuTrigger>
+                                                                    <DropdownMenuContent align="end">
+                                                                        <DropdownMenuItem onClick={() => handleToggleStationStatus(station)}>
+                                                                            {station.is_active ? (
+                                                                                <>
+                                                                                    <AlertCircle className="h-4 w-4 mr-2" />
+                                                                                    Deactivate
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                                                                                    Reactivate
+                                                                                </>
+                                                                            )}
+                                                                        </DropdownMenuItem>
+                                                                        <DropdownMenuSeparator />
+                                                                        <DropdownMenuItem
+                                                                            className="text-destructive"
+                                                                            onClick={() => handleDeleteStation(station)}
+                                                                        >
+                                                                            <Trash2 className="h-4 w-4 mr-2" />
+                                                                            Delete
+                                                                        </DropdownMenuItem>
+                                                                    </DropdownMenuContent>
+                                                                </DropdownMenu>
+                                                            ) : (
+                                                                <span className="text-xs text-muted-foreground">View only</span>
+                                                            )}
                                                         </TableCell>
                                                     </TableRow>
                                                 ))}
@@ -642,36 +649,40 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                             </div>
                                                         </TableCell>
                                                         <TableCell>
-                                                            <DropdownMenu>
-                                                                <DropdownMenuTrigger asChild>
-                                                                    <Button variant="ghost" size="icon">
-                                                                        <MoreHorizontal className="h-4 w-4" />
-                                                                    </Button>
-                                                                </DropdownMenuTrigger>
-                                                                <DropdownMenuContent align="end">
-                                                                    <DropdownMenuItem
-                                                                        onClick={() => handleTestConnection(terminal)}
-                                                                        disabled={testConnectionMutation.isPending}
-                                                                    >
-                                                                        <RefreshCw className={`h-4 w-4 mr-2 ${testConnectionMutation.isPending ? 'animate-spin' : ''}`} />
-                                                                        Test Connection
-                                                                    </DropdownMenuItem>
-                                                                    {terminal.station_id && (
-                                                                        <DropdownMenuItem onClick={() => handleUnlinkTerminal(terminal)}>
-                                                                            <Unlink className="h-4 w-4 mr-2" />
-                                                                            Unlink from Station
+                                                            {canManageDevices ? (
+                                                                <DropdownMenu>
+                                                                    <DropdownMenuTrigger asChild>
+                                                                        <Button variant="ghost" size="icon">
+                                                                            <MoreHorizontal className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </DropdownMenuTrigger>
+                                                                    <DropdownMenuContent align="end">
+                                                                        <DropdownMenuItem
+                                                                            onClick={() => handleTestConnection(terminal)}
+                                                                            disabled={testConnectionMutation.isPending}
+                                                                        >
+                                                                            <RefreshCw className={`h-4 w-4 mr-2 ${testConnectionMutation.isPending ? 'animate-spin' : ''}`} />
+                                                                            Test Connection
                                                                         </DropdownMenuItem>
-                                                                    )}
-                                                                    <DropdownMenuSeparator />
-                                                                    <DropdownMenuItem
-                                                                        className="text-destructive"
-                                                                        onClick={() => handleDeleteTerminal(terminal)}
-                                                                    >
-                                                                        <Trash2 className="h-4 w-4 mr-2" />
-                                                                        Delete
-                                                                    </DropdownMenuItem>
-                                                                </DropdownMenuContent>
-                                                            </DropdownMenu>
+                                                                        {terminal.station_id && (
+                                                                            <DropdownMenuItem onClick={() => handleUnlinkTerminal(terminal)}>
+                                                                                <Unlink className="h-4 w-4 mr-2" />
+                                                                                Unlink from Station
+                                                                            </DropdownMenuItem>
+                                                                        )}
+                                                                        <DropdownMenuSeparator />
+                                                                        <DropdownMenuItem
+                                                                            className="text-destructive"
+                                                                            onClick={() => handleDeleteTerminal(terminal)}
+                                                                        >
+                                                                            <Trash2 className="h-4 w-4 mr-2" />
+                                                                            Delete
+                                                                        </DropdownMenuItem>
+                                                                    </DropdownMenuContent>
+                                                                </DropdownMenu>
+                                                            ) : (
+                                                                <span className="text-xs text-muted-foreground">View only</span>
+                                                            )}
                                                         </TableCell>
                                                     </TableRow>
                                                 ))}

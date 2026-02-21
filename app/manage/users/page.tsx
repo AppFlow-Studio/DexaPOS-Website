@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -57,6 +57,7 @@ import { useAuth, useUser } from '@clerk/nextjs'
 import { useOrganizationInfo } from '../hooks/useOrganizationInfo'
 import { useRouter } from 'next/navigation'
 import { AdminInviteWizard } from '../organizations/[organizationId]/components/AdminInviteWizard'
+import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
 
 // HQ Organization ID for direct admin invites
 const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID || 'org_33z36QibAMZy6kc2xZNYmDl5duh'
@@ -78,6 +79,8 @@ const statusColors = {
 export default function UsersPage() {
     const router = useRouter()
     const { userId, orgId } = useAuth()
+    const { hasPermission, isLoading: permissionsLoading } = useAdminPermissions()
+    const canManageUsers = hasPermission('users.manage')
     const [searchTerm, setSearchTerm] = useState('')
     const [roleFilter, setRoleFilter] = useState('all')
     const [statusFilter, setStatusFilter] = useState('all')
@@ -85,8 +88,20 @@ export default function UsersPage() {
     const [activeTab, setActiveTab] = useState('users')
     const [isAdminInviteOpen, setIsAdminInviteOpen] = useState(false)
     const { user } = useUser()
-    const { data: users, isLoading, error } = useOrganizationUsers(orgId as string)
-    const { data: organizationInfo, refetch: refetchOrganizationInfo } = useOrganizationInfo(user?.publicMetadata.organizationId as string)
+    const fallbackOrgId = user?.publicMetadata?.organizationId as string | undefined
+    const resolvedOrganizationId = DEXA_HQ_ORG_ID || fallbackOrgId || (orgId as string)
+    const { data: users, isLoading, error } = useOrganizationUsers(resolvedOrganizationId as string)
+    const { data: organizationInfo, refetch: refetchOrganizationInfo } = useOrganizationInfo(resolvedOrganizationId as string)
+
+    useEffect(() => {
+        if (permissionsLoading) return
+        if (!canManageUsers) {
+            router.replace('/manage?denied=1&required=users.manage')
+        }
+    }, [canManageUsers, permissionsLoading, router])
+
+    if (permissionsLoading) return <div>Loading...</div>
+    if (!canManageUsers) return <div>Redirecting...</div>
 
     if (isLoading) return <div>Loading...</div>
     if (error) return <div>Error: {error.message}</div>

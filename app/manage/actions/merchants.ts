@@ -14,6 +14,35 @@ import type {
   ToggleLocationResult,
 } from '@/types/merchant'
 
+async function getManagerScopedMerchantIds(
+  userId: string,
+  roleCode: string | null | undefined
+): Promise<string[] | undefined> {
+  if (roleCode !== 'hq.manager') {
+    return undefined
+  }
+
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from('admin_merchant_access')
+    .select('merchant_id')
+    .eq('admin_user_id', userId)
+    .eq('is_active', true)
+
+  if (error) {
+    console.error('[getManagerScopedMerchantIds] Error:', error)
+    return []
+  }
+
+  return Array.from(
+    new Set(
+      (data || [])
+        .map((row) => row.merchant_id)
+        .filter((merchantId): merchantId is string => typeof merchantId === 'string' && merchantId.length > 0)
+    )
+  )
+}
+
 // ============================================================================
 // GET MERCHANTS (Paginated with filters)
 // ============================================================================
@@ -24,23 +53,35 @@ export async function getMerchants(
   pageSize: number = 20,
   accessibleMerchantIds?: string[] // Optional: filter to only these merchant IDs (for non-super-admins)
 ): Promise<{ merchants: MerchantSummary[]; total: number }> {
-  await assertHQPermission('hq.merchant.view')
+  const { userId, role } = await assertHQPermission('hq.merchant.view')
 
   const supabase = createServerSupabaseClient()
   const offset = (page - 1) * pageSize
+
+  const managerScopedIds = await getManagerScopedMerchantIds(userId, role?.role_code)
+
+  let effectiveMerchantIds = managerScopedIds
+  if (accessibleMerchantIds !== undefined) {
+    if (effectiveMerchantIds === undefined) {
+      effectiveMerchantIds = accessibleMerchantIds
+    } else {
+      const requestedSet = new Set(accessibleMerchantIds)
+      effectiveMerchantIds = effectiveMerchantIds.filter((merchantId) => requestedSet.has(merchantId))
+    }
+  }
 
   // Build query on the summary view
   let query = supabase
     .from('admin_merchant_summary')
     .select('*', { count: 'exact' })
 
-  // Filter by accessible merchant IDs (for non-super-admins)
-  if (accessibleMerchantIds !== undefined) {
-    if (accessibleMerchantIds.length === 0) {
+  // Apply effective merchant scope (manager scope + optional caller filter).
+  if (effectiveMerchantIds !== undefined) {
+    if (effectiveMerchantIds.length === 0) {
       // User has no merchant access - return empty result
       return { merchants: [], total: 0 }
     }
-    query = query.in('id', accessibleMerchantIds)
+    query = query.in('id', effectiveMerchantIds)
   }
 
   // Apply search filter
@@ -80,9 +121,14 @@ export async function getMerchants(
 export async function getMerchantDetails(
   merchantId: string
 ): Promise<MerchantDetails | null> {
-  await assertHQPermission('hq.merchant.view')
+  const { userId, role } = await assertHQPermission('hq.merchant.view')
 
   const supabase = createServerSupabaseClient()
+  const managerScopedIds = await getManagerScopedMerchantIds(userId, role?.role_code)
+
+  if (managerScopedIds && managerScopedIds.length === 0) {
+    return null
+  }
 
   // Determine if we're querying by internal ID or Clerk Org ID
   const isClerkId = merchantId.startsWith('org_')
@@ -97,6 +143,10 @@ export async function getMerchantDetails(
 
   if (merchantError || !merchant) {
     console.error('[getMerchantDetails] Merchant error:', merchantError)
+    return null
+  }
+
+  if (managerScopedIds && !managerScopedIds.includes(merchant.id)) {
     return null
   }
 
@@ -289,13 +339,23 @@ export async function getMerchantStats(): Promise<{
   inactive: number
   onboarding: number
 }> {
-  await assertHQPermission('hq.merchant.view')
+  const { userId, role } = await assertHQPermission('hq.merchant.view')
 
   const supabase = createServerSupabaseClient()
+  const managerScopedIds = await getManagerScopedMerchantIds(userId, role?.role_code)
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('admin_merchant_summary')
     .select('derived_status')
+
+  if (managerScopedIds !== undefined) {
+    if (managerScopedIds.length === 0) {
+      return { total: 0, active: 0, inactive: 0, onboarding: 0 }
+    }
+    query = query.in('id', managerScopedIds)
+  }
+
+  const { data, error } = await query
 
   if (error) {
     console.error('[getMerchantStats] Error:', error)
