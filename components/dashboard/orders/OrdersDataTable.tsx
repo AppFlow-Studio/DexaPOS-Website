@@ -61,6 +61,10 @@ interface OrdersDataTableProps {
     data: OrderResponse[]
     isLoading?: boolean
     onOrderClick?: (order: OrderResponse) => void
+    readOnly?: boolean
+    showLocationColumn?: boolean
+    locationsMap?: Map<string, string>
+    pageSize?: number
 }
 
 // Format date to "Today at 9:53 pm" or "Dec 15 at 2:30 pm"
@@ -130,7 +134,7 @@ function getOrderTypeConfig(type: OrderType) {
     return configs[type] || configs.dine_in
 }
 
-export function OrdersDataTable({ data, isLoading, onOrderClick }: OrdersDataTableProps) {
+export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showLocationColumn, locationsMap, pageSize = 50 }: OrdersDataTableProps) {
     const [sorting, setSorting] = React.useState<SortingState>([
         { id: 'created_at', desc: true },
     ])
@@ -140,6 +144,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick }: OrdersDataTab
     const router = useRouter()
     const isAllLocations = useIsAllLocations()
     const { locations } = useLocationStore()
+    const shouldShowLocation = showLocationColumn ?? isAllLocations
 
     const handleRowClick = (order: OrderResponse) => {
         if (onOrderClick) {
@@ -151,7 +156,8 @@ export function OrdersDataTable({ data, isLoading, onOrderClick }: OrdersDataTab
 
     const columns: ColumnDef<OrderResponse>[] = [
         {
-            accessorKey: 'order_number',
+            accessorKey: 'display_number',
+            id: 'order_display',
             header: ({ column }) => {
                 return (
                     <Button
@@ -164,14 +170,16 @@ export function OrdersDataTable({ data, isLoading, onOrderClick }: OrdersDataTab
                     </Button>
                 )
             },
+            accessorFn: (row) => row.display_number || row.order_number || '',
             cell: ({ row }) => {
                 const order = row.original
+                const display = order.display_number || order.order_number
                 return (
                     <div
                         className="font-medium cursor-pointer hover:text-primary transition-colors text-xs"
                         onClick={() => handleRowClick(order)}
                     >
-                        {order.order_number}
+                        {display}
                     </div>
                 )
             },
@@ -196,6 +204,21 @@ export function OrdersDataTable({ data, isLoading, onOrderClick }: OrdersDataTab
                         {formatOrderDate(row.original.created_at)}
                     </div>
                 )
+            },
+        },
+        {
+            id: 'created_by',
+            header: 'Created by',
+            accessorFn: (row) => {
+                const p = row.created_by_staff
+                if (!p) return ''
+                if (p.display_name) return p.display_name
+                return `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim()
+            },
+            cell: ({ row }) => {
+                const p = row.original.created_by_staff
+                const name = !p ? '—' : p.display_name || `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || '—'
+                return <div className="text-sm text-muted-foreground">{name}</div>
             },
         },
         {
@@ -232,16 +255,66 @@ export function OrdersDataTable({ data, isLoading, onOrderClick }: OrdersDataTab
         },
         {
             accessorKey: 'status',
-            header: 'Status',
+            header: ({ column }) => {
+                return (
+                    <Button
+                        variant="ghost"
+                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                        className="h-8 px-2"
+                    >
+                        Status
+                        <ArrowUpDown className="ml-2 h-3 w-3" />
+                    </Button>
+                )
+            },
             cell: ({ row }) => {
                 return <OrderStatusBadge status={row.original.status} />
+            },
+        },
+        {
+            id: 'item_count',
+            header: 'Items',
+            accessorFn: (row) => {
+                if (typeof (row as any).items_count === 'number') return (row as any).items_count
+                return (row.order_items || []).reduce(
+                    (sum, i) => sum + (i.is_voided ? 0 : Number(i.quantity) || 1),
+                    0
+                )
+            },
+            cell: ({ row }) => {
+                const order = row.original as OrderResponse & { items_count?: number }
+                const count = typeof order.items_count === 'number'
+                    ? order.items_count
+                    : (order.order_items || []).reduce(
+                        (sum, i) => sum + (i.is_voided ? 0 : Number(i.quantity) || 1),
+                        0
+                    )
+                return <div className="text-sm tabular-nums">{count}</div>
             },
         },
         {
             accessorKey: 'payment_status',
             header: 'Payment',
             cell: ({ row }) => {
-                return <PaymentStatusBadge status={row.original.payment_status} />
+                const order = row.original
+                const methods = [...new Set((order.order_payments || []).map((p) => p.payment_method))]
+                const methodLabels = methods.map((m) => {
+                    if (typeof m === 'string' && m.startsWith('card_')) return 'Card'
+                    if (m === 'cash') return 'Cash'
+                    if (m === 'gift_card') return 'Gift'
+                    return String(m ?? '').replace(/_/g, ' ')
+                }).filter(Boolean)
+                const summary = methodLabels.length > 0 ? methodLabels.join(', ') : '—'
+                return (
+                    <div className="flex flex-col gap-0.5">
+                        <PaymentStatusBadge status={order.payment_status} />
+                        {summary !== '—' && (
+                            <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">
+                                {summary}
+                            </span>
+                        )}
+                    </div>
+                )
             },
         },
         {
@@ -266,16 +339,17 @@ export function OrdersDataTable({ data, isLoading, onOrderClick }: OrdersDataTab
                 )
             },
         },
-        ...(isAllLocations
+        ...(shouldShowLocation
             ? [
                 {
                     accessorKey: 'location_id',
                     header: 'Location',
                     cell: ({ row }) => {
-                        const location = locations.find(l => l.id === row.original.location_id)
+                        const name = locationsMap?.get(row.original.location_id)
+                            ?? locations.find(l => l.id === row.original.location_id)?.name
                         return (
                             <div className="text-sm">
-                                {location?.name || 'Unknown Location'}
+                                {name || 'Unknown Location'}
                             </div>
                         )
                     },
@@ -301,21 +375,25 @@ export function OrdersDataTable({ data, isLoading, onOrderClick }: OrdersDataTab
                                 <Eye className="mr-2 h-4 w-4" />
                                 View Details
                             </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem>
-                                <Printer className="mr-2 h-4 w-4" />
-                                Print Receipt
-                            </DropdownMenuItem>
-                            {order.status !== 'void' && order.status !== 'cancelled' && (
+                            {!readOnly && (
                                 <>
-                                    <DropdownMenuItem className="text-orange-600">
-                                        <RotateCcw className="mr-2 h-4 w-4" />
-                                        Refund
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem>
+                                        <Printer className="mr-2 h-4 w-4" />
+                                        Print Receipt
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem className="text-destructive">
-                                        <X className="mr-2 h-4 w-4" />
-                                        Void Order
-                                    </DropdownMenuItem>
+                                    {order.status !== 'void' && order.status !== 'cancelled' && (
+                                        <>
+                                            <DropdownMenuItem className="text-orange-600">
+                                                <RotateCcw className="mr-2 h-4 w-4" />
+                                                Refund
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem className="text-destructive">
+                                                <X className="mr-2 h-4 w-4" />
+                                                Void Order
+                                            </DropdownMenuItem>
+                                        </>
+                                    )}
                                 </>
                             )}
                         </DropdownMenuContent>
@@ -338,7 +416,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick }: OrdersDataTab
         onGlobalFilterChange: setGlobalFilter,
         initialState: {
             pagination: {
-                pageSize: 50, // Sets the default number of rows per page to 50
+                pageSize,
             },
         },
         state: {

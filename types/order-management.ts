@@ -2,6 +2,7 @@
 export type OrderStatus =
   | "draft"
   | "pending"
+  | "sent_to_kitchen"
   | "preparing"
   | "ready"
   | "completed"
@@ -255,7 +256,18 @@ export interface OrderResponse {
   status: OrderStatus;
   customer_name?: string;
   customer_phone?: string;
+  customer_email?: string;
   table_number?: string;
+  device_id?: string;
+  internal_notes?: string;
+  payment_pricing_mode?: "card" | "cash" | "mixed";
+  cash_discount_applied?: boolean;
+  cash_discount_amount?: number;
+  location?: { name: string };
+  locations?: { name: string };
+  station?: { station_name?: string; device_name?: string };
+  created_by_staff?: { first_name?: string; last_name?: string; display_name?: string };
+  assigned_server?: { first_name?: string; last_name?: string; display_name?: string };
   subtotal: number;
   tax_amount: number;
   tip_amount: number;
@@ -289,12 +301,15 @@ export interface OrderResponse {
 
 export interface TableSessionWithEvents {
   id: string;
-  order_id: string;
-  session_id: string;
-  session_type: string;
-  session_status: string;
-  session_start_time: string;
-  session_end_time: string;
+  order_id?: string;
+  session_id?: string;
+  session_type?: string;
+  session_status?: string;
+  session_start_time?: string;
+  session_end_time?: string;
+  party_size?: number;
+  server?: { first_name?: string; last_name?: string; display_name?: string };
+  server_staff_id?: string;
   table_session_events: TableSessionEvent[];
 }
 
