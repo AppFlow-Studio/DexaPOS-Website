@@ -5,23 +5,48 @@ import {
   getStationsForLocation,
   getStationsForMerchant,
   getNextStationNumber,
+  getStationsWithHeartbeats,
   createStation,
   updateStation,
   deactivateStation,
   reactivateStation,
   deleteStation,
   deleteMultipleStations,
+  getKdsDisplayByStationId,
+  updateKdsDisplay,
+  getKdsRoutingRules,
+  setKdsRoutingRules,
   Station,
+  StationWithHeartbeat,
   StationType,
   SyncRole,
   ViewScope,
   CreateStationInput,
   UpdateStationInput,
+  CreateKdsDisplayInput,
+  KdsDisplayMode,
+  KdsRoutingMode,
+  KdsDisplay,
+  KdsRoutingRule,
 } from "@/app/dashboard/actions/stations";
 import { toast } from "sonner";
+import { formatDistanceToNow } from "date-fns";
 
 // Re-export types for convenience
-export type { Station, StationType, SyncRole, ViewScope, CreateStationInput, UpdateStationInput };
+export type {
+  Station,
+  StationWithHeartbeat,
+  StationType,
+  SyncRole,
+  ViewScope,
+  CreateStationInput,
+  UpdateStationInput,
+  CreateKdsDisplayInput,
+  KdsDisplayMode,
+  KdsRoutingMode,
+  KdsDisplay,
+  KdsRoutingRule,
+};
 
 // ============================================================================
 // Helper Functions
@@ -79,6 +104,33 @@ export const getViewScopeLabel = (scope: ViewScope): string => {
   }
 };
 
+export const getNetworkTypeLabel = (type: string | null | undefined): string => {
+  switch (type) {
+    case "wifi":
+      return "Wi-Fi";
+    case "ethernet":
+      return "Ethernet";
+    case "cellular":
+      return "Cellular";
+    default:
+      return type || "Unknown";
+  }
+};
+
+export const formatLastSeen = (
+  heartbeatAt: string | null | undefined,
+  fallback: string | null | undefined
+): string => {
+  const timestamp = heartbeatAt || fallback;
+  if (!timestamp) return "Never";
+
+  try {
+    return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
+  } catch {
+    return "Unknown";
+  }
+};
+
 // ============================================================================
 // Query Hooks
 // ============================================================================
@@ -98,6 +150,24 @@ export function useLocationStations(locationId: string) {
     },
     enabled: !!locationId && locationId !== "all",
     staleTime: 30 * 1000, // 30 seconds
+  });
+}
+
+/**
+ * Hook to fetch stations with heartbeat data for a specific location
+ */
+export function useStationsWithHeartbeats(locationId: string) {
+  return useQuery({
+    queryKey: ["stations-with-heartbeats", locationId],
+    queryFn: async () => {
+      const result = await getStationsWithHeartbeats(locationId);
+      if (!result.success) {
+        throw new Error(result.error || "Failed to fetch stations");
+      }
+      return result.data || [];
+    },
+    enabled: !!locationId && locationId !== "all",
+    staleTime: 30 * 1000,
   });
 }
 
@@ -297,6 +367,113 @@ export function useDeleteMultipleStations() {
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to delete stations");
+    },
+  });
+}
+
+// ============================================================================
+// KDS Display Hooks
+// ============================================================================
+
+/**
+ * Hook to fetch KDS display config for a station
+ */
+export function useKdsDisplay(stationId: string | undefined) {
+  return useQuery({
+    queryKey: ["kds-display", stationId],
+    queryFn: async () => {
+      const result = await getKdsDisplayByStationId(stationId!);
+      if (!result.success) {
+        throw new Error(result.error || "Failed to fetch KDS display config");
+      }
+      return result.data;
+    },
+    enabled: !!stationId,
+    staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * Hook to update KDS display config
+ */
+export function useUpdateKdsDisplay() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      kdsDisplayId,
+      input,
+    }: {
+      kdsDisplayId: string;
+      input: Partial<CreateKdsDisplayInput>;
+    }) => {
+      const result = await updateKdsDisplay(kdsDisplayId, input);
+      if (!result.success) {
+        throw new Error(result.error || "Failed to update KDS display config");
+      }
+      return result.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["kds-display"] });
+      queryClient.invalidateQueries({ queryKey: ["kds-routing-rules"] });
+      toast.success("KDS display config updated");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to update KDS display config");
+    },
+  });
+}
+
+// ============================================================================
+// KDS Routing Rules Hooks
+// ============================================================================
+
+/**
+ * Hook to fetch routing rules for a KDS display
+ */
+export function useKdsRoutingRules(kdsDisplayId: string | undefined) {
+  return useQuery({
+    queryKey: ["kds-routing-rules", kdsDisplayId],
+    queryFn: async () => {
+      const result = await getKdsRoutingRules(kdsDisplayId!);
+      if (!result.success) {
+        throw new Error(result.error || "Failed to fetch KDS routing rules");
+      }
+      return result.data || [];
+    },
+    enabled: !!kdsDisplayId,
+    staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * Hook to replace all routing rules for a KDS display
+ */
+export function useSetKdsRoutingRules() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      kdsDisplayId,
+      rules,
+    }: {
+      kdsDisplayId: string;
+      rules: { rule_type: string; rule_value: string }[];
+    }) => {
+      const result = await setKdsRoutingRules(kdsDisplayId, rules);
+      if (!result.success) {
+        throw new Error(result.error || "Failed to update KDS routing rules");
+      }
+      return result.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["kds-routing-rules", variables.kdsDisplayId],
+      });
+      toast.success("KDS routing rules updated");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to update KDS routing rules");
     },
   });
 }

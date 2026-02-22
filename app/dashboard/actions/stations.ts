@@ -34,6 +34,24 @@ export interface Station {
   os_version: string | null;
   app_version: string | null;
 
+  // Hardware Details (populated by POS app)
+  device_manufacturer: string | null;
+  device_model: string | null;
+  has_builtin_cfd: boolean;
+  has_builtin_printer: boolean;
+  has_cash_drawer_port: boolean;
+  has_nfc: boolean;
+  android_sdk_version: number | null;
+  local_ip_address: string | null;
+  network_ssid: string | null;
+  network_type: string | null;
+  screen_density: number | null;
+  screen_width: number | null;
+  screen_height: number | null;
+  battery_level: number | null;
+  ram_free_mb: number | null;
+  storage_free_mb: number | null;
+
   // Network (optional - populated by POS app)
   ip_address: string | null;
   mac_address: string | null;
@@ -62,6 +80,93 @@ export interface Station {
   updated_at: string;
 }
 
+// ============================================================================
+// Device Heartbeat Types
+// ============================================================================
+
+export interface LatestHeartbeat {
+  heartbeat_at: string;
+  is_online: boolean;
+  cpu_usage: number | null;
+  battery_level: number | null;
+  ram_free_mb: number | null;
+  storage_free_mb: number | null;
+  network_type: string | null;
+  printer_status: string | null;
+  cfd_connected: boolean | null;
+  app_version: string | null;
+}
+
+export interface StationWithHeartbeat extends Station {
+  latest_heartbeat: LatestHeartbeat | null;
+}
+
+// ============================================================================
+// KDS Display Types
+// ============================================================================
+
+export type KdsDisplayMode = "ticket" | "list";
+export type KdsRoutingMode = "all" | "category" | "prep_station" | "order_type";
+
+export interface CreateKdsDisplayInput {
+  display_name: string;
+  display_color?: string;
+  display_mode?: KdsDisplayMode;
+  columns?: number;
+  font_scale?: number;
+  routing_mode?: KdsRoutingMode;
+  show_all_items?: boolean;
+  warning_minutes?: number;
+  alert_minutes?: number;
+  auto_bump_minutes?: number | null;
+  sound_on_new_order?: boolean;
+  sound_on_rush?: boolean;
+  show_order_source?: boolean;
+  show_server_name?: boolean;
+  show_order_notes?: boolean;
+  show_allergy_flags?: boolean;
+  show_online_orders?: boolean;
+  online_order_priority?: boolean;
+  show_ready_by_countdown?: boolean;
+}
+
+export interface KdsRoutingRule {
+  id: string;
+  kds_display_id: string;
+  rule_type: string;
+  rule_value: string;
+  created_at: string | null;
+}
+
+export interface KdsDisplay {
+  id: string;
+  station_id: string;
+  merchant_id: string;
+  location_id: string;
+  display_name: string;
+  display_color: string | null;
+  display_mode: string;
+  columns: number | null;
+  font_scale: number | null;
+  routing_mode: string;
+  show_all_items: boolean | null;
+  warning_minutes: number | null;
+  alert_minutes: number | null;
+  auto_bump_minutes: number | null;
+  sound_on_new_order: boolean | null;
+  sound_on_rush: boolean | null;
+  show_order_source: boolean | null;
+  show_server_name: boolean | null;
+  show_order_notes: boolean | null;
+  show_allergy_flags: boolean | null;
+  show_online_orders: boolean | null;
+  online_order_priority: boolean | null;
+  show_ready_by_countdown: boolean | null;
+  is_active: boolean | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 export interface CreateStationInput {
   location_id: string;
   station_name: string;
@@ -77,6 +182,7 @@ export interface CreateStationInput {
   can_void_orders?: boolean;
   can_apply_discounts?: boolean;
   can_update_kitchen_status?: boolean;
+  kds_config?: CreateKdsDisplayInput;
 }
 
 export interface UpdateStationInput {
@@ -243,6 +349,87 @@ export async function getNextStationNumber(
   }
 }
 
+/**
+ * Get all active stations for a location with their latest heartbeat data
+ */
+export async function getStationsWithHeartbeats(locationId: string) {
+  try {
+    const supabase = createServerSupabaseClient();
+
+    // Fetch all stations for the location (including deactivated)
+    const { data: stations, error: stationsError } = await supabase
+      .from("stations")
+      .select("*")
+      .eq("location_id", locationId)
+      .order("station_number", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: false });
+
+    if (stationsError) {
+      console.error("[getStationsWithHeartbeats] Stations error:", stationsError);
+      return { success: false, error: stationsError.message, data: null };
+    }
+
+    if (!stations || stations.length === 0) {
+      return { success: true, data: [] as StationWithHeartbeat[], error: null };
+    }
+
+    const stationIds = stations.map((s) => s.id);
+
+    // Fetch latest heartbeat per station using distinct on station_id
+    const { data: heartbeats, error: heartbeatsError } = await supabase
+      .from("device_heartbeats")
+      .select(
+        "station_id, heartbeat_at, is_online, cpu_usage, battery_level, ram_free_mb, storage_free_mb, network_type, printer_status, cfd_connected, app_version"
+      )
+      .in("station_id", stationIds)
+      .order("station_id")
+      .order("heartbeat_at", { ascending: false });
+
+    if (heartbeatsError) {
+      console.error("[getStationsWithHeartbeats] Heartbeats error:", heartbeatsError);
+      // Continue without heartbeats - not fatal
+    }
+
+    // Build a map of station_id -> latest heartbeat (first occurrence per station)
+    const heartbeatMap = new Map<string, LatestHeartbeat>();
+    if (heartbeats) {
+      for (const hb of heartbeats) {
+        if (!heartbeatMap.has(hb.station_id)) {
+          heartbeatMap.set(hb.station_id, {
+            heartbeat_at: hb.heartbeat_at,
+            is_online: hb.is_online,
+            cpu_usage: hb.cpu_usage,
+            battery_level: hb.battery_level,
+            ram_free_mb: hb.ram_free_mb,
+            storage_free_mb: hb.storage_free_mb,
+            network_type: hb.network_type,
+            printer_status: hb.printer_status,
+            cfd_connected: hb.cfd_connected,
+            app_version: hb.app_version,
+          });
+        }
+      }
+    }
+
+    // Merge heartbeat data onto stations
+    const stationsWithHeartbeats: StationWithHeartbeat[] = (stations as Station[]).map(
+      (station) => ({
+        ...station,
+        latest_heartbeat: heartbeatMap.get(station.id) || null,
+      })
+    );
+
+    return { success: true, data: stationsWithHeartbeats, error: null };
+  } catch (error) {
+    console.error("[getStationsWithHeartbeats] Exception:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    };
+  }
+}
+
 // ============================================================================
 // CREATE Operations
 // ============================================================================
@@ -344,6 +531,41 @@ export async function createStation(
       .select("name")
       .eq("id", input.location_id)
       .single();
+
+    // If KDS station type and kds_config provided, create kds_displays record
+    if (input.station_type === "kds" && input.kds_config) {
+      const kdsConfig = input.kds_config;
+      const { error: kdsError } = await supabase.from("kds_displays").insert({
+        station_id: data.id,
+        merchant_id: merchant.id,
+        location_id: input.location_id,
+        display_name: kdsConfig.display_name,
+        display_color: kdsConfig.display_color || null,
+        display_mode: kdsConfig.display_mode || "ticket",
+        columns: kdsConfig.columns ?? 4,
+        font_scale: kdsConfig.font_scale ?? 1.0,
+        routing_mode: kdsConfig.routing_mode || "all",
+        show_all_items: kdsConfig.show_all_items ?? false,
+        warning_minutes: kdsConfig.warning_minutes ?? 5,
+        alert_minutes: kdsConfig.alert_minutes ?? 10,
+        auto_bump_minutes: kdsConfig.auto_bump_minutes ?? null,
+        sound_on_new_order: kdsConfig.sound_on_new_order ?? true,
+        sound_on_rush: kdsConfig.sound_on_rush ?? true,
+        show_order_source: kdsConfig.show_order_source ?? true,
+        show_server_name: kdsConfig.show_server_name ?? true,
+        show_order_notes: kdsConfig.show_order_notes ?? true,
+        show_allergy_flags: kdsConfig.show_allergy_flags ?? true,
+        show_online_orders: kdsConfig.show_online_orders ?? true,
+        online_order_priority: kdsConfig.online_order_priority ?? true,
+        show_ready_by_countdown: kdsConfig.show_ready_by_countdown ?? true,
+      });
+
+      if (kdsError) {
+        console.error("[createStation] KDS Display insert error:", kdsError);
+        // Station was created but KDS config failed - don't fail the whole operation
+        // but log the error so it can be configured later
+      }
+    }
 
     // Log audit event
     await LogAuditEvent({
@@ -890,6 +1112,264 @@ export async function markStationOffline(stationId: string) {
     return { success: true, error: null };
   } catch (error) {
     console.error("[markStationOffline] Exception:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+// ============================================================================
+// KDS Display Operations
+// ============================================================================
+
+/**
+ * Get KDS display config by station ID
+ */
+export async function getKdsDisplayByStationId(stationId: string) {
+  try {
+    const supabase = createServerSupabaseClient();
+
+    const { data, error } = await supabase
+      .from("kds_displays")
+      .select("*")
+      .eq("station_id", stationId)
+      .single();
+
+    if (error) {
+      // PGRST116 = no rows found, which is acceptable
+      if (error.code === "PGRST116") {
+        return { success: true, data: null, error: null };
+      }
+      console.error("[getKdsDisplayByStationId] Error:", error);
+      return { success: false, error: error.message, data: null };
+    }
+
+    return { success: true, data: data as KdsDisplay, error: null };
+  } catch (error) {
+    console.error("[getKdsDisplayByStationId] Exception:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    };
+  }
+}
+
+/**
+ * Update KDS display config
+ */
+export async function updateKdsDisplay(
+  kdsDisplayId: string,
+  input: Partial<CreateKdsDisplayInput>,
+) {
+  try {
+    const supabase = createServerSupabaseClient();
+
+    const updateData: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (input.display_name !== undefined) updateData.display_name = input.display_name;
+    if (input.display_color !== undefined) updateData.display_color = input.display_color || null;
+    if (input.display_mode !== undefined) updateData.display_mode = input.display_mode;
+    if (input.columns !== undefined) updateData.columns = input.columns;
+    if (input.font_scale !== undefined) updateData.font_scale = input.font_scale;
+    if (input.routing_mode !== undefined) updateData.routing_mode = input.routing_mode;
+    if (input.show_all_items !== undefined) updateData.show_all_items = input.show_all_items;
+    if (input.warning_minutes !== undefined) updateData.warning_minutes = input.warning_minutes;
+    if (input.alert_minutes !== undefined) updateData.alert_minutes = input.alert_minutes;
+    if (input.auto_bump_minutes !== undefined) updateData.auto_bump_minutes = input.auto_bump_minutes;
+    if (input.sound_on_new_order !== undefined) updateData.sound_on_new_order = input.sound_on_new_order;
+    if (input.sound_on_rush !== undefined) updateData.sound_on_rush = input.sound_on_rush;
+    if (input.show_order_source !== undefined) updateData.show_order_source = input.show_order_source;
+    if (input.show_server_name !== undefined) updateData.show_server_name = input.show_server_name;
+    if (input.show_order_notes !== undefined) updateData.show_order_notes = input.show_order_notes;
+    if (input.show_allergy_flags !== undefined) updateData.show_allergy_flags = input.show_allergy_flags;
+    if (input.show_online_orders !== undefined) updateData.show_online_orders = input.show_online_orders;
+    if (input.online_order_priority !== undefined) updateData.online_order_priority = input.online_order_priority;
+    if (input.show_ready_by_countdown !== undefined) updateData.show_ready_by_countdown = input.show_ready_by_countdown;
+
+    // If routing_mode is changing, clear all existing routing rules to prevent
+    // stale rules from matching in the route_items_to_kds() trigger
+    if (input.routing_mode !== undefined) {
+      const { error: clearError } = await supabase
+        .from("kds_routing_rules")
+        .delete()
+        .eq("kds_display_id", kdsDisplayId);
+
+      if (clearError) {
+        console.error("[updateKdsDisplay] Error clearing routing rules:", clearError);
+        // Non-fatal — continue with the display update
+      }
+    }
+
+    const { data, error } = await supabase
+      .from("kds_displays")
+      .update(updateData)
+      .eq("id", kdsDisplayId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("[updateKdsDisplay] Error:", error);
+      return { success: false, error: error.message, data: null };
+    }
+
+    return { success: true, data: data as KdsDisplay, error: null };
+  } catch (error) {
+    console.error("[updateKdsDisplay] Exception:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    };
+  }
+}
+
+// ============================================================================
+// KDS Routing Rules Operations
+// ============================================================================
+
+/**
+ * Get all routing rules for a KDS display
+ */
+export async function getKdsRoutingRules(kdsDisplayId: string) {
+  try {
+    const supabase = createServerSupabaseClient();
+
+    const { data, error } = await supabase
+      .from("kds_routing_rules")
+      .select("*")
+      .eq("kds_display_id", kdsDisplayId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("[getKdsRoutingRules] Error:", error);
+      return { success: false, error: error.message, data: null };
+    }
+
+    return { success: true, data: data as KdsRoutingRule[], error: null };
+  } catch (error) {
+    console.error("[getKdsRoutingRules] Exception:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    };
+  }
+}
+
+/**
+ * Replace all routing rules for a KDS display (delete + insert)
+ */
+export async function setKdsRoutingRules(
+  kdsDisplayId: string,
+  rules: { rule_type: string; rule_value: string }[],
+) {
+  try {
+    const supabase = createServerSupabaseClient();
+
+    // Delete existing rules
+    const { error: deleteError } = await supabase
+      .from("kds_routing_rules")
+      .delete()
+      .eq("kds_display_id", kdsDisplayId);
+
+    if (deleteError) {
+      console.error("[setKdsRoutingRules] Delete error:", deleteError);
+      return { success: false, error: deleteError.message, data: null };
+    }
+
+    // Insert new rules if any
+    if (rules.length > 0) {
+      const { data, error: insertError } = await supabase
+        .from("kds_routing_rules")
+        .insert(
+          rules.map((r) => ({
+            kds_display_id: kdsDisplayId,
+            rule_type: r.rule_type,
+            rule_value: r.rule_value,
+          }))
+        )
+        .select();
+
+      if (insertError) {
+        console.error("[setKdsRoutingRules] Insert error:", insertError);
+        return { success: false, error: insertError.message, data: null };
+      }
+
+      return { success: true, data: data as KdsRoutingRule[], error: null };
+    }
+
+    return { success: true, data: [] as KdsRoutingRule[], error: null };
+  } catch (error) {
+    console.error("[setKdsRoutingRules] Exception:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    };
+  }
+}
+
+/**
+ * Add a single routing rule to a KDS display
+ */
+export async function addKdsRoutingRule(
+  kdsDisplayId: string,
+  ruleType: string,
+  ruleValue: string,
+) {
+  try {
+    const supabase = createServerSupabaseClient();
+
+    const { data, error } = await supabase
+      .from("kds_routing_rules")
+      .insert({
+        kds_display_id: kdsDisplayId,
+        rule_type: ruleType,
+        rule_value: ruleValue,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("[addKdsRoutingRule] Error:", error);
+      return { success: false, error: error.message, data: null };
+    }
+
+    return { success: true, data: data as KdsRoutingRule, error: null };
+  } catch (error) {
+    console.error("[addKdsRoutingRule] Exception:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    };
+  }
+}
+
+/**
+ * Remove a single routing rule by ID
+ */
+export async function removeKdsRoutingRule(ruleId: string) {
+  try {
+    const supabase = createServerSupabaseClient();
+
+    const { error } = await supabase
+      .from("kds_routing_rules")
+      .delete()
+      .eq("id", ruleId);
+
+    if (error) {
+      console.error("[removeKdsRoutingRule] Error:", error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, error: null };
+  } catch (error) {
+    console.error("[removeKdsRoutingRule] Exception:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",

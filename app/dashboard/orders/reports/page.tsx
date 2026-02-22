@@ -1,55 +1,201 @@
 'use client'
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { useState } from 'react'
+import { useAuth } from '@clerk/nextjs'
 import { useIsAllLocations, useSelectedLocation } from '@/stores/location-store'
-import { Globe, MapPin, FileText } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
+
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { MapPin, Globe } from 'lucide-react'
+import { DateRangePicker, DatePreset } from '@/components/dashboard/orders/DateRangePicker'
+import { SalesSummaryReport } from '@/components/dashboard/orders/reports/SalesSummaryReport'
+import { HourlySalesReport } from '@/components/dashboard/orders/reports/HourlySalesReport'
+import { ItemSalesReport } from '@/components/dashboard/orders/reports/ItemSalesReport'
+import { PaymentSummaryReport } from '@/components/dashboard/orders/reports/PaymentSummaryReport'
+import { KitchenPerformanceReport } from '@/components/dashboard/orders/reports/KitchenPerformanceReport'
+import { TableTurnsReport } from '@/components/dashboard/orders/reports/TableTurnsReport'
+import { ServerPerformanceReport } from '@/components/dashboard/orders/reports/ServerPerformanceReport'
+import { VoidsReport } from '@/components/dashboard/orders/reports/VoidsReport'
 
 export default function ReportsPage() {
-    const selectedLocation = useSelectedLocation()
-    const isAllLocations = useIsAllLocations()
+  const { orgSlug } = useAuth()
+  const selectedLocation = useSelectedLocation()
+  const isAllLocations = useIsAllLocations()
 
-    return (
-        <main className="space-y-6 animate-in fade-in duration-500">
-            <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                        <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
-                        {isAllLocations ? (
-                            <Badge variant="outline" className="gap-1">
-                                <Globe className="h-3 w-3" />
-                                All Locations
-                            </Badge>
-                        ) : (
-                            <Badge variant="outline" className="gap-1">
-                                <MapPin className="h-3 w-3" />
-                                {selectedLocation?.name}
-                            </Badge>
-                        )}
-                    </div>
-                    <p className="text-muted-foreground">
-                        Generate and view detailed reports for your orders
-                    </p>
-                </div>
+  // Date range state
+  const [preset, setPreset] = useState<DatePreset>('last_7_days')
+  const [dateFrom, setDateFrom] = useState<Date>(() => {
+    const date = new Date()
+    date.setDate(date.getDate() - 7)
+    return date
+  })
+  const [dateTo, setDateTo] = useState<Date>(new Date())
+  const [activeTab, setActiveTab] = useState('sales-summary')
+
+  // Get merchant and location names for PDF exports
+  const merchantName = orgSlug || 'Merchant'
+  const locationName = isAllLocations ? 'All Locations' : selectedLocation?.name
+
+  const handleDateRangeChange = (from: Date | null, to: Date | null) => {
+    if (from && to) {
+      setDateFrom(from)
+      setDateTo(to)
+    }
+  }
+
+  return (
+    <main className="space-y-6 animate-in fade-in duration-500 ">
+      {/* Header with Blue Theme */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Reports</h1>
             </div>
+            <p className="text-base text-slate-600 dark:text-slate-400">
+              Download and analyze detailed reports for your business
+            </p>
+          </div>
+        </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Reports</CardTitle>
-                    <CardDescription>
-                        This section is coming soon. You'll be able to generate detailed reports here.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex items-center justify-center py-12">
-                        <div className="text-center space-y-2">
-                            <FileText className="h-12 w-12 text-muted-foreground mx-auto" />
-                            <p className="text-muted-foreground">Reports feature coming soon</p>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-        </main>
-    )
+        {/* Divider */}
+        <div className="h-1 bg-gradient-to-r from-blue-500 to-blue-600 dark:from-blue-400 dark:to-blue-500 rounded-full w-24"></div>
+      </div>
+
+      {/* Controls with Blue Styling */}
+      <DateRangePicker
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        onDateRangeChange={handleDateRangeChange}
+        preset={preset}
+        onPresetChange={setPreset}
+      />
+
+      {/* Tab Navigation */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="flex-wrap h-auto gap-2 bg-transparent border-b-2 border-slate-200 dark:border-slate-700 rounded-none p-0 pb-2">
+          <TabsTrigger
+            value="sales-summary"
+            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] dark:data-[state=active]:border-[#0A7AB8] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-none"
+          >
+            Sales Summary
+          </TabsTrigger>
+          <TabsTrigger
+            value="hourly-sales"
+            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] dark:data-[state=active]:border-[#0A7AB8] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-none"
+          >
+            Hourly Sales
+          </TabsTrigger>
+          <TabsTrigger
+            value="item-sales"
+            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] dark:data-[state=active]:border-[#0A7AB8] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-none"
+          >
+            Item Sales
+          </TabsTrigger>
+          <TabsTrigger
+            value="payments"
+            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] dark:data-[state=active]:border-[#0A7AB8] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-none"
+          >
+            Payments
+          </TabsTrigger>
+          <TabsTrigger
+            value="kitchen"
+            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] dark:data-[state=active]:border-[#0A7AB8] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-none"
+          >
+            Kitchen Performance
+          </TabsTrigger>
+          <TabsTrigger
+            value="table-turns"
+            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] dark:data-[state=active]:border-[#0A7AB8] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-none"
+          >
+            Table Turns
+          </TabsTrigger>
+          <TabsTrigger
+            value="server"
+            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] dark:data-[state=active]:border-[#0A7AB8] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-none"
+          >
+            Server Performance
+          </TabsTrigger>
+          <TabsTrigger
+            value="voids"
+            className="border-0 border-b-4 border-transparent transition-colors duration-200 data-[state=active]:border-[#0A5C9E] dark:data-[state=active]:border-[#0A7AB8] data-[state=active]:shadow-none data-[state=active]:bg-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-none"
+          >
+            Voids & Refunds
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Sales Summary Report */}
+        <TabsContent value="sales-summary">
+          <Card className="border-blue-200 dark:border-blue-900/50 shadow-lg dark:shadow-blue-900/10 bg-white dark:bg-slate-900">
+            <CardContent className="pt-6 dark:text-gray-100">
+              <SalesSummaryReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Hourly Sales Report */}
+        <TabsContent value="hourly-sales">
+          <Card className="border-blue-200 dark:border-blue-900/50 shadow-lg dark:shadow-blue-900/10 bg-white dark:bg-slate-900">
+            <CardContent className="pt-6 dark:text-gray-100">
+              <HourlySalesReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Item Sales Report */}
+        <TabsContent value="item-sales">
+          <Card className="border-blue-200 dark:border-blue-900/50 shadow-lg dark:shadow-blue-900/10 bg-white dark:bg-slate-900">
+            <CardContent className="pt-6 dark:text-gray-100">
+              <ItemSalesReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Payment Summary Report */}
+        <TabsContent value="payments">
+          <Card className="border-blue-200 dark:border-blue-900/50 shadow-lg dark:shadow-blue-900/10 bg-white dark:bg-slate-900">
+            <CardContent className="pt-6 dark:text-gray-100">
+              <PaymentSummaryReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Kitchen Performance Report */}
+        <TabsContent value="kitchen">
+          <Card className="border-blue-200 dark:border-blue-900/50 shadow-lg dark:shadow-blue-900/10 bg-white dark:bg-slate-900">
+            <CardContent className="pt-6 dark:text-gray-100">
+              <KitchenPerformanceReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Table Turns Report */}
+        <TabsContent value="table-turns">
+          <Card className="border-blue-200 dark:border-blue-900/50 shadow-lg dark:shadow-blue-900/10 bg-white dark:bg-slate-900">
+            <CardContent className="pt-6 dark:text-gray-100">
+              <TableTurnsReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Server Performance Report */}
+        <TabsContent value="server">
+          <Card className="border-blue-200 dark:border-blue-900/50 shadow-lg dark:shadow-blue-900/10 bg-white dark:bg-slate-900">
+            <CardContent className="pt-6 dark:text-gray-100">
+              <ServerPerformanceReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Voids & Refunds Report */}
+        <TabsContent value="voids">
+          <Card className="border-blue-200 dark:border-blue-900/50 shadow-lg dark:shadow-blue-900/10 bg-white dark:bg-slate-900">
+            <CardContent className="pt-6 dark:text-gray-100">
+              <VoidsReport dateFrom={dateFrom} dateTo={dateTo} merchantName={merchantName} locationName={locationName} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </main>
+  )
 }
-

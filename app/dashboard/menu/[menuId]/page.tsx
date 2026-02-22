@@ -11,15 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Utensils,
-  Tag,
-  Calendar,
   Clock,
-  Wand2,
   ArrowLeft,
   Trash2,
-  Save,
-  Info,
-  Tablet,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DeleteMenu, UpdateMenu, ToggleMenuActive } from "../../actions/menus";
@@ -270,6 +264,9 @@ export default function MenuDetailPage() {
       availability: mi.effective_availability ?? true,
       allergens: mi.allergens ?? [],
       card_bg_color: mi.card_bg_color ?? undefined,
+      // Delivery pricing
+      delivery_price: priceLevels.level_1_delivery ?? null,
+      effective_delivery_price: (mi as any).effective_delivery_price ?? null,
       category_items: [
         { id: category.category_id, name: category.category?.name || "" },
       ],
@@ -305,6 +302,12 @@ export default function MenuDetailPage() {
           (mi as any).location_menu_override?.custom_cash_price ??
           priceLevels.level_5_location_menu_cash ??
           null,
+        // Delivery pricing levels
+        level_1_delivery: priceLevels.level_1_delivery ?? null,
+        level_2_location_item_delivery: priceLevels.level_2_location_item_delivery ?? null,
+        level_3_category_delivery: priceLevels.level_3_category_delivery ?? null,
+        level_4_location_category_delivery: priceLevels.level_4_location_category_delivery ?? null,
+        level_5_location_menu_delivery: priceLevels.level_5_location_menu_delivery ?? null,
       },
       effective_price: mi.effective_price,
       effective_cash_price: mi.effective_cash_price,
