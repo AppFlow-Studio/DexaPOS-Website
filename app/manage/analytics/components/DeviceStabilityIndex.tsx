@@ -234,8 +234,9 @@ export default function DeviceStabilityIndex() {
                                         content={({ active, payload, label }) => {
                                             if (active && payload && payload.length) {
                                                 const healthy = Number(payload[0]?.value || 0)
-                                                const unhealthy = Number(payload[1]?.value || 0)
-                                                const total = healthy + unhealthy
+                                                const degraded = Number(payload[1]?.value || 0)
+                                                const unhealthy = Number(payload[2]?.value || 0)
+                                                const total = healthy + degraded + unhealthy
                                                 const rate = total > 0 ? ((unhealthy / total) * 100).toFixed(2) : '0'
                                                 return (
                                                     <div className="bg-background border rounded-lg p-3 shadow-sm text-xs space-y-1">
@@ -243,6 +244,10 @@ export default function DeviceStabilityIndex() {
                                                         <div className="flex items-center gap-2">
                                                             <span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" />
                                                             <span>Healthy: {healthy.toLocaleString()}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 inline-block" />
+                                                            <span>Degraded: {degraded.toLocaleString()}</span>
                                                         </div>
                                                         <div className="flex items-center gap-2">
                                                             <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" />
@@ -261,9 +266,11 @@ export default function DeviceStabilityIndex() {
                                     <Legend
                                         verticalAlign="top"
                                         height={36}
-                                        formatter={(value) => (
-                                            <span className="text-xs text-muted-foreground capitalize">{value === 'healthy' ? 'Healthy Heartbeats' : 'Unhealthy (Offline + Kicks)'}</span>
-                                        )}
+                                        formatter={(value) => {
+                                            if (value === 'healthy') return <span className="text-xs text-muted-foreground">Healthy Heartbeats</span>
+                                            if (value === 'degraded') return <span className="text-xs text-muted-foreground">Degraded (Low Resources)</span>
+                                            return <span className="text-xs text-muted-foreground">Unhealthy (Offline + Kicks)</span>
+                                        }}
                                     />
                                     <Bar
                                         dataKey="healthy"
@@ -276,6 +283,21 @@ export default function DeviceStabilityIndex() {
                                             <Cell
                                                 key={`healthy-${index}`}
                                                 fill={selectedVersion === entry.version ? '#16a34a' : '#22c55e'}
+                                                opacity={selectedVersion && selectedVersion !== entry.version ? 0.4 : 1}
+                                            />
+                                        ))}
+                                    </Bar>
+                                    <Bar
+                                        dataKey="degraded"
+                                        stackId="stability"
+                                        fill="#eab308"
+                                        radius={[0, 0, 0, 0]}
+                                        cursor="pointer"
+                                    >
+                                        {stabilityData.versionBars.map((entry, index) => (
+                                            <Cell
+                                                key={`degraded-${index}`}
+                                                fill={selectedVersion === entry.version ? '#ca8a04' : '#eab308'}
                                                 opacity={selectedVersion && selectedVersion !== entry.version ? 0.4 : 1}
                                             />
                                         ))}
@@ -360,6 +382,7 @@ export default function DeviceStabilityIndex() {
                                             <TableRow>
                                                 <TableHead>Version</TableHead>
                                                 <TableHead className="text-right">Signals</TableHead>
+                                                <TableHead className="text-right text-yellow-600">Degraded</TableHead>
                                                 <TableHead className="text-right">Instability</TableHead>
                                                 <TableHead className="text-right">Status</TableHead>
                                             </TableRow>
@@ -380,6 +403,12 @@ export default function DeviceStabilityIndex() {
                                                     <TableCell className="text-right text-sm">
                                                         {bar.total.toLocaleString()}
                                                     </TableCell>
+                                                    <TableCell className="text-right text-sm">
+                                                        {bar.degraded > 0
+                                                            ? <span className="font-medium text-yellow-600">{bar.degraded.toLocaleString()}</span>
+                                                            : <span className="text-muted-foreground">—</span>
+                                                        }
+                                                    </TableCell>
                                                     <TableCell className="text-right">
                                                         <span className={`text-sm font-medium ${bar.instabilityRate > INSTABILITY_THRESHOLD ? 'text-red-600' : 'text-green-600'}`}>
                                                             {bar.instabilityRate}%
@@ -388,6 +417,8 @@ export default function DeviceStabilityIndex() {
                                                     <TableCell className="text-right">
                                                         {bar.instabilityRate > INSTABILITY_THRESHOLD ? (
                                                             <Badge variant="destructive" className="text-xs">At Risk</Badge>
+                                                        ) : bar.degraded > 0 ? (
+                                                            <Badge variant="secondary" className="text-xs text-yellow-700">Degraded</Badge>
                                                         ) : (
                                                             <Badge variant="default" className="text-xs bg-green-600">Stable</Badge>
                                                         )}
@@ -435,6 +466,7 @@ export default function DeviceStabilityIndex() {
                                                     <TableHead>Hardware Model</TableHead>
                                                     <TableHead className="text-right">Devices</TableHead>
                                                     <TableHead className="text-right">Healthy</TableHead>
+                                                    <TableHead className="text-right text-yellow-600">Degraded</TableHead>
                                                     <TableHead className="text-right">Unhealthy</TableHead>
                                                     <TableHead className="text-right">Rate</TableHead>
                                                 </TableRow>
@@ -450,6 +482,12 @@ export default function DeviceStabilityIndex() {
                                                         </TableCell>
                                                         <TableCell className="text-right text-sm text-green-600">
                                                             {model.healthy.toLocaleString()}
+                                                        </TableCell>
+                                                        <TableCell className="text-right text-sm">
+                                                            {model.degraded > 0
+                                                                ? <span className="font-medium text-yellow-600">{model.degraded.toLocaleString()}</span>
+                                                                : <span className="text-muted-foreground">—</span>
+                                                            }
                                                         </TableCell>
                                                         <TableCell className="text-right text-sm text-red-600">
                                                             {model.unhealthy.toLocaleString()}

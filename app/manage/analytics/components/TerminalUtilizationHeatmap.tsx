@@ -31,6 +31,7 @@ import {
     Monitor,
     TrendingDown,
     BarChart3,
+    DollarSign,
 } from 'lucide-react'
 import { useTerminalUtilization } from '@/lib/queries/use-platform-analytics'
 import type { MerchantTerminalUtilization, UtilizationTier } from '@/app/manage/actions/hq-platform/analytics'
@@ -127,34 +128,63 @@ function StationHeatmapGrid({ merchant }: { merchant: MerchantTerminalUtilizatio
 // Zombie Insight Banner
 // ============================================================================
 
-function ZombieInsightBanner({ merchants }: { merchants: MerchantTerminalUtilization[] }) {
-    // Find the merchant with the most zombie stations
-    const worstMerchant = merchants
-        .filter(m => m.zombieStations > 0)
-        .sort((a, b) => b.zombieStations - a.zombieStations)[0]
+function ZombieInsightBanner({
+    merchants,
+    totalZombieStations,
+    estimatedWastedHardwareValue,
+    hardwareCostPerUnit,
+}: {
+    merchants: MerchantTerminalUtilization[]
+    totalZombieStations: number
+    estimatedWastedHardwareValue: number
+    hardwareCostPerUnit: number
+}) {
+    const merchantsWithZombies = merchants.filter(m => m.zombieStations > 0)
+    const worstMerchant = [...merchantsWithZombies].sort((a, b) => b.zombieStations - a.zombieStations)[0]
 
     if (!worstMerchant) return null
 
+    const fmtDollars = (n: number) =>
+        n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` :
+        n >= 1_000    ? `$${(n / 1_000).toFixed(1)}k` :
+        `$${n.toLocaleString()}`
+
     return (
-        <Card className="border-amber-200 bg-linear-to-r from-amber-50 to-orange-50">
-            <CardContent className="py-4">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-amber-100">
-                        <Ghost className="h-5 w-5 text-amber-700" />
+        <Card className="border-red-200 bg-linear-to-r from-red-50 to-orange-50">
+            <CardContent className="py-5">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                    <div className="p-2.5 rounded-lg bg-red-100 shrink-0">
+                        <Ghost className="h-6 w-6 text-red-700" />
                     </div>
-                    <div className="flex-1">
-                        <p className="font-semibold text-amber-900">Zombie Terminal Insight</p>
-                        <p className="text-sm text-amber-800">
+
+                    {/* Left — fleet-wide summary */}
+                    <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-red-900">
+                            {merchantsWithZombies.length} merchant{merchantsWithZombies.length !== 1 ? 's have' : ' has'}{' '}
+                            {totalZombieStations} zombie tablet{totalZombieStations !== 1 ? 's' : ''} — no transaction in 30+ days
+                        </p>
+                        <p className="text-sm text-red-800 mt-0.5">
+                            Worst offender:{' '}
                             <span className="font-bold">{worstMerchant.merchantName}</span>{' '}
-                            has {worstMerchant.zombieStations} &ldquo;Zombie&rdquo; tablet{worstMerchant.zombieStations !== 1 ? 's' : ''} that
-                            {worstMerchant.zombieStations !== 1 ? ' haven\'t' : ' hasn\'t'} processed a transaction in 30+ days.
-                            {worstMerchant.totalStations > worstMerchant.activeStations && (
-                                <> Paying for {worstMerchant.totalStations} but only using {worstMerchant.activeStations}.</>
-                            )}
+                            ({worstMerchant.zombieStations} zombie{worstMerchant.zombieStations !== 1 ? 's' : ''} · paying for{' '}
+                            {worstMerchant.totalStations} but only using {worstMerchant.activeStations}).
                         </p>
                     </div>
+
+                    {/* Right — wasted value callout */}
+                    <div className="flex items-center gap-3 shrink-0 rounded-lg bg-white border border-red-200 px-4 py-3">
+                        <DollarSign className="h-5 w-5 text-red-600" />
+                        <div>
+                            <p className="text-xs text-muted-foreground leading-tight">Estimated wasted hardware value</p>
+                            <p className="text-2xl font-bold text-red-600 leading-tight">{fmtDollars(estimatedWastedHardwareValue)}</p>
+                            <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
+                                Based on ~{fmtDollars(hardwareCostPerUnit)}/unit assumption
+                            </p>
+                        </div>
+                    </div>
+
                     <Link href={`/manage/merchants/${worstMerchant.merchantId}`}>
-                        <Button variant="outline" size="sm" className="border-amber-300 text-amber-800 hover:bg-amber-100">
+                        <Button variant="outline" size="sm" className="border-red-300 text-red-800 hover:bg-red-100 shrink-0">
                             <ExternalLink className="h-3 w-3 mr-1" />
                             View Merchant
                         </Button>
@@ -334,18 +364,22 @@ export default function TerminalUtilizationHeatmap() {
                                 </p>
                             </CardContent>
                         </Card>
-                        <Card>
+                        <Card className={data.summary.totalZombieStations > 0 ? 'border-red-200' : undefined}>
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                 <CardTitle className="text-sm font-medium text-muted-foreground">Zombie Tablets</CardTitle>
-                                <Ghost className="h-4 w-4 text-muted-foreground" />
+                                <Ghost className={`h-4 w-4 ${data.summary.totalZombieStations > 0 ? 'text-red-500' : 'text-muted-foreground'}`} />
                             </CardHeader>
                             <CardContent>
                                 <div className={`text-2xl font-bold ${data.summary.totalZombieStations > 0 ? 'text-red-600' : 'text-green-600'}`}>
                                     {data.summary.totalZombieStations}
                                 </div>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    No transactions in 30+ days
-                                </p>
+                                {data.summary.estimatedWastedHardwareValue > 0 ? (
+                                    <p className="text-xs text-red-600 font-medium mt-1">
+                                        ~${data.summary.estimatedWastedHardwareValue.toLocaleString()} wasted hardware
+                                    </p>
+                                ) : (
+                                    <p className="text-xs text-muted-foreground mt-1">No transactions in 30+ days</p>
+                                )}
                             </CardContent>
                         </Card>
                         <Card>
@@ -366,7 +400,12 @@ export default function TerminalUtilizationHeatmap() {
 
                     {/* Zombie Insight Banner */}
                     {data.merchants.some(m => m.zombieStations > 0) && (
-                        <ZombieInsightBanner merchants={data.merchants} />
+                        <ZombieInsightBanner
+                            merchants={data.merchants}
+                            totalZombieStations={data.summary.totalZombieStations}
+                            estimatedWastedHardwareValue={data.summary.estimatedWastedHardwareValue}
+                            hardwareCostPerUnit={data.summary.hardwareCostPerUnit}
+                        />
                     )}
 
                     {/* Utilization Distribution Chart + Merchant Table */}
