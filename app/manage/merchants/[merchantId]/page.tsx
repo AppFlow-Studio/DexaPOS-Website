@@ -10,10 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
     Store,
     Settings,
-    Download,
     AlertTriangle,
-    Building2,
-    Store as StoreIcon
+    MessageSquare
 } from 'lucide-react'
 import { useAdminMerchantDetails } from '@/lib/queries/use-admin-merchant'
 import { MerchantDetails } from '@/types/merchant'
@@ -32,6 +30,7 @@ import { OnlineStoreTab } from './components/OnlineStoreTab'
 import { DiscountsTab } from './components/DiscountsTab'
 import { SchedulesTab } from './components/SchedulesTab'
 import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
+import { NotesTab } from './components/NotesTab'
 
 export default function MerchantDetailsPage() {
     const { merchantId } = useParams()
@@ -121,6 +120,10 @@ export default function MerchantDetailsPage() {
                             <TabsTrigger value="online-store" className="flex-none">Online Store</TabsTrigger>
                             {canManageDevices && <TabsTrigger value="devices" className="flex-none">Devices</TabsTrigger>}
                             <TabsTrigger value="transactions" className="flex-none">Transactions</TabsTrigger>
+                            <TabsTrigger value="notes" className="flex-none">
+                                <MessageSquare className="mr-1 h-4 w-4" />
+                                Notes
+                            </TabsTrigger>
                             <TabsTrigger value="audit" className="flex-none">Audit Logs</TabsTrigger>
                             {canViewSettings && <TabsTrigger value="settings" className="flex-none">Settings</TabsTrigger>}
                         </TabsList>
@@ -159,6 +162,10 @@ export default function MerchantDetailsPage() {
                         <TabsContent value="transactions" className="mt-6">
                              {/* TransactionsTab likely expects MerchantInfoModel or ID */}
                             <TransactionsTab merchantInfo={merchantDetails as unknown as MerchantInfoModel} />
+                        </TabsContent>
+
+                        <TabsContent value="notes" className="mt-6">
+                            <NotesTab merchantId={merchantDetails.id} />
                         </TabsContent>
 
                         <TabsContent value="menu" className="mt-6">

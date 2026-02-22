@@ -2,7 +2,7 @@
 
 **Sprint Focus:** Admin Staff Onboarding, RBAC Enforcement, Audit Logging, Merchant Notes  
 **Sprint Date:** February 15, 2026  
-**Owner:** Ali + Codex  
+**Owner:** Ali 
 **Primary test merchant:** Appflow Studio Cafe
 
 ## References
@@ -21,9 +21,9 @@
 | Ticket | Title | Priority | Status | Progress |
 |---|---|---|---|---|
 | 1 | Role-Based Dashboard Visibility | High | Implemented (QA Pending) | 95% |
-| 2 | Admin Invite System Cleanup | High | Not Started | 0% |
-| 3 | Comprehensive Admin Audit Logging | High | Implemented (QA Pending) | 90% |
-| 4 | Merchant Notes System | Medium | Not Started | 0% |
+| 2 | Admin Invite System Cleanup | High | In Progress | 85% |
+| 3 | Comprehensive Admin Audit Logging | High | Implemented (QA Pending) | 95% |
+| 4 | Merchant Notes System | Medium | In Progress | 90% |
 
 ## Execution Order
 
@@ -48,11 +48,11 @@
 
 ## Ticket 2: Admin Invite System Cleanup
 
-- [ ] `2.1` Pending invites tab shows real-time invite lifecycle
-- [ ] `2.2` Direct-create flow implemented with temporary password
-- [ ] `2.3` Wizard step validation enforced
-- [ ] `2.4` Merchant access persisted for invite and direct-create
-- [ ] `2.5` Users tab shows required fields and actions
+- [x] `2.1` Pending invites tab shows real-time invite lifecycle
+- [x] `2.2` Direct-create flow implemented with temporary password
+- [x] `2.3` Wizard step validation enforced
+- [x] `2.4` Merchant access persisted for invite and direct-create
+- [ ] `2.5` Users tab shows required fields and actions (partially done: assigned merchants/status/last active added; role edit/deactivate/reset password actions still pending)
 - [ ] QA completed and validated against acceptance criteria
 
 ## Ticket 3: Comprehensive Admin Audit Logging
@@ -62,15 +62,21 @@
 - [x] `3.3` Instrument required admin actions with before/after changes
 - [x] `3.4` Global audit page filters/search/expand/export complete
 - [x] `3.5` Merchant-specific audit tab scoped and feature-complete
+- [x] Route merchant-access grant/revoke flows (single + bulk) through audited server actions
+- [x] Add catalog logging for merchant create/deactivate lifecycle actions
+- [x] Verify all catalog categories are represented in `/manage/audit-logs` filters (`merchant`, `user_management`, `device`, `staff`, `notes`)
 - [ ] QA completed and validated against acceptance criteria
+
+Coverage note:
+`ADMIN_ROLE_CHANGED` and `DEVICE_REBOOTED` are catalog-ready but currently have no active UI/server action path in this app yet, so no runtime event source exists to emit them.
 
 ## Ticket 4: Merchant Notes System
 
-- [ ] `4.1` Add `merchant_notes` table + indexes + RLS
-- [ ] `4.2` Build notes UI in merchant details
-- [ ] `4.3` Implement notes CRUD + pin/unpin actions
-- [ ] `4.4` Show notes count in merchant list
-- [ ] `4.5` Audit log integration for note actions
+- [x] `4.1` Add `merchant_notes` table + indexes + RLS (migration created, pending apply)
+- [x] `4.2` Build notes UI in merchant details
+- [x] `4.3` Implement notes CRUD + pin/unpin actions
+- [x] `4.4` Show notes count in merchant list
+- [x] `4.5` Audit log integration for note actions
 - [ ] QA completed and validated against acceptance criteria
 
 ## Migration Tracker
@@ -80,7 +86,7 @@
 | `029_adm_019_admin_payment_audit_logging.sql` | Previous sprint payment-data audit | Applied | Reference only |
 | `030_fix_hq_permission_functions_to_members.sql` | Fix HQ permission functions to read `members` (not `user_roles`) | Applied (dev) | Resolved invited HQ users loading role but empty permissions |
 | `031_grant_hq_manager_system_analytics_permission.sql` | Grant analytics visibility permission to `hq.manager` | Created (apply pending) | Dev SQL grant confirmed by manager seeing Analytics |
-| `TBD (Ticket 4)` | `merchant_notes` schema/RLS/indexes | Pending | To be created when Ticket 4 starts |
+| `032_merchant_notes_system.sql` | Merchant notes table + RLS + trigger + indexes | Created (apply pending) | Required before Ticket 4 QA in env |
 
 ## Decisions Log
 
@@ -127,16 +133,24 @@
 11. Audit write reliability hardening:
 - Added fallback direct insert path in `logAdminAction` when `log_audit_event` RPC returns an error, so HQ invite/revoke events still persist to `audit_logs`.
 
-## Standup Template
+## 2026-02-22
 
-```md
-### YYYY-MM-DD
-- Yesterday:
-  1.
-  2.
-- Today:
-  1.
-  2.
-- Blockers:
-  1.
-```
+1. Ticket 2 invite wizard upgrades completed:
+- Added invite mode selection: single invite, bulk invite, direct account creation.
+- Added direct-create flow with one-time temporary password dialog.
+- Added server action `createAdminDirectly(...)` with Clerk user creation, HQ membership creation, merchant assignment persistence, and audit logging.
+2. Ticket 2 validation hardening:
+- Enforced server-side merchant assignment requirement for non-super-admin roles in single and bulk invite actions.
+- Enforced wizard merchant step requirement for non-super-admin roles and auto-skip merchant step for `hq.super_admin`.
+3. Ticket 2 pending invites UI cleanup:
+- Pending list now shows pending-only rows with name/email/role/invited-by/date and working resend/revoke actions.
+- Users table now surfaces assigned merchant count, status, and last active.
+4. Ticket 4 implementation pass completed (pending migration apply + QA):
+- Added migration `032_merchant_notes_system.sql`.
+- Added merchant notes server actions (list/add/update/delete/pin) with role/author constraints and audit log hooks.
+- Added merchant Notes tab in merchant detail page.
+- Added merchant notes count indicator in merchant list cards/table.
+5. Ticket 3 cleanup pass completed:
+- Merchant access grant/revoke (single + bulk) now runs through server actions with `ADMIN_MERCHANT_ACCESS_GRANTED` / `ADMIN_MERCHANT_ACCESS_REVOKED` audit writes.
+- Merchant lifecycle coverage added for `MERCHANT_CREATED` and `MERCHANT_DEACTIVATED`.
+- Verified global audit filters include all live catalog categories.

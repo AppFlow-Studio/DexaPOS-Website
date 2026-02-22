@@ -121,6 +121,16 @@ export const ADMIN_ACTIONS = {
     category: 'notes',
     severity: 'info',
   },
+  MERCHANT_NOTE_UPDATED: {
+    action: 'merchant.note_updated',
+    category: 'notes',
+    severity: 'info',
+  },
+  MERCHANT_NOTE_PIN_TOGGLED: {
+    action: 'merchant.note_pin_toggled',
+    category: 'notes',
+    severity: 'info',
+  },
   MERCHANT_NOTE_DELETED: {
     action: 'merchant.note_deleted',
     category: 'notes',

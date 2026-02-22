@@ -108,8 +108,34 @@ export async function getMerchants(
     throw new Error('Failed to fetch merchants')
   }
 
+  let merchants = (data as MerchantSummary[]) || []
+
+  if (merchants.length > 0) {
+    const merchantIds = merchants.map((merchant) => merchant.id)
+    const { data: noteRows, error: notesError } = await supabase
+      .from('merchant_notes')
+      .select('merchant_id')
+      .in('merchant_id', merchantIds)
+
+    // Gracefully handle environments that have not applied migration 032 yet.
+    if (notesError && notesError.code !== '42P01') {
+      console.error('[getMerchants] Notes count error:', notesError)
+    } else if (!notesError && noteRows) {
+      const noteCountMap = noteRows.reduce<Record<string, number>>((acc, row) => {
+        if (!row.merchant_id) return acc
+        acc[row.merchant_id] = (acc[row.merchant_id] || 0) + 1
+        return acc
+      }, {})
+
+      merchants = merchants.map((merchant) => ({
+        ...merchant,
+        notes_count: noteCountMap[merchant.id] || 0,
+      }))
+    }
+  }
+
   return {
-    merchants: (data as MerchantSummary[]) || [],
+    merchants,
     total: count || 0,
   }
 }

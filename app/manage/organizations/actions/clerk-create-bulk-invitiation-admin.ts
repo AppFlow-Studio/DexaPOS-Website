@@ -35,6 +35,14 @@ export async function createBulkInvitationAdmin(
             }
         }
 
+        const requiresMerchantAssignment = normalizedInvitations.some((invite) => invite.role !== 'hq.super_admin')
+        if (requiresMerchantAssignment && (!options?.merchantAccess || options.merchantAccess.length === 0)) {
+            return {
+                success: false,
+                message: 'At least one merchant assignment is required for this role.',
+            }
+        }
+
         const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
 
         const supabase = createServerSupabaseClient()

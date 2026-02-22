@@ -94,8 +94,10 @@ export default function UsersPage() {
     const { user } = useUser()
     const fallbackOrgId = user?.publicMetadata?.organizationId as string | undefined
     const resolvedOrganizationId = DEXA_HQ_ORG_ID || fallbackOrgId || (orgId as string)
-    const { data: users, isLoading, error } = useOrganizationUsers(resolvedOrganizationId as string)
+    const { data: users, isLoading, error, refetch: refetchUsers } = useOrganizationUsers(resolvedOrganizationId as string)
     const { data: organizationInfo, refetch: refetchOrganizationInfo } = useOrganizationInfo(resolvedOrganizationId as string)
+    const pendingAdminInvites =
+        organizationInfo?.pending_org_admin_invites?.filter((inv: any) => inv.status === 'pending') || []
 
     useEffect(() => {
         if (permissionsLoading) return
@@ -136,6 +138,12 @@ export default function UsersPage() {
 
     const getInitials = (first_name: string, last_name: string) => {
         return `${first_name.charAt(0)}${last_name.charAt(0)}`.toUpperCase()
+    }
+
+    const getInviteDisplayName = (invite: any) => {
+        const fullName = `${invite.first_name || ''} ${invite.last_name || ''}`.trim()
+        if (fullName) return fullName
+        return invite.email?.split('@')?.[0] || 'Pending admin'
     }
 
     const handleResendInvite = async (invitationId: string) => {
@@ -382,8 +390,9 @@ export default function UsersPage() {
                                     <TableRow>
                                         <TableHead>User</TableHead>
                                         <TableHead>Role</TableHead>
-                                        {/* <TableHead>Status</TableHead> */}
-                                        <TableHead>Last Login</TableHead>
+                                        <TableHead>Assigned Merchants</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead>Last Active</TableHead>
                                         <TableHead>Join Date</TableHead>
                                         <TableHead className="w-[50px]"></TableHead>
                                     </TableRow>
@@ -408,12 +417,15 @@ export default function UsersPage() {
                                                     {user?.role}
                                                 </Badge>
                                             </TableCell>
-                                            {/* <TableCell>
-                                        <Badge variant={statusColors[user.public_metadata.status as keyof typeof statusColors]}>
-                                            {user.public_metadata.status}
-                                        </Badge>
-                                    </TableCell> */}
-                                            {/* <TableCell className="text-sm">{formatDate(user.lastLogin)}</TableCell> */}
+                                            <TableCell className="text-sm">
+                                                {user?.assigned_merchant_count || 0}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant={(statusColors[(user?.users?.public_metadata?.status || 'Active') as keyof typeof statusColors] || 'secondary') as "default" | "destructive" | "outline" | "secondary"}>
+                                                    {user?.users?.public_metadata?.status || 'Active'}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-sm">{formatDate(user?.users?.updated_at || user.created_at)}</TableCell>
                                             <TableCell className="text-sm">{formatDate(user.created_at)}</TableCell>
                                             <TableCell>
                                                 <DropdownMenu>
@@ -489,33 +501,24 @@ export default function UsersPage() {
                                 </div>
                             )}
 
-                            {organizationInfo?.pending_org_admin_invites?.length > 0 && (
+                            {pendingAdminInvites.length > 0 && (
                                 <div className="mb-6">
                                     <div className="text-sm font-medium mb-3">Admin Invites</div>
                                     <div className="divide-y rounded-md border">
-                                        {organizationInfo.pending_org_admin_invites.map((inv: any) => (
+                                        {pendingAdminInvites.map((inv: any) => (
                                             <div key={inv.id} className="flex items-center justify-between p-4">
                                                 <div className="flex items-center gap-3">
                                                     <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
                                                         {(inv.email?.[0] || 'A').toUpperCase()}
                                                     </div>
                                                     <div>
-                                                        <div className={`font-medium ${inv.status === 'pending' ? 'text-yellow-500' :
-                                                            inv.status === 'revoked' ? 'text-red-500' :
-                                                                inv.status === 'accepted' ? 'text-green-500' :
-                                                                    inv.status === 'expired' ? 'text-red-500' :
-                                                                        inv.status === 'cancelled' ? 'text-red-500' :
-                                                                            inv.status === 'failed' ? 'text-red-500' : 'text-red-500'
-                                                            }`}>
-                                                            {inv.status === 'pending' ? 'Pending Invitation' :
-                                                                inv.status === 'revoked' ? 'Invitation Revoked' :
-                                                                    inv.status === 'accepted' ? 'Invitation Accepted' :
-                                                                        inv.status === 'expired' ? 'Invitation Expired' :
-                                                                            inv.status === 'cancelled' ? 'Invitation Cancelled' :
-                                                                                inv.status === 'failed' ? 'Invitation Failed' : 'Invitation Revoked'
-                                                            }
+                                                        <div className="font-medium text-yellow-500">
+                                                            {getInviteDisplayName(inv)}
                                                         </div>
                                                         <div className="text-sm text-muted-foreground">{inv.email}</div>
+                                                        <div className="text-xs text-muted-foreground mt-0.5">
+                                                            Invited by {inv.invited_by_user?.first_name || inv.invited_by || 'Unknown'} • {formatDate(inv.created_at)}
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-4">
@@ -530,7 +533,7 @@ export default function UsersPage() {
                                                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                                             <DropdownMenuItem>Copy invite link</DropdownMenuItem>
                                                             <DropdownMenuItem
-                                                                disabled={inviteActionId === inv.clerk_invite_id}
+                                                                disabled={!inv.clerk_invite_id || inviteActionId === inv.clerk_invite_id}
                                                                 onClick={() => void handleResendInvite(inv.clerk_invite_id)}
                                                             >
                                                                 Resend
@@ -538,7 +541,7 @@ export default function UsersPage() {
                                                             <DropdownMenuSeparator />
                                                             <DropdownMenuItem
                                                                 className="text-red-600"
-                                                                disabled={inviteActionId === inv.clerk_invite_id}
+                                                                disabled={!inv.clerk_invite_id || inviteActionId === inv.clerk_invite_id}
                                                                 onClick={() => void handleRevokeInvite(inv.clerk_invite_id)}
                                                             >
                                                                 Revoke
@@ -602,6 +605,7 @@ export default function UsersPage() {
                 onOpenChange={setIsAdminInviteOpen}
                 onSuccess={() => {
                     refetchOrganizationInfo()
+                    refetchUsers()
                 }}
             />
         </div>

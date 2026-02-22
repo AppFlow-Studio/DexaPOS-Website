@@ -82,6 +82,13 @@ export async function createInvitationAdmin(
       }
     }
 
+    if (normalizedParams.roleCode !== 'hq.super_admin' && normalizedParams.merchantAccess.length === 0) {
+      return {
+        success: false,
+        message: 'At least one merchant assignment is required for this role',
+      }
+    }
+
     // Get the redirect URL from environment or use default
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')

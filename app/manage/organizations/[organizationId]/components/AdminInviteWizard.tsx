@@ -12,6 +12,13 @@ import {
   BottomSheetTitle,
   BottomSheetDescription,
 } from "@/components/ui/bottom-sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,8 +40,10 @@ import {
   Loader2,
   Search,
   AlertCircle,
+  Copy,
+  KeyRound,
 } from "lucide-react";
-import { RolesModel, MerchantsModel } from "@/types/db-modles";
+import { MerchantsModel } from "@/types/db-modles";
 import { useUser } from "@clerk/nextjs";
 import { 
   MerchantAccessAssignment, 
@@ -44,6 +53,7 @@ import {
 } from "@/types/admin";
 import { createInvitationAdmin } from "../../actions/clerk-create-invitation-admin";
 import { createBulkInvitationAdmin } from "../../actions/clerk-create-bulk-invitiation-admin";
+import { createAdminDirectly } from "../../actions/clerk-create-admin-directly";
 import { GetMerchants } from "@/app/manage/actions/get-merchants";
 
 interface AdminInviteWizardProps {
@@ -56,9 +66,9 @@ interface AdminInviteWizardProps {
 }
 
 type Step = "details" | "role" | "merchants" | "review";
-type InviteMode = "single" | "bulk";
+type InviteMode = "single" | "bulk" | "direct";
 
-const STEPS: { key: Step; label: string; icon: React.ReactNode }[] = [
+const BASE_STEPS: { key: Step; label: string; icon: React.ReactNode }[] = [
   { key: "details", label: "Details", icon: <User className="h-4 w-4" /> },
   { key: "role", label: "Role", icon: <Shield className="h-4 w-4" /> },
   { key: "merchants", label: "Merchants", icon: <Store className="h-4 w-4" /> },
@@ -84,6 +94,13 @@ export function AdminInviteWizard({
   const [currentStep, setCurrentStep] = React.useState<Step>("details");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [inviteMode, setInviteMode] = React.useState<InviteMode>("single");
+  const [directCreateCredentials, setDirectCreateCredentials] = React.useState<{
+    email: string;
+    tempPassword: string;
+    roleName: string;
+    userId: string;
+  } | null>(null);
+  const [isCredentialDialogOpen, setIsCredentialDialogOpen] = React.useState(false);
 
   // Data loading
   const [merchants, setMerchants] = React.useState<MerchantsModel[]>([]);
@@ -146,6 +163,8 @@ export function AdminInviteWizard({
     if (!open) {
       setCurrentStep("details");
       setInviteMode("single");
+      setDirectCreateCredentials(null);
+      setIsCredentialDialogOpen(false);
       setFirstName("");
       setLastName("");
       setEmail("");
@@ -156,9 +175,21 @@ export function AdminInviteWizard({
     }
   }, [open]);
 
-  const currentStepIndex = STEPS.findIndex((s) => s.key === currentStep);
-
   const selectedRole = HQ_ROLES[selectedRoleCode];
+  const flowSteps = React.useMemo(() => {
+    if (selectedRoleCode === "hq.super_admin") {
+      return BASE_STEPS.filter((step) => step.key !== "merchants");
+    }
+    return BASE_STEPS;
+  }, [selectedRoleCode]);
+
+  React.useEffect(() => {
+    if (!flowSteps.some((step) => step.key === currentStep)) {
+      setCurrentStep("review");
+    }
+  }, [flowSteps, currentStep]);
+
+  const currentStepIndex = flowSteps.findIndex((s) => s.key === currentStep);
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   const parsedBulkEmails = React.useMemo(() => {
@@ -215,6 +246,14 @@ export function AdminInviteWizard({
         if (inviteMode === "bulk") {
           return parsedBulkEmails.valid.length > 0 && parsedBulkEmails.invalid.length === 0;
         }
+        if (inviteMode === "direct") {
+          return (
+            firstName.trim().length > 0 &&
+            lastName.trim().length > 0 &&
+            email.trim().length > 0 &&
+            emailRegex.test(email.trim())
+          );
+        }
         return (
           firstName.trim() &&
           lastName.trim() &&
@@ -224,8 +263,7 @@ export function AdminInviteWizard({
       case "role":
         return !!selectedRoleCode;
       case "merchants":
-        // Merchant access is optional - admins can be given access later
-        return true;
+        return selectedRoleCode === "hq.super_admin" || selectedMerchantCount > 0;
       case "review":
         return true;
       default:
@@ -236,8 +274,8 @@ export function AdminInviteWizard({
   const handleNext = () => {
     if (!canGoNext()) return;
 
-    if (currentStepIndex < STEPS.length - 1) {
-      setCurrentStep(STEPS[currentStepIndex + 1].key);
+    if (currentStepIndex < flowSteps.length - 1) {
+      setCurrentStep(flowSteps[currentStepIndex + 1].key);
     } else {
       handleSubmit();
     }
@@ -245,7 +283,7 @@ export function AdminInviteWizard({
 
   const handleBack = () => {
     if (currentStepIndex > 0) {
-      setCurrentStep(STEPS[currentStepIndex - 1].key);
+      setCurrentStep(flowSteps[currentStepIndex - 1].key);
     }
   };
 
@@ -269,6 +307,16 @@ export function AdminInviteWizard({
     setSelectedMerchants(new Set());
   };
 
+  const copyTempPassword = async () => {
+    if (!directCreateCredentials?.tempPassword) return;
+    try {
+      await navigator.clipboard.writeText(directCreateCredentials.tempPassword);
+      toast.success("Temporary password copied");
+    } catch (error) {
+      toast.error("Unable to copy password");
+    }
+  };
+
   const handleSubmit = async () => {
     if (!selectedRole) {
       toast.error("Please select a role");
@@ -277,7 +325,40 @@ export function AdminInviteWizard({
 
     setIsSubmitting(true);
     try {
-      if (inviteMode === "bulk") {
+      if (inviteMode === "direct") {
+        const result = await createAdminDirectly({
+          organizationId,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email: email.trim(),
+          roleCode: selectedRoleCode,
+          levelType: "hq",
+          orgType,
+          merchantAccess: merchantAccessArray,
+          invitedBy: user?.id,
+        });
+
+        if (result?.success && result?.data) {
+          setDirectCreateCredentials({
+            email: email.trim(),
+            tempPassword: result.data.temp_password,
+            roleName: selectedRole.name,
+            userId: result.data.user_id,
+          });
+          setIsCredentialDialogOpen(true);
+          toast.success("Admin account created", {
+            description: `Account created for ${email.trim()}.`,
+          });
+          onOpenChange(false);
+          if (onSuccess) {
+            onSuccess();
+          }
+        } else {
+          toast.error("Direct create failed", {
+            description: result?.message || "Unable to create the admin account.",
+          });
+        }
+      } else if (inviteMode === "bulk") {
         const invitations = parsedBulkEmails.valid.map((bulkEmail) => ({
           email: bulkEmail,
           role: selectedRoleCode,
@@ -335,23 +416,31 @@ export function AdminInviteWizard({
       }
     } catch (error: any) {
       console.error("Submit error:", error);
-      toast.error(inviteMode === "bulk" ? "Bulk invitation failed" : "Invitation Failed", {
+      toast.error(
+        inviteMode === "direct"
+          ? "Direct create failed"
+          : inviteMode === "bulk"
+            ? "Bulk invitation failed"
+            : "Invitation Failed",
+        {
         description: error?.message || "An unexpected error occurred.",
-      });
+        }
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <BottomSheet open={open} onOpenChange={onOpenChange}>
+    <>
+      <BottomSheet open={open} onOpenChange={onOpenChange}>
       {children && <BottomSheetTrigger asChild>{children}</BottomSheetTrigger>}
       <BottomSheetContent className="w-full" height="95">
         <div className="flex h-full">
           {/* Left Sidebar - Steps */}
           <div className="w-64 border-r bg-muted/30 p-6 flex flex-col">
             <div className="space-y-1">
-              {STEPS.map((step, index) => {
+              {flowSteps.map((step, index) => {
                 const isActive = step.key === currentStep;
                 const isCompleted = index < currentStepIndex;
                 const isAccessible = index <= currentStepIndex;
@@ -412,13 +501,14 @@ export function AdminInviteWizard({
                 {currentStep === "details" && "Admin Details"}
                 {currentStep === "role" && "Select Role"}
                 {currentStep === "merchants" && "Assign Merchants"}
-                {currentStep === "review" && "Review & Send Invite"}
+                {currentStep === "review" &&
+                  (inviteMode === "direct" ? "Review & Create Account" : "Review & Send Invite")}
               </BottomSheetTitle>
               <BottomSheetDescription>
-                {currentStep === "details" && "Enter the basic information for the new admin."}
+                {currentStep === "details" && "Choose invite flow and enter admin information."}
                 {currentStep === "role" && "Choose the role for this admin. The role determines their permissions."}
-                {currentStep === "merchants" && "Select which merchants this admin can access (optional)."}
-                {currentStep === "review" && "Review all details before sending the invitation."}
+                {currentStep === "merchants" && "Select which merchants this admin can access."}
+                {currentStep === "review" && "Review all details before completing this action."}
               </BottomSheetDescription>
             </BottomSheetHeader>
 
@@ -440,7 +530,7 @@ export function AdminInviteWizard({
                         <RadioGroup
                           value={inviteMode}
                           onValueChange={(value) => setInviteMode(value as InviteMode)}
-                          className="grid grid-cols-2 gap-3"
+                          className="grid grid-cols-1 md:grid-cols-3 gap-3"
                         >
                           <label
                             htmlFor="invite-mode-single"
@@ -468,10 +558,47 @@ export function AdminInviteWizard({
                               <p className="text-xs text-muted-foreground">Paste multiple emails (comma or newline separated).</p>
                             </div>
                           </label>
+                          <label
+                            htmlFor="invite-mode-direct"
+                            className={cn(
+                              "flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors",
+                              inviteMode === "direct" ? "border-primary bg-primary/5" : "border-muted"
+                            )}
+                          >
+                            <RadioGroupItem id="invite-mode-direct" value="direct" className="mt-1" />
+                            <div>
+                              <div className="text-sm font-medium">Create directly</div>
+                              <p className="text-xs text-muted-foreground">Create account now and show a one-time temporary password.</p>
+                            </div>
+                          </label>
                         </RadioGroup>
                       </div>
 
-                      {inviteMode === "single" ? (
+                      {inviteMode === "bulk" ? (
+                        <div className="space-y-2">
+                          <Label htmlFor="bulkEmails">Email addresses *</Label>
+                          <Textarea
+                            id="bulkEmails"
+                            placeholder={"ali@example.com\nmanager@example.com"}
+                            rows={8}
+                            value={bulkEmails}
+                            onChange={(e) => setBulkEmails(e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Separate with commas or new lines. Duplicates are removed automatically.
+                          </p>
+                          {parsedBulkEmails.invalid.length > 0 && (
+                            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                              Invalid emails: {parsedBulkEmails.invalid.join(", ")}
+                            </div>
+                          )}
+                          {parsedBulkEmails.valid.length > 0 && (
+                            <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                              {parsedBulkEmails.valid.length} valid email{parsedBulkEmails.valid.length > 1 ? "s" : ""} ready.
+                            </div>
+                          )}
+                        </div>
+                      ) : (
                         <>
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
@@ -507,34 +634,12 @@ export function AdminInviteWizard({
                               />
                             </div>
                             <p className="text-xs text-muted-foreground">
-                              An invitation email will be sent to this address.
+                              {inviteMode === "direct"
+                                ? "Account will be created immediately with a one-time temporary password."
+                                : "An invitation email will be sent to this address."}
                             </p>
                           </div>
                         </>
-                      ) : (
-                        <div className="space-y-2">
-                          <Label htmlFor="bulkEmails">Email addresses *</Label>
-                          <Textarea
-                            id="bulkEmails"
-                            placeholder={"ali@example.com\nmanager@example.com"}
-                            rows={8}
-                            value={bulkEmails}
-                            onChange={(e) => setBulkEmails(e.target.value)}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Separate with commas or new lines. Duplicates are removed automatically.
-                          </p>
-                          {parsedBulkEmails.invalid.length > 0 && (
-                            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-                              Invalid emails: {parsedBulkEmails.invalid.join(", ")}
-                            </div>
-                          )}
-                          {parsedBulkEmails.valid.length > 0 && (
-                            <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                              {parsedBulkEmails.valid.length} valid email{parsedBulkEmails.valid.length > 1 ? "s" : ""} ready.
-                            </div>
-                          )}
-                        </div>
                       )}
                     </div>
                   )}
@@ -633,7 +738,7 @@ export function AdminInviteWizard({
                         <p className="text-xs text-muted-foreground">
                           <strong>Note:</strong> {selectedRole?.code === 'hq.super_admin' 
                             ? "Super Admins have access to all merchants regardless of selection."
-                            : "Merchant selection is optional. You can grant access later. The admin's role determines their permissions within each merchant."}
+                            : "Select at least one merchant. This assignment controls which merchants the admin can access."}
                         </p>
                       </div>
 
@@ -686,7 +791,7 @@ export function AdminInviteWizard({
                   {currentStep === "review" && (
                     <div className="space-y-6">
                       {/* Admin Info */}
-                      {inviteMode === "single" ? (
+                      {inviteMode !== "bulk" ? (
                         <div className="p-4 rounded-lg border bg-muted/30">
                           <div className="flex items-center gap-3">
                             <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
@@ -784,6 +889,11 @@ export function AdminInviteWizard({
                                 ? " to all merchants."
                                 : "."}
                           </>
+                        ) : inviteMode === "direct" ? (
+                          <>
+                            An account will be created directly for <strong>{email}</strong> with <strong>{selectedRole?.name}</strong> access.
+                            A one-time temporary password will be shown after creation.
+                          </>
                         ) : (
                           <>
                             An invitation email will be sent to <strong>{email}</strong>. Once accepted, they will have <strong>{selectedRole?.name}</strong> access
@@ -817,13 +927,19 @@ export function AdminInviteWizard({
                   disabled={!canGoNext() || isSubmitting}
                   className="gap-2"
                 >
-                  {currentStepIndex === STEPS.length - 1 ? (
+                  {currentStepIndex === flowSteps.length - 1 ? (
                     <>
-                      {isSubmitting ? "Sending..." : inviteMode === "bulk" ? "Send Invitations" : "Send Invitation"}
+                      {isSubmitting
+                        ? "Sending..."
+                        : inviteMode === "direct"
+                          ? "Create Account"
+                          : inviteMode === "bulk"
+                            ? "Send Invitations"
+                            : "Send Invitation"}
                       {isSubmitting ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <Mail className="h-4 w-4" />
+                        inviteMode === "direct" ? <KeyRound className="h-4 w-4" /> : <Mail className="h-4 w-4" />
                       )}
                     </>
                   ) : (
@@ -838,6 +954,36 @@ export function AdminInviteWizard({
           </div>
         </div>
       </BottomSheetContent>
-    </BottomSheet>
+      </BottomSheet>
+
+      <Dialog open={isCredentialDialogOpen} onOpenChange={setIsCredentialDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Temporary Password</DialogTitle>
+            <DialogDescription>
+              Share this password securely with {directCreateCredentials?.email}. It will only be shown once.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-md border bg-muted/40 px-3 py-3 font-mono text-sm tracking-wide break-all">
+              {directCreateCredentials?.tempPassword || "-"}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              User ID: {directCreateCredentials?.userId || "-"}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Role: {directCreateCredentials?.roleName || "-"}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => void copyTempPassword()}>
+                <Copy className="mr-2 h-4 w-4" />
+                Copy Password
+              </Button>
+              <Button onClick={() => setIsCredentialDialogOpen(false)}>Done</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
