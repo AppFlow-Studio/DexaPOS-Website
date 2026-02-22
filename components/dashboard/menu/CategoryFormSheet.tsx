@@ -42,6 +42,8 @@ import {
   Palette,
   Settings2,
   MapPin,
+  Flame,
+  Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -60,6 +62,19 @@ import {
   useLocationScopedSchedules,
 } from "@/app/dashboard/hooks/useLocationScopedSchedules";
 import { ScheduleOverrideDialog } from "./ScheduleOverrideDialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  usePrepStations,
+  useCategoryPrepDefaults,
+  useSetCategoryPrepDefault,
+  useRemoveCategoryPrepDefault,
+} from "@/app/dashboard/hooks/usePrepStations";
 
 // Form schema
 const categorySchema = z.object({
@@ -104,6 +119,17 @@ export function CategoryFormSheet({
   );
   const selectedLocation = useSelectedLocation();
   const isAllLocations = useIsAllLocations();
+
+  // Prep stations for current location
+  const { data: prepStations = [] } = usePrepStations(
+    isAllLocations ? null : selectedLocation?.id,
+  );
+  const { data: categoryPrepDefaults = [] } = useCategoryPrepDefaults(
+    isAllLocations ? null : selectedLocation?.id,
+  );
+  const setCategoryPrepDefaultMutation = useSetCategoryPrepDefault();
+  const removeCategoryPrepDefaultMutation = useRemoveCategoryPrepDefault();
+
   const [expandedSections, setExpandedSections] = React.useState({
     appearance: false,
     scheduling: false,
@@ -582,6 +608,89 @@ export function CategoryFormSheet({
                       )}
                     </CollapsibleContent>
                   </Collapsible>
+
+                  {/* Kitchen Routing (Prep Station Default) */}
+                  {editCategory && !isAllLocations && selectedLocation && (
+                    <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                        <Flame className="h-4 w-4 text-orange-500" />
+                        Kitchen Routing
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Set a default prep station for all items in this
+                        category. Items can override this at the item level.
+                      </p>
+                      {prepStations.filter((ps) => ps.is_active).length ===
+                      0 ? (
+                        <div className="flex items-start gap-2 p-3 bg-muted/50 border rounded-lg text-sm">
+                          <Info className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                          <p className="text-muted-foreground">
+                            No prep stations configured for this location. Create
+                            prep stations in Settings to enable kitchen routing.
+                          </p>
+                        </div>
+                      ) : (
+                        <Select
+                          value={
+                            categoryPrepDefaults.find(
+                              (d) => d.category_id === editCategory.id,
+                            )?.prep_station_id || "__none__"
+                          }
+                          onValueChange={async (val) => {
+                            if (!clerkOrgId || !selectedLocation) return;
+                            // Get merchant_id from the prep station data or from defaults
+                            const merchantIdFromStation =
+                              prepStations[0]?.merchant_id;
+                            if (val === "__none__") {
+                              removeCategoryPrepDefaultMutation.mutate({
+                                locationId: selectedLocation.id,
+                                categoryId: editCategory.id,
+                              });
+                            } else {
+                              setCategoryPrepDefaultMutation.mutate({
+                                locationId: selectedLocation.id,
+                                categoryId: editCategory.id,
+                                prepStationId: val,
+                                merchantId:
+                                  merchantIdFromStation || editCategory.merchant_id,
+                              });
+                            }
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="No default (routes to Expo)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">
+                              None (routes to Expo)
+                            </SelectItem>
+                            {prepStations
+                              .filter((ps) => ps.is_active)
+                              .map((ps) => (
+                                <SelectItem key={ps.id} value={ps.id}>
+                                  <div className="flex items-center gap-2">
+                                    <div
+                                      className="h-3 w-3 rounded-full flex-shrink-0"
+                                      style={{ backgroundColor: ps.color }}
+                                    />
+                                    {ps.name}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  )}
+                  {editCategory && isAllLocations && (
+                    <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm dark:bg-blue-950/30 dark:border-blue-900">
+                      <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0 dark:text-blue-400" />
+                      <p className="text-blue-800 dark:text-blue-300">
+                        Prep station routing is location-specific. Select a
+                        location to set a default prep station for this category.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Advanced Settings */}
                   <Collapsible

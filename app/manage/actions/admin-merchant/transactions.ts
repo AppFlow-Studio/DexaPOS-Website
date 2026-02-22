@@ -671,7 +671,6 @@ export async function refundAdminOrder(
       is_returned: true,
       returned_at: new Date().toISOString(),
       return_reason: reason,
-      refunded_amount: 0, // Placeholder for numeric value
       refunded_at: new Date().toISOString(),
       refund_reason: reason
     } as any)

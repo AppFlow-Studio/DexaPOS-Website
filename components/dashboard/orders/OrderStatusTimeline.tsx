@@ -17,6 +17,7 @@ interface OrderStatusTimelineProps {
 const statusLabels: Record<OrderStatus, string> = {
     draft: 'Draft',
     pending: 'Pending',
+    sent_to_kitchen: 'Sent to Kitchen',
     preparing: 'Preparing',
     ready: 'Ready',
     completed: 'Completed',
@@ -25,10 +26,10 @@ const statusLabels: Record<OrderStatus, string> = {
     void: 'Void',
 }
 
-// Status colors
 const statusColors: Record<OrderStatus, string> = {
     draft: 'bg-gray-500',
     pending: 'bg-yellow-500',
+    sent_to_kitchen: 'bg-indigo-500',
     preparing: 'bg-blue-500',
     ready: 'bg-green-500',
     completed: 'bg-emerald-600',
@@ -67,12 +68,22 @@ function formatTime(dateString: string): string {
     })
 }
 
-// Get status change message
-function getStatusChangeMessage(fromStatus: OrderStatus | null, toStatus: OrderStatus): string {
-    if (!fromStatus) {
-        return `Order created with status: ${statusLabels[toStatus]}`
+function statusLabel(status: OrderStatus | null | undefined): string {
+    if (!status) return ''
+    return statusLabels[status] ?? status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+}
+
+function getStatusChangeMessage(fromStatus: OrderStatus | null | undefined, toStatus: OrderStatus | null | undefined): string {
+    const to = statusLabel(toStatus)
+    const from = statusLabel(fromStatus)
+
+    if (!from) {
+        return `Order created with status: ${to || 'Unknown'}`
     }
-    return `Status changed from ${statusLabels[fromStatus]} to ${statusLabels[toStatus]}`
+    if (!to) {
+        return `Status changed from ${from}`
+    }
+    return `Status changed from ${from} to ${to}`
 }
 
 // Get table session event message
@@ -201,10 +212,10 @@ export function OrderStatusTimeline({
 
                         if (event.type === 'creation') {
                             statusColor = statusColors[event.toStatus || 'draft'] || 'bg-gray-500'
-                            eventMessage = `Order created with status: ${statusLabels[event.toStatus || 'draft']}`
+                            eventMessage = `Order created with status: ${statusLabel(event.toStatus) || 'Draft'}`
                         } else if (event.type === 'status_change') {
                             statusColor = statusColors[event.toStatus || 'draft'] || 'bg-gray-500'
-                            eventMessage = getStatusChangeMessage(event.fromStatus || null, event.toStatus || 'draft')
+                            eventMessage = getStatusChangeMessage(event.fromStatus, event.toStatus)
                         } else if (event.type === 'table_session_event') {
                             statusColor = 'bg-blue-500'
                             eventIcon = <Utensils className="h-3 w-3" />
@@ -218,8 +229,6 @@ export function OrderStatusTimeline({
                                 minutes_since_previous: 0,
                             })
                         }
-                        console.log('event', event)
-
                         return (
                             <div key={event.id} className="relative flex gap-3">
                                 {/* Timeline dot container - 18px wide, dot centered at 9px to align with line */}
@@ -302,7 +311,7 @@ export function OrderStatusTimeline({
                                     </div>
 
                                     {/* Status badge for status changes */}
-                                    {event.type === 'status_change' && event.toStatus && (
+                                    {event.type === 'status_change' && event.toStatus && statusLabel(event.toStatus) && (
                                         <div className="mt-2">
                                             <Badge
                                                 variant="outline"
@@ -312,11 +321,12 @@ export function OrderStatusTimeline({
                                                     event.toStatus === 'cancelled' && 'bg-red-50 text-red-700 border-red-200',
                                                     event.toStatus === 'void' && 'bg-gray-50 text-gray-700 border-gray-200',
                                                     event.toStatus === 'ready' && 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                                                    event.toStatus === 'sent_to_kitchen' && 'bg-indigo-50 text-indigo-700 border-indigo-200',
                                                     event.toStatus === 'preparing' && 'bg-blue-50 text-blue-700 border-blue-200',
                                                     event.toStatus === 'pending' && 'bg-yellow-50 text-yellow-700 border-yellow-200'
                                                 )}
                                             >
-                                                {statusLabels[event.toStatus]}
+                                                {statusLabel(event.toStatus)}
                                             </Badge>
                                         </div>
                                     )}

@@ -56,11 +56,11 @@ import {
   Tag,
   Banknote,
   FileText,
-  MonitorSmartphone,
   Globe,
   GitCompare,
   Monitor,
   MonitorPlay,
+  Flame,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -432,7 +432,7 @@ function MerchantSidebar() {
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
-          {/* Settings with Devices submenu */}
+          {/* Settings submenu */}
           <SidebarMenuItem>
             <Collapsible
               defaultOpen={pathname.startsWith("/dashboard/settings")}
@@ -454,25 +454,11 @@ function MerchantSidebar() {
                       asChild
                       isActive={
                         pathname === "/dashboard/settings" &&
-                        !pathname.includes("/devices") &&
                         !pathname.includes("/stations")
                       }
                     >
                       <Link href="/dashboard/settings">
                         <span>General</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={pathname.startsWith(
-                        "/dashboard/settings/devices"
-                      )}
-                    >
-                      <Link href="/dashboard/settings/devices">
-                        <MonitorSmartphone className="h-3 w-3" />
-                        <span>Devices</span>
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
@@ -493,12 +479,38 @@ function MerchantSidebar() {
                     <SidebarMenuSubButton
                       asChild
                       isActive={pathname.startsWith(
+                        "/dashboard/settings/prep-stations"
+                      )}
+                    >
+                      <Link href="/dashboard/settings/prep-stations">
+                        <Flame className="h-3 w-3" />
+                        <span>Prep Stations</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={pathname.startsWith(
                         "/dashboard/settings/customer-display"
                       )}
                     >
                       <Link href="/dashboard/settings/customer-display">
                         <MonitorPlay className="h-3 w-3" />
                         <span>Customer Display</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={pathname.startsWith(
+                        "/dashboard/settings/receipt-templates"
+                      )}
+                    >
+                      <Link href="/dashboard/settings/receipt-templates">
+                        <Receipt className="h-3 w-3" />
+                        <span>Receipt Templates</span>
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>

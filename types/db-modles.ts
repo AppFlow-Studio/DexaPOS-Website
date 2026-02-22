@@ -362,6 +362,10 @@ export interface LocationItemOverridesModel {
     is_tax_exempt: boolean | null
     available_channels: string[] | null
 
+    // Prep Station (KDS Routing - added in migration 022)
+    // Null = inherit from category default or route to Expo
+    prep_station_id: string | null
+
     created_at: string
     updated_at: string
 }
@@ -595,6 +599,29 @@ export interface MenuItemRecipesModel {
     menu_item_id: string // FK to menu_items table
     recipe_id: string // FK to recipes table
     quantity_multiplier: number
+    created_at: string
+    updated_at: string
+}
+
+// Prep Stations (KDS Routing)
+export interface PrepStationsModel {
+    id: string
+    merchant_id: string // FK to merchants table
+    location_id: string // FK to locations table
+    name: string
+    color: string
+    display_order: number
+    is_active: boolean
+    created_at: string
+    updated_at: string
+}
+
+export interface LocationCategoryPrepDefaultsModel {
+    id: string
+    location_id: string // FK to locations table
+    category_id: string // FK to categories table
+    prep_station_id: string // FK to prep_stations table
+    merchant_id: string // FK to merchants table
     created_at: string
     updated_at: string
 }

@@ -53,7 +53,7 @@ import {
 } from 'lucide-react'
 import { useOrganizationUsers } from '../hooks/useOrganizationUsers'
 import { useAuth, useUser } from '@clerk/nextjs'
-import { SendOrganizationMembersInviteButton } from '../organizations/[organizationId]/components/SendOrganizationMembersInviteButton'
+// import { SendOrganizationMembersInviteButton } from '../organizations/[organizationId]/components/SendOrganizationMembersInviteButton'
 import { useOrganizationInfo } from '../hooks/useOrganizationInfo'
 import { useRouter } from 'next/navigation'
 import { AdminInviteWizard } from '../organizations/[organizationId]/components/AdminInviteWizard'
@@ -137,7 +137,6 @@ export default function UsersPage() {
                         <UserPlus className="h-4 w-4 mr-2" />
                         Invite Admin
                     </Button>
-                    <SendOrganizationMembersInviteButton organizationId={user?.publicMetadata.organizationId as string} refetch={() => refetchOrganizationInfo()} role_types='hq' />
                 </div>
                 <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
                     <DialogTrigger asChild>
@@ -335,7 +334,7 @@ export default function UsersPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {filteredUsers?.map((user) => (
+                                    {filteredUsers?.map((user ) => (
                                         <TableRow key={user.id} className="cursor-pointer" onClick={() => router.push(`/manage/users/${user.users.id}`)}>
                                             <TableCell>
                                                 <div className="flex items-center space-x-3">
@@ -422,7 +421,6 @@ export default function UsersPage() {
                                         <UserPlus className="h-4 w-4 mr-2" />
                                         Invite Admin
                                     </Button>
-                                    <SendOrganizationMembersInviteButton organizationId={user?.publicMetadata.organizationId as string} refetch={() => refetchOrganizationInfo()} role_types='hq' />
                                 </div>
                             </div>
                         </CardHeader>
