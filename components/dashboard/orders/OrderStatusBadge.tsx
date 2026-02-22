@@ -21,6 +21,11 @@ export function OrderStatusBadge({ status, className }: OrderStatusBadgeProps) {
             variant: 'default',
             className: 'bg-amber-100 text-amber-800 border-amber-300',
         },
+        sent_to_kitchen: {
+            label: 'Sent to Kitchen',
+            variant: 'default',
+            className: 'bg-indigo-100 text-indigo-800 border-indigo-300',
+        },
         preparing: {
             label: 'Preparing',
             variant: 'default',
