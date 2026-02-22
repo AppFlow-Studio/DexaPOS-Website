@@ -58,6 +58,9 @@ import { useOrganizationInfo } from '../hooks/useOrganizationInfo'
 import { useRouter } from 'next/navigation'
 import { AdminInviteWizard } from '../organizations/[organizationId]/components/AdminInviteWizard'
 import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
+import { ClerkResendInvitationAdmin } from '../organizations/actions/clerk-resend-invitation-admin'
+import { ClerkRevokeInvitation } from '../organizations/actions/clerk-revoke-invitation'
+import { toast } from 'sonner'
 
 // HQ Organization ID for direct admin invites
 const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID || 'org_33z36QibAMZy6kc2xZNYmDl5duh'
@@ -87,6 +90,7 @@ export default function UsersPage() {
     const [isAddUserOpen, setIsAddUserOpen] = useState(false)
     const [activeTab, setActiveTab] = useState('users')
     const [isAdminInviteOpen, setIsAdminInviteOpen] = useState(false)
+    const [inviteActionId, setInviteActionId] = useState<string | null>(null)
     const { user } = useUser()
     const fallbackOrgId = user?.publicMetadata?.organizationId as string | undefined
     const resolvedOrganizationId = DEXA_HQ_ORG_ID || fallbackOrgId || (orgId as string)
@@ -132,6 +136,42 @@ export default function UsersPage() {
 
     const getInitials = (first_name: string, last_name: string) => {
         return `${first_name.charAt(0)}${last_name.charAt(0)}`.toUpperCase()
+    }
+
+    const handleResendInvite = async (invitationId: string) => {
+        setInviteActionId(invitationId)
+        try {
+            const result = await ClerkResendInvitationAdmin(invitationId)
+            if (result?.success) {
+                toast.success('Invitation resent')
+                await refetchOrganizationInfo()
+                return
+            }
+            toast.error(result?.message || 'Failed to resend invitation')
+        } catch (error) {
+            console.error('[UsersPage] Resend invite failed:', error)
+            toast.error('Failed to resend invitation')
+        } finally {
+            setInviteActionId(null)
+        }
+    }
+
+    const handleRevokeInvite = async (invitationId: string) => {
+        setInviteActionId(invitationId)
+        try {
+            const result = await ClerkRevokeInvitation(invitationId)
+            if (result?.success) {
+                toast.success('Invitation revoked')
+                await refetchOrganizationInfo()
+                return
+            }
+            toast.error(result?.message || 'Failed to revoke invitation')
+        } catch (error) {
+            console.error('[UsersPage] Revoke invite failed:', error)
+            toast.error('Failed to revoke invitation')
+        } finally {
+            setInviteActionId(null)
+        }
     }
 
     return (
@@ -489,9 +529,20 @@ export default function UsersPage() {
                                                         <DropdownMenuContent align="end">
                                                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                                             <DropdownMenuItem>Copy invite link</DropdownMenuItem>
-                                                            <DropdownMenuItem>Resend</DropdownMenuItem>
+                                                            <DropdownMenuItem
+                                                                disabled={inviteActionId === inv.clerk_invite_id}
+                                                                onClick={() => void handleResendInvite(inv.clerk_invite_id)}
+                                                            >
+                                                                Resend
+                                                            </DropdownMenuItem>
                                                             <DropdownMenuSeparator />
-                                                            <DropdownMenuItem className="text-red-600">Revoke</DropdownMenuItem>
+                                                            <DropdownMenuItem
+                                                                className="text-red-600"
+                                                                disabled={inviteActionId === inv.clerk_invite_id}
+                                                                onClick={() => void handleRevokeInvite(inv.clerk_invite_id)}
+                                                            >
+                                                                Revoke
+                                                            </DropdownMenuItem>
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 </div>

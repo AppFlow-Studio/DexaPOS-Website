@@ -3,7 +3,7 @@
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
+import { logAdminAction } from '@/lib/admin/log-admin-action'
 import type {
   MerchantFilters,
   MerchantSummary,
@@ -215,9 +215,19 @@ export async function updateMerchantSettings(
   merchantId: string,
   updates: MerchantSettingsUpdate
 ): Promise<UpdateMerchantResult> {
-  const { userId } = await assertHQPermission('hq.merchant.update')
+  await assertHQPermission('hq.merchant.update')
 
   const supabase = createServerSupabaseClient()
+  const { data: beforeMerchant } = await supabase
+    .from('merchants')
+    .select('id, name, public_metadata')
+    .eq('id', merchantId)
+    .single()
+
+  const beforeSnapshot: Record<string, unknown> = {}
+  for (const key of Object.keys(updates)) {
+    beforeSnapshot[key] = (beforeMerchant as Record<string, unknown> | null)?.[key]
+  }
 
   // Prepare the update object
   let finalUpdates: any = {
@@ -227,16 +237,12 @@ export async function updateMerchantSettings(
 
   // If public_metadata is provided, merge it with existing metadata to avoid overwriting everything
   if (updates.public_metadata) {
-      const { data: existing } = await supabase
-          .from('merchants')
-          .select('public_metadata')
-          .eq('id', merchantId)
-          .single()
-      
       finalUpdates.public_metadata = {
-          ...(existing?.public_metadata || {}),
+          ...(beforeMerchant?.public_metadata || {}),
           ...updates.public_metadata
       }
+
+      beforeSnapshot.public_metadata = beforeMerchant?.public_metadata || {}
   }
 
   const { error } = await supabase
@@ -249,16 +255,17 @@ export async function updateMerchantSettings(
     return { success: false, error: error.message }
   }
 
-  // Audit log
-  await LogAuditEvent({
+  await logAdminAction('MERCHANT_SETTINGS_CHANGED', {
     merchantId,
-    action: 'ADMIN_UPDATE_MERCHANT',
-    actionCategory: 'settings',
     resourceType: 'merchant',
     resourceId: merchantId,
-    changes: { after: updates as unknown as Record<string, unknown> },
+    resourceName: beforeMerchant?.name || merchantId,
+    changes: {
+      before: beforeSnapshot,
+      after: finalUpdates as Record<string, unknown>,
+    },
     metadata: {
-      admin_action: true,
+      source: 'updateMerchantSettings',
     },
   })
 
@@ -277,14 +284,14 @@ export async function toggleLocationStatus(
   locationId: string,
   isActive: boolean
 ): Promise<ToggleLocationResult> {
-  const { userId } = await assertHQPermission('hq.merchant.update')
+  await assertHQPermission('hq.merchant.update')
 
   const supabase = createServerSupabaseClient()
 
   // First verify the location belongs to this merchant
   const { data: location } = await supabase
     .from('locations')
-    .select('id, name')
+    .select('id, name, is_active')
     .eq('id', locationId)
     .eq('merchant_id', merchantId)
     .single()
@@ -307,20 +314,22 @@ export async function toggleLocationStatus(
     return { success: false, error: error.message }
   }
 
-  // Audit log
-  await LogAuditEvent({
+  await logAdminAction('MERCHANT_UPDATED', {
     merchantId,
-    action: isActive ? 'Activated Location' : 'Deactivated Location',
-    actionCategory: 'settings',
+    locationId,
     resourceType: 'location',
     resourceId: locationId,
     resourceName: location.name,
-    locationId,
-    changes: { before: { is_active: !isActive }, after: { is_active: isActive } },
-    severity: 'warning',
+    changes: {
+      is_active: {
+        old: Boolean(location.is_active),
+        new: isActive,
+      },
+    },
+    severity: isActive ? 'info' : 'warning',
     metadata: {
       location_name: location.name,
-      admin_action: true,
+      source: 'toggleLocationStatus',
     },
   })
 

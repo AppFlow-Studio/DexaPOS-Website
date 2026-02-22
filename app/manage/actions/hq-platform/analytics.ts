@@ -2,6 +2,7 @@
 
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 
 // ============================================================================
 // TYPES
@@ -30,6 +31,53 @@ export interface PlatformTopMerchant {
   revenue: number
   transactions: number
   growth: number
+}
+
+export interface PlatformAuditLogFilters {
+  search?: string
+  actionCategory?: string
+  severity?: string
+  actor?: string
+  merchantIds?: string[]
+  dateFrom?: string
+  dateTo?: string
+  status?: 'success' | 'failed'
+  resourceType?: string
+}
+
+export interface PlatformAuditLogRow {
+  id: string
+  created_at: string
+  actor_user_id?: string
+  actor_email?: string
+  actor_name?: string
+  actor_role?: string
+  action: string
+  action_category?: string
+  severity?: string
+  resource_type?: string
+  resource_id?: string
+  resource_name?: string
+  status?: string
+  error_message?: string
+  merchant_id?: string
+  merchant_name?: string
+  location_id?: string
+  location_name?: string
+  changes?: Record<string, unknown> | null
+  metadata?: Record<string, unknown> | null
+}
+
+export interface PlatformAuditLogsResult {
+  data: PlatformAuditLogRow[]
+  total: number
+}
+
+export interface PlatformAuditLogsExportResult {
+  data: PlatformAuditLogRow[]
+  total: number
+  cap: number
+  capped: boolean
 }
 
 async function getAssignedMerchantScope(
@@ -275,33 +323,91 @@ export async function getTopMerchants(limit: number = 5): Promise<PlatformTopMer
  * Get platform-wide audit logs
  */
 export async function getPlatformAuditLogs(
-  filters?: any,
+  filters?: PlatformAuditLogFilters,
   limit: number = 50,
   offset: number = 0
-): Promise<{ data: any[], total: number }> {
-  await assertHQPermission('hq.org.view')
+): Promise<PlatformAuditLogsResult> {
+  await assertHQPermission('system.audit.view')
 
-  const supabase = createServerSupabaseClient()
+  let supabase = createServerSupabaseClient()
+  try {
+    supabase = createServiceRoleClient()
+  } catch (error) {
+    console.warn('[getPlatformAuditLogs] Service-role client unavailable, falling back to user-scoped client.')
+  }
 
   let query = supabase
     .from('audit_logs')
     .select(`
-      *,
-      merchants!inner(name),
+      id,
+      created_at,
+      actor_user_id,
+      actor_email,
+      actor_name,
+      actor_role,
+      action,
+      action_category,
+      severity,
+      resource_type,
+      resource_id,
+      resource_name,
+      status,
+      error_message,
+      merchant_id,
+      location_id,
+      changes,
+      metadata,
+      merchants(name),
       location:locations(id, name)
     `, { count: 'exact' })
     .order('created_at', { ascending: false })
 
   if (filters?.search) {
-    query = query.or(`action.ilike.%${filters.search}%,actor_name.ilike.%${filters.search}%,resource_name.ilike.%${filters.search}%`)
+    const term = filters.search.trim()
+    if (term.length > 0) {
+      query = query.or(
+        `action.ilike.%${term}%,actor_name.ilike.%${term}%,actor_email.ilike.%${term}%,resource_name.ilike.%${term}%,resource_type.ilike.%${term}%`
+      )
+    }
   }
 
-  if (filters?.action_category) {
-    query = query.eq('action_category', filters.action_category)
+  if (filters?.actionCategory) {
+    query = query.eq('action_category', filters.actionCategory)
   }
 
   if (filters?.severity) {
     query = query.eq('severity', filters.severity)
+  }
+
+  if (filters?.actor) {
+    const actorTerm = filters.actor.trim()
+    if (actorTerm.length > 0) {
+      query = query.or(
+        `actor_name.ilike.%${actorTerm}%,actor_email.ilike.%${actorTerm}%,actor_user_id.ilike.%${actorTerm}%`
+      )
+    }
+  }
+
+  if (filters?.dateFrom) {
+    query = query.gte('created_at', filters.dateFrom)
+  }
+
+  if (filters?.dateTo) {
+    query = query.lte('created_at', filters.dateTo)
+  }
+
+  if (filters?.status === 'success') {
+    query = query.or('status.eq.success,status.is.null')
+  } else if (filters?.status === 'failed') {
+    query = query.or('status.eq.failed,status.eq.error')
+  }
+
+  if (filters?.resourceType) {
+    query = query.eq('resource_type', filters.resourceType)
+  }
+
+  if (filters?.merchantIds && filters.merchantIds.length > 0) {
+    query = query.in('merchant_id', filters.merchantIds)
   }
 
   query = query.range(offset, offset + limit - 1)
@@ -313,8 +419,53 @@ export async function getPlatformAuditLogs(
     return { data: [], total: 0 }
   }
 
+  const rows: PlatformAuditLogRow[] = (data || []).map((row: any) => {
+    const merchantRaw = row.merchants
+    const locationRaw = row.location
+    const merchant = Array.isArray(merchantRaw) ? merchantRaw[0] : merchantRaw
+    const location = Array.isArray(locationRaw) ? locationRaw[0] : locationRaw
+
+    return {
+      id: row.id,
+      created_at: row.created_at,
+      actor_user_id: row.actor_user_id || undefined,
+      actor_email: row.actor_email || undefined,
+      actor_name: row.actor_name || undefined,
+      actor_role: row.actor_role || undefined,
+      action: row.action || 'unknown_action',
+      action_category: row.action_category || undefined,
+      severity: row.severity || undefined,
+      resource_type: row.resource_type || undefined,
+      resource_id: row.resource_id || undefined,
+      resource_name: row.resource_name || undefined,
+      status: row.status || undefined,
+      error_message: row.error_message || undefined,
+      merchant_id: row.merchant_id || undefined,
+      merchant_name: merchant?.name || undefined,
+      location_id: row.location_id || undefined,
+      location_name: location?.name || undefined,
+      changes: row.changes || null,
+      metadata: row.metadata || null,
+    }
+  })
+
   return {
-    data: data || [],
+    data: rows,
     total: count || 0
+  }
+}
+
+export async function getPlatformAuditLogsExport(
+  filters?: PlatformAuditLogFilters,
+  cap: number = 5000
+): Promise<PlatformAuditLogsExportResult> {
+  const normalizedCap = Math.max(1, Math.min(cap, 10000))
+  const result = await getPlatformAuditLogs(filters, normalizedCap, 0)
+
+  return {
+    data: result.data,
+    total: result.total,
+    cap: normalizedCap,
+    capped: result.total > normalizedCap,
   }
 }

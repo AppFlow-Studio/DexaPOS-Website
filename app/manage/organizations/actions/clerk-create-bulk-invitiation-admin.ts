@@ -1,41 +1,102 @@
 'use server'
 
-import { createClerkClient, Invitation } from '@clerk/backend'
+import { createClerkClient } from '@clerk/backend'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
+import { logAdminAction } from '@/lib/admin/log-admin-action'
+import { MerchantAccessAssignment } from '@/types/admin'
 
-export async function createBulkInvitationAdmin(organizationId: string, invitations: { email: string, role: string, level_type: string }[]) {
+interface BulkInviteOptions {
+    merchantAccess?: MerchantAccessAssignment[]
+    invitedBy?: string
+    firstName?: string
+    lastName?: string
+    orgType?: string
+}
+
+export async function createBulkInvitationAdmin(
+    organizationId: string,
+    invitations: { email: string, role: string, level_type: string }[],
+    options?: BulkInviteOptions
+) {
 
     try {
-        const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
-        const invitationsResponse = await clerkClient.invitations.createInvitationBulk(
-            invitations.map((invitation) => ({
-                emailAddress: invitation.email,
-                redirectUrl: 'http://localhost:3000/',
-                role: invitation.level_type,
-                publicMetadata: { organizationId: organizationId, role: invitation.role, level_type: invitation.level_type, setupRequired: true },
+        const normalizedInvitations = invitations
+            .map((invite) => ({
+                email: invite.email.trim(),
+                role: invite.role,
+                level_type: invite.level_type,
             }))
-        )
-        const ParsedInvitationsResponse = JSON.parse(JSON.stringify(invitationsResponse));
+            .filter((invite) => Boolean(invite.email))
 
+        if (normalizedInvitations.length === 0) {
+            return {
+                success: false,
+                message: 'At least one valid email is required.',
+            }
+        }
 
-        // insert the correct clerk_invite_id into the invitations array with the correct email and role
-        const invitationsWithClerkInviteId = invitations.map((invitation) => ({
-            organization_id: organizationId,
-            email: invitation.email,
-            role: invitation.role,
-            status: 'pending',
-            created_at: new Date().toISOString(),
-            clerk_invite_id: ParsedInvitationsResponse.find((inv: Invitation) => inv.emailAddress === invitation.email)?.id,
-        }))
-
-
+        const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
 
         const supabase = createServerSupabaseClient()
-        // insert the invitations with the correct clerk_invite_id into the pending_org_admin_invites table
-        const { data, error } = await supabase.from('pending_org_admin_invites').insert(invitationsWithClerkInviteId)
+        const createdInvitations: Array<{
+            organization_id: string
+            clerk_invite_id: string
+            email: string
+            first_name: string | null
+            last_name: string | null
+            status: string
+            role: string
+            merchant_access: MerchantAccessAssignment[] | null
+            invited_by: string | null
+            created_at: string
+            updated_at: string
+        }> = []
+
+        for (const invitation of normalizedInvitations) {
+            const clerkInvitation = await clerkClient.organizations.createOrganizationInvitation({
+                organizationId,
+                emailAddress: invitation.email,
+                role: 'org:admin',
+                publicMetadata: {
+                    role: invitation.role,
+                    level_type: invitation.level_type,
+                    org_type: options?.orgType || 'hq',
+                    firstName: options?.firstName || '',
+                    lastName: options?.lastName || '',
+                },
+            })
+
+            createdInvitations.push({
+                organization_id: organizationId,
+                clerk_invite_id: clerkInvitation.id,
+                email: invitation.email,
+                first_name: options?.firstName?.trim() || null,
+                last_name: options?.lastName?.trim() || null,
+                status: clerkInvitation.status || 'pending',
+                role: invitation.role,
+                merchant_access: options?.merchantAccess?.length ? options.merchantAccess : null,
+                invited_by: options?.invitedBy || null,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+            })
+        }
+
+        const { error } = await supabase.from('pending_org_admin_invites').insert(createdInvitations)
 
         if (error) {
+            // Best effort rollback so Clerk does not keep orphaned invites.
+            for (const invitation of createdInvitations) {
+                try {
+                    await clerkClient.organizations.revokeOrganizationInvitation({
+                        organizationId,
+                        invitationId: invitation.clerk_invite_id,
+                        requestingUserId: options?.invitedBy || '',
+                    })
+                } catch (revokeError) {
+                    console.error('[createBulkInvitationAdmin] rollback revoke failed:', revokeError)
+                }
+            }
+
             return {
                 success: false,
                 message: 'Error creating bulk invitation: ' + error.message,
@@ -50,23 +111,29 @@ export async function createBulkInvitationAdmin(organizationId: string, invitati
             .eq('clerk_org_id', organizationId)
             .single()
 
-        await LogAuditEvent({
+        await logAdminAction('ADMIN_INVITED', {
             merchantId: merchant?.id,
             clerkOrgId: organizationId,
-            action: `Sent Bulk Admin Invitations (${invitations.length})`,
-            actionCategory: 'people',
             resourceType: 'invitation',
+            resourceName: `bulk_invite_${new Date().toISOString()}`,
+            changes: {
+                after: {
+                    invitation_count: normalizedInvitations.length,
+                    status: 'pending',
+                },
+            },
             metadata: {
-                invitation_count: invitations.length,
-                emails: invitations.map(i => i.email),
-                roles: Array.from(new Set(invitations.map(i => i.role))),
-                admin_action: true,
+                bulk_invite: true,
+                emails: normalizedInvitations.map(i => i.email),
+                roles: Array.from(new Set(normalizedInvitations.map(i => i.role))),
+                merchant_access_count: options?.merchantAccess?.length || 0,
             },
         })
 
         return {
             success: true,
             message: 'Bulk invitation sent successfully',
+            count: createdInvitations.length,
         }
 
     }

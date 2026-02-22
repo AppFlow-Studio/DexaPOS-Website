@@ -22,7 +22,7 @@
 |---|---|---|---|---|
 | 1 | Role-Based Dashboard Visibility | High | Implemented (QA Pending) | 95% |
 | 2 | Admin Invite System Cleanup | High | Not Started | 0% |
-| 3 | Comprehensive Admin Audit Logging | High | Not Started | 0% |
+| 3 | Comprehensive Admin Audit Logging | High | Implemented (QA Pending) | 90% |
 | 4 | Merchant Notes System | Medium | Not Started | 0% |
 
 ## Execution Order
@@ -57,11 +57,11 @@
 
 ## Ticket 3: Comprehensive Admin Audit Logging
 
-- [ ] `3.1` Add `ADMIN_ACTIONS` catalog
-- [ ] `3.2` Add typed `logAdminAction(...)` helper
-- [ ] `3.3` Instrument required admin actions with before/after changes
-- [ ] `3.4` Global audit page filters/search/expand/export complete
-- [ ] `3.5` Merchant-specific audit tab scoped and feature-complete
+- [x] `3.1` Add `ADMIN_ACTIONS` catalog
+- [x] `3.2` Add typed `logAdminAction(...)` helper
+- [x] `3.3` Instrument required admin actions with before/after changes
+- [x] `3.4` Global audit page filters/search/expand/export complete
+- [x] `3.5` Merchant-specific audit tab scoped and feature-complete
 - [ ] QA completed and validated against acceptance criteria
 
 ## Ticket 4: Merchant Notes System
@@ -88,6 +88,8 @@
 |---|---|---|
 | 2026-02-19 | Use build order `1 -> 3 -> 2 -> 4` | Dependency-safe implementation |
 | 2026-02-19 | Keep payment audit (`payment_audit_log`) separate from general admin audit (`audit_logs`) | Different scope and reporting needs |
+| 2026-02-21 | Implement Ticket 3 with shared TS helper (`logAdminAction`) on top of existing `log_audit_event` RPC | Standardize logging without introducing new migration risk |
+| 2026-02-21 | Add CSV export cap at `10,000` rows for global audit page | Prevent oversized client export and keep UI responsive |
 
 ## Daily Notes
 
@@ -111,6 +113,19 @@
 - merchant/location/staff filter loaders now return assigned merchants only.
 - payment audit log and chargebacks queries now enforce assigned-merchant intersection even when no merchant filter is selected.
 7. Fixed `/manage` dashboard analytics loaders to use manager-assigned merchant scope and manager-safe permission gate (prevents false `0` KPI cards due permission mismatch).
+8. Ticket 3 implementation completed in code (pending QA):
+- Added `lib/admin/audit-actions.ts` catalog.
+- Added `lib/admin/log-admin-action.ts` typed helper with automatic metadata tagging.
+- Instrumented key admin actions (merchant settings/location toggle, invite create/resend/revoke, remove user, staff PIN/status/create, payment terminal config/pair/unpair/delete).
+- Rebuilt `/manage/audit-logs` with required filters (category, severity, actor, merchant, date range, status, resource type), expandable change/metadata view, 50-row pagination, and CSV export.
+- Added merchant audit tab CSV export for scoped compliance reporting.
+9. QA hotfix for invite/revoke audit verification:
+- Wired Pending Invites dropdown actions in `Users` page to actual server actions (`resend`/`revoke`).
+- Fixed HQ org-scoped audit logging fallback so logs can be recorded even when no merchant row exists for HQ org id.
+10. Invite revoke/resend API fix:
+- Switched from Clerk personal invitation API (`invitations.*`) to Clerk organization invitation API (`organizations.*`) so `orginv_*` ids revoke/resend correctly.
+11. Audit write reliability hardening:
+- Added fallback direct insert path in `logAdminAction` when `log_audit_event` RPC returns an error, so HQ invite/revoke events still persist to `audit_logs`.
 
 ## Standup Template
 
