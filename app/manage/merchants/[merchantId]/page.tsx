@@ -10,10 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
     Store,
     Settings,
-    Download,
     AlertTriangle,
-    Building2,
-    Store as StoreIcon
+    MessageSquare
 } from 'lucide-react'
 import { useAdminMerchantDetails } from '@/lib/queries/use-admin-merchant'
 import { MerchantDetails } from '@/types/merchant'
@@ -31,11 +29,16 @@ import { MenuTab } from './components/MenuTab'
 import { OnlineStoreTab } from './components/OnlineStoreTab'
 import { DiscountsTab } from './components/DiscountsTab'
 import { SchedulesTab } from './components/SchedulesTab'
+import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
+import { NotesTab } from './components/NotesTab'
 import { OrdersTab } from './components/OrdersTab'
 
 export default function MerchantDetailsPage() {
     const { merchantId } = useParams()
+    const { hasPermission } = useAdminPermissions()
     const { data: merchantDetails, isLoading, isError, refetch } = useAdminMerchantDetails(merchantId as string)
+    const canManageDevices = hasPermission('users.manage')
+    const canViewSettings = hasPermission('users.manage')
 
     if (isLoading) {
         return (
@@ -94,9 +97,11 @@ export default function MerchantDetailsPage() {
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
-                            <Button variant="outline" size="sm">
-                                <Settings className="h-4 w-4 mr-2" /> Settings
-                            </Button>
+                            {canViewSettings && (
+                                <Button variant="outline" size="sm">
+                                    <Settings className="h-4 w-4 mr-2" /> Settings
+                                </Button>
+                            )}
                              {/* Export Data Button */}
                         </div>
                     </div>
@@ -114,11 +119,15 @@ export default function MerchantDetailsPage() {
                             <TabsTrigger value="schedules" className="flex-none">Schedules</TabsTrigger>
                             <TabsTrigger value="discounts" className="flex-none">Discounts</TabsTrigger>
                             <TabsTrigger value="online-store" className="flex-none">Online Store</TabsTrigger>
-                            <TabsTrigger value="devices" className="flex-none">Devices</TabsTrigger>
+                            {canManageDevices && <TabsTrigger value="devices" className="flex-none">Devices</TabsTrigger>}
                             <TabsTrigger value="orders" className="flex-none">Orders</TabsTrigger>
                             <TabsTrigger value="transactions" className="flex-none">Transactions</TabsTrigger>
+                            <TabsTrigger value="notes" className="flex-none">
+                                <MessageSquare className="mr-1 h-4 w-4" />
+                                Notes
+                            </TabsTrigger>
                             <TabsTrigger value="audit" className="flex-none">Audit Logs</TabsTrigger>
-                            <TabsTrigger value="settings" className="flex-none">Settings</TabsTrigger>
+                            {canViewSettings && <TabsTrigger value="settings" className="flex-none">Settings</TabsTrigger>}
                         </TabsList>
 
                         {/* Tab Contents */}
@@ -146,9 +155,11 @@ export default function MerchantDetailsPage() {
                             <ProductsTab merchantInfo={merchantDetails} />
                         </TabsContent>
 
-                        <TabsContent value="devices" className="mt-6">
-                            <DevicesTab merchantId={merchantDetails.id} merchantInfo={merchantDetails} />
-                        </TabsContent>
+                        {canManageDevices && (
+                            <TabsContent value="devices" className="mt-6">
+                                <DevicesTab merchantId={merchantDetails.id} merchantInfo={merchantDetails} />
+                            </TabsContent>
+                        )}
 
                         <TabsContent value="orders" className="mt-6">
                             <OrdersTab merchantInfo={merchantDetails} />
@@ -157,6 +168,10 @@ export default function MerchantDetailsPage() {
                         <TabsContent value="transactions" className="mt-6">
                              {/* TransactionsTab likely expects MerchantInfoModel or ID */}
                             <TransactionsTab merchantInfo={merchantDetails as unknown as MerchantInfoModel} />
+                        </TabsContent>
+
+                        <TabsContent value="notes" className="mt-6">
+                            <NotesTab merchantId={merchantDetails.id} />
                         </TabsContent>
 
                         <TabsContent value="menu" className="mt-6">
@@ -186,9 +201,11 @@ export default function MerchantDetailsPage() {
                             <AuditLogsTab merchantInfo={merchantDetails as unknown as MerchantInfoModel} />
                         </TabsContent>
 
-                        <TabsContent value="settings" className="mt-6">
-                            <SettingsTab merchantInfo={merchantDetails} refetchMerchantInfo={refetch} />
-                        </TabsContent>
+                        {canViewSettings && (
+                            <TabsContent value="settings" className="mt-6">
+                                <SettingsTab merchantInfo={merchantDetails} refetchMerchantInfo={refetch} />
+                            </TabsContent>
+                        )}
                     </Tabs>
                 </CardContent>
             </Card>

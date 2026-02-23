@@ -51,6 +51,7 @@ import {
 } from '@/types/tax'
 import { toast } from 'sonner'
 import type { Location } from '@/types/merchant_locations'
+import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
 
 
 import { MerchantDetails } from '@/types/merchant'
@@ -61,6 +62,7 @@ interface SettingsTabProps {
 }
 
 export function SettingsTab({ merchantInfo, refetchMerchantInfo }: SettingsTabProps) {
+    const { isSuperAdmin } = useAdminPermissions()
     const [openDeleteOrganizationDialog, setOpenDeleteOrganizationDialog] = useState(false)
     const [selectedLocationId, setSelectedLocationId] = useState<string>('all')
     const [editDialogOpen, setEditDialogOpen] = useState(false)
@@ -706,38 +708,40 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo }: SettingsTabPr
                     </Card>
 
                     {/* Danger Zone */}
-                    <Card className="border-destructive">
-                        <CardHeader>
-                            <CardTitle className="text-destructive flex items-center gap-2">
-                                <AlertTriangle className="h-5 w-5" />
-                                Danger Zone
-                            </CardTitle>
-                            <CardDescription>
-                                Irreversible and destructive actions. Please proceed with caution.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between p-4 border border-destructive/20 rounded-lg bg-destructive/5">
-                                    <div className="space-y-1">
-                                        <h4 className="font-medium text-destructive">Delete Organization</h4>
-                                        <p className="text-sm text-muted-foreground">
-                                            Permanently delete this merchant organization and all associated data.
-                                            This action cannot be undone.
-                                        </p>
+                    {isSuperAdmin && (
+                        <Card className="border-destructive">
+                            <CardHeader>
+                                <CardTitle className="text-destructive flex items-center gap-2">
+                                    <AlertTriangle className="h-5 w-5" />
+                                    Danger Zone
+                                </CardTitle>
+                                <CardDescription>
+                                    Irreversible and destructive actions. Please proceed with caution.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between p-4 border border-destructive/20 rounded-lg bg-destructive/5">
+                                        <div className="space-y-1">
+                                            <h4 className="font-medium text-destructive">Delete Organization</h4>
+                                            <p className="text-sm text-muted-foreground">
+                                                Permanently delete this merchant organization and all associated data.
+                                                This action cannot be undone.
+                                            </p>
+                                        </div>
+                                        <Button
+                                            variant="destructive"
+                                            onClick={() => setOpenDeleteOrganizationDialog(true)}
+                                            className="ml-4"
+                                        >
+                                            <Trash2 className="h-4 w-4 mr-2" />
+                                            Delete Organization
+                                        </Button>
                                     </div>
-                                    <Button
-                                        variant="destructive"
-                                        onClick={() => setOpenDeleteOrganizationDialog(true)}
-                                        className="ml-4"
-                                    >
-                                        <Trash2 className="h-4 w-4 mr-2" />
-                                        Delete Organization
-                                    </Button>
                                 </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                            </CardContent>
+                        </Card>
+                    )}
                 </TabsContent>
             </Tabs>
 
