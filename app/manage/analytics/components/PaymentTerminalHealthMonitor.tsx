@@ -289,7 +289,7 @@ export function PaymentTerminalHealthMonitor() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-auto max-h-[600px]">
+          <div className="overflow-auto ">
             <Table>
               <TableHeader className="sticky top-0 bg-background z-10">
                 <TableRow>
@@ -352,7 +352,7 @@ export function PaymentTerminalHealthMonitor() {
                 {data.terminals.filter(t => t.isOrphan).map(t => (
                   <TableRow key={t.id} className="bg-orange-50/40">
                     <TableCell className="text-sm py-2 pl-4 font-medium">{t.terminalName}</TableCell>
-                    <TableCell className="text-sm py-2 font-mono text-xs text-muted-foreground">{t.tpn}</TableCell>
+                    <TableCell className="py-2 font-mono text-xs text-muted-foreground">{t.tpn}</TableCell>
                     <TableCell className="text-sm py-2">
                       <span className="flex items-center gap-1.5">
                         <Building2 className="h-3 w-3 text-muted-foreground" />
