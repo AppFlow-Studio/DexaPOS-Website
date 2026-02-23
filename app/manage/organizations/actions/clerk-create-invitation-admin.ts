@@ -3,7 +3,7 @@
 import { createClerkClient } from '@clerk/backend'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { CreateAdminInviteParams, MerchantAccessAssignment } from '@/types/admin'
-import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
+import { logAdminAction } from '@/lib/admin/log-admin-action'
 
 
 // Legacy interface for backwards compatibility
@@ -82,6 +82,13 @@ export async function createInvitationAdmin(
       }
     }
 
+    if (normalizedParams.roleCode !== 'hq.super_admin' && normalizedParams.merchantAccess.length === 0) {
+      return {
+        success: false,
+        message: 'At least one merchant assignment is required for this role',
+      }
+    }
+
     // Get the redirect URL from environment or use default
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
@@ -155,20 +162,24 @@ export async function createInvitationAdmin(
       .eq('clerk_org_id', normalizedParams.organizationId)
       .single()
 
-    await LogAuditEvent({
+    await logAdminAction('ADMIN_INVITED', {
       merchantId: merchant?.id,
       clerkOrgId: normalizedParams.organizationId,
-      action: `Sent Admin Invitation: ${normalizedParams.email}`,
-      actionCategory: 'people',
       resourceType: 'invitation',
       resourceId: data.id,
       resourceName: normalizedParams.email,
+      changes: {
+        after: {
+          email: normalizedParams.email,
+          role: normalizedParams.roleCode,
+          status: invitation.status || 'pending',
+        },
+      },
       metadata: {
-        role: normalizedParams.roleCode,
         level: normalizedParams.levelType,
         org_type: normalizedParams.orgType,
         merchant_access_count: normalizedParams.merchantAccess.length,
-        admin_action: true,
+        invited_by: normalizedParams.invitedBy || null,
       },
     })
 

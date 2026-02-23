@@ -792,6 +792,54 @@ function applyChargebackFilters(
   return next
 }
 
+async function getAssignedMerchantScope(
+  userId: string,
+  roleCode?: string | null
+): Promise<string[] | null> {
+  // Super admin keeps global visibility.
+  if (roleCode === 'hq.super_admin') {
+    return null
+  }
+
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from('admin_merchant_access')
+    .select('merchant_id')
+    .eq('admin_user_id', userId)
+    .eq('is_active', true)
+
+  if (error) {
+    console.error('[getAssignedMerchantScope] Error:', error)
+    return []
+  }
+
+  return Array.from(
+    new Set(
+      (data ?? [])
+        .map((row: any) => row.merchant_id)
+        .filter((merchantId: unknown): merchantId is string =>
+          typeof merchantId === 'string' && merchantId.length > 0
+        )
+    )
+  )
+}
+
+function applyMerchantScope(
+  requestedMerchantIds: string[] | undefined,
+  scopedMerchantIds: string[] | null
+): string[] | undefined {
+  if (scopedMerchantIds === null) {
+    return requestedMerchantIds
+  }
+
+  if (!requestedMerchantIds || requestedMerchantIds.length === 0) {
+    return scopedMerchantIds
+  }
+
+  const allowed = new Set(scopedMerchantIds)
+  return requestedMerchantIds.filter((merchantId) => allowed.has(merchantId))
+}
+
 function normalizeSort(
   filters?: PlatformTransactionFilters
 ): { sortBy: 'created_at' | 'order_number' | 'total_amount'; ascending: boolean } {
@@ -1517,16 +1565,24 @@ export async function getPlatformTransactions(
   offset: number = 0,
   filters?: PlatformTransactionFilters
 ): Promise<{ data: PlatformTransaction[]; total: number }> {
-  await assertHQPermission('hq.merchant.transactions')
+  const { userId, role } = await assertHQPermission('hq.merchant.transactions')
+  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
+  const scopedMerchantIds = applyMerchantScope(filters?.merchantIds, merchantScope)
+  const scopedFilters =
+    scopedMerchantIds === undefined ? filters : { ...(filters ?? {}), merchantIds: scopedMerchantIds }
 
-  const auditMerchantId = getSingleUuidFilterValue(filters?.merchantIds)
+  if (scopedMerchantIds !== undefined && scopedMerchantIds.length === 0) {
+    return { data: [], total: 0 }
+  }
+
+  const auditMerchantId = getSingleUuidFilterValue(scopedFilters?.merchantIds)
   const auditLocationId = getSingleUuidFilterValue(filters?.locationIds)
-  const cardLastFourSearchTerm = getCardLastFourSearchTerm(filters)
+  const cardLastFourSearchTerm = getCardLastFourSearchTerm(scopedFilters)
 
   try {
     let result: { data: PlatformTransaction[]; total: number } | null = null
 
-    const fromRpc = await getPlatformTransactionsFromRpc(limit, offset, filters)
+    const fromRpc = await getPlatformTransactionsFromRpc(limit, offset, scopedFilters)
     if (!fromRpc.errorCode) {
       result = { data: fromRpc.data, total: fromRpc.total }
     } else {
@@ -1535,7 +1591,7 @@ export async function getPlatformTransactions(
       )
 
       if (USE_PLATFORM_TX_VIEW) {
-        const fromView = await getPlatformTransactionsFromView(limit, offset, filters)
+        const fromView = await getPlatformTransactionsFromView(limit, offset, scopedFilters)
         if (!fromView.errorCode) {
           result = { data: fromView.data, total: fromView.total }
         } else {
@@ -1546,7 +1602,7 @@ export async function getPlatformTransactions(
       }
 
       if (!result) {
-        const legacyResult = await getPlatformTransactionsLegacy(limit, offset, filters)
+        const legacyResult = await getPlatformTransactionsLegacy(limit, offset, scopedFilters)
         result = { data: legacyResult.data, total: legacyResult.total }
       }
     }
@@ -1604,31 +1660,44 @@ export async function getPlatformTransactions(
 export async function getPlatformTransactionsExport(
   filters?: PlatformTransactionFilters
 ): Promise<PlatformTransactionExportResult> {
-  await assertHQPermission('hq.merchant.transactions')
+  const { userId, role } = await assertHQPermission('hq.merchant.transactions')
+  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
+  const scopedMerchantIds = applyMerchantScope(filters?.merchantIds, merchantScope)
+  const scopedFilters =
+    scopedMerchantIds === undefined ? filters : { ...(filters ?? {}), merchantIds: scopedMerchantIds }
+
+  if (scopedMerchantIds !== undefined && scopedMerchantIds.length === 0) {
+    return {
+      rows: [],
+      total: 0,
+      cap: 10000,
+      capped: false,
+    }
+  }
 
   const supabase = createServerSupabaseClient()
   const exportCap = 10000
-  const search = filters?.search?.trim()
-  const auditMerchantId = getSingleUuidFilterValue(filters?.merchantIds)
-  const auditLocationId = getSingleUuidFilterValue(filters?.locationIds)
-  const cardLastFourSearchTerm = getCardLastFourSearchTerm(filters)
+  const search = scopedFilters?.search?.trim()
+  const auditMerchantId = getSingleUuidFilterValue(scopedFilters?.merchantIds)
+  const auditLocationId = getSingleUuidFilterValue(scopedFilters?.locationIds)
+  const cardLastFourSearchTerm = getCardLastFourSearchTerm(scopedFilters)
 
   try {
     const { data, error } = await supabase.rpc('get_admin_transactions_export', {
-      p_merchant_ids: filters?.merchantIds ?? null,
-      p_location_ids: filters?.locationIds ?? null,
-      p_status: filters?.orderStatuses ?? null,
-      p_payment_status: filters?.paymentStatuses ?? null,
-      p_payment_method: filters?.paymentMethods ?? null,
-      p_date_from: filters?.dateFrom ?? null,
-      p_date_to: filters?.dateTo ?? null,
-      p_min_amount: filters?.minAmount ?? null,
-      p_max_amount: filters?.maxAmount ?? null,
+      p_merchant_ids: scopedFilters?.merchantIds ?? null,
+      p_location_ids: scopedFilters?.locationIds ?? null,
+      p_status: scopedFilters?.orderStatuses ?? null,
+      p_payment_status: scopedFilters?.paymentStatuses ?? null,
+      p_payment_method: scopedFilters?.paymentMethods ?? null,
+      p_date_from: scopedFilters?.dateFrom ?? null,
+      p_date_to: scopedFilters?.dateTo ?? null,
+      p_min_amount: scopedFilters?.minAmount ?? null,
+      p_max_amount: scopedFilters?.maxAmount ?? null,
       p_search: search && search.length >= 2 ? search : null,
-      p_card_type: normalizeCardTypeFilterForRpc(filters?.cardTypes),
-      p_staff_id: filters?.staffId ?? null,
-      p_sort_by: normalizeSortByForRpc(filters),
-      p_sort_dir: filters?.sortDir ?? 'desc',
+      p_card_type: normalizeCardTypeFilterForRpc(scopedFilters?.cardTypes),
+      p_staff_id: scopedFilters?.staffId ?? null,
+      p_sort_by: normalizeSortByForRpc(scopedFilters),
+      p_sort_dir: scopedFilters?.sortDir ?? 'desc',
       p_limit: exportCap,
     })
 
@@ -1732,26 +1801,34 @@ export async function getPlatformTransactionsExport(
 export async function getPlatformTransactionSummary(
   filters?: PlatformTransactionFilters
 ): Promise<PlatformTransactionSummary | null> {
-  await assertHQPermission('hq.merchant.transactions')
+  const { userId, role } = await assertHQPermission('hq.merchant.transactions')
+  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
+  const scopedMerchantIds = applyMerchantScope(filters?.merchantIds, merchantScope)
+  const scopedFilters =
+    scopedMerchantIds === undefined ? filters : { ...(filters ?? {}), merchantIds: scopedMerchantIds }
+
+  if (scopedMerchantIds !== undefined && scopedMerchantIds.length === 0) {
+    return null
+  }
 
   const supabase = createServerSupabaseClient()
-  const search = filters?.search?.trim()
+  const search = scopedFilters?.search?.trim()
 
   const { data, error } = await supabase.rpc('get_admin_transaction_summary', {
-    p_merchant_ids: filters?.merchantIds ?? null,
-    p_location_ids: filters?.locationIds ?? null,
-    p_status: filters?.orderStatuses ?? null,
-    p_payment_status: filters?.paymentStatuses ?? null,
-    p_payment_method: filters?.paymentMethods ?? null,
-    p_date_from: filters?.dateFrom ?? null,
-    p_date_to: filters?.dateTo ?? null,
-    p_min_amount: filters?.minAmount ?? null,
-    p_max_amount: filters?.maxAmount ?? null,
+    p_merchant_ids: scopedFilters?.merchantIds ?? null,
+    p_location_ids: scopedFilters?.locationIds ?? null,
+    p_status: scopedFilters?.orderStatuses ?? null,
+    p_payment_status: scopedFilters?.paymentStatuses ?? null,
+    p_payment_method: scopedFilters?.paymentMethods ?? null,
+    p_date_from: scopedFilters?.dateFrom ?? null,
+    p_date_to: scopedFilters?.dateTo ?? null,
+    p_min_amount: scopedFilters?.minAmount ?? null,
+    p_max_amount: scopedFilters?.maxAmount ?? null,
     p_search: search && search.length >= 2 ? search : null,
-    p_card_type: normalizeCardTypeFilterForRpc(filters?.cardTypes),
-    p_staff_id: filters?.staffId ?? null,
-    p_sort_by: normalizeSortByForRpc(filters),
-    p_sort_dir: filters?.sortDir ?? 'desc',
+    p_card_type: normalizeCardTypeFilterForRpc(scopedFilters?.cardTypes),
+    p_staff_id: scopedFilters?.staffId ?? null,
+    p_sort_by: normalizeSortByForRpc(scopedFilters),
+    p_sort_dir: scopedFilters?.sortDir ?? 'desc',
   })
 
   if (error) {
@@ -1856,7 +1933,18 @@ export async function getPlatformPaymentAuditLogs(
   limit: number = 50,
   offset: number = 0
 ): Promise<PlatformPaymentAuditLogsResult> {
-  await assertHQPermission('hq.merchant.transactions')
+  const { userId, role } = await assertHQPermission('hq.merchant.transactions')
+  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
+  const scopedMerchantIds = applyMerchantScope(filters?.merchantIds, merchantScope)
+  const scopedFilters =
+    scopedMerchantIds === undefined ? filters : { ...(filters ?? {}), merchantIds: scopedMerchantIds }
+
+  if (scopedMerchantIds !== undefined && scopedMerchantIds.length === 0) {
+    return {
+      data: [],
+      total: 0,
+    }
+  }
 
   const supabase = createServerSupabaseClient()
   const safeLimit = Math.min(Math.max(limit, 1), 200)
@@ -1885,36 +1973,36 @@ export async function getPlatformPaymentAuditLogs(
     )
     .order('event_timestamp', { ascending: false })
 
-  if (filters?.merchantIds && filters.merchantIds.length > 0) {
-    query = query.in('merchant_id', filters.merchantIds)
+  if (scopedFilters?.merchantIds && scopedFilters.merchantIds.length > 0) {
+    query = query.in('merchant_id', scopedFilters.merchantIds)
   }
 
-  if (filters?.action) {
-    query = query.eq('action', filters.action)
+  if (scopedFilters?.action) {
+    query = query.eq('action', scopedFilters.action)
   }
 
-  if (filters?.outcome === 'success') {
+  if (scopedFilters?.outcome === 'success') {
     query = query.eq('success', true)
-  } else if (filters?.outcome === 'failed') {
+  } else if (scopedFilters?.outcome === 'failed') {
     query = query.eq('success', false)
   }
 
-  if (filters?.user && filters.user.trim().length > 0) {
-    const userTerm = sanitizeSearchTerm(filters.user).trim()
+  if (scopedFilters?.user && scopedFilters.user.trim().length > 0) {
+    const userTerm = sanitizeSearchTerm(scopedFilters.user).trim()
     if (userTerm.length > 0) {
       query = query.ilike('user_email', `%${userTerm}%`)
     }
   }
 
-  if (filters?.dateFrom) {
-    query = query.gte('event_timestamp', `${filters.dateFrom}T00:00:00`)
+  if (scopedFilters?.dateFrom) {
+    query = query.gte('event_timestamp', `${scopedFilters.dateFrom}T00:00:00`)
   }
 
-  if (filters?.dateTo) {
-    query = query.lte('event_timestamp', `${filters.dateTo}T23:59:59`)
+  if (scopedFilters?.dateTo) {
+    query = query.lte('event_timestamp', `${scopedFilters.dateTo}T23:59:59`)
   }
 
-  const searchTerm = filters?.search?.trim() || ''
+  const searchTerm = scopedFilters?.search?.trim() || ''
   if (searchTerm.length >= 2) {
     if (UUID_REGEX.test(searchTerm)) {
       query = query.eq('resource_id', searchTerm)
@@ -1976,7 +2064,20 @@ export async function getPlatformChargebacks(
   limit: number = 50,
   offset: number = 0
 ): Promise<PlatformChargebacksResult> {
-  await assertHQPermission('hq.merchant.transactions')
+  const { userId, role } = await assertHQPermission('hq.merchant.transactions')
+  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
+  const scopedMerchantIds = applyMerchantScope(filters?.merchantIds, merchantScope)
+  const scopedFilters =
+    scopedMerchantIds === undefined ? filters : { ...(filters ?? {}), merchantIds: scopedMerchantIds }
+
+  if (scopedMerchantIds !== undefined && scopedMerchantIds.length === 0) {
+    return {
+      data: [],
+      total: 0,
+      pendingCount: 0,
+      urgentCount: 0,
+    }
+  }
 
   const supabase = createServerSupabaseClient()
   const safeLimit = Math.min(Math.max(limit, 1), 200)
@@ -2012,7 +2113,7 @@ export async function getPlatformChargebacks(
     .order('defense_deadline', { ascending: true, nullsFirst: false })
     .order('received_at', { ascending: false })
 
-  baseQuery = applyChargebackFilters(baseQuery, filters, true)
+  baseQuery = applyChargebackFilters(baseQuery, scopedFilters, true)
   baseQuery = baseQuery.range(safeOffset, safeOffset + safeLimit - 1)
 
   const { data, error, count } = await baseQuery
@@ -2113,7 +2214,7 @@ export async function getPlatformChargebacks(
     .from('chargebacks')
     .select('id', { count: 'exact', head: true })
     .in('status', pendingStatuses)
-  pendingQuery = applyChargebackFilters(pendingQuery, filters, false)
+  pendingQuery = applyChargebackFilters(pendingQuery, scopedFilters, false)
 
   const { count: pendingCountRaw, error: pendingCountError } = await pendingQuery
   if (pendingCountError) {
@@ -2130,7 +2231,7 @@ export async function getPlatformChargebacks(
     .not('defense_deadline', 'is', null)
     .gte('defense_deadline', now.toISOString())
     .lte('defense_deadline', cutoff.toISOString())
-  urgentQuery = applyChargebackFilters(urgentQuery, filters, false)
+  urgentQuery = applyChargebackFilters(urgentQuery, scopedFilters, false)
 
   const { count: urgentCountRaw, error: urgentCountError } = await urgentQuery
   if (urgentCountError) {
@@ -2158,7 +2259,23 @@ export interface PlatformTransactionStats {
 export async function getPlatformTransactionStats(
   filters?: PlatformTransactionFilters
 ): Promise<PlatformTransactionStats> {
-  await assertHQPermission('hq.merchant.transactions')
+  const { userId, role } = await assertHQPermission('hq.merchant.transactions')
+  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
+  const scopedMerchantIds = applyMerchantScope(filters?.merchantIds, merchantScope)
+  const scopedFilters =
+    scopedMerchantIds === undefined ? filters : { ...(filters ?? {}), merchantIds: scopedMerchantIds }
+
+  if (scopedMerchantIds !== undefined && scopedMerchantIds.length === 0) {
+    return {
+      totalTransactions: 0,
+      capturedTransactions: 0,
+      authorizedTransactions: 0,
+      refundedTransactions: 0,
+      totalRevenue: 0,
+      totalTips: 0,
+      averageTicket: 0,
+    }
+  }
 
   const batchSize = 1000
   let offset = 0
@@ -2175,7 +2292,7 @@ export async function getPlatformTransactionStats(
     let rows: PlatformTransaction[] = []
 
     if (source === 'rpc') {
-      const fromRpc = await getPlatformTransactionsFromRpc(batchSize, offset, filters)
+      const fromRpc = await getPlatformTransactionsFromRpc(batchSize, offset, scopedFilters)
       if (fromRpc.errorCode) {
         console.warn(
           `[getPlatformTransactionStats] Falling back from rpc due to error (${fromRpc.errorCode}).`
@@ -2185,7 +2302,7 @@ export async function getPlatformTransactionStats(
       }
       rows = fromRpc.data
     } else if (source === 'view') {
-      const fromView = await getPlatformTransactionsFromView(batchSize, offset, filters)
+      const fromView = await getPlatformTransactionsFromView(batchSize, offset, scopedFilters)
       if (fromView.errorCode) {
         console.warn(
           `[getPlatformTransactionStats] Falling back to legacy query path due to view error (${fromView.errorCode}).`
@@ -2195,7 +2312,7 @@ export async function getPlatformTransactionStats(
       }
       rows = fromView.data
     } else {
-      const fromLegacy = await getPlatformTransactionsLegacy(batchSize, offset, filters)
+      const fromLegacy = await getPlatformTransactionsLegacy(batchSize, offset, scopedFilters)
       rows = fromLegacy.data
     }
 
@@ -3266,14 +3383,22 @@ export interface PlatformMerchant {
 }
 
 export async function getPlatformMerchants(): Promise<PlatformMerchant[]> {
-  await assertHQPermission('hq.merchant.view')
+  const { userId, role } = await assertHQPermission('hq.merchant.view')
+  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
 
   const supabase = createServerSupabaseClient()
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('merchants')
     .select('id, name')
     .order('name')
+
+  if (merchantScope !== null) {
+    if (merchantScope.length === 0) return []
+    query = query.in('id', merchantScope)
+  }
+
+  const { data, error } = await query
 
   if (error) {
     console.error('[getPlatformMerchants] Error:', error)
@@ -3292,7 +3417,13 @@ export interface PlatformLocation {
 }
 
 export async function getPlatformLocations(merchantIds?: string[]): Promise<PlatformLocation[]> {
-  await assertHQPermission('hq.merchant.view')
+  const { userId, role } = await assertHQPermission('hq.merchant.view')
+  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
+  const effectiveMerchantIds = applyMerchantScope(merchantIds, merchantScope)
+
+  if (effectiveMerchantIds !== undefined && effectiveMerchantIds.length === 0) {
+    return []
+  }
 
   const supabase = createServerSupabaseClient()
 
@@ -3301,8 +3432,8 @@ export async function getPlatformLocations(merchantIds?: string[]): Promise<Plat
     .select('id, name, merchant_id')
     .order('name')
 
-  if (merchantIds && merchantIds.length > 0) {
-    query = query.in('merchant_id', merchantIds)
+  if (effectiveMerchantIds && effectiveMerchantIds.length > 0) {
+    query = query.in('merchant_id', effectiveMerchantIds)
   }
 
   const { data, error } = await query
@@ -3328,7 +3459,13 @@ export async function getPlatformStaff(
   merchantIds?: string[],
   locationIds?: string[]
 ): Promise<PlatformStaff[]> {
-  await assertHQPermission('hq.merchant.view')
+  const { userId, role } = await assertHQPermission('hq.merchant.view')
+  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
+  const effectiveMerchantIds = applyMerchantScope(merchantIds, merchantScope)
+
+  if (effectiveMerchantIds !== undefined && effectiveMerchantIds.length === 0) {
+    return []
+  }
 
   const supabase = createServerSupabaseClient()
 
@@ -3351,8 +3488,8 @@ export async function getPlatformStaff(
     .order('created_at', { ascending: false })
     .limit(5000)
 
-  if (merchantIds && merchantIds.length > 0) {
-    query = query.in('merchant_id', merchantIds)
+  if (effectiveMerchantIds && effectiveMerchantIds.length > 0) {
+    query = query.in('merchant_id', effectiveMerchantIds)
   }
 
   if (locationIds && locationIds.length > 0) {
