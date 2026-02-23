@@ -8,8 +8,8 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 // ============================================================================
 
 export interface AdminOrderFilters {
-  status?: string
-  orderType?: string
+  status?: string | string[]
+  orderType?: string | string[]
   paymentMethod?: string
   locationId?: string
   search?: string
@@ -112,19 +112,28 @@ export async function getAdminOrders(
       customer_phone,
       locations!inner(name),
       order_items(id),
-      order_payments(payment_method)
+      order_payments(payment_method),
+      created_by_staff:staff_profiles!orders_created_by_staff_id_fkey(first_name, last_name, display_name)
     `,
       { count: 'exact' }
     )
     .eq('merchant_id', merchantId)
 
   // Apply filters
-  if (filters.status && filters.status !== 'all') {
-    query = query.eq('status', filters.status)
+  if (filters.status) {
+    const statuses = Array.isArray(filters.status) ? filters.status : [filters.status]
+    const valid = statuses.filter((s) => s && s !== 'all')
+    if (valid.length > 0) {
+      query = query.in('status', valid)
+    }
   }
 
-  if (filters.orderType && filters.orderType !== 'all') {
-    query = query.eq('order_type', filters.orderType)
+  if (filters.orderType) {
+    const types = Array.isArray(filters.orderType) ? filters.orderType : [filters.orderType]
+    const valid = types.filter((t) => t && t !== 'all')
+    if (valid.length > 0) {
+      query = query.in('order_type', valid)
+    }
   }
 
   if (filters.paymentMethod && filters.paymentMethod !== 'all') {
@@ -168,6 +177,10 @@ export async function getAdminOrders(
     // Derive primary payment method from order_payments
     const payments = order.order_payments || []
     const primaryPaymentMethod = payments.length > 0 ? payments[0].payment_method : null
+    const staff = order.created_by_staff
+    const staffName = staff
+      ? staff.display_name || [staff.first_name, staff.last_name].filter(Boolean).join(' ')
+      : undefined
 
     return {
       id: order.id,
@@ -187,6 +200,7 @@ export async function getAdminOrders(
       location_id: order.location_id,
       location_name: order.locations?.name,
       staff_id: order.created_by_staff_id,
+      staff_name: staffName || undefined,
       customer_name: order.customer_name,
       customer_phone: order.customer_phone,
       items_count: order.order_items?.length || 0,

@@ -31,6 +31,7 @@ import { DiscountsTab } from './components/DiscountsTab'
 import { SchedulesTab } from './components/SchedulesTab'
 import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
 import { NotesTab } from './components/NotesTab'
+import { OrdersTab } from './components/OrdersTab'
 
 export default function MerchantDetailsPage() {
     const { merchantId } = useParams()
@@ -119,6 +120,7 @@ export default function MerchantDetailsPage() {
                             <TabsTrigger value="discounts" className="flex-none">Discounts</TabsTrigger>
                             <TabsTrigger value="online-store" className="flex-none">Online Store</TabsTrigger>
                             {canManageDevices && <TabsTrigger value="devices" className="flex-none">Devices</TabsTrigger>}
+                            <TabsTrigger value="orders" className="flex-none">Orders</TabsTrigger>
                             <TabsTrigger value="transactions" className="flex-none">Transactions</TabsTrigger>
                             <TabsTrigger value="notes" className="flex-none">
                                 <MessageSquare className="mr-1 h-4 w-4" />
@@ -158,6 +160,10 @@ export default function MerchantDetailsPage() {
                                 <DevicesTab merchantId={merchantDetails.id} merchantInfo={merchantDetails} />
                             </TabsContent>
                         )}
+
+                        <TabsContent value="orders" className="mt-6">
+                            <OrdersTab merchantInfo={merchantDetails} />
+                        </TabsContent>
 
                         <TabsContent value="transactions" className="mt-6">
                              {/* TransactionsTab likely expects MerchantInfoModel or ID */}

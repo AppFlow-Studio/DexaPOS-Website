@@ -30,6 +30,8 @@ export const adminKeys = {
   merchantAnalytics: (id: string, dateRange: { from: string; to: string }) =>
     [...adminKeys.merchants(), id, 'analytics', dateRange] as const,
 
+  merchantHealthGrid: () => [...adminKeys.merchants(), 'health-grid'] as const,
+
   // ============================================================================
   // MERCHANT ANALYTICS (Admin View)
   // ============================================================================
