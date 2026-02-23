@@ -16,7 +16,7 @@ import {
   MapPin, ArrowUpRight, ArrowDownRight, Minus, Trophy,
   TrendingDown, Search, Building2,
 } from 'lucide-react'
-import type { LocationMetrics } from '@/app/manage/actions/hq-platform/analytics'
+import type { LocationMetrics, SparklinePoint } from '@/app/manage/actions/hq-platform/analytics'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -49,6 +49,32 @@ function RankBadge({ rank, total }: { rank: number; total: number }) {
     </span>
   )
   return <span className="text-xs text-muted-foreground">#{rank}</span>
+}
+
+// ── Inline SVG sparkline (7-day GPV trend) ───────────────────────────────────
+
+function MiniSparkline({ data }: { data: SparklinePoint[] }) {
+  const maxGPV = Math.max(...data.map(d => d.gpv), 1)
+  const hasData = data.some(d => d.gpv > 0)
+  if (!hasData) return <span className="text-xs text-muted-foreground">—</span>
+
+  const W = 56, H = 20, PAD = 1
+  const points = data.map((d, i) => {
+    const x = PAD + (i / (data.length - 1)) * (W - PAD * 2)
+    const y = PAD + (1 - d.gpv / maxGPV) * (H - PAD * 2)
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+
+  // Determine trend color: compare last 2 days
+  const last = data[data.length - 1]?.gpv ?? 0
+  const prev = data[data.length - 2]?.gpv ?? 0
+  const color = last >= prev ? '#22c55e' : '#ef4444'
+
+  return (
+    <svg width={W} height={H} className="overflow-visible" aria-hidden>
+      <polyline points={points} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  )
 }
 
 // ── Performance bar (% of top location GPV) ──────────────────────────────────
@@ -293,6 +319,7 @@ export function MultiLocationComparison() {
                   <TableHead className="text-xs text-right">Avg Order</TableHead>
                   <TableHead className="text-xs text-right">Void %</TableHead>
                   <TableHead className="text-xs text-right">vs Prev</TableHead>
+                  <TableHead className="text-xs text-right">7d Trend</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -344,11 +371,14 @@ export function MultiLocationComparison() {
                     <TableCell className="py-2">
                       <TrendChip pct={loc.trendVsPrev} />
                     </TableCell>
+                    <TableCell className="py-2 text-right">
+                      <MiniSparkline data={loc.sparkline ?? []} />
+                    </TableCell>
                   </TableRow>
                 ))}
                 {filteredLocations.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground text-sm py-8">
+                    <TableCell colSpan={10} className="text-center text-muted-foreground text-sm py-8">
                       No locations match your search
                     </TableCell>
                   </TableRow>

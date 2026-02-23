@@ -11,8 +11,8 @@ import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from 'recharts'
-import { Utensils, ShoppingBag, Truck, Globe, TrendingUp, Package2, ChefHat } from 'lucide-react'
-import type { OrderTypeStat } from '@/app/manage/actions/hq-platform/analytics'
+import { Utensils, ShoppingBag, Truck, Globe, TrendingUp, Package2, ChefHat, ArrowLeftRight } from 'lucide-react'
+import type { OrderTypeStat, ChannelStat } from '@/app/manage/actions/hq-platform/analytics'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -180,6 +180,91 @@ export function OrderTypeIntelligence() {
           <TypeStatCard key={stat.type} stat={stat} />
         ))}
       </div>
+
+      {/* ── Channel Comparison ──────────────────────────────────────────── */}
+      {data.channelBreakdown.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
+                  Channel Comparison
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Order volume and average ticket value by fulfillment channel (order_channel)
+                </CardDescription>
+              </div>
+              {/* Online vs In-Store callout */}
+              {(() => {
+                const onlineStat = data.breakdown.find(s => s.type === 'online')
+                const onlinePct = onlineStat?.percentage ?? 0
+                return onlinePct > 0 ? (
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">Online vs In-Store</p>
+                    <p className="text-sm font-bold">
+                      <span className="text-purple-600">{onlinePct}%</span>
+                      {' '}online · <span className="text-foreground">{Math.round((100 - onlinePct) * 10) / 10}%</span> in-store
+                    </p>
+                  </div>
+                ) : null
+              })()}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Order count per channel */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-3 font-medium uppercase tracking-wide">Orders by Channel</p>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={data.channelBreakdown} layout="vertical" margin={{ left: 8, right: 32 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 11 }} />
+                    <YAxis type="category" dataKey="label" tick={{ fontSize: 12 }} width={80} />
+                    <Tooltip formatter={(v: number, _n, props) => [`${v.toLocaleString()} orders (${props.payload?.percentage}%)`, 'Orders']} />
+                    <Bar dataKey="orderCount" radius={[0, 4, 4, 0]}>
+                      {data.channelBreakdown.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Avg order value per channel */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-3 font-medium uppercase tracking-wide">Avg Order Value by Channel</p>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={data.channelBreakdown} layout="vertical" margin={{ left: 8, right: 32 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={v => `$${v}`} />
+                    <YAxis type="category" dataKey="label" tick={{ fontSize: 12 }} width={80} />
+                    <Tooltip formatter={(v: number) => [`$${v.toFixed(2)}`, 'Avg Order Value']} />
+                    <Bar dataKey="avgOrderValue" radius={[0, 4, 4, 0]}>
+                      {data.channelBreakdown.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Channel stat row */}
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {data.channelBreakdown.map((ch: ChannelStat) => (
+                <div key={ch.channel} className="flex items-center gap-2 p-2 rounded-lg bg-muted/40">
+                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: ch.color }} />
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium truncate">{ch.label}</p>
+                    <p className="text-xs text-muted-foreground">{ch.orderCount.toLocaleString()} · {ch.percentage}%</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Charts row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
