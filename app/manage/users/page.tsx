@@ -80,6 +80,13 @@ const statusColors = {
     Pending: 'outline',
 }
 
+const inviteStatusVariants: Record<string, "default" | "destructive" | "outline" | "secondary"> = {
+    pending: 'outline',
+    accepted: 'default',
+    revoked: 'secondary',
+    direct_created: 'default',
+}
+
 export default function UsersPage() {
     const router = useRouter()
     const { userId, orgId } = useAuth()
@@ -107,8 +114,7 @@ export default function UsersPage() {
     const resolvedOrganizationId = DEXA_HQ_ORG_ID || fallbackOrgId || (orgId as string)
     const { data: users, isLoading, error, refetch: refetchUsers } = useOrganizationUsers(resolvedOrganizationId as string)
     const { data: organizationInfo, refetch: refetchOrganizationInfo } = useOrganizationInfo(resolvedOrganizationId as string)
-    const pendingAdminInvites =
-        organizationInfo?.pending_org_admin_invites?.filter((inv: any) => inv.status === 'pending') || []
+    const adminInvites = organizationInfo?.pending_org_admin_invites || []
 
     useEffect(() => {
         if (permissionsLoading) return
@@ -155,6 +161,14 @@ export default function UsersPage() {
         const fullName = `${invite.first_name || ''} ${invite.last_name || ''}`.trim()
         if (fullName) return fullName
         return invite.email?.split('@')?.[0] || 'Pending admin'
+    }
+
+    const getInviteStatusLabel = (status?: string | null) => {
+        if (!status) return 'Unknown'
+        return status
+            .split('_')
+            .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(' ')
     }
 
     const openEditRoleDialog = (member: any) => {
@@ -388,7 +402,7 @@ export default function UsersPage() {
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
                 <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="users">Users</TabsTrigger>
-                    <TabsTrigger value="invites">Pending Invites</TabsTrigger>
+                    <TabsTrigger value="invites">Invites</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="users" className="space-y-4">
@@ -616,8 +630,8 @@ export default function UsersPage() {
                         <CardHeader>
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <CardTitle>Pending Invites</CardTitle>
-                                    <CardDescription>Manage pending role invitations</CardDescription>
+                                    <CardTitle>Invites</CardTitle>
+                                    <CardDescription>Manage admin and member invitations</CardDescription>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Input placeholder="Search invites..." className="w-72" />
@@ -637,27 +651,34 @@ export default function UsersPage() {
                                     <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
                                         <Mail className="h-6 w-6 text-muted-foreground" />
                                     </div>
-                                    <div className="text-sm text-muted-foreground">No pending invites.</div>
+                                    <div className="text-sm text-muted-foreground">No invites found.</div>
                                 </div>
                             )}
 
-                            {pendingAdminInvites.length > 0 && (
+                            {adminInvites.length > 0 && (
                                 <div className="mb-6">
                                     <div className="text-sm font-medium mb-3">Admin Invites</div>
                                     <div className="divide-y rounded-md border">
-                                        {pendingAdminInvites.map((inv: any) => (
+                                        {adminInvites.map((inv: any) => (
                                             <div key={inv.id} className="flex items-center justify-between p-4">
                                                 <div className="flex items-center gap-3">
                                                     <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
                                                         {(inv.email?.[0] || 'A').toUpperCase()}
                                                     </div>
                                                     <div>
-                                                        <div className="font-medium text-yellow-500">
+                                                        <div className="font-medium">
                                                             {getInviteDisplayName(inv)}
                                                         </div>
                                                         <div className="text-sm text-muted-foreground">{inv.email}</div>
-                                                        <div className="text-xs text-muted-foreground mt-0.5">
-                                                            Invited by {inv.invited_by_user?.first_name || inv.invited_by || 'Unknown'} • {formatDate(inv.created_at)}
+                                                        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                                            <span>Invited by {inv.invited_by_user?.first_name || inv.invited_by || 'Unknown'}</span>
+                                                            <span>{formatDate(inv.created_at)}</span>
+                                                            <Badge
+                                                                variant={inviteStatusVariants[(inv.status || '').toLowerCase()] || 'secondary'}
+                                                                className="text-[10px] uppercase tracking-wide"
+                                                            >
+                                                                {getInviteStatusLabel(inv.status)}
+                                                            </Badge>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -673,7 +694,11 @@ export default function UsersPage() {
                                                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                                             <DropdownMenuItem>Copy invite link</DropdownMenuItem>
                                                             <DropdownMenuItem
-                                                                disabled={!inv.clerk_invite_id || inviteActionId === inv.clerk_invite_id}
+                                                                disabled={
+                                                                    !inv.clerk_invite_id ||
+                                                                    inviteActionId === inv.clerk_invite_id ||
+                                                                    inv.status !== 'pending'
+                                                                }
                                                                 onClick={() => void handleResendInvite(inv.clerk_invite_id)}
                                                             >
                                                                 Resend
@@ -681,7 +706,11 @@ export default function UsersPage() {
                                                             <DropdownMenuSeparator />
                                                             <DropdownMenuItem
                                                                 className="text-red-600"
-                                                                disabled={!inv.clerk_invite_id || inviteActionId === inv.clerk_invite_id}
+                                                                disabled={
+                                                                    !inv.clerk_invite_id ||
+                                                                    inviteActionId === inv.clerk_invite_id ||
+                                                                    inv.status !== 'pending'
+                                                                }
                                                                 onClick={() => void handleRevokeInvite(inv.clerk_invite_id)}
                                                             >
                                                                 Revoke
@@ -829,3 +858,4 @@ export default function UsersPage() {
         </div>
     )
 }
+
