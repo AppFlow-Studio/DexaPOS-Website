@@ -60,6 +60,11 @@ export const ADMIN_ACTIONS = {
     category: 'user_management',
     severity: 'warning',
   },
+  ADMIN_PASSWORD_RESET: {
+    action: 'admin.password_reset',
+    category: 'user_management',
+    severity: 'warning',
+  },
   ADMIN_MERCHANT_ACCESS_GRANTED: {
     action: 'admin.access_granted',
     category: 'user_management',

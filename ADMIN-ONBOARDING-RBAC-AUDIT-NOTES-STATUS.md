@@ -21,7 +21,7 @@
 | Ticket | Title | Priority | Status | Progress |
 |---|---|---|---|---|
 | 1 | Role-Based Dashboard Visibility | High | Implemented (QA Pending) | 95% |
-| 2 | Admin Invite System Cleanup | High | In Progress | 85% |
+| 2 | Admin Invite System Cleanup | High | Implemented (QA Pending) | 95% |
 | 3 | Comprehensive Admin Audit Logging | High | Implemented (QA Pending) | 95% |
 | 4 | Merchant Notes System | Medium | In Progress | 90% |
 
@@ -52,7 +52,7 @@
 - [x] `2.2` Direct-create flow implemented with temporary password
 - [x] `2.3` Wizard step validation enforced
 - [x] `2.4` Merchant access persisted for invite and direct-create
-- [ ] `2.5` Users tab shows required fields and actions (partially done: assigned merchants/status/last active added; role edit/deactivate/reset password actions still pending)
+- [x] `2.5` Users tab shows required fields and actions (role edit, deactivate, reset password wired)
 - [ ] QA completed and validated against acceptance criteria
 
 ## Ticket 3: Comprehensive Admin Audit Logging
@@ -154,3 +154,7 @@ Coverage note:
 - Merchant access grant/revoke (single + bulk) now runs through server actions with `ADMIN_MERCHANT_ACCESS_GRANTED` / `ADMIN_MERCHANT_ACCESS_REVOKED` audit writes.
 - Merchant lifecycle coverage added for `MERCHANT_CREATED` and `MERCHANT_DEACTIVATED`.
 - Verified global audit filters include all live catalog categories.
+6. Ticket 2.5 implementation pass completed:
+- Added server actions for HQ user role change, user deactivation (soft deactivate), and password reset with temporary password return.
+- Wired Users table dropdown actions to real handlers and added role/password dialogs in `/manage/users`.
+- Added audit events for role changes, deactivation, and password reset actions.

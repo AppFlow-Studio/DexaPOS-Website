@@ -36,20 +36,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
     Search,
-    Filter,
     MoreHorizontal,
-    Plus,
     UserPlus,
     Mail,
-    Phone,
-    MapPin,
-    Calendar,
-    Shield,
     Edit,
-    Trash2,
     Eye,
     UserCheck,
     UserX,
+    KeyRound,
+    Copy,
 } from 'lucide-react'
 import { useOrganizationUsers } from '../hooks/useOrganizationUsers'
 import { useAuth, useUser } from '@clerk/nextjs'
@@ -61,6 +56,12 @@ import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
 import { ClerkResendInvitationAdmin } from '../organizations/actions/clerk-resend-invitation-admin'
 import { ClerkRevokeInvitation } from '../organizations/actions/clerk-revoke-invitation'
 import { toast } from 'sonner'
+import {
+    changeAdminUserRole,
+    deactivateAdminUser,
+    resetAdminUserPassword,
+} from '../actions/admin-user-management'
+import { HQ_ROLES, type HQRoleCode } from '@/types/admin'
 
 // HQ Organization ID for direct admin invites
 const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID || 'org_33z36QibAMZy6kc2xZNYmDl5duh'
@@ -82,7 +83,7 @@ const statusColors = {
 export default function UsersPage() {
     const router = useRouter()
     const { userId, orgId } = useAuth()
-    const { hasPermission, isLoading: permissionsLoading } = useAdminPermissions()
+    const { hasPermission, role_level, isLoading: permissionsLoading } = useAdminPermissions()
     const canManageUsers = hasPermission('users.manage')
     const [searchTerm, setSearchTerm] = useState('')
     const [roleFilter, setRoleFilter] = useState('all')
@@ -91,6 +92,16 @@ export default function UsersPage() {
     const [activeTab, setActiveTab] = useState('users')
     const [isAdminInviteOpen, setIsAdminInviteOpen] = useState(false)
     const [inviteActionId, setInviteActionId] = useState<string | null>(null)
+    const [isEditRoleDialogOpen, setIsEditRoleDialogOpen] = useState(false)
+    const [selectedMemberForRoleEdit, setSelectedMemberForRoleEdit] = useState<any | null>(null)
+    const [selectedRoleCode, setSelectedRoleCode] = useState<HQRoleCode>('hq.manager')
+    const [userActionId, setUserActionId] = useState<string | null>(null)
+    const [resetPasswordResult, setResetPasswordResult] = useState<{
+        userName: string
+        userEmail: string
+        tempPassword: string
+    } | null>(null)
+    const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false)
     const { user } = useUser()
     const fallbackOrgId = user?.publicMetadata?.organizationId as string | undefined
     const resolvedOrganizationId = DEXA_HQ_ORG_ID || fallbackOrgId || (orgId as string)
@@ -144,6 +155,111 @@ export default function UsersPage() {
         const fullName = `${invite.first_name || ''} ${invite.last_name || ''}`.trim()
         if (fullName) return fullName
         return invite.email?.split('@')?.[0] || 'Pending admin'
+    }
+
+    const openEditRoleDialog = (member: any) => {
+        const currentRole = member?.role as HQRoleCode | undefined
+        setSelectedMemberForRoleEdit(member)
+        setSelectedRoleCode(
+            currentRole && HQ_ROLES[currentRole] ? currentRole : 'hq.manager'
+        )
+        setIsEditRoleDialogOpen(true)
+    }
+
+    const handleSaveRole = async () => {
+        if (!selectedMemberForRoleEdit?.users?.id) return
+        const actionId = `role:${selectedMemberForRoleEdit.users.id}`
+        setUserActionId(actionId)
+        try {
+            const result = await changeAdminUserRole({
+                userId: selectedMemberForRoleEdit.users.id,
+                roleCode: selectedRoleCode,
+                organizationId: resolvedOrganizationId,
+            })
+            if (!result.success) {
+                toast.error(result.message || 'Failed to update role')
+                return
+            }
+            toast.success('Role updated successfully')
+            setIsEditRoleDialogOpen(false)
+            setSelectedMemberForRoleEdit(null)
+            await refetchUsers()
+        } catch (error) {
+            console.error('[UsersPage] Failed to update role:', error)
+            toast.error('Failed to update role')
+        } finally {
+            setUserActionId(null)
+        }
+    }
+
+    const handleDeactivateUser = async (member: any) => {
+        const userIdToDeactivate = member?.users?.id as string | undefined
+        if (!userIdToDeactivate) return
+
+        const userName = `${member?.users?.first_name || ''} ${member?.users?.last_name || ''}`.trim() || member?.users?.email || 'this user'
+        const confirmed = window.confirm(`Deactivate ${userName}? They will no longer be able to sign in.`)
+        if (!confirmed) return
+
+        const actionId = `deactivate:${userIdToDeactivate}`
+        setUserActionId(actionId)
+        try {
+            const result = await deactivateAdminUser({
+                userId: userIdToDeactivate,
+                organizationId: resolvedOrganizationId,
+            })
+            if (!result.success) {
+                toast.error(result.message || 'Failed to deactivate user')
+                return
+            }
+            toast.success('User deactivated')
+            await refetchUsers()
+        } catch (error) {
+            console.error('[UsersPage] Failed to deactivate user:', error)
+            toast.error('Failed to deactivate user')
+        } finally {
+            setUserActionId(null)
+        }
+    }
+
+    const handleResetPassword = async (member: any) => {
+        const userIdToReset = member?.users?.id as string | undefined
+        if (!userIdToReset) return
+
+        const actionId = `reset:${userIdToReset}`
+        setUserActionId(actionId)
+        try {
+            const result = await resetAdminUserPassword({
+                userId: userIdToReset,
+                organizationId: resolvedOrganizationId,
+            })
+            if (!result.success || !result.tempPassword) {
+                toast.error(result.message || 'Failed to reset password')
+                return
+            }
+            setResetPasswordResult({
+                userName: `${member?.users?.first_name || ''} ${member?.users?.last_name || ''}`.trim() || member?.users?.email || userIdToReset,
+                userEmail: member?.users?.email || '',
+                tempPassword: result.tempPassword,
+            })
+            setIsResetPasswordDialogOpen(true)
+            await refetchUsers()
+        } catch (error) {
+            console.error('[UsersPage] Failed to reset password:', error)
+            toast.error('Failed to reset password')
+        } finally {
+            setUserActionId(null)
+        }
+    }
+
+    const handleCopyTempPassword = async () => {
+        if (!resetPasswordResult?.tempPassword) return
+        try {
+            await navigator.clipboard.writeText(resetPasswordResult.tempPassword)
+            toast.success('Temporary password copied')
+        } catch (error) {
+            console.error('[UsersPage] Failed to copy temp password:', error)
+            toast.error('Failed to copy password')
+        }
     }
 
     const handleResendInvite = async (invitationId: string) => {
@@ -428,38 +544,62 @@ export default function UsersPage() {
                                             <TableCell className="text-sm">{formatDate(user?.users?.updated_at || user.created_at)}</TableCell>
                                             <TableCell className="text-sm">{formatDate(user.created_at)}</TableCell>
                                             <TableCell>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" size="icon">
-                                                            <MoreHorizontal className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                        <DropdownMenuItem>
-                                                            <Eye className="mr-2 h-4 w-4" />
-                                                            View Details
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem>
-                                                            <Edit className="mr-2 h-4 w-4" />
-                                                            Edit User
-                                                        </DropdownMenuItem>
-                                                        {/* <DropdownMenuSeparator />
-                                                {user.public_metadata.status === 'Active' ? (
-                                                    <DropdownMenuItem className="text-yellow-600">
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                onClick={(event) => event.stopPropagation()}
+                                                            >
+                                                                <MoreHorizontal className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                            <DropdownMenuItem
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation()
+                                                                    router.push(`/manage/users/${user.users.id}`)
+                                                                }}
+                                                            >
+                                                                <Eye className="mr-2 h-4 w-4" />
+                                                                View Details
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation()
+                                                                    openEditRoleDialog(user)
+                                                                }}
+                                                                disabled={userActionId === `role:${user.users.id}`}
+                                                            >
+                                                                <Edit className="mr-2 h-4 w-4" />
+                                                                Edit Role
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation()
+                                                                    void handleResetPassword(user)
+                                                                }}
+                                                                disabled={userActionId === `reset:${user.users.id}`}
+                                                            >
+                                                                <KeyRound className="mr-2 h-4 w-4" />
+                                                                Reset Password
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuSeparator />
+                                                            <DropdownMenuItem
+                                                                className="text-yellow-600"
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation()
+                                                                    void handleDeactivateUser(user)
+                                                                }}
+                                                                disabled={
+                                                                    userActionId === `deactivate:${user.users.id}` ||
+                                                                    (user?.users?.public_metadata?.status || 'Active') === 'Inactive'
+                                                                }
+                                                            >
                                                         <UserX className="mr-2 h-4 w-4" />
                                                         Deactivate
-                                                    </DropdownMenuItem>
-                                                ) : (
-                                                    <DropdownMenuItem className="text-green-600">
-                                                        <UserCheck className="mr-2 h-4 w-4" />
-                                                        Activate
-                                                    </DropdownMenuItem>
-                                                )}
-                                                <DropdownMenuItem className="text-red-600">
-                                                    <Trash2 className="mr-2 h-4 w-4" />
-                                                    Delete User
-                                                </DropdownMenuItem> */}
+                                                            </DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </TableCell>
@@ -608,6 +748,84 @@ export default function UsersPage() {
                     refetchUsers()
                 }}
             />
+
+            <Dialog open={isEditRoleDialogOpen} onOpenChange={setIsEditRoleDialogOpen}>
+                <DialogContent onClick={(event) => event.stopPropagation()}>
+                    <DialogHeader>
+                        <DialogTitle>Edit User Role</DialogTitle>
+                        <DialogDescription>
+                            Update the HQ role for{' '}
+                            <span className="font-medium">
+                                {selectedMemberForRoleEdit?.users?.email || 'selected user'}
+                            </span>
+                            .
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-2 py-2">
+                        <Label htmlFor="role-code">Role</Label>
+                        <Select value={selectedRoleCode} onValueChange={(value) => setSelectedRoleCode(value as HQRoleCode)}>
+                            <SelectTrigger id="role-code">
+                                <SelectValue placeholder="Select role" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {Object.values(HQ_ROLES)
+                                    .filter((role) => role.level <= role_level)
+                                    .sort((a, b) => b.level - a.level)
+                                    .map((role) => (
+                                        <SelectItem key={role.code} value={role.code}>
+                                            {role.name} ({role.code})
+                                        </SelectItem>
+                                    ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsEditRoleDialogOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={() => void handleSaveRole()}
+                            disabled={!selectedMemberForRoleEdit || userActionId === `role:${selectedMemberForRoleEdit?.users?.id}`}
+                        >
+                            {userActionId === `role:${selectedMemberForRoleEdit?.users?.id}` ? 'Saving...' : 'Save Role'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={isResetPasswordDialogOpen}
+                onOpenChange={(open) => {
+                    setIsResetPasswordDialogOpen(open)
+                    if (!open) {
+                        setResetPasswordResult(null)
+                    }
+                }}
+            >
+                <DialogContent onClick={(event) => event.stopPropagation()}>
+                    <DialogHeader>
+                        <DialogTitle>Temporary Password Generated</DialogTitle>
+                        <DialogDescription>
+                            Share this with{' '}
+                            <span className="font-medium">{resetPasswordResult?.userName || 'the user'}</span>{' '}
+                            securely. It is shown only once.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="rounded-md border bg-muted/40 p-3">
+                        <div className="text-xs text-muted-foreground mb-1">{resetPasswordResult?.userEmail}</div>
+                        <div className="font-mono text-sm break-all">{resetPasswordResult?.tempPassword}</div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => void handleCopyTempPassword()}>
+                            <Copy className="h-4 w-4 mr-2" />
+                            Copy
+                        </Button>
+                        <Button onClick={() => setIsResetPasswordDialogOpen(false)}>
+                            Done
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
