@@ -14,7 +14,7 @@ import {
 } from 'recharts'
 import {
   MapPin, ArrowUpRight, ArrowDownRight, Minus, Trophy,
-  TrendingDown, Search, Building2,
+  TrendingDown, Search, Building2, Users, Monitor,
 } from 'lucide-react'
 import type { LocationMetrics, SparklinePoint } from '@/app/manage/actions/hq-platform/analytics'
 
@@ -83,7 +83,7 @@ function PerformanceBar({ value, max }: { value: number; max: number }) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0
   const color = pct >= 70 ? 'bg-green-500' : pct >= 40 ? 'bg-amber-500' : 'bg-red-400'
   return (
-    <div className="flex items-center gap-2 min-w-28">
+    <div className="flex items-center gap-2 w-24">
       <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
       </div>
@@ -318,6 +318,16 @@ export function MultiLocationComparison() {
                   <TableHead className="text-xs text-right">Orders</TableHead>
                   <TableHead className="text-xs text-right">Avg Order</TableHead>
                   <TableHead className="text-xs text-right">Void %</TableHead>
+                  <TableHead className="text-xs text-right">
+                    <span className="flex items-center justify-end gap-1">
+                      <Users className="h-3 w-3" /> Staff
+                    </span>
+                  </TableHead>
+                  <TableHead className="text-xs text-right">
+                    <span className="flex items-center justify-end gap-1">
+                      <Monitor className="h-3 w-3" /> Devices
+                    </span>
+                  </TableHead>
                   <TableHead className="text-xs text-right">vs Prev</TableHead>
                   <TableHead className="text-xs text-right">7d Trend</TableHead>
                 </TableRow>
@@ -328,13 +338,15 @@ export function MultiLocationComparison() {
                     <TableCell className="py-2 text-center">
                       <RankBadge rank={loc.gpvRank} total={data.totalLocations} />
                     </TableCell>
-                    <TableCell className="py-2">
+                    <TableCell className="py-2 max-w-40">
                       <div className="flex items-center gap-1.5">
                         <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
-                        <span className="text-sm font-medium">{loc.locationName}</span>
+                        <span className="text-sm font-medium truncate" title={loc.locationName}>{loc.locationName}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm py-2 text-muted-foreground">{loc.merchantName}</TableCell>
+                    <TableCell className="text-sm py-2 text-muted-foreground max-w-32">
+                      <span className="truncate block" title={loc.merchantName}>{loc.merchantName}</span>
+                    </TableCell>
                     <TableCell className="py-2 text-right">
                       <div>
                         <p className="text-sm font-bold">{fmtGPV(loc.totalGPV)}</p>
@@ -368,6 +380,16 @@ export function MultiLocationComparison() {
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </TableCell>
+                    <TableCell className="text-sm py-2 text-right">
+                      {loc.staffCount > 0
+                        ? loc.staffCount
+                        : <span className="text-xs text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell className="text-sm py-2 text-right">
+                      {loc.deviceCount > 0
+                        ? loc.deviceCount
+                        : <span className="text-xs text-muted-foreground">—</span>}
+                    </TableCell>
                     <TableCell className="py-2">
                       <TrendChip pct={loc.trendVsPrev} />
                     </TableCell>
@@ -378,7 +400,7 @@ export function MultiLocationComparison() {
                 ))}
                 {filteredLocations.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center text-muted-foreground text-sm py-8">
+                    <TableCell colSpan={12} className="text-center text-muted-foreground text-sm py-8">
                       No locations match your search
                     </TableCell>
                   </TableRow>

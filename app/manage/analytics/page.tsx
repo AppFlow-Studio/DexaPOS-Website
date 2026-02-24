@@ -799,7 +799,7 @@ export default function AnalyticsPage() {
                   ))}
                 </div>
 
-                <div className="rounded-lg border bg-white overflow-hidden">
+                <div className="rounded-lg border bg-white overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/50">
