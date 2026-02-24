@@ -285,10 +285,12 @@ export async function GetOrderDetails(
     return null;
   }
 
-  const supabase = createServerSupabaseClient();
+  // Use service role so we can read the order; access is enforced in application code
+  // (same pattern as GetOrders). This avoids RLS blocking merchant owners who have
+  // no staff_profiles row but do have access via Clerk org/members.
+  const supabase = createServiceRoleClient();
 
   try {
-    // Get order with related items (including modifiers), payments, location, staff, and station
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .select(
@@ -333,7 +335,27 @@ export async function GetOrderDetails(
       return null;
     }
 
-    return order as OrderResponse;
+    const orderObj = order as OrderResponse & { merchant_id?: string; location_id?: string };
+
+    // Enforce access: HQ admin with permission, or merchant/location in user scope
+    try {
+      try {
+        await assertHQPermission("hq.merchant.view");
+        return orderObj as OrderResponse;
+      } catch {
+        const userAccess = await getUserOrderAccess();
+        if (!userAccess) return null;
+        if (
+          orderObj.merchant_id !== userAccess.merchantId ||
+          !userAccess.locationIds.includes(orderObj.location_id)
+        ) {
+          return null;
+        }
+        return orderObj as OrderResponse;
+      }
+    } catch {
+      return null;
+    }
   } catch (error) {
     console.error("[GetOrderDetails] Unexpected error:", error);
     return null;
