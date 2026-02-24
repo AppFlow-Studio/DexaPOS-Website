@@ -10,6 +10,13 @@ import {
   AddCustomerTag,
   RemoveCustomerTag,
   UpdateCustomerNotes,
+  CreateCustomer,
+  CheckCustomerByPhone,
+  BulkAddTagToCustomers,
+  BulkRemoveTagFromCustomers,
+  FindDuplicateCustomers,
+  MergeCustomers,
+  DeleteCustomer,
 } from "@/app/dashboard/actions/customers";
 import type {
   Customer,
@@ -181,6 +188,133 @@ export function useUpdateCustomerNotes() {
       queryClient.invalidateQueries({
         queryKey: ["customer", "profile", variables.customerId],
       });
+    },
+  });
+}
+
+// =============================================================================
+// Customer Creation & Duplicate Check Hooks (Phase 2)
+// =============================================================================
+
+/**
+ * Check if a customer with given phone already exists
+ */
+export function useCheckCustomerByPhone() {
+  const clerkOrgId = useClerkOrgId();
+
+  return useMutation({
+    mutationFn: (phone: string) => CheckCustomerByPhone(clerkOrgId, phone),
+  });
+}
+
+/**
+ * Create a new customer
+ */
+export function useCreateCustomer() {
+  const queryClient = useQueryClient();
+  const clerkOrgId = useClerkOrgId();
+
+  return useMutation({
+    mutationFn: (data: {
+      name: string;
+      phone: string;
+      email?: string;
+      address?: string;
+      tags?: string[];
+      notes?: string;
+    }) => CreateCustomer(clerkOrgId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+    },
+  });
+}
+
+/**
+ * Bulk add a tag to multiple customers
+ */
+export function useBulkAddCustomerTag() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      customerIds,
+      tag,
+    }: {
+      customerIds: string[];
+      tag: string;
+    }) => BulkAddTagToCustomers(customerIds, tag),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+    },
+  });
+}
+
+/**
+ * Bulk remove a tag from multiple customers
+ */
+export function useBulkRemoveCustomerTag() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      customerIds,
+      tag,
+    }: {
+      customerIds: string[];
+      tag: string;
+    }) => BulkRemoveTagFromCustomers(customerIds, tag),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+    },
+  });
+}
+
+// =============================================================================
+// Smart Deduplication Hooks (Phase 3)
+// =============================================================================
+
+/**
+ * Find duplicate customer groups
+ */
+export function useFindDuplicateCustomers() {
+  const clerkOrgId = useClerkOrgId();
+
+  return useMutation({
+    mutationFn: () => FindDuplicateCustomers(clerkOrgId),
+  });
+}
+
+/**
+ * Merge duplicate customers
+ */
+export function useMergeCustomers() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      primaryId,
+      duplicateIds,
+    }: {
+      primaryId: string;
+      duplicateIds: string[];
+    }) => MergeCustomers(primaryId, duplicateIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+    },
+  });
+}
+
+/**
+ * Delete a customer
+ */
+export function useDeleteCustomer() {
+  const queryClient = useQueryClient();
+  const clerkOrgId = useClerkOrgId();
+
+  return useMutation({
+    mutationFn: (customerId: string) => DeleteCustomer(customerId, clerkOrgId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
     },
   });
 }

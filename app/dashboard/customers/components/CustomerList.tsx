@@ -11,10 +11,13 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   MoreHorizontal,
-  Calendar,
+  Mail,
   User as UserIcon,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -24,14 +27,27 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { format } from "date-fns";
 import type { CustomerListItem } from "@/types/customer";
-import { getCustomerDisplayName } from "@/types/customer";
+import {
+  getCustomerDisplayName,
+  getCustomerStatus,
+  formatRelativeDate,
+  type CustomerStatus,
+} from "@/types/customer";
+
+type SortField = "name" | "lifetime_spend" | "visits" | "avg_spend" | "last_visit";
+type SortDir = "asc" | "desc";
 
 interface CustomerListProps {
   customers: CustomerListItem[];
   isLoading: boolean;
   onViewProfile?: (customer: CustomerListItem) => void;
+  onDeleteCustomer?: (customer: CustomerListItem) => void;
+  sortField?: SortField;
+  sortDir?: SortDir;
+  onSort?: (field: SortField) => void;
+  selectedIds?: string[];
+  onSelectChange?: (ids: string[]) => void;
 }
 
 /**
@@ -48,22 +64,87 @@ function getInitials(customer: CustomerListItem): string {
 }
 
 /**
- * Format the last visit date safely
+ * Get status badge color for customer status
  */
-function formatLastVisit(lastVisit: string | null): string {
-  if (!lastVisit) return "Never";
-  try {
-    return format(new Date(lastVisit), "MMM d, yyyy");
-  } catch {
-    return "Unknown";
+function getStatusColor(status: CustomerStatus): string {
+  switch (status) {
+    case "Active":
+      return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
+    case "At Risk":
+      return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400";
+    case "Lapsed":
+      return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400";
+    case "New":
+      return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400";
   }
+}
+
+/**
+ * Sortable column header with toggle indicator
+ */
+function SortableColumnHead({
+  field,
+  label,
+  sortField,
+  sortDir,
+  onSort,
+}: {
+  field: SortField;
+  label: string;
+  sortField?: SortField;
+  sortDir?: SortDir;
+  onSort?: (field: SortField) => void;
+}) {
+  const isActive = sortField === field;
+  return (
+    <TableHead
+      className="cursor-pointer select-none hover:bg-muted/50"
+      onClick={() => onSort?.(field)}
+    >
+      <div className="flex items-center gap-1">
+        {label}
+        {isActive && (
+          <>
+            {sortDir === "asc" && <ChevronUp className="h-4 w-4" />}
+            {sortDir === "desc" && <ChevronDown className="h-4 w-4" />}
+          </>
+        )}
+      </div>
+    </TableHead>
+  );
 }
 
 export function CustomerList({
   customers,
   isLoading,
   onViewProfile,
+  onDeleteCustomer,
+  sortField,
+  sortDir,
+  onSort,
+  selectedIds = [],
+  onSelectChange,
 }: CustomerListProps) {
+  const allSelected =
+    customers.length > 0 && selectedIds.length === customers.length;
+  const someSelected = selectedIds.length > 0 && selectedIds.length < customers.length;
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      onSelectChange?.([]);
+    } else {
+      onSelectChange?.(customers.map((c) => c.id));
+    }
+  };
+
+  const toggleSelectCustomer = (customerId: string) => {
+    if (selectedIds.includes(customerId)) {
+      onSelectChange?.(selectedIds.filter((id) => id !== customerId));
+    } else {
+      onSelectChange?.([...selectedIds, customerId]);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="w-full h-96 flex items-center justify-center">
@@ -87,38 +168,103 @@ export function CustomerList({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[300px]">Customer</TableHead>
-            <TableHead>Total Spend</TableHead>
-            <TableHead>Visits</TableHead>
-            <TableHead>Last Visit</TableHead>
-            <TableHead>Avg. Spend</TableHead>
-            <TableHead className="w-[50px]"></TableHead>
+            <TableHead className="w-10">
+              <Checkbox
+                checked={allSelected}
+                indeterminate={someSelected}
+                onCheckedChange={toggleSelectAll}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </TableHead>
+            <TableHead className="w-75">Customer</TableHead>
+            <TableHead>Phone</TableHead>
+            <TableHead>Email</TableHead>
+            <TableHead>Tags</TableHead>
+            <SortableColumnHead
+              field="lifetime_spend"
+              label="Total Spend"
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={onSort}
+            />
+            <SortableColumnHead
+              field="visits"
+              label="Visits"
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={onSort}
+            />
+            <SortableColumnHead
+              field="avg_spend"
+              label="Avg. Spend"
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={onSort}
+            />
+            <SortableColumnHead
+              field="last_visit"
+              label="Last Visit"
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={onSort}
+            />
+            <TableHead>Status</TableHead>
+            <TableHead className="w-12.5"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {customers.map((customer) => (
-            <TableRow
-              key={customer.id}
-              className="group cursor-pointer"
-              onClick={() => onViewProfile?.(customer)}
-            >
-              <TableCell>
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-9 w-9">
-                    <AvatarFallback className="bg-primary/10 text-primary">
-                      {getInitials(customer)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col">
-                    <span className="font-medium text-sm">
-                      {getCustomerDisplayName(customer)}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {customer.phone || customer.email || "No contact info"}
-                    </span>
+          {customers.map((customer) => {
+            const status = getCustomerStatus(customer);
+            const isSelected = selectedIds.includes(customer.id);
+
+            return (
+              <TableRow
+                key={customer.id}
+                className={`group cursor-pointer ${isSelected ? "bg-muted/50" : ""}`}
+                onClick={() => onViewProfile?.(customer)}
+              >
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={() => toggleSelectCustomer(customer.id)}
+                  />
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-9 w-9">
+                      <AvatarFallback className="bg-primary/10 text-primary">
+                        {getInitials(customer)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <span className="font-medium text-sm">
+                        {getCustomerDisplayName(customer)}
+                      </span>
+                    </div>
                   </div>
-                  {customer.tags && customer.tags.length > 0 && (
-                    <div className="flex gap-1 ml-2">
+                </TableCell>
+                <TableCell>
+                  <span className="text-sm text-muted-foreground">
+                    {customer.phone || "—"}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1">
+                    {customer.email ? (
+                      <>
+                        <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground truncate max-w-[150px]">
+                          {customer.email}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">—</span>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  {customer.tags && customer.tags.length > 0 ? (
+                    <div className="flex gap-1 flex-wrap">
                       {customer.tags.slice(0, 2).map((tag) => (
                         <Badge
                           key={tag}
@@ -137,63 +283,64 @@ export function CustomerList({
                         </Badge>
                       )}
                     </div>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">—</span>
                   )}
-                </div>
-              </TableCell>
-              <TableCell>
-                <div className="font-medium">
-                  ${(customer.lifetime_spend ?? 0).toFixed(2)}
-                </div>
-              </TableCell>
-              <TableCell>
-                <Badge variant="secondary" className="font-normal">
-                  {customer.visits ?? 0} visits
-                </Badge>
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Calendar className="h-3.5 w-3.5" />
-                  {formatLastVisit(customer.last_visit)}
-                </div>
-              </TableCell>
-              <TableCell>
-                <Badge variant="outline">
-                  $
-                  {(customer.avg_spend ?? 0).toFixed(2)}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <span className="sr-only">Open menu</span>
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onViewProfile?.(customer);
-                      }}
-                    >
-                      View Profile
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>View Orders</DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive focus:text-destructive">
-                      Delete Customer
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </TableCell>
-            </TableRow>
-          ))}
+                </TableCell>
+                <TableCell>
+                  <div className="font-medium">
+                    ${(customer.lifetime_spend ?? 0).toFixed(2)}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="secondary" className="font-normal">
+                    {customer.visits ?? 0}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline">
+                    ${(customer.avg_spend ?? 0).toFixed(2)}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <span className="text-sm text-muted-foreground">
+                    {formatRelativeDate(customer.last_visit)}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <Badge className={getStatusColor(status)}>{status}</Badge>
+                </TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <span className="sr-only">Open menu</span>
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                      <DropdownMenuItem
+                        onClick={() => onViewProfile?.(customer)}
+                      >
+                        View Profile
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => onDeleteCustomer?.(customer)}
+                      >
+                        Delete Customer
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>

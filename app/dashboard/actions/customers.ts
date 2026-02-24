@@ -457,3 +457,408 @@ export async function GetCustomerCount(clerkOrgId: string): Promise<number> {
 
   return count || 0;
 }
+
+// =============================================================================
+// Customer Creation & Duplicate Check (Phase 2)
+// =============================================================================
+
+/**
+ * Check if a customer with the given phone already exists
+ */
+export async function CheckCustomerByPhone(
+  clerkOrgId: string,
+  phone: string,
+): Promise<CustomerListItem | null> {
+  if (!clerkOrgId || !phone?.trim()) {
+    return null;
+  }
+
+  const merchantId = await getMerchantId(clerkOrgId);
+  if (!merchantId) {
+    return null;
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  const { data, error } = await supabase
+    .from("customers")
+    .select(
+      `
+      id,
+      name,
+      phone,
+      email,
+      lifetime_spend,
+      visits,
+      last_visit,
+      total_orders,
+      avg_spend,
+      tags
+    `,
+    )
+    .eq("merchant_id", merchantId)
+    .eq("phone", phone.trim())
+    .single();
+
+  if (error && error.code !== "PGRST116") {
+    // PGRST116 = no rows found
+    console.error("[CheckCustomerByPhone] Error:", error);
+    return null;
+  }
+
+  return (data as CustomerListItem) || null;
+}
+
+/**
+ * Create a new customer
+ */
+export async function CreateCustomer(
+  clerkOrgId: string,
+  data: {
+    name: string;
+    phone: string;
+    email?: string;
+    address?: string;
+    tags?: string[];
+    notes?: string;
+  },
+): Promise<{ success: boolean; error?: string; customerId?: string }> {
+  if (!clerkOrgId || !data.name?.trim() || !data.phone?.trim()) {
+    return { success: false, error: "Name and phone are required" };
+  }
+
+  const merchantId = await getMerchantId(clerkOrgId);
+  if (!merchantId) {
+    return { success: false, error: "Merchant not found" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  // Normalize tags to uppercase
+  const normalizedTags = (data.tags || []).map((tag) =>
+    tag.trim().toUpperCase()
+  );
+
+  const { data: newCustomer, error } = await supabase
+    .from("customers")
+    .insert({
+      merchant_id: merchantId,
+      name: data.name.trim(),
+      phone: data.phone.trim(),
+      email: data.email?.trim() || null,
+      address: data.address?.trim() || null,
+      tags: normalizedTags.length > 0 ? normalizedTags : [],
+      notes: data.notes?.trim() || null,
+      visits: 0,
+      lifetime_spend: 0,
+      avg_spend: 0,
+      total_orders: 0,
+      avg_tip_percent: 0,
+      last_visit: null,
+      last_order_date: null,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    console.error("[CreateCustomer] Error creating customer:", error);
+    return { success: false, error: error.message };
+  }
+
+  // Log audit event
+  await LogAuditEvent({
+    merchantId,
+    action: `Created Customer: ${data.name}`,
+    actionCategory: "customer",
+    resourceType: "customer",
+    resourceId: newCustomer.id,
+    resourceName: data.name,
+    metadata: {
+      phone: data.phone,
+      email: data.email,
+      tags: normalizedTags,
+    },
+  });
+
+  return { success: true, customerId: newCustomer.id };
+}
+
+/**
+ * Bulk add a tag to multiple customers
+ */
+export async function BulkAddTagToCustomers(
+  customerIds: string[],
+  tag: string,
+): Promise<{ success: boolean; error?: string; updatedCount?: number }> {
+  if (!customerIds.length || !tag?.trim()) {
+    return { success: false, error: "Customers and tag are required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const normalizedTag = tag.trim().toUpperCase();
+  let updatedCount = 0;
+
+  // Process each customer (could be optimized with array operations in Postgres)
+  for (const customerId of customerIds) {
+    const { data: customer, error: fetchError } = await supabase
+      .from("customers")
+      .select("tags, merchant_id, name")
+      .eq("id", customerId)
+      .single();
+
+    if (fetchError) {
+      console.error("[BulkAddTagToCustomers] Error fetching customer:", fetchError);
+      continue;
+    }
+
+    const currentTags = customer?.tags || [];
+    if (currentTags.includes(normalizedTag)) {
+      continue; // Tag already exists
+    }
+
+    const newTags = [...currentTags, normalizedTag];
+    const { error: updateError } = await supabase
+      .from("customers")
+      .update({
+        tags: newTags,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", customerId);
+
+    if (!updateError) {
+      updatedCount++;
+      // Log audit event
+      await LogAuditEvent({
+        merchantId: customer.merchant_id,
+        action: `Added Tag to Customer (Bulk)`,
+        actionCategory: "customer",
+        resourceType: "customer",
+        resourceId: customerId,
+        resourceName: customer.name || "Unknown Customer",
+        metadata: {
+          tag: normalizedTag,
+          new_tags: newTags,
+        },
+      });
+    }
+  }
+
+  return { success: true, updatedCount };
+}
+
+/**
+ * Bulk remove a tag from multiple customers
+ */
+export async function BulkRemoveTagFromCustomers(
+  customerIds: string[],
+  tag: string,
+): Promise<{ success: boolean; error?: string; updatedCount?: number }> {
+  if (!customerIds.length || !tag?.trim()) {
+    return { success: false, error: "Customers and tag are required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+  const normalizedTag = tag.trim().toUpperCase();
+  let updatedCount = 0;
+
+  for (const customerId of customerIds) {
+    const { data: customer, error: fetchError } = await supabase
+      .from("customers")
+      .select("tags, merchant_id, name")
+      .eq("id", customerId)
+      .single();
+
+    if (fetchError) {
+      console.error("[BulkRemoveTagFromCustomers] Error fetching customer:", fetchError);
+      continue;
+    }
+
+    const currentTags = customer?.tags || [];
+    if (!currentTags.includes(normalizedTag)) {
+      continue; // Tag doesn't exist
+    }
+
+    const newTags = currentTags.filter((t: string) => t !== normalizedTag);
+    const { error: updateError } = await supabase
+      .from("customers")
+      .update({
+        tags: newTags,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", customerId);
+
+    if (!updateError) {
+      updatedCount++;
+      await LogAuditEvent({
+        merchantId: customer.merchant_id,
+        action: `Removed Tag from Customer (Bulk)`,
+        actionCategory: "customer",
+        resourceType: "customer",
+        resourceId: customerId,
+        resourceName: customer.name || "Unknown Customer",
+        metadata: {
+          tag: normalizedTag,
+          remaining_tags: newTags,
+        },
+      });
+    }
+  }
+
+  return { success: true, updatedCount };
+}
+
+// =============================================================================
+// Smart Deduplication (Phase 3) - Requires RPC functions
+// =============================================================================
+
+/**
+ * Find duplicate customer groups
+ * Requires: find_duplicate_customers(p_merchant_id uuid) RPC function
+ */
+export async function FindDuplicateCustomers(
+  clerkOrgId: string,
+): Promise<
+  Array<{
+    customers: CustomerListItem[];
+    reason: "same_phone" | "similar_name";
+  }> | null
+> {
+  if (!clerkOrgId) {
+    return null;
+  }
+
+  const merchantId = await getMerchantId(clerkOrgId);
+  if (!merchantId) {
+    return null;
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  // Call the RPC function (once it's created in Supabase)
+  const { data, error } = await supabase.rpc("find_duplicate_customers", {
+    p_merchant_id: merchantId,
+  });
+
+  if (error) {
+    console.error("[FindDuplicateCustomers] Error:", error);
+    return null;
+  }
+
+  return data as Array<{
+    customers: CustomerListItem[];
+    reason: "same_phone" | "similar_name";
+  }> | null;
+}
+
+/**
+ * Merge duplicate customers into a primary customer
+ * Requires: merge_customers(p_primary_id uuid, p_duplicate_ids uuid[]) RPC function
+ */
+export async function MergeCustomers(
+  primaryId: string,
+  duplicateIds: string[],
+): Promise<{ success: boolean; error?: string }> {
+  if (!primaryId || !duplicateIds || duplicateIds.length === 0) {
+    return { success: false, error: "Primary ID and duplicate IDs are required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  // Call the RPC function (once it's created in Supabase)
+  const { error } = await supabase.rpc("merge_customers", {
+    p_primary_id: primaryId,
+    p_duplicate_ids: duplicateIds,
+  });
+
+  if (error) {
+    console.error("[MergeCustomers] Error:", error);
+    return { success: false, error: error.message };
+  }
+
+  // Get customer details for audit log
+  const { data: customer } = await supabase
+    .from("customers")
+    .select("merchant_id, name")
+    .eq("id", primaryId)
+    .single();
+
+  if (customer) {
+    await LogAuditEvent({
+      merchantId: customer.merchant_id,
+      action: `Merged Duplicate Customers`,
+      actionCategory: "customer",
+      resourceType: "customer",
+      resourceId: primaryId,
+      resourceName: customer.name,
+      metadata: {
+        primary_id: primaryId,
+        merged_ids: duplicateIds,
+      },
+    });
+  }
+
+  return { success: true };
+}
+
+// =============================================================================
+// Delete Customer
+// =============================================================================
+
+/**
+ * Delete a customer by ID
+ */
+export async function DeleteCustomer(
+  customerId: string,
+  clerkOrgId: string,
+): Promise<{ success: boolean; error?: string }> {
+  if (!customerId || !clerkOrgId) {
+    return { success: false, error: "Customer ID and organization ID are required" };
+  }
+
+  const merchantId = await getMerchantId(clerkOrgId);
+  if (!merchantId) {
+    return { success: false, error: "Merchant not found" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  // Get customer details before deletion for audit log
+  const { data: customer, error: fetchError } = await supabase
+    .from("customers")
+    .select("id, merchant_id, name")
+    .eq("id", customerId)
+    .eq("merchant_id", merchantId)
+    .single();
+
+  if (fetchError || !customer) {
+    console.error("[DeleteCustomer] Customer not found:", fetchError);
+    return { success: false, error: "Customer not found" };
+  }
+
+  // Delete the customer
+  const { error: deleteError } = await supabase
+    .from("customers")
+    .delete()
+    .eq("id", customerId)
+    .eq("merchant_id", merchantId);
+
+  if (deleteError) {
+    console.error("[DeleteCustomer] Error deleting customer:", deleteError);
+    return { success: false, error: deleteError.message };
+  }
+
+  // Log the deletion
+  await LogAuditEvent({
+    merchantId: customer.merchant_id,
+    action: "Deleted Customer",
+    actionCategory: "customer",
+    resourceType: "customer",
+    resourceId: customerId,
+    resourceName: customer.name,
+    metadata: {
+      deleted_at: new Date().toISOString(),
+    },
+  });
+
+  return { success: true };
+}

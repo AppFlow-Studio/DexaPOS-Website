@@ -122,6 +122,68 @@ export interface CustomerListItem {
 }
 
 // =============================================================================
+// Customer Status Type
+// =============================================================================
+
+/**
+ * Customer segmentation status based on visit behavior
+ */
+export type CustomerStatus = "New" | "Active" | "At Risk" | "Lapsed";
+
+/**
+ * Get customer status based on visit count and last visit date
+ */
+export function getCustomerStatus(customer: CustomerListItem): CustomerStatus {
+  // New: fewer than 3 visits
+  if (customer.visits < 3) return "New";
+
+  // If no last visit, treat as lapsed
+  if (!customer.last_visit) return "Lapsed";
+
+  const now = new Date();
+  const lastVisit = new Date(customer.last_visit);
+  const daysSinceVisit = Math.floor(
+    (now.getTime() - lastVisit.getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  // Active: visited within last 30 days
+  if (daysSinceVisit < 30) return "Active";
+
+  // At Risk: visited 30-90 days ago
+  if (daysSinceVisit < 90) return "At Risk";
+
+  // Lapsed: visited more than 90 days ago
+  return "Lapsed";
+}
+
+/**
+ * Format a date as relative time ("3 days ago", "2 months ago", etc)
+ */
+export function formatRelativeDate(dateString: string | null): string {
+  if (!dateString) return "Never";
+
+  try {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffWeeks = Math.floor(diffDays / 7);
+    const diffMonths = Math.floor(diffDays / 30);
+    const diffYears = Math.floor(diffDays / 365);
+
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffWeeks < 4) return `${diffWeeks} week${diffWeeks > 1 ? "s" : ""} ago`;
+    if (diffMonths < 12)
+      return `${diffMonths} month${diffMonths > 1 ? "s" : ""} ago`;
+    return `${diffYears} year${diffYears > 1 ? "s" : ""} ago`;
+  } catch {
+    return "Unknown";
+  }
+}
+
+// =============================================================================
 // UI Mapping Helpers
 // =============================================================================
 
