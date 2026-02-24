@@ -21,6 +21,7 @@ export interface MerchantSummary {
   revenue_today: number
   last_order_at: string | null
   derived_status: 'active' | 'inactive' | 'onboarding'
+  notes_count?: number
 }
 
 // ============================================================================

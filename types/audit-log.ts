@@ -5,6 +5,10 @@
 
 // Audit log action categories
 export const AUDIT_CATEGORIES = [
+  "merchant",
+  "user_management",
+  "device",
+  "notes",
   "inventory",
   "purchase_order",
   "expense",
@@ -167,6 +171,10 @@ export interface AuditLogFilters {
 
 // Category display configuration
 export const CATEGORY_LABELS: Record<AuditCategory, string> = {
+  merchant: "Merchant",
+  user_management: "User Management",
+  device: "Device",
+  notes: "Notes",
   inventory: "Inventory",
   purchase_order: "Purchase Orders",
   expense: "Expenses",
@@ -178,6 +186,14 @@ export const CATEGORY_LABELS: Record<AuditCategory, string> = {
 };
 
 export const CATEGORY_COLORS: Record<AuditCategory, string> = {
+  merchant:
+    "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-400",
+  user_management:
+    "bg-cyan-100 text-cyan-700 dark:bg-cyan-950/50 dark:text-cyan-400",
+  device:
+    "bg-slate-100 text-slate-700 dark:bg-slate-950/50 dark:text-slate-400",
+  notes:
+    "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400",
   inventory:
     "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400",
   purchase_order:
