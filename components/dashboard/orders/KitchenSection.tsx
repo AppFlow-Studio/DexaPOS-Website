@@ -70,6 +70,13 @@ function formatShortTime(dateString: string | null | undefined): string | null {
   return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
+/** Normalize to ms for equality; same moment => same time shown once. */
+function timeMs(ts: string | null | undefined): number | null {
+  if (ts == null) return null;
+  const t = new Date(ts).getTime();
+  return Number.isFinite(t) ? t : null;
+}
+
 function diffMinutes(
   start: string | null | undefined,
   end: string | null | undefined
@@ -169,7 +176,12 @@ function KitchenStatusPipeline({
         const cfg = STAGE_CONFIG[stage];
         const isLast = idx === KITCHEN_STAGES.length - 1;
         const ts = timestamps?.[stage];
-        const timeStr = ts ? formatShortTime(ts) : null;
+        const firstMs = timeMs(timestamps?.new ?? null);
+        const tsMs = timeMs(ts);
+        // Show time only once per distinct moment: never repeat the same time (compare by value, not string)
+        const sameAsFirst = tsMs != null && firstMs != null && tsMs === firstMs;
+        const showTime = reached && ts && (idx === 0 || !sameAsFirst);
+        const timeStr = showTime ? formatShortTime(ts) : null;
 
         return (
           <React.Fragment key={stage}>
