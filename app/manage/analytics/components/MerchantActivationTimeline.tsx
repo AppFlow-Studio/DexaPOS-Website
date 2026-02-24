@@ -138,7 +138,7 @@ export function MerchantActivationTimeline() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-xs min-w-[140px]">Merchant</TableHead>
+                  <TableHead className="text-xs ">Merchant</TableHead>
                   <TableHead className="text-xs text-right whitespace-nowrap">Days Since Sign-up</TableHead>
                   <TableHead className="text-xs text-center">Logo</TableHead>
                   <TableHead className="text-xs text-center">Location</TableHead>
@@ -152,7 +152,7 @@ export function MerchantActivationTimeline() {
               <TableBody>
                 {data.neverActivated.map((m: NeverActivatedMerchant) => (
                   <TableRow key={m.id}>
-                    <TableCell className="text-sm py-2 font-medium max-w-[180px]">
+                    <TableCell className="text-sm py-2 font-medium ">
                       <span className="block truncate" title={m.name}>{m.name}</span>
                     </TableCell>
                     <TableCell className="text-sm py-2 text-right font-mono">{m.daysSinceCreation}d</TableCell>
