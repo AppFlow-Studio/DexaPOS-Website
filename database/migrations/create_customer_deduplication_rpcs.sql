@@ -139,8 +139,7 @@ BEGIN
   -- =====================================
 
   UPDATE customer_activities
-  SET customer_id = p_primary_id,
-      updated_at = NOW()
+  SET customer_id = p_primary_id
   WHERE customer_id = ANY(p_duplicate_ids)
     AND merchant_id = v_merchant_id;
 

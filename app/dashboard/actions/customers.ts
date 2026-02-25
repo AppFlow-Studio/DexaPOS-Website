@@ -862,3 +862,269 @@ export async function DeleteCustomer(
 
   return { success: true };
 }
+
+// =============================================================================
+// DEXA-CUST-002: Enhanced Overview Tab Analytics
+// =============================================================================
+
+/**
+ * Get customer spend trend over last 6 months
+ */
+export async function GetCustomerSpendTrend(
+  customerId: string,
+  months: number = 6,
+): Promise<Array<{
+  month: string;
+  month_date: string;
+  total_spend: number;
+  order_count: number;
+}> | null> {
+  if (!customerId) {
+    return null;
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  const { data, error } = await supabase.rpc("get_customer_spend_trend", {
+    p_customer_id: customerId,
+    p_months: months,
+  });
+
+  if (error) {
+    console.error("[GetCustomerSpendTrend] Error:", error);
+    return null;
+  }
+
+  return data;
+}
+
+/**
+ * Get customer visit pattern (day of week and time)
+ */
+export async function GetCustomerVisitPattern(
+  customerId: string,
+  days: number = 90,
+): Promise<Array<{
+  day_of_week: string;
+  hour_of_day: number;
+  visit_count: number;
+  is_peak: boolean;
+}> | null> {
+  if (!customerId) {
+    return null;
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  const { data, error } = await supabase.rpc("get_customer_visit_pattern", {
+    p_customer_id: customerId,
+    p_days: days,
+  });
+
+  if (error) {
+    console.error("[GetCustomerVisitPattern] Error:", error);
+    return null;
+  }
+
+  return data;
+}
+
+/**
+ * Get customer's top items ordered in last 90 days
+ */
+export async function GetCustomerTopItems(
+  customerId: string,
+  days: number = 90,
+  limit: number = 10,
+): Promise<Array<{
+  item_id: string;
+  item_name: string;
+  order_count: number;
+  total_spent: number;
+  last_ordered_at: string;
+  is_new_favorite: boolean;
+  frequency_label: string;
+}> | null> {
+  if (!customerId) {
+    return null;
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  const { data, error } = await supabase.rpc("get_customer_top_items", {
+    p_customer_id: customerId,
+    p_days: days,
+    p_limit: limit,
+  });
+
+  if (error) {
+    console.error("[GetCustomerTopItems] Error:", error);
+    return null;
+  }
+
+  return data;
+}
+
+/**
+ * Get customer order channel trend
+ */
+export async function GetCustomerChannelTrend(
+  customerId: string,
+  days: number = 90,
+): Promise<Array<{
+  channel: string;
+  count_recent: number;
+  count_previous: number;
+  percentage_recent: number;
+  percentage_previous: number;
+  trend_label: string;
+}> | null> {
+  if (!customerId) {
+    return null;
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  const { data, error } = await supabase.rpc("get_customer_channel_trend", {
+    p_customer_id: customerId,
+    p_days: days,
+  });
+
+  if (error) {
+    console.error("[GetCustomerChannelTrend] Error:", error);
+    return null;
+  }
+
+  return data;
+}
+
+/**
+ * Get customer activity timeline (unified: orders, tags, notes, feedback)
+ */
+export async function GetCustomerActivityTimeline(
+  customerId: string,
+  limit: number = 50,
+): Promise<Array<{
+  activity_id: string;
+  activity_type: string;
+  activity_label: string;
+  description: string;
+  amount_value: number | null;
+  currency: string | null;
+  created_at: string;
+  is_clickable: boolean;
+  related_entity_id: string | null;
+  related_entity_type: string | null;
+}> | null> {
+  if (!customerId) {
+    return null;
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  const { data, error } = await supabase.rpc("get_customer_activity_timeline", {
+    p_customer_id: customerId,
+    p_limit: limit,
+  });
+
+  if (error) {
+    console.error("[GetCustomerActivityTimeline] Error:", error);
+    return null;
+  }
+
+  return data;
+}
+
+/**
+ * Get customer spend percentile rank (with merchant UUID)
+ * @param customerId Customer UUID
+ * @param merchantId Merchant UUID (NOT Clerk org ID)
+ */
+export async function GetCustomerPercentile(
+  customerId: string,
+  merchantId: string,
+): Promise<{
+  percentile: number;
+  rank_position: number;
+  total_customers: number;
+  is_top_tier: boolean;
+} | null> {
+  if (!customerId || !merchantId) {
+    return null;
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  const { data, error } = await supabase.rpc("get_customer_percentile", {
+    p_customer_id: customerId,
+    p_merchant_id: merchantId,
+  });
+
+  if (error) {
+    console.error("[GetCustomerPercentile] Error:", error);
+    return null;
+  }
+
+  return data?.[0] || null;
+}
+
+/**
+ * Get customer spend percentile rank (with Clerk org ID)
+ * Handles conversion from Clerk org ID to merchant UUID
+ * @param customerId Customer UUID
+ * @param clerkOrgId Clerk organization ID (org_*)
+ */
+export async function GetCustomerPercentileByClerkOrgId(
+  customerId: string,
+  clerkOrgId: string,
+): Promise<{
+  percentile: number;
+  rank_position: number;
+  total_customers: number;
+  is_top_tier: boolean;
+} | null> {
+  if (!customerId || !clerkOrgId) {
+    return null;
+  }
+
+  const merchantId = await getMerchantId(clerkOrgId);
+  if (!merchantId) {
+    console.error("[GetCustomerPercentileByClerkOrgId] Could not resolve merchant ID from Clerk org ID");
+    return null;
+  }
+
+  return GetCustomerPercentile(customerId, merchantId);
+}
+
+/**
+ * Get customer visit frequency trend
+ */
+export async function GetCustomerVisitTrend(
+  customerId: string,
+  recentDays: number = 90,
+  compareDays: number = 90,
+): Promise<{
+  recent_visits: number;
+  previous_visits: number;
+  trend_direction: string;
+  trend_percentage: number | null;
+} | null> {
+  if (!customerId) {
+    return null;
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  const { data, error } = await supabase.rpc("get_customer_visit_trend", {
+    p_customer_id: customerId,
+    p_recent_days: recentDays,
+    p_compare_days: compareDays,
+  });
+
+  if (error) {
+    console.error("[GetCustomerVisitTrend] Error:", error);
+    return null;
+  }
+
+  return data?.[0] || null;
+}

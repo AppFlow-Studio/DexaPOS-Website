@@ -170,8 +170,7 @@ export function CustomerList({
           <TableRow>
             <TableHead className="w-10">
               <Checkbox
-                checked={allSelected}
-                indeterminate={someSelected}
+                checked={allSelected ? true : someSelected ? "indeterminate" : false}
                 onCheckedChange={toggleSelectAll}
                 onClick={(e) => e.stopPropagation()}
               />

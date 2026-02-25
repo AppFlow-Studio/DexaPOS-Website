@@ -17,6 +17,14 @@ import {
   FindDuplicateCustomers,
   MergeCustomers,
   DeleteCustomer,
+  GetCustomerSpendTrend,
+  GetCustomerVisitPattern,
+  GetCustomerTopItems,
+  GetCustomerChannelTrend,
+  GetCustomerActivityTimeline,
+  GetCustomerPercentile,
+  GetCustomerPercentileByClerkOrgId,
+  GetCustomerVisitTrend,
 } from "@/app/dashboard/actions/customers";
 import type {
   Customer,
@@ -316,6 +324,139 @@ export function useDeleteCustomer() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customers"] });
     },
+  });
+}
+
+// =============================================================================
+// DEXA-CUST-002: Enhanced Overview Analytics Hooks
+// =============================================================================
+
+/**
+ * Get customer spend trend over last 6 months
+ */
+export function useCustomerSpendTrend(customerId: string | null, months: number = 6) {
+  return useQuery({
+    queryKey: ["customer", "spend-trend", customerId, months],
+    queryFn: () => (customerId ? GetCustomerSpendTrend(customerId, months) : null),
+    enabled: !!customerId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+/**
+ * Get customer visit pattern
+ */
+export function useCustomerVisitPattern(customerId: string | null, days: number = 90) {
+  return useQuery({
+    queryKey: ["customer", "visit-pattern", customerId, days],
+    queryFn: () => (customerId ? GetCustomerVisitPattern(customerId, days) : null),
+    enabled: !!customerId,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Get customer top items
+ */
+export function useCustomerTopItems(
+  customerId: string | null,
+  days: number = 90,
+  limit: number = 10,
+) {
+  return useQuery({
+    queryKey: ["customer", "top-items", customerId, days, limit],
+    queryFn: () =>
+      customerId ? GetCustomerTopItems(customerId, days, limit) : null,
+    enabled: !!customerId,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Get customer channel trend
+ */
+export function useCustomerChannelTrend(customerId: string | null, days: number = 90) {
+  return useQuery({
+    queryKey: ["customer", "channel-trend", customerId, days],
+    queryFn: () => (customerId ? GetCustomerChannelTrend(customerId, days) : null),
+    enabled: !!customerId,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Get customer activity timeline
+ */
+export function useCustomerActivityTimeline(
+  customerId: string | null,
+  limit: number = 50,
+) {
+  return useQuery({
+    queryKey: ["customer", "activity-timeline", customerId, limit],
+    queryFn: () =>
+      customerId ? GetCustomerActivityTimeline(customerId, limit) : null,
+    enabled: !!customerId,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Get customer percentile rank
+ * @param customerId Customer UUID
+ * @param merchantId Merchant UUID (not Clerk org ID)
+ */
+export function useCustomerPercentile(
+  customerId: string | null,
+  merchantId: string | null,
+) {
+  return useQuery({
+    queryKey: ["customer", "percentile", customerId, merchantId],
+    queryFn: () =>
+      customerId && merchantId
+        ? GetCustomerPercentile(customerId, merchantId)
+        : null,
+    enabled: !!customerId && !!merchantId,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+  });
+}
+
+/**
+ * Get customer percentile rank using Clerk org ID
+ * Automatically converts Clerk org ID to merchant UUID
+ * @param customerId Customer UUID
+ * @param clerkOrgId Clerk organization ID (org_*)
+ */
+export function useCustomerPercentileWithClerkOrgId(
+  customerId: string | null,
+  clerkOrgId: string | null,
+) {
+  return useQuery({
+    queryKey: ["customer", "percentile", customerId, clerkOrgId],
+    queryFn: () =>
+      customerId && clerkOrgId
+        ? GetCustomerPercentileByClerkOrgId(customerId, clerkOrgId)
+        : null,
+    enabled: !!customerId && !!clerkOrgId,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+  });
+}
+
+/**
+ * Get customer visit frequency trend
+ */
+export function useCustomerVisitTrend(
+  customerId: string | null,
+  recentDays: number = 90,
+  compareDays: number = 90,
+) {
+  return useQuery({
+    queryKey: ["customer", "visit-trend", customerId, recentDays, compareDays],
+    queryFn: () =>
+      customerId
+        ? GetCustomerVisitTrend(customerId, recentDays, compareDays)
+        : null,
+    enabled: !!customerId,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
