@@ -252,7 +252,7 @@ export function CustomerList({
                     {customer.email ? (
                       <>
                         <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground truncate max-w-[150px]">
+                        <span className="text-sm text-muted-foreground truncate max-w-37.5">
                           {customer.email}
                         </span>
                       </>

@@ -331,7 +331,7 @@ export default function CustomersPage() {
 
       {/* Bulk Tag Dialog */}
       <Dialog open={isBulkTagDialogOpen} onOpenChange={setIsBulkTagDialogOpen}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-100">
           <DialogHeader>
             <DialogTitle>
               {bulkTagAction === "add" ? "Add Tag" : "Remove Tag"}

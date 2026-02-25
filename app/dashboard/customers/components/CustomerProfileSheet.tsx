@@ -89,6 +89,9 @@ import { useCustomerOrders } from "../hooks/useCustomerOrders";
 import { OrderDetailSheet } from "@/components/dashboard/orders/OrderDetailSheet";
 import { useCustomerReservations, useCustomerWaitlist, useCustomerDineSessions } from "../hooks/useCustomerBookings";
 import { useCustomerFeedback, useAddFeedbackResponse, useUpdateFeedbackFlag } from "../hooks/useCustomerFeedback";
+import { DetailsTab } from "./tabs/DetailsTab";
+import { LoyaltyTab } from "./tabs/LoyaltyTab";
+import { MarketingTab } from "./tabs/MarketingTab";
 
 interface CustomerProfileSheetProps {
   customer: CustomerListItem | null;
@@ -310,7 +313,7 @@ function MetricCard({
   isLoading?: boolean;
 }) {
   return (
-    <Card className={cn("flex flex-col justify-center p-5 h-[120px]", className)}>
+    <Card className={cn("flex flex-col justify-center p-5 h-30", className)}>
       <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
         {title}
       </span>
@@ -377,7 +380,7 @@ function AddTagDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[400px]">
+      <DialogContent className="sm:max-w-100">
         <DialogHeader>
           <DialogTitle>Add Tag</DialogTitle>
         </DialogHeader>
@@ -423,7 +426,7 @@ function AddNoteDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-125">
         <DialogHeader>
           <DialogTitle>Customer Notes</DialogTitle>
         </DialogHeader>
@@ -893,7 +896,7 @@ function OrdersTabContent({ customer }: { customer: CustomerListItem | null }) {
     const total = orders.length;
     const completed = orders.filter((o) => o.status === "completed").length;
     const voided = orders.filter((o) => o.status === "void").length;
-    const refunded = orders.filter((o) => o.status === "refund").length;
+    const refunded = orders.filter((o) => o.status === "refunded").length;
 
     return {
       total,
@@ -917,7 +920,7 @@ function OrdersTabContent({ customer }: { customer: CustomerListItem | null }) {
         return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
       case "void":
         return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400";
-      case "refund":
+      case "refunded":
         return "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400";
       default:
         return "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400";
@@ -1015,7 +1018,7 @@ function OrdersTabContent({ customer }: { customer: CustomerListItem | null }) {
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="completed">Completed</SelectItem>
             <SelectItem value="void">Voided</SelectItem>
-            <SelectItem value="refund">Refunded</SelectItem>
+            <SelectItem value="refunded">Refunded</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -1114,7 +1117,7 @@ function OrdersTabContent({ customer }: { customer: CustomerListItem | null }) {
                           {new Date(order.created_at).toLocaleTimeString("en-US", {
                             hour: "2-digit",
                             minute: "2-digit",
-                            meridiem: "short",
+                            hour12: true,
                           })}
                         </div>
                       </div>
@@ -1184,6 +1187,7 @@ export function CustomerProfileSheet({
 
   const { data: userInfo } = useUserInfo();
   const clerkOrgId = userInfo?.members?.[0]?.organizations?.id || null;
+  const merchantId = userInfo?.members?.[0]?.organizations?.merchants?.id || null;
 
   // Existing profile data
   const { data: profile, isLoading: isLoadingProfile } = useCustomerProfile(
@@ -1289,7 +1293,7 @@ export function CustomerProfileSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="sm:max-w-[900px] w-full overflow-y-auto px-0 bg-[#F8F9FB] dark:bg-background">
+        <SheetContent className="sm:max-w-225 w-full overflow-y-auto px-0 bg-[#F8F9FB] dark:bg-background">
           <div className="px-6 py-6 border-b bg-background">
             <SheetHeader className="space-y-4">
               <div className="flex justify-between items-start">
@@ -1420,7 +1424,7 @@ export function CustomerProfileSheet({
                       </CardHeader>
                       <CardContent>
                         {isLoadingSpend ? (
-                          <div className="h-[140px] flex items-center justify-center">
+                          <div className="h-35 flex items-center justify-center">
                             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                           </div>
                         ) : spendTrend && spendTrend.length > 0 ? (
@@ -1442,7 +1446,7 @@ export function CustomerProfileSheet({
                             </AreaChart>
                           </ResponsiveContainer>
                         ) : (
-                          <div className="h-[140px] flex items-center justify-center text-muted-foreground text-sm">
+                          <div className="h-35 flex items-center justify-center text-muted-foreground text-sm">
                             No spend data yet
                           </div>
                         )}
@@ -1456,7 +1460,7 @@ export function CustomerProfileSheet({
                           VISIT PATTERN
                         </CardTitle>
                       </CardHeader>
-                      <CardContent className="flex flex-col justify-center h-[140px]">
+                      <CardContent className="flex flex-col justify-center h-35">
                         {visitPatternSummary ? (
                           <div className="space-y-3">
                             <p className="text-sm text-foreground">{visitPatternSummary}</p>
@@ -1492,7 +1496,7 @@ export function CustomerProfileSheet({
                       </CardHeader>
                       <CardContent className="flex items-center justify-between pl-0">
                         {isLoadingChannels ? (
-                          <div className="w-full h-[140px] flex items-center justify-center">
+                          <div className="w-full h-35 flex items-center justify-center">
                             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                           </div>
                         ) : orderChannels.length > 0 ? (
@@ -1506,7 +1510,7 @@ export function CustomerProfileSheet({
                                 </div>
                               ))}
                             </div>
-                            <div className="h-[140px] w-[140px] relative">
+                            <div className="h-35 w-35 relative">
                               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                 <span className="text-xl font-bold">{totalVisits}</span>
                               </div>
@@ -1523,7 +1527,7 @@ export function CustomerProfileSheet({
                             </div>
                           </>
                         ) : (
-                          <div className="w-full h-[140px] flex items-center justify-center text-muted-foreground text-sm">
+                          <div className="w-full h-35 flex items-center justify-center text-muted-foreground text-sm">
                             No order data yet
                           </div>
                         )}
@@ -1568,7 +1572,7 @@ export function CustomerProfileSheet({
                             ))}
                           </div>
                         ) : (
-                          <div className="h-[120px] flex items-center justify-center text-muted-foreground text-sm">
+                          <div className="h-30 flex items-center justify-center text-muted-foreground text-sm">
                             No orders in last 90 days
                           </div>
                         )}
@@ -1622,16 +1626,20 @@ export function CustomerProfileSheet({
                   <FeedbackTabContent customer={customer} />
                 </TabsContent>
 
-                {/* Placeholder tabs */}
-                {["loyalty", "marketing", "details"].map((tab) => (
-                  <TabsContent
-                    key={tab}
-                    value={tab}
-                    className="h-64 flex items-center justify-center text-muted-foreground bg-white dark:bg-card rounded-lg border-2 border-dashed"
-                  >
-                    {tab.charAt(0).toUpperCase() + tab.slice(1)} view coming soon
-                  </TabsContent>
-                ))}
+                {/* Loyalty Tab */}
+                <TabsContent value="loyalty" className="space-y-6 py-6 animate-in fade-in-50 duration-300">
+                  {customer && <LoyaltyTab customer={customer} merchantId={merchantId} />}
+                </TabsContent>
+
+                {/* Marketing Tab */}
+                <TabsContent value="marketing" className="space-y-6 py-6 animate-in fade-in-50 duration-300">
+                  {customer && <MarketingTab customer={customer} merchantId={merchantId} />}
+                </TabsContent>
+
+                {/* Details Tab */}
+                <TabsContent value="details" className="space-y-6 py-6 animate-in fade-in-50 duration-300">
+                  {customer && <DetailsTab customer={customer} merchantId={merchantId} />}
+                </TabsContent>
               </div>
             </Tabs>
           </div>

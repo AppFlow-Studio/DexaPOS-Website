@@ -640,7 +640,7 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
           )}
           <span
             className={cn(
-              "max-w-[150px] truncate transition-colors duration-200",
+              "max-w-37.5 truncate transition-colors duration-200",
               isAllLocations ? "text-muted-foreground" : "font-medium"
             )}
           >
