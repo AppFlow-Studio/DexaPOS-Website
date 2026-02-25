@@ -136,6 +136,7 @@ export interface OrderFullHistory {
       previous_status: string | null;
       new_status: string | null;
       amount: number | null;
+      tip_amount?: number | null;
       auth_code: string | null;
       result_code: string | null;
       response_message: string | null;

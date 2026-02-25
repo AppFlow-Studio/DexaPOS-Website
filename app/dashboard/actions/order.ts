@@ -462,6 +462,7 @@ export async function GetOrderFullHistory(
     if (op?.processed_by_staff_id) staffIds.add(op.processed_by_staff_id);
     if (op?.voided_by) staffIds.add(op.voided_by);
     if (op?.refunded_by) staffIds.add(op.refunded_by);
+    if (op?.tip_adjusted_by) staffIds.add(op.tip_adjusted_by);
   }
 
   for (const ts of order.table_sessions || []) {
@@ -700,6 +701,7 @@ export async function GetOrderFullHistory(
         previous_status: pe.previous_status ?? null,
         new_status: pe.new_status ?? null,
         amount: pe.amount ?? null,
+        tip_amount: pe.tip_amount ?? null,
         auth_code: pe.auth_code ?? null,
         result_code: pe.result_code ?? null,
         response_message: pe.response_message ?? null,
@@ -747,6 +749,7 @@ export async function GetOrderFullHistory(
         void_reason: op.void_reason ?? null,
         tip_adjusted_at: op.tip_adjusted_at ?? null,
         original_tip_amount: op.original_tip_amount != null ? Number(op.original_tip_amount) : null,
+        tip_adjusted_by_staff_id: op.tip_adjusted_by ?? null,
         covers_items: op.covers_items ?? null,
         payment_items: paymentItems.length ? paymentItems : null,
         events,
@@ -1005,6 +1008,8 @@ export async function GetOrderFullHistory(
     events.some((e) => /void/i.test(e.event_type));
   const hasInitEvent = (events: { event_type: string }[]) =>
     events.some((e) => /init|created|authorized|approve/i.test(e.event_type));
+  const hasTipAdjustedEvent = (events: { event_type: string }[]) =>
+    events.some((e) => /tip_adjusted/i.test(e.event_type));
 
   for (const p of payments) {
     const useSynthetic = p.events.length === 0;
@@ -1060,19 +1065,71 @@ export async function GetOrderFullHistory(
       );
     }
 
+    if ((useSynthetic || !hasTipAdjustedEvent(p.events)) && p.tip_adjusted_at) {
+      const tipStr =
+        p.tip_amount != null
+          ? `: $${p.tip_amount}`
+          : p.original_tip_amount != null
+            ? ` (was $${p.original_tip_amount})`
+            : "";
+      timeline.push(
+        makeEvent({
+          timestamp: p.tip_adjusted_at,
+          category: "payment",
+          event_type: "payment_tip_adjusted",
+          description: `Tip adjusted${tipStr}`,
+          actor_name: getStaffName((p as any).tip_adjusted_by_staff_id) ?? null,
+          actor_role: (p as any).tip_adjusted_by_staff_id ? "Staff" : null,
+          details: {
+            payment_id: p.id,
+            tip_amount: p.tip_amount,
+            original_tip_amount: p.original_tip_amount,
+          },
+          severity: "info",
+        })
+      );
+    }
+
+    // Show tip on timeline when payment has a tip but no tip_adjusted event (e.g. tip added at payment time)
+    const hasTipEvent =
+      hasTipAdjustedEvent(p.events) || (p.tip_adjusted_at != null);
+    if (
+      (p.tip_amount != null && Number(p.tip_amount) > 0) &&
+      !hasTipEvent
+    ) {
+      const tipTimestamp = p.captured_at ?? p.created_at;
+      timeline.push(
+        makeEvent({
+          timestamp: tipTimestamp,
+          category: "payment",
+          event_type: "payment_tip",
+          description: `Tip: $${Number(p.tip_amount).toFixed(2)}`,
+          actor_name: p.processed_by_name ?? null,
+          actor_role: p.processed_by_name ? "Staff" : null,
+          details: {
+            payment_id: p.id,
+            tip_amount: p.tip_amount,
+          },
+          severity: "info",
+        })
+      );
+    }
+
     for (const ev of p.events) {
+      const isTipAdjusted = /tip_adjusted/i.test(ev.event_type);
+      const description = isTipAdjusted
+        ? `Tip adjusted${ev.tip_amount != null || ev.amount != null ? `: $${ev.tip_amount ?? ev.amount}` : ""}`
+        : `Payment ${ev.event_type}${ev.amount != null ? `: $${ev.amount}` : ""}`;
       timeline.push(
         makeEvent({
           timestamp: ev.timestamp,
           category: "payment",
-          event_type: `payment_${ev.event_type}`,
-          description: `Payment ${ev.event_type}${
-            ev.amount != null ? `: $${ev.amount}` : ""
-          }`,
+          event_type: isTipAdjusted ? "payment_tip_adjusted" : `payment_${ev.event_type}`,
+          description,
           actor_name: ev.staff_name ?? null,
           actor_role: ev.staff_name ? "Staff" : null,
           details: ev as any,
-          severity: severityForPaymentEvent(ev.event_type),
+          severity: isTipAdjusted ? "info" : severityForPaymentEvent(ev.event_type),
         })
       );
     }
