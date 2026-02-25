@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Sheet,
   SheetContent,
@@ -17,6 +17,8 @@ import {
   FileText,
   Plus,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   Receipt,
   RotateCcw,
   MapPin,
@@ -31,6 +33,13 @@ import {
   StickyNote,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   PieChart,
@@ -76,6 +85,10 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { useCustomerOrders } from "../hooks/useCustomerOrders";
+import { OrderDetailSheet } from "@/components/dashboard/orders/OrderDetailSheet";
+import { useCustomerReservations, useCustomerWaitlist, useCustomerDineSessions } from "../hooks/useCustomerBookings";
+import { useCustomerFeedback, useAddFeedbackResponse, useUpdateFeedbackFlag } from "../hooks/useCustomerFeedback";
 
 interface CustomerProfileSheetProps {
   customer: CustomerListItem | null;
@@ -436,6 +449,728 @@ function AddNoteDialog({
 }
 
 // =============================================================================
+// Bookings Tab Content Component
+// =============================================================================
+
+function BookingsTabContent({ customer }: { customer: CustomerListItem | null }) {
+  const [activeSubTab, setActiveSubTab] = useState<"reservations" | "waitlist" | "dine">("reservations");
+  const customerId = customer?.id || null;
+
+  const { data: reservations = [], isLoading: loadingRes } = useCustomerReservations(customerId);
+  const { data: waitlist = [], isLoading: loadingWait } = useCustomerWaitlist(customerId);
+  const { data: dineSessions = [], isLoading: loadingDine } = useCustomerDineSessions(customerId);
+
+  const stats = useMemo(() => {
+    const totalBookings = reservations.length;
+    const completedBookings = reservations.filter((r: any) => r.status === "completed").length;
+    const noShows = reservations.filter((r: any) => r.status === "no_show").length;
+    const avgPartySize = totalBookings > 0
+      ? (reservations.reduce((sum, r: any) => sum + (r.party_size || 0), 0) / totalBookings).toFixed(1)
+      : 0;
+    const noShowRate = totalBookings > 0 ? ((noShows / totalBookings) * 100).toFixed(1) : 0;
+
+    return {
+      totalBookings,
+      completedBookings,
+      completedPct: totalBookings > 0 ? ((completedBookings / totalBookings) * 100).toFixed(1) : 0,
+      noShows,
+      noShowRate,
+      avgPartySize,
+    };
+  }, [reservations]);
+
+  return (
+    <>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-4 gap-3">
+        <Card className="border-none shadow-sm bg-white dark:bg-card">
+          <CardContent className="pt-4">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Bookings</p>
+            <p className="text-2xl font-bold mt-2">{stats.totalBookings}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-none shadow-sm bg-white dark:bg-card">
+          <CardContent className="pt-4">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Completed</p>
+            <p className="text-2xl font-bold mt-2">{stats.completedBookings}</p>
+            <p className="text-xs text-muted-foreground mt-1">{stats.completedPct}%</p>
+          </CardContent>
+        </Card>
+        <Card className="border-none shadow-sm bg-white dark:bg-card">
+          <CardContent className="pt-4">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">No-Shows</p>
+            <p className="text-2xl font-bold mt-2">{stats.noShows}</p>
+            <p className="text-xs text-muted-foreground mt-1">{stats.noShowRate}%</p>
+          </CardContent>
+        </Card>
+        <Card className="border-none shadow-sm bg-white dark:bg-card">
+          <CardContent className="pt-4">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Avg Party Size</p>
+            <p className="text-2xl font-bold mt-2">{stats.avgPartySize}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Sub-tabs */}
+      <Tabs value={activeSubTab} onValueChange={(val) => setActiveSubTab(val as any)}>
+        <TabsList className="bg-muted">
+          <TabsTrigger value="reservations">Reservations ({reservations.length})</TabsTrigger>
+          <TabsTrigger value="waitlist">Waitlist ({waitlist.length})</TabsTrigger>
+          <TabsTrigger value="dine">Dine-In ({dineSessions.length})</TabsTrigger>
+        </TabsList>
+
+        {/* Reservations */}
+        <TabsContent value="reservations" className="mt-6">
+          {loadingRes ? (
+            <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
+          ) : reservations.length === 0 ? (
+            <div className="text-center p-8 text-muted-foreground">No reservations</div>
+          ) : (
+            <div className="border rounded-lg overflow-x-auto bg-white dark:bg-card">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/30 border-b">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium">Date & Time</th>
+                    <th className="px-4 py-3 text-left font-medium">Party Size</th>
+                    <th className="px-4 py-3 text-left font-medium">Location</th>
+                    <th className="px-4 py-3 text-left font-medium">Table</th>
+                    <th className="px-4 py-3 text-left font-medium">Status</th>
+                    <th className="px-4 py-3 text-left font-medium">Requests</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(reservations as any[]).map((res) => (
+                    <tr key={res.id} className="border-t hover:bg-muted/50">
+                      <td className="px-4 py-3 text-sm">{res.reservation_date} {res.reservation_time}</td>
+                      <td className="px-4 py-3 text-sm">{res.party_size}</td>
+                      <td className="px-4 py-3 text-sm">{res.location?.name}</td>
+                      <td className="px-4 py-3 text-sm">{res.assigned_table_ids?.join(", ") || "—"}</td>
+                      <td className="px-4 py-3"><Badge variant="outline">{res.status || "—"}</Badge></td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground max-w-xs truncate">{res.special_requests || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Waitlist */}
+        <TabsContent value="waitlist" className="mt-6">
+          {loadingWait ? (
+            <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
+          ) : waitlist.length === 0 ? (
+            <div className="text-center p-8 text-muted-foreground">No waitlist entries</div>
+          ) : (
+            <div className="border rounded-lg overflow-x-auto bg-white dark:bg-card">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/30 border-b">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium">Date</th>
+                    <th className="px-4 py-3 text-left font-medium">Party</th>
+                    <th className="px-4 py-3 text-left font-medium">Quoted Wait</th>
+                    <th className="px-4 py-3 text-left font-medium">Actual Wait</th>
+                    <th className="px-4 py-3 text-left font-medium">Status</th>
+                    <th className="px-4 py-3 text-left font-medium">Location</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(waitlist as any[]).map((entry) => (
+                    <tr key={entry.id} className="border-t hover:bg-muted/50">
+                      <td className="px-4 py-3 text-sm">{new Date(entry.created_at).toLocaleDateString()}</td>
+                      <td className="px-4 py-3 text-sm">{entry.party_size}</td>
+                      <td className="px-4 py-3 text-sm">{entry.quoted_wait_minutes} min</td>
+                      <td className="px-4 py-3 text-sm">{entry.actual_wait_minutes ? `${entry.actual_wait_minutes} min` : "—"}</td>
+                      <td className="px-4 py-3"><Badge variant="outline">{entry.status || "—"}</Badge></td>
+                      <td className="px-4 py-3 text-sm">{entry.location?.name}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Dine-In Sessions */}
+        <TabsContent value="dine" className="mt-6">
+          {loadingDine ? (
+            <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
+          ) : dineSessions.length === 0 ? (
+            <div className="text-center p-8 text-muted-foreground">No dine-in sessions</div>
+          ) : (
+            <div className="border rounded-lg overflow-x-auto bg-white dark:bg-card">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/30 border-b">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium">Date</th>
+                    <th className="px-4 py-3 text-left font-medium">Table(s)</th>
+                    <th className="px-4 py-3 text-left font-medium">Party</th>
+                    <th className="px-4 py-3 text-left font-medium">Duration</th>
+                    <th className="px-4 py-3 text-left font-medium">Server</th>
+                    <th className="px-4 py-3 text-left font-medium">Order</th>
+                    <th className="px-4 py-3 text-left font-medium">Complaint</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(dineSessions as any[]).map((session) => {
+                    const duration = session.closed_at
+                      ? Math.round((new Date(session.closed_at).getTime() - new Date(session.seated_at).getTime()) / 60000)
+                      : null;
+                    return (
+                      <tr key={session.id} className="border-t hover:bg-muted/50">
+                        <td className="px-4 py-3 text-sm">{new Date(session.seated_at).toLocaleDateString()}</td>
+                        <td className="px-4 py-3 text-sm">{session.table_numbers?.join(", ") || "—"}</td>
+                        <td className="px-4 py-3 text-sm">{session.party_size}</td>
+                        <td className="px-4 py-3 text-sm">{duration ? `${duration} min` : "—"}</td>
+                        <td className="px-4 py-3 text-sm">{session.server?.display_name || "—"}</td>
+                        <td className="px-4 py-3 text-sm">{session.order?.display_number || "—"}</td>
+                        <td className="px-4 py-3">
+                          {session.is_complaint ? <Badge variant="destructive">Yes</Badge> : "No"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+    </>
+  );
+}
+
+// =============================================================================
+// Feedback Tab Content Component
+// =============================================================================
+
+function FeedbackTabContent({ customer }: { customer: CustomerListItem | null }) {
+  const customerId = customer?.id || null;
+  const { data: feedback = [], isLoading } = useCustomerFeedback(customerId);
+  const [respondingTo, setRespondingTo] = useState<string | null>(null);
+  const [responseText, setResponseText] = useState("");
+
+  const respondMutation = useAddFeedbackResponse();
+  const flagMutation = useUpdateFeedbackFlag();
+
+  const stats = useMemo(() => {
+    if (feedback.length === 0) {
+      return {
+        avgRating: 0,
+        totalReviews: 0,
+        foodAvg: 0,
+        serviceAvg: 0,
+      };
+    }
+
+    const overallSum = feedback.reduce((sum, f: any) => sum + (f.overall_rating || 0), 0);
+    const foodSum = feedback.reduce((sum, f: any) => sum + (f.food_rating || 0), 0);
+    const serviceSum = feedback.reduce((sum, f: any) => sum + (f.service_rating || 0), 0);
+    const foodCount = feedback.filter((f: any) => f.food_rating).length;
+    const serviceCount = feedback.filter((f: any) => f.service_rating).length;
+
+    return {
+      avgRating: (overallSum / feedback.length).toFixed(1),
+      totalReviews: feedback.length,
+      foodAvg: foodCount > 0 ? (foodSum / foodCount).toFixed(1) : 0,
+      serviceAvg: serviceCount > 0 ? (serviceSum / serviceCount).toFixed(1) : 0,
+    };
+  }, [feedback]);
+
+  const handleRespond = async () => {
+    if (!respondingTo || !responseText.trim()) return;
+    await respondMutation.mutateAsync({ feedbackId: respondingTo, response: responseText });
+    setRespondingTo(null);
+    setResponseText("");
+  };
+
+  return (
+    <>
+      {/* Stats */}
+      <div className="grid grid-cols-4 gap-3">
+        <Card className="border-none shadow-sm bg-white dark:bg-card">
+          <CardContent className="pt-4">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Avg Rating</p>
+            <p className="text-2xl font-bold mt-2">⭐ {stats.avgRating}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-none shadow-sm bg-white dark:bg-card">
+          <CardContent className="pt-4">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Reviews</p>
+            <p className="text-2xl font-bold mt-2">{stats.totalReviews}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-none shadow-sm bg-white dark:bg-card">
+          <CardContent className="pt-4">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Food Avg</p>
+            <p className="text-2xl font-bold mt-2">⭐ {stats.foodAvg}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-none shadow-sm bg-white dark:bg-card">
+          <CardContent className="pt-4">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Service Avg</p>
+            <p className="text-2xl font-bold mt-2">⭐ {stats.serviceAvg}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Feedback List */}
+      <div className="space-y-3">
+        {isLoading ? (
+          <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
+        ) : feedback.length === 0 ? (
+          <div className="text-center p-8 text-muted-foreground">No feedback yet</div>
+        ) : (
+          (feedback as any[]).map((item) => (
+            <Card key={item.id} className="border shadow-sm">
+              <CardContent className="pt-4">
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-sm">{"⭐".repeat(item.overall_rating)}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(item.created_at).toLocaleDateString()}
+                      </span>
+                      {item.is_flagged && (
+                        <Badge variant="destructive" className="text-xs">Flagged</Badge>
+                      )}
+                    </div>
+                    {item.comment && (
+                      <p className="text-sm text-foreground mb-2">{item.comment}</p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant={item.is_flagged ? "default" : "outline"}
+                      onClick={() => flagMutation.mutate({ feedbackId: item.id, isFlagged: !item.is_flagged })}
+                      className="h-8"
+                    >
+                      {item.is_flagged ? "Unflag" : "Flag"}
+                    </Button>
+                    {!item.response && (
+                      <Button
+                        size="sm"
+                        onClick={() => setRespondingTo(item.id)}
+                        className="h-8"
+                      >
+                        Respond
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Response */}
+                {item.response && (
+                  <div className="bg-muted/30 p-3 rounded-md text-sm mb-3">
+                    <p className="font-medium text-xs text-muted-foreground mb-1">Your response:</p>
+                    <p>{item.response}</p>
+                  </div>
+                )}
+
+                {/* Respond Input */}
+                {respondingTo === item.id && (
+                  <div className="mt-3 space-y-2">
+                    <Textarea
+                      placeholder="Type your response..."
+                      value={responseText}
+                      onChange={(e) => setResponseText(e.target.value)}
+                      rows={3}
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={handleRespond}
+                        disabled={!responseText.trim() || respondMutation.isPending}
+                      >
+                        Send
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { setRespondingTo(null); setResponseText(""); }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+    </>
+  );
+}
+
+// =============================================================================
+// Orders Tab Content Component
+// =============================================================================
+
+type DateRangeFilter = "30d" | "90d" | "6mo" | "1yr" | "all";
+type StatusFilter = "all" | "completed" | "void" | "refund";
+type SortField = "date" | "total" | "items" | "status";
+
+function OrdersTabContent({ customer }: { customer: CustomerListItem | null }) {
+  const { data: orders = [], isLoading } = useCustomerOrders(customer?.id || null);
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRangeFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [sortField, setSortField] = useState<SortField>("date");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  // Filter by date range
+  const dateFilteredOrders = useMemo(() => {
+    if (dateRange === "all") return orders;
+
+    const now = new Date();
+    const daysMap: Record<Exclude<DateRangeFilter, "all">, number> = {
+      "30d": 30,
+      "90d": 90,
+      "6mo": 180,
+      "1yr": 365,
+    };
+    const days = daysMap[dateRange];
+    const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+
+    return orders.filter((order) => new Date(order.created_at) >= cutoffDate);
+  }, [orders, dateRange]);
+
+  // Filter by status
+  const statusFilteredOrders = useMemo(() => {
+    if (statusFilter === "all") return dateFilteredOrders;
+    return dateFilteredOrders.filter((order) => order.status === statusFilter);
+  }, [dateFilteredOrders, statusFilter]);
+
+  // Sort
+  const sortedOrders = useMemo(() => {
+    const sorted = [...statusFilteredOrders];
+    sorted.sort((a, b) => {
+      let aVal: any;
+      let bVal: any;
+
+      switch (sortField) {
+        case "date":
+          aVal = new Date(a.created_at).getTime();
+          bVal = new Date(b.created_at).getTime();
+          break;
+        case "total":
+          aVal = a.total_amount || 0;
+          bVal = b.total_amount || 0;
+          break;
+        case "items":
+          aVal = a.order_items?.length || 0;
+          bVal = b.order_items?.length || 0;
+          break;
+        case "status":
+          aVal = a.status || "";
+          bVal = b.status || "";
+          break;
+        default:
+          return 0;
+      }
+
+      if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+    return sorted;
+  }, [statusFilteredOrders, sortField, sortDir]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDir("desc");
+    }
+  };
+
+  // Calculate stats
+  const stats = useMemo(() => {
+    const total = orders.length;
+    const completed = orders.filter((o) => o.status === "completed").length;
+    const voided = orders.filter((o) => o.status === "void").length;
+    const refunded = orders.filter((o) => o.status === "refund").length;
+
+    return {
+      total,
+      completed,
+      completedPct: total > 0 ? ((completed / total) * 100).toFixed(1) : "0.0",
+      voided,
+      voidedPct: total > 0 ? ((voided / total) * 100).toFixed(1) : "0.0",
+      refunded,
+      refundedPct: total > 0 ? ((refunded / total) * 100).toFixed(1) : "0.0",
+    };
+  }, [orders]);
+
+  const handleViewOrder = (order: any) => {
+    setSelectedOrder(order);
+    setIsDetailOpen(true);
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "completed":
+        return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
+      case "void":
+        return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400";
+      case "refund":
+        return "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400";
+      default:
+        return "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400";
+    }
+  };
+
+  const getPaymentIcon = (method: string) => {
+    return method === "cash" ? "💵" : "💳";
+  };
+
+  return (
+    <>
+      {/* Stats */}
+      <div className="grid grid-cols-4 gap-3">
+        <Card className="border-none shadow-sm bg-white dark:bg-card">
+          <CardContent className="pt-4">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  Total Orders
+                </p>
+                <p className="text-2xl font-bold mt-2">{stats.total}</p>
+              </div>
+              <Receipt className="h-5 w-5 text-muted-foreground" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-none shadow-sm bg-white dark:bg-card">
+          <CardContent className="pt-4">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  Completed
+                </p>
+                <p className="text-2xl font-bold mt-2">{stats.completed}</p>
+                <p className="text-xs text-muted-foreground mt-1">{stats.completedPct}%</p>
+              </div>
+              <div className="h-5 w-5 rounded-full bg-green-100 dark:bg-green-900/30" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-none shadow-sm bg-white dark:bg-card">
+          <CardContent className="pt-4">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  Voided
+                </p>
+                <p className="text-2xl font-bold mt-2">{stats.voided}</p>
+                <p className="text-xs text-muted-foreground mt-1">{stats.voidedPct}%</p>
+              </div>
+              <div className="h-5 w-5 rounded-full bg-red-100 dark:bg-red-900/30" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-none shadow-sm bg-white dark:bg-card">
+          <CardContent className="pt-4">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  Refunded
+                </p>
+                <p className="text-2xl font-bold mt-2">{stats.refunded}</p>
+                <p className="text-xs text-muted-foreground mt-1">{stats.refundedPct}%</p>
+              </div>
+              <div className="h-5 w-5 rounded-full bg-amber-100 dark:bg-amber-900/30" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <div className="flex gap-3">
+        <Select value={dateRange} onValueChange={(val) => setDateRange(val as DateRangeFilter)}>
+          <SelectTrigger className="w-36 h-9 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="30d">Last 30 days</SelectItem>
+            <SelectItem value="90d">Last 90 days</SelectItem>
+            <SelectItem value="6mo">Last 6 months</SelectItem>
+            <SelectItem value="1yr">Last year</SelectItem>
+            <SelectItem value="all">All time</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val as StatusFilter)}>
+          <SelectTrigger className="w-40 h-9 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="void">Voided</SelectItem>
+            <SelectItem value="refund">Refunded</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Orders Table */}
+      <div className="border rounded-lg bg-white dark:bg-card overflow-hidden">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-40">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : sortedOrders.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
+            <Receipt className="h-8 w-8 mb-2 opacity-50" />
+            <p className="text-sm">No orders found</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/30 border-b">
+                <tr>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">
+                    <button
+                      className="flex items-center gap-1 hover:text-foreground"
+                      onClick={() => handleSort("date")}
+                    >
+                      Date
+                      {sortField === "date" &&
+                        (sortDir === "asc" ? (
+                          <ChevronUp className="h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        ))}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Order #</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Type</th>
+                  <th className="px-4 py-3 text-right font-medium text-muted-foreground">
+                    <button
+                      className="flex items-center justify-end gap-1 w-full hover:text-foreground"
+                      onClick={() => handleSort("items")}
+                    >
+                      Items
+                      {sortField === "items" &&
+                        (sortDir === "asc" ? (
+                          <ChevronUp className="h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        ))}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3 text-right font-medium text-muted-foreground">
+                    <button
+                      className="flex items-center justify-end gap-1 w-full hover:text-foreground"
+                      onClick={() => handleSort("total")}
+                    >
+                      Total
+                      {sortField === "total" &&
+                        (sortDir === "asc" ? (
+                          <ChevronUp className="h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        ))}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tip</th>
+                  <th className="px-4 py-3 text-center font-medium text-muted-foreground">Payment</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">
+                    <button
+                      className="flex items-center gap-1 hover:text-foreground"
+                      onClick={() => handleSort("status")}
+                    >
+                      Status
+                      {sortField === "status" &&
+                        (sortDir === "asc" ? (
+                          <ChevronUp className="h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        ))}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedOrders.map((order) => (
+                  <tr key={order.id} className="border-t hover:bg-muted/50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="text-sm">
+                        <div className="font-medium">
+                          {new Date(order.created_at).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {new Date(order.created_at).toLocaleTimeString("en-US", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            meridiem: "short",
+                          })}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-sm font-medium">{order.display_number}</td>
+                    <td className="px-4 py-3">
+                      <Badge variant="outline" className="text-xs">
+                        {order.order_type || "—"}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm">
+                      {order.order_items?.length || 0} item{order.order_items?.length !== 1 ? "s" : ""}
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium">
+                      ${(order.total_amount || 0).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {order.tip_amount ? `$${order.tip_amount.toFixed(2)}` : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-center">{getPaymentIcon(order.payment_pricing_mode || "")}</td>
+                    <td className="px-4 py-3">
+                      <Badge className={cn("text-xs", getStatusColor(order.status))}>
+                        {order.status}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleViewOrder(order)}
+                        className="h-8 px-2"
+                      >
+                        View
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Order Detail Sheet */}
+      {selectedOrder && (
+        <OrderDetailSheet
+          order={selectedOrder}
+          open={isDetailOpen}
+          onOpenChange={setIsDetailOpen}
+        />
+      )}
+    </>
+  );
+}
+
+// =============================================================================
 // Main Component
 // =============================================================================
 
@@ -464,6 +1199,10 @@ export function CustomerProfileSheet({
   const { data: activityTimeline, isLoading: isLoadingTimeline } = useCustomerActivityTimeline(customerId);
   const { data: percentile } = useCustomerPercentileWithClerkOrgId(customerId, clerkOrgId);
   const { data: visitTrend } = useCustomerVisitTrend(customerId);
+
+  // Tab badge counts
+  const { data: reservations = [] } = useCustomerReservations(customerId);
+  const { data: feedback = [] } = useCustomerFeedback(customerId);
 
   // Mutations
   const addTagMutation = useAddCustomerTag();
@@ -596,28 +1335,32 @@ export function CustomerProfileSheet({
               </div>
             </SheetHeader>
 
+            {/* Tab Configs with counts from top-level hooks */}
             <Tabs defaultValue="overview" className="mt-8">
               <TabsList className="bg-transparent h-auto p-0 space-x-6 border-b rounded-none w-full justify-start">
-                {[
-                  { name: "Overview", count: null },
-                  { name: "Orders", count: profile?.customer?.total_orders ?? customer.total_orders ?? 0 },
-                  { name: "Bookings", count: 0 },
-                  { name: "Feedback", count: 0 },
-                  { name: "Loyalty", count: null },
-                  { name: "Marketing", count: null },
-                  { name: "Details", count: null },
-                ].map((tab) => (
-                  <TabsTrigger
-                    key={tab.name}
-                    value={tab.name.toLowerCase()}
-                    className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2 text-muted-foreground data-[state=active]:text-foreground font-medium bg-transparent shadow-none border-b-2 border-transparent transition-none"
-                  >
-                    {tab.name}
-                    {tab.count !== null && (
-                      <span className="ml-1.5 text-xs text-muted-foreground font-normal">{tab.count}</span>
-                    )}
-                  </TabsTrigger>
-                ))}
+                {(() => {
+                  const tabConfigs = [
+                    { name: "Overview", count: null },
+                    { name: "Orders", count: profile?.customer?.total_orders ?? customer.total_orders ?? 0 },
+                    { name: "Bookings", count: reservations.length },
+                    { name: "Feedback", count: feedback.length },
+                    { name: "Loyalty", count: null },
+                    { name: "Marketing", count: null },
+                    { name: "Details", count: null },
+                  ];
+                  return tabConfigs.map((tab) => (
+                    <TabsTrigger
+                      key={tab.name}
+                      value={tab.name.toLowerCase()}
+                      className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2 text-muted-foreground data-[state=active]:text-foreground font-medium bg-transparent shadow-none border-b-2 border-transparent transition-none"
+                    >
+                      {tab.name}
+                      {tab.count !== null && (
+                        <span className="ml-1.5 text-xs text-muted-foreground font-normal">{tab.count}</span>
+                      )}
+                    </TabsTrigger>
+                  ));
+                })()}
               </TabsList>
 
               <div className="mt-6">
@@ -864,8 +1607,23 @@ export function CustomerProfileSheet({
                   </div>
                 </TabsContent>
 
+                {/* Orders Tab */}
+                <TabsContent value="orders" className="space-y-6 py-6 animate-in fade-in-50 duration-300">
+                  <OrdersTabContent customer={customer} />
+                </TabsContent>
+
+                {/* Bookings Tab */}
+                <TabsContent value="bookings" className="space-y-6 py-6 animate-in fade-in-50 duration-300">
+                  <BookingsTabContent customer={customer} />
+                </TabsContent>
+
+                {/* Feedback Tab */}
+                <TabsContent value="feedback" className="space-y-6 py-6 animate-in fade-in-50 duration-300">
+                  <FeedbackTabContent customer={customer} />
+                </TabsContent>
+
                 {/* Placeholder tabs */}
-                {["orders", "bookings", "feedback", "loyalty", "marketing", "details"].map((tab) => (
+                {["loyalty", "marketing", "details"].map((tab) => (
                   <TabsContent
                     key={tab}
                     value={tab}
