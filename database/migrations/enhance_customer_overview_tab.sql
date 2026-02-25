@@ -204,8 +204,8 @@ BEGIN
   )
   SELECT
     COALESCE(rp.channel, pp.channel) AS channel,
-    COALESCE(rp.count_recent, 0)::bigint,
-    COALESCE(pp.count_previous, 0)::bigint,
+    COALESCE(rp.count_recent, 0)::bigint AS count_recent,
+    COALESCE(pp.count_previous, 0)::bigint AS count_previous,
     ROUND(
       (COALESCE(rp.count_recent, 0)::numeric / NULLIF(t.total_recent, 0) * 100),
       1
@@ -222,7 +222,7 @@ BEGIN
   FROM recent_period rp
   FULL OUTER JOIN previous_period pp ON rp.channel = pp.channel
   CROSS JOIN totals t
-  ORDER BY count_recent DESC;
+  ORDER BY COALESCE(rp.count_recent, 0) DESC;
 END;
 $$;
 

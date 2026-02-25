@@ -60,7 +60,7 @@ export async function GetCustomerDineSessions(customerId: string) {
       *,
       location:locations(name),
       server:staff_profiles!table_sessions_server_staff_id_fkey(first_name, last_name, display_name),
-      order:orders(display_number)
+      order:orders!table_sessions_order_id_fkey(display_number)
       `
     )
     .eq("customer_id", customerId)
