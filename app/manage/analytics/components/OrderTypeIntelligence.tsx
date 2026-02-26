@@ -182,7 +182,7 @@ export function OrderTypeIntelligence() {
       </div>
 
       {/* ── Channel Comparison ──────────────────────────────────────────── */}
-      {data.channelBreakdown.length > 0 && (
+      {(data.channelBreakdown?.length ?? 0) > 0 && (
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
@@ -217,13 +217,13 @@ export function OrderTypeIntelligence() {
               <div>
                 <p className="text-xs text-muted-foreground mb-3 font-medium uppercase tracking-wide">Orders by Channel</p>
                 <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={data.channelBreakdown} layout="vertical" margin={{ left: 8, right: 32 }}>
+                  <BarChart data={data.channelBreakdown ?? []} layout="vertical" margin={{ left: 8, right: 32 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                     <XAxis type="number" tick={{ fontSize: 11 }} />
                     <YAxis type="category" dataKey="label" tick={{ fontSize: 12 }} width={80} />
                     <Tooltip formatter={(v: number, _n, props) => [`${v.toLocaleString()} orders (${props.payload?.percentage}%)`, 'Orders']} />
                     <Bar dataKey="orderCount" radius={[0, 4, 4, 0]}>
-                      {data.channelBreakdown.map((entry, i) => (
+                      {(data.channelBreakdown ?? []).map((entry, i) => (
                         <Cell key={i} fill={entry.color} />
                       ))}
                     </Bar>
@@ -235,13 +235,13 @@ export function OrderTypeIntelligence() {
               <div>
                 <p className="text-xs text-muted-foreground mb-3 font-medium uppercase tracking-wide">Avg Order Value by Channel</p>
                 <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={data.channelBreakdown} layout="vertical" margin={{ left: 8, right: 32 }}>
+                  <BarChart data={data.channelBreakdown ?? []} layout="vertical" margin={{ left: 8, right: 32 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                     <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={v => `$${v}`} />
                     <YAxis type="category" dataKey="label" tick={{ fontSize: 12 }} width={80} />
                     <Tooltip formatter={(v: number) => [`$${v.toFixed(2)}`, 'Avg Order Value']} />
                     <Bar dataKey="avgOrderValue" radius={[0, 4, 4, 0]}>
-                      {data.channelBreakdown.map((entry, i) => (
+                      {(data.channelBreakdown ?? []).map((entry, i) => (
                         <Cell key={i} fill={entry.color} />
                       ))}
                     </Bar>
@@ -252,7 +252,7 @@ export function OrderTypeIntelligence() {
 
             {/* Channel stat row */}
             <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {data.channelBreakdown.map((ch: ChannelStat) => (
+              {(data.channelBreakdown ?? []).map((ch: ChannelStat) => (
                 <div key={ch.channel} className="flex items-center gap-2 p-2 rounded-lg bg-muted/40">
                   <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: ch.color }} />
                   <div className="min-w-0">

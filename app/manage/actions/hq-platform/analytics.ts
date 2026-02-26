@@ -2513,6 +2513,7 @@ export interface MerchantLaborStat {
   totalHours: number
   totalOrders: number
   hoursPerOrder: number | null
+  openShiftsCount: number
 }
 
 export interface HourlyStaffPattern {
@@ -2540,6 +2541,7 @@ export interface StaffLaborData {
   totalStaffHours: number
   totalActiveStaff: number
   avgHoursPerStaffPerWeek: number
+  openShiftsCount: number
   merchantStats: MerchantLaborStat[]
   hourlyPattern: HourlyStaffPattern[]
   dayOfWeekPattern: DayOfWeekPattern[]
@@ -2566,6 +2568,7 @@ export async function getStaffLaborAnalytics(days: number = 30): Promise<StaffLa
     totalStaffHours: 0,
     totalActiveStaff: 0,
     avgHoursPerStaffPerWeek: 0,
+    openShiftsCount: 0,
     merchantStats: [],
     hourlyPattern: HOUR_LABELS.map((label, hour) => ({ hour, label, shiftCount: 0 })),
     dayOfWeekPattern: DAY_LABELS.map((day, dayIndex) => ({ day, dayIndex, shiftCount: 0 })),
@@ -2604,19 +2607,26 @@ export async function getStaffLaborAnalytics(days: number = 30): Promise<StaffLa
   const merchantNameMap = new Map(merchants.map(m => [m.id, m.name]))
 
   // ── Per-merchant aggregation ──────────────────────────────────────────────
-  const merchantMap = new Map<string, { staffIds: Set<string>; totalHours: number }>()
+  // Only count hours from COMPLETED shifts (clock_out_time present).
+  // Open/active shifts have no finalized duration — using NOW() as end time
+  // inflates totals with stuck/forgotten clock-ins.
+  const merchantMap = new Map<string, { staffIds: Set<string>; totalHours: number; openShifts: number }>()
 
   shifts.forEach(shift => {
     const mid = shift.merchant_id
     if (!merchantMap.has(mid)) {
-      merchantMap.set(mid, { staffIds: new Set(), totalHours: 0 })
+      merchantMap.set(mid, { staffIds: new Set(), totalHours: 0, openShifts: 0 })
     }
     const entry = merchantMap.get(mid)!
     if (shift.staff_profile_id) entry.staffIds.add(shift.staff_profile_id)
-    const clockOut = shift.clock_out_time ? new Date(shift.clock_out_time) : new Date()
-    const hours = Math.max(0, (clockOut.getTime() - new Date(shift.clock_in_time).getTime()) / (1000 * 60 * 60))
-    // Cap unreasonably long open shifts at 24h to avoid bad data skewing totals
-    entry.totalHours += Math.min(hours, 24)
+    if (shift.clock_out_time) {
+      // Completed shift — count actual hours, cap at 24h for data integrity
+      const hours = Math.max(0, (new Date(shift.clock_out_time).getTime() - new Date(shift.clock_in_time).getTime()) / (1000 * 60 * 60))
+      entry.totalHours += Math.min(hours, 24)
+    } else {
+      // Still open (active) — track count for the warning badge, skip hours
+      entry.openShifts += 1
+    }
   })
 
   // Order counts per merchant
@@ -2636,6 +2646,7 @@ export async function getStaffLaborAnalytics(days: number = 30): Promise<StaffLa
         totalHours,
         totalOrders,
         hoursPerOrder: totalOrders > 0 ? Math.round((totalHours / totalOrders) * 100) / 100 : null,
+        openShiftsCount: v.openShifts,
       }
     })
     .sort((a, b) => b.totalHours - a.totalHours)
@@ -2645,9 +2656,14 @@ export async function getStaffLaborAnalytics(days: number = 30): Promise<StaffLa
   const totalActiveStaff = new Set(
     shifts.filter(s => s.staff_profile_id).map(s => s.staff_profile_id)
   ).size
+  const openShiftsCount = shifts.filter(s => !s.clock_out_time).length
   const weeks = days / 7
-  const avgHoursPerStaffPerWeek = totalActiveStaff > 0 && weeks > 0
-    ? Math.round((totalStaffHours / totalActiveStaff / weeks) * 10) / 10
+  // Use only staff who have at least one completed shift for the avg calculation
+  const staffWithCompletedShifts = new Set(
+    shifts.filter(s => s.staff_profile_id && s.clock_out_time).map(s => s.staff_profile_id)
+  ).size
+  const avgHoursPerStaffPerWeek = staffWithCompletedShifts > 0 && weeks > 0
+    ? Math.round((totalStaffHours / staffWithCompletedShifts / weeks) * 10) / 10
     : 0
 
   // ── Hourly pattern (by clock-in hour) ────────────────────────────────────
@@ -2698,6 +2714,7 @@ export async function getStaffLaborAnalytics(days: number = 30): Promise<StaffLa
     totalStaffHours,
     totalActiveStaff,
     avgHoursPerStaffPerWeek,
+    openShiftsCount,
     merchantStats,
     hourlyPattern,
     dayOfWeekPattern,
@@ -2744,6 +2761,16 @@ export interface OrderTypeMerchantRow {
   onlinePct: number
 }
 
+export interface ChannelStat {
+  channel: string
+  label: string
+  orderCount: number
+  totalGPV: number
+  avgOrderValue: number
+  percentage: number
+  color: string
+}
+
 export interface OrderTypeIntelligenceData {
   breakdown: OrderTypeStat[]
   totalOrders: number
@@ -2751,6 +2778,7 @@ export interface OrderTypeIntelligenceData {
   weeklyTrend: OrderTypeTrendPoint[]
   merchantBreakdown: OrderTypeMerchantRow[]
   periodDays: number
+  channelBreakdown?: ChannelStat[]
 }
 
 const ORDER_TYPE_META: Record<string, { label: string; color: string }> = {

@@ -11,7 +11,7 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, Cell,
 } from 'recharts'
-import { ArrowUpDown, Clock, Users, TrendingUp, AlertTriangle, Zap } from 'lucide-react'
+import { ArrowUpDown, Clock, Users, TrendingUp, AlertTriangle, Zap, AlertCircle } from 'lucide-react'
 import type { MerchantLaborStat } from '@/app/manage/actions/hq-platform/analytics'
 
 type SortKey = 'totalHours' | 'activeStaff' | 'totalOrders' | 'hoursPerOrder' | 'merchantName'
@@ -69,6 +69,7 @@ export function StaffLaborAnalytics() {
     if (!data) return null
 
     const { sessionHealth } = data
+    const totalOpenShifts = data.openShiftsCount
 
     const peakHour = data.hourlyPattern.reduce((max, h) => h.shiftCount > max.shiftCount ? h : max, data.hourlyPattern[0])
     const peakDay = data.dayOfWeekPattern.reduce((max, d) => d.shiftCount > max.shiftCount ? d : max, data.dayOfWeekPattern[0])
@@ -89,6 +90,18 @@ export function StaffLaborAnalytics() {
                     </SelectContent>
                 </Select>
             </div>
+
+            {/* Open shifts warning */}
+            {totalOpenShifts > 0 && (
+                <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />
+                    <div>
+                        <span className="font-semibold">{totalOpenShifts} open shift{totalOpenShifts > 1 ? 's' : ''} detected.</span>
+                        {' '}Staff clocked in but never clocked out. Their hours are excluded from totals to prevent inflated data.
+                        Hours shown reflect <span className="font-semibold">completed shifts only</span>.
+                    </div>
+                </div>
+            )}
 
             {/* Labor KPI Cards */}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -333,6 +346,7 @@ export function StaffLaborAnalytics() {
                                             Hrs / Order <ArrowUpDown className="h-3 w-3" />
                                         </span>
                                     </TableHead>
+                                    <TableHead className="text-right">Open Shifts</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -358,6 +372,16 @@ export function StaffLaborAnalytics() {
                                                     </span>
                                                 ) : (
                                                     <span className="text-xs text-muted-foreground italic">No orders</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-right py-2">
+                                                {m.openShiftsCount > 0 ? (
+                                                    <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700">
+                                                        <AlertCircle className="h-3 w-3" />
+                                                        {m.openShiftsCount}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-xs text-muted-foreground">—</span>
                                                 )}
                                             </TableCell>
                                         </TableRow>
