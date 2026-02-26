@@ -57,8 +57,7 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
 import { useOrderOutStatus, useOnboardOrderOut } from "./hooks/useOrderOutStatus";
-import { OrderOutOnboardingForm, type OnboardingFormData } from "@/components/dashboard/orderout/OrderOutOnboardingForm";
-import { OrderOutStatusCard } from "@/components/dashboard/orderout/OrderOutStatusCard";
+import { OrderOutTab } from "@/components/dashboard/orderout/OrderOutTab";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 
@@ -418,6 +417,10 @@ export default function OnlineOrderingPage() {
           <TabsTrigger value="automation" className="gap-2">
             <Zap className="h-4 w-4" />
             Automation
+          </TabsTrigger>
+          <TabsTrigger value="orderout" className="gap-2">
+            <Plug className="h-4 w-4" />
+            OrderOut
           </TabsTrigger>
         </TabsList>
 
@@ -1546,89 +1549,28 @@ export default function OnlineOrderingPage() {
             </CardContent>
           </Card>
         </TabsContent>
-      </Tabs>
 
-      {/* OrderOut — Delivery Integration */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Plug className="h-5 w-5" />
-                OrderOut — Delivery Integration
-              </CardTitle>
-              <CardDescription>
-                Connect to UberEats, DoorDash, Grubhub and more
-              </CardDescription>
-            </div>
-            <Badge variant="outline">$79.99/mo</Badge>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {orderOutStatus?.hasRestaurant ? (
-            <OrderOutStatusCard
-              hasAccount={orderOutStatus.hasAccount}
-              hasRestaurant={true}
-              isAcceptingOrders={orderOutStatus.isAcceptingOrders}
-              prepTimeMinutes={orderOutStatus.prepTimeMinutes}
-              connectedChannels={orderOutStatus.connectedChannels}
-              autoAcceptOrders={orderOutStatus.autoAcceptOrders}
-              dashboardUrl={orderOutStatus.dashboardUrl}
-            />
-          ) : showOrderOutForm ? (
-            <OrderOutOnboardingForm
-              defaultValues={{
-                accountName: merchantName || "",
-                restaurantName: selectedLocation?.name || "",
-                streetAddress: selectedLocation?.address_line1 || "",
-                city: selectedLocation?.city || "",
-                state: selectedLocation?.state || "",
-                zipcode: selectedLocation?.postal_code || "",
-                country: selectedLocation?.country || "US",
-              }}
-              isSubmitting={onboardOrderOut.isPending}
-              onSubmit={(data: OnboardingFormData) => {
-                if (!clerkOrgId) return;
-                onboardOrderOut.mutate(
-                  {
-                    clerkOrgId,
-                    locationId: selectedLocationId,
-                    accountName: data.accountName,
-                    restaurantName: data.restaurantName,
-                    streetAddress: data.streetAddress,
-                    city: data.city,
-                    state: data.state,
-                    zipcode: data.zipcode,
-                    country: data.country,
-                    restaurantManagerEmail: data.restaurantManagerEmail,
-                    restaurantManagerFirstname: data.restaurantManagerFirstname,
-                    restaurantManagerLastname: data.restaurantManagerLastname,
-                    restaurantManagerPhone: data.restaurantManagerPhone,
-                  },
-                  {
-                    onSuccess: (result) => {
-                      if (result.success) setShowOrderOutForm(false);
-                    },
-                  }
-                );
-              }}
-              onCancel={() => setShowOrderOutForm(false)}
-            />
-          ) : (
-            <div className="flex flex-col items-center py-6">
-              <Plug className="h-10 w-10 text-muted-foreground mb-3" />
-              <p className="text-sm text-muted-foreground text-center mb-4 max-w-sm">
-                Connect this location to delivery platforms like UberEats,
-                DoorDash, and Grubhub through OrderOut.
-              </p>
-              <Button onClick={() => setShowOrderOutForm(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Connect to OrderOut
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        {/* OrderOut Tab */}
+        <TabsContent value="orderout" className="space-y-6">
+          <OrderOutTab
+            clerkOrgId={clerkOrgId || ""}
+            locationId={selectedLocationId}
+            orderOutStatus={orderOutStatus || null}
+            showOnboardingForm={showOrderOutForm}
+            onShowOnboardingForm={setShowOrderOutForm}
+            onboardMutation={onboardOrderOut}
+            merchantName={merchantName}
+            locationName={selectedLocation?.name || ""}
+            locationDefaults={{
+              streetAddress: selectedLocation?.address_line1 || "",
+              city: selectedLocation?.city || "",
+              state: selectedLocation?.state || "",
+              zipcode: selectedLocation?.postal_code || "",
+              country: selectedLocation?.country || "US",
+            }}
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* Hours Modal */}
       <HoursConfigModal

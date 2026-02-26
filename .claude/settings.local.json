@@ -19,7 +19,8 @@
       "Bash(npx tsx:*)",
       "Bash(head:*)",
       "Bash(tail:*)",
-      "Bash(git diff:*)"
+      "Bash(git diff:*)",
+      "Bash(git stash:*)"
     ]
   }
 }

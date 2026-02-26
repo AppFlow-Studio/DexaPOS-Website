@@ -442,4 +442,10 @@ export const adminKeys = {
 
   merchantOrderOutStatus: (merchantId: string) =>
     [...adminKeys.merchants(), merchantId, 'orderout-status'] as const,
+
+  merchantOrderOutMenuSync: (merchantId: string, locationId: string, menuId: string) =>
+    [...adminKeys.merchants(), merchantId, 'orderout-menu-sync', locationId, menuId] as const,
+
+  merchantOrderOutPayloadDiff: (merchantId: string, locationId: string, menuId: string) =>
+    [...adminKeys.merchants(), merchantId, 'orderout-payload-diff', locationId, menuId] as const,
 }

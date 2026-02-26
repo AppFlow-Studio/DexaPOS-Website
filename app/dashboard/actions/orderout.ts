@@ -1087,3 +1087,204 @@ export async function checkMenuPayloadDiff(
     };
   }
 }
+
+// ============================================================================
+// Synced Menus (for OrderOut Tab)
+// ============================================================================
+
+export interface OrderOutSyncedMenu {
+  menuId: string;
+  menuName: string;
+  ooMenuId: string;
+  isActive: boolean;
+  lastPushedAt: string | null;
+  lastSyncStatus: string | null;
+  itemsSynced: number;
+}
+
+/**
+ * Get all menus synced to OrderOut for a location
+ */
+export async function getOrderOutSyncedMenus(
+  clerkOrgId: string,
+  locationId: string
+): Promise<{
+  success: boolean;
+  data: OrderOutSyncedMenu[] | null;
+  error: string | null;
+}> {
+  if (!clerkOrgId || !locationId) {
+    return { success: false, data: null, error: "Missing required parameters" };
+  }
+
+  try {
+    const supabase = createServerSupabaseClient();
+
+    // Resolve merchant
+    const { data: merchant, error: merchantError } = await supabase
+      .from("merchants")
+      .select("id")
+      .eq("clerk_org_id", clerkOrgId)
+      .single();
+
+    if (merchantError || !merchant) {
+      return { success: false, data: null, error: "Merchant not found" };
+    }
+
+    // Get restaurant for this location
+    const { data: restaurant } = await supabase
+      .from("orderout_restaurants")
+      .select("id")
+      .eq("location_id", locationId)
+      .single();
+
+    if (!restaurant) {
+      return { success: true, data: [], error: null };
+    }
+
+    // Get menu links
+    const { data: links, error: linksError } = await supabase
+      .from("orderout_menu_links")
+      .select("menu_id, oo_menu_id, oo_menu_name, is_active, last_pushed_at, last_sync_id")
+      .eq("orderout_restaurant_id", restaurant.id);
+
+    if (linksError) {
+      return { success: false, data: null, error: linksError.message };
+    }
+
+    if (!links || links.length === 0) {
+      return { success: true, data: [], error: null };
+    }
+
+    // Fetch menu names
+    const menuIds = links.map((l) => l.menu_id).filter(Boolean);
+    const { data: menus } = await supabase
+      .from("menus")
+      .select("id, name")
+      .in("id", menuIds);
+
+    const menuNameMap = new Map(menus?.map((m) => [m.id, m.name]) || []);
+
+    // Fetch latest sync status for each link
+    const syncIds = links.map((l) => l.last_sync_id).filter(Boolean) as string[];
+    const { data: syncs } = syncIds.length > 0
+      ? await supabase
+          .from("orderout_menu_syncs")
+          .select("id, sync_status, items_synced")
+          .in("id", syncIds)
+      : { data: [] };
+
+    const syncMap = new Map(syncs?.map((s) => [s.id, s]) || []);
+
+    const result: OrderOutSyncedMenu[] = links.map((link) => {
+      const sync = link.last_sync_id ? syncMap.get(link.last_sync_id) : null;
+      return {
+        menuId: link.menu_id,
+        menuName: menuNameMap.get(link.menu_id) || link.oo_menu_name || "Unknown Menu",
+        ooMenuId: link.oo_menu_id,
+        isActive: link.is_active,
+        lastPushedAt: link.last_pushed_at,
+        lastSyncStatus: sync?.sync_status || null,
+        itemsSynced: sync?.items_synced ?? 0,
+      };
+    });
+
+    return { success: true, data: result, error: null };
+  } catch (error) {
+    console.error("[getOrderOutSyncedMenus] Exception:", error);
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+// ============================================================================
+// Recent Orders (for OrderOut Tab)
+// ============================================================================
+
+export interface OrderOutRecentOrder {
+  id: string;
+  ooOrderNumber: string;
+  deliveryPlatform: string;
+  orderType: string;
+  customerName: string | null;
+  acceptStatus: string;
+  platformTotal: number | null;
+  createdAt: string;
+}
+
+/**
+ * Get the last 10 delivery orders for a location
+ */
+export async function getRecentOrderOutOrders(
+  clerkOrgId: string,
+  locationId: string
+): Promise<{
+  success: boolean;
+  data: OrderOutRecentOrder[] | null;
+  error: string | null;
+}> {
+  if (!clerkOrgId || !locationId) {
+    return { success: false, data: null, error: "Missing required parameters" };
+  }
+
+  try {
+    const supabase = createServerSupabaseClient();
+
+    // Resolve merchant
+    const { data: merchant, error: merchantError } = await supabase
+      .from("merchants")
+      .select("id")
+      .eq("clerk_org_id", clerkOrgId)
+      .single();
+
+    if (merchantError || !merchant) {
+      return { success: false, data: null, error: "Merchant not found" };
+    }
+
+    // Get restaurant for this location
+    const { data: restaurant } = await supabase
+      .from("orderout_restaurants")
+      .select("id")
+      .eq("location_id", locationId)
+      .single();
+
+    if (!restaurant) {
+      return { success: true, data: [], error: null };
+    }
+
+    // Get last 10 orders
+    const { data: orders, error: ordersError } = await supabase
+      .from("orderout_orders")
+      .select("id, oo_order_number, delivery_platform, order_type, customer_name, accept_status, platform_total, created_at")
+      .eq("orderout_restaurant_id", restaurant.id)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (ordersError) {
+      return { success: false, data: null, error: ordersError.message };
+    }
+
+    const result: OrderOutRecentOrder[] = (orders || []).map((o) => ({
+      id: o.id,
+      ooOrderNumber: o.oo_order_number,
+      deliveryPlatform: o.delivery_platform,
+      orderType: o.order_type,
+      customerName: o.customer_name,
+      acceptStatus: o.accept_status,
+      platformTotal: o.platform_total,
+      createdAt: o.created_at,
+    }));
+
+    return { success: true, data: result, error: null };
+  } catch (error) {
+    console.error("[getRecentOrderOutOrders] Exception:", error);
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}

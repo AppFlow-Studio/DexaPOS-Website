@@ -5,6 +5,8 @@ import {
   getOrderOutStatus,
   onboardOrderOut,
   pushMenuToOrderOut,
+  getOrderOutSyncedMenus,
+  getRecentOrderOutOrders,
   type OnboardOrderOutParams,
   type PushMenuToOrderOutParams,
 } from "@/app/dashboard/actions/orderout";
@@ -73,6 +75,9 @@ export function usePushMenuToOrderOut(clerkOrgId: string) {
         queryClient.invalidateQueries({
           queryKey: ["orderout-payload-diff"],
         });
+        queryClient.invalidateQueries({
+          queryKey: ["orderout-synced-menus"],
+        });
       } else {
         toast.error(result.error || "Failed to upload menu to OrderOut");
       }
@@ -80,5 +85,29 @@ export function usePushMenuToOrderOut(clerkOrgId: string) {
     onError: () => {
       toast.error("Failed to upload menu to OrderOut");
     },
+  });
+}
+
+/**
+ * Get synced menus for the OrderOut tab
+ */
+export function useOrderOutSyncedMenus(clerkOrgId: string, locationId: string) {
+  return useQuery({
+    queryKey: ["orderout-synced-menus", clerkOrgId, locationId],
+    queryFn: () => getOrderOutSyncedMenus(clerkOrgId, locationId),
+    enabled: !!clerkOrgId && !!locationId && locationId !== "all",
+    staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * Get recent delivery orders for the OrderOut tab
+ */
+export function useRecentOrderOutOrders(clerkOrgId: string, locationId: string) {
+  return useQuery({
+    queryKey: ["orderout-recent-orders", clerkOrgId, locationId],
+    queryFn: () => getRecentOrderOutOrders(clerkOrgId, locationId),
+    enabled: !!clerkOrgId && !!locationId && locationId !== "all",
+    staleTime: 30 * 1000,
   });
 }
