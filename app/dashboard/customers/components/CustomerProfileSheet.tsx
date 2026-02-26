@@ -73,6 +73,7 @@ import type {
 import {
   getCustomerDisplayName,
   transformOrderChannelsForChart,
+  transformChannelTrendForChart,
   formatActivityTime,
   formatRelativeDate,
   ACTIVITY_DISPLAY_MAP,
@@ -1286,7 +1287,7 @@ export function CustomerProfileSheet({
   if (!customer) return null;
 
   const customerData = profile?.customer || customer;
-  const orderChannels = transformOrderChannelsForChart(profile?.order_channels || null);
+  const orderChannels = transformChannelTrendForChart(channelTrend || null);
   const totalVisits = profile?.customer?.visits ?? customer.visits ?? 0;
 
   // Calculate lifetime spend from actual order data (spend trend RPC)
@@ -1352,6 +1353,11 @@ export function CustomerProfileSheet({
   const channelTrendText = dominantChannelTrend
     ? `${dominantChannelTrend.trend_label} ${dominantChannelTrend.channel}`
     : null;
+
+  // Calculate total orders from channel trend data
+  const totalOrdersRecent = channelTrend
+    ? channelTrend.reduce((sum, channel) => sum + (channel.count_recent || 0), 0)
+    : 0;
 
   const handleAddTag = (tag: string) => {
     addTagMutation.mutate({ customerId: customer.id, tag }, { onSuccess: () => setShowAddTag(false) });
@@ -1466,7 +1472,9 @@ export function CustomerProfileSheet({
                     onOrderClick={(orderId) => {
                       setSelectedOrderId(orderId);
                       setIsOrderDetailOpen(true);
-                    } } totalOrdersRecent={0}                  />
+                    }}
+                    totalOrdersRecent={totalOrdersRecent}
+                  />
                 </TabsContent>
 
                 {/* Orders Tab */}

@@ -79,6 +79,7 @@ export async function GetCustomers(
     `,
     )
     .eq("merchant_id", merchantId)
+    .eq("is_active", true)
     .order(orderBy, { ascending, nullsFirst: false })
     .range(offset, offset + limit - 1);
 
@@ -127,6 +128,7 @@ export async function SearchCustomers(
     `,
     )
     .eq("merchant_id", merchantId)
+    .eq("is_active", true)
     .or(
       `name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`,
     )
@@ -498,6 +500,7 @@ export async function CheckCustomerByPhone(
     )
     .eq("merchant_id", merchantId)
     .eq("phone", phone.trim())
+    .eq("is_active", true)
     .single();
 
   if (error && error.code !== "PGRST116") {
@@ -549,6 +552,7 @@ export async function CreateCustomer(
       address: data.address?.trim() || null,
       tags: normalizedTags.length > 0 ? normalizedTags : [],
       notes: data.notes?.trim() || null,
+      is_active: true,
       visits: 0,
       lifetime_spend: 0,
       avg_spend: 0,
@@ -807,6 +811,9 @@ export async function MergeCustomers(
 /**
  * Delete a customer by ID
  */
+/**
+ * Soft delete a customer (mark as inactive instead of removing from database)
+ */
 export async function DeleteCustomer(
   customerId: string,
   clerkOrgId: string,
@@ -822,7 +829,7 @@ export async function DeleteCustomer(
 
   const supabase = createServerSupabaseClient();
 
-  // Get customer details before deletion for audit log
+  // Get customer details before soft deletion for audit log
   const { data: customer, error: fetchError } = await supabase
     .from("customers")
     .select("id, merchant_id, name")
@@ -835,19 +842,19 @@ export async function DeleteCustomer(
     return { success: false, error: "Customer not found" };
   }
 
-  // Delete the customer
-  const { error: deleteError } = await supabase
+  // Soft delete the customer by marking is_active as false
+  const { error: updateError } = await supabase
     .from("customers")
-    .delete()
+    .update({ is_active: false, updated_at: new Date().toISOString() })
     .eq("id", customerId)
     .eq("merchant_id", merchantId);
 
-  if (deleteError) {
-    console.error("[DeleteCustomer] Error deleting customer:", deleteError);
-    return { success: false, error: deleteError.message };
+  if (updateError) {
+    console.error("[DeleteCustomer] Error soft deleting customer:", updateError);
+    return { success: false, error: updateError.message };
   }
 
-  // Log the deletion
+  // Log the soft deletion
   await LogAuditEvent({
     merchantId: customer.merchant_id,
     action: "Deleted Customer",
@@ -856,6 +863,7 @@ export async function DeleteCustomer(
     resourceId: customerId,
     resourceName: customer.name,
     metadata: {
+      soft_deleted: true,
       deleted_at: new Date().toISOString(),
     },
   });

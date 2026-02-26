@@ -278,6 +278,38 @@ export function transformOrderChannelsForChart(
 }
 
 /**
+ * Transform channel trend from get_customer_channel_trend RPC to pie chart format
+ * Converts the RPC return format (with count_recent, count_previous, etc.) to chart format
+ */
+export function transformChannelTrendForChart(
+  channelTrend: Array<{
+    channel: string;
+    count_recent: number;
+    count_previous: number;
+    percentage_recent: number;
+    percentage_previous: number;
+    trend_label: string;
+  }> | null
+): Array<{ name: string; value: number; color: string }> {
+  if (!channelTrend || channelTrend.length === 0) {
+    return [];
+  }
+
+  return channelTrend.map((channel) => {
+    const config = CHANNEL_DISPLAY_MAP[channel.channel] || {
+      name: channel.channel,
+      color: "#6b7280", // gray fallback
+    };
+
+    return {
+      name: config.name,
+      value: channel.percentage_recent,
+      color: config.color,
+    };
+  });
+}
+
+/**
  * Get display name for a customer (fallback to phone/email if no name)
  */
 export function getCustomerDisplayName(customer: Customer | CustomerListItem): string {
