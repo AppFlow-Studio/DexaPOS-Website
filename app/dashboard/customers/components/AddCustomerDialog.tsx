@@ -17,9 +17,27 @@ import { Badge } from "@/components/ui/badge";
 import { AlertCircle, Loader2, X } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   useCreateCustomer,
   useCheckCustomerByPhone,
 } from "../hooks/useCustomers";
+
+const SUGGESTED_TAGS = [
+  "VIP",
+  "REGULAR",
+  "NEW",
+  "CORPORATE",
+  "FRIEND_OF_OWNER",
+  "INFLUENCER",
+  "COMPLAINT_HISTORY",
+  "CATERING_CLIENT",
+];
 
 interface AddCustomerDialogProps {
   open: boolean;
@@ -192,32 +210,34 @@ export function AddCustomerDialog({
 
           {/* Tags */}
           <div>
-            <Label htmlFor="tags">Tags</Label>
-            <div className="flex gap-2 mb-2">
-              <Input
-                id="tags"
-                placeholder="Add a tag (e.g., VIP)"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleAddTag();
-                  }
-                }}
-                disabled={isLoading}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleAddTag}
-                disabled={!tagInput.trim() || isLoading}
-              >
-                Add
-              </Button>
+            <Label>Tags</Label>
+
+            {/* Suggested Tags Dropdown */}
+            <div className="mb-3">
+              <Select onValueChange={(value) => {
+                if (value) {
+                  handleRemoveTag(value);
+                  setTags([...tags, value]);
+                }
+              }}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select from suggested tags..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {SUGGESTED_TAGS.filter((tag) => !tags.includes(tag)).map(
+                    (tag) => (
+                      <SelectItem key={tag} value={tag}>
+                        {tag}
+                      </SelectItem>
+                    )
+                  )}
+                </SelectContent>
+              </Select>
             </div>
+
+            {/* Current Tags */}
             {tags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 mb-3">
                 {tags.map((tag) => (
                   <Badge key={tag} variant="secondary" className="gap-1">
                     {tag}
@@ -231,6 +251,36 @@ export function AddCustomerDialog({
                 ))}
               </div>
             )}
+
+            {/* Custom Tag Input */}
+            <div className="space-y-2">
+              <Label htmlFor="custom-tag" className="text-xs text-muted-foreground">
+                Custom Tag
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="custom-tag"
+                  placeholder="Or create a custom tag..."
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddTag();
+                    }
+                  }}
+                  disabled={isLoading}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleAddTag}
+                  disabled={!tagInput.trim() || isLoading}
+                >
+                  Add
+                </Button>
+              </div>
+            </div>
           </div>
 
           {/* Notes */}

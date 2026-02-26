@@ -88,10 +88,14 @@ import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { useCustomerOrders } from "../hooks/useCustomerOrders";
 import { OrderDetailSheet } from "@/components/dashboard/orders/OrderDetailSheet";
 import { useCustomerReservations, useCustomerWaitlist, useCustomerDineSessions } from "../hooks/useCustomerBookings";
-import { useCustomerFeedback, useAddFeedbackResponse, useUpdateFeedbackFlag } from "../hooks/useCustomerFeedback";
 import { DetailsTab } from "./tabs/DetailsTab";
 import { LoyaltyTab } from "./tabs/LoyaltyTab";
 import { MarketingTab } from "./tabs/MarketingTab";
+import { OverviewTab } from "./tabs/OverviewTab";
+import { BookingsTab } from "./tabs/BookingsTab";
+import { FeedbackTab } from "./tabs/FeedbackTab";
+import { OrdersTab } from "./tabs/OrdersTab";
+import { useAddFeedbackResponse, useCustomerFeedback, useUpdateFeedbackFlag } from "../hooks/useCustomerFeedback";
 
 interface CustomerProfileSheetProps {
   customer: CustomerListItem | null;
@@ -358,47 +362,112 @@ function MetricCard({
 // Add Tag Dialog
 // =============================================================================
 
+const SUGGESTED_TAGS = [
+  "VIP",
+  "REGULAR",
+  "NEW",
+  "CORPORATE",
+  "FRIEND_OF_OWNER",
+  "INFLUENCER",
+  "COMPLAINT_HISTORY",
+  "CATERING_CLIENT",
+];
+
+const formatTagForDisplay = (tag: string): string => {
+  return tag
+    .split("_")
+    .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
+    .join(" ");
+};
+
 function AddTagDialog({
   open,
   onOpenChange,
   onAdd,
   isLoading,
+  existingTags = [],
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAdd: (tag: string) => void;
   isLoading: boolean;
+  existingTags?: string[];
 }) {
-  const [tag, setTag] = useState("");
+  const [customTag, setCustomTag] = useState("");
 
-  const handleSubmit = () => {
-    if (tag.trim()) {
-      onAdd(tag.trim());
-      setTag("");
+  const suggestedNewTags = SUGGESTED_TAGS.filter(
+    (tag) => !existingTags.includes(tag.toUpperCase())
+  );
+
+  const handleAddSuggestedTag = (tag: string) => {
+    onAdd(tag);
+    onOpenChange(false);
+  };
+
+  const handleAddCustomTag = () => {
+    if (customTag.trim()) {
+      onAdd(customTag.trim().toUpperCase());
+      setCustomTag("");
+      onOpenChange(false);
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-100">
+      <DialogContent className="sm:max-w-125">
         <DialogHeader>
           <DialogTitle>Add Tag</DialogTitle>
         </DialogHeader>
-        <div className="py-4">
-          <Input
-            placeholder="Enter tag name..."
-            value={tag}
-            onChange={(e) => setTag(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-            autoFocus
-          />
+
+        <div className="space-y-4 py-4">
+          {/* Suggested Tags Dropdown */}
+          <div>
+            <label className="text-sm font-medium mb-2 block">Suggested Tags</label>
+            <Select onValueChange={handleAddSuggestedTag}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select from suggested tags..." />
+              </SelectTrigger>
+              <SelectContent>
+                {suggestedNewTags.length > 0 ? (
+                  suggestedNewTags.map(tag => (
+                    <SelectItem key={tag} value={tag}>
+                      {formatTagForDisplay(tag)}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="text-xs text-muted-foreground p-2">
+                    All suggested tags already added
+                  </div>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Custom Tag Input */}
+          <div>
+            <label className="text-sm font-medium mb-2 block">Custom Tag</label>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Or create a custom tag..."
+                value={customTag}
+                onChange={(e) => setCustomTag(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddCustomTag()}
+                autoFocus
+              />
+              <Button
+                onClick={handleAddCustomTag}
+                disabled={!customTag.trim() || isLoading}
+                size="sm"
+              >
+                {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Add
+              </Button>
+            </div>
+          </div>
         </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={!tag.trim() || isLoading}>
-            {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Add Tag
-          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1184,6 +1253,8 @@ export function CustomerProfileSheet({
 }: CustomerProfileSheetProps) {
   const [showAddTag, setShowAddTag] = useState(false);
   const [showAddNote, setShowAddNote] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [isOrderDetailOpen, setIsOrderDetailOpen] = useState(false);
 
   const { data: userInfo } = useUserInfo();
   const clerkOrgId = userInfo?.members?.[0]?.organizations?.id || null;
@@ -1369,261 +1440,48 @@ export function CustomerProfileSheet({
 
               <div className="mt-6">
                 <TabsContent value="overview" className="space-y-6 animate-in fade-in-50 duration-300">
-
-                  {/* 6 KPI Cards */}
-                  <div className="grid grid-cols-3 gap-4">
-                    <MetricCard
-                      title="LAST VISIT"
-                      value={lastVisitRelative}
-                      subtitle={lastVisitAbsolute ?? undefined}
-                      className="bg-white dark:bg-card border-none shadow-sm"
-                      isLoading={isLoadingProfile}
-                    />
-                    <MetricCard
-                      title="TOTAL VISITS"
-                      value={String(totalVisits)}
-                      trend={visitTrendLabel ? { direction: visitTrendDir, label: visitTrendLabel } : undefined}
-                      className="bg-white dark:bg-card border-none shadow-sm"
-                      isLoading={isLoadingProfile}
-                    />
-                    <MetricCard
-                      title="LIFETIME SPEND"
-                      value={`$${lifetimeSpend.toLocaleString()}`}
-                      badge={percentileBadge ?? undefined}
-                      className="bg-white dark:bg-card border-none shadow-sm"
-                      isLoading={isLoadingProfile || isLoadingSpend}
-                    />
-                    <MetricCard
-                      title="AVG. SPEND"
-                      value={`$${avgSpend.toFixed(2)}`}
-                      className="bg-white dark:bg-card border-none shadow-sm"
-                      isLoading={isLoadingProfile}
-                    />
-                    <MetricCard
-                      title="AVG. TIP"
-                      value={`${avgTip.toFixed(1)}%`}
-                      className="bg-white dark:bg-card border-none shadow-sm"
-                      isLoading={isLoadingProfile}
-                    />
-                    <MetricCard
-                      title="CUSTOMER SINCE"
-                      value={customerSince ?? "—"}
-                      className="bg-white dark:bg-card border-none shadow-sm"
-                      isLoading={isLoadingProfile}
-                    />
-                  </div>
-
-                  {/* Spend Over Time + Visit Pattern */}
-                  <div className="grid grid-cols-2 gap-4">
-                    {/* Spend Over Time */}
-                    <Card className="border-none shadow-sm bg-white dark:bg-card">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                          SPEND OVER TIME
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        {isLoadingSpend ? (
-                          <div className="h-35 flex items-center justify-center">
-                            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                          </div>
-                        ) : spendTrend && spendTrend.length > 0 ? (
-                          <ResponsiveContainer width="100%" height={140}>
-                            <AreaChart data={spendTrend} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                              <defs>
-                                <linearGradient id="spendGradient" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                                  <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                                </linearGradient>
-                              </defs>
-                              <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
-                              <YAxis hide />
-                              <Tooltip
-                                formatter={(val: number) => [`$${val.toFixed(2)}`, "Spend"]}
-                                contentStyle={{ fontSize: 12, border: "none", borderRadius: 8, boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}
-                              />
-                              <Area type="monotone" dataKey="total_spend" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#spendGradient)" />
-                            </AreaChart>
-                          </ResponsiveContainer>
-                        ) : (
-                          <div className="h-35 flex items-center justify-center text-muted-foreground text-sm">
-                            No spend data yet
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-
-                    {/* Visit Pattern */}
-                    <Card className="border-none shadow-sm bg-white dark:bg-card">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                          VISIT PATTERN
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="flex flex-col justify-center h-35">
-                        {visitPatternSummary ? (
-                          <div className="space-y-3">
-                            <p className="text-sm text-foreground">{visitPatternSummary}</p>
-                            {visitPattern && visitPattern.slice(0, 3).map((p, i) => (
-                              <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <div className="w-2 h-2 rounded-full bg-primary opacity-80" />
-                                <span>{p.day_of_week} — {p.hour_of_day}:00 · {p.visit_count} visits</span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-center text-muted-foreground text-sm">
-                            Not enough data yet
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Order Channels + Most Ordered Items */}
-                  <div className="grid grid-cols-2 gap-4">
-                    {/* Order Channels */}
-                    <Card className="border-none shadow-sm bg-white dark:bg-card h-full">
-                      <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                            ORDER CHANNELS
-                          </CardTitle>
-                          {channelTrendText && (
-                            <span className="text-[10px] text-muted-foreground italic">{channelTrendText}</span>
-                          )}
-                        </div>
-                      </CardHeader>
-                      <CardContent className="flex items-center justify-between pl-0">
-                        {isLoadingChannels ? (
-                          <div className="w-full h-35 flex items-center justify-center">
-                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                          </div>
-                        ) : orderChannels.length > 0 ? (
-                          <>
-                            <div className="space-y-3 pl-6 text-sm">
-                              {orderChannels.map((channel, idx) => (
-                                <div key={idx} className="flex items-center gap-2">
-                                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: channel.color }} />
-                                  <span className="font-medium text-foreground">{channel.name}</span>
-                                  <span className="text-muted-foreground ml-auto">{channel.value}%</span>
-                                </div>
-                              ))}
-                            </div>
-                            <div className="h-35 w-35 relative">
-                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                <span className="text-xl font-bold">{totalVisits}</span>
-                              </div>
-                              <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                  <Pie data={orderChannels} cx="50%" cy="50%" innerRadius={45} outerRadius={60} paddingAngle={0} dataKey="value" stroke="none">
-                                    {orderChannels.map((entry, index) => (
-                                      <Cell key={`cell-${index}`} fill={entry.color} />
-                                    ))}
-                                  </Pie>
-                                  <Tooltip />
-                                </PieChart>
-                              </ResponsiveContainer>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="w-full h-35 flex items-center justify-center text-muted-foreground text-sm">
-                            No order data yet
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-
-                    {/* Most Ordered Items (last 90 days) */}
-                    <Card className="border-none shadow-sm bg-white dark:bg-card h-full">
-                      <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                            MOST ORDERED (90 DAYS)
-                          </CardTitle>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="pt-2 px-6">
-                        {isLoadingItems ? (
-                          <div className="space-y-4">
-                            {[1, 2, 3].map((i) => (
-                              <div key={i} className="h-6 bg-muted animate-pulse rounded" />
-                            ))}
-                          </div>
-                        ) : topItems && topItems.length > 0 ? (
-                          <div className="space-y-3">
-                            {topItems.map((item, i) => (
-                              <div key={item.item_id || i} className="flex items-center justify-between text-sm py-1 border-b last:border-0 border-muted/40">
-                                <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
-                                  <span className="font-medium text-foreground/90 truncate">
-                                    {item.item_name}
-                                  </span>
-                                  {item.is_new_favorite && (
-                                    <Badge className="text-[9px] px-1 py-0 h-4 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-0 shrink-0">
-                                      NEW
-                                    </Badge>
-                                  )}
-                                </div>
-                                <div className="text-right shrink-0">
-                                  <span className="font-mono text-muted-foreground">{item.order_count}x</span>
-                                  <span className="text-muted-foreground text-xs ml-1.5">({item.frequency_label})</span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="h-30 flex items-center justify-center text-muted-foreground text-sm">
-                            No orders in last 90 days
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Activity Timeline */}
-                  <div className="bg-white dark:bg-card rounded-lg p-6 shadow-sm">
-                    <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-6">
-                      ACTIVITY
-                    </h3>
-                    {isLoadingTimeline ? (
-                      <div className="space-y-6">
-                        {[1, 2, 3].map((i) => (
-                          <div key={i} className="flex items-start gap-4">
-                            <div className="h-10 w-10 bg-muted animate-pulse rounded-lg" />
-                            <div className="flex-1 space-y-2">
-                              <div className="h-4 w-32 bg-muted animate-pulse rounded" />
-                              <div className="h-3 w-48 bg-muted animate-pulse rounded" />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : activityTimeline && activityTimeline.length > 0 ? (
-                      <div className="space-y-6">
-                        {activityTimeline.map((item) => (
-                          <TimelineItem key={item.activity_id} item={item} />
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="h-32 flex items-center justify-center text-muted-foreground text-sm">
-                        No activity recorded yet
-                      </div>
-                    )}
-                  </div>
+                  <OverviewTab
+                    lastVisitRelative={lastVisitRelative}
+                    lastVisitAbsolute={lastVisitAbsolute}
+                    totalVisits={totalVisits}
+                    visitTrendLabel={visitTrendLabel}
+                    visitTrendDir={visitTrendDir}
+                    lifetimeSpend={lifetimeSpend}
+                    percentileBadge={percentileBadge}
+                    avgSpend={avgSpend}
+                    avgTip={avgTip}
+                    customerSince={customerSince}
+                    isLoadingProfile={isLoadingProfile}
+                    isLoadingSpend={isLoadingSpend}
+                    spendTrend={spendTrend || []}
+                    visitPattern={visitPattern || []}
+                    visitPatternSummary={visitPatternSummary}
+                    isLoadingItems={isLoadingItems}
+                    topItems={topItems || []}
+                    isLoadingChannels={isLoadingChannels}
+                    orderChannels={orderChannels}
+                    channelTrendText={channelTrendText}
+                    activityTimeline={activityTimeline || []}
+                    isLoadingTimeline={isLoadingTimeline}
+                    onOrderClick={(orderId) => {
+                      setSelectedOrderId(orderId);
+                      setIsOrderDetailOpen(true);
+                    } } totalOrdersRecent={0}                  />
                 </TabsContent>
 
                 {/* Orders Tab */}
                 <TabsContent value="orders" className="space-y-6 py-6 animate-in fade-in-50 duration-300">
-                  <OrdersTabContent customer={customer} />
+                  {customer && <OrdersTab customer={customer} />}
                 </TabsContent>
 
                 {/* Bookings Tab */}
                 <TabsContent value="bookings" className="space-y-6 py-6 animate-in fade-in-50 duration-300">
-                  <BookingsTabContent customer={customer} />
+                  {customer && <BookingsTab customer={customer} />}
                 </TabsContent>
 
                 {/* Feedback Tab */}
                 <TabsContent value="feedback" className="space-y-6 py-6 animate-in fade-in-50 duration-300">
-                  <FeedbackTabContent customer={customer} />
+                  {customer && <FeedbackTab customer={customer} />}
                 </TabsContent>
 
                 {/* Loyalty Tab */}
@@ -1646,7 +1504,7 @@ export function CustomerProfileSheet({
         </SheetContent>
       </Sheet>
 
-      <AddTagDialog open={showAddTag} onOpenChange={setShowAddTag} onAdd={handleAddTag} isLoading={addTagMutation.isPending} />
+      <AddTagDialog open={showAddTag} onOpenChange={setShowAddTag} onAdd={handleAddTag} isLoading={addTagMutation.isPending} existingTags={profile?.customer?.tags || []} />
       <AddNoteDialog open={showAddNote} onOpenChange={setShowAddNote} onSave={handleSaveNotes} isLoading={updateNotesMutation.isPending} currentNotes={profile?.customer?.notes || null} />
     </>
   );

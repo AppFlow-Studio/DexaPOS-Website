@@ -23,8 +23,7 @@ import {
   useDeleteCustomerNote,
   useAddCustomerTag,
   useRemoveCustomerTag,
-  useMerchantCustomerTags,
-  useMerchantStaffProfiles
+  useMerchantCustomerTags
 } from '../../hooks/useCustomerDetails'
 import type { CustomerListItem } from '@/types/customer'
 
@@ -33,20 +32,6 @@ interface DetailsTabProps {
   merchantId: string | null
 }
 
-const DIETARY_PREFERENCES = [
-  'Vegetarian',
-  'Vegan',
-  'Gluten-Free',
-  'Halal',
-  'Kosher',
-  'Nut Allergy',
-  'Dairy-Free',
-  'Shellfish Allergy'
-]
-
-const SEATING_PREFERENCES = ['Indoor', 'Outdoor', 'Bar', 'Booth', 'Window']
-
-const VIP_LEVELS = ['None', 'Silver', 'Gold', 'Platinum']
 
 const SUGGESTED_TAGS = [
   'VIP',
@@ -73,29 +58,18 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
   // Form state
   const [isEditing, setIsEditing] = useState(false)
   const [noteText, setNoteText] = useState('')
-  const [newTag, setNewTag] = useState('')
   const [tagInput, setTagInput] = useState('')
 
-  // Profile fields
+  // Profile fields (only fields that exist in customers table)
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [address, setAddress] = useState('')
-  const [birthday, setBirthday] = useState('')
-  const [anniversary, setAnniversary] = useState('')
-  const [dietaryPrefs, setDietaryPrefs] = useState<string[]>([])
-  const [allergyNotes, setAllergyNotes] = useState('')
-  const [preferredServerId, setPreferredServerId] = useState('')
-  const [preferredTable, setPreferredTable] = useState('')
-  const [preferredSeating, setPreferredSeating] = useState('')
-  const [companyName, setCompanyName] = useState('')
-  const [vipLevel, setVipLevel] = useState('None')
 
   // Queries
   const { data: profileDetails } = useCustomerProfileDetails(customerId ?? null)
   const { data: notes } = useCustomerNotes(customerId ?? null)
   const { data: existingTags } = useMerchantCustomerTags(merchantId)
-  const { data: staffProfiles } = useMerchantStaffProfiles(merchantId)
   const { data: userInfo } = useUserInfo()
 
   // Mutations
@@ -112,15 +86,6 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
       setPhone(profileDetails.phone || '')
       setEmail(profileDetails.email || '')
       setAddress(profileDetails.address || '')
-      setBirthday(profileDetails.birthday || '')
-      setAnniversary(profileDetails.anniversary || '')
-      setDietaryPrefs(profileDetails.dietary_preferences || [])
-      setAllergyNotes(profileDetails.allergy_notes || '')
-      setPreferredServerId(profileDetails.preferred_server_id || '')
-      setPreferredTable(profileDetails.preferred_table || '')
-      setPreferredSeating(profileDetails.preferred_seating || '')
-      setCompanyName(profileDetails.company_name || '')
-      setVipLevel(profileDetails.vip_level || 'None')
     }
   }, [profileDetails])
 
@@ -131,16 +96,7 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
         name,
         phone,
         email,
-        address,
-        birthday: birthday || null,
-        anniversary: anniversary || null,
-        dietary_preferences: dietaryPrefs,
-        allergy_notes: allergyNotes,
-        preferred_server_id: preferredServerId || null,
-        preferred_table: preferredTable,
-        preferred_seating: preferredSeating,
-        company_name: companyName,
-        vip_level: vipLevel
+        address
       }
     })
     setIsEditing(false)
@@ -167,7 +123,6 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
       customerId: customerId!,
       tag: normalizedTag
     })
-    setNewTag('')
     setTagInput('')
   }
 
@@ -177,12 +132,6 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
       customerId: customerId!,
       tag
     })
-  }
-
-  const handleToggleDietaryPref = (pref: string) => {
-    setDietaryPrefs(prev =>
-      prev.includes(pref) ? prev.filter(p => p !== pref) : [...prev, pref]
-    )
   }
 
   if (!customer || !profileDetails) return null
@@ -272,238 +221,6 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
         </CardContent>
       </Card>
 
-      {/* Personal Details */}
-      <Card>
-        <CardHeader>
-          <CardTitle className='text-sm'>Personal Details</CardTitle>
-        </CardHeader>
-        <CardContent className='space-y-4'>
-          {!isEditing ? (
-            <div className='grid grid-cols-2 gap-4'>
-              <div>
-                <p className='text-xs font-medium text-muted-foreground'>
-                  Birthday
-                </p>
-                <p className='text-sm'>
-                  {birthday ? new Date(birthday).toLocaleDateString() : '—'}
-                </p>
-              </div>
-              <div>
-                <p className='text-xs font-medium text-muted-foreground'>
-                  Anniversary
-                </p>
-                <p className='text-sm'>
-                  {anniversary
-                    ? new Date(anniversary).toLocaleDateString()
-                    : '—'}
-                </p>
-              </div>
-              <div>
-                <p className='text-xs font-medium text-muted-foreground'>
-                  VIP Level
-                </p>
-                <p className='text-sm'>
-                  {vipLevel && vipLevel !== 'None' ? (
-                    <Badge>{vipLevel}</Badge>
-                  ) : (
-                    '—'
-                  )}
-                </p>
-              </div>
-              <div>
-                <p className='text-xs font-medium text-muted-foreground'>
-                  Company
-                </p>
-                <p className='text-sm'>{companyName || '—'}</p>
-              </div>
-            </div>
-          ) : (
-            <div className='space-y-3'>
-              <div className='grid grid-cols-2 gap-3'>
-                <div>
-                  <label className='text-sm font-medium'>Birthday</label>
-                  <Input
-                    type='date'
-                    value={birthday}
-                    onChange={e => setBirthday(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className='text-sm font-medium'>Anniversary</label>
-                  <Input
-                    type='date'
-                    value={anniversary}
-                    onChange={e => setAnniversary(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className='text-sm font-medium'>VIP Level</label>
-                <Select value={vipLevel} onValueChange={setVipLevel}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {VIP_LEVELS.map(level => (
-                      <SelectItem key={level} value={level}>
-                        {level}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className='text-sm font-medium'>Company Name</label>
-                <Input
-                  value={companyName}
-                  onChange={e => setCompanyName(e.target.value)}
-                />
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Dining Preferences */}
-      <Card>
-        <CardHeader>
-          <CardTitle className='text-sm'>Dining Preferences</CardTitle>
-        </CardHeader>
-        <CardContent className='space-y-4'>
-          {!isEditing ? (
-            <div className='space-y-3'>
-              <div>
-                <p className='text-xs font-medium text-muted-foreground'>
-                  Dietary Preferences
-                </p>
-                <div className='flex flex-wrap gap-2 mt-1'>
-                  {dietaryPrefs.length > 0 ? (
-                    dietaryPrefs.map(pref => (
-                      <Badge key={pref} variant='secondary'>
-                        {pref}
-                      </Badge>
-                    ))
-                  ) : (
-                    <p className='text-sm text-muted-foreground'>None</p>
-                  )}
-                </div>
-              </div>
-              <div>
-                <p className='text-xs font-medium text-muted-foreground'>
-                  Allergy Notes
-                </p>
-                <p className='text-sm'>{allergyNotes || '—'}</p>
-              </div>
-              <div>
-                <p className='text-xs font-medium text-muted-foreground'>
-                  Preferred Server
-                </p>
-                <p className='text-sm'>
-                  {staffProfiles?.find((s: any) => s.id === preferredServerId)
-                    ?.display_name || '—'}
-                </p>
-              </div>
-              <div className='grid grid-cols-2 gap-4'>
-                <div>
-                  <p className='text-xs font-medium text-muted-foreground'>
-                    Preferred Table
-                  </p>
-                  <p className='text-sm'>{preferredTable || '—'}</p>
-                </div>
-                <div>
-                  <p className='text-xs font-medium text-muted-foreground'>
-                    Preferred Seating
-                  </p>
-                  <p className='text-sm'>{preferredSeating || '—'}</p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className='space-y-3'>
-              <div>
-                <label className='text-sm font-medium mb-2 block'>
-                  Dietary Preferences
-                </label>
-                <div className='space-y-2'>
-                  {DIETARY_PREFERENCES.map(pref => (
-                    <label key={pref} className='flex items-center gap-2'>
-                      <input
-                        type='checkbox'
-                        checked={dietaryPrefs.includes(pref)}
-                        onChange={() => handleToggleDietaryPref(pref)}
-                        className='w-4 h-4'
-                      />
-                      <span className='text-sm'>{pref}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className='text-sm font-medium'>Allergy Notes</label>
-                <Textarea
-                  value={allergyNotes}
-                  onChange={e => setAllergyNotes(e.target.value)}
-                  placeholder='e.g., Severe peanut allergy — alert kitchen'
-                  rows={2}
-                />
-              </div>
-
-              <div>
-                <label className='text-sm font-medium'>Preferred Server</label>
-                <Select
-                  value={preferredServerId}
-                  onValueChange={setPreferredServerId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder='Select a server' />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {staffProfiles?.map((staff: any) => (
-                      <SelectItem key={staff.id} value={staff.id}>
-                        {staff.display_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className='grid grid-cols-2 gap-3'>
-                <div>
-                  <label className='text-sm font-medium'>Preferred Table</label>
-                  <Input
-                    value={preferredTable}
-                    onChange={e => setPreferredTable(e.target.value)}
-                    placeholder='e.g., Booth 3'
-                  />
-                </div>
-                <div>
-                  <label className='text-sm font-medium'>
-                    Preferred Seating
-                  </label>
-                  <Select
-                    value={preferredSeating}
-                    onValueChange={setPreferredSeating}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder='Select' />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SEATING_PREFERENCES.map(seating => (
-                        <SelectItem key={seating} value={seating}>
-                          {seating}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Tags */}
       <Card>
@@ -526,40 +243,42 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
             ))}
           </div>
 
-          <div className='space-y-2'>
-            <div className='flex gap-2'>
-              <Select value={newTag} onValueChange={setNewTag}>
+          <div className='space-y-3'>
+            {/* Suggested Tags Dropdown */}
+            <div>
+              <label className='text-sm font-medium mb-2 block'>Suggested Tags</label>
+              <Select onValueChange={(value) => {
+                if (value) {
+                  handleAddTag(value)
+                }
+              }}>
                 <SelectTrigger>
-                  <SelectValue placeholder='Select a tag' />
+                  <SelectValue placeholder='Select from suggested tags...' />
                 </SelectTrigger>
                 <SelectContent>
-                  {suggestedNewTags.map(tag => (
-                    <SelectItem key={tag} value={tag}>
-                      {formatTagForDisplay(tag)}
-                    </SelectItem>
-                  ))}
+                  {suggestedNewTags.length > 0 ? (
+                    suggestedNewTags.map(tag => (
+                      <SelectItem key={tag} value={tag}>
+                        {formatTagForDisplay(tag)}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <div className='text-xs text-muted-foreground p-2'>
+                      All suggested tags added
+                    </div>
+                  )}
                 </SelectContent>
               </Select>
-              <Button
-                onClick={() => handleAddTag(newTag)}
-                disabled={!newTag || addTagMutation.isPending}
-                size='sm'
-              >
-                {addTagMutation.isPending ? (
-                  <Loader2 className='w-4 h-4 animate-spin' />
-                ) : (
-                  <Plus className='w-4 h-4' />
-                )}
-              </Button>
             </div>
 
+            {/* Custom Tag Input */}
             <div>
-              <label className='text-sm font-medium'>Custom Tag</label>
+              <label className='text-sm font-medium mb-2 block'>Custom Tag</label>
               <div className='flex gap-2'>
                 <Input
                   value={tagInput}
                   onChange={e => setTagInput(e.target.value)}
-                  placeholder='e.g., Wedding Planning'
+                  placeholder='Create a custom tag...'
                   onKeyPress={e => {
                     if (e.key === 'Enter' && tagInput) {
                       handleAddTag(tagInput)
@@ -571,7 +290,11 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
                   disabled={!tagInput || addTagMutation.isPending}
                   size='sm'
                 >
-                  <Plus className='w-4 h-4' />
+                  {addTagMutation.isPending ? (
+                    <Loader2 className='w-4 h-4 animate-spin' />
+                  ) : (
+                    <Plus className='w-4 h-4' />
+                  )}
                 </Button>
               </div>
             </div>

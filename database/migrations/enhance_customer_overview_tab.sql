@@ -159,16 +159,16 @@ $$;
 -- The channel concept maps to order_type enum: dine_in, takeout, delivery, online, catering
 
 CREATE OR REPLACE FUNCTION get_customer_channel_trend(
-  p_customer_id uuid,
-  p_days integer DEFAULT 90
+    p_customer_id uuid,
+    p_days integer DEFAULT 90
 )
 RETURNS TABLE (
-  channel text,
-  count_recent bigint,
-  count_previous bigint,
-  percentage_recent numeric,
-  percentage_previous numeric,
-  trend_label text
+    channel text,
+    count_recent bigint,
+    count_previous bigint,
+    percentage_recent numeric,
+    percentage_previous numeric,
+    trend_label text
 )
 LANGUAGE plpgsql
 STABLE
@@ -176,53 +176,58 @@ AS $$
 BEGIN
   RETURN QUERY
   WITH recent_period AS (
-    SELECT
-      o.order_type::text AS channel,
-      COUNT(*)::bigint AS count_recent
-    FROM orders o
-    WHERE o.customer_id = p_customer_id
-      AND o.created_at >= NOW() - (p_days || ' days')::interval
-      AND o.status NOT IN ('cancelled', 'void')
-    GROUP BY o.order_type
+      SELECT
+          o.order_type::text AS channel,
+          COUNT(*)::bigint AS count_recent
+      FROM orders o
+      WHERE o.customer_id = p_customer_id
+        AND o.created_at >= NOW() - (p_days || ' days')::interval
+        AND o.status NOT IN ('cancelled', 'void')
+      GROUP BY o.order_type
   ),
   previous_period AS (
-    SELECT
-      o.order_type::text AS channel,
-      COUNT(*)::bigint AS count_previous
-    FROM orders o
-    WHERE o.customer_id = p_customer_id
-      AND o.created_at >= NOW() - ((p_days * 2) || ' days')::interval
-      AND o.created_at < NOW() - (p_days || ' days')::interval
-      AND o.status NOT IN ('cancelled', 'void')
-    GROUP BY o.order_type
+      SELECT
+          o.order_type::text AS channel,
+          COUNT(*)::bigint AS count_previous
+      FROM orders o
+      WHERE o.customer_id = p_customer_id
+        AND o.created_at >= NOW() - ((p_days * 2) || ' days')::interval
+        AND o.created_at < NOW() - (p_days || ' days')::interval
+        AND o.status NOT IN ('cancelled', 'void')
+      GROUP BY o.order_type
   ),
   totals AS (
-    SELECT
-      NULLIF(SUM(count_recent), 0) AS total_recent,
-      NULLIF(SUM(count_previous), 0) AS total_previous
-    FROM recent_period
+      SELECT
+          NULLIF((SELECT SUM(r.count_recent) FROM recent_period r), 0) AS total_recent,
+          NULLIF((SELECT SUM(p.count_previous) FROM previous_period p), 0) AS total_previous
   )
   SELECT
-    COALESCE(rp.channel, pp.channel) AS channel,
-    COALESCE(rp.count_recent, 0)::bigint AS count_recent,
-    COALESCE(pp.count_previous, 0)::bigint AS count_previous,
-    ROUND(
-      (COALESCE(rp.count_recent, 0)::numeric / NULLIF(t.total_recent, 0) * 100),
-      1
-    ) AS percentage_recent,
-    ROUND(
-      (COALESCE(pp.count_previous, 0)::numeric / NULLIF(t.total_previous, 0) * 100),
-      1
-    ) AS percentage_previous,
-    CASE
-      WHEN COALESCE(rp.count_recent, 0) > COALESCE(pp.count_previous, 0) THEN '↑ Increasing'
-      WHEN COALESCE(rp.count_recent, 0) < COALESCE(pp.count_previous, 0) THEN '↓ Decreasing'
-      ELSE '→ Stable'
-    END AS trend_label
+      COALESCE(rp.channel, pp.channel) AS channel,
+      COALESCE(rp.count_recent, 0) AS count_recent,
+      COALESCE(pp.count_previous, 0) AS count_previous,
+      ROUND(
+          COALESCE(rp.count_recent, 0)::numeric
+          / NULLIF(t.total_recent, 0) * 100,
+          1
+      ) AS percentage_recent,
+      ROUND(
+          COALESCE(pp.count_previous, 0)::numeric
+          / NULLIF(t.total_previous, 0) * 100,
+          1
+      ) AS percentage_previous,
+      CASE
+          WHEN COALESCE(rp.count_recent, 0) > COALESCE(pp.count_previous, 0)
+              THEN '↑ Increasing'
+          WHEN COALESCE(rp.count_recent, 0) < COALESCE(pp.count_previous, 0)
+              THEN '↓ Decreasing'
+          ELSE '→ Stable'
+      END AS trend_label
   FROM recent_period rp
-  FULL OUTER JOIN previous_period pp ON rp.channel = pp.channel
+  FULL OUTER JOIN previous_period pp
+      ON rp.channel = pp.channel
   CROSS JOIN totals t
   ORDER BY COALESCE(rp.count_recent, 0) DESC;
+
 END;
 $$;
 

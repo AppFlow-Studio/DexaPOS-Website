@@ -14,7 +14,8 @@ export async function GetCustomerFeedback(customerId: string) {
       `
       *,
       server:staff_profiles!customer_feedback_server_staff_id_fkey(first_name, last_name, display_name),
-      order:orders(display_number)
+      order:orders(display_number),
+      responder:users!customer_feedback_responded_by_fkey(first_name, last_name, email)
       `
     )
     .eq("customer_id", customerId)

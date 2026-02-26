@@ -61,6 +61,7 @@ import {
   Monitor,
   MonitorPlay,
   Flame,
+  Mail,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -205,6 +206,16 @@ const navMain = [
             url: "/dashboard/reports/voids",
           },
         ],
+      },
+    ],
+  },
+  {
+    title: "Marketing",
+    items: [
+      {
+        title: "Campaigns",
+        url: "/dashboard/customers/campaigns",
+        icon: Mail,
       },
     ],
   },

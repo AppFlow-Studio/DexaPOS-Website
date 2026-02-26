@@ -141,12 +141,16 @@ export function useAddCustomerTag() {
       customerId: string;
       tag: string;
     }) => AddCustomerTag(customerId, tag),
-    onSuccess: (result, variables) => {
+    onSuccess: async (result, variables) => {
       if (result.success) {
-        queryClient.invalidateQueries({ queryKey: ["customers"] });
-        queryClient.invalidateQueries({
-          queryKey: ["customer", "profile", variables.customerId],
-        });
+        // Invalidate and refetch both queries
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["customers"], refetchType: "active" }),
+          queryClient.invalidateQueries({
+            queryKey: ["customer", "profile", variables.customerId],
+            refetchType: "active",
+          }),
+        ]);
       }
     },
   });
@@ -166,12 +170,16 @@ export function useRemoveCustomerTag() {
       customerId: string;
       tag: string;
     }) => RemoveCustomerTag(customerId, tag),
-    onSuccess: (result, variables) => {
+    onSuccess: async (result, variables) => {
       if (result.success) {
-        queryClient.invalidateQueries({ queryKey: ["customers"] });
-        queryClient.invalidateQueries({
-          queryKey: ["customer", "profile", variables.customerId],
-        });
+        // Invalidate and refetch both queries
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["customers"], refetchType: "active" }),
+          queryClient.invalidateQueries({
+            queryKey: ["customer", "profile", variables.customerId],
+            refetchType: "active",
+          }),
+        ]);
       }
     },
   });

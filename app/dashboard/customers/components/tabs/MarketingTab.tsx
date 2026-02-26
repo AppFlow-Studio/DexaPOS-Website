@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -56,17 +56,15 @@ export function MarketingTab({ customer, merchantId }: MarketingTabProps) {
   const unsubscribeMutation = useUnsubscribeFromMarketing();
 
   // Initialize form with existing preferences
-  if (
-    preferences &&
-    (smsOptIn !== preferences.sms_opt_in ||
-      emailOptIn !== preferences.email_opt_in)
-  ) {
-    setSmsOptIn(preferences.sms_opt_in || false);
-    setEmailOptIn(preferences.email_opt_in || false);
-    setReceiptSms(preferences.receipt_via_sms || false);
-    setReceiptEmail(preferences.receipt_via_email || false);
-    setLanguage(preferences.preferred_language || "en");
-  }
+  useEffect(() => {
+    if (preferences) {
+      setSmsOptIn(preferences.sms_opt_in || false);
+      setEmailOptIn(preferences.email_opt_in || false);
+      setReceiptSms(preferences.receipt_via_sms || false);
+      setReceiptEmail(preferences.receipt_via_email || false);
+      setLanguage(preferences.preferred_language || "en");
+    }
+  }, [preferences?.id]);
 
   const handleUpdatePreferences = async () => {
     await updatePrefsMutation.mutateAsync({

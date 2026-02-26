@@ -1,5 +1,6 @@
 "use server";
 
+import { auth } from "@clerk/nextjs/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import type { Database } from "@/types/database.types";
 
@@ -157,9 +158,12 @@ export async function CreateMarketingCampaign({
   audienceTags?: string[];
   audienceFilter?: Record<string, any>;
   scheduledFor?: string;
-  createdBy: string;
+  createdBy?: string;
 }) {
   if (!merchantId || !name || !body) return null;
+
+  const { userId } = await auth();
+  if (!userId) return { error: "Not authenticated" };
 
   const supabase = createServiceRoleClient();
 
@@ -176,14 +180,14 @@ export async function CreateMarketingCampaign({
       audience_filter: audienceFilter,
       status: "draft",
       scheduled_for: scheduledFor,
-      created_by: createdBy,
+      created_by: userId,
     })
     .select()
     .single();
 
   if (error) {
     console.error("[CreateMarketingCampaign]", error);
-    return null;
+    return { error: error.message };
   }
 
   return data;
@@ -435,4 +439,25 @@ export async function GetMarketingCampaignStats(campaignId: string) {
   }
 
   return data;
+}
+
+/**
+ * Delete a marketing campaign
+ */
+export async function DeleteMarketingCampaign(campaignId: string) {
+  if (!campaignId) return null;
+
+  const supabase = createServiceRoleClient();
+
+  const { error } = await supabase
+    .from("marketing_campaigns")
+    .delete()
+    .eq("id", campaignId);
+
+  if (error) {
+    console.error("[DeleteMarketingCampaign]", error);
+    return { error: error.message };
+  }
+
+  return { success: true };
 }

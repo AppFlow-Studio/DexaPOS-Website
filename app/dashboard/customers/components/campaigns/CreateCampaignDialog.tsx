@@ -1,0 +1,250 @@
+"use client";
+
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import { Loader2 } from "lucide-react";
+import { useCreateCampaign } from "../../hooks/useCustomerMarketing";
+
+interface CreateCampaignDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export function CreateCampaignDialog({
+  open,
+  onOpenChange,
+}: CreateCampaignDialogProps) {
+  const [campaignName, setCampaignName] = useState("");
+  const [campaignType, setCampaignType] = useState<"sms" | "email">("sms");
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [audienceType, setAudienceType] = useState<"all" | "tag" | "segment">("all");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [scheduleType, setScheduleType] = useState<"now" | "later">("now");
+  const [scheduledFor, setScheduledFor] = useState("");
+
+  const createMutation = useCreateCampaign();
+
+  const handleCreate = async () => {
+    if (!campaignName.trim() || !body.trim()) return;
+
+    try {
+      await createMutation.mutateAsync({
+        name: campaignName,
+        campaignType,
+        subject: campaignType === "email" ? subject : undefined,
+        body,
+        audienceType,
+        audienceTags: selectedTags.length > 0 ? selectedTags : undefined,
+        scheduledFor: scheduleType === "later" && scheduledFor ? scheduledFor : undefined,
+      });
+
+      // Reset form
+      setCampaignName("");
+      setCampaignType("sms");
+      setSubject("");
+      setBody("");
+      setAudienceType("all");
+      setSelectedTags([]);
+      setScheduleType("now");
+      setScheduledFor("");
+      onOpenChange(false);
+    } catch (error) {
+      console.error("Error creating campaign:", error);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Create Campaign</DialogTitle>
+          <DialogDescription>
+            Create a new marketing campaign to send to your customers
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6">
+          {/* Campaign Basics */}
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="campaign-name">Campaign Name</Label>
+              <Input
+                id="campaign-name"
+                placeholder="e.g., Holiday Sale 2024"
+                value={campaignName}
+                onChange={(e) => setCampaignName(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="campaign-type">Campaign Type</Label>
+              <Select value={campaignType} onValueChange={(v) => setCampaignType(v as "sms" | "email")}>
+                <SelectTrigger id="campaign-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sms">SMS</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="space-y-4 border-t pt-4">
+            <h3 className="font-medium">Message Content</h3>
+
+            {campaignType === "email" && (
+              <div>
+                <Label htmlFor="email-subject">Email Subject</Label>
+                <Input
+                  id="email-subject"
+                  placeholder="Enter email subject"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                />
+              </div>
+            )}
+
+            <div>
+              <Label htmlFor="message-body">Message Body</Label>
+              <Textarea
+                id="message-body"
+                placeholder={
+                  campaignType === "sms"
+                    ? "Type your SMS message (max 160 characters)"
+                    : "Type your email message"
+                }
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                rows={5}
+                maxLength={campaignType === "sms" ? 160 : undefined}
+              />
+              {campaignType === "sms" && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {body.length} / 160 characters
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Audience */}
+          <div className="space-y-4 border-t pt-4">
+            <h3 className="font-medium">Audience</h3>
+
+            <div>
+              <Label htmlFor="audience-type">Audience Type</Label>
+              <Select value={audienceType} onValueChange={(v) => setAudienceType(v as "all" | "tag" | "segment")}>
+                <SelectTrigger id="audience-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Customers</SelectItem>
+                  <SelectItem value="tag">By Tags</SelectItem>
+                  <SelectItem value="segment">By Segment</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {audienceType === "tag" && (
+              <div>
+                <Label htmlFor="tags">Select Tags</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Coming soon: Tag selection interface
+                </p>
+              </div>
+            )}
+
+            {audienceType === "segment" && (
+              <div>
+                <Label>Segment Filters</Label>
+                <p className="text-xs text-muted-foreground">
+                  Coming soon: Custom segment builder
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Scheduling */}
+          <div className="space-y-4 border-t pt-4">
+            <h3 className="font-medium">Scheduling</h3>
+
+            <div>
+              <Label>When to Send</Label>
+              <div className="flex gap-4 mt-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    value="now"
+                    checked={scheduleType === "now"}
+                    onChange={(e) => setScheduleType(e.target.value as "now" | "later")}
+                  />
+                  <span className="text-sm">Send Now</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    value="later"
+                    checked={scheduleType === "later"}
+                    onChange={(e) => setScheduleType(e.target.value as "now" | "later")}
+                  />
+                  <span className="text-sm">Schedule for Later</span>
+                </label>
+              </div>
+            </div>
+
+            {scheduleType === "later" && (
+              <div>
+                <Label htmlFor="scheduled-for">Send At</Label>
+                <Input
+                  id="scheduled-for"
+                  type="datetime-local"
+                  value={scheduledFor}
+                  onChange={(e) => setScheduledFor(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCreate}
+            disabled={!campaignName.trim() || !body.trim() || createMutation.isPending}
+          >
+            {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            {scheduleType === "now" ? "Create & Send" : "Create Campaign"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

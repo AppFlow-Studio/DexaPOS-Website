@@ -80,9 +80,10 @@ export function useUpdateCustomerProfile() {
 
   return useMutation({
     mutationFn: UpdateCustomerProfile,
-    onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({
         queryKey: ["customer-profile-details", variables.customerId],
+        refetchType: "active",
       });
     },
   });
@@ -96,9 +97,10 @@ export function useAddCustomerNote() {
 
   return useMutation({
     mutationFn: AddCustomerNote,
-    onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({
         queryKey: ["customer-notes", variables.customerId],
+        refetchType: "active",
       });
     },
   });
@@ -112,9 +114,10 @@ export function useUpdateCustomerNote() {
 
   return useMutation({
     mutationFn: UpdateCustomerNote,
-    onSuccess: () => {
-      queryClient.invalidateQueries({
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
         queryKey: ["customer-notes"],
+        refetchType: "active",
       });
     },
   });
@@ -128,9 +131,10 @@ export function useDeleteCustomerNote() {
 
   return useMutation({
     mutationFn: DeleteCustomerNote,
-    onSuccess: () => {
-      queryClient.invalidateQueries({
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
         queryKey: ["customer-notes"],
+        refetchType: "active",
       });
     },
   });
@@ -144,9 +148,10 @@ export function useAddCustomerTag() {
 
   return useMutation({
     mutationFn: AddCustomerTag,
-    onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({
         queryKey: ["customer-profile-details", variables.customerId],
+        refetchType: "active",
       });
     },
   });
@@ -160,9 +165,10 @@ export function useRemoveCustomerTag() {
 
   return useMutation({
     mutationFn: RemoveCustomerTag,
-    onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({
         queryKey: ["customer-profile-details", variables.customerId],
+        refetchType: "active",
       });
     },
   });
