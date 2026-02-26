@@ -55,6 +55,7 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
         city: location.city,
         state: location.state,
         postal_code: location.postal_code,
+        country: location.country || 'US',
         timezone: location.timezone,
     })
 
@@ -78,6 +79,7 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
                 city: location.city,
                 state: location.state,
                 postal_code: location.postal_code,
+                country: location.country || 'US',
                 timezone: location.timezone,
             })
         }
@@ -125,6 +127,7 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
                 city: addressInfo.city.trim(),
                 state: addressInfo.state,
                 postal_code: addressInfo.postal_code.trim(),
+                country: addressInfo.country.trim() || 'US',
                 timezone: addressInfo.timezone,
             }
         }
@@ -399,23 +402,32 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="timezone">Timezone</Label>
-                                    <Select
-                                        value={addressInfo.timezone}
-                                        onValueChange={(value) => setAddressInfo(prev => ({ ...prev, timezone: value }))}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select timezone" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {US_TIMEZONES.map((tz) => (
-                                                <SelectItem key={tz.value} value={tz.value}>
-                                                    {tz.label}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <Label htmlFor="country">Country</Label>
+                                    <Input
+                                        id="country"
+                                        value={addressInfo.country}
+                                        onChange={(e) => setAddressInfo(prev => ({ ...prev, country: e.target.value }))}
+                                        placeholder="US"
+                                    />
                                 </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="timezone">Timezone</Label>
+                                <Select
+                                    value={addressInfo.timezone}
+                                    onValueChange={(value) => setAddressInfo(prev => ({ ...prev, timezone: value }))}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select timezone" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {US_TIMEZONES.map((tz) => (
+                                            <SelectItem key={tz.value} value={tz.value}>
+                                                {tz.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div className="flex items-center gap-2 pt-2">
                                 <Button onClick={() => handleSave('address')} disabled={isSaving} size="sm">
@@ -438,6 +450,9 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
                                 <p>{location.address_line1}</p>
                                 {location.address_line2 && <p>{location.address_line2}</p>}
                                 <p>{location.city}, {getStateName(location.state)} {location.postal_code}</p>
+                                {location.country && location.country !== 'US' && (
+                                    <p className="text-muted-foreground">{location.country}</p>
+                                )}
                             </div>
                             <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2">
                                 <Globe className="h-4 w-4" />

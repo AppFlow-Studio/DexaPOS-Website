@@ -1,6 +1,6 @@
 'use client'
 //TODO : ADD Tax Rate Configuration
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Location } from '@/types/merchant_locations'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -23,6 +23,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
     Settings,
     Power,
@@ -33,13 +34,16 @@ import {
     XCircle,
     Globe,
     Layers,
-    DollarSign
+    DollarSign,
+    Building2,
+    Info,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { UpdateLocation, ToggleLocationActive, ToggleLocationOrders } from '@/app/dashboard/actions/locations'
 import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { useLocationStore } from '@/stores/location-store'
+import { useEffectivePricing } from '@/app/dashboard/hooks/useEffectivePricing'
 
 interface SettingsTabProps {
     location: Location
@@ -50,6 +54,7 @@ interface SettingsTabProps {
 export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
     const queryClient = useQueryClient()
     const { setSelectedLocation } = useLocationStore()
+    const { pricingStrategy: merchantStrategy, dualPricingPercentage: merchantPercentage } = useEffectivePricing()
 
     const [isTogglingOrders, setIsTogglingOrders] = useState(false)
     const [isDeactivating, setIsDeactivating] = useState(false)
@@ -59,6 +64,12 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
     // Local state for immediate UI feedback
     const [isAcceptingOrders, setIsAcceptingOrders] = useState(location.is_accepting_orders)
     const [isActive, setIsActive] = useState(location.is_active)
+    const [useMerchantDefaults, setUseMerchantDefaults] = useState(location.use_merchant_pricing_defaults)
+
+    // Sync when location prop changes
+    useEffect(() => {
+        setUseMerchantDefaults(location.use_merchant_pricing_defaults)
+    }, [location.use_merchant_pricing_defaults])
 
     const handleToggleOrders = async () => {
         setIsTogglingOrders(true)
@@ -93,6 +104,27 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
             toast.error('Update Failed', { description: 'An unexpected error occurred' })
         } finally {
             setIsTogglingOrders(false)
+        }
+    }
+
+    const handleToggleMerchantDefaults = async (checked: boolean) => {
+        setUseMerchantDefaults(checked)
+        try {
+            const result = await UpdateLocation(location.id, {
+                use_merchant_pricing_defaults: checked,
+            })
+            if (result.error) {
+                setUseMerchantDefaults(!checked)
+                toast.error('Update Failed', { description: result.error })
+                return
+            }
+            toast.success(checked ? 'Using Organization Defaults' : 'Using Custom Pricing')
+            queryClient.invalidateQueries({ queryKey: ['locations'] })
+            queryClient.invalidateQueries({ queryKey: ['merchant-pricing-defaults'] })
+            onUpdate?.()
+        } catch (error) {
+            setUseMerchantDefaults(!checked)
+            toast.error('Update Failed', { description: 'An unexpected error occurred' })
         }
     }
 
@@ -215,7 +247,8 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
                 </CardContent>
             </Card>
 
-            {/* Pricing Strategy Settings */}            <Card>
+            {/* Pricing Strategy Settings */}
+            <Card>
                 <CardHeader className="pb-3">
                     <CardTitle className="text-base flex items-center gap-2">
                         <DollarSign className="h-4 w-4" />
@@ -225,65 +258,49 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
                 </CardHeader>
                 <CardContent>
                     <div className="space-y-4">
-                        <div className="grid gap-2">
-                            <Label>Pricing Mode</Label>
-                            <Select
-                                defaultValue={location.pricing_strategy || 'manual'}
-                                onValueChange={async (value) => {
-                                    try {
-                                        const result = await UpdateLocation(location.id, {
-                                            pricing_strategy: value as 'manual' | 'dual'
-                                        });
-                                        if (result.error) {
-                                            toast.error('Update Failed', { description: result.error });
-                                        } else {
-                                            toast.success('Strategy Updated');
-                                            queryClient.invalidateQueries({ queryKey: ['locations'] });
-                                            onUpdate?.();
-                                        }
-                                    } catch (e) {
-                                        toast.error('Update Failed');
-                                    }
-                                }}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select strategy" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="manual">Manual Pricing</SelectItem>
-                                    <SelectItem value="dual">Dual Pricing</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <p className="text-sm text-muted-foreground">
-                                {location.pricing_strategy === 'dual' 
-                                    ? 'Card prices are automatically calculated based on a percentage markup over cash prices.' 
-                                    : 'Cash and Card prices are set independently.'}
-                            </p>
+                        {/* Use Organization Defaults Toggle */}
+                        <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                            <div className="flex items-center gap-3">
+                                <Building2 className="h-4 w-4 text-muted-foreground" />
+                                <div>
+                                    <p className="text-sm font-medium">Use Organization Defaults</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        Inherit pricing strategy from your organization settings
+                                    </p>
+                                </div>
+                            </div>
+                            <Switch
+                                checked={useMerchantDefaults}
+                                onCheckedChange={handleToggleMerchantDefaults}
+                            />
                         </div>
 
-                        {location.pricing_strategy === 'dual' && (
-                            <div className="grid gap-2 animate-in fade-in slide-in-from-top-2">
-                                <Label>Dual Pricing Percentage (%)</Label>
-                                <div className="relative">
-                                    <Input
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        max="100"
-                                        defaultValue={location.dual_pricing_percentage ?? 4.0}
-                                        onBlur={async (e) => {
-                                            const val = parseFloat(e.target.value);
-                                            if (isNaN(val)) return;
-                                            if (val === location.dual_pricing_percentage) return;
-
+                        {useMerchantDefaults ? (
+                            <Alert className="border-blue-200 bg-blue-50/50">
+                                <Info className="h-4 w-4 text-blue-600" />
+                                <AlertDescription className="text-sm">
+                                    <span className="font-medium">Inherited from Organization:</span>{' '}
+                                    {merchantStrategy === 'dual'
+                                        ? `Dual Pricing at ${merchantPercentage}%`
+                                        : 'Manual Pricing'
+                                    }
+                                </AlertDescription>
+                            </Alert>
+                        ) : (
+                            <>
+                                <div className="grid gap-2">
+                                    <Label>Pricing Mode</Label>
+                                    <Select
+                                        defaultValue={location.pricing_strategy || 'manual'}
+                                        onValueChange={async (value) => {
                                             try {
                                                 const result = await UpdateLocation(location.id, {
-                                                    dual_pricing_percentage: val
+                                                    pricing_strategy: value as 'manual' | 'dual'
                                                 });
                                                 if (result.error) {
                                                     toast.error('Update Failed', { description: result.error });
                                                 } else {
-                                                    toast.success('Percentage Updated');
+                                                    toast.success('Strategy Updated');
                                                     queryClient.invalidateQueries({ queryKey: ['locations'] });
                                                     onUpdate?.();
                                                 }
@@ -291,13 +308,61 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
                                                 toast.error('Update Failed');
                                             }
                                         }}
-                                    />
-                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select strategy" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="manual">Manual Pricing</SelectItem>
+                                            <SelectItem value="dual">Dual Pricing</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-sm text-muted-foreground">
+                                        {location.pricing_strategy === 'dual'
+                                            ? 'Card prices are automatically calculated based on a percentage markup over cash prices.'
+                                            : 'Cash and Card prices are set independently.'}
+                                    </p>
                                 </div>
-                                <p className="text-xs text-muted-foreground">
-                                    Typical values range from 3.5% to 4.0%
-                                </p>
-                            </div>
+
+                                {location.pricing_strategy === 'dual' && (
+                                    <div className="grid gap-2 animate-in fade-in slide-in-from-top-2">
+                                        <Label>Dual Pricing Percentage (%)</Label>
+                                        <div className="relative">
+                                            <Input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                max="100"
+                                                defaultValue={location.dual_pricing_percentage ?? 4.0}
+                                                onBlur={async (e) => {
+                                                    const val = parseFloat(e.target.value);
+                                                    if (isNaN(val)) return;
+                                                    if (val === location.dual_pricing_percentage) return;
+
+                                                    try {
+                                                        const result = await UpdateLocation(location.id, {
+                                                            dual_pricing_percentage: val
+                                                        });
+                                                        if (result.error) {
+                                                            toast.error('Update Failed', { description: result.error });
+                                                        } else {
+                                                            toast.success('Percentage Updated');
+                                                            queryClient.invalidateQueries({ queryKey: ['locations'] });
+                                                            onUpdate?.();
+                                                        }
+                                                    } catch (e) {
+                                                        toast.error('Update Failed');
+                                                    }
+                                                }}
+                                            />
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">
+                                            Typical values range from 3.5% to 4.0%
+                                        </p>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
                 </CardContent>
@@ -436,4 +501,3 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
         </div>
     )
 }
-

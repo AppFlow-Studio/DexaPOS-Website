@@ -161,12 +161,23 @@ export async function getMerchantDetails(
   const isClerkId = merchantId.startsWith('org_')
   const idField = isClerkId ? 'clerk_org_id' : 'id'
 
-  // Get merchant summary
+  // Get merchant summary from view
   const { data: merchant, error: merchantError } = await supabase
     .from('admin_merchant_summary')
     .select('*')
     .eq(idField, merchantId)
     .single()
+
+  // Supplement with pricing columns from merchants table (not in view)
+  let merchantPricing: { pricing_strategy: string; dual_pricing_percentage: number } | null = null
+  if (merchant) {
+    const { data: pricingData } = await supabase
+      .from('merchants')
+      .select('pricing_strategy, dual_pricing_percentage')
+      .eq('id', merchant.id)
+      .single()
+    merchantPricing = pricingData
+  }
 
   if (merchantError || !merchant) {
     console.error('[getMerchantDetails] Merchant error:', merchantError)
@@ -191,7 +202,8 @@ export async function getMerchantDetails(
       is_accepting_orders,
       timezone,
       pricing_strategy,
-      dual_pricing_percentage
+      dual_pricing_percentage,
+      use_merchant_pricing_defaults
     `)
     .eq('merchant_id', merchant.id)
     .order('name')
@@ -230,6 +242,8 @@ export async function getMerchantDetails(
 
   return {
     ...(merchant as MerchantSummary),
+    pricing_strategy: merchantPricing?.pricing_strategy as 'manual' | 'dual' | undefined,
+    dual_pricing_percentage: merchantPricing?.dual_pricing_percentage,
     locations: locationsWithMetrics,
   }
 }
@@ -247,7 +261,7 @@ export async function updateMerchantSettings(
   const supabase = createServerSupabaseClient()
   const { data: beforeMerchant } = await supabase
     .from('merchants')
-    .select('id, name, public_metadata')
+    .select('id, name, public_metadata, pricing_strategy, dual_pricing_percentage')
     .eq('id', merchantId)
     .single()
 

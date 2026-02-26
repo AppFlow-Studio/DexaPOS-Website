@@ -435,4 +435,11 @@ export const adminKeys = {
 
   auditLogList: (filters?: Record<string, unknown>) =>
     [...adminKeys.auditLogs(), 'list', filters] as const,
+
+  // ============================================================================
+  // MERCHANT ORDEROUT (Admin View)
+  // ============================================================================
+
+  merchantOrderOutStatus: (merchantId: string) =>
+    [...adminKeys.merchants(), merchantId, 'orderout-status'] as const,
 }
