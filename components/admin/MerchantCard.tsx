@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Building2, MapPin, Users, ShoppingCart, DollarSign, MessageSquare } from 'lucide-react'
+import { Building2, MapPin, Users, ShoppingCart, DollarSign } from 'lucide-react'
 import type { MerchantSummary } from '@/types/merchant'
 import { formatDistanceToNow } from 'date-fns'
 import Image from 'next/image'
@@ -81,18 +81,12 @@ export function MerchantCard({ merchant, onClick }: MerchantCardProps) {
         </div>
 
         {/* Footer */}
-        <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
+        <div className="mt-4 pt-3 border-t border-border">
           <p className="text-xs text-muted-foreground">
             {merchant.last_order_at
               ? `Last order ${formatDistanceToNow(new Date(merchant.last_order_at), { addSuffix: true })}`
               : 'No orders yet'}
           </p>
-          {(merchant.notes_count || 0) > 0 && (
-            <div className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <MessageSquare className="h-3.5 w-3.5" />
-              {merchant.notes_count}
-            </div>
-          )}
         </div>
       </CardContent>
     </Card>

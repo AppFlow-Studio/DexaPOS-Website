@@ -50,7 +50,6 @@ BEGIN
                             -- Category-level price
                             'category_price', ci.custom_price,
                             'category_cash_price', ci.custom_cash_price,
-                            'category_delivery_price', ci.custom_delivery_price,
                             'category_is_available', ci.is_available,
                             
                             'menu_item', json_build_object(
@@ -65,7 +64,6 @@ BEGIN
                                 -- Level 1: Base price
                                 'base_price', mi.price,
                                 'base_cash_price', mi.cash_price,
-                                'base_delivery_price', mi.delivery_price,
                                 'base_availability', mi.availability,
                                 
                                 -- Level 2: Location item override
@@ -74,7 +72,6 @@ BEGIN
                                         'id', lio.id,
                                         'custom_price', lio.custom_price,
                                         'custom_cash_price', lio.custom_cash_price,
-                                        'custom_delivery_price', lio.custom_delivery_price,
                                         'price_modifier', lio.price_modifier,
                                         'price_modifier_type', lio.price_modifier_type,
                                         'is_available', lio.is_available,
@@ -90,7 +87,6 @@ BEGIN
                                         'id', lcio.id,
                                         'custom_price', lcio.custom_price,
                                         'custom_cash_price', lcio.custom_cash_price,
-                                        'custom_delivery_price', lcio.custom_delivery_price,
                                         'is_available', lcio.is_available
                                     )
                                     ELSE NULL
@@ -110,14 +106,7 @@ BEGIN
                                     lio.custom_cash_price,
                                     mi.cash_price
                                 ),
-
-                                'effective_delivery_price', COALESCE(
-                                    lcio.custom_delivery_price,
-                                    ci.custom_delivery_price,
-                                    lio.custom_delivery_price,
-                                    mi.delivery_price
-                                ),
-
+                                
                                 -- Availability (AND logic)
                                 'effective_availability', (
                                     mi.availability = true
@@ -125,7 +114,7 @@ BEGIN
                                     AND COALESCE(ci.is_available, true) = true
                                     AND COALESCE(lcio.is_available, true) = true
                                 ),
-
+                                
                                 -- Price source
                                 'price_source', CASE
                                     WHEN lcio.custom_price IS NOT NULL THEN 'location_category'
@@ -133,7 +122,7 @@ BEGIN
                                     WHEN lio.custom_price IS NOT NULL THEN 'location_item'
                                     ELSE 'base'
                                 END,
-
+                                
                                 -- Override flags
                                 'has_location_item_override', (lio.id IS NOT NULL),
                                 'has_category_price', (ci.custom_price IS NOT NULL),
@@ -1035,7 +1024,6 @@ BEGIN
                             -- Category-level price
                             'category_price', ci.custom_price,
                             'category_cash_price', ci.custom_cash_price,
-                            'category_delivery_price', ci.custom_delivery_price,
                             'category_is_available', ci.is_available,
                             
                             'menu_item', json_build_object(
@@ -1050,7 +1038,6 @@ BEGIN
                                 -- Level 1: Base price
                                 'base_price', mi.price,
                                 'base_cash_price', mi.cash_price,
-                                'base_delivery_price', mi.delivery_price,
                                 'base_availability', mi.availability,
                                 
                                 -- Level 2: Location item override
@@ -1059,7 +1046,6 @@ BEGIN
                                         'id', lio.id,
                                         'custom_price', lio.custom_price,
                                         'custom_cash_price', lio.custom_cash_price,
-                                        'custom_delivery_price', lio.custom_delivery_price,
                                         'price_modifier', lio.price_modifier,
                                         'price_modifier_type', lio.price_modifier_type,
                                         'is_available', lio.is_available,
@@ -1075,7 +1061,6 @@ BEGIN
                                         'id', lcio.id,
                                         'custom_price', lcio.custom_price,
                                         'custom_cash_price', lcio.custom_cash_price,
-                                        'custom_delivery_price', lcio.custom_delivery_price,
                                         'is_available', lcio.is_available
                                     )
                                     ELSE NULL
@@ -1095,14 +1080,7 @@ BEGIN
                                     lio.custom_cash_price,
                                     mi.cash_price
                                 ),
-
-                                'effective_delivery_price', COALESCE(
-                                    lcio.custom_delivery_price,
-                                    ci.custom_delivery_price,
-                                    lio.custom_delivery_price,
-                                    mi.delivery_price
-                                ),
-
+                                
                                 -- Availability (AND logic)
                                 'effective_availability', (
                                     mi.availability = true
@@ -1110,7 +1088,7 @@ BEGIN
                                     AND COALESCE(ci.is_available, true) = true
                                     AND COALESCE(lcio.is_available, true) = true
                                 ),
-
+                                
                                 -- Price source
                                 'price_source', CASE
                                     WHEN lcio.custom_price IS NOT NULL THEN 'location_category'
@@ -1118,7 +1096,7 @@ BEGIN
                                     WHEN lio.custom_price IS NOT NULL THEN 'location_item'
                                     ELSE 'base'
                                 END,
-
+                                
                                 -- Override flags
                                 'has_location_item_override', (lio.id IS NOT NULL),
                                 'has_category_price', (ci.custom_price IS NOT NULL),

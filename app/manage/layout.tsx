@@ -1,8 +1,8 @@
 'use client'
 
-import { useClerk, useSession } from '@clerk/nextjs'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { Suspense, useEffect, useMemo } from 'react'
+import { SignOutButton, useClerk, useSession } from '@clerk/nextjs'
+import { redirect, usePathname } from 'next/navigation'
+import { useEffect, useMemo } from 'react'
 import {
     Sidebar,
     SidebarContent,
@@ -55,20 +55,18 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { AnimatedThemeToggler } from '@/components/ui/animated-theme-toggler'
 import { useUserInfo } from './hooks/useUserInfo.'
-import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
+import { useAdminAuth } from '@/lib/hooks/useAdminAuth'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import Image from 'next/image'
-import type { PermissionCode } from '@/lib/admin/permission-codes'
-import { toast } from 'sonner'
+import type { HQPermission } from '@/types/admin'
 
 // Navigation item type with optional permission requirement
 interface NavItem {
     title: string
     url: string
     icon: LucideIcon
-    requiredPermission?: PermissionCode | PermissionCode[]
-    minRoleLevel?: number
+    permission?: HQPermission | HQPermission[]
     group?: string
 }
 
@@ -92,7 +90,7 @@ const navMain: NavGroup[] = [
                 title: 'Merchants',
                 url: '/manage/merchants',
                 icon: Building2,
-                requiredPermission: 'merchants.view',
+                permission: 'hq.merchant.view',
             },
             // {
             //     title: 'Organizations',
@@ -104,13 +102,13 @@ const navMain: NavGroup[] = [
                 title: 'Transactions',
                 url: '/manage/transactions',
                 icon: CreditCard,
-                requiredPermission: 'transactions.view',
+                permission: 'hq.merchant.transactions',
             },
             {
                 title: 'Analytics',
                 url: '/manage/analytics',
                 icon: BarChart3,
-                requiredPermission: 'analytics.view',
+                permission: 'system.analytics.view',
             }
         ]
     },
@@ -121,20 +119,19 @@ const navMain: NavGroup[] = [
                 title: 'Users',
                 url: '/manage/users',
                 icon: UserCheck,
-                requiredPermission: 'users.manage',
+                permission: 'hq.team.view',
             },
             {
                 title: 'Roles & Permissions',
                 url: '/manage/roles-permissions',
                 icon: ShieldCheck,
-                requiredPermission: 'roles.manage',
-                minRoleLevel: 10,
+                permission: 'hq.team.manage',
             },
             {
                 title: 'Audit Logs',
                 url: '/manage/audit-logs',
                 icon: History,
-                requiredPermission: 'audit.view',
+                permission: 'system.audit.view',
             }
         ]
     }
@@ -145,7 +142,7 @@ const navFooter = [
         title: 'Settings',
         url: '/manage/settings',
         icon: Settings,
-        requiredPermission: 'system.config.manage' as PermissionCode,
+        permission: 'system.config.manage' as HQPermission,
     },
     {
         title: 'Get Help',
@@ -156,11 +153,10 @@ const navFooter = [
 
 function AppSidebar() {
     const { data: userInfo, isLoading: userInfoLoading } = useUserInfo()
-    const { role, hasPermission, hasAnyPermission, isAtLeast, isLoading: authLoading } = useAdminPermissions()
+    const { role, hasPermission, isLoading: authLoading, canCreateMerchants } = useAdminAuth()
     const pathname = usePathname()
     
     const { signOut } = useClerk()
-    const canCreateMerchants = hasPermission('merchants.create')
 
     const isLoading = userInfoLoading || authLoading
     // Filter navigation items based on user permissions
@@ -168,34 +164,23 @@ function AppSidebar() {
         return navMain.map(group => ({
             ...group,
             items: group.items.filter(item => {
-                const hasPermissionAccess = !item.requiredPermission
-                    ? true
-                    : hasAnyPermission(
-                        Array.isArray(item.requiredPermission)
-                            ? item.requiredPermission
-                            : [item.requiredPermission]
-                    )
-
-                const hasRoleAccess = !item.minRoleLevel
-                    ? true
-                    : isAtLeast(item.minRoleLevel)
-
-                return hasPermissionAccess && hasRoleAccess
+                // If no permission required, show the item
+                if (!item.permission) return true
+                // Check if user has any of the required permissions
+                const permissions = Array.isArray(item.permission) ? item.permission : [item.permission]
+                return permissions.some(p => hasPermission(p))
             })
         })).filter(group => group.items.length > 0) // Remove empty groups
-    }, [hasAnyPermission, isAtLeast])
+    }, [hasPermission])
 
     // Filter footer navigation based on permissions
     const filteredNavFooter = useMemo(() => {
         return navFooter.filter(item => {
-            if (!item.requiredPermission) return true
-            return hasAnyPermission(
-                Array.isArray(item.requiredPermission)
-                    ? item.requiredPermission
-                    : [item.requiredPermission]
-            )
+            if (!item.permission) return true
+            return hasPermission(item.permission as HQPermission)
         })
-    }, [hasAnyPermission])
+    }, [hasPermission])
+   console.log(role)
     return (
         <Sidebar variant="inset">
             <SidebarHeader>
@@ -335,55 +320,18 @@ function AppSidebar() {
     )
 }
 
-function DeniedParamHandler() {
-    const router = useRouter()
-    const pathname = usePathname()
-    const searchParams = useSearchParams()
-
-    useEffect(() => {
-        if (searchParams.get('denied') !== '1') {
-            return
-        }
-
-        const required = searchParams.get('required') ?? ''
-        const deniedMessageByRequirement: Record<string, string> = {
-            'users.manage': "You don't have access to Users.",
-            'roles.manage': "You don't have access to Roles & Permissions.",
-            'audit.view': "You don't have access to Audit Logs.",
-            'merchants.create': "You don't have access to Create Merchant.",
-        }
-
-        toast.error(
-            deniedMessageByRequirement[required] ||
-            "You don't have permission to access that page."
-        )
-
-        const nextParams = new URLSearchParams(searchParams.toString())
-        nextParams.delete('denied')
-        nextParams.delete('required')
-        const cleanedQuery = nextParams.toString()
-
-        router.replace(cleanedQuery ? `${pathname}?${cleanedQuery}` : pathname, {
-            scroll: false,
-        })
-    }, [pathname, router, searchParams])
-
-    return null
-}
-
 export default function ManageLayout({
     children,
 }: {
     children: React.ReactNode
 }) {
     const { isLoaded, isSignedIn } = useSession()
-    const router = useRouter()
 
     useEffect(() => {
         if (isLoaded && !isSignedIn) {
-            router.replace('/')
+            redirect('/')
         }
-    }, [isLoaded, isSignedIn, router])
+    }, [isLoaded, isSignedIn])
 
     if (!isLoaded) {
         return (
@@ -399,9 +347,6 @@ export default function ManageLayout({
 
     return (
         <SidebarProvider>
-            <Suspense>
-                <DeniedParamHandler />
-            </Suspense>
             <AppSidebar />
             <main className="flex-1 flex flex-col">
                 <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">

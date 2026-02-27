@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Info, ArrowLeftRight } from "lucide-react";
+import { Info, Lock, Unlock } from "lucide-react";
 import { useSelectedLocation } from "@/stores/location-store";
 import { cn } from "@/lib/utils";
 import {
@@ -36,16 +36,14 @@ export function PriceInputGroup({
   dualPricingPercentage: propPercentage,
 }: PriceInputGroupProps) {
   const selectedLocation = useSelectedLocation();
-
+  
   // Use props if provided, otherwise fall back to store
+  // This allows the parent to explicitly control the strategy
   const pricingStrategy = propStrategy ?? (selectedLocation as any)?.pricing_strategy ?? "manual";
   const startDualPercentage = propPercentage ?? (selectedLocation as any)?.dual_pricing_percentage ?? 4.0;
 
   const isDual = pricingStrategy === "dual";
   const percentage = Number(startDualPercentage);
-
-  // Track which input was last edited to prevent circular updates
-  const lastEditedRef = useRef<"cash" | "card" | null>(null);
 
   // On mount/dual mode: if we have card price but no cash, derive cash so cash becomes the driver
   useEffect(() => {
@@ -53,26 +51,23 @@ export function PriceInputGroup({
       const rawCash = price / (1 + percentage / 100);
       const roundedCash = Math.round(rawCash * 100) / 100;
       if (roundedCash !== cashPrice) {
-        lastEditedRef.current = "card";
         onCashPriceChange(roundedCash);
       }
     }
   }, [isDual, price, cashPrice, percentage, onCashPriceChange]);
 
-  // Card price change
+  // Card price change (only used in manual mode; in dual mode card input is disabled)
   const handlePriceChange = (newPrice: number) => {
-    lastEditedRef.current = "card";
     onPriceChange(newPrice);
     if (!isDual) return;
-    // In dual mode: derive cash from card
+    // Dual: card is derived from cash only; this path shouldn't fire when input is disabled
     const rawCash = newPrice / (1 + percentage / 100);
     const roundedCash = Math.round(rawCash * 100) / 100;
     onCashPriceChange(roundedCash);
   };
 
-  // Cash price change - the driver in dual mode
+  // Cash price is the driver in dual mode: Card Price = Cash Price * (1 + p/100)
   const handleCashPriceChange = (newCashPrice: number | null) => {
-    lastEditedRef.current = "cash";
     onCashPriceChange(newCashPrice);
     if (isDual && !disabled && newCashPrice !== null) {
       const rawCard = newCashPrice * (1 + percentage / 100);
@@ -99,8 +94,8 @@ export function PriceInputGroup({
                <Info className="h-4 w-4 text-muted-foreground cursor-help" />
              </TooltipTrigger>
              <TooltipContent className="max-w-xs">
-               <p>Dual Pricing is enabled.</p>
-               <p>Edit either price — the other is auto-calculated at {percentage}%.</p>
+               <p>Dual Pricing is enabled by location settings.</p>
+               <p>Edit Cash Price; Card Price is calculated {percentage}% higher.</p>
              </TooltipContent>
            </Tooltip>
          </TooltipProvider>
@@ -108,11 +103,11 @@ export function PriceInputGroup({
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        {/* Card Price Input - editable in dual mode */}
+        {/* Card Price Input - read-only in dual mode (derived from Cash Price) */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label className="text-xs text-muted-foreground">Card Price</Label>
-            {isDual && <ArrowLeftRight className="h-3 w-3 text-blue-500 opacity-70" />}
+            {isDual && <Lock className="h-3 w-3 text-muted-foreground opacity-50" />}
           </div>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
@@ -122,17 +117,17 @@ export function PriceInputGroup({
               min="0"
               value={price || ""}
               onChange={(e) => handlePriceChange(parseFloat(e.target.value) || 0)}
-              disabled={disabled}
-              className={cn("pl-7", isDual && "border-blue-200 focus-visible:ring-blue-500")}
+              disabled={disabled || isDual}
+              readOnly={isDual}
+              className={cn("pl-7", isDual && "bg-muted text-muted-foreground")}
             />
           </div>
         </div>
 
-        {/* Cash Price Input */}
+        {/* Cash Price Input - editable driver in dual mode */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label className="text-xs text-muted-foreground">Cash Price</Label>
-            {isDual && <ArrowLeftRight className="h-3 w-3 text-blue-500 opacity-70" />}
           </div>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
@@ -151,12 +146,13 @@ export function PriceInputGroup({
           </div>
         </div>
       </div>
-
+      
       {isDual && (
         <p className="text-[11px] text-muted-foreground mt-2">
-          * Edit either price — the other is auto-calculated at {percentage}%.
+          * Edit Cash Price; Card Price is automatically {percentage}% higher.
         </p>
       )}
     </div>
   );
 }
+

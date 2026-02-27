@@ -5,6 +5,5 @@ export const useOrganizationUsers = (organizationId: string) => {
     return useQuery({
         queryKey: ['organization-users', organizationId],
         queryFn: () => getOrganizationUsers(organizationId),
-        enabled: !!organizationId,
     })
 }

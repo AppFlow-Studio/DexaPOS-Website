@@ -48,13 +48,6 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Switch } from '@/components/ui/switch'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 
 // Icons
 import {
@@ -86,7 +79,6 @@ import {
 // Admin hooks and actions
 import {
   useAdminMenuWithCategories,
-  useAdminMerchantDetails,
   type AdminMenuWithCategories,
   type AdminMenuItem,
 } from '@/lib/queries/use-admin-merchant'
@@ -99,18 +91,11 @@ import {
   type AdminMenuCategory,
 } from '@/app/manage/actions/admin-merchant/menus'
 import { getAdminMenuSchedules } from '@/app/manage/actions/admin-merchant/menus'
+import { useMerchantId } from '@/app/manage/hooks/useMerchantId'
 
 // Form Sheets (reuse from MenuTab)
 import { MenuFormSheet } from '../../components/MenuTab/sheets/MenuFormSheet'
 import { ItemFormSheet } from '../../components/MenuTab/sheets/ItemFormSheet'
-
-// OrderOut
-import { AdminMenuOrderOutTab } from './AdminMenuOrderOutTab'
-import {
-  useAdminOrderOutStatus,
-  useAdminOrderOutMenuSync,
-  useAdminMenuPayloadDiff,
-} from '@/lib/queries/use-admin-orderout'
 
 // ============================================================================
 // TYPES
@@ -169,30 +154,13 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
 
-  // Fetch merchant details (UUID + locations) from clerk_org_id
-  const { data: merchantDetails, isLoading: isMerchantLoading } = useAdminMerchantDetails(clerkOrgId)
-  const merchantId = merchantDetails?.id
-  const locations = merchantDetails?.locations ?? []
+  // Fetch merchant UUID from clerk_org_id
+  const { data: merchantData, isLoading: isMerchantLoading } = useMerchantId(clerkOrgId)
+  const merchantId = merchantData?.id
 
-  // Location selection with URL sync
+  // Get location from URL search params (?location=uuid or ?location=all)
   const locationParam = searchParams.get('location')
-  const [selectedLocationId, setSelectedLocationId] = useState<string>(
-    locationParam || 'all'
-  )
-  const locationId = selectedLocationId !== 'all' ? selectedLocationId : null
-
-  const selectedLocationName = locations.find((l) => l.id === selectedLocationId)?.name
-
-  const handleLocationChange = (value: string) => {
-    setSelectedLocationId(value)
-    const params = new URLSearchParams(searchParams.toString())
-    if (value === 'all') {
-      params.delete('location')
-    } else {
-      params.set('location', value)
-    }
-    router.replace(`?${params.toString()}`, { scroll: false })
-  }
+  const locationId = locationParam && locationParam !== 'all' ? locationParam : null
 
   // State for expanded categories
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
@@ -227,34 +195,6 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
     refetch,
     isFetching,
   } = useAdminMenuWithCategories(clerkOrgId, menuId, locationId)
-
-  // OrderOut status
-  const { data: orderOutData } = useAdminOrderOutStatus(merchantId || '')
-  const locationRestaurant = orderOutData?.data?.restaurants?.find((r) => r.locationId === locationId)
-  const canShowOrderOutTab = !!locationId
-
-  // OrderOut sync status for tab indicator dot
-  const { data: syncResult } = useAdminOrderOutMenuSync(
-    merchantId || '',
-    locationId || '',
-    menuId
-  )
-  const { data: diffResult } = useAdminMenuPayloadDiff(
-    merchantId || '',
-    locationId || '',
-    menuId
-  )
-
-  // Compute dot color for OrderOut tab indicator
-  const orderOutDotColor = (() => {
-    if (!canShowOrderOutTab || !locationRestaurant?.hasRestaurant) return null
-    const lastSync = syncResult?.data?.lastSync
-    const diff = diffResult?.data
-    if (lastSync?.status === 'failed') return 'bg-red-500'
-    if (diff?.hasChanges) return 'bg-amber-500'
-    if (lastSync?.status === 'success') return 'bg-green-500'
-    return null
-  })()
 
   // Combined loading state
   const isLoading = isMerchantLoading || isMenuLoading
@@ -549,24 +489,6 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
             <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-
-          {/* Location Selector */}
-          {locations.length > 0 && (
-            <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-muted-foreground" />
-              <Select value={selectedLocationId} onValueChange={handleLocationChange}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Select location" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Locations (Global)</SelectItem>
-                  {locations.map((loc) => (
-                    <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
         </div>
 
         <div className="flex items-start justify-between">
@@ -575,12 +497,6 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
             {menu.description && (
               <p className="text-muted-foreground mt-1">{menu.description}</p>
             )}
-            <p className="text-sm text-muted-foreground mt-1">
-              {locationId
-                ? <>Viewing effective prices for <span className="text-foreground font-medium">{selectedLocationName}</span></>
-                : <>Viewing global prices (L1) for all locations</>
-              }
-            </p>
             <div className="flex items-center gap-2 mt-2">
               <Badge
                 variant="outline"
@@ -637,14 +553,6 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
             )}
           </TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
-          {canShowOrderOutTab && (
-            <TabsTrigger value="orderout" className="flex items-center gap-1.5">
-              OrderOut
-              {orderOutDotColor && (
-                <span className={`h-2 w-2 rounded-full ${orderOutDotColor}`} />
-              )}
-            </TabsTrigger>
-          )}
         </TabsList>
 
         {/* Overview Tab */}
@@ -916,19 +824,6 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
             </CardContent>
           </Card>
         </TabsContent>
-
-        {/* OrderOut Tab */}
-        {canShowOrderOutTab && merchantId && locationId && (
-          <TabsContent value="orderout" className="space-y-4">
-            <AdminMenuOrderOutTab
-              merchantId={merchantId}
-              locationId={locationId}
-              menuId={menuId}
-              menuName={menu.name}
-              clerkOrgId={clerkOrgId}
-            />
-          </TabsContent>
-        )}
       </Tabs>
 
       {/* Menu Form Sheet - only render when merchantId is available */}

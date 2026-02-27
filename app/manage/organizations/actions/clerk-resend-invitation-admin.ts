@@ -2,17 +2,11 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createClerkClient } from '@clerk/backend'
-import { logAdminAction } from '@/lib/admin/log-admin-action'
-import { auth } from '@clerk/nextjs/server'
 export async function ClerkResendInvitationAdmin(invitationId: string) {
     try {
         // Find the pending invite in the pending_org_admin_invites table
         const supabase = createServerSupabaseClient()
-        const { data: existingInvite, error } = await supabase
-            .from('pending_org_admin_invites')
-            .select('id, email, role, organization_id, first_name, last_name')
-            .eq('clerk_invite_id', invitationId)
-            .single()
+        const { data, error } = await supabase.from('pending_org_admin_invites').select('id').eq('clerk_invite_id', invitationId).single()
         if (error) {
             return {
                 success: false,
@@ -20,101 +14,54 @@ export async function ClerkResendInvitationAdmin(invitationId: string) {
             }
         }
 
-        const organizationId = existingInvite?.organization_id
-        if (!organizationId) {
-            return {
-                success: false,
-                message: 'Missing organization id for invitation',
-            }
-        }
-
-        const inviteEmail = existingInvite?.email
-        if (!inviteEmail) {
-            return {
-                success: false,
-                message: 'Missing invite email',
-            }
-        }
-
-        const { userId } = await auth()
         const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
-        await clerkClient.organizations.revokeOrganizationInvitation({
-            organizationId,
-            invitationId,
-            requestingUserId: userId || '',
-        })
-
-        const resendInvitation = await clerkClient.organizations.createOrganizationInvitation({
-            organizationId,
-            emailAddress: inviteEmail,
-            role: 'org:admin',
-            publicMetadata: {
-                role: existingInvite.role || 'hq.manager',
-                level_type: 'hq',
-                org_type: 'hq',
-                firstName: existingInvite.first_name || '',
-                lastName: existingInvite.last_name || '',
-            },
-        })
-
-        if (!resendInvitation?.id) {
-            return {
-                success: false,
-                message: 'Failed to create replacement invitation',
+        const invitation = await clerkClient.invitations.revokeInvitation(invitationId)
+        if (invitation?.id) {
+            const { data: OrgAdminInviteData, error } = await supabase.from('pending_org_admin_invites').update({
+                status: 'revoked',
+            }).eq('clerk_invite_id', invitationId).select().single()
+            if (error) {
+                return {
+                    success: false,
+                    message: 'Error revoking invitation: ' + error.message,
+                }
             }
-        }
 
-        const { data: updatedInvite, error: updateError } = await supabase
-            .from('pending_org_admin_invites')
-            .update({
-                clerk_invite_id: resendInvitation.id,
-                status: resendInvitation.status || 'pending',
-                role: existingInvite.role,
-                updated_at: new Date().toISOString(),
+            const ResendInvitationResponse = await clerkClient.invitations.createInvitation({
+                emailAddress: invitation.emailAddress,
+                redirectUrl: 'http://localhost:3000/',
+                publicMetadata: invitation?.publicMetadata || undefined,
             })
-            .eq('id', existingInvite.id)
-            .select()
-            .single()
 
-        if (updateError) {
-            return {
-                success: false,
-                message: 'Error saving resent invitation: ' + updateError.message,
+            if (ResendInvitationResponse.id) {
+                const { data, error } = await supabase.from('pending_org_admin_invites').update({
+                    clerk_invite_id: ResendInvitationResponse.id,
+                    status: 'pending',
+                    role: ResendInvitationResponse.publicMetadata?.role,
+                    created_at: new Date().toISOString(),
+                }).eq('id', OrgAdminInviteData?.id).select().single()
+                if (error) {
+                    return {
+                        success: false,
+                        message: 'Error Saving resending invitation: ' + error.message,
+                    }
+                }
+                return {
+                    success: true,
+                    message: 'Invitation resend successfully',
+                }
             }
-        }
 
-        await logAdminAction('ADMIN_INVITE_RESENT', {
-            clerkOrgId: updatedInvite.organization_id || undefined,
-            resourceType: 'invitation',
-            resourceId: updatedInvite.id,
-            resourceName: updatedInvite.email || inviteEmail,
-            changes: {
-                before: {
-                    clerk_invite_id: invitationId,
-                    status: 'revoked',
-                },
-                after: {
-                    clerk_invite_id: resendInvitation.id,
-                    status: resendInvitation.status || 'pending',
-                    role: updatedInvite.role || existingInvite.role || null,
-                },
-            },
-            metadata: {
-                previous_clerk_invite_id: invitationId,
-            },
-        })
-
-        return {
-            success: true,
-            message: 'Invitation resent successfully',
+            return {
+                success: true,
+                message: 'Invitation revoked successfully',
+            }
         }
     } catch (error) {
         console.error('Error revoking invitation:', error)
-        const typedError = error as { errors?: Array<{ longMessage?: string }>; message?: string }
-        const message = typedError?.errors?.[0]?.longMessage || typedError?.message || 'Unknown error'
         return {
             success: false,
-            message: 'Error revoking invitation: ' + message,
+            message: 'Error revoking invitation: ' + error?.errors?.[0]?.longMessage || 'Unknown error',
         }
     }
 

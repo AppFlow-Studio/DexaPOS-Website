@@ -1,7 +1,7 @@
 'use client'
 
-import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
-import type { PermissionCode } from '@/lib/admin/permission-codes'
+import { useAdminAuth } from '@/lib/hooks/useAdminAuth'
+import type { HQPermission } from '@/types/admin'
 
 interface PermissionGateProps {
   /**
@@ -9,11 +9,7 @@ interface PermissionGateProps {
    * By default, requires ANY of the permissions (OR logic).
    * Set requireAll=true to require ALL permissions (AND logic).
    */
-  permission?: PermissionCode | PermissionCode[]
-  /**
-   * Optional minimum role level (e.g., 10 = super admin only).
-   */
-  minLevel?: number
+  permission: HQPermission | HQPermission[]
   /**
    * Content to render if the user lacks the required permission(s).
    * Defaults to null (renders nothing).
@@ -61,32 +57,20 @@ interface PermissionGateProps {
  */
 export function PermissionGate({
   permission,
-  minLevel,
   fallback = null,
   children,
   requireAll = false,
 }: PermissionGateProps) {
-  const { hasPermission, isAtLeast, isLoading } = useAdminPermissions()
+  const { hasPermission, isLoading } = useAdminAuth()
 
   // Don't render anything while loading to prevent flash
   if (isLoading) return null
 
-  const permissions = permission
-    ? Array.isArray(permission)
-      ? permission
-      : [permission]
-    : []
+  const permissions = Array.isArray(permission) ? permission : [permission]
 
-  const hasPermissionAccess =
-    permissions.length === 0
-      ? true
-      : requireAll
-        ? permissions.every(hasPermission)
-        : permissions.some(hasPermission)
-
-  const hasLevelAccess = minLevel == null ? true : isAtLeast(minLevel)
-
-  const hasAccess = hasPermissionAccess && hasLevelAccess
+  const hasAccess = requireAll
+    ? permissions.every(hasPermission)
+    : permissions.some(hasPermission)
 
   if (!hasAccess) return <>{fallback}</>
 
@@ -104,29 +88,14 @@ export function PermissionGate({
  * }
  * ```
  */
-export function useCanAccess(
-  permission?: PermissionCode | PermissionCode[],
-  requireAll = false,
-  minLevel?: number
-): boolean {
-  const { hasPermission, isAtLeast, isLoading } = useAdminPermissions()
+export function useCanAccess(permission: HQPermission | HQPermission[], requireAll = false): boolean {
+  const { hasPermission, isLoading } = useAdminAuth()
 
   if (isLoading) return false
 
-  const permissions = permission
-    ? Array.isArray(permission)
-      ? permission
-      : [permission]
-    : []
+  const permissions = Array.isArray(permission) ? permission : [permission]
 
-  const hasPermissionAccess =
-    permissions.length === 0
-      ? true
-      : requireAll
-        ? permissions.every(hasPermission)
-        : permissions.some(hasPermission)
-
-  const hasLevelAccess = minLevel == null ? true : isAtLeast(minLevel)
-
-  return hasPermissionAccess && hasLevelAccess
+  return requireAll
+    ? permissions.every(hasPermission)
+    : permissions.some(hasPermission)
 }

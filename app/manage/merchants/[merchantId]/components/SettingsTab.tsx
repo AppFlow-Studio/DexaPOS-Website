@@ -51,7 +51,6 @@ import {
 } from '@/types/tax'
 import { toast } from 'sonner'
 import type { Location } from '@/types/merchant_locations'
-import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
 
 
 import { MerchantDetails } from '@/types/merchant'
@@ -62,7 +61,6 @@ interface SettingsTabProps {
 }
 
 export function SettingsTab({ merchantInfo, refetchMerchantInfo }: SettingsTabProps) {
-    const { isSuperAdmin } = useAdminPermissions()
     const [openDeleteOrganizationDialog, setOpenDeleteOrganizationDialog] = useState(false)
     const [selectedLocationId, setSelectedLocationId] = useState<string>('all')
     const [editDialogOpen, setEditDialogOpen] = useState(false)
@@ -466,104 +464,13 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo }: SettingsTabPr
 
                 {/* Pricing Strategy Content */}
                 <TabsContent value="pricing" className="space-y-6">
-                    {/* Organization Default Pricing Card */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Globe className="h-5 w-5" />
-                                Organization Default Pricing
-                            </CardTitle>
-                            <CardDescription>
-                                Set the default pricing strategy for all locations. Locations inherit these values unless they have custom overrides.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-6 max-w-lg">
-                                <div className="space-y-2">
-                                    <Label>Default Strategy</Label>
-                                    <Select
-                                        value={merchantInfo.pricing_strategy || 'manual'}
-                                        onValueChange={async (val) => {
-                                            try {
-                                                const result = await updateMerchantMutation.mutateAsync({
-                                                    merchantId: merchantInfo.id,
-                                                    updates: {
-                                                        pricing_strategy: val as 'manual' | 'dual',
-                                                        dual_pricing_percentage: val === 'dual' && !merchantInfo.dual_pricing_percentage
-                                                            ? 4.0
-                                                            : merchantInfo.dual_pricing_percentage,
-                                                    }
-                                                })
-                                                if (result.success) {
-                                                    toast.success('Organization pricing updated')
-                                                    refetchMerchantInfo()
-                                                } else {
-                                                    toast.error(result.error || 'Failed to update')
-                                                }
-                                            } catch (e) {
-                                                toast.error('Error updating organization pricing')
-                                            }
-                                        }}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="manual">Manual Pricing</SelectItem>
-                                            <SelectItem value="dual">Dual Pricing (Cash Discount)</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                {merchantInfo.pricing_strategy === 'dual' && (
-                                    <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
-                                        <Label>Default Percentage (%)</Label>
-                                        <div className="relative">
-                                            <Input
-                                                type="number"
-                                                defaultValue={merchantInfo.dual_pricing_percentage ?? 4.0}
-                                                step="0.1"
-                                                className="pr-8"
-                                                onBlur={async (e) => {
-                                                    const val = parseFloat(e.target.value)
-                                                    if (isNaN(val)) return
-                                                    if (val === merchantInfo.dual_pricing_percentage) return
-
-                                                    try {
-                                                        const result = await updateMerchantMutation.mutateAsync({
-                                                            merchantId: merchantInfo.id,
-                                                            updates: { dual_pricing_percentage: val }
-                                                        })
-                                                        if (result.success) {
-                                                            toast.success('Percentage updated')
-                                                            refetchMerchantInfo()
-                                                        } else {
-                                                            toast.error(result.error || 'Failed to update')
-                                                        }
-                                                    } catch (e) {
-                                                        toast.error('Error updating percentage')
-                                                    }
-                                                }}
-                                            />
-                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
-                                        </div>
-                                        <p className="text-xs text-muted-foreground">
-                                            Typical values range from 3.5% to 4.0%
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Per-Location Pricing */}
                     <Card>
                         <CardHeader>
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <CardTitle>Per-Location Pricing</CardTitle>
+                                    <CardTitle>Pricing Strategy</CardTitle>
                                     <CardDescription>
-                                        View and override pricing for individual locations
+                                        Configure pricing strategy for each location
                                     </CardDescription>
                                 </div>
                                 <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
@@ -585,156 +492,96 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo }: SettingsTabPr
                         <CardContent>
                              {selectedLocationId === 'all' ? (
                                  <div className="space-y-4">
-                                     {locations.map((location) => {
-                                         const usesDefaults = (location as any).use_merchant_pricing_defaults !== false
-                                         const effectiveStrategy = usesDefaults
-                                             ? (merchantInfo.pricing_strategy || 'manual')
-                                             : (location.pricing_strategy || 'manual')
-                                         const effectivePercentage = usesDefaults
-                                             ? (merchantInfo.dual_pricing_percentage ?? 4.0)
-                                             : (location.dual_pricing_percentage ?? 4.0)
-                                         return (
-                                             <div key={location.id} className="flex items-center justify-between p-4 border rounded-lg">
-                                                 <div className="flex items-center gap-3">
-                                                     <MapPin className="h-5 w-5 text-muted-foreground" />
-                                                     <div>
-                                                         <p className="font-medium flex items-center gap-2">
-                                                             {location.name}
-                                                             {usesDefaults ? (
-                                                                 <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                                                                     Org Default
-                                                                 </Badge>
-                                                             ) : (
-                                                                 <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
-                                                                     Custom
-                                                                 </Badge>
-                                                             )}
-                                                         </p>
-                                                         <p className="text-sm text-muted-foreground">
-                                                             Strategy: {effectiveStrategy === 'dual' ? 'Dual Pricing' : 'Manual'}
-                                                             {effectiveStrategy === 'dual' && ` (${effectivePercentage}%)`}
-                                                         </p>
-                                                     </div>
+                                     {locations.map((location) => (
+                                         <div key={location.id} className="flex items-center justify-between p-4 border rounded-lg">
+                                             <div className="flex items-center gap-3">
+                                                 <MapPin className="h-5 w-5 text-muted-foreground" />
+                                                 <div>
+                                                     <p className="font-medium">{location.name}</p>
+                                                     <p className="text-sm text-muted-foreground">
+                                                         Strategy: {location.pricing_strategy === 'dual' ? 'Dual Pricing' : 'Manual'} 
+                                                         {location.pricing_strategy === 'dual' && ` (${location.dual_pricing_percentage}%)`}
+                                                     </p>
                                                  </div>
-                                                 <Button variant="outline" size="sm" onClick={() => setSelectedLocationId(location.id)}>
-                                                     <Edit className="h-4 w-4 mr-2" />
-                                                     Edit
-                                                 </Button>
                                              </div>
-                                         )
-                                     })}
+                                             <Button variant="outline" size="sm" onClick={() => setSelectedLocationId(location.id)}>
+                                                 <Edit className="h-4 w-4 mr-2" />
+                                                 Edit
+                                             </Button>
+                                         </div>
+                                     ))}
                                  </div>
                              ) : currentLocation ? (
                                  <div className="space-y-6 max-w-lg">
-                                     {/* Use Org Defaults Toggle */}
-                                     <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
-                                         <div className="flex items-center gap-3">
-                                             <Globe className="h-4 w-4 text-muted-foreground" />
-                                             <div>
-                                                 <p className="text-sm font-medium">Use Organization Defaults</p>
-                                                 <p className="text-xs text-muted-foreground">
-                                                     Inherit pricing from organization settings
-                                                 </p>
-                                             </div>
-                                         </div>
-                                         <Switch
-                                             checked={(currentLocation as any).use_merchant_pricing_defaults !== false}
-                                             onCheckedChange={async (checked) => {
-                                                 try {
-                                                     const result = await UpdateLocation(currentLocation.id, {
-                                                         use_merchant_pricing_defaults: checked
-                                                     })
-                                                     if (result.data) {
-                                                         toast.success(checked ? 'Using Organization Defaults' : 'Using Custom Pricing')
-                                                         refetchMerchantInfo()
-                                                     } else {
-                                                         toast.error(result.error || 'Failed to update')
-                                                     }
-                                                 } catch (e) {
-                                                     toast.error('Error updating setting')
-                                                 }
+                                     <div className="space-y-2">
+                                         <Label>Pricing Strategy</Label>
+                                         <Select 
+                                             value={currentLocation.pricing_strategy || 'manual'}
+                                             onValueChange={async (val) => {
+                                                  try {
+                                                      // Call the server action to update location
+                                                      const result = await UpdateLocation(currentLocation.id, { 
+                                                          pricing_strategy: val as 'manual'| 'dual',
+                                                          // If switching to dual and no percentage is set, default to 4.0
+                                                          dual_pricing_percentage: val === 'dual' && !currentLocation.dual_pricing_percentage 
+                                                              ? 4.0 
+                                                              : currentLocation.dual_pricing_percentage
+                                                      });
+                                                      
+                                                      if (result.data) {
+                                                         toast.success('Strategy Updated Successfully');
+                                                         // Force a refetch of the merchant info to update the locations list
+                                                         refetchMerchantInfo();
+                                                      } else {
+                                                         toast.error(result.error || 'Failed to update');
+                                                      }
+                                                  } catch(e) { 
+                                                      console.error(e);
+                                                      toast.error('Error updating strategy'); 
+                                                  }
                                              }}
-                                         />
+                                         >
+                                             <SelectTrigger>
+                                                 <SelectValue />
+                                             </SelectTrigger>
+                                             <SelectContent>
+                                                 <SelectItem value="manual">Manual Pricing</SelectItem>
+                                                 <SelectItem value="dual">Dual Pricing (Cash Discount)</SelectItem>
+                                             </SelectContent>
+                                         </Select>
+                                         <p className="text-sm text-muted-foreground">
+                                             {currentLocation.pricing_strategy === 'dual' 
+                                              ? 'Card prices are automatically higher than cash prices by the set percentage.'
+                                              : 'Manually set Independent Cash and Card prices.'}
+                                         </p>
                                      </div>
 
-                                     {(currentLocation as any).use_merchant_pricing_defaults !== false ? (
-                                         <Alert>
-                                             <AlertCircle className="h-4 w-4" />
-                                             <AlertTitle>Inherited from Organization</AlertTitle>
-                                             <AlertDescription>
-                                                 Strategy: {merchantInfo.pricing_strategy === 'dual' ? `Dual Pricing at ${merchantInfo.dual_pricing_percentage ?? 4.0}%` : 'Manual Pricing'}.
-                                                 Toggle off to set custom pricing for this location.
-                                             </AlertDescription>
-                                         </Alert>
-                                     ) : (
-                                         <>
-                                             <div className="space-y-2">
-                                                 <Label>Pricing Strategy</Label>
-                                                 <Select
-                                                     value={currentLocation.pricing_strategy || 'manual'}
-                                                     onValueChange={async (val) => {
-                                                         try {
-                                                             const result = await UpdateLocation(currentLocation.id, {
-                                                                 pricing_strategy: val as 'manual'| 'dual',
-                                                                 dual_pricing_percentage: val === 'dual' && !currentLocation.dual_pricing_percentage
-                                                                     ? 4.0
-                                                                     : currentLocation.dual_pricing_percentage
-                                                             })
-                                                             if (result.data) {
-                                                                 toast.success('Strategy Updated Successfully')
-                                                                 refetchMerchantInfo()
-                                                             } else {
-                                                                 toast.error(result.error || 'Failed to update')
-                                                             }
-                                                         } catch(e) {
-                                                             console.error(e)
-                                                             toast.error('Error updating strategy')
-                                                         }
+                                     {currentLocation.pricing_strategy === 'dual' && (
+                                         <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                                             <Label>Dual Pricing Percentage (%)</Label>
+                                             <div className="relative">
+                                                 <Input 
+                                                     type="number" 
+                                                     defaultValue={currentLocation.dual_pricing_percentage ?? 4.0}
+                                                     step="0.1"
+                                                     className="pr-8"
+                                                     onBlur={async (e) => {
+                                                         const val = parseFloat(e.target.value);
+                                                         if (isNaN(val)) return;
+                                                         if (val === currentLocation.dual_pricing_percentage) return;
+                                                         
+                                                         const result = await UpdateLocation(currentLocation.id, { dual_pricing_percentage: val });
+                                                          if (result.data) {
+                                                             toast.success('Percentage Updated');
+                                                             refetchMerchantInfo();
+                                                          } else {
+                                                             toast.error(result.error || 'Failed to update');
+                                                          }
                                                      }}
-                                                 >
-                                                     <SelectTrigger>
-                                                         <SelectValue />
-                                                     </SelectTrigger>
-                                                     <SelectContent>
-                                                         <SelectItem value="manual">Manual Pricing</SelectItem>
-                                                         <SelectItem value="dual">Dual Pricing (Cash Discount)</SelectItem>
-                                                     </SelectContent>
-                                                 </Select>
-                                                 <p className="text-sm text-muted-foreground">
-                                                     {currentLocation.pricing_strategy === 'dual'
-                                                      ? 'Card prices are automatically higher than cash prices by the set percentage.'
-                                                      : 'Manually set Independent Cash and Card prices.'}
-                                                 </p>
+                                                 />
+                                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
                                              </div>
-
-                                             {currentLocation.pricing_strategy === 'dual' && (
-                                                 <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
-                                                     <Label>Dual Pricing Percentage (%)</Label>
-                                                     <div className="relative">
-                                                         <Input
-                                                             type="number"
-                                                             defaultValue={currentLocation.dual_pricing_percentage ?? 4.0}
-                                                             step="0.1"
-                                                             className="pr-8"
-                                                             onBlur={async (e) => {
-                                                                 const val = parseFloat(e.target.value)
-                                                                 if (isNaN(val)) return
-                                                                 if (val === currentLocation.dual_pricing_percentage) return
-
-                                                                 const result = await UpdateLocation(currentLocation.id, { dual_pricing_percentage: val })
-                                                                 if (result.data) {
-                                                                     toast.success('Percentage Updated')
-                                                                     refetchMerchantInfo()
-                                                                 } else {
-                                                                     toast.error(result.error || 'Failed to update')
-                                                                 }
-                                                             }}
-                                                         />
-                                                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
-                                                     </div>
-                                                 </div>
-                                             )}
-                                         </>
+                                         </div>
                                      )}
                                  </div>
                              ) : null}
@@ -859,40 +706,38 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo }: SettingsTabPr
                     </Card>
 
                     {/* Danger Zone */}
-                    {isSuperAdmin && (
-                        <Card className="border-destructive">
-                            <CardHeader>
-                                <CardTitle className="text-destructive flex items-center gap-2">
-                                    <AlertTriangle className="h-5 w-5" />
-                                    Danger Zone
-                                </CardTitle>
-                                <CardDescription>
-                                    Irreversible and destructive actions. Please proceed with caution.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between p-4 border border-destructive/20 rounded-lg bg-destructive/5">
-                                        <div className="space-y-1">
-                                            <h4 className="font-medium text-destructive">Delete Organization</h4>
-                                            <p className="text-sm text-muted-foreground">
-                                                Permanently delete this merchant organization and all associated data.
-                                                This action cannot be undone.
-                                            </p>
-                                        </div>
-                                        <Button
-                                            variant="destructive"
-                                            onClick={() => setOpenDeleteOrganizationDialog(true)}
-                                            className="ml-4"
-                                        >
-                                            <Trash2 className="h-4 w-4 mr-2" />
-                                            Delete Organization
-                                        </Button>
+                    <Card className="border-destructive">
+                        <CardHeader>
+                            <CardTitle className="text-destructive flex items-center gap-2">
+                                <AlertTriangle className="h-5 w-5" />
+                                Danger Zone
+                            </CardTitle>
+                            <CardDescription>
+                                Irreversible and destructive actions. Please proceed with caution.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between p-4 border border-destructive/20 rounded-lg bg-destructive/5">
+                                    <div className="space-y-1">
+                                        <h4 className="font-medium text-destructive">Delete Organization</h4>
+                                        <p className="text-sm text-muted-foreground">
+                                            Permanently delete this merchant organization and all associated data.
+                                            This action cannot be undone.
+                                        </p>
                                     </div>
+                                    <Button
+                                        variant="destructive"
+                                        onClick={() => setOpenDeleteOrganizationDialog(true)}
+                                        className="ml-4"
+                                    >
+                                        <Trash2 className="h-4 w-4 mr-2" />
+                                        Delete Organization
+                                    </Button>
                                 </div>
-                            </CardContent>
-                        </Card>
-                    )}
+                            </div>
+                        </CardContent>
+                    </Card>
                 </TabsContent>
             </Tabs>
 

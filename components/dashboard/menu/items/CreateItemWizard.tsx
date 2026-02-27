@@ -21,12 +21,12 @@ import {
 } from "@/components/ui/bottom-sheet";
 import { CategoryWithItems } from "@/types/menu";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { useLocationStore } from "@/stores/location-store";
 import {
   CreateItemInCategory,
   AddItemToCategory,
 } from "@/app/dashboard/actions/item-assignments";
 import { PriceInputGroup } from "@/components/dashboard/locations/PriceInputGroup";
-import { useEffectivePricing } from "@/app/dashboard/hooks/useEffectivePricing";
 
 interface CreateItemWizardProps {
   open: boolean;
@@ -50,11 +50,17 @@ export function CreateItemWizard({
   const queryClient = useQueryClient();
   const { data: userInfo } = useUserInfo();
   const merchantId = userInfo?.members?.[0]?.organizations?.merchants?.id || "";
-  // Use effective pricing (resolves merchant vs location)
-  const {
-    pricingStrategy,
-    dualPricingPercentage,
-  } = useEffectivePricing();
+  const { locations } = useLocationStore();
+  
+  // Get location details for dual pricing context
+  const targetLocation = React.useMemo(() => {
+    if (isAllLocations || !selectedLocationId) return null;
+    return locations.find(l => l.id === selectedLocationId);
+  }, [locations, selectedLocationId, isAllLocations]);
+
+  // Check if current location uses dual pricing
+  const pricingStrategy = (targetLocation as any)?.pricing_strategy || "manual";
+  const dualPricingPercentage = (targetLocation as any)?.dual_pricing_percentage || 4.0;
   const isDualPricing = pricingStrategy === "dual";
 
 
@@ -308,7 +314,7 @@ export function CreateItemWizard({
                 onPriceChange={setPrice}
                 onCashPriceChange={setCashPrice}
                 label="Price"
-                pricingStrategy={pricingStrategy}
+                pricingStrategy={isAllLocations ? 'manual' : pricingStrategy}
                 dualPricingPercentage={dualPricingPercentage}
               />
               <div className="flex gap-4 px-4">

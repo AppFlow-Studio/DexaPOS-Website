@@ -5,21 +5,6 @@ import type { HQPermission, HQRole, ServerAdminAuth } from '@/types/admin'
 
 const DEXA_HQ_ORG_ID = process.env.DEXA_POS_INTERNAL_TEAM_ID || 'org_33z36QibAMZy6kc2xZNYmDl5duh'
 
-interface RequireAdminAuthOptions {
-  redirectToDashboard?: boolean
-  requiredLabel?: string
-  minRoleLevel?: number
-}
-
-function buildDashboardDeniedUrl(required?: string): string {
-  const params = new URLSearchParams()
-  params.set('denied', '1')
-  if (required) {
-    params.set('required', required)
-  }
-  return `/manage?${params.toString()}`
-}
-
 /**
  * Server-side admin auth check. Throws redirect if not authorized.
  * Use in server components or pages that require HQ admin access.
@@ -28,21 +13,8 @@ function buildDashboardDeniedUrl(required?: string): string {
  * @returns ServerAdminAuth object with role and permissions
  */
 export async function requireAdminAuth(
-  requiredPermission?: HQPermission,
-  options: RequireAdminAuthOptions = {}
+  requiredPermission?: HQPermission
 ): Promise<ServerAdminAuth> {
-  const deny = (reason: string): never => {
-    if (options.redirectToDashboard) {
-      redirect(buildDashboardDeniedUrl(options.requiredLabel ?? requiredPermission))
-    }
-
-    if (reason === 'not_hq_admin') {
-      redirect('/unauthorized?reason=not_hq_admin')
-    }
-
-    redirect(`/manage/unauthorized?reason=${reason}`)
-  }
-
   const { userId, orgId } = await auth()
 
   if (!userId) {
@@ -50,9 +22,8 @@ export async function requireAdminAuth(
   }
 
   if (orgId !== DEXA_HQ_ORG_ID) {
-    deny('not_hq_admin')
+    redirect('/unauthorized?reason=not_hq_admin')
   }
-  const normalizedOrgId = orgId as string
 
   const supabase = createServerSupabaseClient()
 
@@ -61,7 +32,7 @@ export async function requireAdminAuth(
     .single()
 
   if (roleError || !roleData) {
-    deny('no_hq_role')
+    redirect('/manage/unauthorized?reason=no_hq_role')
   }
 
   const { data: permissions } = await supabase
@@ -74,18 +45,13 @@ export async function requireAdminAuth(
   }
 
   if (requiredPermission && !hasPermission(requiredPermission)) {
-    deny('insufficient_permissions')
-  }
-
-  const role = roleData as HQRole
-  if (options.minRoleLevel != null && role.level < options.minRoleLevel) {
-    deny('insufficient_role_level')
+    redirect(`/manage/unauthorized?required=${requiredPermission}`)
   }
 
   return {
     userId,
-    orgId: normalizedOrgId,
-    role,
+    orgId,
+    role: roleData as HQRole,
     permissions: permissionList,
     hasPermission,
   }

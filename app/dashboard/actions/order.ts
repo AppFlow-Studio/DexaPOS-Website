@@ -285,12 +285,10 @@ export async function GetOrderDetails(
     return null;
   }
 
-  // Use service role so we can read the order; access is enforced in application code
-  // (same pattern as GetOrders). This avoids RLS blocking merchant owners who have
-  // no staff_profiles row but do have access via Clerk org/members.
-  const supabase = createServiceRoleClient();
+  const supabase = createServerSupabaseClient();
 
   try {
+    // Get order with related items (including modifiers), payments, location, staff, and station
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .select(
@@ -335,27 +333,7 @@ export async function GetOrderDetails(
       return null;
     }
 
-    const orderObj = order as OrderResponse & { merchant_id?: string; location_id?: string };
-
-    // Enforce access: HQ admin with permission, or merchant/location in user scope
-    try {
-      try {
-        await assertHQPermission("hq.merchant.view");
-        return orderObj as OrderResponse;
-      } catch {
-        const userAccess = await getUserOrderAccess();
-        if (!userAccess) return null;
-        if (
-          orderObj.merchant_id !== userAccess.merchantId ||
-          !userAccess.locationIds.includes(orderObj.location_id)
-        ) {
-          return null;
-        }
-        return orderObj as OrderResponse;
-      }
-    } catch {
-      return null;
-    }
+    return order as OrderResponse;
   } catch (error) {
     console.error("[GetOrderDetails] Unexpected error:", error);
     return null;
@@ -421,17 +399,11 @@ export async function GetOrderFullHistory(
           console.error(
             "[GetOrderFullHistory] Access denied: order merchant/location not in user scope"
           );
-          const err = new Error("ACCESS_DENIED") as Error & { code?: string };
-          err.code = "ACCESS_DENIED";
-          throw err;
+          return null;
         }
       }
     }
-  } catch (accessErr: unknown) {
-    const err = accessErr as Error & { code?: string };
-    if (err?.code === "ACCESS_DENIED") {
-      throw accessErr; // Propagate so API can return 403
-    }
+  } catch (accessErr) {
     console.warn("[GetOrderFullHistory] Access check failed, continuing with RLS protection:", accessErr);
   }
 
@@ -484,7 +456,6 @@ export async function GetOrderFullHistory(
     staffProfilesRes,
     stationRes,
     createdByUserRes,
-    kdsItemStatusRes,
   ] = await Promise.all([
     paymentIds.length
       ? supabase
@@ -560,11 +531,6 @@ export async function GetOrderFullHistory(
           .eq("id", createdByUserId)
           .single()
       : Promise.resolve({ data: null, error: null } as any),
-    supabase
-      .from("kds_item_status")
-      .select("order_item_id, status, started_at, completed_at")
-      .eq("order_id", orderId)
-      .not("status", "eq", "cancelled"),
   ]);
 
   if (paymentEventsRes?.error)
@@ -585,42 +551,6 @@ export async function GetOrderFullHistory(
     console.error("[GetOrderFullHistory] Error getting station:", stationRes.error);
   if (createdByUserRes?.error)
     console.error("[GetOrderFullHistory] Error getting created-by user:", createdByUserRes.error);
-  if (kdsItemStatusRes?.error)
-    console.error("[GetOrderFullHistory] Error getting KDS item status:", kdsItemStatusRes.error);
-
-  // Build map: order_item_id -> best KDS row (status, started_at, completed_at).
-  // KDS is source of truth for kitchen status; order_items may not be synced.
-  // Prefer most advanced status: completed > ready > preparing > new.
-  const kdsStatusOrder: Record<string, number> = {
-    completed: 4,
-    ready: 3,
-    preparing: 2,
-    new: 1,
-    pending: 0,
-  };
-  const kdsByOrderItemId = new Map<
-    string,
-    { status: string; started_at: string | null; completed_at: string | null }
-  >();
-  for (const row of kdsItemStatusRes?.data ?? []) {
-    const existing = kdsByOrderItemId.get(row.order_item_id);
-    const rank = kdsStatusOrder[row.status?.toLowerCase()] ?? 0;
-    const existingRank = existing ? kdsStatusOrder[existing.status?.toLowerCase()] ?? 0 : -1;
-    if (rank > existingRank) {
-      kdsByOrderItemId.set(row.order_item_id, {
-        status: row.status ?? "new",
-        started_at: row.started_at ?? null,
-        completed_at: row.completed_at ?? null,
-      });
-    }
-  }
-
-  // Normalize kitchen status for UI: "served" (order_items) and "completed" (KDS) both show as "completed".
-  const normalizeKitchenStatus = (s: string | null | undefined): string | null => {
-    if (s == null) return null;
-    const lower = s.toLowerCase();
-    return lower === "served" ? "completed" : lower;
-  };
 
   const staffNameById = new Map<string, string>();
   for (const sp of staffProfilesRes?.data || []) {
@@ -755,68 +685,40 @@ export async function GetOrderFullHistory(
   );
 
   const items: OrderFullHistory["items"] = (order.order_items || []).map(
-    (oi: any) => {
-      const kds = oi.id ? kdsByOrderItemId.get(oi.id) : undefined;
-      const kitchenStatus = normalizeKitchenStatus(
-        kds?.status ?? oi.kitchen_status ?? null
-      );
-      const fireTime = oi.fire_time ?? oi.sent_to_kitchen_at ?? null;
-      const completedAt = kds?.completed_at ?? oi.completed_at ?? null;
-      const rawPreparingAt = kds?.started_at ?? oi.preparing_at ?? oi.started_preparing_at ?? null;
-      const rawReadyAt = oi.ready_at ?? null;
-      // Normalize to same-second for equality (ISO strings can differ by ms)
-      const sameMoment = (a: string | null, b: string | null) => {
-        if (!a || !b) return false;
-        const tA = new Date(a).getTime();
-        const tB = new Date(b).getTime();
-        return Number.isFinite(tA) && Number.isFinite(tB) && tA === tB;
-      };
-      // Don't send duplicate timestamps: if Preparing/Ready equal fire or completed, send null so UI shows time once
-      const preparingAt =
-        !rawPreparingAt ||
-        sameMoment(rawPreparingAt, fireTime) ||
-        sameMoment(rawPreparingAt, completedAt)
-          ? null
-          : rawPreparingAt;
-      const readyAt =
-        !rawReadyAt || sameMoment(rawReadyAt, fireTime) || sameMoment(rawReadyAt, completedAt)
-          ? null
-          : rawReadyAt;
-      return {
-        id: oi.id,
-        item_name: oi.item_name,
-        quantity: oi.quantity,
-        unit_price: oi.unit_price,
-        subtotal: oi.subtotal,
-        cash_unit_price: oi.cash_unit_price ?? oi.cash_price ?? null,
-        category_name: oi.category_name ?? null,
-        course_number: oi.course_number ?? null,
-        is_voided: Boolean(oi.is_voided),
-        void_reason: oi.void_reason ?? null,
-        voided_at: oi.voided_at ?? null,
-        voided_by_name: getStaffName(oi.voided_by),
-        is_open_item: Boolean(oi.is_open_item),
-        is_tax_exempt: Boolean(oi.is_tax_exempt),
-        special_instructions: oi.special_instructions ?? null,
-        kitchen_status: kitchenStatus,
-        kitchen_notes: oi.kitchen_notes ?? null,
-        fire_time: fireTime,
-        preparing_at: preparingAt,
-        ready_at: readyAt,
-        completed_at: completedAt,
-        item_status: oi.item_status,
-        created_at: oi.created_at,
-        discount_name: oi.discount_name ?? null,
-        discount_amount: oi.discount_amount ?? null,
-        discount_type: oi.discount_type ?? null,
-        modifiers: (oi.order_item_modifiers || []).map((m: any) => ({
-          modifier_group_name: m.modifier_group_name,
-          modifier_name: m.modifier_name,
-          price_modifier: m.price_modifier,
-          quantity: m.quantity,
-        })),
-      };
-    }
+    (oi: any) => ({
+      id: oi.id,
+      item_name: oi.item_name,
+      quantity: oi.quantity,
+      unit_price: oi.unit_price,
+      subtotal: oi.subtotal,
+      cash_unit_price: oi.cash_unit_price ?? oi.cash_price ?? null,
+      category_name: oi.category_name ?? null,
+      course_number: oi.course_number ?? null,
+      is_voided: Boolean(oi.is_voided),
+      void_reason: oi.void_reason ?? null,
+      voided_at: oi.voided_at ?? null,
+      voided_by_name: getStaffName(oi.voided_by),
+      is_open_item: Boolean(oi.is_open_item),
+      is_tax_exempt: Boolean(oi.is_tax_exempt),
+      special_instructions: oi.special_instructions ?? null,
+      kitchen_status: oi.kitchen_status ?? null,
+      kitchen_notes: oi.kitchen_notes ?? null,
+      fire_time: oi.fire_time ?? null,
+      preparing_at: oi.preparing_at ?? null,
+      ready_at: oi.ready_at ?? null,
+      completed_at: oi.completed_at ?? null,
+      item_status: oi.item_status,
+      created_at: oi.created_at,
+      discount_name: oi.discount_name ?? null,
+      discount_amount: oi.discount_amount ?? null,
+      discount_type: oi.discount_type ?? null,
+      modifiers: (oi.order_item_modifiers || []).map((m: any) => ({
+        modifier_group_name: m.modifier_group_name,
+        modifier_name: m.modifier_name,
+        price_modifier: m.price_modifier,
+        quantity: m.quantity,
+      })),
+    })
   );
 
   const reversals: OrderFullHistory["reversals"] = (reversalsRes?.data || []).map(

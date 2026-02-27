@@ -43,6 +43,7 @@ export default function CashFlowReportPage() {
   // Note: Change Given is not yet tracked in DB, so we focus on collected for now until full integration.
   // const totalChangeGiven = 0;
   // const netCash = totalCashCollected - totalChangeGiven;
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

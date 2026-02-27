@@ -4,7 +4,6 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createClerkClient } from '@clerk/backend'
 import { createInvitationAdmin } from './clerk-create-invitation-admin'
 import { DeleteOrganization } from '../../actions/delete-organization'
-import { logAdminAction } from '@/lib/admin/log-admin-action'
 export async function createCarrierMerchantAccountAdmin({
     userId,
     carrierId,
@@ -87,32 +86,6 @@ export async function createCarrierMerchantAccountAdmin({
                 }
             }
         }
-
-        const { data: createdMerchant } = await supabase
-            .from('merchants')
-            .select('id')
-            .eq('clerk_org_id', CreateMerchantResponse.id)
-            .maybeSingle()
-
-        await logAdminAction('MERCHANT_CREATED', {
-            clerkOrgId: CreateMerchantResponse.id,
-            merchantId: createdMerchant?.id,
-            resourceType: 'merchant_organization',
-            resourceId: CreateMerchantResponse.id,
-            resourceName: merchantName,
-            changes: {
-                after: {
-                    merchant_name: merchantName,
-                    merchant_type: merchantType,
-                    owner_email: ownerEmail,
-                    status: 'active',
-                },
-            },
-            metadata: {
-                carrier_id: carrierId,
-                source: 'createCarrierMerchantAccountAdmin',
-            },
-        })
 
         return {
             success: true,

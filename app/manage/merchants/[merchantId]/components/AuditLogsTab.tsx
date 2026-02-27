@@ -33,7 +33,6 @@ import {
   User,
   MapPin,
   RefreshCw,
-  Download,
   GitCompare,
   ChevronDown,
   ChevronUp,
@@ -74,21 +73,6 @@ const formatKey = (key: string) => {
     .replace(/_/g, " ") // Replace underscores with spaces
     .trim();
 };
-
-const escapeCsvValue = (value: unknown): string => {
-  const raw = value == null ? '' : String(value)
-  return `"${raw.replace(/"/g, '""')}"`
-}
-
-const downloadCsv = (filename: string, content: string): void => {
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
-}
 
 const RenderObject = ({
   data,
@@ -135,10 +119,6 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   staff: <User className="h-3.5 w-3.5" />,
   order: <Activity className="h-3.5 w-3.5" />,
   inventory: <FileText className="h-3.5 w-3.5" />,
-  merchant: <Shield className="h-3.5 w-3.5" />,
-  user_management: <User className="h-3.5 w-3.5" />,
-  device: <Activity className="h-3.5 w-3.5" />,
-  notes: <FileText className="h-3.5 w-3.5" />,
   settings: <Shield className="h-3.5 w-3.5" />,
   authentication: <Shield className="h-3.5 w-3.5" />,
   purchase_order: <FileText className="h-3.5 w-3.5" />,
@@ -153,14 +133,6 @@ const CATEGORY_COLORS: Record<string, string> = {
     "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
   inventory:
     "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
-  merchant:
-    "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300",
-  user_management:
-    "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300",
-  device:
-    "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300",
-  notes:
-    "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
   settings: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
   authentication:
     "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
@@ -196,7 +168,6 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
   const [page, setPage] = useState(1);
   const pageSize = 50;
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
 
   const { data, isLoading, refetch, isFetching } = useAuditLogs(
     {
@@ -233,44 +204,6 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
     });
     setPage(1);
   };
-
-  const handleExport = () => {
-    setIsExporting(true)
-
-    try {
-      const headers = [
-        'Timestamp',
-        'Action',
-        'Category',
-        'Actor',
-        'Severity',
-        'Resource Type',
-        'Resource Name',
-        'Location',
-        'Changes',
-        'Metadata',
-      ]
-
-      const rowsCsv = logs.map((log) => [
-        log.created_at,
-        log.action,
-        log.action_category,
-        log.actor_name,
-        log.severity,
-        log.resource_type,
-        log.resource_name,
-        log.location?.name || 'Global',
-        log.changes ? JSON.stringify(log.changes) : '',
-        log.metadata ? JSON.stringify(log.metadata) : '',
-      ].map(escapeCsvValue).join(','))
-
-      const csv = [headers.map(escapeCsvValue).join(','), ...rowsCsv].join('\\n')
-      const timestamp = format(new Date(), 'yyyy-MM-dd_HHmm')
-      downloadCsv(`DEXA_Merchant_Audit_${timestamp}.csv`, csv)
-    } finally {
-      setIsExporting(false)
-    }
-  }
 
   const logs = data?.data || [];
   const total = data?.total || 0;
@@ -327,16 +260,6 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
               className={cn("h-4 w-4 mr-2", isFetching && "animate-spin")}
             />
             Refresh
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExport}
-            disabled={isExporting || logs.length === 0}
-            className="h-9"
-          >
-            <Download className="h-4 w-4 mr-2" />
-            {isExporting ? 'Exporting...' : 'Export CSV'}
           </Button>
         </div>
       </div>
@@ -469,10 +392,6 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                   <SelectItem value="staff">Staff & Access</SelectItem>
                   <SelectItem value="order">Orders & Payments</SelectItem>
                   <SelectItem value="inventory">Inventory</SelectItem>
-                  <SelectItem value="merchant">Merchant</SelectItem>
-                  <SelectItem value="user_management">User Management</SelectItem>
-                  <SelectItem value="device">Device</SelectItem>
-                  <SelectItem value="notes">Notes</SelectItem>
                   <SelectItem value="settings">Settings</SelectItem>
                   <SelectItem value="authentication">Authentication</SelectItem>
                   <SelectItem value="purchase_order">

@@ -14,11 +14,7 @@ interface MenuOverviewTabProps {
     })[]
 }
 
-export function MenuOverviewTab({
-    categoriesCount,
-    totalItems,
-    menuSchedules,
-}: MenuOverviewTabProps) {
+export function MenuOverviewTab({ categoriesCount, totalItems, menuSchedules }: MenuOverviewTabProps) {
     return (
         <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-3">
@@ -67,3 +63,4 @@ export function MenuOverviewTab({
         </div>
     )
 }
+

@@ -169,43 +169,31 @@ export function AddressStep({ data, onChange, errors }: AddressStepProps) {
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="country" className="text-primary">
-                        Country
+                    <Label htmlFor="timezone" className="text-primary">
+                        Timezone <span className="text-destructive">*</span>
                     </Label>
-                    <Input
-                        id="country"
-                        value={data.country}
-                        onChange={(e) => onChange({ country: e.target.value })}
-                        placeholder="US"
-                    />
+                    <Select
+                        value={data.timezone}
+                        onValueChange={(value) => onChange({ timezone: value })}
+                    >
+                        <SelectTrigger className={errors?.timezone ? 'border-destructive' : ''}>
+                            <SelectValue placeholder="Select timezone" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {US_TIMEZONES.map((tz) => (
+                                <SelectItem key={tz.value} value={tz.value}>
+                                    {tz.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    {errors?.timezone && (
+                        <p className="text-sm text-destructive">{errors.timezone}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                        Auto-selected based on state
+                    </p>
                 </div>
-            </div>
-
-            <div className="space-y-2">
-                <Label htmlFor="timezone" className="text-primary">
-                    Timezone <span className="text-destructive">*</span>
-                </Label>
-                <Select
-                    value={data.timezone}
-                    onValueChange={(value) => onChange({ timezone: value })}
-                >
-                    <SelectTrigger className={errors?.timezone ? 'border-destructive' : ''}>
-                        <SelectValue placeholder="Select timezone" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {US_TIMEZONES.map((tz) => (
-                            <SelectItem key={tz.value} value={tz.value}>
-                                {tz.label}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-                {errors?.timezone && (
-                    <p className="text-sm text-destructive">{errors.timezone}</p>
-                )}
-                <p className="text-xs text-muted-foreground">
-                    Auto-selected based on state
-                </p>
             </div>
         </div>
     )

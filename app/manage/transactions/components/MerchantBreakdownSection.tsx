@@ -314,13 +314,7 @@ export function MerchantBreakdownSection({ filters }: MerchantBreakdownSectionPr
                   sortedRows.map((row) => (
                     <TableRow key={row.merchant_id}>
                       <TableCell className="font-medium">{row.merchant_name}</TableCell>
-                      <TableCell className="text-right font-mono">
-                        {row.active_locations !== undefined &&
-                        row.total_locations !== undefined &&
-                        row.active_locations !== row.total_locations
-                          ? `${row.active_locations.toLocaleString()} / ${row.total_locations.toLocaleString()}`
-                          : row.location_count.toLocaleString()}
-                      </TableCell>
+                      <TableCell className="text-right font-mono">{row.location_count.toLocaleString()}</TableCell>
                       <TableCell className="text-right font-mono">{row.transaction_count.toLocaleString()}</TableCell>
                       <TableCell className="text-right font-mono">{formatCurrency(row.card_revenue)}</TableCell>
                       <TableCell className="text-right font-mono">{formatCurrency(row.cash_revenue)}</TableCell>

@@ -217,9 +217,7 @@ export async function LogAuditEvent(
     locationId = null;
   }
 
-  // If merchantId is not provided, try to look it up via Clerk Org ID.
-  // Some HQ-only actions are org-scoped (no merchant row), so missing merchant
-  // should not block audit logging.
+  // If merchantId is not provided, look it up via Clerk Org ID
   if (!merchantId) {
     const { orgId: dynamicOrgId } = await auth();
     const activeOrgId = params.clerkOrgId || dynamicOrgId;
@@ -235,14 +233,10 @@ export async function LogAuditEvent(
       .single();
 
     if (merchantError || !merchant) {
-      console.warn("[LogAuditEvent] Merchant lookup skipped for org-scoped action:", {
-        activeOrgId,
-        merchantError,
-      });
-      merchantId = undefined;
-    } else {
-      merchantId = merchant.id;
+      return { error: "Merchant not found" };
     }
+
+    merchantId = merchant.id;
   }
 
   // Get current user
@@ -320,7 +314,7 @@ export async function LogAuditEvent(
 
   // Call RPC
   const { data, error } = await supabase.rpc("log_audit_event", {
-    p_merchant_id: merchantId || null,
+    p_merchant_id: merchantId,
     p_location_id: locationId || null,
     p_actor_user_id: userId,
     p_actor_name: userName,

@@ -3,7 +3,7 @@
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { logAdminAction } from '@/lib/admin/log-admin-action'
+import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
 import { revalidatePath } from 'next/cache'
 import bcrypt from 'bcryptjs'
 import type {
@@ -98,18 +98,6 @@ export async function adminResetStaffPin(
     return { success: false, error: result?.error_message || 'Failed to reset PIN' }
   }
 
-  await logAdminAction('MERCHANT_STAFF_PIN_RESET', {
-    merchantId,
-    locationId,
-    resourceType: 'staff_member',
-    resourceId: staffProfileId,
-    resourceName: result.staff_name || staffProfileId,
-    metadata: {
-      custom_pin_used: Boolean(customPin),
-      source: 'adminResetStaffPin',
-    },
-  })
-
   revalidatePath(`/manage/merchants/${merchantId}`)
   return { success: true, pin: result.new_pin }
 }
@@ -146,16 +134,15 @@ export async function adminBulkResetPins(
 
   // Audit log
   if (results.length > 0) {
-    await logAdminAction('MERCHANT_STAFF_PIN_RESET', {
+    await LogAuditEvent({
       merchantId,
       locationId: locationId || null,
-      resourceType: 'staff_member',
-      resourceName: `bulk_pin_reset_${new Date().toISOString()}`,
+      action: `Bulk Staff PIN Reset: ${results.length} members`,
+      actionCategory: 'staff',
+      severity: 'info',
       metadata: {
         bulk_reset: true,
         staff_count: results.length,
-        staff_profile_ids: results.map((row) => row.staff_profile_id),
-        source: 'adminBulkResetPins',
       },
     })
   }
@@ -203,20 +190,17 @@ export async function adminToggleStaffStatus(
     ? `Reactivated Staff Member: ${result.staff_name}`
     : `Deactivated Staff Member: ${result.staff_name}`
 
-  await logAdminAction(newStatus ? 'MERCHANT_STAFF_REACTIVATED' : 'MERCHANT_STAFF_DEACTIVATED', {
+  await LogAuditEvent({
     merchantId,
     locationId,
+    action: actionString,
+    actionCategory: 'staff',
     resourceType: 'staff_member',
     resourceId: staffProfileId,
-    resourceName: result.staff_name || actionString,
+    resourceName: result.staff_name,
     changes: {
-      is_active: {
-        old: !newStatus,
-        new: newStatus,
-      },
-    },
-    metadata: {
-      source: 'adminToggleStaffStatus',
+      before: { is_active: !newStatus },
+      after: { is_active: newStatus },
     },
   })
 
@@ -301,9 +285,12 @@ export async function adminCreateStaff(
   const staffName = `${data.firstName} ${data.lastName}`
 
   // Audit log
-  await logAdminAction('MERCHANT_STAFF_CREATED', {
-    merchantId,
+  await LogAuditEvent({
+    merchantId: merchantId,
     locationId: data.locationId,
+    action: `Created POS Staff: ${staffName}`,
+    actionCategory: 'staff',
+    severity: 'info',
     resourceType: 'staff_member',
     resourceId: staffProfile.id,
     resourceName: staffName,
@@ -316,13 +303,12 @@ export async function adminCreateStaff(
         role: data.roleCode,
         employment_type: data.employmentType,
         is_active: true,
-      },
+      }
     },
     metadata: {
       admin_created: true,
       hq_admin_id: userId,
       role: data.roleCode,
-      source: 'adminCreateStaff',
     },
   })
 

@@ -17,11 +17,6 @@ import { usePrepStations } from "@/app/dashboard/hooks/usePrepStations";
 import { useStationDevices } from "../../hooks/useStationDevices";
 import { useStationTerminal } from "../../hooks/usePaymentTerminals";
 import {
-  useStationPrinters,
-  getPrinterRoleLabel,
-  PrinterRole,
-} from "../../hooks/usePrinters";
-import {
   Monitor,
   CreditCard,
   Printer,
@@ -222,7 +217,6 @@ function ResourceBar({
 export function StationOverviewTab({ station, timeFilter }: StationOverviewTabProps) {
   const { data: devices } = useStationDevices(station.id);
   const { data: terminal } = useStationTerminal(station.id);
-  const { data: printers } = useStationPrinters(station.id);
 
   // KDS-specific data
   const isKds = station.station_type === "kds";
@@ -264,8 +258,6 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
   };
 
   const deviceCount = devices?.length || 0;
-  const printerCount = printers?.length || 0;
-  const totalDeviceCount = deviceCount + printerCount;
   const hasTerminal = !!terminal;
   const isOnline = station.is_active && station.is_online;
 
@@ -276,14 +268,8 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
         <StatCard
           icon={Printer}
           label="Devices Connected"
-          value={totalDeviceCount}
-          subtext={
-            hasTerminal
-              ? `Including payment terminal${printerCount > 0 ? ` & ${printerCount} printer${printerCount > 1 ? "s" : ""}` : ""}`
-              : printerCount > 0
-                ? `Including ${printerCount} printer${printerCount > 1 ? "s" : ""}`
-                : undefined
-          }
+          value={deviceCount}
+          subtext={hasTerminal ? "Including payment terminal" : undefined}
         />
         <StatCard
           icon={isOnline ? Wifi : WifiOff}
@@ -704,12 +690,12 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
           <CardTitle className="text-lg">Connected Devices</CardTitle>
         </CardHeader>
         <CardContent>
-          {deviceCount === 0 && printerCount === 0 && !hasTerminal ? (
+          {deviceCount === 0 && !hasTerminal ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <Printer className="h-10 w-10 text-muted-foreground mb-3" />
               <p className="font-medium">No devices connected</p>
               <p className="text-sm text-muted-foreground">
-                Go to the Devices or Printers tab to add peripherals.
+                Go to the Devices tab to add printers and other peripherals.
               </p>
             </div>
           ) : (
@@ -762,33 +748,6 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
                     )}
                   >
                     {device.is_connected ? "Online" : "Offline"}
-                  </Badge>
-                </div>
-              ))}
-              {printers?.map((printer) => (
-                <div
-                  key={printer.id}
-                  className="flex items-center gap-3 p-3 rounded-lg border bg-card"
-                >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                    <Printer className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <p className="font-medium">{printer.printer_name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {getPrinterRoleLabel(printer.printer_role as PrinterRole)} Printer
-                    </p>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "ml-auto",
-                      printer.is_connected
-                        ? "border-green-500/50 text-green-600"
-                        : "border-gray-400/50 text-gray-500"
-                    )}
-                  >
-                    {printer.is_connected ? "Online" : "Offline"}
                   </Badge>
                 </div>
               ))}

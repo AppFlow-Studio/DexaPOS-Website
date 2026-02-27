@@ -31,7 +31,6 @@ export interface Location {
   timezone: string;
   pricing_strategy: 'manual' | 'dual';
   dual_pricing_percentage: number;
-  use_merchant_pricing_defaults: boolean;
   is_active: boolean;
   is_accepting_orders: boolean;
   business_hours: BusinessHours;
@@ -328,7 +327,6 @@ export const createLocationSchema = z.object({
   timezone: z.string().default('America/New_York'),
   pricing_strategy: z.enum(['manual', 'dual']).default('manual'),
   dual_pricing_percentage: z.number().min(0).max(100).default(4.0),
-  use_merchant_pricing_defaults: z.boolean().default(true),
   is_active: z.boolean().default(true),
   is_accepting_orders: z.boolean().default(true),
   business_hours: businessHoursSchema.default({}),
@@ -735,7 +733,6 @@ export interface LocationFormStep2 {
   city: string;
   state: string;
   postal_code: string;
-  country: string;
   timezone: string;
 }
 

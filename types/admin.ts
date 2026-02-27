@@ -147,8 +147,6 @@ export const HQ_ROLES: Record<HQRoleCode, HQRoleConfig> = {
       'hq.support.view',
       // Team permissions (view only)
       'hq.team.view',
-      // System analytics visibility for dashboard analytics section
-      'system.analytics.view',
       // Merchant-level access (view mostly)
       'merchant.team.view',
       'merchant.transactions.view',

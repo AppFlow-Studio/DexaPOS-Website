@@ -69,7 +69,6 @@ export interface LocationItemOverride {
   id: string;
   custom_price: number | null;
   custom_cash_price: number | null;
-  custom_delivery_price: number | null;
   price_modifier: number | null;
   price_modifier_type: PriceModifierType | null;
   is_available: boolean;
@@ -88,7 +87,6 @@ export interface LocationCategoryItemOverride {
   id: string;
   custom_price: number | null;
   custom_cash_price: number | null;
-  custom_delivery_price: number | null;
   is_available: boolean;
 }
 
@@ -96,7 +94,6 @@ export interface LocationMenuItemOverride {
   id: string;
   custom_price: number | null;
   custom_cash_price: number | null;
-  custom_delivery_price: number | null;
   is_available: boolean;
 }
 
@@ -153,7 +150,6 @@ export interface LocationLibraryItem {
   // Level 1: Base
   base_price: number;
   base_cash_price: number | null;
-  base_delivery_price: number | null;
   base_availability: boolean;
 
   // Level 2: Location Override (Nullable)
@@ -162,7 +158,6 @@ export interface LocationLibraryItem {
   // Effective Values (Computed)
   effective_price: number;
   effective_cash_price: number | null;
-  effective_delivery_price: number | null;
   effective_availability: boolean;
 
   // UI Flags
@@ -199,7 +194,6 @@ export interface CategoryMenuItem {
   // Level 3: Category-specific price
   category_price: number | null;
   category_cash_price: number | null;
-  category_delivery_price: number | null;
   category_is_available: boolean;
 
   // The menu item details
@@ -215,7 +209,6 @@ export interface CategoryMenuItem {
     // Level 1: Base price
     base_price: number;
     base_cash_price: number | null;
-    base_delivery_price: number | null;
     base_availability: boolean;
 
     // Level 2: Location item override (applies to all categories)
@@ -227,7 +220,6 @@ export interface CategoryMenuItem {
     // Computed effective values (full 5-level cascade)
     effective_price: number;
     effective_cash_price: number | null;
-    effective_delivery_price: number | null;
     effective_availability: boolean;
 
     // Price source indicator
@@ -341,7 +333,6 @@ export interface MenuCategoryItem {
     // Computed effective values
     effective_price: number;
     effective_cash_price: number | null;
-    effective_delivery_price: number | null;
     effective_availability: boolean;
 
     // Price source indicator

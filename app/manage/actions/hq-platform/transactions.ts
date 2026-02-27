@@ -340,27 +340,15 @@ export interface PlatformMerchantBreakdownFilters {
 interface PlatformMerchantBreakdownRpcRow {
   merchant_id: string | null
   merchant_name: string | null
-  location_count?: number | string | null
-  total_locations?: number | string | null
-  active_locations?: number | string | null
-  order_count?: number | string | null
+  location_count: number | string | null
   transaction_count: number | string | null
   card_revenue: number | string | null
   cash_revenue: number | string | null
   total_revenue: number | string | null
   avg_ticket: number | string | null
   tip_total: number | string | null
-  total_fees?: number | string | null
   void_count: number | string | null
-  refund_count?: number | string | null
-  void_refund_amount?: number | string | null
   void_rate_pct: number | string | null
-  unsettled_amount?: number | string | null
-  cash_discount_count?: number | string | null
-  last_transaction_at?: string | null
-  prior_total_revenue?: number | string | null
-  revenue_change_pct?: number | string | null
-  payment_method_breakdown?: unknown
   daily_revenue_trend: unknown
 }
 
@@ -373,30 +361,14 @@ export interface PlatformMerchantBreakdown {
   merchant_id: string
   merchant_name: string
   location_count: number
-  total_locations?: number
-  active_locations?: number
-  order_count?: number
   transaction_count: number
   card_revenue: number
   cash_revenue: number
   total_revenue: number
   avg_ticket: number
   tip_total: number
-  total_fees?: number
   void_count: number
-  refund_count?: number
-  void_refund_amount?: number
   void_rate_pct: number
-  unsettled_amount?: number
-  cash_discount_count?: number
-  last_transaction_at?: string
-  prior_total_revenue?: number
-  revenue_change_pct?: number
-  payment_method_breakdown?: Array<{
-    method?: string
-    count: number
-    amount: number
-  }>
   daily_revenue_trend: PlatformMerchantBreakdownDailyPoint[]
 }
 
@@ -820,54 +792,6 @@ function applyChargebackFilters(
   return next
 }
 
-async function getAssignedMerchantScope(
-  userId: string,
-  roleCode?: string | null
-): Promise<string[] | null> {
-  // Super admin keeps global visibility.
-  if (roleCode === 'hq.super_admin') {
-    return null
-  }
-
-  const supabase = createServerSupabaseClient()
-  const { data, error } = await supabase
-    .from('admin_merchant_access')
-    .select('merchant_id')
-    .eq('admin_user_id', userId)
-    .eq('is_active', true)
-
-  if (error) {
-    console.error('[getAssignedMerchantScope] Error:', error)
-    return []
-  }
-
-  return Array.from(
-    new Set(
-      (data ?? [])
-        .map((row: any) => row.merchant_id)
-        .filter((merchantId: unknown): merchantId is string =>
-          typeof merchantId === 'string' && merchantId.length > 0
-        )
-    )
-  )
-}
-
-function applyMerchantScope(
-  requestedMerchantIds: string[] | undefined,
-  scopedMerchantIds: string[] | null
-): string[] | undefined {
-  if (scopedMerchantIds === null) {
-    return requestedMerchantIds
-  }
-
-  if (!requestedMerchantIds || requestedMerchantIds.length === 0) {
-    return scopedMerchantIds
-  }
-
-  const allowed = new Set(scopedMerchantIds)
-  return requestedMerchantIds.filter((merchantId) => allowed.has(merchantId))
-}
-
 function normalizeSort(
   filters?: PlatformTransactionFilters
 ): { sortBy: 'created_at' | 'order_number' | 'total_amount'; ascending: boolean } {
@@ -1091,74 +1015,18 @@ function mapRpcRowToMerchantBreakdown(
     }))
     .filter((point) => point.date.length > 0)
 
-  const methodBreakdown = asArray<any>(row.payment_method_breakdown).map((entry) => ({
-    method: typeof entry?.method === 'string' ? entry.method : undefined,
-    count: Number(entry?.count || 0),
-    amount: Number(entry?.amount || 0),
-  }))
-
-  const totalLocations =
-    row.total_locations !== null && row.total_locations !== undefined
-      ? Number(row.total_locations)
-      : row.location_count !== null && row.location_count !== undefined
-        ? Number(row.location_count)
-        : row.active_locations !== null && row.active_locations !== undefined
-          ? Number(row.active_locations)
-          : 0
-
-  const activeLocations =
-    row.active_locations !== null && row.active_locations !== undefined
-      ? Number(row.active_locations)
-      : undefined
-
   return {
     merchant_id: row.merchant_id || '',
     merchant_name: row.merchant_name || 'Unknown',
-    location_count: totalLocations,
-    total_locations: totalLocations,
-    active_locations: activeLocations,
-    order_count:
-      row.order_count !== null && row.order_count !== undefined
-        ? Number(row.order_count)
-        : undefined,
+    location_count: Number(row.location_count || 0),
     transaction_count: Number(row.transaction_count || 0),
     card_revenue: Number(row.card_revenue || 0),
     cash_revenue: Number(row.cash_revenue || 0),
     total_revenue: Number(row.total_revenue || 0),
     avg_ticket: Number(row.avg_ticket || 0),
     tip_total: Number(row.tip_total || 0),
-    total_fees:
-      row.total_fees !== null && row.total_fees !== undefined
-        ? Number(row.total_fees)
-        : undefined,
     void_count: Number(row.void_count || 0),
-    refund_count:
-      row.refund_count !== null && row.refund_count !== undefined
-        ? Number(row.refund_count)
-        : undefined,
-    void_refund_amount:
-      row.void_refund_amount !== null && row.void_refund_amount !== undefined
-        ? Number(row.void_refund_amount)
-        : undefined,
     void_rate_pct: Number(row.void_rate_pct || 0),
-    unsettled_amount:
-      row.unsettled_amount !== null && row.unsettled_amount !== undefined
-        ? Number(row.unsettled_amount)
-        : undefined,
-    cash_discount_count:
-      row.cash_discount_count !== null && row.cash_discount_count !== undefined
-        ? Number(row.cash_discount_count)
-        : undefined,
-    last_transaction_at: row.last_transaction_at || undefined,
-    prior_total_revenue:
-      row.prior_total_revenue !== null && row.prior_total_revenue !== undefined
-        ? Number(row.prior_total_revenue)
-        : undefined,
-    revenue_change_pct:
-      row.revenue_change_pct !== null && row.revenue_change_pct !== undefined
-        ? Number(row.revenue_change_pct)
-        : undefined,
-    payment_method_breakdown: methodBreakdown,
     daily_revenue_trend: trend,
   }
 }
@@ -1649,24 +1517,16 @@ export async function getPlatformTransactions(
   offset: number = 0,
   filters?: PlatformTransactionFilters
 ): Promise<{ data: PlatformTransaction[]; total: number }> {
-  const { userId, role } = await assertHQPermission('hq.merchant.transactions')
-  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
-  const scopedMerchantIds = applyMerchantScope(filters?.merchantIds, merchantScope)
-  const scopedFilters =
-    scopedMerchantIds === undefined ? filters : { ...(filters ?? {}), merchantIds: scopedMerchantIds }
+  await assertHQPermission('hq.merchant.transactions')
 
-  if (scopedMerchantIds !== undefined && scopedMerchantIds.length === 0) {
-    return { data: [], total: 0 }
-  }
-
-  const auditMerchantId = getSingleUuidFilterValue(scopedFilters?.merchantIds)
+  const auditMerchantId = getSingleUuidFilterValue(filters?.merchantIds)
   const auditLocationId = getSingleUuidFilterValue(filters?.locationIds)
-  const cardLastFourSearchTerm = getCardLastFourSearchTerm(scopedFilters)
+  const cardLastFourSearchTerm = getCardLastFourSearchTerm(filters)
 
   try {
     let result: { data: PlatformTransaction[]; total: number } | null = null
 
-    const fromRpc = await getPlatformTransactionsFromRpc(limit, offset, scopedFilters)
+    const fromRpc = await getPlatformTransactionsFromRpc(limit, offset, filters)
     if (!fromRpc.errorCode) {
       result = { data: fromRpc.data, total: fromRpc.total }
     } else {
@@ -1675,7 +1535,7 @@ export async function getPlatformTransactions(
       )
 
       if (USE_PLATFORM_TX_VIEW) {
-        const fromView = await getPlatformTransactionsFromView(limit, offset, scopedFilters)
+        const fromView = await getPlatformTransactionsFromView(limit, offset, filters)
         if (!fromView.errorCode) {
           result = { data: fromView.data, total: fromView.total }
         } else {
@@ -1686,7 +1546,7 @@ export async function getPlatformTransactions(
       }
 
       if (!result) {
-        const legacyResult = await getPlatformTransactionsLegacy(limit, offset, scopedFilters)
+        const legacyResult = await getPlatformTransactionsLegacy(limit, offset, filters)
         result = { data: legacyResult.data, total: legacyResult.total }
       }
     }
@@ -1744,44 +1604,31 @@ export async function getPlatformTransactions(
 export async function getPlatformTransactionsExport(
   filters?: PlatformTransactionFilters
 ): Promise<PlatformTransactionExportResult> {
-  const { userId, role } = await assertHQPermission('hq.merchant.transactions')
-  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
-  const scopedMerchantIds = applyMerchantScope(filters?.merchantIds, merchantScope)
-  const scopedFilters =
-    scopedMerchantIds === undefined ? filters : { ...(filters ?? {}), merchantIds: scopedMerchantIds }
-
-  if (scopedMerchantIds !== undefined && scopedMerchantIds.length === 0) {
-    return {
-      rows: [],
-      total: 0,
-      cap: 10000,
-      capped: false,
-    }
-  }
+  await assertHQPermission('hq.merchant.transactions')
 
   const supabase = createServerSupabaseClient()
   const exportCap = 10000
-  const search = scopedFilters?.search?.trim()
-  const auditMerchantId = getSingleUuidFilterValue(scopedFilters?.merchantIds)
-  const auditLocationId = getSingleUuidFilterValue(scopedFilters?.locationIds)
-  const cardLastFourSearchTerm = getCardLastFourSearchTerm(scopedFilters)
+  const search = filters?.search?.trim()
+  const auditMerchantId = getSingleUuidFilterValue(filters?.merchantIds)
+  const auditLocationId = getSingleUuidFilterValue(filters?.locationIds)
+  const cardLastFourSearchTerm = getCardLastFourSearchTerm(filters)
 
   try {
     const { data, error } = await supabase.rpc('get_admin_transactions_export', {
-      p_merchant_ids: scopedFilters?.merchantIds ?? null,
-      p_location_ids: scopedFilters?.locationIds ?? null,
-      p_status: scopedFilters?.orderStatuses ?? null,
-      p_payment_status: scopedFilters?.paymentStatuses ?? null,
-      p_payment_method: scopedFilters?.paymentMethods ?? null,
-      p_date_from: scopedFilters?.dateFrom ?? null,
-      p_date_to: scopedFilters?.dateTo ?? null,
-      p_min_amount: scopedFilters?.minAmount ?? null,
-      p_max_amount: scopedFilters?.maxAmount ?? null,
+      p_merchant_ids: filters?.merchantIds ?? null,
+      p_location_ids: filters?.locationIds ?? null,
+      p_status: filters?.orderStatuses ?? null,
+      p_payment_status: filters?.paymentStatuses ?? null,
+      p_payment_method: filters?.paymentMethods ?? null,
+      p_date_from: filters?.dateFrom ?? null,
+      p_date_to: filters?.dateTo ?? null,
+      p_min_amount: filters?.minAmount ?? null,
+      p_max_amount: filters?.maxAmount ?? null,
       p_search: search && search.length >= 2 ? search : null,
-      p_card_type: normalizeCardTypeFilterForRpc(scopedFilters?.cardTypes),
-      p_staff_id: scopedFilters?.staffId ?? null,
-      p_sort_by: normalizeSortByForRpc(scopedFilters),
-      p_sort_dir: scopedFilters?.sortDir ?? 'desc',
+      p_card_type: normalizeCardTypeFilterForRpc(filters?.cardTypes),
+      p_staff_id: filters?.staffId ?? null,
+      p_sort_by: normalizeSortByForRpc(filters),
+      p_sort_dir: filters?.sortDir ?? 'desc',
       p_limit: exportCap,
     })
 
@@ -1885,34 +1732,26 @@ export async function getPlatformTransactionsExport(
 export async function getPlatformTransactionSummary(
   filters?: PlatformTransactionFilters
 ): Promise<PlatformTransactionSummary | null> {
-  const { userId, role } = await assertHQPermission('hq.merchant.transactions')
-  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
-  const scopedMerchantIds = applyMerchantScope(filters?.merchantIds, merchantScope)
-  const scopedFilters =
-    scopedMerchantIds === undefined ? filters : { ...(filters ?? {}), merchantIds: scopedMerchantIds }
-
-  if (scopedMerchantIds !== undefined && scopedMerchantIds.length === 0) {
-    return null
-  }
+  await assertHQPermission('hq.merchant.transactions')
 
   const supabase = createServerSupabaseClient()
-  const search = scopedFilters?.search?.trim()
+  const search = filters?.search?.trim()
 
   const { data, error } = await supabase.rpc('get_admin_transaction_summary', {
-    p_merchant_ids: scopedFilters?.merchantIds ?? null,
-    p_location_ids: scopedFilters?.locationIds ?? null,
-    p_status: scopedFilters?.orderStatuses ?? null,
-    p_payment_status: scopedFilters?.paymentStatuses ?? null,
-    p_payment_method: scopedFilters?.paymentMethods ?? null,
-    p_date_from: scopedFilters?.dateFrom ?? null,
-    p_date_to: scopedFilters?.dateTo ?? null,
-    p_min_amount: scopedFilters?.minAmount ?? null,
-    p_max_amount: scopedFilters?.maxAmount ?? null,
+    p_merchant_ids: filters?.merchantIds ?? null,
+    p_location_ids: filters?.locationIds ?? null,
+    p_status: filters?.orderStatuses ?? null,
+    p_payment_status: filters?.paymentStatuses ?? null,
+    p_payment_method: filters?.paymentMethods ?? null,
+    p_date_from: filters?.dateFrom ?? null,
+    p_date_to: filters?.dateTo ?? null,
+    p_min_amount: filters?.minAmount ?? null,
+    p_max_amount: filters?.maxAmount ?? null,
     p_search: search && search.length >= 2 ? search : null,
-    p_card_type: normalizeCardTypeFilterForRpc(scopedFilters?.cardTypes),
-    p_staff_id: scopedFilters?.staffId ?? null,
-    p_sort_by: normalizeSortByForRpc(scopedFilters),
-    p_sort_dir: scopedFilters?.sortDir ?? 'desc',
+    p_card_type: normalizeCardTypeFilterForRpc(filters?.cardTypes),
+    p_staff_id: filters?.staffId ?? null,
+    p_sort_by: normalizeSortByForRpc(filters),
+    p_sort_dir: filters?.sortDir ?? 'desc',
   })
 
   if (error) {
@@ -2017,18 +1856,7 @@ export async function getPlatformPaymentAuditLogs(
   limit: number = 50,
   offset: number = 0
 ): Promise<PlatformPaymentAuditLogsResult> {
-  const { userId, role } = await assertHQPermission('hq.merchant.transactions')
-  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
-  const scopedMerchantIds = applyMerchantScope(filters?.merchantIds, merchantScope)
-  const scopedFilters =
-    scopedMerchantIds === undefined ? filters : { ...(filters ?? {}), merchantIds: scopedMerchantIds }
-
-  if (scopedMerchantIds !== undefined && scopedMerchantIds.length === 0) {
-    return {
-      data: [],
-      total: 0,
-    }
-  }
+  await assertHQPermission('hq.merchant.transactions')
 
   const supabase = createServerSupabaseClient()
   const safeLimit = Math.min(Math.max(limit, 1), 200)
@@ -2057,36 +1885,36 @@ export async function getPlatformPaymentAuditLogs(
     )
     .order('event_timestamp', { ascending: false })
 
-  if (scopedFilters?.merchantIds && scopedFilters.merchantIds.length > 0) {
-    query = query.in('merchant_id', scopedFilters.merchantIds)
+  if (filters?.merchantIds && filters.merchantIds.length > 0) {
+    query = query.in('merchant_id', filters.merchantIds)
   }
 
-  if (scopedFilters?.action) {
-    query = query.eq('action', scopedFilters.action)
+  if (filters?.action) {
+    query = query.eq('action', filters.action)
   }
 
-  if (scopedFilters?.outcome === 'success') {
+  if (filters?.outcome === 'success') {
     query = query.eq('success', true)
-  } else if (scopedFilters?.outcome === 'failed') {
+  } else if (filters?.outcome === 'failed') {
     query = query.eq('success', false)
   }
 
-  if (scopedFilters?.user && scopedFilters.user.trim().length > 0) {
-    const userTerm = sanitizeSearchTerm(scopedFilters.user).trim()
+  if (filters?.user && filters.user.trim().length > 0) {
+    const userTerm = sanitizeSearchTerm(filters.user).trim()
     if (userTerm.length > 0) {
       query = query.ilike('user_email', `%${userTerm}%`)
     }
   }
 
-  if (scopedFilters?.dateFrom) {
-    query = query.gte('event_timestamp', `${scopedFilters.dateFrom}T00:00:00`)
+  if (filters?.dateFrom) {
+    query = query.gte('event_timestamp', `${filters.dateFrom}T00:00:00`)
   }
 
-  if (scopedFilters?.dateTo) {
-    query = query.lte('event_timestamp', `${scopedFilters.dateTo}T23:59:59`)
+  if (filters?.dateTo) {
+    query = query.lte('event_timestamp', `${filters.dateTo}T23:59:59`)
   }
 
-  const searchTerm = scopedFilters?.search?.trim() || ''
+  const searchTerm = filters?.search?.trim() || ''
   if (searchTerm.length >= 2) {
     if (UUID_REGEX.test(searchTerm)) {
       query = query.eq('resource_id', searchTerm)
@@ -2148,20 +1976,7 @@ export async function getPlatformChargebacks(
   limit: number = 50,
   offset: number = 0
 ): Promise<PlatformChargebacksResult> {
-  const { userId, role } = await assertHQPermission('hq.merchant.transactions')
-  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
-  const scopedMerchantIds = applyMerchantScope(filters?.merchantIds, merchantScope)
-  const scopedFilters =
-    scopedMerchantIds === undefined ? filters : { ...(filters ?? {}), merchantIds: scopedMerchantIds }
-
-  if (scopedMerchantIds !== undefined && scopedMerchantIds.length === 0) {
-    return {
-      data: [],
-      total: 0,
-      pendingCount: 0,
-      urgentCount: 0,
-    }
-  }
+  await assertHQPermission('hq.merchant.transactions')
 
   const supabase = createServerSupabaseClient()
   const safeLimit = Math.min(Math.max(limit, 1), 200)
@@ -2197,7 +2012,7 @@ export async function getPlatformChargebacks(
     .order('defense_deadline', { ascending: true, nullsFirst: false })
     .order('received_at', { ascending: false })
 
-  baseQuery = applyChargebackFilters(baseQuery, scopedFilters, true)
+  baseQuery = applyChargebackFilters(baseQuery, filters, true)
   baseQuery = baseQuery.range(safeOffset, safeOffset + safeLimit - 1)
 
   const { data, error, count } = await baseQuery
@@ -2298,7 +2113,7 @@ export async function getPlatformChargebacks(
     .from('chargebacks')
     .select('id', { count: 'exact', head: true })
     .in('status', pendingStatuses)
-  pendingQuery = applyChargebackFilters(pendingQuery, scopedFilters, false)
+  pendingQuery = applyChargebackFilters(pendingQuery, filters, false)
 
   const { count: pendingCountRaw, error: pendingCountError } = await pendingQuery
   if (pendingCountError) {
@@ -2315,7 +2130,7 @@ export async function getPlatformChargebacks(
     .not('defense_deadline', 'is', null)
     .gte('defense_deadline', now.toISOString())
     .lte('defense_deadline', cutoff.toISOString())
-  urgentQuery = applyChargebackFilters(urgentQuery, scopedFilters, false)
+  urgentQuery = applyChargebackFilters(urgentQuery, filters, false)
 
   const { count: urgentCountRaw, error: urgentCountError } = await urgentQuery
   if (urgentCountError) {
@@ -2343,23 +2158,7 @@ export interface PlatformTransactionStats {
 export async function getPlatformTransactionStats(
   filters?: PlatformTransactionFilters
 ): Promise<PlatformTransactionStats> {
-  const { userId, role } = await assertHQPermission('hq.merchant.transactions')
-  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
-  const scopedMerchantIds = applyMerchantScope(filters?.merchantIds, merchantScope)
-  const scopedFilters =
-    scopedMerchantIds === undefined ? filters : { ...(filters ?? {}), merchantIds: scopedMerchantIds }
-
-  if (scopedMerchantIds !== undefined && scopedMerchantIds.length === 0) {
-    return {
-      totalTransactions: 0,
-      capturedTransactions: 0,
-      authorizedTransactions: 0,
-      refundedTransactions: 0,
-      totalRevenue: 0,
-      totalTips: 0,
-      averageTicket: 0,
-    }
-  }
+  await assertHQPermission('hq.merchant.transactions')
 
   const batchSize = 1000
   let offset = 0
@@ -2376,7 +2175,7 @@ export async function getPlatformTransactionStats(
     let rows: PlatformTransaction[] = []
 
     if (source === 'rpc') {
-      const fromRpc = await getPlatformTransactionsFromRpc(batchSize, offset, scopedFilters)
+      const fromRpc = await getPlatformTransactionsFromRpc(batchSize, offset, filters)
       if (fromRpc.errorCode) {
         console.warn(
           `[getPlatformTransactionStats] Falling back from rpc due to error (${fromRpc.errorCode}).`
@@ -2386,7 +2185,7 @@ export async function getPlatformTransactionStats(
       }
       rows = fromRpc.data
     } else if (source === 'view') {
-      const fromView = await getPlatformTransactionsFromView(batchSize, offset, scopedFilters)
+      const fromView = await getPlatformTransactionsFromView(batchSize, offset, filters)
       if (fromView.errorCode) {
         console.warn(
           `[getPlatformTransactionStats] Falling back to legacy query path due to view error (${fromView.errorCode}).`
@@ -2396,7 +2195,7 @@ export async function getPlatformTransactionStats(
       }
       rows = fromView.data
     } else {
-      const fromLegacy = await getPlatformTransactionsLegacy(batchSize, offset, scopedFilters)
+      const fromLegacy = await getPlatformTransactionsLegacy(batchSize, offset, filters)
       rows = fromLegacy.data
     }
 
@@ -3467,22 +3266,14 @@ export interface PlatformMerchant {
 }
 
 export async function getPlatformMerchants(): Promise<PlatformMerchant[]> {
-  const { userId, role } = await assertHQPermission('hq.merchant.view')
-  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
+  await assertHQPermission('hq.merchant.view')
 
   const supabase = createServerSupabaseClient()
 
-  let query = supabase
+  const { data, error } = await supabase
     .from('merchants')
     .select('id, name')
     .order('name')
-
-  if (merchantScope !== null) {
-    if (merchantScope.length === 0) return []
-    query = query.in('id', merchantScope)
-  }
-
-  const { data, error } = await query
 
   if (error) {
     console.error('[getPlatformMerchants] Error:', error)
@@ -3501,13 +3292,7 @@ export interface PlatformLocation {
 }
 
 export async function getPlatformLocations(merchantIds?: string[]): Promise<PlatformLocation[]> {
-  const { userId, role } = await assertHQPermission('hq.merchant.view')
-  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
-  const effectiveMerchantIds = applyMerchantScope(merchantIds, merchantScope)
-
-  if (effectiveMerchantIds !== undefined && effectiveMerchantIds.length === 0) {
-    return []
-  }
+  await assertHQPermission('hq.merchant.view')
 
   const supabase = createServerSupabaseClient()
 
@@ -3516,8 +3301,8 @@ export async function getPlatformLocations(merchantIds?: string[]): Promise<Plat
     .select('id, name, merchant_id')
     .order('name')
 
-  if (effectiveMerchantIds && effectiveMerchantIds.length > 0) {
-    query = query.in('merchant_id', effectiveMerchantIds)
+  if (merchantIds && merchantIds.length > 0) {
+    query = query.in('merchant_id', merchantIds)
   }
 
   const { data, error } = await query
@@ -3543,13 +3328,7 @@ export async function getPlatformStaff(
   merchantIds?: string[],
   locationIds?: string[]
 ): Promise<PlatformStaff[]> {
-  const { userId, role } = await assertHQPermission('hq.merchant.view')
-  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
-  const effectiveMerchantIds = applyMerchantScope(merchantIds, merchantScope)
-
-  if (effectiveMerchantIds !== undefined && effectiveMerchantIds.length === 0) {
-    return []
-  }
+  await assertHQPermission('hq.merchant.view')
 
   const supabase = createServerSupabaseClient()
 
@@ -3572,8 +3351,8 @@ export async function getPlatformStaff(
     .order('created_at', { ascending: false })
     .limit(5000)
 
-  if (effectiveMerchantIds && effectiveMerchantIds.length > 0) {
-    query = query.in('merchant_id', effectiveMerchantIds)
+  if (merchantIds && merchantIds.length > 0) {
+    query = query.in('merchant_id', merchantIds)
   }
 
   if (locationIds && locationIds.length > 0) {

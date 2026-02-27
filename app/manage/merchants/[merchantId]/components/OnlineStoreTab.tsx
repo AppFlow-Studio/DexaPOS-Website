@@ -33,7 +33,6 @@ import {
     Bell,
     ExternalLink,
     Loader2,
-    Plug,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -47,18 +46,14 @@ import {
     type OnlineOrderingSettings,
     type LocationOnlineStoreOverview,
 } from '@/lib/queries/use-admin-online-ordering'
-import { useAdminOrderOutStatus, useAdminOnboardOrderOut } from '@/lib/queries/use-admin-orderout'
-import { OrderOutOnboardingForm, type OnboardingFormData } from '@/components/dashboard/orderout/OrderOutOnboardingForm'
-import { OrderOutStatusCard } from '@/components/dashboard/orderout/OrderOutStatusCard'
 
 interface OnlineStoreTabProps {
     merchantId: string
-    merchantName: string
     locations: Location[]
     locationsLoading: boolean
 }
 
-export function OnlineStoreTab({ merchantId, merchantName, locations, locationsLoading }: OnlineStoreTabProps) {
+export function OnlineStoreTab({ merchantId, locations, locationsLoading }: OnlineStoreTabProps) {
     const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
 
     // Fetch overview of all locations
@@ -79,12 +74,6 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
     const saveMutation = useAdminSaveOnlineOrderingSettings()
     const toggleMutation = useAdminToggleOnlineStore()
     const createMutation = useAdminCreateOnlineStore()
-
-    // OrderOut
-    const { data: orderOutData } = useAdminOrderOutStatus(merchantId)
-    const orderOutStatus = orderOutData?.data
-    const onboardOrderOut = useAdminOnboardOrderOut()
-    const [showOrderOutForm, setShowOrderOutForm] = useState(false)
 
     // Sync local settings when server data changes
     useEffect(() => {
@@ -202,10 +191,6 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                     const hasStore = storeInfo?.hasOnlineStore ?? false
                                     const isEnabled = storeInfo?.isEnabled ?? false
 
-                                    const ooRest = orderOutStatus?.restaurants.find(
-                                        (r) => r.locationId === location.id
-                                    )
-
                                     return (
                                         <div
                                             key={location.id}
@@ -225,15 +210,7 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                                     <Globe className="h-6 w-6" />
                                                 </div>
                                                 <div>
-                                                    <h4 className="font-medium">
-                                                        {location.name}
-                                                        {ooRest?.hasRestaurant && (
-                                                            <Badge variant="outline" className="ml-2 text-xs">
-                                                                <Plug className="h-3 w-3 mr-1" />
-                                                                OrderOut
-                                                            </Badge>
-                                                        )}
-                                                    </h4>
+                                                    <h4 className="font-medium">{location.name}</h4>
                                                     <p className="text-sm text-muted-foreground">
                                                         {hasStore
                                                             ? isEnabled
@@ -963,97 +940,6 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                             </Card>
                         </TabsContent>
                     </Tabs>
-
-                    {/* OrderOut Integration */}
-                    <Card>
-                        <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <Plug className="h-5 w-5" />
-                                        OrderOut — Delivery Integration
-                                    </CardTitle>
-                                    <CardDescription>
-                                        Connect to UberEats, DoorDash, Grubhub and more
-                                    </CardDescription>
-                                </div>
-                                <Badge variant="outline">$79.99/mo</Badge>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            {(() => {
-                                const locOO = orderOutStatus?.restaurants.find(
-                                    (r) => r.locationId === selectedLocationId
-                                )
-
-                                if (locOO?.hasRestaurant) {
-                                    return (
-                                        <OrderOutStatusCard
-                                            hasAccount={orderOutStatus?.account.hasAccount ?? false}
-                                            hasRestaurant={true}
-                                            isAcceptingOrders={locOO.isAcceptingOrders}
-                                            prepTimeMinutes={locOO.prepTimeMinutes}
-                                            connectedChannels={locOO.connectedChannels}
-                                            autoAcceptOrders={locOO.autoAcceptOrders}
-                                            dashboardUrl="https://dashboard.orderout.co"
-                                        />
-                                    )
-                                }
-
-                                if (showOrderOutForm) {
-                                    return (
-                                        <OrderOutOnboardingForm
-                                            defaultValues={{
-                                                accountName: merchantName || '',
-                                                restaurantName: selectedLocation?.name || '',
-                                                streetAddress: selectedLocation?.address_line1 || '',
-                                                city: selectedLocation?.city || '',
-                                                state: selectedLocation?.state || '',
-                                                zipcode: selectedLocation?.postal_code || '',
-                                                country: selectedLocation?.country || 'US',
-                                            }}
-                                            isSubmitting={onboardOrderOut.isPending}
-                                            onSubmit={(data: OnboardingFormData) => {
-                                                onboardOrderOut.mutate({
-                                                    merchantId,
-                                                    locationId: selectedLocationId!,
-                                                    accountName: data.accountName,
-                                                    restaurantName: data.restaurantName,
-                                                    streetAddress: data.streetAddress,
-                                                    city: data.city,
-                                                    state: data.state,
-                                                    zipcode: data.zipcode,
-                                                    country: data.country,
-                                                    restaurantManagerEmail: data.restaurantManagerEmail,
-                                                    restaurantManagerFirstname: data.restaurantManagerFirstname,
-                                                    restaurantManagerLastname: data.restaurantManagerLastname,
-                                                    restaurantManagerPhone: data.restaurantManagerPhone,
-                                                }, {
-                                                    onSuccess: (result) => {
-                                                        if (result.success) setShowOrderOutForm(false)
-                                                    },
-                                                })
-                                            }}
-                                            onCancel={() => setShowOrderOutForm(false)}
-                                        />
-                                    )
-                                }
-
-                                return (
-                                    <div className="flex flex-col items-center py-6">
-                                        <Plug className="h-10 w-10 text-muted-foreground mb-3" />
-                                        <p className="text-sm text-muted-foreground text-center mb-4 max-w-sm">
-                                            Connect this location to delivery platforms like UberEats, DoorDash, and Grubhub through OrderOut.
-                                        </p>
-                                        <Button onClick={() => setShowOrderOutForm(true)}>
-                                            <Plus className="h-4 w-4 mr-2" />
-                                            Connect to OrderOut
-                                        </Button>
-                                    </div>
-                                )
-                            })()}
-                        </CardContent>
-                    </Card>
                 </>
             )}
         </div>

@@ -2,7 +2,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createClerkClient } from '@clerk/backend'
 import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
-import { logAdminAction } from '@/lib/admin/log-admin-action'
 
 export async function DeleteOrganization(organizationId: string) {
     try {
@@ -12,13 +11,6 @@ export async function DeleteOrganization(organizationId: string) {
         // Fetch organization details before deletion for audit log
         const clerkOrg = await clerkClient.organizations.getOrganization({ organizationId })
         const orgName = clerkOrg.name
-        const orgType = clerkOrg.publicMetadata?.org_type as string | undefined
-
-        const { data: merchant } = await supabase
-            .from('merchants')
-            .select('id')
-            .eq('clerk_org_id', organizationId)
-            .maybeSingle()
 
         // Delete pending invites for this organization
         const { data: pendingInvites, error: pendingInvitesError } = await supabase.from('pending_org_admin_invites').select('*').eq('organization_id', organizationId)
@@ -41,46 +33,22 @@ export async function DeleteOrganization(organizationId: string) {
             // Delete Image from Supabase Storage and all pending invites
             const { data, error } = await supabase.storage.from('Organizations-Logos').remove([organizationId.toString() + '.png'])
 
-            if (orgType === 'merchant') {
-                await logAdminAction('MERCHANT_DEACTIVATED', {
-                    clerkOrgId: organizationId,
-                    merchantId: merchant?.id,
-                    resourceType: 'merchant_organization',
-                    resourceId: organizationId,
-                    resourceName: orgName,
-                    changes: {
-                        before: {
-                            status: 'active',
-                        },
-                        after: {
-                            status: 'deactivated',
-                        },
-                        reason: 'Organization deleted by HQ admin',
-                    },
-                    metadata: {
-                        organization_id: organizationId,
-                        method: 'DeleteOrganization',
-                        revoked_invites: pendingInvites.length,
-                    },
-                })
-            } else {
-                // Keep generic organization audit event for non-merchant organizations.
-                await LogAuditEvent({
-                    clerkOrgId: organizationId,
-                    action: `Deleted Organization: ${orgName}`,
-                    actionCategory: 'organization',
-                    resourceType: 'organization',
-                    resourceId: organizationId,
-                    resourceName: orgName,
-                    severity: 'info',
-                    metadata: {
-                        organization_id: organizationId,
-                        method: 'DeleteOrganization',
-                        admin_action: true,
-                        revoked_invites: pendingInvites.length,
-                    },
-                })
-            }
+            // Log audit event
+            await LogAuditEvent({
+                clerkOrgId: organizationId,
+                action: `Deleted Organization: ${orgName}`,
+                actionCategory: 'organization',
+                resourceType: 'organization',
+                resourceId: organizationId,
+                resourceName: orgName,
+                severity: 'info',
+                metadata: {
+                    organization_id: organizationId,
+                    method: 'DeleteOrganization',
+                    admin_action: true,
+                    revoked_invites: pendingInvites.length,
+                },
+            })
         }
         return { success: true }
     }

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -54,8 +54,10 @@ import {
   KitchenSection,
   hasKitchenData,
 } from "@/components/dashboard/orders/KitchenSection";
-import { GetOrderDetails } from "@/app/dashboard/actions/order";
-import { useOrderFullHistory } from "@/app/dashboard/hooks/useOrderFullHistory";
+import {
+  GetOrderDetails,
+  GetOrderFullHistory,
+} from "@/app/dashboard/actions/order";
 
 // ─── Props ───
 
@@ -64,17 +66,12 @@ interface BreadcrumbItem {
   href?: string;
 }
 
-const TAB_VALUES = ["items", "payments", "timeline", "kitchen", "refunds", "raw"] as const;
-type TabValue = (typeof TAB_VALUES)[number];
-
 interface OrderDetailFullPageProps {
   orderId: string;
   backUrl: string;
   backLabel?: string;
   breadcrumbs: BreadcrumbItem[];
   readOnly?: boolean;
-  /** When provided, shows "Viewing as [HQ Admin / Carrier Admin] — Read Only" banner */
-  adminViewType?: "hq" | "carrier" | null;
 }
 
 // ─── Utilities ───
@@ -955,14 +952,10 @@ function LoadingSkeleton() {
 
 function ErrorState({
   backUrl,
-  title,
   message,
-  onRetry,
 }: {
   backUrl: string;
-  title?: string;
-  message: string;
-  onRetry?: () => void;
+  message?: string;
 }) {
   const router = useRouter();
   return (
@@ -971,21 +964,16 @@ function ErrorState({
         <AlertTriangle className="h-7 w-7 text-destructive" />
       </div>
       <div className="text-center space-y-1">
-        <h2 className="text-lg font-semibold">{title ?? "Order not found"}</h2>
-        <p className="text-sm text-muted-foreground max-w-md">{message}</p>
+        <h2 className="text-lg font-semibold">Order not found</h2>
+        <p className="text-sm text-muted-foreground max-w-md">
+          {message ||
+            "The order you're looking for doesn't exist or you don't have permission to view it."}
+        </p>
       </div>
-      <div className="flex flex-wrap gap-2 justify-center">
-        {onRetry && (
-          <Button variant="default" onClick={onRetry}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Retry
-          </Button>
-        )}
-        <Button variant="outline" onClick={() => router.push(backUrl)}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Orders
-        </Button>
-      </div>
+      <Button variant="outline" onClick={() => router.push(backUrl)}>
+        <ArrowLeft className="h-4 w-4 mr-2" />
+        Back to Orders
+      </Button>
     </div>
   );
 }
@@ -1000,23 +988,8 @@ export function OrderDetailFullPage({
   backLabel = "Back to Orders",
   breadcrumbs,
   readOnly = false,
-  adminViewType = null,
 }: OrderDetailFullPageProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const pathname = usePathname();
-
-  const tabFromUrl = (searchParams.get("tab") ?? "items") as TabValue;
-  const activeTab = TAB_VALUES.includes(tabFromUrl) ? tabFromUrl : "items";
-
-  const setTab = React.useCallback(
-    (value: string) => {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("tab", value);
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-    },
-    [pathname, router, searchParams]
-  );
 
   const {
     data: orderDetails,
@@ -1034,10 +1007,19 @@ export function OrderDetailFullPage({
   const {
     data: fullHistory,
     isLoading: isHistoryLoading,
-    isError: isHistoryError,
-    error: historyError,
-    refetch: refetchHistory,
-  } = useOrderFullHistory(orderId);
+  } = useQuery({
+    queryKey: ["order-full-history", orderId],
+    queryFn: async (): Promise<OrderFullHistory | null> => {
+      if (!orderId) return null;
+      try {
+        return await GetOrderFullHistory(orderId);
+      } catch (error) {
+        console.error("Error fetching full history:", error);
+        return null;
+      }
+    },
+    enabled: !!orderId,
+  });
 
   const order = orderDetails as OrderResponse | null;
   const items: (OrderItem & { order_item_modifiers?: OrderItemModifier[] })[] =
@@ -1092,102 +1074,18 @@ export function OrderDetailFullPage({
   const reversalsCount =
     (fullHistory?.reversals?.length ?? 0) +
     (fullHistory?.chargebacks?.length ?? 0);
-  const showRefunds = reversalsCount > 0;
-
-  const visibleTabs: TabValue[] = React.useMemo(() => {
-    const t: TabValue[] = ["items", "payments", "timeline"];
-    if (showKitchen) t.push("kitchen");
-    if (showRefunds) t.push("refunds");
-    t.push("raw");
-    return t;
-  }, [showKitchen, showRefunds]);
-
-  React.useEffect(() => {
-    document.title = order
-      ? `Order #${order.display_number || order.order_number} | DEXA POS`
-      : "Order | DEXA POS";
-    return () => {
-      document.title = "DEXA POS";
-    };
-  }, [order]);
-
-  React.useEffect(() => {
-    if (!visibleTabs.includes(activeTab)) {
-      setTab("items");
-    }
-  }, [activeTab, visibleTabs, setTab]);
-
-  const handleKeyDown = React.useCallback(
-    (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      const idx = visibleTabs.indexOf(activeTab);
-      if (e.key === "ArrowRight" && idx < visibleTabs.length - 1) {
-        e.preventDefault();
-        setTab(visibleTabs[idx + 1]!);
-      } else if (e.key === "ArrowLeft" && idx > 0) {
-        e.preventDefault();
-        setTab(visibleTabs[idx - 1]!);
-      }
-    },
-    [activeTab, visibleTabs, setTab]
-  );
-
-  React.useEffect(() => {
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
+  const showRefunds = reversalsCount > 0 || isHistoryLoading;
 
   if (isLoading) {
     return <LoadingSkeleton />;
   }
 
   if (!order || isOrderError) {
-    return (
-      <ErrorState
-        backUrl={backUrl}
-        title="Order not found"
-        message="The order you're looking for doesn't exist."
-      />
-    );
-  }
-
-  if (isHistoryError && historyError) {
-    const err = historyError as Error & { errorType?: string };
-    if (err.errorType === "access_denied") {
-      return (
-        <ErrorState
-          backUrl={backUrl}
-          title="Access denied"
-          message="You don't have permission to view this order."
-        />
-      );
-    }
-    if (err.errorType === "network" || err.status === 500) {
-      return (
-        <ErrorState
-          backUrl={backUrl}
-          title="Something went wrong"
-          message="Unable to load order details. Please try again."
-          onRetry={() => refetchHistory()}
-        />
-      );
-    }
-    return (
-      <ErrorState
-        backUrl={backUrl}
-        title="Order not found"
-        message={historyError.message ?? "The order you're looking for doesn't exist."}
-      />
-    );
+    return <ErrorState backUrl={backUrl} />;
   }
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-4rem)] animate-in fade-in duration-500">
-      {readOnly && adminViewType && (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-          Viewing as {adminViewType === "hq" ? "HQ Admin" : "Carrier Admin"} — Read Only
-        </div>
-      )}
       {/* Breadcrumbs */}
       <nav className="flex items-center gap-1.5 text-sm text-muted-foreground mb-4">
         {breadcrumbs.map((crumb, i) => {
@@ -1326,7 +1224,7 @@ export function OrderDetailFullPage({
       )}
 
       {/* Tabbed Interface */}
-      <Tabs value={activeTab} onValueChange={setTab} className="flex-1">
+      <Tabs defaultValue="items" className="flex-1">
         <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
           <TabsTrigger value="items" className="gap-1.5">
             <ShoppingBag className="h-3.5 w-3.5" />

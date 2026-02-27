@@ -2,7 +2,7 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createClerkClient } from '@clerk/backend'
-import { logAdminAction } from '@/lib/admin/log-admin-action'
+import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
 
 export async function RemoveUser(userId: string) {
     console.log('Removing user:', userId)
@@ -25,17 +25,17 @@ export async function RemoveUser(userId: string) {
             }
 
             // Log audit event
-            await logAdminAction('ADMIN_DEACTIVATED', {
+            await LogAuditEvent({
+                action: `Removed User: ${userName}`,
+                actionCategory: 'people',
                 resourceType: 'user',
                 resourceId: userId,
                 resourceName: userName,
-                changes: {
-                    before: { status: 'active' },
-                    after: { status: 'deleted' },
-                },
+                severity: 'info',
                 metadata: {
                     user_id: userId,
                     method: 'RemoveUser',
+                    admin_action: true,
                 },
             })
 

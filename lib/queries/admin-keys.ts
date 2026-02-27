@@ -435,17 +435,4 @@ export const adminKeys = {
 
   auditLogList: (filters?: Record<string, unknown>) =>
     [...adminKeys.auditLogs(), 'list', filters] as const,
-
-  // ============================================================================
-  // MERCHANT ORDEROUT (Admin View)
-  // ============================================================================
-
-  merchantOrderOutStatus: (merchantId: string) =>
-    [...adminKeys.merchants(), merchantId, 'orderout-status'] as const,
-
-  merchantOrderOutMenuSync: (merchantId: string, locationId: string, menuId: string) =>
-    [...adminKeys.merchants(), merchantId, 'orderout-menu-sync', locationId, menuId] as const,
-
-  merchantOrderOutPayloadDiff: (merchantId: string, locationId: string, menuId: string) =>
-    [...adminKeys.merchants(), merchantId, 'orderout-payload-diff', locationId, menuId] as const,
 }

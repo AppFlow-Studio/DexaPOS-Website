@@ -290,7 +290,6 @@ export async function getPlatformStationFleet(): Promise<MerchantStationGroup[]>
       })
     }
 
-
     const stationHealth = getStationHealth(
       station.is_online,
       station.last_heartbeat_at,

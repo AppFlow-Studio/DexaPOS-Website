@@ -2,9 +2,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
   getPlatformKPIs,
   getPlatformSalesTrend,
-  getTopMerchants,
-  type PlatformAuditLogFilters,
-  type PlatformAuditLogsResult,
+  getTopMerchants
 } from '@/app/manage/actions/hq-platform/analytics'
 import {
   getPlatformChargebacks,
@@ -40,8 +38,6 @@ export const platformKeys = {
   paymentAuditLogs: (filters?: PlatformPaymentAuditLogFilters, limit: number = 50, offset: number = 0) =>
     [...platformKeys.all, 'payment-audit-logs', filters, limit, offset] as const,
   transactionDetails: (transactionId: string | null) => [...platformKeys.all, 'transaction-details', transactionId] as const,
-  auditLogs: (filters?: PlatformAuditLogFilters, limit: number = 50, offset: number = 0) =>
-    [...platformKeys.all, 'audit-logs', filters, limit, offset] as const,
 }
 
 export function usePlatformKPIs() {
@@ -147,13 +143,9 @@ export function usePlatformTransactionDetails(transactionId: string | null, enab
   })
 }
 
-export function usePlatformAuditLogs(filters?: PlatformAuditLogFilters, limit: number = 50, offset: number = 0) {
+export function usePlatformAuditLogs(filters?: any, limit: number = 50, offset: number = 0) {
   return useQuery({
-    queryKey: platformKeys.auditLogs(filters, limit, offset),
-    queryFn: async (): Promise<PlatformAuditLogsResult> =>
-      import('@/app/manage/actions/hq-platform/analytics').then((m) =>
-        m.getPlatformAuditLogs(filters, limit, offset)
-      ),
-    placeholderData: keepPreviousData,
+    queryKey: [...platformKeys.all, 'audit-logs', filters, limit, offset],
+    queryFn: () => import('@/app/manage/actions/hq-platform/analytics').then(m => m.getPlatformAuditLogs(filters, limit, offset)),
   })
 }
