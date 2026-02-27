@@ -356,3 +356,20 @@ entrypoint = "./functions/clerk-webhook/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/clerk-webhook/*.html" ]
+
+[functions.orderout-menu-webhook]
+enabled = true
+verify_jwt = true
+import_map = "./functions/orderout-menu-webhook/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/orderout-menu-webhook/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/orderout-menu-webhook/*.html" ]
+
+[functions.orderout-orders-webhook]
+enabled = true
+verify_jwt = false
+import_map = "./functions/orderout-orders-webhook/deno.json"
+entrypoint = "./functions/orderout-orders-webhook/index.ts"

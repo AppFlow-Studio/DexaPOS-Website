@@ -70,7 +70,7 @@ export async function GetLocations(clerkOrgId: string, user_id: string) {
       return [];
     }
 
-    console.log("[GetLocations] Merchant Owner Locations", locations);
+    // console.log("[GetLocations] Merchant Owner Locations", locations);
     return locations;
   }
 

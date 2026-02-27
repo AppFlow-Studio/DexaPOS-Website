@@ -26,6 +26,7 @@ import {
     LayoutGrid,
     List,
     ShieldAlert,
+    MessageSquare,
 } from 'lucide-react'
 import { useMerchants, useMerchantStats } from '@/lib/queries/use-merchants'
 import { useDebounce } from '@/lib/hooks/useDebounce'
@@ -409,6 +410,7 @@ function MerchantListView({
                     <TableHead className="text-right">Staff</TableHead>
                     <TableHead className="text-right">Orders Today</TableHead>
                     <TableHead className="text-right">Revenue Today</TableHead>
+                    <TableHead className="text-right">Notes</TableHead>
                     <TableHead>Created</TableHead>
                 </TableRow>
             </TableHeader>
@@ -448,6 +450,16 @@ function MerchantListView({
                         </TableCell>
                         <TableCell className="text-right">
                             {formatCurrency(merchant.revenue_today)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                            {(merchant.notes_count || 0) > 0 ? (
+                                <span className="inline-flex items-center gap-1">
+                                    <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                                    {merchant.notes_count}
+                                </span>
+                            ) : (
+                                <span className="text-muted-foreground">0</span>
+                            )}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                             {new Date(merchant.created_at).toLocaleDateString()}

@@ -50,11 +50,16 @@ import {
   Building2,
   MapPin,
   Loader2,
+  Plug,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
+import { useOrderOutStatus, useOnboardOrderOut } from "./hooks/useOrderOutStatus";
+import { OrderOutTab } from "@/components/dashboard/orderout/OrderOutTab";
+import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
+import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 
 export default function OnlineOrderingPage() {
   const {
@@ -79,6 +84,18 @@ export default function OnlineOrderingPage() {
   const { selectedLocationId } = useLocationStore();
   const selectedLocation = useSelectedLocation();
   const isAllLocations = selectedLocationId === "all";
+  const clerkOrgId = useClerkOrgId();
+  const { data: userInfo } = useUserInfo();
+  const merchantName = userInfo?.members?.[0]?.organizations?.merchants?.name || "";
+
+  // OrderOut state
+  const [showOrderOutForm, setShowOrderOutForm] = useState(false);
+  const { data: orderOutData } = useOrderOutStatus(
+    clerkOrgId || "",
+    selectedLocationId
+  );
+  const orderOutStatus = orderOutData?.data;
+  const onboardOrderOut = useOnboardOrderOut(clerkOrgId || "");
 
   // File input refs
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -400,6 +417,10 @@ export default function OnlineOrderingPage() {
           <TabsTrigger value="automation" className="gap-2">
             <Zap className="h-4 w-4" />
             Automation
+          </TabsTrigger>
+          <TabsTrigger value="orderout" className="gap-2">
+            <Plug className="h-4 w-4" />
+            OrderOut
           </TabsTrigger>
         </TabsList>
 
@@ -1527,6 +1548,27 @@ export default function OnlineOrderingPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* OrderOut Tab */}
+        <TabsContent value="orderout" className="space-y-6">
+          <OrderOutTab
+            clerkOrgId={clerkOrgId || ""}
+            locationId={selectedLocationId}
+            orderOutStatus={orderOutStatus || null}
+            showOnboardingForm={showOrderOutForm}
+            onShowOnboardingForm={setShowOrderOutForm}
+            onboardMutation={onboardOrderOut}
+            merchantName={merchantName}
+            locationName={selectedLocation?.name || ""}
+            locationDefaults={{
+              streetAddress: selectedLocation?.address_line1 || "",
+              city: selectedLocation?.city || "",
+              state: selectedLocation?.state || "",
+              zipcode: selectedLocation?.postal_code || "",
+              country: selectedLocation?.country || "US",
+            }}
+          />
         </TabsContent>
       </Tabs>
 

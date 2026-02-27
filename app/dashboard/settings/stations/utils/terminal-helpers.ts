@@ -128,3 +128,73 @@ export const getDeviceConnectionTypeLabel = (type: DeviceConnectionType): string
       return type
   }
 }
+
+// ============================================================================
+// Printer Types
+// ============================================================================
+
+export type PrinterType = 'thermal' | 'impact' | 'inkjet' | 'laser'
+export type PrinterRole = 'receipt' | 'kitchen' | 'label' | 'report'
+export type PrinterConnectionType = 'usb' | 'bluetooth' | 'network'
+
+// ============================================================================
+// Printer Helper Functions
+// ============================================================================
+
+export const getPrinterTypeLabel = (type: PrinterType): string => {
+  switch (type) {
+    case 'thermal':
+      return 'Thermal'
+    case 'impact':
+      return 'Impact'
+    case 'inkjet':
+      return 'Inkjet'
+    case 'laser':
+      return 'Laser'
+    default:
+      return type
+  }
+}
+
+export const getPrinterRoleLabel = (role: PrinterRole): string => {
+  switch (role) {
+    case 'receipt':
+      return 'Receipt'
+    case 'kitchen':
+      return 'Kitchen'
+    case 'label':
+      return 'Label'
+    case 'report':
+      return 'Report'
+    default:
+      return role
+  }
+}
+
+export const getPrinterRoleIcon = (role: PrinterRole): string => {
+  switch (role) {
+    case 'receipt':
+      return '🧾'
+    case 'kitchen':
+      return '🍳'
+    case 'label':
+      return '🏷️'
+    case 'report':
+      return '📊'
+    default:
+      return '🖨️'
+  }
+}
+
+export const getPrinterConnectionTypeLabel = (type: PrinterConnectionType): string => {
+  switch (type) {
+    case 'usb':
+      return 'USB'
+    case 'bluetooth':
+      return 'Bluetooth'
+    case 'network':
+      return 'Network'
+    default:
+      return type
+  }
+}

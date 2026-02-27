@@ -3,7 +3,7 @@
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
+import { logAdminAction } from '@/lib/admin/log-admin-action'
 import type {
   MerchantFilters,
   MerchantSummary,
@@ -15,6 +15,35 @@ import type {
   MerchantHealthSummary,
 } from '@/types/merchant'
 
+async function getManagerScopedMerchantIds(
+  userId: string,
+  roleCode: string | null | undefined
+): Promise<string[] | undefined> {
+  if (roleCode !== 'hq.manager') {
+    return undefined
+  }
+
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from('admin_merchant_access')
+    .select('merchant_id')
+    .eq('admin_user_id', userId)
+    .eq('is_active', true)
+
+  if (error) {
+    console.error('[getManagerScopedMerchantIds] Error:', error)
+    return []
+  }
+
+  return Array.from(
+    new Set(
+      (data || [])
+        .map((row) => row.merchant_id)
+        .filter((merchantId): merchantId is string => typeof merchantId === 'string' && merchantId.length > 0)
+    )
+  )
+}
+
 // ============================================================================
 // GET MERCHANTS (Paginated with filters)
 // ============================================================================
@@ -25,23 +54,35 @@ export async function getMerchants(
   pageSize: number = 20,
   accessibleMerchantIds?: string[] // Optional: filter to only these merchant IDs (for non-super-admins)
 ): Promise<{ merchants: MerchantSummary[]; total: number }> {
-  await assertHQPermission('hq.merchant.view')
+  const { userId, role } = await assertHQPermission('hq.merchant.view')
 
   const supabase = createServerSupabaseClient()
   const offset = (page - 1) * pageSize
+
+  const managerScopedIds = await getManagerScopedMerchantIds(userId, role?.role_code)
+
+  let effectiveMerchantIds = managerScopedIds
+  if (accessibleMerchantIds !== undefined) {
+    if (effectiveMerchantIds === undefined) {
+      effectiveMerchantIds = accessibleMerchantIds
+    } else {
+      const requestedSet = new Set(accessibleMerchantIds)
+      effectiveMerchantIds = effectiveMerchantIds.filter((merchantId) => requestedSet.has(merchantId))
+    }
+  }
 
   // Build query on the summary view
   let query = supabase
     .from('admin_merchant_summary')
     .select('*', { count: 'exact' })
 
-  // Filter by accessible merchant IDs (for non-super-admins)
-  if (accessibleMerchantIds !== undefined) {
-    if (accessibleMerchantIds.length === 0) {
+  // Apply effective merchant scope (manager scope + optional caller filter).
+  if (effectiveMerchantIds !== undefined) {
+    if (effectiveMerchantIds.length === 0) {
       // User has no merchant access - return empty result
       return { merchants: [], total: 0 }
     }
-    query = query.in('id', accessibleMerchantIds)
+    query = query.in('id', effectiveMerchantIds)
   }
 
   // Apply search filter
@@ -68,8 +109,34 @@ export async function getMerchants(
     throw new Error('Failed to fetch merchants')
   }
 
+  let merchants = (data as MerchantSummary[]) || []
+
+  if (merchants.length > 0) {
+    const merchantIds = merchants.map((merchant) => merchant.id)
+    const { data: noteRows, error: notesError } = await supabase
+      .from('merchant_notes')
+      .select('merchant_id')
+      .in('merchant_id', merchantIds)
+
+    // Gracefully handle environments that have not applied migration 032 yet.
+    if (notesError && notesError.code !== '42P01') {
+      console.error('[getMerchants] Notes count error:', notesError)
+    } else if (!notesError && noteRows) {
+      const noteCountMap = noteRows.reduce<Record<string, number>>((acc, row) => {
+        if (!row.merchant_id) return acc
+        acc[row.merchant_id] = (acc[row.merchant_id] || 0) + 1
+        return acc
+      }, {})
+
+      merchants = merchants.map((merchant) => ({
+        ...merchant,
+        notes_count: noteCountMap[merchant.id] || 0,
+      }))
+    }
+  }
+
   return {
-    merchants: (data as MerchantSummary[]) || [],
+    merchants,
     total: count || 0,
   }
 }
@@ -81,23 +148,43 @@ export async function getMerchants(
 export async function getMerchantDetails(
   merchantId: string
 ): Promise<MerchantDetails | null> {
-  await assertHQPermission('hq.merchant.view')
+  const { userId, role } = await assertHQPermission('hq.merchant.view')
 
   const supabase = createServerSupabaseClient()
+  const managerScopedIds = await getManagerScopedMerchantIds(userId, role?.role_code)
+
+  if (managerScopedIds && managerScopedIds.length === 0) {
+    return null
+  }
 
   // Determine if we're querying by internal ID or Clerk Org ID
   const isClerkId = merchantId.startsWith('org_')
   const idField = isClerkId ? 'clerk_org_id' : 'id'
 
-  // Get merchant summary
+  // Get merchant summary from view
   const { data: merchant, error: merchantError } = await supabase
     .from('admin_merchant_summary')
     .select('*')
     .eq(idField, merchantId)
     .single()
 
+  // Supplement with pricing columns from merchants table (not in view)
+  let merchantPricing: { pricing_strategy: string; dual_pricing_percentage: number } | null = null
+  if (merchant) {
+    const { data: pricingData } = await supabase
+      .from('merchants')
+      .select('pricing_strategy, dual_pricing_percentage')
+      .eq('id', merchant.id)
+      .single()
+    merchantPricing = pricingData
+  }
+
   if (merchantError || !merchant) {
     console.error('[getMerchantDetails] Merchant error:', merchantError)
+    return null
+  }
+
+  if (managerScopedIds && !managerScopedIds.includes(merchant.id)) {
     return null
   }
 
@@ -115,7 +202,8 @@ export async function getMerchantDetails(
       is_accepting_orders,
       timezone,
       pricing_strategy,
-      dual_pricing_percentage
+      dual_pricing_percentage,
+      use_merchant_pricing_defaults
     `)
     .eq('merchant_id', merchant.id)
     .order('name')
@@ -154,6 +242,8 @@ export async function getMerchantDetails(
 
   return {
     ...(merchant as MerchantSummary),
+    pricing_strategy: merchantPricing?.pricing_strategy as 'manual' | 'dual' | undefined,
+    dual_pricing_percentage: merchantPricing?.dual_pricing_percentage,
     locations: locationsWithMetrics,
   }
 }
@@ -166,9 +256,19 @@ export async function updateMerchantSettings(
   merchantId: string,
   updates: MerchantSettingsUpdate
 ): Promise<UpdateMerchantResult> {
-  const { userId } = await assertHQPermission('hq.merchant.update')
+  await assertHQPermission('hq.merchant.update')
 
   const supabase = createServerSupabaseClient()
+  const { data: beforeMerchant } = await supabase
+    .from('merchants')
+    .select('id, name, public_metadata, pricing_strategy, dual_pricing_percentage')
+    .eq('id', merchantId)
+    .single()
+
+  const beforeSnapshot: Record<string, unknown> = {}
+  for (const key of Object.keys(updates)) {
+    beforeSnapshot[key] = (beforeMerchant as Record<string, unknown> | null)?.[key]
+  }
 
   // Prepare the update object
   let finalUpdates: any = {
@@ -178,16 +278,12 @@ export async function updateMerchantSettings(
 
   // If public_metadata is provided, merge it with existing metadata to avoid overwriting everything
   if (updates.public_metadata) {
-      const { data: existing } = await supabase
-          .from('merchants')
-          .select('public_metadata')
-          .eq('id', merchantId)
-          .single()
-      
       finalUpdates.public_metadata = {
-          ...(existing?.public_metadata || {}),
+          ...(beforeMerchant?.public_metadata || {}),
           ...updates.public_metadata
       }
+
+      beforeSnapshot.public_metadata = beforeMerchant?.public_metadata || {}
   }
 
   const { error } = await supabase
@@ -200,16 +296,17 @@ export async function updateMerchantSettings(
     return { success: false, error: error.message }
   }
 
-  // Audit log
-  await LogAuditEvent({
+  await logAdminAction('MERCHANT_SETTINGS_CHANGED', {
     merchantId,
-    action: 'ADMIN_UPDATE_MERCHANT',
-    actionCategory: 'settings',
     resourceType: 'merchant',
     resourceId: merchantId,
-    changes: { after: updates as unknown as Record<string, unknown> },
+    resourceName: beforeMerchant?.name || merchantId,
+    changes: {
+      before: beforeSnapshot,
+      after: finalUpdates as Record<string, unknown>,
+    },
     metadata: {
-      admin_action: true,
+      source: 'updateMerchantSettings',
     },
   })
 
@@ -228,14 +325,14 @@ export async function toggleLocationStatus(
   locationId: string,
   isActive: boolean
 ): Promise<ToggleLocationResult> {
-  const { userId } = await assertHQPermission('hq.merchant.update')
+  await assertHQPermission('hq.merchant.update')
 
   const supabase = createServerSupabaseClient()
 
   // First verify the location belongs to this merchant
   const { data: location } = await supabase
     .from('locations')
-    .select('id, name')
+    .select('id, name, is_active')
     .eq('id', locationId)
     .eq('merchant_id', merchantId)
     .single()
@@ -258,20 +355,22 @@ export async function toggleLocationStatus(
     return { success: false, error: error.message }
   }
 
-  // Audit log
-  await LogAuditEvent({
+  await logAdminAction('MERCHANT_UPDATED', {
     merchantId,
-    action: isActive ? 'Activated Location' : 'Deactivated Location',
-    actionCategory: 'settings',
+    locationId,
     resourceType: 'location',
     resourceId: locationId,
     resourceName: location.name,
-    locationId,
-    changes: { before: { is_active: !isActive }, after: { is_active: isActive } },
-    severity: 'warning',
+    changes: {
+      is_active: {
+        old: Boolean(location.is_active),
+        new: isActive,
+      },
+    },
+    severity: isActive ? 'info' : 'warning',
     metadata: {
       location_name: location.name,
-      admin_action: true,
+      source: 'toggleLocationStatus',
     },
   })
 
@@ -290,13 +389,23 @@ export async function getMerchantStats(): Promise<{
   inactive: number
   onboarding: number
 }> {
-  await assertHQPermission('hq.merchant.view')
+  const { userId, role } = await assertHQPermission('hq.merchant.view')
 
   const supabase = createServerSupabaseClient()
+  const managerScopedIds = await getManagerScopedMerchantIds(userId, role?.role_code)
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('admin_merchant_summary')
     .select('derived_status')
+
+  if (managerScopedIds !== undefined) {
+    if (managerScopedIds.length === 0) {
+      return { total: 0, active: 0, inactive: 0, onboarding: 0 }
+    }
+    query = query.in('id', managerScopedIds)
+  }
+
+  const { data, error } = await query
 
   if (error) {
     console.error('[getMerchantStats] Error:', error)
