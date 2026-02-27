@@ -214,7 +214,7 @@ const navMain = [
     items: [
       {
         title: "Campaigns",
-        url: "/dashboard/customers/campaigns",
+        url: "/dashboard/campaigns",
         icon: Mail,
       },
     ],
