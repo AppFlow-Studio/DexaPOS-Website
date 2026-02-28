@@ -33,8 +33,9 @@ import {
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
 import { Plus, AlertTriangle, Loader2, Gift } from 'lucide-react';
-import { useUserInfo } from '@/app/manage/hooks/useUserInfo.';
+import { useUserInfo } from '@/app/manage/hooks/useUserInfo..ts';
 import { useLocationStore } from '../../hooks/useLocationScoped';
+import { GetMenuItems } from '../../actions/menu-items';
 import type { LoyaltyProgram, Promotion } from '../../actions/loyalty-programs';
 
 export default function LoyaltySettingsPage() {
@@ -71,6 +72,7 @@ export default function LoyaltySettingsPage() {
 
   // State
   const [mounted, setMounted] = useState(false);
+  const [menuItems, setMenuItems] = useState<Array<{ id: string; name: string; price: number }>>([]);
   const [isProgramWizardOpen, setIsProgramWizardOpen] = useState(false);
   const [editingProgram, setEditingProgram] = useState<LoyaltyProgram | null>(null);
   const [programToDelete, setProgramToDelete] = useState<LoyaltyProgram | null>(null);
@@ -84,6 +86,21 @@ export default function LoyaltySettingsPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Fetch menu items on mount
+  useEffect(() => {
+    if (clerkOrgId) {
+      GetMenuItems(clerkOrgId).then((items) => {
+        setMenuItems(
+          items.map((item: any) => ({
+            id: item.id,
+            name: item.name,
+            price: item.price || 0,
+          }))
+        );
+      });
+    }
+  }, [clerkOrgId]);
 
   // Filter programs and promotions by location
   const filteredPrograms = programs.filter((program) => {
@@ -417,6 +434,8 @@ export default function LoyaltySettingsPage() {
         }}
         promotion={editingPromotion}
         isLoading={createPromotionMutation.isPending || updatePromotionMutation.isPending}
+        createdBy={userInfo?.id}
+        menuItems={menuItems}
         onSubmit={handleCreateOrUpdatePromotion}
       />
 

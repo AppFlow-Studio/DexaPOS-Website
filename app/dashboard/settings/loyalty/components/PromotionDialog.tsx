@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Card } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -22,14 +23,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Search } from 'lucide-react';
 import type { Promotion, PromotionInsert } from '../../../actions/loyalty-programs';
+
+interface MenuItem {
+  id: string;
+  name: string;
+  price: number;
+}
 
 interface PromotionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   promotion?: Promotion | null;
   isLoading?: boolean;
+  createdBy?: string | null;
+  menuItems?: MenuItem[];
   onSubmit: (data: Omit<PromotionInsert, 'merchant_id' | 'created_at' | 'updated_at'>) => void;
 }
 
@@ -67,6 +76,7 @@ interface FormData {
   bogo_get_category_id: string | null;
   threshold_amount: number | null;
   auto_apply: boolean;
+  application_mode: 'auto_apply' | 'promo_code' | 'manual_only';
 }
 
 const INITIAL_FORM: FormData = {
@@ -100,17 +110,45 @@ const INITIAL_FORM: FormData = {
   bogo_get_category_id: null,
   threshold_amount: null,
   auto_apply: false,
+  application_mode: 'auto_apply',
 };
+
+// Promo type definitions
+const PROMO_TYPES: Array<{
+  value: PromoType;
+  label: string;
+  emoji: string;
+  description: string;
+}> = [
+  { value: 'happy_hour', label: 'Happy Hour', emoji: '🕐', description: 'Time-based discounts' },
+  { value: 'birthday', label: 'Birthday', emoji: '🎂', description: 'Birthday month rewards' },
+  { value: 'first_visit', label: 'First Visit', emoji: '🎫', description: 'New customer incentive' },
+  { value: 'comeback', label: 'Comeback', emoji: '🔙', description: 'Win-back discount' },
+  { value: 'referral', label: 'Referral', emoji: '🤝', description: 'Refer a friend' },
+  { value: 'seasonal', label: 'Seasonal', emoji: '📅', description: 'Holiday/seasonal offer' },
+  { value: 'threshold', label: 'Spend Threshold', emoji: '💰', description: 'Reward for spending' },
+  { value: 'bogo', label: 'BOGO', emoji: '📦', description: 'Buy one get one' },
+  { value: 'bundle', label: 'Bundle', emoji: '📦', description: 'Bundle discount' },
+];
 
 export function PromotionDialog({
   open,
   onOpenChange,
   promotion,
   isLoading = false,
+  createdBy,
+  menuItems = [],
   onSubmit,
 }: PromotionDialogProps) {
   const [formData, setFormData] = useState<FormData>(INITIAL_FORM);
+  const [menuSearchQuery, setMenuSearchQuery] = useState('');
   const isEditing = !!promotion;
+
+  const filteredMenuItems = menuItems.filter((item) =>
+    item.name.toLowerCase().includes(menuSearchQuery.toLowerCase())
+  );
+
+  const selectedMenuItem = menuItems.find((item) => item.id === formData.free_item_id);
 
   useEffect(() => {
     if (open) {
@@ -146,6 +184,7 @@ export function PromotionDialog({
           bogo_get_category_id: promotion.bogo_get_category_id,
           threshold_amount: promotion.threshold_amount,
           auto_apply: promotion.auto_apply ?? false,
+          application_mode: promotion.auto_apply ? 'auto_apply' : (promotion.promo_code ? 'promo_code' : 'manual_only'),
         });
       } else {
         setFormData(INITIAL_FORM);
@@ -161,7 +200,7 @@ export function PromotionDialog({
     const submitData: Omit<PromotionInsert, 'merchant_id' | 'created_at' | 'updated_at'> = {
       name: formData.name,
       description: formData.description,
-      promo_code: formData.promo_code,
+      promo_code: formData.application_mode === 'promo_code' ? (formData.promo_code || '') : null,
       promo_type: formData.promo_type,
       discount_type: formData.discount_type,
       discount_value: formData.discount_value,
@@ -189,10 +228,10 @@ export function PromotionDialog({
       bogo_get_item_id: formData.bogo_get_item_id,
       bogo_get_category_id: formData.bogo_get_category_id,
       threshold_amount: formData.threshold_amount,
-      auto_apply: formData.auto_apply,
+      auto_apply: formData.application_mode === 'auto_apply',
       total_redemptions: promotion?.total_redemptions ?? 0,
       total_discount_given: promotion?.total_discount_given ?? 0,
-      created_by: null,
+      created_by: createdBy || null,
     };
 
     onSubmit(submitData);
@@ -201,30 +240,21 @@ export function PromotionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Edit Promotion' : 'Create Promotion'}</DialogTitle>
           <DialogDescription>
-            Set up a new marketing promotion to drive customer engagement
+            Set up a marketing promotion to drive customer engagement and sales
           </DialogDescription>
         </DialogHeader>
 
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 mb-4">
-          <p className="font-medium mb-1">📢 Merchant-Wide Promotion</p>
-          <p>This promotion will be created for your entire merchant. You can optionally limit it to specific locations in <span className="font-semibold">Schedule & Limits</span> tab.</p>
-        </div>
+        <div className="space-y-6">
+          {/* Basic Info Section */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-sm">Promotion Details</h3>
 
-        <Tabs defaultValue="basic" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="basic">Basic Info</TabsTrigger>
-            <TabsTrigger value="discount">Discount</TabsTrigger>
-            <TabsTrigger value="schedule">Schedule & Limits</TabsTrigger>
-          </TabsList>
-
-          {/* Basic Info Tab */}
-          <TabsContent value="basic" className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Promotion Name</Label>
+              <Label htmlFor="name">Promotion Name *</Label>
               <Input
                 id="name"
                 value={formData.name}
@@ -243,133 +273,365 @@ export function PromotionDialog({
                 rows={2}
               />
             </div>
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="promo-type">Promotion Type</Label>
-              <Select value={formData.promo_type} onValueChange={(value) =>
-                setFormData({ ...formData, promo_type: value as PromoType })
-              }>
-                <SelectTrigger id="promo-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="happy_hour">Happy Hour</SelectItem>
-                  <SelectItem value="birthday">Birthday</SelectItem>
-                  <SelectItem value="first_visit">First Visit</SelectItem>
-                  <SelectItem value="comeback">Comeback</SelectItem>
-                  <SelectItem value="referral">Referral</SelectItem>
-                  <SelectItem value="seasonal">Seasonal</SelectItem>
-                  <SelectItem value="threshold">Threshold</SelectItem>
-                  <SelectItem value="bogo">Buy One Get One</SelectItem>
-                  <SelectItem value="bundle">Bundle</SelectItem>
-                </SelectContent>
-              </Select>
+          {/* Promo Type Selector Grid */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-sm">Promotion Type</h3>
+            <div className="grid grid-cols-3 gap-3">
+              {PROMO_TYPES.map((type) => (
+                <button
+                  key={type.value}
+                  onClick={() => setFormData({ ...formData, promo_type: type.value })}
+                  className={`p-3 rounded-lg border-2 text-center transition-all ${
+                    formData.promo_type === type.value
+                      ? 'border-primary bg-primary/5'
+                      : 'border-muted bg-muted/30 hover:border-muted-foreground'
+                  }`}
+                >
+                  <div className="text-2xl mb-1">{type.emoji}</div>
+                  <div className="font-medium text-sm">{type.label}</div>
+                  <div className="text-xs text-muted-foreground mt-1">{type.description}</div>
+                </button>
+              ))}
             </div>
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="promo-code">Promo Code (optional)</Label>
-              <Input
-                id="promo-code"
-                value={formData.promo_code || ''}
-                onChange={(e) => setFormData({ ...formData, promo_code: e.target.value })}
-                placeholder="e.g., HAPPY20"
-              />
-            </div>
+          {/* Type-Specific Fields */}
+          <div className="space-y-4 p-4 bg-muted/20 rounded-lg">
+            <h3 className="font-semibold text-sm">Type-Specific Settings</h3>
 
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="auto-apply"
-                checked={formData.auto_apply}
-                onCheckedChange={(checked) =>
-                  setFormData({ ...formData, auto_apply: checked as boolean })
-                }
-              />
-              <Label htmlFor="auto-apply" className="cursor-pointer">
-                Auto-apply at checkout
-              </Label>
-            </div>
-          </TabsContent>
+            {/* Happy Hour - Time fields */}
+            {formData.promo_type === 'happy_hour' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="time-start">Start time *</Label>
+                    <Input
+                      id="time-start"
+                      type="time"
+                      value={formData.active_time_start || ''}
+                      onChange={(e) => setFormData({ ...formData, active_time_start: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="time-end">End time *</Label>
+                    <Input
+                      id="time-end"
+                      type="time"
+                      value={formData.active_time_end || ''}
+                      onChange={(e) => setFormData({ ...formData, active_time_end: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <Label>Active Days</Label>
+                  <div className="grid grid-cols-7 gap-2">
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, idx) => (
+                      <div key={day} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`day-${idx}`}
+                          checked={formData.active_days?.includes(idx) ?? false}
+                          onCheckedChange={(checked) => {
+                            const days = formData.active_days || [];
+                            if (checked) {
+                              setFormData({ ...formData, active_days: [...days, idx].sort() });
+                            } else {
+                              setFormData({
+                                ...formData,
+                                active_days: days.filter((d) => d !== idx),
+                              });
+                            }
+                          }}
+                        />
+                        <Label htmlFor={`day-${idx}`} className="text-xs cursor-pointer">
+                          {day}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
-          {/* Discount Tab */}
-          <TabsContent value="discount" className="space-y-4 py-4">
-            <div className="space-y-3">
-              <Label>Discount Type</Label>
-              <RadioGroup value={formData.discount_type} onValueChange={(value) =>
-                setFormData({ ...formData, discount_type: value as DiscountType })
-              }>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="percentage" id="discount-percent" />
-                  <Label htmlFor="discount-percent" className="cursor-pointer">
-                    Percentage off
-                  </Label>
+            {/* Birthday - Window selector */}
+            {formData.promo_type === 'birthday' && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="birthday-window">Birthday Window *</Label>
+                  <Select
+                    value={formData.birthday_window}
+                    onValueChange={(value) =>
+                      setFormData({
+                        ...formData,
+                        birthday_window: value as 'day' | 'week' | 'month',
+                      })
+                    }
+                  >
+                    <SelectTrigger id="birthday-window">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="day">Birthday day only</SelectItem>
+                      <SelectItem value="week">Birthday week (±3 days)</SelectItem>
+                      <SelectItem value="month">Birthday month</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="fixed_amount" id="discount-fixed" />
-                  <Label htmlFor="discount-fixed" className="cursor-pointer">
-                    Fixed amount off
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="free_item" id="discount-free" />
-                  <Label htmlFor="discount-free" className="cursor-pointer">
-                    Free item
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="bogo" id="discount-bogo" />
-                  <Label htmlFor="discount-bogo" className="cursor-pointer">
-                    Buy one get one
-                  </Label>
-                </div>
-              </RadioGroup>
-            </div>
+                <p className="text-xs text-muted-foreground">
+                  Discount applies automatically on the customer's birthday within the selected window
+                </p>
+              </div>
+            )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="discount-value">Value</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                    {formData.discount_type === 'percentage' ? '%' : '$'}
-                  </span>
+            {/* Comeback - Days input */}
+            {formData.promo_type === 'comeback' && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="comeback-days">Days of inactivity *</Label>
                   <Input
-                    id="discount-value"
+                    id="comeback-days"
                     type="number"
-                    value={formData.discount_value || ''}
+                    min="1"
+                    value={formData.comeback_days || ''}
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        discount_value: e.target.value ? parseFloat(e.target.value) : null,
+                        comeback_days: e.target.value ? parseInt(e.target.value) : null,
                       })
                     }
-                    className="pl-8"
+                    placeholder="e.g., 30"
                   />
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Offer applies to customers who haven't placed an order in X days
+                </p>
               </div>
+            )}
 
-              {formData.discount_type === 'percentage' && (
+            {/* Threshold - Spend amount */}
+            {formData.promo_type === 'threshold' && (
+              <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="discount-max">Max discount ($)</Label>
+                  <Label htmlFor="threshold-amount">Minimum order amount *</Label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                       $
                     </span>
                     <Input
-                      id="discount-max"
+                      id="threshold-amount"
                       type="number"
                       step="0.01"
-                      value={formData.discount_max || ''}
+                      value={formData.threshold_amount || ''}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          discount_max: e.target.value ? parseFloat(e.target.value) : null,
+                          threshold_amount: e.target.value ? parseFloat(e.target.value) : null,
                         })
                       }
                       className="pl-8"
+                      placeholder="e.g., 50"
                     />
                   </div>
                 </div>
-              )}
+                <p className="text-xs text-muted-foreground">
+                  Reward applies when customer spends at or above this amount
+                </p>
+              </div>
+            )}
+
+            {/* BOGO - Buy/Get quantities */}
+            {formData.promo_type === 'bogo' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="bogo-buy">Buy quantity *</Label>
+                    <Input
+                      id="bogo-buy"
+                      type="number"
+                      min="1"
+                      value={formData.bogo_buy_quantity}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          bogo_buy_quantity: parseInt(e.target.value) || 1,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="bogo-get">Get quantity *</Label>
+                    <Input
+                      id="bogo-get"
+                      type="number"
+                      min="1"
+                      value={formData.bogo_get_quantity}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          bogo_get_quantity: parseInt(e.target.value) || 1,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Buy X of selected item, get Y free
+                </p>
+              </div>
+            )}
+
+            {/* First Visit, Referral, Seasonal, Bundle - Generic message */}
+            {['first_visit', 'referral', 'seasonal', 'bundle'].includes(formData.promo_type) && (
+              <div className="text-sm text-muted-foreground">
+                Configure discount settings and limits in the sections below
+              </div>
+            )}
+          </div>
+
+          {/* Discount Configuration */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-sm">Discount Configuration</h3>
+
+            <div className="space-y-3">
+              <Label>Discount Type *</Label>
+              <RadioGroup value={formData.discount_type} onValueChange={(value) =>
+                setFormData({ ...formData, discount_type: value as DiscountType })
+              }>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="percentage" id="discount-percent" />
+                  <Label htmlFor="discount-percent" className="cursor-pointer font-normal">
+                    Percentage off
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="fixed_amount" id="discount-fixed" />
+                  <Label htmlFor="discount-fixed" className="cursor-pointer font-normal">
+                    Fixed amount off
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="free_item" id="discount-free" />
+                  <Label htmlFor="discount-free" className="cursor-pointer font-normal">
+                    Free item
+                  </Label>
+                </div>
+              </RadioGroup>
             </div>
+
+            {formData.discount_type !== 'free_item' && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="discount-value">Discount Value *</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                      {formData.discount_type === 'percentage' ? '%' : '$'}
+                    </span>
+                    <Input
+                      id="discount-value"
+                      type="number"
+                      step={formData.discount_type === 'percentage' ? '1' : '0.01'}
+                      value={formData.discount_value || ''}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          discount_value: e.target.value ? parseFloat(e.target.value) : null,
+                        })
+                      }
+                      className="pl-8"
+                      placeholder="e.g., 20"
+                    />
+                  </div>
+                </div>
+
+                {formData.discount_type === 'percentage' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="discount-max">Max discount ($)</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                        $
+                      </span>
+                      <Input
+                        id="discount-max"
+                        type="number"
+                        step="0.01"
+                        value={formData.discount_max || ''}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            discount_max: e.target.value ? parseFloat(e.target.value) : null,
+                          })
+                        }
+                        className="pl-8"
+                        placeholder="e.g., 50"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {formData.discount_type === 'free_item' && (
+              <div className="space-y-2">
+                <Label>Select Free Item *</Label>
+                {menuItems && menuItems.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                      <Input
+                        placeholder="Search items..."
+                        value={menuSearchQuery}
+                        onChange={(e) => setMenuSearchQuery(e.target.value)}
+                        className="pl-8"
+                      />
+                    </div>
+                    <div className="border rounded-lg bg-muted/30 max-h-48 overflow-y-auto">
+                      {filteredMenuItems.length > 0 ? (
+                        <div className="divide-y">
+                          {filteredMenuItems.map((item) => (
+                            <button
+                              key={item.id}
+                              onClick={() => {
+                                setFormData({ ...formData, free_item_id: item.id });
+                                setMenuSearchQuery('');
+                              }}
+                              className={`w-full text-left px-4 py-3 text-sm hover:bg-muted transition-colors ${
+                                formData.free_item_id === item.id
+                                  ? 'bg-primary/10 font-medium'
+                                  : ''
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span>{item.name}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  ${item.price.toFixed(2)}
+                                </span>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground text-center py-4">
+                          No items found
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-muted/50 rounded border text-sm text-muted-foreground">
+                    No menu items available
+                  </div>
+                )}
+                {selectedMenuItem && (
+                  <div className="p-3 bg-primary/5 border border-primary/20 rounded text-sm">
+                    <div className="font-medium">{selectedMenuItem.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      Price: ${selectedMenuItem.price.toFixed(2)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="min-order">Minimum order amount</Label>
@@ -389,13 +651,153 @@ export function PromotionDialog({
                     })
                   }
                   className="pl-8"
+                  placeholder="Leave blank for no minimum"
                 />
               </div>
             </div>
-          </TabsContent>
+          </div>
 
-          {/* Schedule & Limits Tab */}
-          <TabsContent value="schedule" className="space-y-4 py-4">
+          {/* Application Mode */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-sm">How Will This Be Applied?</h3>
+
+            <RadioGroup value={formData.application_mode} onValueChange={(value) =>
+              setFormData({
+                ...formData,
+                application_mode: value as 'auto_apply' | 'promo_code' | 'manual_only',
+              })
+            }>
+              <div className="p-3 border rounded-lg space-y-2">
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="auto_apply" id="mode-auto" />
+                  <Label htmlFor="mode-auto" className="cursor-pointer font-normal">
+                    Auto-apply when eligible
+                  </Label>
+                </div>
+                <p className="text-xs text-muted-foreground ml-6">
+                  Automatically applied at checkout when conditions are met
+                </p>
+              </div>
+
+              <div className="p-3 border rounded-lg space-y-2">
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="promo_code" id="mode-code" />
+                  <Label htmlFor="mode-code" className="cursor-pointer font-normal">
+                    Require promo code
+                  </Label>
+                </div>
+                {formData.application_mode === 'promo_code' && (
+                  <div className="ml-6 mt-2 space-y-2">
+                    <Label htmlFor="promo-code-input" className="text-sm">
+                      Promo Code *
+                    </Label>
+                    <Input
+                      id="promo-code-input"
+                      value={formData.promo_code || ''}
+                      onChange={(e) => setFormData({ ...formData, promo_code: e.target.value })}
+                      placeholder="e.g., SAVE20"
+                      className="text-sm"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="p-3 border rounded-lg space-y-2">
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="manual_only" id="mode-manual" />
+                  <Label htmlFor="mode-manual" className="cursor-pointer font-normal">
+                    Staff must manually apply
+                  </Label>
+                </div>
+                <p className="text-xs text-muted-foreground ml-6">
+                  Only staff can apply this at the point of sale
+                </p>
+              </div>
+            </RadioGroup>
+          </div>
+
+          {/* Apply To Section */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-sm">What Does This Apply To?</h3>
+
+            <div className="space-y-3">
+              <Label>Applies To</Label>
+              <RadioGroup value={formData.applies_to} onValueChange={(value) =>
+                setFormData({
+                  ...formData,
+                  applies_to: value as 'order' | 'item' | 'category',
+                })
+              }>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="order" id="applies-order" />
+                  <Label htmlFor="applies-order" className="cursor-pointer font-normal">
+                    Entire order
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="item" id="applies-item" />
+                  <Label htmlFor="applies-item" className="cursor-pointer font-normal">
+                    Specific items
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="category" id="applies-category" />
+                  <Label htmlFor="applies-category" className="cursor-pointer font-normal">
+                    Specific categories
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            {formData.applies_to === 'item' && (
+              <div className="space-y-2">
+                <Label htmlFor="target-items">Target Items (comma-separated IDs)</Label>
+                <Input
+                  id="target-items"
+                  placeholder="e.g., item-1, item-2, item-3"
+                  value={formData.target_item_ids?.join(', ') || ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      target_item_ids: e.target.value
+                        ? e.target.value.split(',').map((id) => id.trim())
+                        : null,
+                    })
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave empty to apply to all items
+                </p>
+              </div>
+            )}
+
+            {formData.applies_to === 'category' && (
+              <div className="space-y-2">
+                <Label htmlFor="target-categories">Target Categories (comma-separated IDs)</Label>
+                <Input
+                  id="target-categories"
+                  placeholder="e.g., cat-1, cat-2, cat-3"
+                  value={formData.target_categories?.join(', ') || ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      target_categories: e.target.value
+                        ? e.target.value.split(',').map((id) => id.trim())
+                        : null,
+                    })
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave empty to apply to all categories
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Schedule & Limits */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-sm">Schedule & Limits</h3>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="starts-at">Start date</Label>
@@ -423,27 +825,6 @@ export function PromotionDialog({
                       ends_at: e.target.value ? `${e.target.value}T23:59:59Z` : null,
                     })
                   }
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="time-start">Start time (optional)</Label>
-                <Input
-                  id="time-start"
-                  type="time"
-                  value={formData.active_time_start || ''}
-                  onChange={(e) => setFormData({ ...formData, active_time_start: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="time-end">End time (optional)</Label>
-                <Input
-                  id="time-end"
-                  type="time"
-                  value={formData.active_time_end || ''}
-                  onChange={(e) => setFormData({ ...formData, active_time_end: e.target.value })}
                 />
               </div>
             </div>
@@ -496,14 +877,35 @@ export function PromotionDialog({
                 placeholder="Leave blank for unlimited"
               />
             </div>
-          </TabsContent>
-        </Tabs>
+          </div>
+
+          {/* Active Status */}
+          <div className="flex items-center gap-2 p-3 bg-muted/20 rounded-lg">
+            <Checkbox
+              id="is-active"
+              checked={formData.is_active}
+              onCheckedChange={(checked) =>
+                setFormData({ ...formData, is_active: checked as boolean })
+              }
+            />
+            <Label htmlFor="is-active" className="cursor-pointer font-normal">
+              Active promotion (enable immediately)
+            </Label>
+          </div>
+        </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={handleClose}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={isLoading || !formData.name}>
+          <Button
+            onClick={handleSubmit}
+            disabled={
+              isLoading ||
+              !formData.name ||
+              (formData.application_mode === 'promo_code' && !formData.promo_code)
+            }
+          >
             {isLoading ? 'Saving...' : isEditing ? 'Update Promotion' : 'Create Promotion'}
           </Button>
         </DialogFooter>
