@@ -62,6 +62,7 @@ import {
   MonitorPlay,
   Flame,
   Mail,
+  Gift,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -522,6 +523,17 @@ function MerchantSidebar() {
                       <Link href="/dashboard/settings/receipt-templates">
                         <Receipt className="h-3 w-3" />
                         <span>Receipt Templates</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={pathname === "/dashboard/settings/loyalty"}
+                    >
+                      <Link href="/dashboard/settings/loyalty">
+                        <Gift className="h-3 w-3" />
+                        <span>Loyalty & Rewards</span>
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
