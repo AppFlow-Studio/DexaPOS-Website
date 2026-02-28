@@ -38,12 +38,12 @@ export async function GetCustomerLoyaltyEnrollments(customerId: string) {
 
   const supabase = createServiceRoleClient();
 
-  // Get all loyalty transactions for this customer to determine enrollments
+  // Get active enrollments with program details
   const { data, error } = await supabase
-    .from("loyalty_transactions")
+    .from("loyalty_enrollments")
     .select(
       `
-      program_id,
+      *,
       loyalty_programs!inner(
         id,
         merchant_id,
@@ -52,27 +52,25 @@ export async function GetCustomerLoyaltyEnrollments(customerId: string) {
         program_type,
         reward_type,
         reward_value,
-        reward_description
+        reward_description,
+        points_redemption_threshold,
+        visits_required,
+        punches_required,
+        display_color,
+        display_icon
       )
       `
     )
     .eq("customer_id", customerId)
-    .order("created_at", { ascending: false });
+    .eq("is_active", true)
+    .order("enrolled_at", { ascending: false });
 
   if (error) {
     console.error("[GetCustomerLoyaltyEnrollments]", error);
     return [];
   }
 
-  // Deduplicate by program_id
-  const uniquePrograms = new Map();
-  data?.forEach((item: any) => {
-    if (!uniquePrograms.has(item.program_id)) {
-      uniquePrograms.set(item.program_id, item.loyalty_programs);
-    }
-  });
-
-  return Array.from(uniquePrograms.values());
+  return data || [];
 }
 
 /**
@@ -86,22 +84,20 @@ export async function GetCustomerLoyaltyBalance(
 
   const supabase = createServiceRoleClient();
 
-  // Get the most recent transaction to get the running balance
+  // Check loyalty_enrollments for current points balance
   const { data, error } = await supabase
-    .from("loyalty_transactions")
-    .select("balance_after")
+    .from("loyalty_enrollments")
+    .select("current_points")
     .eq("customer_id", customerId)
     .eq("program_id", programId)
-    .order("created_at", { ascending: false })
-    .limit(1)
     .single();
 
   if (error || !data) {
-    // No transactions found, return 0
+    // No enrollment found, return 0
     return 0;
   }
 
-  return data.balance_after || 0;
+  return data.current_points || 0;
 }
 
 /**
@@ -116,18 +112,18 @@ export async function GetCustomerLoyaltyLifetimePoints(
   const supabase = createServiceRoleClient();
 
   const { data, error } = await supabase
-    .from("loyalty_transactions")
-    .select("points_amount")
+    .from("loyalty_enrollments")
+    .select("lifetime_points")
     .eq("customer_id", customerId)
     .eq("program_id", programId)
-    .eq("transaction_type", "earn");
+    .single();
 
   if (error) {
     console.error("[GetCustomerLoyaltyLifetimePoints]", error);
     return 0;
   }
 
-  return data?.reduce((sum, tx) => sum + tx.points_amount, 0) || 0;
+  return data?.lifetime_points || 0;
 }
 
 /**
@@ -191,6 +187,7 @@ export async function GetCustomerLoyaltyTransactionHistory(
 
 /**
  * Add points to customer's loyalty balance (admin action)
+ * Calls the loyalty_manual_adjust RPC function
  */
 export async function AddLoyaltyPoints({
   customerId,
@@ -211,27 +208,30 @@ export async function AddLoyaltyPoints({
 
   const supabase = createServiceRoleClient();
 
-  // Get current balance
-  const currentBalance = await GetCustomerLoyaltyBalance(customerId, programId);
-  const newBalance = Math.max(0, currentBalance + pointsAmount);
-
-  const { data, error } = await supabase
-    .from("loyalty_transactions")
-    .insert({
-      customer_id: customerId,
-      program_id: programId,
-      merchant_id: merchantId,
-      transaction_type: "adjust",
-      points_amount: pointsAmount,
-      balance_after: newBalance,
-      description,
-      staff_id: staffId || null,
-    })
-    .select()
+  // Get enrollment record to get enrollment_id
+  const { data: enrollment, error: enrollmentError } = await supabase
+    .from("loyalty_enrollments")
+    .select("id")
+    .eq("customer_id", customerId)
+    .eq("program_id", programId)
     .single();
 
+  if (enrollmentError || !enrollment) {
+    console.error("[AddLoyaltyPoints] Enrollment not found", enrollmentError);
+    return null;
+  }
+
+  // Call the loyalty_manual_adjust RPC function
+  const { data, error } = await supabase.rpc("loyalty_manual_adjust", {
+    p_enrollment_id: enrollment.id,
+    p_adjustment_type: "points",
+    p_amount: pointsAmount,
+    p_reason: description,
+    p_staff_id: staffId || null,
+  });
+
   if (error) {
-    console.error("[AddLoyaltyPoints]", error);
+    console.error("[AddLoyaltyPoints] RPC error", error);
     return null;
   }
 
@@ -287,30 +287,36 @@ export async function EnrollInLoyaltyProgram({
 
   const supabase = createServiceRoleClient();
 
-  // Check if already enrolled (has any transaction)
-  const { data: existingTx } = await supabase
-    .from("loyalty_transactions")
+  // Check if already enrolled
+  const { data: existingEnrollment } = await supabase
+    .from("loyalty_enrollments")
     .select("id")
     .eq("customer_id", customerId)
     .eq("program_id", programId)
     .limit(1);
 
-  if (existingTx && existingTx.length > 0) {
+  if (existingEnrollment && existingEnrollment.length > 0) {
     // Already enrolled
     return { id: programId, already_enrolled: true };
   }
 
-  // Create initial enrollment transaction (0 points)
+  // Create enrollment record in loyalty_enrollments
   const { data, error } = await supabase
-    .from("loyalty_transactions")
+    .from("loyalty_enrollments")
     .insert({
       customer_id: customerId,
       program_id: programId,
       merchant_id: merchantId,
-      transaction_type: "earn",
-      points_amount: 0,
-      balance_after: 0,
-      description: "Enrollment in loyalty program",
+      current_points: 0,
+      current_punches: 0,
+      current_visits: 0,
+      lifetime_points: 0,
+      lifetime_punches: 0,
+      lifetime_visits: 0,
+      total_rewards_earned: 0,
+      total_rewards_redeemed: 0,
+      total_reward_value: 0,
+      is_active: true,
     })
     .select()
     .single();
@@ -405,7 +411,7 @@ export async function EarnLoyaltyPointsOnOrder({
   for (const program of programs) {
     // Check if customer is enrolled
     const { data: enrollmentCheck } = await supabase
-      .from("loyalty_transactions")
+      .from("loyalty_enrollments")
       .select("id")
       .eq("customer_id", customerId)
       .eq("program_id", program.id)
@@ -417,8 +423,8 @@ export async function EarnLoyaltyPointsOnOrder({
 
     // Check if order meets minimum threshold
     if (
-      program.min_order_to_earn &&
-      orderAmount < Number(program.min_order_to_earn)
+      program.min_order_amount &&
+      orderAmount < Number(program.min_order_amount)
     ) {
       continue;
     }
@@ -429,32 +435,28 @@ export async function EarnLoyaltyPointsOnOrder({
       pointsEarned = Math.floor(
         orderAmount * Number(program.points_per_dollar || 1)
       );
-      if (program.points_per_visit) {
-        pointsEarned += program.points_per_visit;
-      }
     }
 
     if (pointsEarned === 0) continue;
 
-    // Get current balance
-    const currentBalance = await GetCustomerLoyaltyBalance(
-      customerId,
-      program.id
-    );
+    // Get current balance and enrollment
+    const enrollment = enrollmentCheck[0];
+    const currentBalance = enrollment.current_points || 0;
     const newBalance = currentBalance + pointsEarned;
 
-    // Create transaction
+    // Create transaction with enrollment_id
     const { data, error } = await supabase
       .from("loyalty_transactions")
       .insert({
         customer_id: customerId,
         program_id: program.id,
         merchant_id: merchantId,
+        enrollment_id: enrollment.id,
         location_id: locationId,
         order_id: orderId,
-        transaction_type: "earn",
-        points_amount: pointsEarned,
-        balance_after: newBalance,
+        transaction_type: "earn_points",
+        points_delta: pointsEarned,
+        balance_points: newBalance,
         description: `Earned on Order #${orderId.slice(0, 8)}`,
       })
       .select()
@@ -466,9 +468,10 @@ export async function EarnLoyaltyPointsOnOrder({
       // Check if customer earned a reward
       if (program.reward_type && program.reward_value) {
         // For points-based programs, create reward if points exceed threshold
-        // This is simplified - in production you'd check the actual reward threshold
-        if (newBalance >= 500) {
-          // Example threshold
+        if (
+          program.points_redemption_threshold &&
+          newBalance >= Number(program.points_redemption_threshold)
+        ) {
           const { data: existingReward } = await supabase
             .from("loyalty_rewards")
             .select("id")
@@ -482,13 +485,14 @@ export async function EarnLoyaltyPointsOnOrder({
               customer_id: customerId,
               program_id: program.id,
               merchant_id: merchantId,
+              enrollment_id: enrollment.id,
               reward_type: program.reward_type,
               reward_value: program.reward_value,
               reward_description: program.reward_description,
               status: "available",
-              expires_at: program.points_expiry_days
+              expires_at: program.reward_expiry_days
                 ? new Date(
-                    Date.now() + program.points_expiry_days * 24 * 60 * 60 * 1000
+                    Date.now() + program.reward_expiry_days * 24 * 60 * 60 * 1000
                   ).toISOString()
                 : null,
             });
@@ -499,4 +503,77 @@ export async function EarnLoyaltyPointsOnOrder({
   }
 
   return results;
+}
+
+/**
+ * Void a loyalty reward (mark as voided instead of redeemed)
+ */
+export async function VoidLoyaltyReward({
+  rewardId,
+  reason,
+}: {
+  rewardId: string;
+  reason?: string;
+}) {
+  if (!rewardId) return null;
+
+  const supabase = createServiceRoleClient();
+
+  const { data, error } = await supabase
+    .from("loyalty_rewards")
+    .update({
+      status: "voided",
+      voided_at: new Date().toISOString(),
+      voided_reason: reason || null,
+    })
+    .eq("id", rewardId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[VoidLoyaltyReward]", error);
+    return null;
+  }
+
+  return data;
+}
+
+/**
+ * Get customer's promotion usage history
+ */
+export async function GetCustomerPromotionUsage(
+  customerId: string,
+  merchantId: string
+) {
+  if (!customerId || !merchantId) return [];
+
+  const supabase = createServiceRoleClient();
+
+  const { data, error } = await supabase
+    .from("promotion_usage")
+    .select(
+      `
+      id,
+      created_at,
+      discount_applied,
+      order_id,
+      promotions!inner(
+        id,
+        name,
+        discount_type,
+        discount_value
+      )
+      `
+    )
+    .eq("customer_id", customerId)
+    .eq("merchant_id", merchantId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) {
+    console.error("[GetCustomerPromotionUsage]", error);
+    return [];
+  }
+
+  return data || [];
 }

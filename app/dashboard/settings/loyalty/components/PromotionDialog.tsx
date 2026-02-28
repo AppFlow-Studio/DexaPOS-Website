@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { Promotion, PromotionInsert } from '../../actions/loyalty-programs';
+import type { Promotion, PromotionInsert } from '../../../actions/loyalty-programs';
 
 interface PromotionDialogProps {
   open: boolean;

@@ -7,7 +7,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { LogAuditEvent } from "./audit-logs";
-import type { Database } from "@/types/database.types";
+import type { Database } from "@/database.types";
 
 // ============================================================================
 // Types

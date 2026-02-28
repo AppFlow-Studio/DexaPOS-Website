@@ -29,9 +29,24 @@ BEGIN
     FROM orders
     WHERE id = p_order_id;
 
-    -- Only process if order is completed and has a customer
-    IF v_status != 'completed' OR v_customer_id IS NULL THEN
-        RETURN v_result;
+    -- Debug: return status info if order not found or not completed
+    IF v_status IS NULL THEN
+        RETURN jsonb_build_object('error', 'Order not found', 'order_id', p_order_id);
+    END IF;
+
+    IF v_status != 'completed' THEN
+        RETURN jsonb_build_object(
+            'error', 'Order not completed',
+            'status', v_status,
+            'order_id', p_order_id
+        );
+    END IF;
+
+    IF v_customer_id IS NULL THEN
+        RETURN jsonb_build_object(
+            'error', 'Order has no customer',
+            'order_id', p_order_id
+        );
     END IF;
 
     -- Loop through active programs

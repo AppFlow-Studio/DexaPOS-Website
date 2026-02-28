@@ -10,6 +10,8 @@ import {
   RedeemLoyaltyReward,
   EnrollInLoyaltyProgram,
   GetLoyaltyProgramWithCustomerContext,
+  VoidLoyaltyReward,
+  GetCustomerPromotionUsage,
 } from "@/app/dashboard/actions/loyalty";
 
 /**
@@ -160,14 +162,22 @@ export function useAddLoyaltyPoints() {
   return useMutation({
     mutationFn: AddLoyaltyPoints,
     onSuccess: (data, variables) => {
+      // Invalidate all customer loyalty queries to ensure UI updates
+      queryClient.invalidateQueries({
+        queryKey: ["customer-loyalty-enrollments", variables.customerId],
+        refetchType: "active",
+      });
       queryClient.invalidateQueries({
         queryKey: ["customer-loyalty-balance", variables.customerId],
+        refetchType: "active",
       });
       queryClient.invalidateQueries({
         queryKey: ["customer-loyalty-history", variables.customerId],
+        refetchType: "active",
       });
       queryClient.invalidateQueries({
         queryKey: ["customer-loyalty-program", variables.customerId],
+        refetchType: "active",
       });
     },
   });
@@ -188,5 +198,39 @@ export function useRedeemLoyaltyReward() {
         });
       }
     },
+  });
+}
+
+/**
+ * Mutation: Void loyalty reward
+ */
+export function useVoidLoyaltyReward() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: VoidLoyaltyReward,
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["customer-loyalty-rewards"],
+      });
+    },
+  });
+}
+
+/**
+ * Get customer's promotion usage history
+ */
+export function useCustomerPromotionUsage(
+  customerId: string | null,
+  merchantId: string | null
+) {
+  return useQuery({
+    queryKey: ["customer-promotion-usage", customerId, merchantId],
+    queryFn: async () => {
+      if (!customerId || !merchantId) return [];
+      return GetCustomerPromotionUsage(customerId, merchantId);
+    },
+    enabled: !!customerId && !!merchantId,
+    staleTime: 1000 * 60 * 5,
   });
 }

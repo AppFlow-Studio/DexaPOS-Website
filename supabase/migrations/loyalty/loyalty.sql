@@ -100,6 +100,7 @@ CREATE TABLE loyalty_enrollments (
   enrolled_at         TIMESTAMP WITH TIME ZONE DEFAULT now(),
   last_earn_at        TIMESTAMP WITH TIME ZONE,          -- Last time they earned (for cooldown)
   last_redeem_at      TIMESTAMP WITH TIME ZONE,
+  updated_at          TIMESTAMP WITH TIME ZONE DEFAULT now(),
 
   is_active           BOOLEAN DEFAULT true,              -- Can be paused/unpaused
 
