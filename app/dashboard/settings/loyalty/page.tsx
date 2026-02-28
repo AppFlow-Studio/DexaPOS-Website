@@ -17,6 +17,7 @@ import { ProgramCard } from './components/ProgramCard';
 import { PromotionCard } from './components/PromotionCard';
 import { ProgramWizard } from './components/ProgramWizard';
 import { PromotionDialog } from './components/PromotionDialog';
+import { ProgramAnalyticsSheet } from './components/ProgramAnalyticsSheet';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Empty } from '@/components/ui/empty';
@@ -73,6 +74,8 @@ export default function LoyaltySettingsPage() {
   const [isProgramWizardOpen, setIsProgramWizardOpen] = useState(false);
   const [editingProgram, setEditingProgram] = useState<LoyaltyProgram | null>(null);
   const [programToDelete, setProgramToDelete] = useState<LoyaltyProgram | null>(null);
+  const [analyticsProgram, setAnalyticsProgram] = useState<LoyaltyProgram | null>(null);
+  const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
 
   const [isPromotionDialogOpen, setIsPromotionDialogOpen] = useState(false);
   const [editingPromotion, setEditingPromotion] = useState<Promotion | null>(null);
@@ -111,6 +114,11 @@ export default function LoyaltySettingsPage() {
   const handleEditProgram = (program: LoyaltyProgram) => {
     setEditingProgram(program);
     setIsProgramWizardOpen(true);
+  };
+
+  const handleAnalyticsProgram = (program: LoyaltyProgram) => {
+    setAnalyticsProgram(program);
+    setIsAnalyticsOpen(true);
   };
 
   const handleDeleteProgramClick = (program: LoyaltyProgram) => {
@@ -306,6 +314,7 @@ export default function LoyaltySettingsPage() {
                 onEdit={handleEditProgram}
                 onDelete={handleDeleteProgramClick}
                 onToggle={handleToggleProgram}
+                onAnalytics={handleAnalyticsProgram}
                 isToggling={toggleProgramMutation.isPending}
               />
             ))}
@@ -378,6 +387,14 @@ export default function LoyaltySettingsPage() {
           </div>
         )}
       </div>
+
+      {/* Program Analytics Sheet */}
+      <ProgramAnalyticsSheet
+        open={isAnalyticsOpen}
+        onOpenChange={setIsAnalyticsOpen}
+        clerkOrgId={clerkOrgId}
+        programId={analyticsProgram?.id}
+      />
 
       {/* Program Wizard Dialog */}
       <ProgramWizard

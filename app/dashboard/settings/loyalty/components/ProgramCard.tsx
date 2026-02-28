@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Star, Coffee, Hash, MoreVertical, Edit2, Trash2 } from 'lucide-react';
+import { Star, Coffee, Hash, MoreVertical, Edit2, Trash2, BarChart3 } from 'lucide-react';
 import type { LoyaltyProgram } from '../../actions/loyalty-programs';
 
 interface ProgramCardProps {
@@ -19,6 +19,7 @@ interface ProgramCardProps {
   onEdit: (program: LoyaltyProgram) => void;
   onDelete: (program: LoyaltyProgram) => void;
   onToggle: (programId: string, isActive: boolean) => void;
+  onAnalytics?: (program: LoyaltyProgram) => void;
   isToggling?: boolean;
 }
 
@@ -27,6 +28,7 @@ export function ProgramCard({
   onEdit,
   onDelete,
   onToggle,
+  onAnalytics,
   isToggling = false,
 }: ProgramCardProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -136,6 +138,15 @@ export function ProgramCard({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {onAnalytics && (
+                <DropdownMenuItem onClick={() => {
+                  onAnalytics(program);
+                  setIsOpen(false);
+                }}>
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  Analytics
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={() => {
                 onEdit(program);
                 setIsOpen(false);

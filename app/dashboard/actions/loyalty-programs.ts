@@ -744,3 +744,172 @@ export async function DeletePromotion(clerkOrgId: string, promotionId: string) {
     };
   }
 }
+
+// ============================================================================
+// Analytics: Get loyalty program analytics and insights
+// ============================================================================
+
+export interface ProgramAnalytics {
+  program_id: string;
+  program_name: string;
+  program_type: string;
+  total_members: number;
+  active_this_month: number;
+  rewards_given: number;
+  total_savings: number;
+  active_rate: number;
+  alerts: {
+    rewards_expiring_week: number;
+    inactive_customers: number;
+  };
+  top_customers: Array<{
+    customer_id: string;
+    customer_name: string;
+    phone: string;
+    lifetime_value: number;
+    rewards_earned: number;
+    total_savings: number;
+  }>;
+}
+
+export async function GetProgramAnalytics(
+  clerkOrgId: string,
+  programId: string
+): Promise<ProgramAnalytics | null> {
+  if (!clerkOrgId || !programId) return null;
+
+  try {
+    const supabase = createServerSupabaseClient();
+    const merchantId = await getMerchantId(clerkOrgId);
+    if (!merchantId) return null;
+
+    // Get program details
+    const { data: programData } = await supabase
+      .from("loyalty_programs")
+      .select("id, name, program_type")
+      .eq("id", programId)
+      .eq("merchant_id", merchantId)
+      .single();
+
+    if (!programData) return null;
+
+    // KPI: Members for this program
+    const { data: kpiData } = await supabase
+      .from("loyalty_enrollments")
+      .select("id, last_earn_at, total_rewards_earned, total_reward_value")
+      .eq("program_id", programId)
+      .eq("merchant_id", merchantId)
+      .eq("is_active", true);
+
+    const total_members = kpiData?.length || 0;
+    const active_this_month = (kpiData || []).filter((e) => {
+      if (!e.last_earn_at) return false;
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      return new Date(e.last_earn_at) >= thirtyDaysAgo;
+    }).length;
+    const rewards_given = (kpiData || []).reduce(
+      (sum, e) => sum + (e.total_rewards_earned || 0),
+      0
+    );
+
+    // Total savings: SUM of REDEEMED rewards only
+    const { data: redeemedRewardsData } = await supabase
+      .from("loyalty_rewards")
+      .select("reward_value")
+      .eq("program_id", programId)
+      .eq("status", "redeemed");
+
+    const total_savings = (redeemedRewardsData || []).reduce(
+      (sum, r) => sum + Number(r.reward_value || 0),
+      0
+    );
+
+    // Alerts: Rewards expiring this week
+    const weekFromNow = new Date();
+    weekFromNow.setDate(weekFromNow.getDate() + 7);
+    const { data: expiringData } = await supabase
+      .from("loyalty_rewards")
+      .select("id", { count: "exact" })
+      .eq("program_id", programId)
+      .eq("status", "available")
+      .gte("expires_at", new Date().toISOString())
+      .lte("expires_at", weekFromNow.toISOString());
+
+    const rewards_expiring_week = expiringData?.length || 0;
+
+    // Alerts: Inactive customers (no earn in 30 days)
+    const thirtyDaysAgoStr = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: inactiveData } = await supabase
+      .from("loyalty_enrollments")
+      .select("id", { count: "exact" })
+      .eq("program_id", programId)
+      .eq("merchant_id", merchantId)
+      .eq("is_active", true)
+      .or(`last_earn_at.is.null,last_earn_at.lt.${thirtyDaysAgoStr}`);
+
+    const inactive_customers = inactiveData?.length || 0;
+
+    // Top customers: with REDEEMED rewards value (not total_reward_value)
+    const { data: topCustomersBaseData } = await supabase
+      .from("loyalty_enrollments")
+      .select("id, customer_id, total_rewards_earned, customers!inner(id, name, phone)")
+      .eq("program_id", programId)
+      .eq("merchant_id", merchantId)
+      .eq("is_active", true);
+
+    // For each customer, calculate their actual redeemed value
+    const topCustomersData = await Promise.all(
+      (topCustomersBaseData || []).map(async (enrollment: any) => {
+        const { data: customerRewards } = await supabase
+          .from("loyalty_rewards")
+          .select("reward_value")
+          .eq("enrollment_id", enrollment.id)
+          .eq("status", "redeemed");
+
+        const redeemed_value = (customerRewards || []).reduce(
+          (sum: number, r: any) => sum + Number(r.reward_value || 0),
+          0
+        );
+
+        return {
+          ...enrollment,
+          lifetime_value: redeemed_value,
+          total_savings: redeemed_value,
+        };
+      })
+    );
+
+    // Sort by lifetime_value and take top 5
+    const top_customers = topCustomersData
+      .sort((a: any, b: any) => b.lifetime_value - a.lifetime_value)
+      .slice(0, 5)
+      .map((enrollment: any) => ({
+        customer_id: enrollment.customer_id,
+        customer_name: enrollment.customers?.name || "Unknown",
+        phone: enrollment.customers?.phone || "",
+        lifetime_value: enrollment.lifetime_value,
+        rewards_earned: enrollment.total_rewards_earned || 0,
+        total_savings: enrollment.total_savings,
+      }));
+
+    return {
+      program_id: programData.id,
+      program_name: programData.name,
+      program_type: programData.program_type,
+      total_members,
+      active_this_month,
+      rewards_given,
+      total_savings,
+      active_rate: total_members > 0 ? (active_this_month / total_members) * 100 : 0,
+      alerts: {
+        rewards_expiring_week,
+        inactive_customers,
+      },
+      top_customers,
+    };
+  } catch (error) {
+    console.error("[GetProgramAnalytics] Exception:", error);
+    return null;
+  }
+}

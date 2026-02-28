@@ -18,6 +18,7 @@ import {
   UpdatePromotion,
   TogglePromotion,
   DeletePromotion,
+  GetProgramAnalytics,
   type LoyaltyProgram,
   type LoyaltyProgramInsert,
   type LoyaltyProgramUpdate,
@@ -25,6 +26,7 @@ import {
   type PromotionInsert,
   type PromotionUpdate,
   type ProgramWithStats,
+  type ProgramAnalytics,
 } from '../../../actions/loyalty-programs';
 
 // ============================================================================
@@ -346,5 +348,29 @@ export function useDeletePromotion() {
     onError: (error: Error) => {
       toast.error(error.message || 'Failed to delete promotion');
     },
+  });
+}
+
+// ============================================================================
+// ANALYTICS - Queries
+// ============================================================================
+
+/**
+ * Query hook to fetch loyalty program analytics for a specific program
+ */
+export function useProgramAnalytics(clerkOrgId: string | undefined, programId: string | undefined) {
+  return useQuery({
+    queryKey: ['program-analytics', clerkOrgId, programId],
+    queryFn: async () => {
+      if (!clerkOrgId || !programId) throw new Error('clerkOrgId and programId are required');
+      const result = await GetProgramAnalytics(clerkOrgId, programId);
+      if (!result) {
+        throw new Error('Failed to fetch program analytics');
+      }
+      return result;
+    },
+    enabled: !!clerkOrgId && !!programId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
   });
 }
