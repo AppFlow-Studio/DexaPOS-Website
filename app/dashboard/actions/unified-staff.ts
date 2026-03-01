@@ -350,19 +350,10 @@ export async function CreateClerkUserDirectly(
     }
 
     const merchantId = merchant.id;
-    // 1. Generate permanent password
+
+    // 1. Generate password and PIN upfront
     const tempPassword = generateSecurePassword(12);
 
-    // 2. Prepare location assignments for publicMetadata
-    const locationAssignments = formData.location_ids.map((locationId) => ({
-      locationId: locationId,
-      roleCode: formData.role_code,
-      isPrimaryLocation: locationId === formData.primary_location_id,
-      hourlyRate: formData.hourly_rate,
-      employmentType: formData.employment_type,
-    }));
-
-    // 3. Generate PIN if needed
     let hashedPin: string | null = null;
     let generatedPin: string | undefined;
 
@@ -373,12 +364,17 @@ export async function CreateClerkUserDirectly(
       hashedPin = await bcrypt.hash(formData.pin_code, 10);
     }
 
-    // Add PIN to location assignments if provided
-    const locationAssignmentsWithPin = hashedPin
-      ? locationAssignments.map((la) => ({ ...la, pinCode: hashedPin }))
-      : locationAssignments;
+    // 2. Prepare location assignments for publicMetadata (webhook fallback)
+    const locationAssignments = formData.location_ids.map((locationId) => ({
+      locationId,
+      roleCode: formData.role_code,
+      isPrimaryLocation: locationId === formData.primary_location_id,
+      hourlyRate: formData.hourly_rate,
+      employmentType: formData.employment_type,
+      pinCode: hashedPin,
+    }));
 
-    // 4. Create Clerk user with password
+    // 3. Create Clerk user with password
     const clerk = await clerkClient();
     const clerkUser = await clerk.users.createUser({
       emailAddress: [formData.email],
@@ -387,11 +383,11 @@ export async function CreateClerkUserDirectly(
       lastName: formData.last_name,
       phoneNumber: formData?.phone ? [formData.phone] : undefined,
       publicMetadata: {
-        creationType: "direct", // Mark as direct creation
+        creationType: "direct",
         organizationId: clerkOrgId,
-        merchantId: merchantId,
+        merchantId,
         roleCode: formData.role_code,
-        locationAssignments: locationAssignmentsWithPin,
+        locationAssignments,
         phone: formData.phone,
       },
       skipPasswordRequirement: false,
@@ -402,67 +398,114 @@ export async function CreateClerkUserDirectly(
       return { error: "Failed to create Clerk user" };
     }
 
-    // 5. Add user to organization
-    await clerk.organizations.createOrganizationMembership({
+    // 4. Add user to organization — capture membership ID for idempotent DB write
+    const membership = await clerk.organizations.createOrganizationMembership({
       organizationId: clerkOrgId,
       userId: clerkUser.id,
       role: "org:member",
     });
 
-    // 6. Create staff_profile record
-    // const { data: staffProfile, error: profileError } = await supabase
-    //     .from('staff_profiles')
-    //     .insert({
-    //         merchant_id: merchantId,
-    //         user_id: clerkUser.id,
-    //         first_name: formData.first_name,
-    //         last_name: formData.last_name,
-    //         email: formData.email,
-    //         phone: formData.phone,
-    //         account_type: 'clerk',
-    //         is_active: true,
-    //     })
-    //     .select()
-    //     .single()
+    // 4b. Eagerly create the users row — members.user_id is a FK to users.id and the
+    //     user.created webhook hasn't fired yet, so we write it now (upsert = safe on retry)
+    await supabase
+      .from("users")
+      .upsert(
+        {
+          id: clerkUser.id,
+          first_name: formData.first_name,
+          last_name: formData.last_name,
+          email: formData.email,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id", ignoreDuplicates: true },
+      );
 
-    // if (profileError || !staffProfile) {
-    //     console.error('[CreateClerkUserDirectly] Failed to create staff profile:', profileError)
-    //     // Rollback Clerk user
-    //     await clerk.users.deleteUser(clerkUser.id)
-    //     return { error: 'Failed to create staff profile' }
-    // }
-
-    // 7. The organizationMembership.created webhook will handle:
-    //    - Creating members record
-    //    - Creating location_members records
-    //    - Using publicMetadata.locationAssignments
-
-    // 8. Wait a moment for webhook to process, then verify member was created
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    const { data: member } = await supabase
-      .from("members")
-      .select("id")
-      .eq("user_id", clerkUser.id)
-      .eq("organization_id", clerkOrgId)
+    // 5. Eagerly create staff_profile (webhook acts as fallback/sync, not primary writer)
+    const { data: staffProfile, error: profileError } = await supabase
+      .from("staff_profiles")
+      .insert({
+        merchant_id: merchantId,
+        user_id: clerkUser.id,
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        email: formData.email,
+        phone: formData.phone,
+        account_type: "clerk",
+        is_active: true,
+      })
+      .select()
       .single();
 
-    if (!member) {
-      console.warn(
-        "[CreateClerkUserDirectly] Member not created yet by webhook",
+    if (profileError || !staffProfile) {
+      console.error(
+        "[CreateClerkUserDirectly] Failed to create staff profile:",
+        profileError,
       );
-      // Don't fail - webhook might still be processing
+      await clerk.users.deleteUser(clerkUser.id);
+      return { error: "Failed to create staff profile" };
+    }
+
+    // 6. Eagerly create member record — use Clerk membership ID so webhook upsert is a no-op
+    const { data: member, error: memberError } = await supabase
+      .from("members")
+      .insert({
+        id: membership.id,
+        user_id: clerkUser.id,
+        staff_profile_id: staffProfile.id,
+        organization_id: clerkOrgId,
+        role: formData.role_code,
+      })
+      .select()
+      .single();
+
+    if (memberError || !member) {
+      console.error(
+        "[CreateClerkUserDirectly] Failed to create member:",
+        memberError,
+      );
+      await supabase.from("staff_profiles").delete().eq("id", staffProfile.id);
+      await clerk.users.deleteUser(clerkUser.id);
+      return { error: "Failed to create member record" };
+    }
+
+    // 7. Eagerly create location_members records
+    const locationMembersData = formData.location_ids.map((locationId) => ({
+      location_id: locationId,
+      merchant_id: merchantId,
+      user_id: clerkUser.id,
+      staff_profile_id: staffProfile.id,
+      role_code: formData.role_code,
+      is_primary_location: locationId === formData.primary_location_id,
+      is_active: true,
+      pin_code: hashedPin,
+      hourly_rate: formData.hourly_rate,
+      employment_type: formData.employment_type,
+    }));
+
+    const { error: assignmentError } = await supabase
+      .from("location_members")
+      .insert(locationMembersData);
+
+    if (assignmentError) {
+      console.error(
+        "[CreateClerkUserDirectly] Failed to create location assignments:",
+        assignmentError,
+      );
+      await supabase.from("members").delete().eq("id", member.id);
+      await supabase.from("staff_profiles").delete().eq("id", staffProfile.id);
+      await clerk.users.deleteUser(clerkUser.id);
+      return { error: "Failed to create location assignments" };
     }
 
     revalidatePath("/dashboard/staff");
 
-    // Log audit event
+    // Log audit event — use staffProfile.id (UUID), not clerkUser.id (Clerk string ID)
     await LogAuditEvent({
-      merchantId: merchantId,
+      merchantId,
       action: `Created Staff (Clerk): ${formData.first_name} ${formData.last_name}`,
       actionCategory: "staff",
-      resourceType: "user",
-      resourceId: clerkUser.id,
+      resourceType: "staff_profile",
+      resourceId: staffProfile.id,
       resourceName: `${formData.first_name} ${formData.last_name}`,
       metadata: {
         email: formData.email,
@@ -474,7 +517,7 @@ export async function CreateClerkUserDirectly(
 
     return {
       data: {
-        member_id: member?.id || "",
+        member_id: member.id,
         user_id: clerkUser.id,
         generated_pin: generatedPin,
         temp_password: tempPassword,
@@ -483,10 +526,9 @@ export async function CreateClerkUserDirectly(
   } catch (error) {
     console.error("[CreateClerkUserDirectly] Unexpected error:", error);
     console.error(
-      "[CreateClerkUserDirectly] Failed to create Clerk user:",
+      "[CreateClerkUserDirectly] Clerk error details:",
       (error as any)?.errors,
     );
-
     return { error: "An unexpected error occurred" };
   }
 }
@@ -887,13 +929,13 @@ export async function DeactivateStaffMember(
 
     // Log audit event
     if (member) {
-      const { data: staffData } = await supabase
+      await supabase
         .rpc("get_unified_staff_view", {
           p_merchant_id: (member as any).organization_id || "",
           p_location_id: null,
         })
         .eq("member_id", memberId)
-        .single(); // Attempt to get name but use memberId if fails
+        .single();
 
       // Fallback to basic fetch if RPC fails or not simple
       let resourceName = "Staff Member";

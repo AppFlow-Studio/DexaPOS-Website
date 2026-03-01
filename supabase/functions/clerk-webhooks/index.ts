@@ -628,7 +628,8 @@ async function handleMerchantMembershipCreated(
     return errorResponse(memberResult.error || 'Failed to create member', 500)
   }
 
-  // Create location_members records
+  // Create location_members records — skip any that already exist (server action may have
+  // written them eagerly before this webhook fired)
   if (locationAssignments && locationAssignments.length > 0) {
     const locationMembersData = locationAssignments.map((assignment: any) => ({
       location_id: assignment.locationId,
@@ -645,16 +646,36 @@ async function handleMerchantMembershipCreated(
       updated_at: updatedAt,
     }))
 
-    const { error: locationMembersError } = await supabase
+    // Fetch which location assignments already exist to avoid duplicate-key errors
+    const { data: existingAssignments } = await supabase
       .from('location_members')
-      .insert(locationMembersData)
+      .select('location_id')
+      .eq('user_id', userId)
 
-    if (locationMembersError) {
-      logError(eventType, 'Failed to create location members', locationMembersError)
-      return errorResponse(locationMembersError.message, 500)
+    const existingLocationIds = new Set(
+      (existingAssignments || []).map((row: any) => row.location_id)
+    )
+
+    const newAssignments = locationMembersData.filter(
+      (row: any) => !existingLocationIds.has(row.location_id)
+    )
+
+    if (newAssignments.length > 0) {
+      const { error: locationMembersError } = await supabase
+        .from('location_members')
+        .insert(newAssignments)
+
+      if (locationMembersError) {
+        logError(eventType, 'Failed to create location members', locationMembersError)
+        return errorResponse(locationMembersError.message, 500)
+      }
+
+      logEvent(eventType, 'Created location members', { count: newAssignments.length })
+    } else {
+      logEvent(eventType, 'Location members already exist, skipping insert (idempotent)', {
+        skipped: locationMembersData.length,
+      })
     }
-
-    logEvent(eventType, 'Created location members', { count: locationMembersData.length })
   }
 
   // Update location_invites if this was from an invitation
