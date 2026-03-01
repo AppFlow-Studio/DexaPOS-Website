@@ -95,7 +95,6 @@ export function MarketingTab({ customer, merchantId }: MarketingTabProps) {
       channel: messageChannel,
       destination,
       message: quickMessage,
-      createdBy: "current-user", // Replace with actual user ID
     });
 
     setQuickMessage("");

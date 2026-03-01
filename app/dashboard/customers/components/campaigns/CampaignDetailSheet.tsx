@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -7,6 +8,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Clock,
@@ -16,8 +18,10 @@ import {
   BarChart3,
   Users,
   FileText,
+  Loader2,
 } from "lucide-react";
-import { useMarketingCampaignRecipients } from "../../hooks/useCustomerMarketing";
+import { toast } from "sonner";
+import { useMarketingCampaignRecipients, useSendCampaign } from "../../hooks/useCustomerMarketing";
 import { CampaignDetailsTab } from "./CampaignDetailsTab";
 import { CampaignPerformanceTab } from "./CampaignPerformanceTab";
 import { CampaignChartsTab } from "./CampaignChartsTab";
@@ -46,23 +50,65 @@ export function CampaignDetailSheet({
   onOpenChange,
 }: CampaignDetailSheetProps) {
   const { data: recipients = [] } = useMarketingCampaignRecipients(open ? campaign.id : null);
+  const sendMutation = useSendCampaign();
+  const [isSending, setIsSending] = useState(false);
+
+  const handleSendNow = async () => {
+    if (campaign.status !== "draft" && campaign.status !== "scheduled") {
+      toast.error(`Cannot send campaign with status: ${campaign.status}`);
+      return;
+    }
+
+    setIsSending(true);
+    try {
+      await sendMutation.mutateAsync(campaign.id);
+      toast.success("Campaign sent successfully!");
+    } catch (error: any) {
+      console.error("Error sending campaign:", error);
+      toast.error(error.message || "Failed to send campaign");
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full max-w-2xl overflow-y-auto">
         <SheetHeader>
-          <SheetTitle className="flex items-start justify-between">
+          <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
-              <h2 className="text-xl font-bold">{campaign.name}</h2>
-              <p className="text-sm text-muted-foreground mt-1">
+              <SheetTitle className="text-xl">{campaign.name}</SheetTitle>
+              <p className="text-sm text-muted-foreground mt-2">
                 {campaign.created_at ? new Date(campaign.created_at).toLocaleString() : "N/A"}
               </p>
             </div>
-            <Badge className={`gap-1 ${STATUS_CONFIG[campaign.status]?.color || "bg-gray-100"}`}>
-              {STATUS_CONFIG[campaign.status]?.icon}
-              {STATUS_CONFIG[campaign.status]?.label}
-            </Badge>
-          </SheetTitle>
+            <div className="flex flex-col items-end gap-2 shrink-0">
+              <Badge className={`gap-1 ${STATUS_CONFIG[campaign.status]?.color || "bg-gray-100"}`}>
+                {STATUS_CONFIG[campaign.status]?.icon}
+                {STATUS_CONFIG[campaign.status]?.label}
+              </Badge>
+              {(campaign.status === "draft" || campaign.status === "scheduled") && (
+                <Button
+                  onClick={handleSendNow}
+                  disabled={isSending}
+                  size="sm"
+                  className="gap-2"
+                >
+                  {isSending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4" />
+                      Send Now
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
         </SheetHeader>
 
         <Tabs defaultValue="details" className="mt-6">

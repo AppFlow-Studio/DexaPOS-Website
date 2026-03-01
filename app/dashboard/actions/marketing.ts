@@ -2,7 +2,9 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import type { Database } from "@/types/database.types";
+import { sendSMS, isValidPhoneNumber } from "@/lib/messaging/twilio";
+import { sendEmail, buildEmailTemplate, isValidEmail } from "@/lib/messaging/resend";
+import type { Database } from "@/database.types";
 
 type MarketingCampaign = Database["public"]["Tables"]["marketing_campaigns"]["Row"];
 type MarketingRecipient = Database["public"]["Tables"]["marketing_recipients"]["Row"];
@@ -226,6 +228,190 @@ export async function UpdateMarketingCampaign({
 }
 
 /**
+ * Send a marketing campaign to all eligible recipients
+ */
+export async function SendCampaignNow(campaignId: string) {
+  if (!campaignId) return { error: "Campaign ID required" };
+
+  const supabase = createServiceRoleClient();
+
+  // 1. Fetch campaign
+  const { data: campaign, error: campaignError } = await supabase
+    .from("marketing_campaigns")
+    .select("*")
+    .eq("id", campaignId)
+    .single();
+
+  if (campaignError || !campaign) {
+    console.error("[SendCampaignNow] Campaign fetch error:", campaignError);
+    return { error: "Campaign not found" };
+  }
+
+  // Validate campaign status
+  if (!["draft", "scheduled"].includes(campaign.status)) {
+    return { error: `Cannot send campaign with status: ${campaign.status}` };
+  }
+
+  try {
+    // 2. Resolve audience - fetch eligible customers
+    let query = supabase
+      .from("customers")
+      .select("id, email, phone, merchant_id")
+      .eq("merchant_id", campaign.merchant_id)
+      .eq("is_active", true);
+
+    // Filter by opt-in status based on channel
+    if (campaign.campaign_type === "sms") {
+      query = query.eq("sms_opt_in", true).not("phone", "is", null);
+    } else if (campaign.campaign_type === "email") {
+      query = query.eq("email_opt_in", true).not("email", "is", null);
+    }
+
+    // Filter by tags if specified
+    if (campaign.audience_type === "tag" && campaign.audience_tags?.length > 0) {
+      // PostgreSQL array overlap check
+      query = query.overlaps("tags", campaign.audience_tags);
+    }
+
+    const { data: customers, error: customersError } = await query;
+
+    if (customersError) {
+      console.error("[SendCampaignNow] Customers fetch error:", customersError);
+      return { error: "Failed to fetch customers" };
+    }
+
+    if (!customers || customers.length === 0) {
+      // Don't send campaign if there are no eligible recipients
+      return { error: "No eligible recipients found. Make sure customers have opted in and have valid contact information." };
+    }
+
+    // 3. Create recipient rows
+    const recipientInserts = customers.map((customer) => ({
+      campaign_id: campaignId,
+      customer_id: customer.id,
+      channel: campaign.campaign_type,
+      destination:
+        campaign.campaign_type === "sms" ? customer.phone : customer.email,
+      status: "pending",
+      created_at: new Date().toISOString(),
+    }));
+
+    const { error: insertError } = await supabase
+      .from("marketing_recipients")
+      .insert(recipientInserts);
+
+    if (insertError) {
+      console.error("[SendCampaignNow] Recipients insert error:", insertError);
+      return { error: "Failed to create recipient records" };
+    }
+
+    // 4. Update campaign status to "sending"
+    await supabase
+      .from("marketing_campaigns")
+      .update({
+        status: "sending",
+        total_recipients: customers.length,
+      })
+      .eq("id", campaignId);
+
+    // 5. Send messages (fire-and-forget)
+    (async () => {
+      let delivered = 0;
+      let failed = 0;
+
+      for (const customer of customers) {
+        const destination =
+          campaign.campaign_type === "sms" ? customer.phone : customer.email;
+
+        if (!destination) continue;
+
+        let sendResult: { sid?: string; id?: string; error?: string } = {};
+
+        try {
+          if (campaign.campaign_type === "sms") {
+            if (!isValidPhoneNumber(destination)) {
+              sendResult = { error: "Invalid phone number" };
+            } else {
+              sendResult = await sendSMS(destination, campaign.body);
+            }
+          } else if (campaign.campaign_type === "email") {
+            if (!isValidEmail(destination)) {
+              sendResult = { error: "Invalid email" };
+            } else {
+              const { data: merchant } = await supabase
+                .from("merchants")
+                .select("name")
+                .eq("id", campaign.merchant_id)
+                .single();
+
+              const html = buildEmailTemplate(
+                merchant?.name || "Your Business",
+                campaign.subject || "Message from us",
+                campaign.body
+              );
+              sendResult = await sendEmail(
+                destination,
+                campaign.subject || "Message from us",
+                html
+              );
+            }
+          }
+
+          const status = sendResult.error ? "failed" : "delivered";
+          if (status === "delivered") delivered++;
+          else failed++;
+
+          // Update recipient record
+          await supabase
+            .from("marketing_recipients")
+            .update({
+              status,
+              sent_at: new Date().toISOString(),
+              delivered_at: status === "delivered" ? new Date().toISOString() : null,
+              error_message: sendResult.error || null,
+            })
+            .eq("campaign_id", campaignId)
+            .eq("customer_id", customer.id);
+        } catch (error: any) {
+          console.error(
+            `[SendCampaignNow] Error sending to ${destination}:`,
+            error
+          );
+          failed++;
+
+          await supabase
+            .from("marketing_recipients")
+            .update({
+              status: "failed",
+              error_message: error.message,
+            })
+            .eq("campaign_id", campaignId)
+            .eq("customer_id", customer.id);
+        }
+      }
+
+      // 6. Update campaign with final stats
+      await supabase
+        .from("marketing_campaigns")
+        .update({
+          status: "sent",
+          sent_at: new Date().toISOString(),
+          total_delivered: delivered,
+        })
+        .eq("id", campaignId);
+    })();
+
+    return {
+      message: "Campaign sending started",
+      sent: customers.length,
+    };
+  } catch (error: any) {
+    console.error("[SendCampaignNow] Unexpected error:", error);
+    return { error: error.message || "Unexpected error" };
+  }
+}
+
+/**
  * Send a quick one-off message to a customer
  */
 export async function SendQuickMessage({
@@ -234,17 +420,18 @@ export async function SendQuickMessage({
   channel,
   destination,
   message,
-  createdBy,
 }: {
   customerId: string;
   merchantId: string;
   channel: "sms" | "email";
   destination: string;
   message: string;
-  createdBy: string;
 }) {
   if (!customerId || !merchantId || !channel || !destination || !message)
     return null;
+
+  const { userId } = await auth();
+  if (!userId) return { error: "Not authenticated" };
 
   const supabase = createServiceRoleClient();
 
@@ -256,16 +443,51 @@ export async function SendQuickMessage({
       name: `Quick ${channel.toUpperCase()} to ${destination}`,
       campaign_type: channel,
       body: message,
-      status: "sent",
-      sent_at: new Date().toISOString(),
-      created_by: createdBy,
+      status: "sending",
+      created_by: userId,
     })
     .select()
     .single();
 
   if (campaignError || !campaign) {
     console.error("[SendQuickMessage] Campaign creation error:", campaignError);
-    return null;
+    return { error: "Failed to create campaign" };
+  }
+
+  // Determine if message should be sent
+  let sendResult: { sid?: string; id?: string; error?: string } = {};
+  let status: "delivered" | "failed" = "failed";
+
+  if (channel === "sms") {
+    if (!isValidPhoneNumber(destination)) {
+      sendResult = { error: "Invalid phone number" };
+    } else {
+      sendResult = await sendSMS(destination, message);
+      if (!sendResult.error) {
+        status = "delivered";
+      }
+    }
+  } else if (channel === "email") {
+    if (!isValidEmail(destination)) {
+      sendResult = { error: "Invalid email address" };
+    } else {
+      // Get merchant name for email template
+      const { data: merchant } = await supabase
+        .from("merchants")
+        .select("name")
+        .eq("id", merchantId)
+        .single();
+
+      const html = buildEmailTemplate(
+        merchant?.name || "Your Business",
+        "Message from us",
+        message
+      );
+      sendResult = await sendEmail(destination, "Message from us", html);
+      if (!sendResult.error) {
+        status = "delivered";
+      }
+    }
   }
 
   // Create recipient record
@@ -276,17 +498,29 @@ export async function SendQuickMessage({
       customer_id: customerId,
       channel,
       destination,
-      status: "delivered",
+      status,
       sent_at: new Date().toISOString(),
-      delivered_at: new Date().toISOString(),
+      delivered_at: status === "delivered" ? new Date().toISOString() : null,
+      error_message: sendResult.error || null,
     })
     .select()
     .single();
 
   if (recipientError) {
     console.error("[SendQuickMessage] Recipient error:", recipientError);
-    return null;
+    return { error: "Failed to create recipient record" };
   }
+
+  // Update campaign status
+  await supabase
+    .from("marketing_campaigns")
+    .update({
+      status: "sent",
+      sent_at: new Date().toISOString(),
+      total_recipients: 1,
+      total_delivered: status === "delivered" ? 1 : 0,
+    })
+    .eq("id", campaign.id);
 
   return { campaign, recipient };
 }

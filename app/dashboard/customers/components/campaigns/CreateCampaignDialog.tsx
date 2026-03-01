@@ -27,7 +27,8 @@ import {
 } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
-import { useCreateCampaign } from "../../hooks/useCustomerMarketing";
+import { useCreateCampaign, useSendCampaign } from "../../hooks/useCustomerMarketing";
+import { toast } from "sonner";
 
 interface CreateCampaignDialogProps {
   open: boolean;
@@ -42,18 +43,19 @@ export function CreateCampaignDialog({
   const [campaignType, setCampaignType] = useState<"sms" | "email">("sms");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
-  const [audienceType, setAudienceType] = useState<"all" | "tag" | "segment">("all");
+  const [audienceType, setAudienceType] = useState<"all" | "tag">("all");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [scheduleType, setScheduleType] = useState<"now" | "later">("now");
   const [scheduledFor, setScheduledFor] = useState("");
 
   const createMutation = useCreateCampaign();
+  const sendMutation = useSendCampaign();
 
   const handleCreate = async () => {
     if (!campaignName.trim() || !body.trim()) return;
 
     try {
-      await createMutation.mutateAsync({
+      const newCampaign = await createMutation.mutateAsync({
         name: campaignName,
         campaignType,
         subject: campaignType === "email" ? subject : undefined,
@@ -62,6 +64,38 @@ export function CreateCampaignDialog({
         audienceTags: selectedTags.length > 0 ? selectedTags : undefined,
         scheduledFor: scheduleType === "later" && scheduledFor ? scheduledFor : undefined,
       });
+
+      // If "Send Now" was selected, dispatch the campaign
+      if (scheduleType === "now" && newCampaign?.id) {
+        toast.loading("Sending campaign...");
+        try {
+          const sendResult = await sendMutation.mutateAsync(newCampaign.id);
+
+          // Check if send was successful
+          if (sendResult?.error) {
+            toast.error(sendResult.error);
+            return;
+          }
+
+          // Success message with recipient count
+          const recipientCount = sendResult?.sent || 0;
+          if (recipientCount > 0) {
+            toast.success(`Campaign sent to ${recipientCount} recipient${recipientCount !== 1 ? 's' : ''}!`);
+          } else {
+            toast.error("No recipients to send to");
+            return;
+          }
+        } catch (sendError: any) {
+          console.error("Error sending campaign:", sendError);
+          const errorMsg = sendError?.message || "Failed to send campaign";
+          toast.error(errorMsg);
+          return;
+        }
+      } else if (scheduleType === "later") {
+        toast.success("Campaign scheduled successfully!");
+      } else {
+        toast.success("Campaign created successfully!");
+      }
 
       // Reset form
       setCampaignName("");
@@ -75,6 +109,7 @@ export function CreateCampaignDialog({
       onOpenChange(false);
     } catch (error) {
       console.error("Error creating campaign:", error);
+      toast.error("Failed to create campaign");
     }
   };
 
@@ -159,35 +194,65 @@ export function CreateCampaignDialog({
 
             <div>
               <Label htmlFor="audience-type">Audience Type</Label>
-              <Select value={audienceType} onValueChange={(v) => setAudienceType(v as "all" | "tag" | "segment")}>
+              <Select value={audienceType} onValueChange={(v) => setAudienceType(v as "all" | "tag")}>
                 <SelectTrigger id="audience-type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Customers</SelectItem>
                   <SelectItem value="tag">By Tags</SelectItem>
-                  <SelectItem value="segment">By Segment</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {audienceType === "tag" && (
-              <div>
-                <Label htmlFor="tags">Select Tags</Label>
-                <p className="text-xs text-muted-foreground mb-2">
-                  Coming soon: Tag selection interface
-                </p>
+              <div className="space-y-3">
+                <Label>Select Tags to Target</Label>
+                <div className="border rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
+                  {["VIP", "REGULAR", "NEW", "CORPORATE", "FRIEND_OF_OWNER", "INFLUENCER", "COMPLAINT_HISTORY", "CATERING_CLIENT"].map((tag) => (
+                    <label key={tag} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-2 rounded">
+                      <input
+                        type="checkbox"
+                        checked={selectedTags.includes(tag)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedTags([...selectedTags, tag]);
+                          } else {
+                            setSelectedTags(selectedTags.filter((t) => t !== tag));
+                          }
+                        }}
+                        className="w-4 h-4 cursor-pointer"
+                      />
+                      <span className="text-sm">
+                        {tag
+                          .split("_")
+                          .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
+                          .join(" ")}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {selectedTags.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedTags.map((tag) => (
+                      <span key={tag} className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs">
+                        {tag
+                          .split("_")
+                          .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
+                          .join(" ")}
+                        <button
+                          onClick={() => setSelectedTags(selectedTags.filter((t) => t !== tag))}
+                          className="ml-1 hover:font-bold"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
-            {audienceType === "segment" && (
-              <div>
-                <Label>Segment Filters</Label>
-                <p className="text-xs text-muted-foreground">
-                  Coming soon: Custom segment builder
-                </p>
-              </div>
-            )}
           </div>
 
           {/* Scheduling */}
@@ -238,9 +303,9 @@ export function CreateCampaignDialog({
           </Button>
           <Button
             onClick={handleCreate}
-            disabled={!campaignName.trim() || !body.trim() || createMutation.isPending}
+            disabled={!campaignName.trim() || !body.trim() || createMutation.isPending || sendMutation.isPending}
           >
-            {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            {(createMutation.isPending || sendMutation.isPending) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             {scheduleType === "now" ? "Create & Send" : "Create Campaign"}
           </Button>
         </DialogFooter>

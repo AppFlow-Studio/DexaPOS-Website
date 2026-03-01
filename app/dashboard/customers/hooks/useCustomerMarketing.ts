@@ -11,6 +11,7 @@ import {
   DeleteMarketingCampaign,
   CreateMarketingCampaign,
   GetMarketingCampaignRecipients,
+  SendCampaignNow,
 } from "@/app/dashboard/actions/marketing";
 
 /**
@@ -174,5 +175,24 @@ export function useMarketingCampaignRecipients(campaignId: string | null) {
       campaignId ? GetMarketingCampaignRecipients(campaignId) : Promise.resolve([]),
     enabled: !!campaignId,
     staleTime: 1000 * 60 * 5,
+  });
+}
+
+/**
+ * Mutation: Send a campaign now
+ */
+export function useSendCampaign() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: SendCampaignNow,
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["merchant-marketing-campaigns"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["marketing-campaign-stats"],
+      });
+    },
   });
 }
