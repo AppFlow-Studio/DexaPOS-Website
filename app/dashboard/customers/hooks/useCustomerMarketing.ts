@@ -100,6 +100,10 @@ export function useSendQuickMessage() {
   return useMutation({
     mutationFn: SendQuickMessage,
     onSuccess: (data, variables) => {
+      // Check if there was an error in the response
+      if (data?.recipient?.error_message) {
+        throw new Error(data.recipient.error_message);
+      }
       queryClient.invalidateQueries({
         queryKey: ["customer-marketing-history", variables.customerId],
       });

@@ -461,10 +461,15 @@ export async function SendQuickMessage({
   if (channel === "sms") {
     if (!isValidPhoneNumber(destination)) {
       sendResult = { error: "Invalid phone number" };
+      console.error("[SendQuickMessage] Invalid phone number:", destination);
     } else {
+      console.log("[SendQuickMessage] Sending SMS to:", destination);
       sendResult = await sendSMS(destination, message);
+      console.log("[SendQuickMessage] SMS result:", sendResult);
       if (!sendResult.error) {
         status = "delivered";
+      } else {
+        console.error("[SendQuickMessage] SMS error:", sendResult.error);
       }
     }
   } else if (channel === "email") {

@@ -14,6 +14,29 @@ if (!accountSid || !authToken || !fromPhone) {
 const client = accountSid?.startsWith("AC") && authToken ? twilio(accountSid, authToken) : null;
 
 /**
+ * Normalize phone number to E.164 format
+ * Removes spaces, parentheses, dashes, etc.
+ */
+function normalizePhoneNumber(phone: string): string {
+  if (!phone) return "";
+  // Remove all non-digit characters except leading +
+  const normalized = phone.replace(/[^\d+]/g, "");
+  // Ensure it starts with +
+  if (!normalized.startsWith("+")) {
+    // If it's a US number (10 digits), add +1
+    if (normalized.length === 10) {
+      return `+1${normalized}`;
+    }
+    // Otherwise, assume it needs a +1 prefix
+    if (normalized.length === 11 && normalized.startsWith("1")) {
+      return `+${normalized}`;
+    }
+    return `+1${normalized}`;
+  }
+  return normalized;
+}
+
+/**
  * Send an SMS message via Twilio
  */
 export async function sendSMS(
@@ -45,15 +68,17 @@ export async function sendSMS(
   }
 
   try {
-    console.log("[sendSMS] Creating message via Twilio:", { from: fromPhone, to });
+    // Normalize the phone number to E.164 format
+    const normalizedTo = normalizePhoneNumber(to);
+    console.log("[sendSMS] Normalized phone number:", { original: to, normalized: normalizedTo });
 
     const message = await client.messages.create({
       body,
       from: fromPhone,
-      to,
+      to: normalizedTo,
     });
 
-    console.log("[sendSMS] Message sent successfully:", { sid: message.sid, to, status: message.status });
+    console.log("[sendSMS] Message sent successfully:", { sid: message.sid, to: normalizedTo, status: message.status });
     return { sid: message.sid };
   } catch (error: any) {
     console.error("[sendSMS] Exception:", {

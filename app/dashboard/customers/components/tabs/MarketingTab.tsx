@@ -89,15 +89,19 @@ export function MarketingTab({ customer, merchantId }: MarketingTabProps) {
       return;
     }
 
-    await sendQuickMessageMutation.mutateAsync({
-      customerId,
-      merchantId,
-      channel: messageChannel,
-      destination,
-      message: quickMessage,
-    });
-
-    setQuickMessage("");
+    try {
+      await sendQuickMessageMutation.mutateAsync({
+        customerId,
+        merchantId,
+        channel: messageChannel,
+        destination,
+        message: quickMessage,
+      });
+      alert("Message sent successfully!");
+      setQuickMessage("");
+    } catch (error: any) {
+      alert(`Failed to send message: ${error.message || "Unknown error"}`);
+    }
   };
 
   const handleUnsubscribe = async () => {
@@ -274,6 +278,13 @@ export function MarketingTab({ customer, merchantId }: MarketingTabProps) {
           <CardTitle className="text-sm">Send Quick Message</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 flex items-start gap-2">
+            <Clock className="w-4 h-4 mt-0.5 text-blue-600 shrink-0" />
+            <div className="text-xs text-blue-800">
+              <p className="font-medium">Trial Account Limitation</p>
+              <p className="mt-1">If using a Twilio Trial account, verify the recipient phone number in your Twilio console before sending SMS.</p>
+            </div>
+          </div>
           <div>
             <label className="text-sm font-medium">Channel</label>
             <Select
