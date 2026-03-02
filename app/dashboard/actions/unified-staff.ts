@@ -8,11 +8,44 @@ import {
   StaffActionResponse,
   ResetPINResult,
   UpgradePOSToClerkResult,
+  BulkPinResetResult,
 } from "@/types/staff";
-import { clerkClient } from "@clerk/nextjs/server";
+import { clerkClient, auth } from "@clerk/nextjs/server";
 import bcrypt from "bcryptjs";
 import { LogAuditEvent } from "./audit-logs";
 import { revalidatePath } from "next/cache";
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+/** Role codes that receive automatic access to ALL merchant locations. */
+const ADMIN_ROLE_CODES = ["merchant.owner", "merchant.admin"];
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+/**
+ * Resolves the final set of location IDs for a staff creation request.
+ * Owner / admin roles are automatically provisioned to EVERY merchant location.
+ */
+async function resolveLocationIds(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  merchantId: string,
+  formData: InviteStaffFormData,
+): Promise<string[]> {
+  if (!ADMIN_ROLE_CODES.includes(formData.role_code)) {
+    return formData.location_ids;
+  }
+
+  const { data: allLocations } = await supabase
+    .from("locations")
+    .select("id")
+    .eq("merchant_id", merchantId);
+
+  return (allLocations || []).map((l) => l.id);
+}
 
 // ============================================================================
 // GET OPERATIONS
@@ -351,6 +384,13 @@ export async function CreateClerkUserDirectly(
 
     const merchantId = merchant.id;
 
+    // Owners/admins are auto-provisioned to every location
+    const resolvedLocationIds = await resolveLocationIds(
+      supabase,
+      merchantId,
+      formData,
+    );
+
     // 1. Generate password and PIN upfront
     const tempPassword = generateSecurePassword(12);
 
@@ -365,7 +405,7 @@ export async function CreateClerkUserDirectly(
     }
 
     // 2. Prepare location assignments for publicMetadata (webhook fallback)
-    const locationAssignments = formData.location_ids.map((locationId) => ({
+    const locationAssignments = resolvedLocationIds.map((locationId) => ({
       locationId,
       roleCode: formData.role_code,
       isPrimaryLocation: locationId === formData.primary_location_id,
@@ -469,7 +509,7 @@ export async function CreateClerkUserDirectly(
     }
 
     // 7. Eagerly create location_members records
-    const locationMembersData = formData.location_ids.map((locationId) => ({
+    const locationMembersData = resolvedLocationIds.map((locationId) => ({
       location_id: locationId,
       merchant_id: merchantId,
       user_id: clerkUser.id,
@@ -499,6 +539,26 @@ export async function CreateClerkUserDirectly(
 
     revalidatePath("/dashboard/staff");
 
+    // Insert a 'direct_created' audit record in location_invites.
+    // This is purely for history — the user already exists; status is never 'pending'.
+    const { userId: actorUserId } = await auth();
+    if (actorUserId) {
+      await supabase.from("location_invites").insert({
+        merchant_id: merchantId,
+        location_id: null,
+        invited_by_user_id: actorUserId,
+        email: formData.email,
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        phone: formData.phone ?? null,
+        role_code: formData.role_code,
+        invite_type: "direct_clerk",
+        status: "direct_created",
+        clerk_invite_id: clerkUser.id,
+        location_assignments: locationAssignments,
+      });
+    }
+
     // Log audit event — use staffProfile.id (UUID), not clerkUser.id (Clerk string ID)
     await LogAuditEvent({
       merchantId,
@@ -510,7 +570,7 @@ export async function CreateClerkUserDirectly(
       metadata: {
         email: formData.email,
         role_code: formData.role_code,
-        locations: formData.location_ids,
+        locations: resolvedLocationIds,
         creation_type: "direct",
       },
     });
@@ -564,8 +624,16 @@ export async function InviteClerkStaff(
     }
 
     const merchantId = merchant.id;
+
+    // Owners/admins are auto-provisioned to every location
+    const resolvedLocationIds = await resolveLocationIds(
+      supabase,
+      merchantId,
+      formData,
+    );
+
     // 1. Prepare location assignments for publicMetadata (using camelCase)
-    const locationAssignments = formData.location_ids.map((locationId) => ({
+    const locationAssignments = resolvedLocationIds.map((locationId) => ({
       locationId: locationId,
       roleCode: formData.role_code,
       isPrimaryLocation: locationId === formData.primary_location_id,
@@ -588,10 +656,12 @@ export async function InviteClerkStaff(
 
     // 3. Create Clerk organization invitation
     const clerk = await clerkClient();
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
     const invitation = await clerk.organizations.createOrganizationInvitation({
       organizationId: clerkOrgId,
       emailAddress: formData.email,
       role: "org:member",
+      ...(appUrl && { redirectUrl: `${appUrl}/dashboard` }),
       publicMetadata: {
         creationType: "invitation", // Mark as invitation flow
         roleCode: formData.role_code,
@@ -647,7 +717,7 @@ export async function InviteClerkStaff(
       metadata: {
         email: formData.email,
         role_code: formData.role_code,
-        locations: formData.location_ids,
+        locations: resolvedLocationIds,
       },
     });
 
@@ -1196,6 +1266,21 @@ export async function UpgradePOSStaffToClerk(
       return { error: "Failed to add user to organization" };
     }
 
+    // 7b. Eagerly create the users row — members.user_id is a FK to users.id and the
+    //     user.created webhook hasn't fired yet, so we write it now (upsert = safe on retry)
+    await supabase
+      .from("users")
+      .upsert(
+        {
+          id: clerkUser.id,
+          first_name: staffProfile.first_name,
+          last_name: staffProfile.last_name,
+          email: email,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id", ignoreDuplicates: true },
+      );
+
     // 8. Update staff_profiles - change account type and add user_id
     const { error: profileUpdateError } = await supabase
       .from("staff_profiles")
@@ -1246,14 +1331,27 @@ export async function UpgradePOSStaffToClerk(
 
     // 10. Update location_members - CRITICAL: set user_id and clear staff_profile_id
     // Database constraint requires EITHER user_id OR staff_profile_id, not both
-    const { error: locationUpdateError } = await supabase
+    // PIN PERSISTENCE: Explicitly preserve pin_code by reading current values first
+    const { data: existingLocationMembers } = await supabase
       .from("location_members")
-      .update({
-        user_id: clerkUser.id,
-        staff_profile_id: null, // MUST clear this due to constraint
-        updated_at: new Date().toISOString(),
-      })
+      .select("id, pin_code")
       .eq("staff_profile_id", staffProfile.id);
+
+    // Update each location_member row, explicitly re-setting pin_code to prevent nullification
+    const locationUpdatePromises = (existingLocationMembers || []).map((lm) =>
+      supabase
+        .from("location_members")
+        .update({
+          user_id: clerkUser.id,
+          staff_profile_id: null, // MUST clear this due to constraint
+          pin_code: lm.pin_code, // Explicitly preserve existing PIN
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", lm.id)
+    );
+
+    const locationUpdateResults = await Promise.all(locationUpdatePromises);
+    const locationUpdateError = locationUpdateResults.find((r) => r.error)?.error;
 
     if (locationUpdateError) {
       console.error(
@@ -1306,4 +1404,705 @@ export async function UpgradePOSStaffToClerk(
     console.error("[UpgradePOSStaffToClerk] Unexpected error:", error);
     return { error: "An unexpected error occurred during upgrade" };
   }
+}
+
+// ============================================================================
+// DEMOTE OPERATIONS
+// ============================================================================
+
+/**
+ * Demote a Clerk dashboard user back to POS-only.
+ *
+ * Steps:
+ *  1. Verify member is currently a Clerk user.
+ *  2. Remove org membership in Clerk (revoke dashboard access).
+ *  3. Update staff_profiles: account_type → 'pos_only', user_id → null.
+ *  4. Nullify user_id on members row.
+ *  5. Update location_members: move from user_id → staff_profile_id, preserve PIN.
+ *  6. Audit log.
+ */
+export async function DemoteClerkToPOSOnly(
+  memberId: string,
+): Promise<StaffActionResponse<{ success: boolean }>> {
+  const supabase = createServerSupabaseClient();
+
+  try {
+    // 1. Fetch member with staff profile
+    const { data: member, error: memberError } = await supabase
+      .from("members")
+      .select(
+        `id, user_id, staff_profile_id, organization_id,
+         staff_profiles ( id, merchant_id, first_name, last_name, account_type )`
+      )
+      .eq("id", memberId)
+      .single();
+
+    if (memberError || !member) {
+      return { error: "Member not found" };
+    }
+
+    const staffProfile = member.staff_profiles as any;
+    if (!staffProfile) {
+      return { error: "Staff profile not found" };
+    }
+
+    if (!member.user_id) {
+      return { error: "Staff member does not have a dashboard account" };
+    }
+
+    if (staffProfile.account_type !== "clerk") {
+      return { error: "Staff member is already POS-only" };
+    }
+
+    const clerkUserId = member.user_id;
+    const staffName = `${staffProfile.first_name} ${staffProfile.last_name}`;
+
+    // 2. Remove Clerk org membership (revokes dashboard access)
+    const clerk = await clerkClient();
+    try {
+      await clerk.organizations.deleteOrganizationMembership({
+        organizationId: member.organization_id,
+        userId: clerkUserId,
+      });
+    } catch (clerkErr: any) {
+      console.error(
+        "[DemoteClerkToPOSOnly] Failed to remove org membership:",
+        clerkErr,
+      );
+      // Continue — membership may already be removed
+    }
+
+    // 3. Update location_members: switch from user_id to staff_profile_id, preserve PIN
+    const { data: existingLocationMembers } = await supabase
+      .from("location_members")
+      .select("id, pin_code")
+      .eq("user_id", clerkUserId);
+
+    const locationUpdatePromises = (existingLocationMembers || []).map((lm) =>
+      supabase
+        .from("location_members")
+        .update({
+          user_id: null,
+          staff_profile_id: staffProfile.id,
+          pin_code: lm.pin_code, // Preserve existing PIN
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", lm.id)
+    );
+    await Promise.all(locationUpdatePromises);
+
+    // 4. Update staff_profiles: revert to pos_only
+    await supabase
+      .from("staff_profiles")
+      .update({
+        account_type: "pos_only",
+        user_id: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", staffProfile.id);
+
+    // 5. Nullify user_id on members row
+    await supabase
+      .from("members")
+      .update({
+        user_id: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", memberId);
+
+    // 6. Audit log
+    await LogAuditEvent({
+      merchantId: staffProfile.merchant_id,
+      action: `Demoted Clerk to POS-Only: ${staffName}`,
+      actionCategory: "staff",
+      resourceType: "staff_profile",
+      resourceId: staffProfile.id,
+      resourceName: staffName,
+      metadata: {
+        previous_user_id: clerkUserId,
+      },
+    });
+
+    revalidatePath("/dashboard/staff");
+
+    return { data: { success: true } };
+  } catch (error) {
+    console.error("[DemoteClerkToPOSOnly] Unexpected error:", error);
+    return { error: "An unexpected error occurred during demotion" };
+  }
+}
+
+// ============================================================================
+// PIN STATUS
+// ============================================================================
+
+/**
+ * Check whether the current Clerk user has a POS PIN set on any active
+ * location assignment.  Used to drive the dashboard PIN-setup banner.
+ *
+ * @param clerkOrgId  - Clerk organization ID (to scope to the right merchant)
+ * @param clerkUserId - Clerk user ID to look up in location_members
+ */
+export async function GetCurrentUserPinStatus(
+  clerkOrgId: string,
+  clerkUserId: string,
+): Promise<{ hasPinSet: boolean; locationCount: number } | null> {
+  if (!clerkOrgId || !clerkUserId) return null;
+
+  const supabase = createServerSupabaseClient();
+
+  try {
+    const { data, error } = await supabase
+      .from("location_members")
+      .select("pin_code, location_id")
+      .eq("user_id", clerkUserId)
+      .eq("is_active", true);
+
+    if (error) {
+      console.error("[GetCurrentUserPinStatus] Error:", error);
+      return null;
+    }
+
+    const locationCount = data?.length ?? 0;
+    const hasPinSet =
+      locationCount > 0 && data.some((row) => row.pin_code !== null);
+
+    return { hasPinSet, locationCount };
+  } catch (error) {
+    console.error("[GetCurrentUserPinStatus] Unexpected error:", error);
+    return null;
+  }
+}
+
+// ============================================================================
+// PROFILE UPDATE OPERATIONS (with Clerk sync)
+// ============================================================================
+
+export interface UpdateStaffProfileData {
+  first_name?: string;
+  last_name?: string;
+  email?: string | null;
+  phone?: string | null;
+}
+
+/**
+ * Update staff profile (name, email, phone) with Clerk sync.
+ *
+ * For Clerk users, this also calls `clerk.users.updateUser` so the auth
+ * provider stays in sync with the DB.
+ *
+ * @param memberId  - UUID of the member record
+ * @param updates   - Fields to update
+ */
+export async function UpdateStaffProfile(
+  memberId: string,
+  updates: UpdateStaffProfileData,
+): Promise<StaffActionResponse<{ success: boolean }>> {
+  const supabase = createServerSupabaseClient();
+
+  try {
+    // 1. Fetch member + staff profile
+    const { data: member, error: memberError } = await supabase
+      .from("members")
+      .select("id, user_id, staff_profile_id, organization_id")
+      .eq("id", memberId)
+      .single();
+
+    if (memberError || !member) {
+      return { error: "Member not found" };
+    }
+
+    if (!member.staff_profile_id) {
+      return { error: "No staff profile linked to this member" };
+    }
+
+    // 2. Build the profile update payload (only changed fields)
+    const profilePayload: Record<string, any> = {
+      updated_at: new Date().toISOString(),
+    };
+    if (updates.first_name !== undefined)
+      profilePayload.first_name = updates.first_name;
+    if (updates.last_name !== undefined)
+      profilePayload.last_name = updates.last_name;
+    if (updates.email !== undefined) profilePayload.email = updates.email;
+    if (updates.phone !== undefined) profilePayload.phone = updates.phone;
+
+    // Compute display_name if name fields changed
+    if (updates.first_name !== undefined || updates.last_name !== undefined) {
+      // Fetch current profile for the unchanged half
+      const { data: currentProfile } = await supabase
+        .from("staff_profiles")
+        .select("first_name, last_name")
+        .eq("id", member.staff_profile_id)
+        .single();
+      const fn = updates.first_name ?? currentProfile?.first_name ?? "";
+      const ln = updates.last_name ?? currentProfile?.last_name ?? "";
+      profilePayload.display_name = `${fn} ${ln}`.trim();
+    }
+
+    // 3. Update staff_profiles
+    const { error: profileError } = await supabase
+      .from("staff_profiles")
+      .update(profilePayload)
+      .eq("id", member.staff_profile_id);
+
+    if (profileError) {
+      console.error("[UpdateStaffProfile] profile update error:", profileError);
+      return { error: "Failed to update staff profile" };
+    }
+
+    // 4. Also update the `users` row if the member has a Clerk user_id
+    if (member.user_id) {
+      const usersPayload: Record<string, any> = {
+        updated_at: new Date().toISOString(),
+      };
+      if (updates.first_name !== undefined)
+        usersPayload.first_name = updates.first_name;
+      if (updates.last_name !== undefined)
+        usersPayload.last_name = updates.last_name;
+      if (updates.email !== undefined) usersPayload.email = updates.email;
+
+      await supabase
+        .from("users")
+        .update(usersPayload)
+        .eq("id", member.user_id);
+
+      // 5. Clerk sync — keep the auth provider in sync
+      try {
+        const clerk = await clerkClient();
+        const clerkPayload: Record<string, any> = {};
+
+        if (updates.first_name !== undefined)
+          clerkPayload.firstName = updates.first_name;
+        if (updates.last_name !== undefined)
+          clerkPayload.lastName = updates.last_name;
+
+        if (Object.keys(clerkPayload).length > 0) {
+          await clerk.users.updateUser(member.user_id, clerkPayload);
+        }
+
+        // Clerk email update is more complex (requires verification flow),
+        // so we only update the DB email and leave Clerk email unchanged.
+        // A full email change would require clerk.emailAddresses.createEmailAddress().
+      } catch (clerkErr) {
+        console.error(
+          "[UpdateStaffProfile] Clerk sync failed (non-fatal):",
+          clerkErr,
+        );
+        // Non-fatal — DB is source of truth for the dashboard
+      }
+    }
+
+    revalidatePath("/dashboard/staff");
+
+    // Audit
+    const staffName =
+      profilePayload.display_name ??
+      `${updates.first_name ?? ""} ${updates.last_name ?? ""}`.trim() ??
+      "Staff";
+    if (member.organization_id) {
+      await LogAuditEvent({
+        clerkOrgId: member.organization_id,
+        action: `Updated Staff Profile: ${staffName}`,
+        actionCategory: "staff",
+        resourceType: "staff_profile",
+        resourceId: member.staff_profile_id,
+        resourceName: staffName,
+        metadata: { updated_fields: Object.keys(updates) },
+      });
+    }
+
+    return { data: { success: true } };
+  } catch (error) {
+    console.error("[UpdateStaffProfile] Unexpected error:", error);
+    return { error: "An unexpected error occurred" };
+  }
+}
+
+// ============================================================================
+// LOCATION MANAGEMENT — Add / Remove staff from locations
+// ============================================================================
+
+/**
+ * Add a staff member to a new location (creates a `location_members` row).
+ */
+export async function AddStaffToLocation(
+  memberId: string,
+  locationId: string,
+  roleCode: string,
+  isPrimary?: boolean,
+): Promise<StaffActionResponse<{ success: boolean }>> {
+  const supabase = createServerSupabaseClient();
+
+  try {
+    const { data: member } = await supabase
+      .from("members")
+      .select("user_id, staff_profile_id, organization_id")
+      .eq("id", memberId)
+      .single();
+
+    if (!member) return { error: "Member not found" };
+
+    // Determine merchant_id from location
+    const { data: location } = await supabase
+      .from("locations")
+      .select("merchant_id")
+      .eq("id", locationId)
+      .single();
+
+    if (!location) return { error: "Location not found" };
+
+    // Check for existing (even inactive) assignment
+    const matchCol = member.user_id ? "user_id" : "staff_profile_id";
+    const matchVal = member.user_id || member.staff_profile_id;
+
+    const { data: existing } = await supabase
+      .from("location_members")
+      .select("id, is_active")
+      .eq("location_id", locationId)
+      .eq(matchCol, matchVal)
+      .maybeSingle();
+
+    if (existing) {
+      if (existing.is_active) {
+        return { error: "Staff is already assigned to this location" };
+      }
+      // Re-activate the existing soft-deleted row
+      const { error } = await supabase
+        .from("location_members")
+        .update({
+          is_active: true,
+          role_code: roleCode,
+          is_primary_location: isPrimary ?? false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id);
+
+      if (error) return { error: error.message };
+    } else {
+      // Create a fresh row
+      const insertRow: Record<string, any> = {
+        location_id: locationId,
+        merchant_id: location.merchant_id,
+        role_code: roleCode,
+        is_primary_location: isPrimary ?? false,
+        is_active: true,
+      };
+
+      if (member.user_id) {
+        insertRow.user_id = member.user_id;
+      }
+      if (member.staff_profile_id) {
+        insertRow.staff_profile_id = member.staff_profile_id;
+      }
+
+      const { error } = await supabase
+        .from("location_members")
+        .insert(insertRow);
+
+      if (error) return { error: error.message };
+    }
+
+    revalidatePath("/dashboard/staff");
+
+    // Audit
+    if (member.organization_id) {
+      let staffName = "Staff Member";
+      if (member.staff_profile_id) {
+        const { data: sp } = await supabase
+          .from("staff_profiles")
+          .select("first_name, last_name")
+          .eq("id", member.staff_profile_id)
+          .single();
+        if (sp) staffName = `${sp.first_name} ${sp.last_name}`;
+      }
+      const { data: loc } = await supabase
+        .from("locations")
+        .select("name")
+        .eq("id", locationId)
+        .single();
+
+      await LogAuditEvent({
+        clerkOrgId: member.organization_id,
+        locationId,
+        action: `Added ${staffName} to ${loc?.name ?? "location"}`,
+        actionCategory: "staff",
+        resourceType: "staff_member",
+        resourceId: member.staff_profile_id || member.user_id || memberId,
+        resourceName: staffName,
+      });
+    }
+
+    return { data: { success: true } };
+  } catch (error) {
+    console.error("[AddStaffToLocation] Unexpected error:", error);
+    return { error: "An unexpected error occurred" };
+  }
+}
+
+/**
+ * Remove (soft-delete) a staff member from a location by setting `is_active = false`.
+ *
+ * Guard: Prevents removing the staff member's LAST active location assignment.
+ */
+export async function RemoveStaffFromLocation(
+  memberId: string,
+  locationId: string,
+): Promise<StaffActionResponse<{ success: boolean }>> {
+  const supabase = createServerSupabaseClient();
+
+  // Look up the member to find their identifier for location_members
+  const { data: member } = await supabase
+    .from("members")
+    .select("user_id, staff_profile_id")
+    .eq("id", memberId)
+    .single();
+
+  if (!member) {
+    return { error: "Member not found" };
+  }
+
+  // Count active location assignments for this staff member
+  const matchCol = member.user_id ? "user_id" : "staff_profile_id";
+  const matchVal = member.user_id || member.staff_profile_id;
+
+  if (!matchVal) {
+    return { error: "Invalid member record: no identifier found" };
+  }
+
+  const { count, error: countError } = await supabase
+    .from("location_members")
+    .select("id", { count: "exact", head: true })
+    .eq(matchCol, matchVal)
+    .eq("is_active", true);
+
+  if (countError) {
+    return { error: "Failed to check location assignments" };
+  }
+
+  if ((count ?? 0) <= 1) {
+    return {
+      error:
+        "Cannot remove — this is the staff member's only active location. Deactivate the member instead.",
+    };
+  }
+
+  return DeactivateStaffMember(memberId, locationId);
+}
+
+// ============================================================================
+// BULK OPERATIONS
+// ============================================================================
+
+/**
+ * Bulk deactivate multiple staff members.
+ *
+ * @param memberIds  - Array of member UUIDs to deactivate
+ * @returns count of successfully deactivated members
+ */
+export async function BulkDeactivateStaff(
+  memberIds: string[],
+): Promise<StaffActionResponse<{ deactivated: number; errors: string[] }>> {
+  if (!memberIds.length) return { error: "No members provided" };
+
+  const errors: string[] = [];
+  let deactivated = 0;
+
+  for (const memberId of memberIds) {
+    const result = await DeactivateStaffMember(memberId);
+    if (result.error) {
+      errors.push(`${memberId}: ${result.error}`);
+    } else {
+      deactivated++;
+    }
+  }
+
+  revalidatePath("/dashboard/staff");
+
+  return { data: { deactivated, errors } };
+}
+
+/**
+ * Bulk PIN reset — generates a new random PIN for each member and
+ * returns the list of { staff name, new PIN } so the caller can
+ * present / export them.
+ *
+ * @param memberIds - Array of member UUIDs
+ * @returns Array of BulkPinResetResult (name + unhashed new PIN)
+ */
+export async function BulkResetPINs(
+  memberIds: string[],
+): Promise<
+  StaffActionResponse<{ results: BulkPinResetResult[]; errors: string[] }>
+> {
+  if (!memberIds.length) return { error: "No members provided" };
+
+  const supabase = createServerSupabaseClient();
+  const results: BulkPinResetResult[] = [];
+  const errors: string[] = [];
+
+  for (const memberId of memberIds) {
+    try {
+      // Look up member
+      const { data: member } = await supabase
+        .from("members")
+        .select("user_id, staff_profile_id, organization_id")
+        .eq("id", memberId)
+        .single();
+
+      if (!member) {
+        errors.push(`${memberId}: Member not found`);
+        continue;
+      }
+
+      // Determine the staff name
+      let staffName = "Unknown";
+      let staffProfileId = member.staff_profile_id;
+      if (staffProfileId) {
+        const { data: sp } = await supabase
+          .from("staff_profiles")
+          .select("first_name, last_name")
+          .eq("id", staffProfileId)
+          .single();
+        if (sp) staffName = `${sp.first_name} ${sp.last_name}`;
+      }
+
+      // Determine the lookup column
+      const matchCol = member.user_id ? "user_id" : "staff_profile_id";
+      const matchVal = member.user_id || member.staff_profile_id;
+      if (!matchVal) {
+        errors.push(`${memberId}: No identifier found`);
+        continue;
+      }
+
+      // Get all active location assignments
+      const { data: assignments } = await supabase
+        .from("location_members")
+        .select("id, location_id")
+        .eq(matchCol, matchVal)
+        .eq("is_active", true);
+
+      if (!assignments || assignments.length === 0) {
+        errors.push(`${memberId}: No active location assignments`);
+        continue;
+      }
+
+      // Generate one PIN, apply to all locations
+      const newPin = Math.floor(1000 + Math.random() * 9000).toString();
+      const hashedPin = await bcrypt.hash(newPin, 10);
+
+      const { error: updateError } = await supabase
+        .from("location_members")
+        .update({
+          pin_code: hashedPin,
+          updated_at: new Date().toISOString(),
+        })
+        .eq(matchCol, matchVal)
+        .eq("is_active", true);
+
+      if (updateError) {
+        errors.push(`${memberId}: ${updateError.message}`);
+        continue;
+      }
+
+      results.push({
+        staff_profile_id: staffProfileId || memberId,
+        staff_name: staffName,
+        new_pin: newPin,
+      });
+    } catch (err) {
+      errors.push(`${memberId}: Unexpected error`);
+    }
+  }
+
+  revalidatePath("/dashboard/staff");
+
+  return { data: { results, errors } };
+}
+
+/**
+ * Bulk assign a role to multiple staff members across all their active locations.
+ *
+ * @param memberIds - Array of member UUIDs
+ * @param roleCode  - The role to assign
+ * @returns count of successfully updated members
+ */
+export async function BulkAssignRole(
+  memberIds: string[],
+  roleCode: string,
+): Promise<StaffActionResponse<{ updated: number; errors: string[] }>> {
+  if (!memberIds.length) return { error: "No members provided" };
+  if (!roleCode) return { error: "Role code is required" };
+
+  const supabase = createServerSupabaseClient();
+  const errors: string[] = [];
+  let updated = 0;
+
+  for (const memberId of memberIds) {
+    try {
+      const { data: member } = await supabase
+        .from("members")
+        .select("user_id, staff_profile_id, organization_id")
+        .eq("id", memberId)
+        .single();
+
+      if (!member) {
+        errors.push(`${memberId}: Member not found`);
+        continue;
+      }
+
+      const matchCol = member.user_id ? "user_id" : "staff_profile_id";
+      const matchVal = member.user_id || member.staff_profile_id;
+      if (!matchVal) {
+        errors.push(`${memberId}: No identifier found`);
+        continue;
+      }
+
+      const { error: updateError } = await supabase
+        .from("location_members")
+        .update({
+          role_code: roleCode,
+          updated_at: new Date().toISOString(),
+        })
+        .eq(matchCol, matchVal)
+        .eq("is_active", true);
+
+      if (updateError) {
+        errors.push(`${memberId}: ${updateError.message}`);
+        continue;
+      }
+
+      updated++;
+    } catch (err) {
+      errors.push(`${memberId}: Unexpected error`);
+    }
+  }
+
+  revalidatePath("/dashboard/staff");
+
+  // Audit the bulk operation
+  const { userId } = await auth();
+  if (userId) {
+    // We need an org id — grab from first successful member
+    const { data: anyMember } = await supabase
+      .from("members")
+      .select("organization_id")
+      .in("id", memberIds)
+      .limit(1)
+      .single();
+
+    if (anyMember?.organization_id) {
+      await LogAuditEvent({
+        clerkOrgId: anyMember.organization_id,
+        action: `Bulk Role Assignment: ${roleCode} (${updated} staff)`,
+        actionCategory: "staff",
+        resourceType: "bulk_operation",
+        resourceId: "bulk",
+        resourceName: `${updated} staff members`,
+        metadata: { role_code: roleCode, member_count: memberIds.length },
+      });
+    }
+  }
+
+  return { data: { updated, errors } };
 }

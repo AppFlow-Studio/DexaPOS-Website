@@ -28,11 +28,28 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import {
   MoreHorizontal,
   Search,
@@ -46,14 +63,26 @@ import {
   ArrowUpDown,
   CheckCircle2,
   User,
+  ShieldCheck,
+  Shield,
+  Download,
+  Copy,
+  X,
 } from "lucide-react";
-import { UnifiedStaffMember } from "@/types/staff";
+import { UnifiedStaffMember, BulkPinResetResult } from "@/types/staff";
+import { RolesModel } from "@/types/db-modles";
 import {
   useUpdateStaffAssignment,
   useResetStaffPIN,
   useDeactivateStaff,
   useReactivateStaff,
+  useUpgradePOSToClerk,
+  useDemoteClerkToPOS,
+  useBulkDeactivateStaff,
+  useBulkResetPINs,
+  useBulkAssignRole,
 } from "@/app/dashboard/hooks/useStaff";
+import { GetMerchantRoles } from "@/app/dashboard/actions/staff-invite";
 import { StaffDetailSheet } from "./StaffDetailSheet";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -79,17 +108,172 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
     React.useState<UnifiedStaffMember | null>(null);
   const [isDetailOpen, setIsDetailOpen] = React.useState(false);
 
+  // Upgrade dialog state
+  const [upgradeTarget, setUpgradeTarget] =
+    React.useState<UnifiedStaffMember | null>(null);
+  const [upgradeEmail, setUpgradeEmail] = React.useState("");
+  const [isUpgradeOpen, setIsUpgradeOpen] = React.useState(false);
+
+  // Bulk operation state
+  const [bulkRoleDialogOpen, setBulkRoleDialogOpen] = React.useState(false);
+  const [bulkRoleCode, setBulkRoleCode] = React.useState("");
+  const [bulkPinResultsOpen, setBulkPinResultsOpen] = React.useState(false);
+  const [bulkPinResults, setBulkPinResults] = React.useState<BulkPinResetResult[]>([]);
+  const [bulkConfirmDeactivateOpen, setBulkConfirmDeactivateOpen] = React.useState(false);
+  const [availableRoles, setAvailableRoles] = React.useState<RolesModel[]>([]);
+
   const updateAssignment = useUpdateStaffAssignment();
   const resetPIN = useResetStaffPIN();
   const deactivateStaff = useDeactivateStaff();
   const reactivateStaff = useReactivateStaff();
+  const upgradePOS = useUpgradePOSToClerk();
+  const demoteClerk = useDemoteClerkToPOS();
+  const bulkDeactivate = useBulkDeactivateStaff();
+  const bulkResetPINs = useBulkResetPINs();
+  const bulkAssignRole = useBulkAssignRole();
+
+  // Selected member IDs derived from rowSelection
+  const selectedMemberIds = React.useMemo(() => {
+    return Object.keys(rowSelection).filter((key) => rowSelection[key as keyof typeof rowSelection]);
+  }, [rowSelection]);
+
+  const selectedCount = selectedMemberIds.length;
+
+  // Load roles when bulk role dialog opens
+  React.useEffect(() => {
+    if (bulkRoleDialogOpen && availableRoles.length === 0) {
+      GetMerchantRoles().then((rolesData) => {
+        if (Array.isArray(rolesData) && rolesData.length > 0) {
+          setAvailableRoles(rolesData);
+        }
+      });
+    }
+  }, [bulkRoleDialogOpen, availableRoles.length]);
+
+  // ── Bulk handlers ──
+  const handleBulkDeactivate = () => {
+    bulkDeactivate.mutate(selectedMemberIds, {
+      onSuccess: () => {
+        setRowSelection({});
+        setBulkConfirmDeactivateOpen(false);
+      },
+    });
+  };
+
+  const handleBulkResetPINs = () => {
+    bulkResetPINs.mutate(selectedMemberIds, {
+      onSuccess: (result) => {
+        if (result.data?.results) {
+          setBulkPinResults(result.data.results);
+          setBulkPinResultsOpen(true);
+        }
+        setRowSelection({});
+      },
+    });
+  };
+
+  const handleBulkAssignRole = () => {
+    if (!bulkRoleCode) return;
+    bulkAssignRole.mutate(
+      { memberIds: selectedMemberIds, roleCode: bulkRoleCode },
+      {
+        onSuccess: () => {
+          setRowSelection({});
+          setBulkRoleDialogOpen(false);
+          setBulkRoleCode("");
+        },
+      }
+    );
+  };
+
+  const handleCopyPinResults = () => {
+    const text = bulkPinResults
+      .map((r) => `${r.staff_name}: ${r.new_pin}`)
+      .join("\n");
+    navigator.clipboard.writeText(text);
+    toast.success("PINs copied to clipboard");
+  };
+
+  const handleDownloadPinResults = () => {
+    const csv = ["Name,PIN", ...bulkPinResults.map((r) => `${r.staff_name},${r.new_pin}`)].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pin-reset-results-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const handleRowClick = (staff: UnifiedStaffMember) => {
     setSelectedStaff(staff);
     setIsDetailOpen(true);
   };
 
+  const handleUpgradeClick = (staff: UnifiedStaffMember) => {
+    setUpgradeTarget(staff);
+    setUpgradeEmail(staff.email || "");
+    setIsUpgradeOpen(true);
+  };
+
+  const handleUpgradeSubmit = () => {
+    if (!upgradeTarget) return;
+
+    const primaryAssignment = upgradeTarget.location_assignments.find(
+      (a) => a.is_primary
+    );
+    if (!primaryAssignment) {
+      toast.error("No primary location found for this staff member");
+      return;
+    }
+
+    if (!upgradeEmail || !upgradeEmail.includes("@")) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
+    upgradePOS.mutate(
+      {
+        memberId: upgradeTarget.member_id,
+        locationId: primaryAssignment.location_id,
+        email: upgradeEmail,
+      },
+      {
+        onSuccess: () => {
+          setIsUpgradeOpen(false);
+          setUpgradeTarget(null);
+          setUpgradeEmail("");
+        },
+      }
+    );
+  };
+
   const columns: ColumnDef<UnifiedStaffMember>[] = [
+    {
+      id: "select",
+      header: ({ table }) => (
+        <Checkbox
+          checked={
+            table.getIsAllPageRowsSelected() ||
+            (table.getIsSomePageRowsSelected() && "indeterminate")
+          }
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          aria-label="Select all"
+          className="translate-y-[2px]"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select row"
+          className="translate-y-[2px]"
+          onClick={(e) => e.stopPropagation()}
+        />
+      ),
+      enableSorting: false,
+      enableHiding: false,
+    },
     {
       accessorKey: "display_name",
       header: ({ column }) => {
@@ -350,6 +534,36 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                   </DropdownMenuItem>
                 </>
               )}
+              {/* Upgrade to Dashboard User — only for POS-only staff */}
+              {!staff.is_clerk_user && !staff.user_id && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => handleUpgradeClick(staff)}
+                  >
+                    <ShieldCheck className="mr-2 h-4 w-4" />
+                    Upgrade to Dashboard User
+                  </DropdownMenuItem>
+                </>
+              )}
+              {/* Demote to POS-Only — only for Clerk staff */}
+              {staff.is_clerk_user && staff.user_id && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => {
+                      if (confirm(`Demote ${staff.display_name} to POS-only? This will revoke their dashboard access.`)) {
+                        demoteClerk.mutate(staff.member_id);
+                      }
+                    }}
+                    disabled={demoteClerk.isPending}
+                    className="text-orange-600"
+                  >
+                    <Shield className="mr-2 h-4 w-4" />
+                    Demote to POS-Only
+                  </DropdownMenuItem>
+                </>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={handleDeactivate}
@@ -390,6 +604,8 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
     onGlobalFilterChange: setGlobalFilter,
+    enableRowSelection: true,
+    getRowId: (row) => row.member_id,
     state: {
       sorting,
       columnFilters,
@@ -413,6 +629,51 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
           />
         </div>
       </div>
+
+      {/* Bulk Action Bar */}
+      {selectedCount > 0 && (
+        <div className="flex items-center gap-2 rounded-lg border bg-muted/50 px-4 py-3">
+          <span className="text-sm font-medium mr-2">
+            {selectedCount} selected
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setBulkConfirmDeactivateOpen(true)}
+            disabled={bulkDeactivate.isPending}
+          >
+            <UserX className="mr-2 h-4 w-4" />
+            Bulk Deactivate
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleBulkResetPINs}
+            disabled={bulkResetPINs.isPending}
+          >
+            <KeyRound className="mr-2 h-4 w-4" />
+            {bulkResetPINs.isPending ? "Resetting..." : "Bulk PIN Reset"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setBulkRoleDialogOpen(true)}
+            disabled={bulkAssignRole.isPending}
+          >
+            <Shield className="mr-2 h-4 w-4" />
+            Bulk Assign Role
+          </Button>
+          <div className="flex-1" />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setRowSelection({})}
+          >
+            <X className="mr-2 h-4 w-4" />
+            Clear Selection
+          </Button>
+        </div>
+      )}
 
       {/* Table */}
       <div className="rounded-md border">
@@ -483,8 +744,9 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
       {/* Results count */}
       <div className="flex items-center justify-between text-sm text-muted-foreground">
         <div>
-          Showing {table.getFilteredRowModel().rows.length} of {data.length}{" "}
-          staff member(s)
+          {selectedCount > 0
+            ? `${selectedCount} of ${table.getFilteredRowModel().rows.length} row(s) selected`
+            : `Showing ${table.getFilteredRowModel().rows.length} of ${data.length} staff member(s)`}
         </div>
       </div>
 
@@ -499,6 +761,201 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
           }
         }}
       />
+
+      {/* Upgrade POS to Dashboard dialog */}
+      <Dialog open={isUpgradeOpen} onOpenChange={setIsUpgradeOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Upgrade to Dashboard User</DialogTitle>
+            <DialogDescription>
+              Promote{" "}
+              <span className="font-semibold">
+                {upgradeTarget?.first_name} {upgradeTarget?.last_name}
+              </span>{" "}
+              from POS-only to a full Dashboard user. Their time-clock history
+              and POS PIN will be preserved.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="upgrade-email">Email Address</Label>
+              <Input
+                id="upgrade-email"
+                type="email"
+                placeholder="user@example.com"
+                value={upgradeEmail}
+                onChange={(e) => setUpgradeEmail(e.target.value)}
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground">
+                A temporary password will be generated. Share it securely with
+                the staff member.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsUpgradeOpen(false)}
+              disabled={upgradePOS.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpgradeSubmit}
+              disabled={
+                upgradePOS.isPending ||
+                !upgradeEmail ||
+                !upgradeEmail.includes("@")
+              }
+            >
+              {upgradePOS.isPending ? "Upgrading..." : "Upgrade"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Confirm Deactivation Dialog */}
+      <Dialog open={bulkConfirmDeactivateOpen} onOpenChange={setBulkConfirmDeactivateOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Bulk Deactivate Staff</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to deactivate{" "}
+              <span className="font-semibold">{selectedCount}</span> staff
+              member(s)? They will lose access to all assigned locations.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setBulkConfirmDeactivateOpen(false)}
+              disabled={bulkDeactivate.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleBulkDeactivate}
+              disabled={bulkDeactivate.isPending}
+            >
+              {bulkDeactivate.isPending
+                ? "Deactivating..."
+                : `Deactivate ${selectedCount} Staff`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Role Assignment Dialog */}
+      <Dialog
+        open={bulkRoleDialogOpen}
+        onOpenChange={(open) => {
+          setBulkRoleDialogOpen(open);
+          if (!open) setBulkRoleCode("");
+        }}
+      >
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Bulk Assign Role</DialogTitle>
+            <DialogDescription>
+              Assign a new role to{" "}
+              <span className="font-semibold">{selectedCount}</span> selected
+              staff member(s). This will update their role across all active
+              location assignments.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>Role</Label>
+              <Select value={bulkRoleCode} onValueChange={setBulkRoleCode}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableRoles.map((role) => (
+                    <SelectItem key={role.code} value={role.code}>
+                      {role.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setBulkRoleDialogOpen(false);
+                setBulkRoleCode("");
+              }}
+              disabled={bulkAssignRole.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBulkAssignRole}
+              disabled={bulkAssignRole.isPending || !bulkRoleCode}
+            >
+              {bulkAssignRole.isPending
+                ? "Assigning..."
+                : `Assign to ${selectedCount} Staff`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk PIN Reset Results Dialog */}
+      <Dialog
+        open={bulkPinResultsOpen}
+        onOpenChange={(open) => {
+          setBulkPinResultsOpen(open);
+          if (!open) setBulkPinResults([]);
+        }}
+      >
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>PIN Reset Results</DialogTitle>
+            <DialogDescription>
+              New PINs have been generated for {bulkPinResults.length} staff
+              member(s). Save these securely — they cannot be retrieved later.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[300px] overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Staff Name</TableHead>
+                  <TableHead className="text-right">New PIN</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {bulkPinResults.map((result) => (
+                  <TableRow key={result.staff_profile_id}>
+                    <TableCell className="font-medium">
+                      {result.staff_name}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-lg">
+                      {result.new_pin}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={handleCopyPinResults}>
+              <Copy className="mr-2 h-4 w-4" />
+              Copy All
+            </Button>
+            <Button variant="outline" onClick={handleDownloadPinResults}>
+              <Download className="mr-2 h-4 w-4" />
+              Download CSV
+            </Button>
+            <Button onClick={() => setBulkPinResultsOpen(false)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

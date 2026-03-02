@@ -355,6 +355,18 @@ export function InviteUserWizard({
   }, [filteredRoles, staffType]);
 
   const selectedRole = filteredRoles.find((r) => r.code === selectedRoleCode);
+  const isAdminRole = (selectedRole?.level ?? 0) >= 9;
+
+  // Auto-select all locations when an owner/admin role is chosen
+  React.useEffect(() => {
+    if (isAdminRole && locations.length > 0) {
+      setSelectedLocationIds(new Set(locations.map((l) => l.id)));
+      if (!primaryLocationId) {
+        setPrimaryLocationId(locations[0].id);
+      }
+    }
+  }, [isAdminRole, locations]);
+
   const selectedLocations = locations.filter((loc) =>
     selectedLocationIds.has(loc.id),
   );
@@ -821,10 +833,29 @@ export function InviteUserWizard({
                   {/* Step 3: Assign Locations */}
                   {currentStep === "locations" && (
                     <div className="space-y-4">
-                      <div className="text-sm text-muted-foreground">
-                        Select one or more locations where this team member will
-                        have access.
-                      </div>
+                      {isAdminRole ? (
+                        /* ── Admin / Owner: auto-assigned, show info banner ── */
+                        <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+                          <Info className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
+                          <div>
+                            <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                              Auto-assigned to all locations
+                            </p>
+                            <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">
+                              Owners and Admins automatically receive access to
+                              all {locations.length} location
+                              {locations.length !== 1 ? "s" : ""}. Any new
+                              locations added in the future will also be
+                              provisioned automatically.
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-muted-foreground">
+                          Select one or more locations where this team member
+                          will have access.
+                        </div>
+                      )}
                       <div className="space-y-2">
                         {locations.length === 0 ? (
                           <div className="text-center py-8 text-muted-foreground">
@@ -840,17 +871,22 @@ export function InviteUserWizard({
                               <div
                                 key={location.id}
                                 className={cn(
-                                  "flex items-center gap-4 p-4 rounded-lg border-2 transition-all cursor-pointer",
-                                  isSelected
-                                    ? "border-primary bg-primary/5"
-                                    : "border-muted hover:border-primary/50",
+                                  "flex items-center gap-4 p-4 rounded-lg border-2 transition-all",
+                                  isAdminRole
+                                    ? "cursor-default border-primary/40 bg-primary/5 opacity-80"
+                                    : isSelected
+                                      ? "cursor-pointer border-primary bg-primary/5"
+                                      : "cursor-pointer border-muted hover:border-primary/50",
                                 )}
-                                onClick={() => toggleLocation(location.id)}
+                                onClick={() =>
+                                  !isAdminRole && toggleLocation(location.id)
+                                }
                               >
                                 <Checkbox
                                   checked={isSelected}
+                                  disabled={isAdminRole}
                                   onCheckedChange={() =>
-                                    toggleLocation(location.id)
+                                    !isAdminRole && toggleLocation(location.id)
                                   }
                                 />
                                 <div className="flex-1">

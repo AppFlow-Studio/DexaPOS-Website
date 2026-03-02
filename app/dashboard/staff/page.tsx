@@ -31,6 +31,8 @@ import {
 } from "lucide-react";
 import { InviteUserWizard } from "@/components/dashboard/staff/InviteUserWizard";
 import { StaffDataTable } from "@/components/dashboard/staff/StaffDataTable";
+import { PendingInvitesTable } from "@/components/dashboard/staff/PendingInvitesTable";
+import { usePendingInvites } from "../hooks/useInvites";
 import {
   ChartContainer,
   ChartTooltip,
@@ -46,6 +48,7 @@ export default function MerchantStaffPage() {
   // Fetch unified staff data with automatic location scoping
   const { data: staffMembers, isLoading, refetch } = useUnifiedStaff();
   const { data: orders } = useOrders();
+  const { data: pendingInvites } = usePendingInvites();
   const staff = staffMembers || [];
   const ordersList = Array.isArray(orders) ? orders : [];
 
@@ -238,6 +241,32 @@ export default function MerchantStaffPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Pending Invitations — only shown when there are pending invites */}
+      {pendingInvites && pendingInvites.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-amber-500" />
+                  Pending Invitations
+                </CardTitle>
+                <CardDescription>
+                  {pendingInvites.length} invitation
+                  {pendingInvites.length !== 1 ? "s" : ""} awaiting acceptance
+                </CardDescription>
+              </div>
+              <Badge variant="outline" className="text-amber-600 border-amber-300">
+                {pendingInvites.length} pending
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <PendingInvitesTable />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Staff Data Table */}
       <Card>
