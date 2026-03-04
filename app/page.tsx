@@ -1,5 +1,5 @@
-import { SignIn, SignUpButton, SignedIn, SignedOut } from '@clerk/nextjs'
-import { Shield, ArrowRight } from 'lucide-react'
+import { SignIn, SignedIn, SignedOut, SignOutButton } from '@clerk/nextjs'
+import { Shield, ArrowRight, LayoutDashboard, Settings, LogOut } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Home() {
@@ -68,13 +68,41 @@ export default function Home() {
           </SignedOut>
 
           <SignedIn>
-            <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+            <div className="bg-card border border-border rounded-xl p-6 shadow-sm w-full">
               <h2 className="text-xl font-semibold text-card-foreground mb-2">
-                Welcome back! 🎉
+                Welcome back!
               </h2>
-              <p className="text-muted-foreground">
-                You're successfully signed in. Ready to explore your dashboard?
+              <p className="text-muted-foreground mb-6">
+                Where would you like to go?
               </p>
+              <div className="flex flex-col gap-3">
+                <Link
+                  href="/dashboard"
+                  className="flex items-center justify-between w-full px-4 py-3 bg-foreground text-background rounded-lg font-medium hover:bg-foreground/90 transition-colors"
+                >
+                  <span className="flex items-center gap-2">
+                    <LayoutDashboard className="w-4 h-4" />
+                    Go to Dashboard
+                  </span>
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+                <Link
+                  href="/manage"
+                  className="flex items-center justify-between w-full px-4 py-3 bg-muted text-foreground rounded-lg font-medium hover:bg-muted/80 transition-colors"
+                >
+                  <span className="flex items-center gap-2">
+                    <Settings className="w-4 h-4" />
+                    Go to Admin Panel
+                  </span>
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+                <SignOutButton>
+                  <button className="flex items-center justify-center gap-2 w-full px-4 py-3 text-muted-foreground rounded-lg font-medium hover:bg-muted/50 transition-colors mt-1">
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </button>
+                </SignOutButton>
+              </div>
             </div>
           </SignedIn>
         </div>
