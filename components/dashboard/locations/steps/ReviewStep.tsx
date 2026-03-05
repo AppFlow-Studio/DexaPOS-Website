@@ -114,6 +114,9 @@ export function ReviewStep({ data, onEditStep }: ReviewStepProps) {
                     <InfoRow label="City" value={data.city} />
                     <InfoRow label="State" value={stateName} />
                     <InfoRow label="ZIP Code" value={data.postal_code} />
+                    {data.country && data.country !== 'US' && (
+                        <InfoRow label="Country" value={data.country} />
+                    )}
                     <InfoRow label="Timezone" value={timezoneName} />
                 </div>
             </ReviewSection>

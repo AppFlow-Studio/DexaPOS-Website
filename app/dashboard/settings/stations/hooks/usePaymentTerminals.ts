@@ -5,7 +5,9 @@ import {
   getTerminalsForLocation,
   getAvailableTerminals,
   getTerminalForStation,
+  getTerminalsForStation,
   getPaymentTerminalById,
+  setActiveTerminalForStation,
   createPaymentTerminal,
   updatePaymentTerminal,
   deletePaymentTerminal,
@@ -90,6 +92,24 @@ export function useStationTerminal(stationId: string) {
         throw new Error(result.error || "Failed to fetch terminal");
       }
       return result.data;
+    },
+    enabled: !!stationId,
+    staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * Hook to fetch ALL terminals for a station (supports multi-terminal)
+ */
+export function useStationTerminals(stationId: string) {
+  return useQuery({
+    queryKey: ["paymentTerminals", "stationTerminals", stationId],
+    queryFn: async () => {
+      const result = await getTerminalsForStation(stationId);
+      if (!result.success) {
+        throw new Error(result.error || "Failed to fetch terminals");
+      }
+      return result.data || [];
     },
     enabled: !!stationId,
     staleTime: 30 * 1000,
@@ -254,6 +274,37 @@ export function useUnlinkTerminalFromStation() {
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to unlink terminal");
+    },
+  });
+}
+
+/**
+ * Hook to set a terminal as the active one for a station
+ */
+export function useSetActiveTerminal() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      terminalId,
+      stationId,
+    }: {
+      terminalId: string;
+      stationId: string;
+    }) => {
+      const result = await setActiveTerminalForStation(terminalId, stationId);
+      if (!result.success) {
+        throw new Error(result.error || "Failed to set active terminal");
+      }
+      return result.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["paymentTerminals"] });
+      queryClient.invalidateQueries({ queryKey: ["stations"] });
+      toast.success(`Switched to ${data?.terminal_name}`);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to switch terminal");
     },
   });
 }

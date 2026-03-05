@@ -126,6 +126,7 @@ export async function CreateLocation(
       timezone: data.timezone || "America/New_York",
       pricing_strategy: data.pricing_strategy || "manual",
       dual_pricing_percentage: data.dual_pricing_percentage ?? 4.0,
+      use_merchant_pricing_defaults: data.use_merchant_pricing_defaults ?? true,
       is_active: data.is_active ?? true,
       is_accepting_orders: data.is_accepting_orders ?? true,
       business_hours: data.business_hours || {},
@@ -191,6 +192,7 @@ export async function UpdateLocation(
   if (data.timezone !== undefined) updateData.timezone = data.timezone;
   if (data.pricing_strategy !== undefined) updateData.pricing_strategy = data.pricing_strategy;
   if (data.dual_pricing_percentage !== undefined) updateData.dual_pricing_percentage = data.dual_pricing_percentage;
+  if (data.use_merchant_pricing_defaults !== undefined) updateData.use_merchant_pricing_defaults = data.use_merchant_pricing_defaults;
   if (data.is_active !== undefined) updateData.is_active = data.is_active;
   if (data.is_accepting_orders !== undefined)
     updateData.is_accepting_orders = data.is_accepting_orders;
@@ -425,6 +427,95 @@ export async function DeleteLocation(locationId: string) {
       resourceName: locationToDelete.name,
     });
   }
+
+  return { success: true };
+}
+
+// ============================================================================
+// MERCHANT PRICING DEFAULTS
+// ============================================================================
+
+export async function GetMerchantPricingDefaults(clerkOrgId: string) {
+  if (!clerkOrgId) {
+    return { error: "Organization ID is required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  const { data: merchant, error } = await supabase
+    .from("merchants")
+    .select("id, pricing_strategy, dual_pricing_percentage")
+    .eq("clerk_org_id", clerkOrgId)
+    .single();
+
+  if (error || !merchant) {
+    console.error("[GetMerchantPricingDefaults] Error:", error);
+    return { error: "Merchant not found" };
+  }
+
+  return {
+    data: {
+      merchantId: merchant.id,
+      pricing_strategy: merchant.pricing_strategy as "manual" | "dual",
+      dual_pricing_percentage: merchant.dual_pricing_percentage as number,
+    },
+  };
+}
+
+export async function UpdateMerchantPricingDefaults(
+  clerkOrgId: string,
+  data: {
+    pricing_strategy?: "manual" | "dual";
+    dual_pricing_percentage?: number;
+  },
+) {
+  if (!clerkOrgId) {
+    return { error: "Organization ID is required" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  // Get merchant
+  const { data: merchant, error: merchantError } = await supabase
+    .from("merchants")
+    .select("id, name, pricing_strategy, dual_pricing_percentage")
+    .eq("clerk_org_id", clerkOrgId)
+    .single();
+
+  if (merchantError || !merchant) {
+    return { error: "Merchant not found" };
+  }
+
+  const updateData: Record<string, unknown> = {};
+  if (data.pricing_strategy !== undefined) updateData.pricing_strategy = data.pricing_strategy;
+  if (data.dual_pricing_percentage !== undefined) updateData.dual_pricing_percentage = data.dual_pricing_percentage;
+
+  const { error } = await supabase
+    .from("merchants")
+    .update(updateData)
+    .eq("id", merchant.id);
+
+  if (error) {
+    console.error("[UpdateMerchantPricingDefaults] Error:", error);
+    return { error: error.message };
+  }
+
+  // Audit log
+  await LogAuditEvent({
+    merchantId: merchant.id,
+    action: "Updated Merchant Pricing Defaults",
+    actionCategory: "settings",
+    resourceType: "merchant",
+    resourceId: merchant.id,
+    resourceName: merchant.name,
+    changes: {
+      before: {
+        pricing_strategy: merchant.pricing_strategy,
+        dual_pricing_percentage: merchant.dual_pricing_percentage,
+      },
+      after: updateData,
+    },
+  });
 
   return { success: true };
 }

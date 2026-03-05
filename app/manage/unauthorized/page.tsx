@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ShieldX, ArrowLeft, Home } from 'lucide-react'
@@ -7,7 +8,28 @@ interface UnauthorizedPageProps {
   searchParams: Promise<{ required?: string; reason?: string }>
 }
 
-export default async function UnauthorizedPage({
+export default function UnauthorizedPage({
+  searchParams,
+}: UnauthorizedPageProps) {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="mx-auto w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mb-4">
+              <ShieldX className="h-8 w-8 text-destructive" />
+            </div>
+            <CardTitle className="text-2xl">Access Denied</CardTitle>
+          </CardHeader>
+        </Card>
+      </div>
+    }>
+      <UnauthorizedContent searchParams={searchParams} />
+    </Suspense>
+  )
+}
+
+async function UnauthorizedContent({
   searchParams,
 }: UnauthorizedPageProps) {
   const params = await searchParams
