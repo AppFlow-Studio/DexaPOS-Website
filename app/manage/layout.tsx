@@ -220,7 +220,7 @@ function AppSidebar() {
                 </div>
                 {/* Only show Create Merchant button if user has permission */}
                 {canCreateMerchants && (
-                    <Link href="/manage/create-merchant" className="px-4 pb-2">
+                    <Link href="/manage/merchants/new" className="px-4 pb-2">
                         <Button className="w-full justify-start gap-2" size="sm">
                             <Plus className="h-4 w-4" />
                             Create Merchant

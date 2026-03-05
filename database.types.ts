@@ -3754,6 +3754,105 @@ export type Database = {
           },
         ]
       }
+      location_banking_profiles: {
+        Row: {
+          account_holder_name: string
+          account_number_last_four: string
+          account_type: string
+          bank_account_token: string | null
+          bank_name: string
+          created_at: string
+          id: string
+          is_active: boolean
+          is_verified: boolean
+          location_id: string
+          merchant_id: string
+          minimum_payout_amount: number
+          payout_day_of_month: number | null
+          payout_day_of_week: number | null
+          payout_frequency: string
+          routing_number_last_four: string
+          updated_at: string
+          verified_at: string | null
+        }
+        Insert: {
+          account_holder_name: string
+          account_number_last_four: string
+          account_type?: string
+          bank_account_token?: string | null
+          bank_name: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_verified?: boolean
+          location_id: string
+          merchant_id?: string
+          minimum_payout_amount?: number
+          payout_day_of_month?: number | null
+          payout_day_of_week?: number | null
+          payout_frequency?: string
+          routing_number_last_four: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Update: {
+          account_holder_name?: string
+          account_number_last_four?: string
+          account_type?: string
+          bank_account_token?: string | null
+          bank_name?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_verified?: boolean
+          location_id?: string
+          merchant_id?: string
+          minimum_payout_amount?: number
+          payout_day_of_month?: number | null
+          payout_day_of_week?: number | null
+          payout_frequency?: string
+          routing_number_last_four?: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_banking_profiles_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "location_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_banking_profiles_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_banking_profiles_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_location_menu_items"
+            referencedColumns: ["location_id"]
+          },
+          {
+            foreignKeyName: "location_banking_profiles_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "admin_merchant_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_banking_profiles_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       locations: {
         Row: {
           address_line1: string | null
@@ -3765,6 +3864,8 @@ export type Database = {
           created_at: string | null
           description: string | null
           dual_pricing_percentage: number
+          ein: string | null
+          ein_last_four: string | null
           email: string | null
           id: string
           is_accepting_orders: boolean
@@ -3773,11 +3874,16 @@ export type Database = {
           longitude: number | null
           merchant_id: string
           name: string
+          onboarding_completed: boolean | null
+          onboarding_step: number | null
           phone: string | null
           postal_code: string
           pricing_strategy: string
           public_metadata: Json | null
+          sales_tax_rate: number | null
           state: string
+          tax_id: string | null
+          tax_registration_status: string | null
           timezone: string
           updated_at: string
           uses_global_menu: boolean
@@ -3792,6 +3898,8 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           dual_pricing_percentage?: number
+          ein?: string | null
+          ein_last_four?: string | null
           email?: string | null
           id?: string
           is_accepting_orders?: boolean
@@ -3800,11 +3908,16 @@ export type Database = {
           longitude?: number | null
           merchant_id: string
           name: string
+          onboarding_completed?: boolean | null
+          onboarding_step?: number | null
           phone?: string | null
           postal_code?: string
           pricing_strategy?: string
           public_metadata?: Json | null
+          sales_tax_rate?: number | null
           state?: string
+          tax_id?: string | null
+          tax_registration_status?: string | null
           timezone?: string
           updated_at?: string
           uses_global_menu?: boolean
@@ -3819,6 +3932,8 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           dual_pricing_percentage?: number
+          ein?: string | null
+          ein_last_four?: string | null
           email?: string | null
           id?: string
           is_accepting_orders?: boolean
@@ -3827,11 +3942,16 @@ export type Database = {
           longitude?: number | null
           merchant_id?: string
           name?: string
+          onboarding_completed?: boolean | null
+          onboarding_step?: number | null
           phone?: string | null
           postal_code?: string
           pricing_strategy?: string
           public_metadata?: Json | null
+          sales_tax_rate?: number | null
           state?: string
+          tax_id?: string | null
+          tax_registration_status?: string | null
           timezone?: string
           updated_at?: string
           uses_global_menu?: boolean
@@ -4541,33 +4661,165 @@ export type Database = {
           },
         ]
       }
+      merchant_billing_profiles: {
+        Row: {
+          account_holder_name: string | null
+          account_number_last_four: string | null
+          account_type: string | null
+          bank_name: string | null
+          billing_method: string
+          card_brand: string | null
+          card_exp_month: number | null
+          card_exp_year: number | null
+          card_last_four: string | null
+          card_token: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          is_primary: boolean
+          is_verified: boolean
+          merchant_id: string
+          routing_number_last_four: string | null
+          updated_at: string
+          verified_at: string | null
+        }
+        Insert: {
+          account_holder_name?: string | null
+          account_number_last_four?: string | null
+          account_type?: string | null
+          bank_name?: string | null
+          billing_method?: string
+          card_brand?: string | null
+          card_exp_month?: number | null
+          card_exp_year?: number | null
+          card_last_four?: string | null
+          card_token?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_primary?: boolean
+          is_verified?: boolean
+          merchant_id: string
+          routing_number_last_four?: string | null
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Update: {
+          account_holder_name?: string | null
+          account_number_last_four?: string | null
+          account_type?: string | null
+          bank_name?: string | null
+          billing_method?: string
+          card_brand?: string | null
+          card_exp_month?: number | null
+          card_exp_year?: number | null
+          card_last_four?: string | null
+          card_token?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_primary?: boolean
+          is_verified?: boolean
+          merchant_id?: string
+          routing_number_last_four?: string | null
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merchant_billing_profiles_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "admin_merchant_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchant_billing_profiles_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       merchants: {
         Row: {
+          activated_at: string | null
+          business_address_line1: string | null
+          business_address_line2: string | null
+          business_city: string | null
+          business_country: string | null
+          business_legal_name: string | null
+          business_postal_code: string | null
+          business_state: string | null
+          business_type: string | null
           carrier_id: string
           clerk_org_id: string
           created_at: string | null
+          dba_name: string | null
+          ein_last_four: string | null
           id: string
           name: string
+          onboarding_completed_at: string | null
+          onboarding_status: string
+          owner_email: string | null
+          owner_first_name: string | null
+          owner_last_name: string | null
+          owner_phone: string | null
           public_metadata: Json | null
           type: string | null
           updated_at: string | null
         }
         Insert: {
+          activated_at?: string | null
+          business_address_line1?: string | null
+          business_address_line2?: string | null
+          business_city?: string | null
+          business_country?: string | null
+          business_legal_name?: string | null
+          business_postal_code?: string | null
+          business_state?: string | null
+          business_type?: string | null
           carrier_id: string
           clerk_org_id: string
           created_at?: string | null
+          dba_name?: string | null
+          ein_last_four?: string | null
           id?: string
           name: string
+          onboarding_completed_at?: string | null
+          onboarding_status?: string
+          owner_email?: string | null
+          owner_first_name?: string | null
+          owner_last_name?: string | null
+          owner_phone?: string | null
           public_metadata?: Json | null
           type?: string | null
           updated_at?: string | null
         }
         Update: {
+          activated_at?: string | null
+          business_address_line1?: string | null
+          business_address_line2?: string | null
+          business_city?: string | null
+          business_country?: string | null
+          business_legal_name?: string | null
+          business_postal_code?: string | null
+          business_state?: string | null
+          business_type?: string | null
           carrier_id?: string
           clerk_org_id?: string
           created_at?: string | null
+          dba_name?: string | null
+          ein_last_four?: string | null
           id?: string
           name?: string
+          onboarding_completed_at?: string | null
+          onboarding_status?: string
+          owner_email?: string | null
+          owner_first_name?: string | null
+          owner_last_name?: string | null
+          owner_phone?: string | null
           public_metadata?: Json | null
           type?: string | null
           updated_at?: string | null
