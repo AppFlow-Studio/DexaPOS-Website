@@ -3,12 +3,12 @@
 import { auth } from "@clerk/nextjs/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
-export async function GetCustomerFeedback(customerId: string) {
+export async function GetCustomerFeedback(customerId: string, locationId?: string) {
   if (!customerId) return [];
 
   const supabase = createServiceRoleClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("customer_feedback")
     .select(
       `
@@ -20,6 +20,12 @@ export async function GetCustomerFeedback(customerId: string) {
     )
     .eq("customer_id", customerId)
     .order("created_at", { ascending: false });
+
+  if (locationId && locationId !== "all") {
+    query = query.eq("location_id", locationId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("[GetCustomerFeedback]", error);

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2 } from "lucide-react";
 import { useCustomerReservations, useCustomerWaitlist, useCustomerDineSessions } from "../../hooks/useCustomerBookings";
+import { useLocationStore } from "@/stores/location-store";
 import type { CustomerListItem } from "@/types/customer";
 
 interface BookingsTabProps {
@@ -14,11 +15,12 @@ interface BookingsTabProps {
 
 export function BookingsTab({ customer }: BookingsTabProps) {
   const [activeSubTab, setActiveSubTab] = useState<"reservations" | "waitlist" | "dine">("reservations");
+  const { selectedLocationId } = useLocationStore();
   const customerId = customer?.id || null;
 
-  const { data: reservations = [], isLoading: loadingRes } = useCustomerReservations(customerId);
-  const { data: waitlist = [], isLoading: loadingWait } = useCustomerWaitlist(customerId);
-  const { data: dineSessions = [], isLoading: loadingDine } = useCustomerDineSessions(customerId);
+  const { data: reservations = [], isLoading: loadingRes } = useCustomerReservations(customerId, selectedLocationId);
+  const { data: waitlist = [], isLoading: loadingWait } = useCustomerWaitlist(customerId, selectedLocationId);
+  const { data: dineSessions = [], isLoading: loadingDine } = useCustomerDineSessions(customerId, selectedLocationId);
 
   const stats = useMemo(() => {
     const totalBookings = reservations.length;

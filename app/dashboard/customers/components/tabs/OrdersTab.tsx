@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useCustomerOrders } from "../../hooks/useCustomerOrders";
+import { useLocationStore } from "@/stores/location-store";
 import type { CustomerListItem } from "@/types/customer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -41,7 +42,8 @@ type StatusFilter = "all" | "completed" | "void" | "refund";
 type SortField = "date" | "total" | "items" | "status";
 
 export function OrdersTab({ customer }: OrdersTabProps) {
-  const { data: orders = [], isLoading } = useCustomerOrders(customer.id);
+  const { selectedLocationId } = useLocationStore();
+  const { data: orders = [], isLoading } = useCustomerOrders(customer.id, selectedLocationId);
   const [selectedOrder, setSelectedOrder] = useState<OrderResponse | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRangeFilter>("all");

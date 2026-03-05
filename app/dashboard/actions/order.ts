@@ -1152,7 +1152,8 @@ export async function GetOrderFullHistory(
  * Get all orders for a specific customer
  */
 export async function GetCustomerOrders(
-  customerId: string
+  customerId: string,
+  locationId?: string
 ): Promise<OrderResponse[]> {
   if (!customerId) {
     return [];
@@ -1161,7 +1162,7 @@ export async function GetCustomerOrders(
   const supabase = createServiceRoleClient();
 
   try {
-    const { data: orders, error } = await supabase
+    let query = supabase
       .from("orders")
       .select(
         `
@@ -1177,6 +1178,12 @@ export async function GetCustomerOrders(
       )
       .eq("customer_id", customerId)
       .order("created_at", { ascending: false });
+
+    if (locationId && locationId !== "all") {
+      query = query.eq("location_id", locationId);
+    }
+
+    const { data: orders, error } = await query;
 
     if (error) {
       console.error("[GetCustomerOrders] Error fetching customer orders:", error);

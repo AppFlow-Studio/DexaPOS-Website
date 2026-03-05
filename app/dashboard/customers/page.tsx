@@ -37,12 +37,14 @@ import { CustomerProfileSheet } from "./components/CustomerProfileSheet";
 import type { CustomerListItem } from "@/types/customer";
 import { getCustomerDisplayName, getCustomerStatus } from "@/types/customer";
 import { exportCustomersCSV } from "./utils/exportCustomers";
+import { useLocationStore } from "@/stores/location-store";
 
 type SortField = "name" | "lifetime_spend" | "visits" | "avg_spend" | "last_visit";
 type SortDir = "asc" | "desc";
 
 export default function CustomersPage() {
-  const { data: customers = [], isLoading } = useCustomers();
+  const { selectedLocationId } = useLocationStore();
+  const { data: customers = [], isLoading } = useCustomers({ locationId: selectedLocationId });
   const bulkAddTagMutation = useBulkAddCustomerTag();
   const bulkRemoveTagMutation = useBulkRemoveCustomerTag();
   const deleteCustomerMutation = useDeleteCustomer();
@@ -241,7 +243,7 @@ export default function CustomersPage() {
 
           {/* Search Bar */}
           <div className="relative w-full max-w-md">
-            <Search className="absolute left-3 top-3.5 h-5 w-5 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
               placeholder="Search by name, email, or phone..."
               className="pl-10 py-2.5 text-base rounded-lg border-input bg-card shadow-sm focus-visible:ring-2 focus-visible:ring-primary"

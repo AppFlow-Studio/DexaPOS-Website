@@ -7,11 +7,11 @@ import {
   UpdateFeedbackFlag,
 } from "@/app/dashboard/actions/feedback";
 
-export function useCustomerFeedback(customerId: string | null) {
+export function useCustomerFeedback(customerId: string | null, locationId?: string) {
   return useQuery({
-    queryKey: ["customer", "feedback", customerId],
+    queryKey: ["customer", "feedback", customerId, locationId],
     queryFn: () =>
-      customerId ? GetCustomerFeedback(customerId) : Promise.resolve([]),
+      customerId ? GetCustomerFeedback(customerId, locationId) : Promise.resolve([]),
     enabled: !!customerId,
     staleTime: 30000,
   });

@@ -7,31 +7,31 @@ import {
   GetCustomerDineSessions,
 } from "@/app/dashboard/actions/bookings";
 
-export function useCustomerReservations(customerId: string | null) {
+export function useCustomerReservations(customerId: string | null, locationId?: string) {
   return useQuery({
-    queryKey: ["customer", "reservations", customerId],
+    queryKey: ["customer", "reservations", customerId, locationId],
     queryFn: () =>
-      customerId ? GetCustomerReservations(customerId) : Promise.resolve([]),
+      customerId ? GetCustomerReservations(customerId, locationId) : Promise.resolve([]),
     enabled: !!customerId,
     staleTime: 30000,
   });
 }
 
-export function useCustomerWaitlist(customerId: string | null) {
+export function useCustomerWaitlist(customerId: string | null, locationId?: string) {
   return useQuery({
-    queryKey: ["customer", "waitlist", customerId],
+    queryKey: ["customer", "waitlist", customerId, locationId],
     queryFn: () =>
-      customerId ? GetCustomerWaitlist(customerId) : Promise.resolve([]),
+      customerId ? GetCustomerWaitlist(customerId, locationId) : Promise.resolve([]),
     enabled: !!customerId,
     staleTime: 30000,
   });
 }
 
-export function useCustomerDineSessions(customerId: string | null) {
+export function useCustomerDineSessions(customerId: string | null, locationId?: string) {
   return useQuery({
-    queryKey: ["customer", "dine_sessions", customerId],
+    queryKey: ["customer", "dine_sessions", customerId, locationId],
     queryFn: () =>
-      customerId ? GetCustomerDineSessions(customerId) : Promise.resolve([]),
+      customerId ? GetCustomerDineSessions(customerId, locationId) : Promise.resolve([]),
     enabled: !!customerId,
     staleTime: 30000,
   });

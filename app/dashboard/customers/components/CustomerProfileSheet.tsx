@@ -75,6 +75,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { useLocationStore } from "@/stores/location-store";
 import { useCustomerOrders } from "../hooks/useCustomerOrders";
 import { OrderDetailSheet } from "@/components/dashboard/orders/OrderDetailSheet";
 import { useCustomerReservations, useCustomerWaitlist, useCustomerDineSessions } from "../hooks/useCustomerBookings";
@@ -370,6 +371,8 @@ export function CustomerProfileSheet({
   const { data: userInfo } = useUserInfo();
   const clerkOrgId = userInfo?.members?.[0]?.organizations?.id || null;
   const merchantId = userInfo?.members?.[0]?.organizations?.merchants?.id || null;
+  const { selectedLocationId } = useLocationStore();
+  const isLocationFiltered = selectedLocationId && selectedLocationId !== "all";
 
   // Existing profile data
   const { data: profile, isLoading: isLoadingProfile } = useCustomerProfile(
@@ -379,6 +382,12 @@ export function CustomerProfileSheet({
   // New enhanced analytics
   const customerId = open && customer ? customer.id : null;
   const { data: spendTrend, isLoading: isLoadingSpend } = useCustomerSpendTrend(customerId);
+
+  // Location-filtered orders for accurate KPI cards
+  const { data: locationOrders = [] } = useCustomerOrders(
+    isLocationFiltered ? customerId : null,
+    selectedLocationId
+  );
   const { data: visitPattern } = useCustomerVisitPattern(customerId);
   const { data: topItems, isLoading: isLoadingItems } = useCustomerTopItems(customerId);
   const { data: channelTrend, isLoading: isLoadingChannels } = useCustomerChannelTrend(customerId);
@@ -394,19 +403,36 @@ export function CustomerProfileSheet({
 
   const customerData = profile?.customer || customer;
   const orderChannels = transformChannelTrendForChart(channelTrend || null);
-  const totalVisits = profile?.customer?.visits ?? customer.visits ?? 0;
 
-  // Calculate lifetime spend from actual order data (spend trend RPC)
-  // This ensures it's always accurate, not relying on the denormalized field
-  const lifetimeSpend = spendTrend && spendTrend.length > 0
-    ? spendTrend.reduce((sum, month) => sum + (month.total_spend || 0), 0)
-    : (profile?.customer?.lifetime_spend ?? customer.lifetime_spend ?? 0);
+  // When location is selected, compute KPIs from location-filtered orders
+  // Otherwise use the merchant-wide profile/RPC data
+  const locationSpend = isLocationFiltered
+    ? locationOrders.reduce((sum, o: any) => sum + (Number(o.total_amount) || 0), 0)
+    : null;
+  const locationVisits = isLocationFiltered ? locationOrders.length : null;
+  const locationLastOrder = isLocationFiltered && locationOrders.length > 0
+    ? locationOrders.reduce((latest: string | null, o: any) => {
+        const d = o.created_at || o.order_date;
+        return d && (!latest || d > latest) ? d : latest;
+      }, null as string | null)
+    : null;
 
-  const avgSpend = profile?.customer?.avg_spend ?? customer.avg_spend ?? 0;
+  const totalVisits = locationVisits ?? profile?.customer?.visits ?? customer.visits ?? 0;
+
+  const lifetimeSpend = locationSpend ?? (
+    spendTrend && spendTrend.length > 0
+      ? spendTrend.reduce((sum, month) => sum + (month.total_spend || 0), 0)
+      : (profile?.customer?.lifetime_spend ?? customer.lifetime_spend ?? 0)
+  );
+
+  const avgSpend = isLocationFiltered
+    ? (locationOrders.length > 0 ? locationSpend! / locationOrders.length : 0)
+    : (profile?.customer?.avg_spend ?? customer.avg_spend ?? 0);
   const avgTip = profile?.customer?.avg_tip_percent ?? 0;
 
   // Last visit relative + absolute
-  const lastVisitRaw = profile?.customer?.last_visit ?? customer.last_visit ?? null;
+  const lastVisitRaw = (isLocationFiltered ? locationLastOrder : null)
+    ?? profile?.customer?.last_visit ?? customer.last_visit ?? null;
   const lastVisitRelative = formatRelativeDate(lastVisitRaw);
   const lastVisitAbsolute = lastVisitRaw
     ? new Date(lastVisitRaw).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })

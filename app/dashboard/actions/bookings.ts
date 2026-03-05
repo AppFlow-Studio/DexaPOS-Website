@@ -2,12 +2,12 @@
 
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
-export async function GetCustomerReservations(customerId: string) {
+export async function GetCustomerReservations(customerId: string, locationId?: string) {
   if (!customerId) return [];
 
   const supabase = createServiceRoleClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("reservations")
     .select(
       `
@@ -18,6 +18,12 @@ export async function GetCustomerReservations(customerId: string) {
     .eq("customer_id", customerId)
     .order("reservation_date", { ascending: false });
 
+  if (locationId && locationId !== "all") {
+    query = query.eq("location_id", locationId);
+  }
+
+  const { data, error } = await query;
+
   if (error) {
     console.error("[GetCustomerReservations]", error);
     return [];
@@ -25,12 +31,12 @@ export async function GetCustomerReservations(customerId: string) {
   return data || [];
 }
 
-export async function GetCustomerWaitlist(customerId: string) {
+export async function GetCustomerWaitlist(customerId: string, locationId?: string) {
   if (!customerId) return [];
 
   const supabase = createServiceRoleClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("waitlist")
     .select(
       `
@@ -41,6 +47,12 @@ export async function GetCustomerWaitlist(customerId: string) {
     .eq("customer_id", customerId)
     .order("created_at", { ascending: false });
 
+  if (locationId && locationId !== "all") {
+    query = query.eq("location_id", locationId);
+  }
+
+  const { data, error } = await query;
+
   if (error) {
     console.error("[GetCustomerWaitlist]", error);
     return [];
@@ -48,12 +60,12 @@ export async function GetCustomerWaitlist(customerId: string) {
   return data || [];
 }
 
-export async function GetCustomerDineSessions(customerId: string) {
+export async function GetCustomerDineSessions(customerId: string, locationId?: string) {
   if (!customerId) return [];
 
   const supabase = createServiceRoleClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("table_sessions")
     .select(
       `
@@ -65,6 +77,12 @@ export async function GetCustomerDineSessions(customerId: string) {
     )
     .eq("customer_id", customerId)
     .order("seated_at", { ascending: false });
+
+  if (locationId && locationId !== "all") {
+    query = query.eq("location_id", locationId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("[GetCustomerDineSessions]", error);

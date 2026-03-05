@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
 import { useCustomerFeedback, useAddFeedbackResponse, useUpdateFeedbackFlag } from "../../hooks/useCustomerFeedback";
+import { useLocationStore } from "@/stores/location-store";
 import type { CustomerListItem } from "@/types/customer";
 
 interface FeedbackTabProps {
@@ -14,8 +15,9 @@ interface FeedbackTabProps {
 }
 
 export function FeedbackTab({ customer }: FeedbackTabProps) {
+  const { selectedLocationId } = useLocationStore();
   const customerId = customer?.id || null;
-  const { data: feedback = [], isLoading } = useCustomerFeedback(customerId);
+  const { data: feedback = [], isLoading } = useCustomerFeedback(customerId, selectedLocationId);
   const [respondingTo, setRespondingTo] = useState<string | null>(null);
   const [responseText, setResponseText] = useState("");
 

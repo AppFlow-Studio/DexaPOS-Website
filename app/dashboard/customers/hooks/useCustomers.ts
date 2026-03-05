@@ -46,13 +46,14 @@ function useClerkOrgId(): string {
 // =============================================================================
 
 /**
- * Fetch all customers for the current merchant
+ * Fetch all customers for the current merchant, optionally filtered by location
  */
 export function useCustomers(options?: {
   limit?: number;
   offset?: number;
   orderBy?: "last_order_date" | "lifetime_spend" | "visits" | "created_at";
   ascending?: boolean;
+  locationId?: string;
 }) {
   const clerkOrgId = useClerkOrgId();
 

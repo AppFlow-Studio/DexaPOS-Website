@@ -36,7 +36,8 @@ async function getMerchantId(clerkOrgId: string): Promise<string | null> {
 // =============================================================================
 
 /**
- * Get all customers for a merchant
+ * Get all customers for a merchant, optionally filtered by location
+ * When locationId is provided (not 'all'), only returns customers who have orders at that location
  */
 export async function GetCustomers(
   clerkOrgId: string,
@@ -45,6 +46,7 @@ export async function GetCustomers(
     offset?: number;
     orderBy?: "last_order_date" | "lifetime_spend" | "visits" | "created_at";
     ascending?: boolean;
+    locationId?: string;
   },
 ): Promise<CustomerListItem[]> {
   if (!clerkOrgId) {
@@ -61,7 +63,92 @@ export async function GetCustomers(
   const offset = options?.offset ?? 0;
   const orderBy = options?.orderBy ?? "last_order_date";
   const ascending = options?.ascending ?? false;
+  const locationId = options?.locationId;
 
+  // If a specific location is selected, filter customers via orders at that location
+  // and compute location-specific spend/visits instead of using merchant-wide totals
+  if (locationId && locationId !== "all") {
+    const { data: locationOrders, error: orderError } = await supabase
+      .from("orders")
+      .select("customer_id, total_amount, created_at")
+      .eq("merchant_id", merchantId)
+      .eq("location_id", locationId)
+      .not("customer_id", "is", null);
+
+    if (orderError) {
+      console.error("[GetCustomers] Error fetching location orders:", orderError);
+      return [];
+    }
+
+    // Aggregate per-customer stats from orders at this location
+    const customerStats = new Map<string, { spend: number; orders: number; lastVisit: string | null }>();
+    for (const order of locationOrders || []) {
+      const cid = order.customer_id as string;
+      const existing = customerStats.get(cid);
+      const amount = Number(order.total_amount) || 0;
+      if (existing) {
+        existing.spend += amount;
+        existing.orders += 1;
+        if (order.created_at && (!existing.lastVisit || order.created_at > existing.lastVisit)) {
+          existing.lastVisit = order.created_at;
+        }
+      } else {
+        customerStats.set(cid, { spend: amount, orders: 1, lastVisit: order.created_at });
+      }
+    }
+
+    const uniqueIds = [...customerStats.keys()];
+    if (uniqueIds.length === 0) {
+      return [];
+    }
+
+    const { data, error } = await supabase
+      .from("customers")
+      .select(
+        `
+        id,
+        name,
+        phone,
+        email,
+        tags
+      `,
+      )
+      .eq("merchant_id", merchantId)
+      .eq("is_active", true)
+      .in("id", uniqueIds);
+
+    if (error) {
+      console.error("[GetCustomers] Error fetching customers:", error);
+      return [];
+    }
+
+    // Merge customer data with location-specific stats
+    const results: CustomerListItem[] = (data || []).map((c) => {
+      const stats = customerStats.get(c.id)!;
+      return {
+        ...c,
+        lifetime_spend: stats.spend,
+        visits: stats.orders,
+        total_orders: stats.orders,
+        avg_spend: stats.orders > 0 ? stats.spend / stats.orders : 0,
+        last_visit: stats.lastVisit,
+      };
+    });
+
+    // Sort in JS since we computed the values client-side
+    const sortKey = orderBy === "last_order_date" ? "last_visit" : orderBy;
+    results.sort((a, b) => {
+      const aVal = (a as any)[sortKey] ?? "";
+      const bVal = (b as any)[sortKey] ?? "";
+      if (aVal < bVal) return ascending ? -1 : 1;
+      if (aVal > bVal) return ascending ? 1 : -1;
+      return 0;
+    });
+
+    return results.slice(offset, offset + limit);
+  }
+
+  // Default: all customers for the merchant
   const { data, error } = await supabase
     .from("customers")
     .select(
