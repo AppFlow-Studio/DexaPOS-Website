@@ -149,7 +149,9 @@ function getEntryModeLabel(mode?: string): string {
   if (!mode) return "";
   const labels: Record<string, string> = {
     contactless: "Contactless",
+    emvcl: "Contactless",
     chip: "Chip",
+    emv: "Chip",
     swipe: "Swipe",
     manual: "Manual",
     keyed: "Keyed",
@@ -157,11 +159,18 @@ function getEntryModeLabel(mode?: string): string {
   return labels[mode.toLowerCase()] || mode;
 }
 
+function getCastlesData(p: PaymentRecord) {
+  const ct = p.processor_response?.castles_transaction;
+  const raw = p.processor_response?.raw_castles_response;
+  const isCastles = p.processor_response?.terminal_vendor === "castles";
+  return { ct, raw, isCastles };
+}
+
 function getEntryModeIcon(mode?: string) {
   if (!mode) return null;
   const m = mode.toLowerCase();
-  if (m === "contactless") return <Wifi className="h-3 w-3" />;
-  if (m === "chip") return <ChipIcon className="h-3 w-3" />;
+  if (m === "contactless" || m === "emvcl") return <Wifi className="h-3 w-3" />;
+  if (m === "chip" || m === "emv") return <ChipIcon className="h-3 w-3" />;
   if (m === "swipe") return <CreditCard className="h-3 w-3" />;
   if (m === "manual" || m === "keyed")
     return <Smartphone className="h-3 w-3" />;
@@ -178,8 +187,15 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
   const hasItems =
     payment.order_payment_items && payment.order_payment_items.length > 0;
 
-  const emvData: EmvData | null | undefined =
+  const { ct, raw, isCastles } = getCastlesData(payment);
+
+  const baseEmv: EmvData | null | undefined =
     payment.emv_data || payment.processor_response?.emv_data;
+  const emvData: EmvData | null | undefined = baseEmv
+    ? baseEmv
+    : raw?.txnAID || raw?.txnCardBrand
+      ? { aid: raw.txnAID, applicationName: raw.txnCardBrand }
+      : null;
   const hasEmvData =
     emvData &&
     (emvData.aid ||
@@ -221,16 +237,22 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
               <dd className="font-mono">{payment.dejavoo_response_code}</dd>
             </div>
           )}
-          {payment.batch_number && (
+          {(payment.batch_number || ct?.batchNumber) && (
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Batch #</dt>
-              <dd className="font-mono">{payment.batch_number}</dd>
+              <dd className="font-mono">{payment.batch_number || ct?.batchNumber}</dd>
             </div>
           )}
-          {payment.invoice_number && (
+          {(payment.invoice_number || raw?.txnInvoiceNumber) && (
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Invoice #</dt>
-              <dd className="font-mono">{payment.invoice_number}</dd>
+              <dd className="font-mono">{payment.invoice_number || raw?.txnInvoiceNumber}</dd>
+            </div>
+          )}
+          {ct?.rrn && (
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">RRN</dt>
+              <dd className="font-mono">{ct.rrn}</dd>
             </div>
           )}
         </dl>
@@ -246,10 +268,10 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
               <dd>{payment.terminal_type}</dd>
             </div>
           )}
-          {payment.terminal_id && (
+          {(payment.terminal_id || ct?.terminalId) && (
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Terminal ID</dt>
-              <dd className="font-mono">{payment.terminal_id}</dd>
+              <dd className="font-mono">{payment.terminal_id || ct?.terminalId}</dd>
             </div>
           )}
           {payment.device_id && (
@@ -534,9 +556,11 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
       id: "entry_mode",
       header: "Entry",
       cell: ({ row }) => {
+        const { ct } = getCastlesData(row.original);
         const mode =
           row.original.card_entry_mode ||
-          row.original.processor_response?.entry_type;
+          row.original.processor_response?.entry_type ||
+          ct?.entryMode;
         if (!mode) return <span className="text-muted-foreground">—</span>;
         return (
           <Badge variant="outline" className="gap-1 text-[10px]">

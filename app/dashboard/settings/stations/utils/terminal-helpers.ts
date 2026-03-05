@@ -7,7 +7,7 @@
 // Terminal Types
 // ============================================================================
 
-export type TerminalType = 'dejavoo' | 'pax'
+export type TerminalType = 'dejavoo' | 'castles'
 export type ApiEnvironment = 'sandbox' | 'production'
 export type TerminalConnectionType = 'cloud' | 'local'
 
@@ -34,8 +34,8 @@ export const getTerminalTypeLabel = (type: TerminalType): string => {
   switch (type) {
     case 'dejavoo':
       return 'Dejavoo'
-    case 'pax':
-      return 'PAX'
+    case 'castles':
+      return 'Castles'
     default:
       return type
   }

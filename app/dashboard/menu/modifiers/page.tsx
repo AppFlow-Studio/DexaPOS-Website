@@ -625,12 +625,10 @@ export default function ModifiersPage() {
             structural read-only; you can override price/availability.
           </div>
         )}
-        {isAllLocations && (
-          <Button onClick={handleCreateGroup} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Create Group
-          </Button>
-        )}
+        <Button onClick={handleCreateGroup} className="gap-2">
+          <Plus className="h-4 w-4" />
+          Create Group
+        </Button>
       </div>
 
       <Card className="border shadow-sm">

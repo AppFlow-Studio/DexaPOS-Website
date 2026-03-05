@@ -28,9 +28,8 @@ export interface PaymentTerminal {
   terminal_type: TerminalType
   terminal_model: string | null
   serial_number: string | null
-  tpn: string
   auth_key: string
-  register_id: string | null
+  register_id: string
   api_environment: ApiEnvironment
   api_base_url: string | null
   spin_proxy_timeout: number
@@ -65,9 +64,8 @@ export interface CreatePaymentTerminalInput {
   terminal_type: TerminalType
   terminal_model?: string | null
   serial_number?: string | null
-  tpn: string
   auth_key: string
-  register_id?: string | null
+  register_id: string
   api_environment?: ApiEnvironment
   connection_type?: ConnectionType
   local_ip_address?: string | null
@@ -81,9 +79,8 @@ export interface UpdatePaymentTerminalInput {
   terminal_name?: string
   terminal_model?: string | null
   serial_number?: string | null
-  tpn?: string
   auth_key?: string
-  register_id?: string | null
+  register_id?: string
   api_environment?: ApiEnvironment
   api_base_url?: string | null
   spin_proxy_timeout?: number
@@ -335,18 +332,18 @@ export async function adminCreateTerminal(
 
     const supabase = createServerSupabaseClient()
 
-    // Validate TPN uniqueness per merchant
-    const { data: existingTpn } = await supabase
+    // Validate RegisterId uniqueness per merchant
+    const { data: existingRegisterId } = await supabase
       .from('payment_terminals')
       .select('id')
       .eq('merchant_id', merchantId)
-      .eq('tpn', input.tpn)
+      .eq('register_id', input.register_id)
       .single()
 
-    if (existingTpn) {
+    if (existingRegisterId) {
       return {
         success: false,
-        error: `Terminal with TPN "${input.tpn}" already exists`,
+        error: `Terminal with Register ID "${input.register_id}" already exists`,
         data: null,
       }
     }
@@ -363,10 +360,8 @@ export async function adminCreateTerminal(
         terminal_type: input.terminal_type,
         terminal_model: input.terminal_model || null,
         serial_number: input.serial_number || null,
-        tpn: input.tpn,
         auth_key: input.auth_key,
-        register_id: input.register_id || null,
-        tpn_encrypted: bcrypt.hashSync(input.tpn) || null,
+        register_id: input.register_id,
         auth_key_encrypted: bcrypt.hashSync(input.auth_key) || null,
         api_environment: input.api_environment || 'sandbox',
         connection_type: input.connection_type || 'cloud',
@@ -418,7 +413,7 @@ export async function adminCreateTerminal(
         },
       },
       metadata: {
-        tpn: input.tpn,
+        register_id: input.register_id,
         created_by_admin: userId,
         source: 'adminCreateTerminal',
       },
@@ -463,7 +458,6 @@ export async function adminUpdateTerminal(
     if (input.terminal_name !== undefined) updateData.terminal_name = input.terminal_name
     if (input.terminal_model !== undefined) updateData.terminal_model = input.terminal_model
     if (input.serial_number !== undefined) updateData.serial_number = input.serial_number
-    if (input.tpn !== undefined) updateData.tpn = input.tpn
     if (input.auth_key !== undefined) updateData.auth_key = input.auth_key
     if (input.register_id !== undefined) updateData.register_id = input.register_id
     if (input.api_environment !== undefined) updateData.api_environment = input.api_environment
@@ -696,7 +690,7 @@ export async function adminDeleteTerminal(terminalId: string) {
     // Fetch details before delete
     const { data: terminal } = await supabase
       .from('payment_terminals')
-      .select('terminal_name, merchant_id, location_id, tpn')
+      .select('terminal_name, merchant_id, location_id, register_id')
       .eq('id', terminalId)
       .single()
 
@@ -721,7 +715,7 @@ export async function adminDeleteTerminal(terminalId: string) {
         changes: {
           before: {
             terminal_name: terminal.terminal_name,
-            tpn: terminal.tpn,
+            register_id: terminal.register_id,
             deleted: false,
           },
           after: {
@@ -729,7 +723,7 @@ export async function adminDeleteTerminal(terminalId: string) {
           },
         },
         metadata: {
-          tpn: terminal.tpn,
+          register_id: terminal.register_id,
           deleted_by_admin: userId,
           source: 'adminDeleteTerminal',
         },
@@ -792,7 +786,7 @@ export async function adminTestTerminalConnection(terminalId: string) {
 
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_DEJAVOO_SPIN_API}/spin/v2/Common/TerminalStatus?request.tpn=${terminal.tpn}&request.registerId=${terminal.register_id}&request.authkey=${terminal.auth_key}`,
+        `${process.env.NEXT_PUBLIC_DEJAVOO_SPIN_API}/spin/v2/Common/TerminalStatus?request.registerId=${terminal.register_id}&request.authkey=${terminal.auth_key}`,
         requestOptions
       )
       const result = await response.json()

@@ -1464,11 +1464,9 @@ CREATE TABLE public.payment_terminals (
   terminal_type text NOT NULL DEFAULT 'dejavoo'::text CHECK (terminal_type = ANY (ARRAY['dejavoo'::text, 'pax'::text])),
   terminal_model text,
   serial_number text,
-  tpn text NOT NULL,
   auth_key text NOT NULL,
-  tpn_encrypted bytea,
   auth_key_encrypted bytea NOT NULL,
-  register_id text,
+  register_id text NOT NULL,
   api_environment text DEFAULT 'sandbox'::text CHECK (api_environment = ANY (ARRAY['sandbox'::text, 'production'::text])),
   api_base_url text,
   spin_proxy_timeout integer DEFAULT 120,
@@ -1497,7 +1495,8 @@ CREATE TABLE public.payment_terminals (
   CONSTRAINT payment_terminals_pkey PRIMARY KEY (id),
   CONSTRAINT payment_terminals_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT payment_terminals_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
-  CONSTRAINT payment_terminals_station_id_fkey FOREIGN KEY (station_id) REFERENCES public.stations(id)
+  CONSTRAINT payment_terminals_station_id_fkey FOREIGN KEY (station_id) REFERENCES public.stations(id),
+  CONSTRAINT payment_terminals_merchant_register_id_unique UNIQUE (merchant_id, register_id)
 );
 CREATE TABLE public.pending_org_admin_invites (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
