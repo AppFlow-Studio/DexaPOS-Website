@@ -130,14 +130,12 @@ export function CustomerFilters({
   return (
     <div className="space-y-4">
       {/* Filter Controls Row */}
-      <div className="flex flex-wrap gap-2 items-end">
+      <div className="flex flex-wrap gap-3 items-end">
         {/* Status Filter */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-muted-foreground">
-            Status
-          </label>
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium text-foreground">Status</label>
           <Select value={filters.status || "all"} onValueChange={handleStatusChange}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="w-[150px] bg-background border-input focus-visible:ring-2 focus-visible:ring-primary">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -153,22 +151,25 @@ export function CustomerFilters({
         {/* Tags Filter */}
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="outline" className="gap-1">
+            <Button
+              variant="outline"
+              className="gap-2 h-10 border-input bg-background hover:bg-muted"
+            >
               Tags
               {filters.tags.length > 0 && (
-                <span className="text-xs bg-primary/20 text-primary rounded px-1.5 py-0.5">
+                <span className="text-xs font-semibold bg-primary text-primary-foreground rounded-full px-2 py-0.5">
                   {filters.tags.length}
                 </span>
               )}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-[200px] p-3" align="start">
-            <div className="space-y-2">
+          <PopoverContent className="w-[220px] p-4" align="start">
+            <div className="space-y-3">
               {availableTags.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No tags available</p>
               ) : (
                 availableTags.map((tag) => (
-                  <div key={tag} className="flex items-center gap-2">
+                  <div key={tag} className="flex items-center gap-2.5">
                     <Checkbox
                       id={`tag-${tag}`}
                       checked={filters.tags.includes(tag)}
@@ -176,7 +177,7 @@ export function CustomerFilters({
                     />
                     <Label
                       htmlFor={`tag-${tag}`}
-                      className="text-sm font-normal cursor-pointer flex-1"
+                      className="text-sm font-medium cursor-pointer flex-1"
                     >
                       {tag}
                     </Label>
@@ -190,9 +191,14 @@ export function CustomerFilters({
         {/* Spend Filter */}
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="outline">Spend</Button>
+            <Button
+              variant="outline"
+              className="h-10 border-input bg-background hover:bg-muted"
+            >
+              Spend
+            </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-[180px] p-3" align="start">
+          <PopoverContent className="w-[200px] p-4" align="start">
             <div className="space-y-2">
               {SPEND_PRESETS.map((preset) => (
                 <Button
@@ -204,7 +210,7 @@ export function CustomerFilters({
                       ? "default"
                       : "outline"
                   }
-                  className="w-full justify-start"
+                  className="w-full justify-start font-medium"
                   onClick={() => handleSpendPreset(preset.min, preset.max)}
                 >
                   {preset.label}
@@ -215,17 +221,15 @@ export function CustomerFilters({
         </Popover>
 
         {/* Last Visit Filter */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-muted-foreground">
-            Last Visit
-          </label>
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium text-foreground">Last Visit</label>
           <Select
             value={filters.lastVisit || "all"}
             onValueChange={(val) => {
               handleLastVisitChange(val === "all" ? 0 : parseInt(val, 10));
             }}
           >
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="w-[150px] bg-background border-input focus-visible:ring-2 focus-visible:ring-primary">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -239,10 +243,8 @@ export function CustomerFilters({
         </div>
 
         {/* Email Filter */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-muted-foreground">
-            Has Email
-          </label>
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium text-foreground">Has Email</label>
           <Select
             value={
               filters.hasEmail === null ? "all" : filters.hasEmail ? "yes" : "no"
@@ -252,7 +254,7 @@ export function CustomerFilters({
               else handleHasEmailChange(val === "yes");
             }}
           >
-            <SelectTrigger className="w-[120px]">
+            <SelectTrigger className="w-[130px] bg-background border-input focus-visible:ring-2 focus-visible:ring-primary">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -266,39 +268,38 @@ export function CustomerFilters({
 
       {/* Active Filters Pill Row */}
       {hasActiveFilters && (
-        <div className="flex flex-wrap items-center gap-2 p-2 bg-muted/30 rounded-md">
-          <span className="text-xs font-medium text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2.5 p-3.5 bg-muted/40 rounded-lg border border-muted/60">
+          <span className="text-sm font-semibold text-foreground">
             Active filters:
           </span>
 
           {filters.status && (
-            <Badge variant="secondary" className="gap-1 pr-1">
-              Status: {filters.status}
+            <Badge variant="secondary" className="gap-1.5 pl-3 pr-2 font-medium">
+              {filters.status}
               <button
                 onClick={() => handleRemoveFilter("status")}
-                className="hover:opacity-70"
+                className="hover:opacity-70 transition-opacity"
               >
-                <X className="h-3 w-3" />
+                <X className="h-3.5 w-3.5" />
               </button>
             </Badge>
           )}
 
           {filters.tags.length > 0 && (
-            <Badge variant="secondary" className="gap-1 pr-1">
+            <Badge variant="secondary" className="gap-1.5 pl-3 pr-2 font-medium">
               Tags: {filters.tags.join(", ")}
               <button
                 onClick={() => handleRemoveFilter("tags")}
-                className="hover:opacity-70"
+                className="hover:opacity-70 transition-opacity"
               >
-                <X className="h-3 w-3" />
+                <X className="h-3.5 w-3.5" />
               </button>
             </Badge>
           )}
 
           {(filters.spendMin !== null || filters.spendMax !== null) && (
-            <Badge variant="secondary" className="gap-1 pr-1">
-              Spend: ${filters.spendMin ?? 0} - $
-              {filters.spendMax ?? "∞"}
+            <Badge variant="secondary" className="gap-1.5 pl-3 pr-2 font-medium">
+              ${filters.spendMin ?? 0} - ${filters.spendMax ?? "∞"}
               <button
                 onClick={() => {
                   onFiltersChange({
@@ -307,33 +308,33 @@ export function CustomerFilters({
                     spendMax: null,
                   });
                 }}
-                className="hover:opacity-70"
+                className="hover:opacity-70 transition-opacity"
               >
-                <X className="h-3 w-3" />
+                <X className="h-3.5 w-3.5" />
               </button>
             </Badge>
           )}
 
           {filters.lastVisit && (
-            <Badge variant="secondary" className="gap-1 pr-1">
-              Last Visit: {filters.lastVisit} days ago
+            <Badge variant="secondary" className="gap-1.5 pl-3 pr-2 font-medium">
+              {filters.lastVisit} days
               <button
                 onClick={() => handleRemoveFilter("lastVisit")}
-                className="hover:opacity-70"
+                className="hover:opacity-70 transition-opacity"
               >
-                <X className="h-3 w-3" />
+                <X className="h-3.5 w-3.5" />
               </button>
             </Badge>
           )}
 
           {filters.hasEmail !== null && (
-            <Badge variant="secondary" className="gap-1 pr-1">
+            <Badge variant="secondary" className="gap-1.5 pl-3 pr-2 font-medium">
               Email: {filters.hasEmail ? "Yes" : "No"}
               <button
                 onClick={() => handleRemoveFilter("hasEmail")}
-                className="hover:opacity-70"
+                className="hover:opacity-70 transition-opacity"
               >
-                <X className="h-3 w-3" />
+                <X className="h-3.5 w-3.5" />
               </button>
             </Badge>
           )}
@@ -342,7 +343,7 @@ export function CustomerFilters({
             variant="ghost"
             size="sm"
             onClick={handleClearAll}
-            className="text-xs"
+            className="text-sm font-medium ml-auto hover:bg-muted"
           >
             Clear all
           </Button>

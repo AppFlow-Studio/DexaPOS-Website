@@ -134,58 +134,60 @@ export function AddCustomerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>Add Customer</DialogTitle>
-          <DialogDescription>
-            Create a new customer record in your database.
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader className="space-y-2">
+          <DialogTitle className="text-2xl font-bold">Add Customer</DialogTitle>
+          <DialogDescription className="text-base">
+            Create a new customer record in your system.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-5 py-4">
           {/* Name */}
-          <div>
-            <Label htmlFor="name">
+          <div className="space-y-2.5">
+            <Label htmlFor="name" className="text-sm font-semibold">
               Name <span className="text-destructive">*</span>
             </Label>
             <Input
               id="name"
-              placeholder="Customer name"
+              placeholder="Enter customer name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={isLoading}
+              className="h-10 bg-background border-input focus-visible:ring-2 focus-visible:ring-primary"
             />
           </div>
 
           {/* Phone */}
-          <div>
-            <Label htmlFor="phone">
+          <div className="space-y-2.5">
+            <Label htmlFor="phone" className="text-sm font-semibold">
               Phone <span className="text-destructive">*</span>
             </Label>
             <Input
               id="phone"
-              placeholder="Phone number"
+              placeholder="Enter phone number"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               onBlur={handlePhoneBlur}
               disabled={isLoading}
+              className="h-10 bg-background border-input focus-visible:ring-2 focus-visible:ring-primary"
             />
             {phoneCheckLoading && (
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-muted-foreground animate-pulse">
                 Checking for existing customer...
               </p>
             )}
             {phoneCheckError && (
-              <Alert variant="destructive" className="mt-2">
+              <Alert variant="destructive" className="mt-2 border-destructive/50">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{phoneCheckError}</AlertDescription>
+                <AlertDescription className="text-sm">{phoneCheckError}</AlertDescription>
               </Alert>
             )}
           </div>
 
           {/* Email */}
-          <div>
-            <Label htmlFor="email">Email</Label>
+          <div className="space-y-2.5">
+            <Label htmlFor="email" className="text-sm font-semibold">Email</Label>
             <Input
               id="email"
               type="email"
@@ -193,59 +195,59 @@ export function AddCustomerDialog({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={isLoading}
+              className="h-10 bg-background border-input focus-visible:ring-2 focus-visible:ring-primary"
             />
           </div>
 
           {/* Address */}
-          <div>
-            <Label htmlFor="address">Address</Label>
+          <div className="space-y-2.5">
+            <Label htmlFor="address" className="text-sm font-semibold">Address</Label>
             <Input
               id="address"
-              placeholder="Customer address"
+              placeholder="Enter customer address"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               disabled={isLoading}
+              className="h-10 bg-background border-input focus-visible:ring-2 focus-visible:ring-primary"
             />
           </div>
 
           {/* Tags */}
-          <div>
-            <Label>Tags</Label>
+          <div className="space-y-3 pt-2">
+            <Label className="text-sm font-semibold">Tags</Label>
 
             {/* Suggested Tags Dropdown */}
-            <div className="mb-3">
-              <Select onValueChange={(value) => {
-                if (value) {
-                  handleRemoveTag(value);
-                  setTags([...tags, value]);
-                }
-              }}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select from suggested tags..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {SUGGESTED_TAGS.filter((tag) => !tags.includes(tag)).map(
-                    (tag) => (
-                      <SelectItem key={tag} value={tag}>
-                        {tag}
-                      </SelectItem>
-                    )
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
+            <Select onValueChange={(value) => {
+              if (value) {
+                handleRemoveTag(value);
+                setTags([...tags, value]);
+              }
+            }}>
+              <SelectTrigger className="w-full h-10 bg-background border-input focus-visible:ring-2 focus-visible:ring-primary">
+                <SelectValue placeholder="Select suggested tags..." />
+              </SelectTrigger>
+              <SelectContent>
+                {SUGGESTED_TAGS.filter((tag) => !tags.includes(tag)).map(
+                  (tag) => (
+                    <SelectItem key={tag} value={tag} className="font-medium">
+                      {tag}
+                    </SelectItem>
+                  )
+                )}
+              </SelectContent>
+            </Select>
 
             {/* Current Tags */}
             {tags.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-3">
+              <div className="flex flex-wrap gap-2 p-3 bg-muted/40 rounded-lg border border-muted/60">
                 {tags.map((tag) => (
-                  <Badge key={tag} variant="secondary" className="gap-1">
+                  <Badge key={tag} variant="secondary" className="gap-1.5 px-3 py-1.5 font-medium">
                     {tag}
                     <button
                       onClick={() => handleRemoveTag(tag)}
-                      className="hover:opacity-70"
+                      className="hover:opacity-70 transition-opacity ml-1"
                     >
-                      <X className="h-3 w-3" />
+                      <X className="h-3.5 w-3.5" />
                     </button>
                   </Badge>
                 ))}
@@ -253,14 +255,14 @@ export function AddCustomerDialog({
             )}
 
             {/* Custom Tag Input */}
-            <div className="space-y-2">
-              <Label htmlFor="custom-tag" className="text-xs text-muted-foreground">
-                Custom Tag
+            <div className="space-y-2.5">
+              <Label htmlFor="custom-tag" className="text-xs font-medium text-muted-foreground">
+                Create Custom Tag (Optional)
               </Label>
-              <div className="flex gap-2">
+              <div className="flex gap-2.5">
                 <Input
                   id="custom-tag"
-                  placeholder="Or create a custom tag..."
+                  placeholder="e.g., Premium Member"
                   value={tagInput}
                   onChange={(e) => setTagInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -270,12 +272,14 @@ export function AddCustomerDialog({
                     }
                   }}
                   disabled={isLoading}
+                  className="h-10 flex-1 bg-background border-input focus-visible:ring-2 focus-visible:ring-primary"
                 />
                 <Button
                   type="button"
                   variant="outline"
                   onClick={handleAddTag}
                   disabled={!tagInput.trim() || isLoading}
+                  className="h-10"
                 >
                   Add
                 </Button>
@@ -284,32 +288,35 @@ export function AddCustomerDialog({
           </div>
 
           {/* Notes */}
-          <div>
-            <Label htmlFor="notes">Notes</Label>
+          <div className="space-y-2.5">
+            <Label htmlFor="notes" className="text-sm font-semibold">Notes (Optional)</Label>
             <Textarea
               id="notes"
-              placeholder="Additional notes..."
+              placeholder="Add any additional notes about this customer..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               disabled={isLoading}
               rows={3}
+              className="bg-background border-input focus-visible:ring-2 focus-visible:ring-primary resize-none"
             />
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={isLoading}
+            className="h-10"
           >
             Cancel
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={!formValid || isLoading || phoneCheckLoading}
+            className="h-10 gap-2"
           >
-            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
             {isLoading ? "Creating..." : "Create Customer"}
           </Button>
         </DialogFooter>

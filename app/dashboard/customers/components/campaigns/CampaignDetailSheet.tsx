@@ -73,65 +73,67 @@ export function CampaignDetailSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full max-w-2xl overflow-y-auto">
-        <SheetHeader>
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <SheetTitle className="text-xl">{campaign.name}</SheetTitle>
-              <p className="text-sm text-muted-foreground mt-2">
-                {campaign.created_at ? new Date(campaign.created_at).toLocaleString() : "N/A"}
-              </p>
+      <SheetContent side="right" className="w-full max-w-3xl overflow-y-auto px-0 bg-background">
+        <div className="px-8 py-8 border-b border-border/50 bg-gradient-to-b from-muted/20 to-background">
+          <SheetHeader className="space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 space-y-2">
+                <SheetTitle className="text-3xl font-bold text-foreground">{campaign.name}</SheetTitle>
+                <p className="text-sm text-muted-foreground">
+                  {campaign.created_at ? new Date(campaign.created_at).toLocaleString() : "N/A"}
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-3 shrink-0">
+                <Badge className={`gap-1.5 px-3 py-1.5 font-semibold text-xs ${STATUS_CONFIG[campaign.status]?.color || "bg-gray-100"}`}>
+                  {STATUS_CONFIG[campaign.status]?.icon}
+                  {STATUS_CONFIG[campaign.status]?.label}
+                </Badge>
+                {(campaign.status === "draft" || campaign.status === "scheduled") && (
+                  <Button
+                    onClick={handleSendNow}
+                    disabled={isSending}
+                    size="sm"
+                    className="gap-2 h-10 font-semibold"
+                  >
+                    {isSending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4" />
+                        Send Now
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
             </div>
-            <div className="flex flex-col items-end gap-2 shrink-0">
-              <Badge className={`gap-1 ${STATUS_CONFIG[campaign.status]?.color || "bg-gray-100"}`}>
-                {STATUS_CONFIG[campaign.status]?.icon}
-                {STATUS_CONFIG[campaign.status]?.label}
-              </Badge>
-              {(campaign.status === "draft" || campaign.status === "scheduled") && (
-                <Button
-                  onClick={handleSendNow}
-                  disabled={isSending}
-                  size="sm"
-                  className="gap-2"
-                >
-                  {isSending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4" />
-                      Send Now
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
-          </div>
-        </SheetHeader>
+          </SheetHeader>
+        </div>
 
-        <Tabs defaultValue="details" className="mt-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="details" className="gap-2">
+        <Tabs defaultValue="details" className="mt-8 px-8 pb-8">
+          <TabsList className="bg-transparent h-auto p-0 space-x-8 border-b border-border/50 rounded-none w-full justify-start">
+            <TabsTrigger value="details" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground gap-2">
               <FileText className="h-4 w-4" />
               <span className="hidden sm:inline">Details</span>
             </TabsTrigger>
-            <TabsTrigger value="performance" className="gap-2">
+            <TabsTrigger value="performance" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground gap-2">
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">Performance</span>
             </TabsTrigger>
-            <TabsTrigger value="charts" className="gap-2">
+            <TabsTrigger value="charts" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground gap-2">
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">Charts</span>
             </TabsTrigger>
-            <TabsTrigger value="recipients" className="gap-2">
+            <TabsTrigger value="recipients" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground gap-2">
               <Users className="h-4 w-4" />
               <span className="hidden sm:inline">Recipients</span>
             </TabsTrigger>
           </TabsList>
 
-          <div className="mt-6 space-y-6">
+          <div className="space-y-8">
             <TabsContent value="details">
               <CampaignDetailsTab campaign={campaign} />
             </TabsContent>

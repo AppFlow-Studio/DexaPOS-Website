@@ -218,107 +218,125 @@ export default function CustomersPage() {
   );
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Customers</h2>
-          <p className="text-muted-foreground">
-            Manage your customer database and view order history
-          </p>
-        </div>
-        <div className="flex gap-2 w-full sm:w-auto">
-          <div className="relative flex-1 sm:flex-none sm:w-75">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 py-8 px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto space-y-8">
+        {/* Header Section */}
+        <div className="space-y-6 pb-2">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="space-y-2">
+              <h1 className="text-4xl font-bold tracking-tight text-foreground">Customers</h1>
+              <p className="text-base text-muted-foreground max-w-2xl">
+                Manage your customer database, track their order history, and grow relationships
+              </p>
+            </div>
+            <Button
+              size="lg"
+              className="gap-2 shadow-md hover:shadow-lg transition-shadow w-full sm:w-auto"
+              onClick={() => setIsAddCustomerOpen(true)}
+            >
+              <Plus className="h-5 w-5" />
+              Add Customer
+            </Button>
+          </div>
+
+          {/* Search Bar */}
+          <div className="relative w-full max-w-md">
+            <Search className="absolute left-3 top-3.5 h-5 w-5 text-muted-foreground" />
             <Input
-              placeholder="Search customers..."
-              className="pl-9"
+              placeholder="Search by name, email, or phone..."
+              className="pl-10 py-2.5 text-base rounded-lg border-input bg-card shadow-sm focus-visible:ring-2 focus-visible:ring-primary"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1"
-            onClick={() => setIsAddCustomerOpen(true)}
-          >
-            <Plus className="h-4 w-4" />
-            Add Customer
-          </Button>
+        </div>
+
+        {/* Duplicates Alert */}
+        <DuplicatesAlert />
+
+        {/* Filters Section */}
+        <div className="bg-card rounded-lg border border-border shadow-sm p-6">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-foreground">Filters</h3>
+            </div>
+            <CustomerFilters
+              customers={customers}
+              filters={filters}
+              onFiltersChange={setFilters}
+            />
+          </div>
+        </div>
+
+        {/* Bulk Actions Toolbar */}
+        {selectedIds.length > 0 && (
+          <div className="flex items-center gap-3 p-4 bg-primary/8 border border-primary/30 rounded-lg backdrop-blur-sm">
+            <span className="text-sm font-semibold text-foreground">
+              {selectedIds.length} customer{selectedIds.length > 1 ? "s" : ""} selected
+            </span>
+            <div className="flex-1" />
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-2"
+                onClick={() => {
+                  setBulkTagAction("add");
+                  setIsBulkTagDialogOpen(true);
+                }}
+              >
+                <Tag className="h-4 w-4" />
+                Add Tag
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-2"
+                onClick={() => {
+                  setBulkTagAction("remove");
+                  setIsBulkTagDialogOpen(true);
+                }}
+              >
+                <X className="h-4 w-4" />
+                Remove Tag
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-2"
+                onClick={() => exportCustomersCSV(selectedCustomers)}
+              >
+                <Download className="h-4 w-4" />
+                Export
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setSelectedIds([])}
+              >
+                Clear
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Customer List */}
+        <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden -mx-6 lg:-mx-8">
+          <div className="mx-6 lg:mx-8">
+            <CustomerList
+              customers={sortedData}
+              isLoading={isLoading}
+              onViewProfile={handleViewProfile}
+              onDeleteCustomer={handleDeleteCustomer}
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={handleSort}
+              selectedIds={selectedIds}
+              onSelectChange={setSelectedIds}
+            />
+          </div>
         </div>
       </div>
-
-      {/* Duplicates Alert */}
-      <DuplicatesAlert />
-
-      {/* Filters */}
-      <CustomerFilters
-        customers={customers}
-        filters={filters}
-        onFiltersChange={setFilters}
-      />
-
-      {/* Bulk Actions Toolbar */}
-      {selectedIds.length > 0 && (
-        <div className="flex items-center gap-2 p-3 bg-primary/5 border border-primary/20 rounded-md">
-          <span className="text-sm font-medium">
-            {selectedIds.length} customer{selectedIds.length > 1 ? "s" : ""}{" "}
-            selected
-          </span>
-          <div className="flex-1" />
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setBulkTagAction("add");
-              setIsBulkTagDialogOpen(true);
-            }}
-          >
-            <Tag className="h-4 w-4 mr-1" />
-            Add Tag
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setBulkTagAction("remove");
-              setIsBulkTagDialogOpen(true);
-            }}
-          >
-            <X className="h-4 w-4 mr-1" />
-            Remove Tag
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => exportCustomersCSV(selectedCustomers)}
-          >
-            <Download className="h-4 w-4 mr-1" />
-            Export
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setSelectedIds([])}
-          >
-            Clear
-          </Button>
-        </div>
-      )}
-
-      {/* Customer List */}
-      <CustomerList
-        customers={sortedData}
-        isLoading={isLoading}
-        onViewProfile={handleViewProfile}
-        onDeleteCustomer={handleDeleteCustomer}
-        sortField={sortField}
-        sortDir={sortDir}
-        onSort={handleSort}
-        selectedIds={selectedIds}
-        onSelectChange={setSelectedIds}
-      />
 
       {/* Add Customer Dialog */}
       <AddCustomerDialog

@@ -72,11 +72,12 @@ export function DuplicatesAlert() {
     return (
       <Button
         variant="outline"
-        size="sm"
+        size="lg"
         onClick={handleReviewDuplicates}
         disabled={loadingDuplicates}
+        className="gap-2 h-11"
       >
-        {loadingDuplicates ? "Checking..." : "Check for Duplicates"}
+        {loadingDuplicates ? "Checking..." : "🔍 Check for Duplicates"}
       </Button>
     );
   }
@@ -84,35 +85,37 @@ export function DuplicatesAlert() {
   return (
     <>
       {duplicateGroups.length > 0 && !isSheetOpen && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Possible Duplicates Detected</AlertTitle>
-          <AlertDescription className="mt-2 flex items-center justify-between">
-            <span>
-              Found {duplicateGroups.length} group{duplicateGroups.length > 1 ? "s" : ""} of possible
-              duplicate customers.
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setIsSheetOpen(true)}
-            >
-              Review
-            </Button>
-          </AlertDescription>
+        <Alert variant="destructive" className="border-destructive/50 bg-destructive/5">
+          <AlertCircle className="h-5 w-5" />
+          <div className="ml-3 flex-1">
+            <AlertTitle className="text-base font-semibold">Possible Duplicates Detected</AlertTitle>
+            <AlertDescription className="mt-2 flex items-center justify-between">
+              <span className="text-sm">
+                Found {duplicateGroups.length} group{duplicateGroups.length > 1 ? "s" : ""} of possible duplicate customers.
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsSheetOpen(true)}
+                className="ml-4"
+              >
+                Review
+              </Button>
+            </AlertDescription>
+          </div>
         </Alert>
       )}
 
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Review Duplicate Customers</SheetTitle>
-            <SheetDescription>
-              Merge duplicate customer records to keep your database clean.
+        <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
+          <SheetHeader className="space-y-2 pb-4">
+            <SheetTitle className="text-2xl font-bold">Review Duplicate Customers</SheetTitle>
+            <SheetDescription className="text-base">
+              Merge duplicate customer records to keep your database clean and accurate.
             </SheetDescription>
           </SheetHeader>
 
-          <div className="space-y-6 mt-6">
+          <div className="space-y-6 py-4">
             {duplicateGroups.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <p>No duplicate customers found.</p>
@@ -154,12 +157,12 @@ function DuplicateGroupCard({
     group.reason === "same_phone" ? "Same Phone" : "Similar Name";
 
   return (
-    <div className="border rounded-lg p-4 space-y-4">
+    <div className="border border-border/50 rounded-lg p-6 space-y-5 bg-card shadow-sm">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="font-semibold">Duplicate Group</h3>
-          <p className="text-sm text-muted-foreground">
-            Reason: <Badge variant="outline">{reasonLabel}</Badge>
+          <h3 className="text-base font-bold text-foreground">Duplicate Group</h3>
+          <p className="text-sm text-muted-foreground mt-1">
+            Reason: <Badge variant="secondary" className="ml-1 inline-block font-semibold">{reasonLabel}</Badge>
           </p>
         </div>
       </div>
@@ -171,48 +174,49 @@ function DuplicateGroupCard({
             <button
               key={customer.id}
               onClick={() => setPrimaryId(customer.id)}
-              className={`w-full text-left p-3 rounded-md border-2 transition-colors ${
+              className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
                 isSelected
-                  ? "border-primary bg-primary/5"
-                  : "border-muted hover:border-muted-foreground/50"
+                  ? "border-primary bg-primary/8 shadow-sm"
+                  : "border-border/50 bg-muted/30 hover:border-primary/50 hover:bg-muted/50"
               }`}
             >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <p className="font-medium">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-foreground">
                     {getCustomerDisplayName(customer)}
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground mt-1.5">
                     {customer.phone} {customer.email && `• ${customer.email}`}
                   </p>
-                  <div className="mt-2 flex gap-2 text-xs text-muted-foreground">
-                    <span>{customer.visits} visits</span>
+                  <div className="mt-3 flex gap-3 text-xs font-medium text-muted-foreground">
+                    <span>📊 {customer.visits} visits</span>
                     <span>•</span>
-                    <span>${(customer.lifetime_spend ?? 0).toFixed(2)}</span>
+                    <span>💰 ${(customer.lifetime_spend ?? 0).toFixed(2)}</span>
                   </div>
                 </div>
-                <div className="text-right">
-                  {isSelected && (
-                    <Badge className="bg-primary text-primary-foreground">
-                      Keep
+                {isSelected && (
+                  <div className="flex-shrink-0 pt-1">
+                    <Badge className="bg-primary text-primary-foreground font-semibold">
+                      ✓ Keep
                     </Badge>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             </button>
           );
         })}
       </div>
 
-      <div className="bg-blue-50 dark:bg-blue-900/20 rounded p-3 text-sm text-blue-700 dark:text-blue-400">
-        Select the customer record to keep. Data from other records will be merged
-        into this one.
+      <div className="bg-blue-50/50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-100/50 dark:border-blue-900/40">
+        <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+          ℹ️ Select the customer record to keep. Data from other records will be merged into the selected one.
+        </p>
       </div>
 
       <Button
         onClick={() => onMerge(primaryId, duplicateIds)}
         disabled={isMerging || duplicateIds.length === 0}
-        className="w-full"
+        className="w-full h-11 font-semibold gap-2"
       >
         {isMerging ? "Merging..." : "Merge Selected"}
       </Button>

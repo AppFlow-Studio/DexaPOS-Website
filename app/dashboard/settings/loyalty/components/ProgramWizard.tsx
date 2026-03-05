@@ -296,7 +296,7 @@ export function ProgramWizard({
   // Step 2: Basic Config
   const renderStep2 = () => (
     <div className="space-y-4">
-      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+      <div className="rounded-lg border border-blue-200 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-900/20 p-3 text-sm text-blue-900 dark:text-blue-300">
         <p className="font-medium mb-1">📢 Merchant-Wide Program</p>
         <p>This program will be created for your entire merchant. You can optionally limit it to specific locations in <span className="font-semibold">Advanced Settings → Schedule</span>.</p>
       </div>
@@ -771,7 +771,7 @@ export function ProgramWizard({
 
           <div className="space-y-3">
             <Label>Exclude Categories</Label>
-            <div className="border rounded-lg p-3 space-y-2 max-h-40 overflow-y-auto bg-white">
+            <div className="border rounded-lg p-3 space-y-2 max-h-40 overflow-y-auto bg-card dark:bg-muted/30">
               {categoriesLoading ? (
                 <div className="flex items-center justify-center py-4 text-muted-foreground">
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -814,7 +814,7 @@ export function ProgramWizard({
 
           <div className="space-y-3">
             <Label>Exclude Menu Items</Label>
-            <div className="border rounded-lg p-3 space-y-2 max-h-40 overflow-y-auto bg-white">
+            <div className="border rounded-lg p-3 space-y-2 max-h-40 overflow-y-auto bg-card dark:bg-muted/30">
               {itemsLoading ? (
                 <div className="flex items-center justify-center py-4 text-muted-foreground">
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />

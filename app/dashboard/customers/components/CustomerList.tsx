@@ -98,7 +98,7 @@ function SortableColumnHead({
   const isActive = sortField === field;
   return (
     <TableHead
-      className="cursor-pointer select-none hover:bg-muted/50"
+      className="px-3 py-3 cursor-pointer select-none hover:bg-muted/50 font-semibold text-foreground whitespace-nowrap"
       onClick={() => onSort?.(field)}
     >
       <div className="flex items-center gap-1">
@@ -155,30 +155,36 @@ export function CustomerList({
 
   if (customers.length === 0) {
     return (
-      <div className="w-full h-96 flex flex-col items-center justify-center text-muted-foreground border rounded-lg bg-card/50">
-        <UserIcon className="h-12 w-12 mb-4 opacity-50" />
-        <p className="text-lg font-medium">No customers found</p>
-        <p className="text-sm">Try adjusting your search terms</p>
+      <div className="w-full h-96 flex flex-col items-center justify-center text-muted-foreground">
+        <div className="flex flex-col items-center gap-4">
+          <div className="rounded-lg bg-muted/50 p-3">
+            <UserIcon className="h-8 w-8 text-muted-foreground/60" />
+          </div>
+          <div className="text-center space-y-1">
+            <p className="text-lg font-semibold text-foreground">No customers found</p>
+            <p className="text-sm text-muted-foreground">Try adjusting your search or filters</p>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="rounded-md border bg-card">
+    <div className="w-full overflow-x-auto -mx-6 lg:-mx-8 px-6 lg:px-8">
       <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-10">
+        <TableHeader className="bg-muted/30 border-b border-border/50 sticky top-0">
+          <TableRow className="hover:bg-muted/40 transition-colors">
+            <TableHead className="w-10 px-3 py-3">
               <Checkbox
                 checked={allSelected ? true : someSelected ? "indeterminate" : false}
                 onCheckedChange={toggleSelectAll}
                 onClick={(e) => e.stopPropagation()}
               />
             </TableHead>
-            <TableHead className="w-75">Customer</TableHead>
-            <TableHead>Phone</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Tags</TableHead>
+            <TableHead className="px-3 py-3 font-semibold text-foreground">Customer</TableHead>
+            <TableHead className="px-3 py-3 font-semibold text-foreground whitespace-nowrap">Phone</TableHead>
+            <TableHead className="px-3 py-3 font-semibold text-foreground whitespace-nowrap">Email</TableHead>
+            <TableHead className="px-3 py-3 font-semibold text-foreground">Tags</TableHead>
             <SortableColumnHead
               field="lifetime_spend"
               label="Total Spend"
@@ -194,21 +200,14 @@ export function CustomerList({
               onSort={onSort}
             />
             <SortableColumnHead
-              field="avg_spend"
-              label="Avg. Spend"
-              sortField={sortField}
-              sortDir={sortDir}
-              onSort={onSort}
-            />
-            <SortableColumnHead
               field="last_visit"
               label="Last Visit"
               sortField={sortField}
               sortDir={sortDir}
               onSort={onSort}
             />
-            <TableHead>Status</TableHead>
-            <TableHead className="w-12.5"></TableHead>
+            <TableHead className="px-3 py-3 font-semibold text-foreground whitespace-nowrap">Status</TableHead>
+            <TableHead className="w-10 px-3 py-3"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -219,40 +218,40 @@ export function CustomerList({
             return (
               <TableRow
                 key={customer.id}
-                className={`group cursor-pointer ${isSelected ? "bg-muted/50" : ""}`}
+                className={`group cursor-pointer border-b border-border/50 hover:bg-muted/40 transition-colors ${isSelected ? "bg-primary/5" : ""}`}
                 onClick={() => onViewProfile?.(customer)}
               >
-                <TableCell onClick={(e) => e.stopPropagation()}>
+                <TableCell onClick={(e) => e.stopPropagation()} className="px-3 py-3">
                   <Checkbox
                     checked={isSelected}
                     onCheckedChange={() => toggleSelectCustomer(customer.id)}
                   />
                 </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-3">
+                <TableCell className="px-3 py-3">
+                  <div className="flex items-center gap-2">
                     <Avatar className="h-9 w-9">
-                      <AvatarFallback className="bg-primary/10 text-primary">
+                      <AvatarFallback className="bg-primary/10 text-primary font-semibold text-xs">
                         {getInitials(customer)}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <span className="font-medium text-sm">
+                      <span className="font-semibold text-sm text-foreground">
                         {getCustomerDisplayName(customer)}
                       </span>
                     </div>
                   </div>
                 </TableCell>
-                <TableCell>
+                <TableCell className="px-3 py-3 whitespace-nowrap">
                   <span className="text-sm text-muted-foreground">
                     {customer.phone || "—"}
                   </span>
                 </TableCell>
-                <TableCell>
+                <TableCell className="px-3 py-3">
                   <div className="flex items-center gap-1">
                     {customer.email ? (
                       <>
-                        <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground truncate max-w-37.5">
+                        <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="text-sm text-muted-foreground truncate max-w-25">
                           {customer.email}
                         </span>
                       </>
@@ -261,24 +260,24 @@ export function CustomerList({
                     )}
                   </div>
                 </TableCell>
-                <TableCell>
+                <TableCell className="px-3 py-3">
                   {customer.tags && customer.tags.length > 0 ? (
                     <div className="flex gap-1 flex-wrap">
-                      {customer.tags.slice(0, 2).map((tag) => (
+                      {customer.tags.slice(0, 1).map((tag) => (
                         <Badge
                           key={tag}
-                          variant="outline"
-                          className="text-[10px] px-1.5 py-0"
+                          variant="secondary"
+                          className="text-xs px-2 py-0.5 font-medium"
                         >
                           {tag}
                         </Badge>
                       ))}
-                      {customer.tags.length > 2 && (
+                      {customer.tags.length > 1 && (
                         <Badge
                           variant="outline"
-                          className="text-[10px] px-1.5 py-0"
+                          className="text-xs px-2 py-0.5 font-medium"
                         >
-                          +{customer.tags.length - 2}
+                          +{customer.tags.length - 1}
                         </Badge>
                       )}
                     </div>
@@ -286,50 +285,46 @@ export function CustomerList({
                     <span className="text-sm text-muted-foreground">—</span>
                   )}
                 </TableCell>
-                <TableCell>
-                  <div className="font-medium">
+                <TableCell className="px-3 py-3 whitespace-nowrap">
+                  <div className="font-semibold text-foreground">
                     ${(customer.lifetime_spend ?? 0).toFixed(2)}
                   </div>
                 </TableCell>
-                <TableCell>
-                  <Badge variant="secondary" className="font-normal">
+                <TableCell className="px-3 py-3 whitespace-nowrap">
+                  <Badge variant="secondary" className="font-semibold bg-muted text-muted-foreground">
                     {customer.visits ?? 0}
                   </Badge>
                 </TableCell>
-                <TableCell>
-                  <Badge variant="outline">
-                    ${(customer.avg_spend ?? 0).toFixed(2)}
-                  </Badge>
-                </TableCell>
-                <TableCell>
+                <TableCell className="px-3 py-3 whitespace-nowrap">
                   <span className="text-sm text-muted-foreground">
                     {formatRelativeDate(customer.last_visit)}
                   </span>
                 </TableCell>
-                <TableCell>
+                <TableCell className="px-3 py-3 whitespace-nowrap">
                   <Badge className={getStatusColor(status)}>{status}</Badge>
                 </TableCell>
-                <TableCell onClick={(e) => e.stopPropagation()}>
+                <TableCell onClick={(e) => e.stopPropagation()} className="px-3 py-3">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
                         variant="ghost"
-                        className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="h-9 w-9 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-muted"
                       >
                         <span className="sr-only">Open menu</span>
-                        <MoreHorizontal className="h-4 w-4" />
+                        <MoreHorizontal className="h-5 w-5" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuLabel className="font-semibold">Actions</DropdownMenuLabel>
                       <DropdownMenuItem
                         onClick={() => onViewProfile?.(customer)}
+                        className="cursor-pointer"
                       >
                         View Profile
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
-                        className="text-destructive focus:text-destructive"
+                        className="text-destructive focus:text-destructive cursor-pointer"
                         onClick={() => onDeleteCustomer?.(customer)}
                       >
                         Delete Customer

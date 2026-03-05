@@ -81,26 +81,31 @@ export function TimelineItem({
 
   return (
     <div
-      className={cn("flex items-start gap-4 group", item.is_clickable && "cursor-pointer hover:opacity-80 transition-opacity")}
+      className={cn(
+        "flex items-start gap-4 group p-4 rounded-lg border border-border/50 bg-card/50 hover:bg-card transition-all",
+        item.is_clickable && "cursor-pointer hover:border-primary/50 hover:shadow-sm"
+      )}
       onClick={handleClick}
     >
       <TimelineActivityIcon type={item.activity_type} />
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="font-semibold text-base">{item.activity_label}</span>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="font-semibold text-foreground">{item.activity_label}</span>
           {item.amount_value !== null && (
-            <span className="font-medium text-foreground text-sm">
+            <span className="font-bold text-primary text-base">
               ${item.amount_value.toFixed(2)}
             </span>
           )}
         </div>
         <p className="text-sm text-muted-foreground">{item.description}</p>
       </div>
-      <div className="text-right flex items-center gap-3 text-sm text-muted-foreground shrink-0">
-        <span>{time}</span>
-        <span>{date}</span>
+      <div className="text-right flex items-center gap-3 text-xs text-muted-foreground shrink-0">
+        <div className="flex flex-col items-end gap-1">
+          <span className="font-medium">{time}</span>
+          <span className="text-muted-foreground/70">{date}</span>
+        </div>
         {item.is_clickable && (
-          <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
+          <ChevronRight className="h-5 w-5 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
         )}
       </div>
     </div>
@@ -129,41 +134,45 @@ export function MetricCard({
   isLoading?: boolean;
 }) {
   return (
-    <Card className={cn("flex flex-col justify-center p-5 h-30", className)}>
-      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
-        {title}
-      </span>
+    <Card className={cn("flex flex-col justify-between p-5 h-auto min-h-32 hover:shadow-md transition-shadow", className)}>
+      <div>
+        <span className="text-xs font-semibold text-muted-foreground tracking-normal uppercase">
+          {title}
+        </span>
+      </div>
       {isLoading ? (
-        <div className="space-y-1.5">
-          <div className="h-7 w-24 bg-muted animate-pulse rounded" />
-          <div className="h-3 w-16 bg-muted animate-pulse rounded" />
+        <div className="space-y-2 mt-3">
+          <div className="h-8 w-32 bg-muted animate-pulse rounded" />
+          <div className="h-3 w-20 bg-muted animate-pulse rounded" />
         </div>
       ) : (
         <>
-          <div className="flex items-center gap-2">
-            <span className="text-2xl font-bold text-foreground tracking-tight">{value}</span>
-            {badge && (
-              <Badge className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0 px-1.5 py-0">
-                {badge}
-              </Badge>
-            )}
+          <div className="mt-4">
+            <div className="flex items-end gap-2.5 mb-2">
+              <span className="text-3xl font-bold text-foreground tracking-tight">{value}</span>
+              {badge && (
+                <Badge className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0 px-2 py-1 font-semibold">
+                  {badge}
+                </Badge>
+              )}
+            </div>
             {trend && (
-              <span className={cn(
-                "flex items-center gap-0.5 text-xs font-medium",
+              <div className={cn(
+                "flex items-center gap-1 text-sm font-semibold",
                 trend.direction === "up" && "text-green-600 dark:text-green-400",
                 trend.direction === "down" && "text-red-600 dark:text-red-400",
                 trend.direction === "flat" && "text-muted-foreground",
               )}>
-                {trend.direction === "up" && <TrendingUp className="h-3 w-3" />}
-                {trend.direction === "down" && <TrendingDown className="h-3 w-3" />}
-                {trend.direction === "flat" && <Minus className="h-3 w-3" />}
-                {trend.label}
-              </span>
+                {trend.direction === "up" && <TrendingUp className="h-4 w-4" />}
+                {trend.direction === "down" && <TrendingDown className="h-4 w-4" />}
+                {trend.direction === "flat" && <Minus className="h-4 w-4" />}
+                <span>{trend.label}</span>
+              </div>
+            )}
+            {subtitle && (
+              <span className="text-xs text-muted-foreground block mt-3 leading-relaxed">{subtitle}</span>
             )}
           </div>
-          {subtitle && (
-            <span className="text-xs text-muted-foreground mt-0.5">{subtitle}</span>
-          )}
         </>
       )}
     </Card>

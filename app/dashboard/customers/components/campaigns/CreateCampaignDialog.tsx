@@ -116,43 +116,44 @@ export function CreateCampaignDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Create Campaign</DialogTitle>
-          <DialogDescription>
-            Create a new marketing campaign to send to your customers
+        <DialogHeader className="space-y-2">
+          <DialogTitle className="text-2xl font-bold">Create Campaign</DialogTitle>
+          <DialogDescription className="text-base">
+            Create and send marketing campaigns to your customers via SMS or email
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="space-y-7 py-4">
           {/* Campaign Basics */}
           <div className="space-y-4">
-            <div>
-              <Label htmlFor="campaign-name">Campaign Name</Label>
+            <div className="space-y-2">
+              <Label htmlFor="campaign-name" className="font-semibold text-sm">Campaign Name</Label>
               <Input
                 id="campaign-name"
                 placeholder="e.g., Holiday Sale 2024"
                 value={campaignName}
                 onChange={(e) => setCampaignName(e.target.value)}
+                className="h-10 bg-background border-input focus-visible:ring-2 focus-visible:ring-primary"
               />
             </div>
 
-            <div>
-              <Label htmlFor="campaign-type">Campaign Type</Label>
+            <div className="space-y-2">
+              <Label htmlFor="campaign-type" className="font-semibold text-sm">Campaign Type</Label>
               <Select value={campaignType} onValueChange={(v) => setCampaignType(v as "sms" | "email")}>
-                <SelectTrigger id="campaign-type">
+                <SelectTrigger id="campaign-type" className="h-10 bg-background border-input focus-visible:ring-2 focus-visible:ring-primary">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="sms">SMS</SelectItem>
-                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="sms">📱 SMS</SelectItem>
+                  <SelectItem value="email">✉️ Email</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
           {/* Content */}
-          <div className="space-y-4 border-t pt-4">
-            <h3 className="font-medium">Message Content</h3>
+          <div className="space-y-4 border-t border-border/50 pt-6">
+            <h3 className="font-semibold text-sm text-foreground">Message Content</h3>
 
             {campaignType === "email" && (
               <div>

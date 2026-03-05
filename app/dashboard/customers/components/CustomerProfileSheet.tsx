@@ -476,47 +476,47 @@ export function CustomerProfileSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="sm:max-w-225 w-full overflow-y-auto px-0 bg-[#F8F9FB] dark:bg-background">
-          <div className="px-6 py-6 border-b bg-background">
-            <SheetHeader className="space-y-4">
-              <div className="flex justify-between items-start">
-                <div className="space-y-2">
-                  <SheetTitle className="text-3xl font-bold tracking-tight text-left">
+        <SheetContent className="sm:max-w-225 w-full overflow-y-auto px-0 bg-background">
+          <div className="px-8 py-8 border-b border-border/50 bg-gradient-to-b from-muted/20 to-background">
+            <SheetHeader className="space-y-5">
+              <div className="flex justify-between items-start gap-4">
+                <div className="space-y-4 flex-1">
+                  <SheetTitle className="text-4xl font-bold tracking-tight text-left text-foreground">
                     {getCustomerDisplayName(customerData as any)}
                   </SheetTitle>
-                  <div className="flex gap-2 flex-wrap">
+                  <div className="flex gap-2.5 flex-wrap items-center">
                     {profile?.customer?.tags?.map((tag) => (
-                      <Badge key={tag} variant="secondary" className="h-7 text-xs rounded-full">
+                      <Badge key={tag} variant="secondary" className="px-3 py-1.5 text-xs font-semibold rounded-full">
                         {tag}
                       </Badge>
                     ))}
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-7 text-xs rounded-full bg-muted/50 border-muted-foreground/20 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      className="px-3 py-1.5 text-xs font-medium rounded-full bg-muted/50 border-muted/40 text-muted-foreground hover:bg-muted/70 hover:text-foreground transition-colors"
                       onClick={() => setShowAddTag(true)}
                     >
-                      <Plus className="w-3 h-3 mr-1" /> ADD TAG
+                      <Plus className="w-3.5 h-3.5 mr-1.5" /> Tag
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-7 text-xs text-muted-foreground hover:text-foreground px-2"
+                      className="px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50"
                       onClick={() => setShowAddNote(true)}
                     >
-                      <FileText className="w-3 h-3 mr-2" /> add note
+                      <FileText className="w-3.5 h-3.5 mr-1.5" /> Note
                     </Button>
                   </div>
                 </div>
 
-                <div className="flex flex-col items-end gap-1.5 text-sm">
-                  <div className="flex items-center gap-2 text-foreground/80 font-medium">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    {customerData.phone || "No phone"}
+                <div className="flex flex-col items-end gap-2.5 text-sm bg-muted/30 rounded-lg p-4 border border-muted/50">
+                  <div className="flex items-center gap-2.5 text-foreground font-semibold">
+                    <Phone className="h-4 w-4 text-primary" />
+                    {customerData.phone || <span className="text-muted-foreground">No phone</span>}
                   </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Mail className="h-4 w-4" />
-                    {customerData.email || "No email address"}
+                  <div className="flex items-center gap-2.5 text-foreground font-semibold">
+                    <Mail className="h-4 w-4 text-primary" />
+                    {customerData.email || <span className="text-muted-foreground">No email</span>}
                   </div>
                 </div>
               </div>
@@ -524,53 +524,53 @@ export function CustomerProfileSheet({
 
             {/* Tab Configs with counts from top-level hooks */}
             <Tabs defaultValue="overview" className="mt-8">
-              <TabsList className="bg-transparent h-auto p-0 space-x-6 border-b rounded-none w-full justify-start">
+              <TabsList className="bg-transparent h-auto p-0 space-x-8 border-b border-border/50 rounded-none w-full justify-start">
                 <TabsTrigger
                   value="overview"
-                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2 text-muted-foreground data-[state=active]:text-foreground font-medium bg-transparent shadow-none border-b-2 border-transparent transition-none"
+                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground"
                 >
                   Overview
                 </TabsTrigger>
                 <TabsTrigger
                   value="orders"
-                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2 text-muted-foreground data-[state=active]:text-foreground font-medium bg-transparent shadow-none border-b-2 border-transparent transition-none"
+                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground"
                 >
                   Orders
                 </TabsTrigger>
                 <TabsTrigger
                   value="bookings"
-                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2 text-muted-foreground data-[state=active]:text-foreground font-medium bg-transparent shadow-none border-b-2 border-transparent transition-none"
+                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground"
                 >
                   Bookings
                 </TabsTrigger>
                 <TabsTrigger
                   value="feedback"
-                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2 text-muted-foreground data-[state=active]:text-foreground font-medium bg-transparent shadow-none border-b-2 border-transparent transition-none"
+                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground"
                 >
                   Feedback
                 </TabsTrigger>
                 <TabsTrigger
                   value="loyalty"
-                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2 text-muted-foreground data-[state=active]:text-foreground font-medium bg-transparent shadow-none border-b-2 border-transparent transition-none"
+                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground"
                 >
                   Loyalty
                 </TabsTrigger>
                 <TabsTrigger
                   value="marketing"
-                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2 text-muted-foreground data-[state=active]:text-foreground font-medium bg-transparent shadow-none border-b-2 border-transparent transition-none"
+                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground"
                 >
                   Marketing
                 </TabsTrigger>
                 <TabsTrigger
                   value="details"
-                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2 text-muted-foreground data-[state=active]:text-foreground font-medium bg-transparent shadow-none border-b-2 border-transparent transition-none"
+                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground"
                 >
                   Details
                 </TabsTrigger>
               </TabsList>
 
-              <div className="mt-6">
-                <TabsContent value="overview" className="space-y-6 animate-in fade-in-50 duration-300">
+              <div className="px-8 py-8">
+                <TabsContent value="overview" className="space-y-8 animate-in fade-in-50 duration-300 m-0">
                   <OverviewTab
                     lastVisitRelative={lastVisitRelative}
                     lastVisitAbsolute={lastVisitAbsolute}
@@ -603,32 +603,32 @@ export function CustomerProfileSheet({
                 </TabsContent>
 
                 {/* Orders Tab */}
-                <TabsContent value="orders" className="space-y-6 py-6 animate-in fade-in-50 duration-300">
+                <TabsContent value="orders" className="space-y-8 animate-in fade-in-50 duration-300 m-0">
                   {customer && <OrdersTab customer={customer} />}
                 </TabsContent>
 
                 {/* Bookings Tab */}
-                <TabsContent value="bookings" className="space-y-6 py-6 animate-in fade-in-50 duration-300">
+                <TabsContent value="bookings" className="space-y-8 animate-in fade-in-50 duration-300 m-0">
                   {customer && <BookingsTab customer={customer} />}
                 </TabsContent>
 
                 {/* Feedback Tab */}
-                <TabsContent value="feedback" className="space-y-6 py-6 animate-in fade-in-50 duration-300">
+                <TabsContent value="feedback" className="space-y-8 animate-in fade-in-50 duration-300 m-0">
                   {customer && <FeedbackTab customer={customer} />}
                 </TabsContent>
 
                 {/* Loyalty Tab */}
-                <TabsContent value="loyalty" className="space-y-6 py-6 animate-in fade-in-50 duration-300">
+                <TabsContent value="loyalty" className="space-y-8 animate-in fade-in-50 duration-300 m-0">
                   {customer && <LoyaltyTab customer={customer} merchantId={merchantId} />}
                 </TabsContent>
 
                 {/* Marketing Tab */}
-                <TabsContent value="marketing" className="space-y-6 py-6 animate-in fade-in-50 duration-300">
+                <TabsContent value="marketing" className="space-y-8 animate-in fade-in-50 duration-300 m-0">
                   {customer && <MarketingTab customer={customer} merchantId={merchantId} />}
                 </TabsContent>
 
                 {/* Details Tab */}
-                <TabsContent value="details" className="space-y-6 py-6 animate-in fade-in-50 duration-300">
+                <TabsContent value="details" className="space-y-8 animate-in fade-in-50 duration-300 m-0">
                   {customer && <DetailsTab customer={customer} merchantId={merchantId} />}
                 </TabsContent>
               </div>

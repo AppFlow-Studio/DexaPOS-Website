@@ -71,57 +71,57 @@ export function OverviewTab({
   onOrderClick,
 }: OverviewTabProps) {
   return (
-    <div className="space-y-6 animate-in fade-in-50 duration-300">
+    <div className="space-y-8 animate-in fade-in-50 duration-300">
       {/* 6 KPI Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <MetricCard
           title="LAST VISIT"
           value={lastVisitRelative}
           subtitle={lastVisitAbsolute ?? undefined}
-          className="bg-white dark:bg-card border-none shadow-sm"
+          className="bg-card border border-border/50 shadow-sm rounded-lg p-6 hover:shadow-md transition-shadow"
           isLoading={isLoadingProfile}
         />
         <MetricCard
           title="TOTAL VISITS"
           value={String(totalVisits)}
           trend={visitTrendLabel ? { direction: visitTrendDir, label: visitTrendLabel } : undefined}
-          className="bg-white dark:bg-card border-none shadow-sm"
+          className="bg-card border border-border/50 shadow-sm rounded-lg p-6 hover:shadow-md transition-shadow"
           isLoading={isLoadingProfile}
         />
         <MetricCard
           title="LIFETIME SPEND"
           value={`$${lifetimeSpend.toLocaleString()}`}
           badge={percentileBadge ?? undefined}
-          className="bg-white dark:bg-card border-none shadow-sm"
+          className="bg-card border border-border/50 shadow-sm rounded-lg p-6 hover:shadow-md transition-shadow"
           isLoading={isLoadingProfile || isLoadingSpend}
         />
         <MetricCard
           title="AVG. SPEND"
           value={`$${avgSpend.toFixed(2)}`}
-          className="bg-white dark:bg-card border-none shadow-sm"
+          className="bg-card border border-border/50 shadow-sm rounded-lg p-6 hover:shadow-md transition-shadow"
           isLoading={isLoadingProfile}
         />
         <MetricCard
           title="AVG. TIP"
           value={`${avgTip.toFixed(1)}%`}
-          className="bg-white dark:bg-card border-none shadow-sm"
+          className="bg-card border border-border/50 shadow-sm rounded-lg p-6 hover:shadow-md transition-shadow"
           isLoading={isLoadingProfile}
         />
         <MetricCard
           title="CUSTOMER SINCE"
           value={customerSince ?? "—"}
-          className="bg-white dark:bg-card border-none shadow-sm"
+          className="bg-card border border-border/50 shadow-sm rounded-lg p-6 hover:shadow-md transition-shadow"
           isLoading={isLoadingProfile}
         />
       </div>
 
       {/* Spend Over Time + Visit Pattern */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Spend Over Time */}
-        <Card className="border-none shadow-sm bg-white dark:bg-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-              SPEND OVER TIME
+        <Card className="border border-border/50 shadow-sm bg-card rounded-lg overflow-hidden">
+          <CardHeader className="pb-4 pt-6 px-6">
+            <CardTitle className="text-sm font-bold text-foreground tracking-normal">
+              Spend Over Time
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -134,8 +134,8 @@ export function OverviewTab({
                 <AreaChart data={spendTrend} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
                   <defs>
                     <linearGradient id="spendGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
@@ -144,7 +144,7 @@ export function OverviewTab({
                     formatter={(val: number) => [`$${val.toFixed(2)}`, "Spend"]}
                     contentStyle={{ fontSize: 12, border: "none", borderRadius: 8, boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}
                   />
-                  <Area type="monotone" dataKey="total_spend" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#spendGradient)" />
+                  <Area type="monotone" dataKey="total_spend" stroke="#10b981" strokeWidth={2} fill="url(#spendGradient)" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -156,10 +156,10 @@ export function OverviewTab({
         </Card>
 
         {/* Visit Pattern */}
-        <Card className="border-none shadow-sm bg-white dark:bg-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-              VISIT PATTERN
+        <Card className="border border-border/50 shadow-sm bg-card rounded-lg overflow-hidden">
+          <CardHeader className="pb-4 pt-6 px-6">
+            <CardTitle className="text-sm font-bold text-foreground tracking-normal">
+              Visit Pattern
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col justify-center h-35">
@@ -186,13 +186,13 @@ export function OverviewTab({
       </div>
 
       {/* Order Channels + Most Ordered Items */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Order Channels */}
-        <Card className="border-none shadow-sm bg-white dark:bg-card h-full">
-          <CardHeader className="pb-2">
+        <Card className="border border-border/50 shadow-sm bg-card rounded-lg overflow-hidden h-full">
+          <CardHeader className="pb-4 pt-6 px-6">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                ORDER CHANNELS
+              <CardTitle className="text-sm font-bold text-foreground tracking-normal">
+                Order Channels
               </CardTitle>
               {channelTrendText && <span className="text-[10px] text-muted-foreground italic">{channelTrendText}</span>}
             </div>
@@ -238,15 +238,15 @@ export function OverviewTab({
         </Card>
 
         {/* Most Ordered Items (last 90 days) */}
-        <Card className="border-none shadow-sm bg-white dark:bg-card h-full">
-          <CardHeader className="pb-2">
+        <Card className="border border-border/50 shadow-sm bg-card rounded-lg overflow-hidden h-full">
+          <CardHeader className="pb-4 pt-6 px-6">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                MOST ORDERED (90 DAYS)
+              <CardTitle className="text-sm font-bold text-foreground tracking-normal">
+                Most Ordered Items (90 Days)
               </CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="pt-2 px-6">
+          <CardContent className="pt-6 px-6 pb-6">
             {isLoadingItems ? (
               <div className="space-y-4">
                 {[1, 2, 3].map((i) => (
@@ -254,28 +254,28 @@ export function OverviewTab({
                 ))}
               </div>
             ) : topItems && topItems.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {topItems.map((item, i) => (
-                  <div key={item.item_id || i} className="flex items-center justify-between text-sm py-1 border-b last:border-0 border-muted/40">
-                    <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
-                      <span className="font-medium text-foreground/90 truncate">
+                  <div key={item.item_id || i} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-2.5 flex-1 min-w-0 pr-2">
+                      <span className="font-semibold text-sm text-foreground truncate">
                         {item.item_name}
                       </span>
                       {item.is_new_favorite && (
-                        <Badge className="text-[9px] px-1 py-0 h-4 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-0 shrink-0">
+                        <Badge className="text-xs px-2 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-0 shrink-0 font-semibold">
                           NEW
                         </Badge>
                       )}
                     </div>
-                    <div className="text-right shrink-0">
-                      <span className="font-mono text-muted-foreground">{item.order_count}x</span>
-                      <span className="text-muted-foreground text-xs ml-1.5">({item.frequency_label})</span>
+                    <div className="text-right shrink-0 flex items-center gap-2">
+                      <span className="font-bold text-foreground">{item.order_count}</span>
+                      <span className="text-xs text-muted-foreground">({item.frequency_label})</span>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="h-30 flex items-center justify-center text-muted-foreground text-sm">
+              <div className="h-32 flex items-center justify-center text-muted-foreground text-sm">
                 No orders in last 90 days
               </div>
             )}
@@ -284,24 +284,24 @@ export function OverviewTab({
       </div>
 
       {/* Activity Timeline */}
-      <div className="bg-white dark:bg-card rounded-lg p-6 shadow-sm">
-        <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-6">
-          ACTIVITY
+      <div className="border border-border/50 bg-card rounded-lg p-6 shadow-sm">
+        <h3 className="text-sm font-bold text-foreground tracking-normal mb-6">
+          Recent Activity
         </h3>
         {isLoadingTimeline ? (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-start gap-4">
-                <div className="h-10 w-10 bg-muted animate-pulse rounded-lg" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 w-32 bg-muted animate-pulse rounded" />
-                  <div className="h-3 w-48 bg-muted animate-pulse rounded" />
+              <div key={i} className="flex items-start gap-4 p-4 bg-muted/20 rounded-lg">
+                <div className="h-10 w-10 bg-muted animate-pulse rounded-lg shrink-0" />
+                <div className="flex-1 space-y-2 min-w-0">
+                  <div className="h-4 w-40 bg-muted animate-pulse rounded" />
+                  <div className="h-3 w-56 bg-muted animate-pulse rounded" />
                 </div>
               </div>
             ))}
           </div>
         ) : activityTimeline && activityTimeline.length > 0 ? (
-          <div className="space-y-6">
+          <div className="space-y-3">
             {activityTimeline.map((item) => (
               <TimelineItem
                 key={item.activity_id}
@@ -311,7 +311,7 @@ export function OverviewTab({
             ))}
           </div>
         ) : (
-          <div className="h-32 flex items-center justify-center text-muted-foreground text-sm">
+          <div className="h-40 flex items-center justify-center text-muted-foreground text-sm rounded-lg bg-muted/20">
             No activity recorded yet
           </div>
         )}
