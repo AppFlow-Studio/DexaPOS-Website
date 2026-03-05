@@ -23,7 +23,14 @@ export async function GET(
     }
 
     return NextResponse.json(data);
-  } catch (error) {
+  } catch (error: unknown) {
+    const err = error as Error & { code?: string };
+    if (err?.code === "ACCESS_DENIED") {
+      return NextResponse.json(
+        { error: "You don't have permission to view this order" },
+        { status: 403 }
+      );
+    }
     console.error("[GET /api/orders/full-history/[orderId]]", error);
     return NextResponse.json(
       { error: "Internal server error" },

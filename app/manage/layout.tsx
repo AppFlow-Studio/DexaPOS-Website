@@ -2,7 +2,7 @@
 
 import { useClerk, useSession } from '@clerk/nextjs'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useMemo } from 'react'
+import { Suspense, useEffect, useMemo } from 'react'
 import {
     Sidebar,
     SidebarContent,
@@ -335,12 +335,7 @@ function AppSidebar() {
     )
 }
 
-export default function ManageLayout({
-    children,
-}: {
-    children: React.ReactNode
-}) {
-    const { isLoaded, isSignedIn } = useSession()
+function DeniedParamHandler() {
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
@@ -373,6 +368,17 @@ export default function ManageLayout({
         })
     }, [pathname, router, searchParams])
 
+    return null
+}
+
+export default function ManageLayout({
+    children,
+}: {
+    children: React.ReactNode
+}) {
+    const { isLoaded, isSignedIn } = useSession()
+    const router = useRouter()
+
     useEffect(() => {
         if (isLoaded && !isSignedIn) {
             router.replace('/')
@@ -393,6 +399,9 @@ export default function ManageLayout({
 
     return (
         <SidebarProvider>
+            <Suspense>
+                <DeniedParamHandler />
+            </Suspense>
             <AppSidebar />
             <main className="flex-1 flex flex-col">
                 <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">

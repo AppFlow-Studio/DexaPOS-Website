@@ -64,14 +64,16 @@ BEGIN
             -- Level 1: Global Base
             'base_price', mi.price,
             'base_cash_price', mi.cash_price,
+            'base_delivery_price', mi.delivery_price,
             'base_availability', mi.availability,
-            
+
             -- Level 2: Location Override
-            'location_override', CASE 
+            'location_override', CASE
                 WHEN lio.id IS NOT NULL THEN json_build_object(
                     'id', lio.id,
                     'custom_price', lio.custom_price,
                     'custom_cash_price', lio.custom_cash_price,
+                    'custom_delivery_price', lio.custom_delivery_price,
                     'price_modifier', lio.price_modifier,
                     'price_modifier_type', lio.price_modifier_type,
                     'is_available', lio.is_available,
@@ -80,10 +82,11 @@ BEGIN
                 )
                 ELSE NULL
             END,
-            
+
             -- Effective Values (Computed)
             'effective_price', COALESCE(lio.custom_price, mi.price),
             'effective_cash_price', COALESCE(lio.custom_cash_price, mi.cash_price),
+            'effective_delivery_price', COALESCE(lio.custom_delivery_price, mi.delivery_price),
             'effective_availability', COALESCE(lio.is_available, mi.availability),
             
             -- UI Flags
@@ -213,14 +216,16 @@ BEGIN
                 -- Base prices (Level 1)
                 'base_price', mi.price,
                 'base_cash_price', mi.cash_price,
+                'base_delivery_price', mi.delivery_price,
                 'base_availability', mi.availability,
-                
+
                 -- Location override (Level 2)
-                'location_override', CASE 
+                'location_override', CASE
                     WHEN lio.id IS NOT NULL THEN json_build_object(
                         'id', lio.id,
                         'custom_price', lio.custom_price,
                         'custom_cash_price', lio.custom_cash_price,
+                        'custom_delivery_price', lio.custom_delivery_price,
                         'price_modifier', lio.price_modifier,
                         'price_modifier_type', lio.price_modifier_type,
                         'is_available', lio.is_available,
@@ -230,10 +235,11 @@ BEGIN
                     )
                     ELSE NULL
                 END,
-                
+
                 -- Effective values
                 'effective_price', COALESCE(lio.custom_price, mi.price),
                 'effective_cash_price', COALESCE(lio.custom_cash_price, mi.cash_price),
+                'effective_delivery_price', COALESCE(lio.custom_delivery_price, mi.delivery_price),
                 'effective_availability', COALESCE(lio.is_available, mi.availability),
                 
                 -- UI flags
@@ -741,19 +747,21 @@ BEGIN
                     -- Level 3: Menu-level pricing
                     'custom_price', mim.custom_price,
                     'custom_cash_price', mim.custom_cash_price,
+                    'custom_delivery_price', mim.custom_delivery_price,
                     'is_available', mim.is_available,
-                    
+
                     -- Level 4: Location + Menu override
-                    'location_menu_override', CASE 
+                    'location_menu_override', CASE
                         WHEN lmio.id IS NOT NULL THEN json_build_object(
                             'id', lmio.id,
                             'custom_price', lmio.custom_price,
                             'custom_cash_price', lmio.custom_cash_price,
+                            'custom_delivery_price', lmio.custom_delivery_price,
                             'is_available', lmio.is_available
                         )
                         ELSE NULL
                     END,
-                    
+
                     'menu_item', json_build_object(
                         'id', mi.id,
                         'name', mi.name,
@@ -762,18 +770,20 @@ BEGIN
                         'meal_types', mi.meal_types,
                         'allergens', mi.allergens,
                         'card_bg_color', mi.card_bg_color,
-                        
+
                         -- Level 1: Global base
                         'price', mi.price,
                         'cash_price', mi.cash_price,
+                        'delivery_price', mi.delivery_price,
                         'availability', mi.availability,
-                        
+
                         -- Level 2: Location item base override
-                        'location_item_override', CASE 
+                        'location_item_override', CASE
                             WHEN lio.id IS NOT NULL THEN json_build_object(
                                 'id', lio.id,
                                 'custom_price', lio.custom_price,
                                 'custom_cash_price', lio.custom_cash_price,
+                                'custom_delivery_price', lio.custom_delivery_price,
                                 'price_modifier', lio.price_modifier,
                                 'price_modifier_type', lio.price_modifier_type,
                                 'is_available', lio.is_available,
@@ -827,6 +837,17 @@ BEGIN
                             )
                         END,
                         
+                        'effective_delivery_price', CASE
+                            WHEN m.location_id IS NOT NULL THEN
+                                COALESCE(mim.custom_delivery_price, mi.delivery_price)
+                            ELSE COALESCE(
+                                lmio.custom_delivery_price,
+                                lio.custom_delivery_price,
+                                mim.custom_delivery_price,
+                                mi.delivery_price
+                            )
+                        END,
+
                         -- Availability: AND logic
                         'effective_availability', (
                             mi.availability = true
@@ -834,7 +855,7 @@ BEGIN
                             AND mim.is_available = true
                             AND COALESCE(lmio.is_available, true) = true
                         ),
-                        
+
                         -- UI helper flags
                         'has_location_item_override', (lio.id IS NOT NULL),
                         'has_menu_override', (mim.custom_price IS NOT NULL),
@@ -855,11 +876,15 @@ BEGIN
                         -- Price breakdown for admin UI
                         'price_breakdown', json_build_object(
                             'level_1_base', mi.price,
+                            'level_1_delivery', mi.delivery_price,
                             'level_2_location_item', lio.custom_price,
+                            'level_2_location_item_delivery', lio.custom_delivery_price,
                             'level_2_modifier', lio.price_modifier,
                             'level_2_modifier_type', lio.price_modifier_type,
                             'level_3_menu', mim.custom_price,
-                            'level_4_location_menu', lmio.custom_price
+                            'level_3_menu_delivery', mim.custom_delivery_price,
+                            'level_4_location_menu', lmio.custom_price,
+                            'level_4_location_menu_delivery', lmio.custom_delivery_price
                         ),
                         
                         'stock_tracking_mode', COALESCE(

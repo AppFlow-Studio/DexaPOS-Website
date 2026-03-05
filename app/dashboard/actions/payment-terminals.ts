@@ -14,7 +14,7 @@ import { LogAuditEvent } from "./audit-logs";
 // Types
 // ============================================================================
 
-export type TerminalType = "dejavoo" | "pax";
+export type TerminalType = "dejavoo" | "castles";
 export type ApiEnvironment = "sandbox" | "production";
 export type ConnectionType = "cloud" | "local";
 
@@ -31,9 +31,8 @@ export interface PaymentTerminal {
   serial_number: string | null;
 
   // Credentials (note: auth_key should be masked in responses)
-  tpn: string;
   auth_key: string;
-  register_id: string | null;
+  register_id: string;
 
   // API Configuration
   api_environment: ApiEnvironment;
@@ -82,9 +81,8 @@ export interface CreatePaymentTerminalInput {
   terminal_type: TerminalType;
   terminal_model?: string | null;
   serial_number?: string | null;
-  tpn: string;
   auth_key: string;
-  register_id?: string | null;
+  register_id: string;
   api_environment?: ApiEnvironment;
   connection_type?: ConnectionType;
   local_ip_address?: string | null;
@@ -98,9 +96,8 @@ export interface UpdatePaymentTerminalInput {
   terminal_name?: string;
   terminal_model?: string | null;
   serial_number?: string | null;
-  tpn?: string;
   auth_key?: string;
-  register_id?: string | null;
+  register_id?: string;
   api_environment?: ApiEnvironment;
   api_base_url?: string | null;
   spin_proxy_timeout?: number;
@@ -245,6 +242,46 @@ export async function getTerminalForStation(stationId: string) {
 }
 
 /**
+ * Get ALL terminals for a specific station (supports multiple terminals per station)
+ */
+export async function getTerminalsForStation(stationId: string) {
+  try {
+    const supabase = createServerSupabaseClient();
+
+    const { data, error } = await supabase
+      .from("payment_terminals")
+      .select("*")
+      .eq("station_id", stationId)
+      .order("is_active", { ascending: false })
+      .order("terminal_name");
+
+    if (error) {
+      console.error("[getTerminalsForStation] Error:", error);
+      return { success: false, error: error.message, data: null };
+    }
+
+    // Mask auth_key for security
+    const maskedData = (data || []).map((terminal) => ({
+      ...terminal,
+      auth_key: maskAuthKey(terminal.auth_key),
+    }));
+
+    return {
+      success: true,
+      data: maskedData as PaymentTerminal[],
+      error: null,
+    };
+  } catch (error) {
+    console.error("[getTerminalsForStation] Exception:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    };
+  }
+}
+
+/**
  * Get a specific terminal by ID
  */
 export async function getPaymentTerminalById(terminalId: string) {
@@ -308,18 +345,18 @@ export async function createPaymentTerminal(
       return { success: false, error: "Merchant not found", data: null };
     }
 
-    // Validate TPN uniqueness per merchant
-    const { data: existingTpn } = await supabase
+    // Validate RegisterId uniqueness per merchant
+    const { data: existingRegisterId } = await supabase
       .from("payment_terminals")
       .select("id")
       .eq("merchant_id", merchant.id)
-      .eq("tpn", input.tpn)
+      .eq("register_id", input.register_id)
       .single();
 
-    if (existingTpn) {
+    if (existingRegisterId) {
       return {
         success: false,
-        error: `Terminal with TPN "${input.tpn}" already exists`,
+        error: `Terminal with Register ID "${input.register_id}" already exists`,
         data: null,
       };
     }
@@ -336,10 +373,8 @@ export async function createPaymentTerminal(
         terminal_type: input.terminal_type,
         terminal_model: input.terminal_model || null,
         serial_number: input.serial_number || null,
-        tpn: input.tpn,
         auth_key: input.auth_key,
-        register_id: input.register_id || null,
-        tpn_encrypted: bcrypt.hashSync(input.tpn) || null,
+        register_id: input.register_id,
         auth_key_encrypted: bcrypt.hashSync(input.auth_key) || null,
         api_environment: input.api_environment || "sandbox",
         connection_type: input.connection_type || "cloud",
@@ -385,7 +420,7 @@ export async function createPaymentTerminal(
       resourceId: data.id,
       resourceName: input.terminal_name,
       locationId: input.location_id,
-      metadata: { tpn: input.tpn },
+      metadata: { register_id: input.register_id },
     });
 
     return { success: true, data: maskedData as PaymentTerminal, error: null };
@@ -423,7 +458,6 @@ export async function updatePaymentTerminal(
       updateData.terminal_model = input.terminal_model;
     if (input.serial_number !== undefined)
       updateData.serial_number = input.serial_number;
-    if (input.tpn !== undefined) updateData.tpn = input.tpn;
     if (input.auth_key !== undefined) updateData.auth_key = input.auth_key;
     if (input.register_id !== undefined)
       updateData.register_id = input.register_id;
@@ -508,7 +542,7 @@ export async function updatePaymentTerminal(
       // For now, tracking them as changed is okay, but maybe don't log the actual key if it's sensitive
       // The updateInput has auth_key unmasked usually.
       // Let's mask auth_key in logs if it changes
-      if (key === "auth_key" || key === "tpn") {
+      if (key === "auth_key") {
         if (newValue !== oldValue) {
           changedFields.push(key);
           beforeLog[key] = "***"; // Mask in log
@@ -550,6 +584,76 @@ export async function updatePaymentTerminal(
 }
 
 /**
+ * Set a specific terminal as the active one for a station
+ * Deactivates all other terminals on that station first
+ */
+export async function setActiveTerminalForStation(
+  terminalId: string,
+  stationId: string,
+) {
+  try {
+    const supabase = createServerSupabaseClient();
+
+    // Deactivate all terminals for this station
+    const { error: deactivateError } = await supabase
+      .from("payment_terminals")
+      .update({
+        is_active: false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("station_id", stationId);
+
+    if (deactivateError) {
+      console.error("[setActiveTerminalForStation] Deactivate error:", deactivateError);
+      return { success: false, error: deactivateError.message, data: null };
+    }
+
+    // Activate the specified terminal
+    const { data, error } = await supabase
+      .from("payment_terminals")
+      .update({
+        is_active: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", terminalId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("[setActiveTerminalForStation] Activate error:", error);
+      return { success: false, error: error.message, data: null };
+    }
+
+    // Mask auth_key in response
+    const maskedData = {
+      ...data,
+      auth_key: maskAuthKey(data.auth_key),
+    };
+
+    // Log audit event
+    await LogAuditEvent({
+      merchantId: data.merchant_id,
+      action: `Set Active Terminal: ${data.terminal_name}`,
+      actionCategory: "settings",
+      resourceType: "payment_terminal",
+      resourceId: terminalId,
+      resourceName: data.terminal_name,
+      locationId: data.location_id,
+      metadata: { station_id: stationId },
+    });
+
+    return { success: true, data: maskedData as PaymentTerminal, error: null };
+  } catch (error) {
+    console.error("[setActiveTerminalForStation] Exception:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+      data: null,
+    };
+  }
+}
+
+/**
  * Link a terminal to a station
  */
 export async function linkTerminalToStation(
@@ -559,25 +663,19 @@ export async function linkTerminalToStation(
   try {
     const supabase = createServerSupabaseClient();
 
-    // Check if station already has a terminal
-    const { data: existingTerminal } = await supabase
+    // Check if station already has an active terminal — if so, new one links as inactive
+    const { data: existingTerminals } = await supabase
       .from("payment_terminals")
-      .select("id, terminal_name")
-      .eq("station_id", stationId)
-      .single();
+      .select("id")
+      .eq("station_id", stationId);
 
-    if (existingTerminal) {
-      return {
-        success: false,
-        error: `Station already has terminal "${existingTerminal.terminal_name}" assigned`,
-        data: null,
-      };
-    }
+    const hasExisting = existingTerminals && existingTerminals.length > 0;
 
     const { data, error } = await supabase
       .from("payment_terminals")
       .update({
         station_id: stationId,
+        is_active: !hasExisting, // First terminal is active, subsequent ones are inactive
         updated_at: new Date().toISOString(),
       })
       .eq("id", terminalId)
@@ -689,7 +787,7 @@ export async function deletePaymentTerminal(terminalId: string) {
     // Fetch details before delete
     const { data: terminal } = await supabase
       .from("payment_terminals")
-      .select("terminal_name, merchant_id, location_id, tpn")
+      .select("terminal_name, merchant_id, location_id, register_id")
       .eq("id", terminalId)
       .single();
 
@@ -713,7 +811,7 @@ export async function deletePaymentTerminal(terminalId: string) {
         resourceId: terminalId,
         resourceName: terminal.terminal_name,
         locationId: terminal.location_id,
-        metadata: { tpn: terminal.tpn },
+        metadata: { register_id: terminal.register_id },
       });
     }
 
@@ -791,10 +889,8 @@ export async function testTerminalConnection(terminalId: string) {
       ...terminal.metadata,
       online_since: onlineSince,
     };
-    console.log(`${process.env.NEXT_PUBLIC_DEJAVOO_SPIN_API}/v2/Common/TerminalStatus?request.tpn=${terminal.tpn}&request.registerId=${terminal.register_id}&request.authkey=${terminal.auth_key}`,
-    )
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_DEJAVOO_SPIN_API}/v2/Common/TerminalStatus?request.tpn=${terminal.tpn}&request.registerId=${terminal.register_id}&request.authkey=${terminal.auth_key}`,
+      `${process.env.NEXT_PUBLIC_DEJAVOO_SPIN_API}/v2/Common/TerminalStatus?request.registerId=${terminal.register_id}&request.authkey=${terminal.auth_key}`,
       requestOptions as RequestInit,
     )
       .then((response) => response.json())

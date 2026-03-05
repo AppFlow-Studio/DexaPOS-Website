@@ -7,7 +7,21 @@
       "Bash(grep:*)",
       "Bash(find:*)",
       "Bash(node -e:*)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "WebSearch",
+      "WebFetch(domain:developers.orderout.co)",
+      "Bash(git check-ignore:*)",
+      "Bash(npm run build:*)",
+      "Bash(cat:*)",
+      "Bash(wc:*)",
+      "Bash(head -60 '/Users/temurbeksayfutdinov/Documents/AppFlowStudios/dexapos-website/app/manage/merchants/\\\\[merchantId\\\\]/page.tsx' 2>/dev/null || head -60 '/Users/temurbeksayfutdinov/Documents/AppFlowStudios/dexapos-website/app/manage/merchants/['*']]/page.tsx' 2>/dev/null)",
+      "Bash(python3:*)",
+      "Bash(npx tsx:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(git diff:*)",
+      "Bash(git stash:*)",
+      "Bash(npx next:*)"
     ]
   }
 }

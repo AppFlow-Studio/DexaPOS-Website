@@ -34,7 +34,6 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
     const [selectedStationId, setSelectedStationId] = useState<string>('')
     const [terminalName, setTerminalName] = useState('')
     const [terminalType, setTerminalType] = useState<TerminalType>('dejavoo')
-    const [tpn, setTpn] = useState('')
     const [authKey, setAuthKey] = useState('')
     const [registerId, setRegisterId] = useState('')
     const [apiEnvironment, setApiEnvironment] = useState<ApiEnvironment>('sandbox')
@@ -56,7 +55,6 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
             setSelectedStationId('')
             setTerminalName('')
             setTerminalType('dejavoo')
-            setTpn('')
             setAuthKey('')
             setRegisterId('')
             setApiEnvironment('sandbox')
@@ -71,7 +69,7 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
     }, [selectedLocationId])
 
     const handleSubmit = async () => {
-        if (!selectedLocationId || !terminalName || !tpn || !authKey) {
+        if (!selectedLocationId || !terminalName || !registerId || !authKey) {
             toast.error('Please fill in all required fields')
             return
         }
@@ -81,9 +79,8 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
             station_id: selectedStationId || null,
             terminal_name: terminalName,
             terminal_type: terminalType,
-            tpn,
             auth_key: authKey,
-            register_id: registerId || null,
+            register_id: registerId,
             api_environment: apiEnvironment,
             signature_threshold: signatureThreshold,
         }
@@ -105,7 +102,7 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
         }
     }
 
-    const canSubmit = selectedLocationId && terminalName.trim() && tpn.trim() && authKey.trim()
+    const canSubmit = selectedLocationId && terminalName.trim() && registerId.trim() && authKey.trim()
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -178,17 +175,17 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
                         </div>
                     </div>
 
-                    {/* TPN & Auth Key */}
+                    {/* Register ID & Auth Key */}
                     <div className="space-y-2">
-                        <Label htmlFor="tpn">TPN (Terminal Profile Number) *</Label>
+                        <Label htmlFor="register-id">Register ID *</Label>
                         <Input
-                            id="tpn"
-                            placeholder="10-12 digit number"
-                            value={tpn}
-                            onChange={(e) => setTpn(e.target.value)}
+                            id="register-id"
+                            placeholder="Register identifier"
+                            value={registerId}
+                            onChange={(e) => setRegisterId(e.target.value)}
                         />
                         <p className="text-xs text-muted-foreground">
-                            The Terminal Profile Number provided by your payment processor
+                            The Register ID provided by your payment processor
                         </p>
                     </div>
 
@@ -211,17 +208,6 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
                                 {showAuthKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                             </button>
                         </div>
-                    </div>
-
-                    {/* Register ID */}
-                    <div className="space-y-2">
-                        <Label htmlFor="register-id">Register ID</Label>
-                        <Input
-                            id="register-id"
-                            placeholder="Optional identifier"
-                            value={registerId}
-                            onChange={(e) => setRegisterId(e.target.value)}
-                        />
                     </div>
 
                     {/* Environment & Threshold */}

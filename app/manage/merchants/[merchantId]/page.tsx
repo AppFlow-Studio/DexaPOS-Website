@@ -190,9 +190,10 @@ export default function MerchantDetailsPage() {
                         </TabsContent>
 
                         <TabsContent value="online-store" className="mt-6">
-                            <OnlineStoreTab 
+                            <OnlineStoreTab
                                 merchantId={merchantDetails.id}
-                                locations={merchantDetails.locations as any[]} 
+                                merchantName={merchantDetails.name}
+                                locations={merchantDetails.locations as any[]}
                                 locationsLoading={false}
                             />
                         </TabsContent>
