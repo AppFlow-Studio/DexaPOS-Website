@@ -15,9 +15,9 @@ This workstream covers `DM-013-01` through `DM-013-09` with a total of **35 poin
 3. `DM-013-03`: Core implemented (wizard + server action). Pending final QA and carrier non-HQ path decision.
 4. `DM-013-04`: Core implemented (merchant/admin billing routes + save/load actions). Pending processor token UI hardening + QA.
 5. `DM-013-05`: Completed (status actions + checklist + auto-activation trigger + QA confirmation).
-6. `DM-013-06`: In progress (location wizard Tax UI step added).
+6. `DM-013-06`: In progress (wizard UI + tax persistence + manager assignment wiring complete; QA pending).
 7. `DM-013-07`: In progress in UI only (banking step shell added, backend wiring deferred due hold).
-8. `DM-013-08`: Not started.
+8. `DM-013-08`: In progress (tax settings management + dedicated location settings route implemented; banking management still held).
 9. `DM-013-09`: Completed (owner column + lifecycle status filter/sort + QA confirmation).
 
 ## Latest Validation Update (March 6, 2026)
@@ -25,6 +25,9 @@ This workstream covers `DM-013-01` through `DM-013-09` with a total of **35 poin
 1. Status-management flow (`DM-013-05`) is user-validated.
 2. Location wizard UI updates for `DM-013-06` and `DM-013-07` are user-validated at the UI layer.
 3. Banking persistence/tokenization remains paused under bank-related hold policy.
+4. Location settings tax/compliance editing (`DM-013-08` partial) is implemented and pending QA pass.
+5. Dedicated route `/dashboard/locations/[locationId]/settings` is now available for tax/compliance management and banking read-only visibility.
+6. Location wizard manager assignment now runs on submit (invite-new and assign-existing modes), pending QA.
 
 ## Banking Work Hold
 

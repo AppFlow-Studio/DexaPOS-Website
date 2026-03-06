@@ -174,10 +174,17 @@ Expected:
 - Invite mode shows name/email fields.
 - Existing mode shows identifier field.
 7. On Review step, verify tax/banking/manager sections are visible and editable via "Edit".
+8. Submit with `Invite New` manager mode:
+- confirm location is created
+- confirm pending invite appears in location Team tab with manager role
+9. Submit with `Assign Existing` manager mode (using existing user email or `user_...` ID):
+- confirm location is created
+- confirm user appears in location Team tab with manager role
 
 Expected for this phase:
 1. UI flow and field capture works.
-2. Banking and manager persistence logic is not required in this phase (UI-only).
+2. Manager assignment executes for invite/assign-existing flows.
+3. Banking persistence logic remains deferred due hold.
 
 ## E. DM-013-09 (Admin Merchant List Status/Owner)
 
@@ -198,11 +205,47 @@ Expected:
 1. Lifecycle status filtering works from onboarding status source.
 2. Owner information is visible in merchant list surfaces.
 
+## F. DM-013-08 (Location Settings Tax/Compliance, Non-Banking Scope)
+
+1. Login as merchant owner.
+2. Open `/dashboard/locations`.
+3. Click the settings icon on a location card (or open `/dashboard/locations/[locationId]/settings` directly).
+4. Verify route loads with `Location Tax & Banking` heading.
+5. Verify `Tax & Compliance` card shows:
+- masked EIN (`****1234` style when available)
+- state tax ID
+- sales tax rate
+- registration status badge
+6. Click `Edit Tax Settings`.
+7. Update one or more values:
+- EIN (`12-3456789`)
+- tax ID
+- sales tax rate percent
+- registration status
+8. Save and verify toast success.
+9. Re-open the same location settings route and confirm updated values display in the card.
+10. Verify `Banking & Payouts` section is read-only and shows `[BANK-RELATED: HOLD]` indicator.
+
+Data verification:
+
+```sql
+select id, name, ein_last_four, tax_id, sales_tax_rate, tax_registration_status, updated_at
+from locations
+order by updated_at desc
+limit 20;
+```
+
+Expected:
+1. `sales_tax_rate` persists as decimal (e.g. `0.0875` for 8.75%).
+2. `ein_last_four` reflects the latest EIN input.
+3. Updates appear in `audit_logs` via existing `UpdateLocation` audit path.
+
 ## 5) Known Remaining Gaps (Not QA failure)
 
 1. DM-013-03 carrier non-HQ auto-assign path is blocked by current `/manage` HQ-only routing model.
 2. DM-013-04 card collection uses token input now; replace with processor SDK UI (Stripe Elements or equivalent) in next pass.
 3. DM-013-07 banking save/tokenization wiring remains intentionally deferred due bank-related hold.
+4. DM-013-08 banking management UI/persistence remains deferred due bank-related hold.
 
 ## 6) Latest Confirmed Results (March 6, 2026)
 
@@ -210,3 +253,4 @@ Expected:
 2. DM-013-06/07 location wizard UI checks were completed and confirmed.
 3. DM-013-09 merchant list status/owner/filter/sort checks were completed and confirmed.
 4. Banking logic remains intentionally excluded from this confirmation due hold.
+5. DM-013-08 tax settings implementation is ready for QA.

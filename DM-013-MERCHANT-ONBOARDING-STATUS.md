@@ -37,9 +37,9 @@ Current hold scope:
 | DM-013-03 | 5 | In Progress (Core Flow Implemented) | 80% |
 | DM-013-04 | 5 | In Progress (Core Flow Implemented) `[BANK-RELATED: HOLD]` | 75% |
 | DM-013-05 | 3 | Completed (QA Confirmed) | 100% |
-| DM-013-06 | 5 | In Progress (Location Wizard Tax + Step Flow UI) | 55% |
+| DM-013-06 | 5 | In Progress (UI + backend wiring complete, manager assignment wired, QA pending) | 95% |
 | DM-013-07 | 5 | In Progress (UI Shell Only) `[BANK-RELATED: HOLD]` | 30% |
-| DM-013-08 | 3 | Not Started `[BANK-RELATED: HOLD]` | 0% |
+| DM-013-08 | 3 | In Progress (Tax settings + dedicated route implemented, banking scope on hold) `[BANK-RELATED: HOLD]` | 60% |
 | DM-013-09 | 3 | Completed (QA Confirmed) | 100% |
 
 ## Current Phase
@@ -52,6 +52,7 @@ Current hold scope:
 4. `DM-013-05` implementation and QA are complete.
 5. `DM-013-04` core billing flow is now implemented and pending QA + tokenization integration hardening.
 6. Location wizard UI has been expanded to include Tax, Banking (UI only), and Assign Manager steps.
+7. Location settings now include editable tax/compliance management in the settings sheet.
 
 ## Latest QA Confirmation (March 6, 2026)
 
@@ -59,6 +60,8 @@ Current hold scope:
 2. DM-013-06 and DM-013-07 wizard UI flow was validated for step rendering and form behavior.
 3. DM-013-09 merchant list status/owner/filter/sort was manually validated and confirmed working.
 4. Banking-related persistence remains intentionally deferred due hold.
+5. DM-013-08 tax settings implementation is ready for manual QA.
+6. DM-013-08 dedicated location settings route is implemented and ready for QA.
 
 ## Completed in This Step (DM-013-09)
 
@@ -81,6 +84,21 @@ Current hold scope:
 2. Status sort option validated.
 3. Owner name/email display validated in list and grid views.
 
+## Completed in This Step (DM-013-06 Backend Wiring)
+
+1. Location create action now persists tax/compliance fields:
+- `ein`
+- `tax_id`
+- `sales_tax_rate`
+- `tax_registration_status`
+- `onboarding_step`
+- `onboarding_completed`
+2. Location update action now supports tax/compliance updates for the same fields.
+3. Location wizard submit now maps tax rate percent input to DB decimal format.
+4. Location wizard now executes manager assignment behavior on submit:
+- invite new manager -> creates location invite with `merchant.manager`
+- assign existing manager -> resolves user by ID/email and creates `location_members` assignment
+
 ## Completed in This Step (DM-013-06 + DM-013-07 UI-only)
 
 1. Updated merchant dashboard location onboarding wizard from 5 steps to 7 steps in UI:
@@ -102,10 +120,28 @@ Current hold scope:
 
 ## Pending for DM-013-06 + DM-013-07
 
-1. Wire Tax fields (`ein`, `tax_id`, `sales_tax_rate`) into create/update location server actions.
+1. Run QA pass for tax field persistence in create/update location flows.
 2. Wire Banking fields to tokenization + `location_banking_profiles` persistence after hold is lifted.
-3. Replace existing-user manager text input with real lookup/assignment flow.
+3. Replace existing-user manager text input with real searchable user picker UX.
 4. Add audit logs for manager assignment and tax/banking updates once backend wiring is enabled.
+
+## Completed in This Step (DM-013-08 Tax Settings)
+
+1. Added Tax & Compliance management card to location settings sheet:
+- masked EIN display
+- tax ID display
+- sales tax rate display
+- tax registration status badge
+2. Added Edit Tax Settings dialog in `Settings` tab:
+- EIN input/validation
+- state tax ID input
+- sales tax percentage input
+- tax registration status select
+3. Wired saves to `UpdateLocation(...)` so tax changes persist immediately.
+4. Kept banking management logic deferred to honor `[BANK-RELATED: HOLD]`.
+5. Added dedicated route: `/dashboard/locations/[locationId]/settings`.
+6. Added read-only Banking & Payouts visibility on the route with explicit hold indicator.
+7. Added quick link button from locations list cards to open location settings route directly.
 
 ## Completed in This Step (DM-013-01)
 

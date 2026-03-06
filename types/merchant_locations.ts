@@ -36,6 +36,13 @@ export interface Location {
   is_accepting_orders: boolean;
   business_hours: BusinessHours;
   uses_global_menu: boolean;
+  ein: string | null;
+  ein_last_four: string | null;
+  tax_id: string | null;
+  sales_tax_rate: number | null;
+  tax_registration_status: 'pending' | 'verified' | 'expired' | null;
+  onboarding_step: number;
+  onboarding_completed: boolean;
   public_metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -332,6 +339,16 @@ export const createLocationSchema = z.object({
   is_active: z.boolean().default(true),
   is_accepting_orders: z.boolean().default(true),
   business_hours: businessHoursSchema.default({}),
+  ein: z
+    .string()
+    .regex(/^\d{2}-?\d{7}$/, 'EIN must be 9 digits (with optional dash)')
+    .nullable()
+    .optional(),
+  tax_id: z.string().max(100).nullable().optional(),
+  sales_tax_rate: z.number().min(0).max(1).nullable().optional(),
+  tax_registration_status: z.enum(['pending', 'verified', 'expired']).default('pending'),
+  onboarding_step: z.number().int().min(0).max(7).default(0),
+  onboarding_completed: z.boolean().default(false),
   uses_global_menu: z.boolean().default(true),
   public_metadata: z.record(z.unknown()).default({}),
 });

@@ -22,6 +22,7 @@ import { BusinessHoursStep } from './steps/BusinessHoursStep'
 import { AssignManagerStep } from './steps/AssignManagerStep'
 import { ReviewStep } from './steps/ReviewStep'
 import { CreateLocation } from '@/app/dashboard/actions/locations'
+import { ApplyLocationManagerAssignment } from '@/app/dashboard/actions/location-members'
 import { SyncGlobalMenusToLocation } from '@/app/dashboard/actions/location-menus'
 import {
     LocationFormData,
@@ -38,6 +39,7 @@ import { useQueryClient } from '@tanstack/react-query'
 
 interface CreateLocationWizardProps {
     clerkOrgId: string
+    actorUserId?: string
 }
 
 const TOTAL_STEPS = 7
@@ -86,7 +88,7 @@ const initialFormData: LocationFormData = {
     uses_global_menu: true,
 }
 
-export function CreateLocationWizard({ clerkOrgId }: CreateLocationWizardProps) {
+export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocationWizardProps) {
     const router = useRouter()
     const queryClient = useQueryClient()
 
@@ -220,12 +222,20 @@ export function CreateLocationWizard({ clerkOrgId }: CreateLocationWizardProps) 
             case 7:
                 // Review step - validate all
                 try {
+                    const normalizedTaxRate = Number(formData.sales_tax_rate)
+
                     createLocationSchema.parse({
                         ...formData,
                         phone: formData.phone || undefined,
                         email: formData.email || undefined,
                         code: formData.code || undefined,
                         address_line2: formData.address_line2 || undefined,
+                        ein: formData.ein || undefined,
+                        tax_id: formData.tax_id || undefined,
+                        sales_tax_rate: Number.isFinite(normalizedTaxRate) ? normalizedTaxRate / 100 : undefined,
+                        tax_registration_status: 'pending',
+                        onboarding_step: 7,
+                        onboarding_completed: true,
                     })
                 } catch (e: any) {
                     if (e.errors) {
@@ -275,6 +285,8 @@ export function CreateLocationWizard({ clerkOrgId }: CreateLocationWizardProps) 
         setIsSubmitting(true)
 
         try {
+            const normalizedTaxRate = Number(formData.sales_tax_rate)
+
             const result = await CreateLocation(clerkOrgId, {
                 name: formData.name,
                 code: formData.code || undefined,
@@ -293,6 +305,12 @@ export function CreateLocationWizard({ clerkOrgId }: CreateLocationWizardProps) 
                 is_active: true,
                 is_accepting_orders: true,
                 business_hours: formData.business_hours,
+                ein: formData.ein || undefined,
+                tax_id: formData.tax_id || undefined,
+                sales_tax_rate: Number.isFinite(normalizedTaxRate) ? normalizedTaxRate / 100 : undefined,
+                tax_registration_status: 'pending',
+                onboarding_step: 7,
+                onboarding_completed: true,
                 uses_global_menu: formData.uses_global_menu,
                 public_metadata: {},
             })
@@ -302,6 +320,23 @@ export function CreateLocationWizard({ clerkOrgId }: CreateLocationWizardProps) 
                     description: result.error
                 })
                 return
+            }
+
+            if (result.data && formData.manager_assignment_type !== 'skip') {
+                const managerAssignmentResult = await ApplyLocationManagerAssignment({
+                    clerkOrgId,
+                    locationId: result.data.id,
+                    assignmentType: formData.manager_assignment_type,
+                    invitedByUserId: actorUserId,
+                    managerInviteEmail: formData.manager_invite_email,
+                    existingManagerIdentifier: formData.existing_manager_identifier,
+                })
+
+                if ('error' in managerAssignmentResult) {
+                    toast.warning('Location created, manager assignment not completed', {
+                        description: managerAssignmentResult.error,
+                    })
+                }
             }
 
             // Sync global menus to the new location if using global menu
