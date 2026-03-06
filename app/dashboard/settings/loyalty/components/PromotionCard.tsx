@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreVertical, Edit2, Trash2 } from 'lucide-react';
+import { MoreVertical, Edit2, Trash2, Clock, Cake, PartyPopper, RotateCcw, Share2, Snowflake, Banknote, HandshakeIcon, Package } from 'lucide-react';
 import type { Promotion } from '../../actions/loyalty-programs';
 
 interface PromotionCardProps {
@@ -22,17 +22,17 @@ interface PromotionCardProps {
   isToggling?: boolean;
 }
 
-// Map promo type to emoji icon
-const PROMO_EMOJI: Record<string, string> = {
-  happy_hour: '🕐',
-  birthday: '🎂',
-  first_visit: '🎉',
-  comeback: '🔙',
-  referral: '👥',
-  seasonal: '🎄',
-  threshold: '💰',
-  bogo: '🤝',
-  bundle: '📦',
+// Map promo type to icon component
+const PROMO_ICONS: Record<string, React.ReactNode> = {
+  happy_hour: <Clock className="h-5 w-5 text-orange-500" />,
+  birthday: <Cake className="h-5 w-5 text-pink-500" />,
+  first_visit: <PartyPopper className="h-5 w-5 text-purple-500" />,
+  comeback: <RotateCcw className="h-5 w-5 text-cyan-500" />,
+  referral: <Share2 className="h-5 w-5 text-emerald-500" />,
+  seasonal: <Snowflake className="h-5 w-5 text-blue-400" />,
+  threshold: <Banknote className="h-5 w-5 text-green-600" />,
+  bogo: <HandshakeIcon className="h-5 w-5 text-rose-500" />,
+  bundle: <Package className="h-5 w-5 text-indigo-500" />,
 };
 
 export function PromotionCard({
@@ -103,14 +103,16 @@ export function PromotionCard({
     return parts.length > 0 ? parts.join(' ') : 'Always active';
   };
 
-  const emoji = PROMO_EMOJI[promotion.promo_type] || '✨';
+  const icon = PROMO_ICONS[promotion.promo_type];
 
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between p-4">
         <div className="flex items-start gap-4 flex-1">
-          {/* Emoji Icon */}
-          <div className="text-2xl mt-0.5">{emoji}</div>
+          {/* Icon */}
+          <div className="text-muted-foreground mt-0.5">
+            {icon || <Snowflake className="h-5 w-5" />}
+          </div>
 
           {/* Content */}
           <div className="flex-1 min-w-0">

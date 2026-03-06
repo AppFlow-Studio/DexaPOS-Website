@@ -38,6 +38,11 @@ import {
   Trash2,
   Eye,
   Loader2,
+  Star,
+  Coffee,
+  Heart,
+  Crown,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { CustomerListItem } from "@/types/customer";
@@ -70,13 +75,13 @@ interface ManualAdjustState {
   enrollmentName: string | null;
 }
 
-const iconMap: { [key: string]: string } = {
-  star: "⭐",
-  coffee: "☕",
-  gift: "🎁",
-  heart: "❤️",
-  crown: "👑",
-  lightning: "⚡",
+const iconMap: { [key: string]: React.ReactNode } = {
+  star: <Star className="w-6 h-6 text-yellow-400 fill-yellow-400 drop-shadow-md" />,
+  coffee: <Coffee className="w-6 h-6 text-amber-600 fill-amber-100 drop-shadow-md" />,
+  gift: <Gift className="w-6 h-6 text-pink-500 fill-pink-100 drop-shadow-md" />,
+  heart: <Heart className="w-6 h-6 text-red-500 fill-red-100 drop-shadow-md" />,
+  crown: <Crown className="w-6 h-6 text-amber-500 fill-amber-100 drop-shadow-md" />,
+  lightning: <Zap className="w-6 h-6 text-blue-500 fill-blue-100 drop-shadow-md" />,
 };
 
 function StatBox({ label, value, subtitle }: StatBoxProps) {
@@ -335,7 +340,7 @@ function EnrollmentCard({
 }) {
   const program = enrollment.loyalty_programs;
   const progress = getProgressData(enrollment, program);
-  const icon = iconMap[program.display_icon] || "⭐";
+  const icon = iconMap[program.display_icon] || <Star className="w-6 h-6 text-yellow-500" />;
 
   const { data: rewards } = useCustomerLoyaltyRewards(
     customerId || null,
@@ -375,7 +380,7 @@ function EnrollmentCard({
         <CardHeader className="pb-3 bg-muted/30">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-2xl">{icon}</span>
+              <div className="flex-shrink-0">{icon}</div>
               <div>
                 <CardTitle className="text-lg">{program.name}</CardTitle>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -444,8 +449,9 @@ function EnrollmentCard({
                   className="flex items-center justify-between p-3 border rounded-lg bg-amber-50 dark:bg-amber-950/20"
                 >
                   <div className="flex-1">
-                    <p className="text-sm font-medium">
-                      🎁 {reward.reward_description}
+                    <p className="text-sm font-medium flex items-center gap-2">
+                      <Gift className="w-4 h-4 text-pink-500" />
+                      {reward.reward_description}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
                       {reward.status === "available" && (
@@ -690,9 +696,9 @@ export function LoyaltyTab({ customer, merchantId }: LoyaltyTabProps) {
                       className="flex items-center justify-between p-3 border rounded-lg"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="text-lg">
-                          {iconMap[program.display_icon] || "⭐"}
-                        </span>
+                        <div className="flex-shrink-0">
+                          {iconMap[program.display_icon] || <Star className="w-5 h-5 text-yellow-500" />}
+                        </div>
                         <div className="text-left">
                           <p className="font-medium text-sm">{program.name}</p>
                           <p className="text-xs text-muted-foreground">

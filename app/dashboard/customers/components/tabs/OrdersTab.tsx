@@ -28,6 +28,8 @@ import {
   Loader2,
   Receipt,
   Calendar,
+  Banknote,
+  CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrderDetailSheet } from "@/components/dashboard/orders/OrderDetailSheet";
@@ -155,7 +157,8 @@ export function OrdersTab({ customer }: OrdersTabProps) {
   };
 
   const getPaymentIcon = (method: string) => {
-    return method === "cash" ? "💵" : "💳";
+    if (method === "cash") return <Banknote className="h-4 w-4 text-green-600" />;
+    return <CreditCard className="h-4 w-4 text-blue-600" />;
   };
 
   return (
@@ -365,7 +368,7 @@ export function OrdersTab({ customer }: OrdersTabProps) {
                   <TableCell className="text-right text-sm">
                     {order.tip_amount ? `$${order.tip_amount.toFixed(2)}` : "—"}
                   </TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="text-center flex justify-center">
                     {getPaymentIcon(order.payment_pricing_mode || "")}
                   </TableCell>
                   <TableCell>

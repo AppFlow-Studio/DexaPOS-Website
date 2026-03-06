@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Search } from 'lucide-react';
+import { Search, Clock, Cake, PartyPopper, RotateCcw, Share2, Calendar, Banknote, Package } from 'lucide-react';
 import type { Promotion, PromotionInsert } from '../../../actions/loyalty-programs';
 
 interface MenuItem {
@@ -117,18 +117,18 @@ const INITIAL_FORM: FormData = {
 const PROMO_TYPES: Array<{
   value: PromoType;
   label: string;
-  emoji: string;
+  icon: React.ReactNode;
   description: string;
 }> = [
-  { value: 'happy_hour', label: 'Happy Hour', emoji: '🕐', description: 'Time-based discounts' },
-  { value: 'birthday', label: 'Birthday', emoji: '🎂', description: 'Birthday month rewards' },
-  { value: 'first_visit', label: 'First Visit', emoji: '🎫', description: 'New customer incentive' },
-  { value: 'comeback', label: 'Comeback', emoji: '🔙', description: 'Win-back discount' },
-  { value: 'referral', label: 'Referral', emoji: '🤝', description: 'Refer a friend' },
-  { value: 'seasonal', label: 'Seasonal', emoji: '📅', description: 'Holiday/seasonal offer' },
-  { value: 'threshold', label: 'Spend Threshold', emoji: '💰', description: 'Reward for spending' },
-  { value: 'bogo', label: 'BOGO', emoji: '📦', description: 'Buy one get one' },
-  { value: 'bundle', label: 'Bundle', emoji: '📦', description: 'Bundle discount' },
+  { value: 'happy_hour', label: 'Happy Hour', icon: <Clock className="h-5 w-5 text-orange-500" />, description: 'Time-based discounts' },
+  { value: 'birthday', label: 'Birthday', icon: <Cake className="h-5 w-5 text-pink-500" />, description: 'Birthday month rewards' },
+  { value: 'first_visit', label: 'First Visit', icon: <PartyPopper className="h-5 w-5 text-purple-500" />, description: 'New customer incentive' },
+  { value: 'comeback', label: 'Comeback', icon: <RotateCcw className="h-5 w-5 text-cyan-500" />, description: 'Win-back discount' },
+  { value: 'referral', label: 'Referral', icon: <Share2 className="h-5 w-5 text-emerald-500" />, description: 'Refer a friend' },
+  { value: 'seasonal', label: 'Seasonal', icon: <Calendar className="h-5 w-5 text-blue-400" />, description: 'Holiday/seasonal offer' },
+  { value: 'threshold', label: 'Spend Threshold', icon: <Banknote className="h-5 w-5 text-green-600" />, description: 'Reward for spending' },
+  { value: 'bogo', label: 'BOGO', icon: <Package className="h-5 w-5 text-rose-500" />, description: 'Buy one get one' },
+  { value: 'bundle', label: 'Bundle', icon: <Package className="h-5 w-5 text-indigo-500" />, description: 'Bundle discount' },
 ];
 
 export function PromotionDialog({
@@ -289,7 +289,7 @@ export function PromotionDialog({
                       : 'border-muted bg-muted/30 hover:border-muted-foreground'
                   }`}
                 >
-                  <div className="text-2xl mb-1">{type.emoji}</div>
+                  <div className="flex justify-center mb-2">{type.icon}</div>
                   <div className="font-medium text-sm">{type.label}</div>
                   <div className="text-xs text-muted-foreground mt-1">{type.description}</div>
                 </button>

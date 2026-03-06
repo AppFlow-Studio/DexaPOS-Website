@@ -26,7 +26,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
+import { Loader2, Smartphone, Mail } from "lucide-react";
 import { useCreateCampaign, useSendCampaign } from "../../hooks/useCustomerMarketing";
 import { toast } from "sonner";
 
@@ -144,8 +144,18 @@ export function CreateCampaignDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="sms">📱 SMS</SelectItem>
-                  <SelectItem value="email">✉️ Email</SelectItem>
+                  <SelectItem value="sms">
+                    <div className="flex items-center gap-2">
+                      <Smartphone className="h-4 w-4" />
+                      SMS
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="email">
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4" />
+                      Email
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>

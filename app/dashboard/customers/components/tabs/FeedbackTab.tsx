@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2 } from "lucide-react";
+import { Loader2, Star } from "lucide-react";
 import { useCustomerFeedback, useAddFeedbackResponse, useUpdateFeedbackFlag } from "../../hooks/useCustomerFeedback";
 import { useLocationStore } from "@/stores/location-store";
 import type { CustomerListItem } from "@/types/customer";
@@ -62,7 +62,10 @@ export function FeedbackTab({ customer }: FeedbackTabProps) {
         <Card className="border-none shadow-sm bg-white dark:bg-card">
           <CardContent className="pt-4">
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Avg Rating</p>
-            <p className="text-2xl font-bold mt-2">⭐ {stats.avgRating}</p>
+            <div className="flex items-center gap-2 mt-2">
+              <Star className="h-6 w-6 text-yellow-400 fill-yellow-400 drop-shadow-md" />
+              <p className="text-2xl font-bold">{stats.avgRating}</p>
+            </div>
           </CardContent>
         </Card>
         <Card className="border-none shadow-sm bg-white dark:bg-card">
@@ -74,13 +77,19 @@ export function FeedbackTab({ customer }: FeedbackTabProps) {
         <Card className="border-none shadow-sm bg-white dark:bg-card">
           <CardContent className="pt-4">
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Food Avg</p>
-            <p className="text-2xl font-bold mt-2">⭐ {stats.foodAvg}</p>
+            <div className="flex items-center gap-2 mt-2">
+              <Star className="h-6 w-6 text-yellow-400 fill-yellow-400 drop-shadow-md" />
+              <p className="text-2xl font-bold">{stats.foodAvg}</p>
+            </div>
           </CardContent>
         </Card>
         <Card className="border-none shadow-sm bg-white dark:bg-card">
           <CardContent className="pt-4">
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Service Avg</p>
-            <p className="text-2xl font-bold mt-2">⭐ {stats.serviceAvg}</p>
+            <div className="flex items-center gap-2 mt-2">
+              <Star className="h-6 w-6 text-yellow-400 fill-yellow-400 drop-shadow-md" />
+              <p className="text-2xl font-bold">{stats.serviceAvg}</p>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -98,7 +107,11 @@ export function FeedbackTab({ customer }: FeedbackTabProps) {
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-sm">{"⭐".repeat(item.overall_rating)}</span>
+                      <div className="flex gap-0.5">
+                        {Array.from({ length: item.overall_rating }).map((_, i) => (
+                          <Star key={i} className="h-4 w-4 text-yellow-400 fill-yellow-400 drop-shadow-sm" />
+                        ))}
+                      </div>
                       <span className="text-xs text-muted-foreground">
                         {new Date(item.created_at).toLocaleDateString()}
                       </span>

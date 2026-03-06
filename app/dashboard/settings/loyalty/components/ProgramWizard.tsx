@@ -24,7 +24,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ChevronLeft, ChevronRight, Star, Coffee, Hash, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Star, Coffee, Hash, Loader2, Gift, Target, Flame } from 'lucide-react';
 import { useMenuItems } from '../../../hooks/useMenuItems';
 import { useCategories } from '../../../hooks/useCategories';
 import { useLocations } from '../../../hooks/useLocations';
@@ -967,12 +967,36 @@ export function ProgramWizard({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="star">⭐ Star</SelectItem>
-                <SelectItem value="heart">❤️ Heart</SelectItem>
-                <SelectItem value="coffee">☕ Coffee</SelectItem>
-                <SelectItem value="gift">🎁 Gift</SelectItem>
-                <SelectItem value="fire">🔥 Fire</SelectItem>
-                <SelectItem value="target">🎯 Target</SelectItem>
+                <SelectItem value="star">
+                  <div className="flex items-center gap-2">
+                    <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                    Star
+                  </div>
+                </SelectItem>
+                <SelectItem value="coffee">
+                  <div className="flex items-center gap-2">
+                    <Coffee className="h-4 w-4 text-amber-600" />
+                    Coffee
+                  </div>
+                </SelectItem>
+                <SelectItem value="gift">
+                  <div className="flex items-center gap-2">
+                    <Gift className="h-4 w-4 text-pink-500" />
+                    Gift
+                  </div>
+                </SelectItem>
+                <SelectItem value="fire">
+                  <div className="flex items-center gap-2">
+                    <Flame className="h-4 w-4 text-red-500" />
+                    Fire
+                  </div>
+                </SelectItem>
+                <SelectItem value="target">
+                  <div className="flex items-center gap-2">
+                    <Target className="h-4 w-4 text-cyan-500" />
+                    Target
+                  </div>
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Search, TrendingUp, Banknote } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -77,7 +77,8 @@ export function DuplicatesAlert() {
         disabled={loadingDuplicates}
         className="gap-2 h-11"
       >
-        {loadingDuplicates ? "Checking..." : "🔍 Check for Duplicates"}
+        <Search className="h-5 w-5 text-blue-600" />
+        {loadingDuplicates ? "Checking..." : "Check for Duplicates"}
       </Button>
     );
   }
@@ -189,9 +190,9 @@ function DuplicateGroupCard({
                     {customer.phone} {customer.email && `• ${customer.email}`}
                   </p>
                   <div className="mt-3 flex gap-3 text-xs font-medium text-muted-foreground">
-                    <span>📊 {customer.visits} visits</span>
+                    <span className="flex items-center gap-1"><TrendingUp className="h-3 w-3 text-green-600" /> {customer.visits} visits</span>
                     <span>•</span>
-                    <span>💰 ${(customer.lifetime_spend ?? 0).toFixed(2)}</span>
+                    <span className="flex items-center gap-1"><Banknote className="h-3 w-3 text-amber-600" /> ${(customer.lifetime_spend ?? 0).toFixed(2)}</span>
                   </div>
                 </div>
                 {isSelected && (
@@ -207,9 +208,10 @@ function DuplicateGroupCard({
         })}
       </div>
 
-      <div className="bg-blue-50/50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-100/50 dark:border-blue-900/40">
+      <div className="bg-blue-50/50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-100/50 dark:border-blue-900/40 flex gap-3">
+        <AlertCircle className="h-5 w-5 text-blue-700 dark:text-blue-300 flex-shrink-0 mt-0.5" />
         <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
-          ℹ️ Select the customer record to keep. Data from other records will be merged into the selected one.
+          Select the customer record to keep. Data from other records will be merged into the selected one.
         </p>
       </div>
 

@@ -32,7 +32,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
-import { Plus, AlertTriangle, Loader2, Gift } from 'lucide-react';
+import { Plus, AlertTriangle, Loader2, Gift, Sparkles } from 'lucide-react';
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo..ts';
 import { useLocationStore } from '../../hooks/useLocationScoped';
 import { GetMenuItems } from '../../actions/menu-items';
@@ -517,7 +517,7 @@ export default function LoyaltySettingsPage() {
           </AlertDialogHeader>
           {promotionToDelete && (
             <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
-              <div className="text-2xl">✨</div>
+              <Sparkles className="h-6 w-6 text-purple-500 fill-purple-100 drop-shadow-md flex-shrink-0" />
               <div>
                 <p className="font-medium">{promotionToDelete.name}</p>
                 <p className="text-sm text-muted-foreground">{promotionToDelete.promo_type}</p>
