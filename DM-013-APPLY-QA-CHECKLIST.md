@@ -179,6 +179,25 @@ Expected for this phase:
 1. UI flow and field capture works.
 2. Banking and manager persistence logic is not required in this phase (UI-only).
 
+## E. DM-013-09 (Admin Merchant List Status/Owner)
+
+1. Login as HQ admin.
+2. Open `/manage/merchants`.
+3. Verify table/list includes owner identity (name + email when available).
+4. Verify status filter options include:
+- Created
+- Onboarding
+- Active
+- Suspended
+- Cancelled
+5. Apply each status filter and confirm results update.
+6. Set sort by `Status` and verify ordering changes.
+7. Switch between grid/list views and confirm owner info still appears.
+
+Expected:
+1. Lifecycle status filtering works from onboarding status source.
+2. Owner information is visible in merchant list surfaces.
+
 ## 5) Known Remaining Gaps (Not QA failure)
 
 1. DM-013-03 carrier non-HQ auto-assign path is blocked by current `/manage` HQ-only routing model.
@@ -189,4 +208,5 @@ Expected for this phase:
 
 1. DM-013-05 status controls were validated in UI and confirmed.
 2. DM-013-06/07 location wizard UI checks were completed and confirmed.
-3. Banking logic remains intentionally excluded from this confirmation due hold.
+3. DM-013-09 merchant list status/owner/filter/sort checks were completed and confirmed.
+4. Banking logic remains intentionally excluded from this confirmation due hold.

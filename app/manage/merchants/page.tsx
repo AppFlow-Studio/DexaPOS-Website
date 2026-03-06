@@ -160,9 +160,12 @@ export default function MerchantsPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Status</SelectItem>
-                                    <SelectItem value="active">Active</SelectItem>
-                                    <SelectItem value="inactive">Inactive</SelectItem>
+                                    <SelectItem value="created">Created</SelectItem>
                                     <SelectItem value="onboarding">Onboarding</SelectItem>
+                                    <SelectItem value="active">Active</SelectItem>
+                                    <SelectItem value="suspended">Suspended</SelectItem>
+                                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                                    <SelectItem value="inactive">Inactive</SelectItem>
                                 </SelectContent>
                             </Select>
 
@@ -176,6 +179,7 @@ export default function MerchantsPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="name">Name</SelectItem>
+                                    <SelectItem value="status">Status</SelectItem>
                                     <SelectItem value="created_at">Date Created</SelectItem>
                                     <SelectItem value="orders_today">Orders Today</SelectItem>
                                     <SelectItem value="revenue_today">Revenue Today</SelectItem>
@@ -407,6 +411,7 @@ function MerchantListView({
             <TableHeader>
                 <TableRow>
                     <TableHead>Merchant</TableHead>
+                    <TableHead>Owner</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Locations</TableHead>
                     <TableHead className="text-right">Staff</TableHead>
@@ -436,6 +441,16 @@ function MerchantListView({
                                         </div>
                                     )}
                                 </div>
+                            </div>
+                        </TableCell>
+                        <TableCell>
+                            <div className="flex flex-col">
+                                <span className="font-medium">
+                                    {`${merchant.owner_first_name || ''} ${merchant.owner_last_name || ''}`.trim() || '-'}
+                                </span>
+                                {merchant.owner_email && (
+                                    <span className="text-xs text-muted-foreground">{merchant.owner_email}</span>
+                                )}
                             </div>
                         </TableCell>
                         <TableCell>

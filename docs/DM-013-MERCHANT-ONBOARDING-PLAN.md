@@ -17,7 +17,8 @@ This workstream covers `DM-013-01` through `DM-013-09` with a total of **35 poin
 5. `DM-013-05`: Completed (status actions + checklist + auto-activation trigger + QA confirmation).
 6. `DM-013-06`: In progress (location wizard Tax UI step added).
 7. `DM-013-07`: In progress in UI only (banking step shell added, backend wiring deferred due hold).
-8. `DM-013-08` and `DM-013-09`: Not started.
+8. `DM-013-08`: Not started.
+9. `DM-013-09`: Completed (owner column + lifecycle status filter/sort + QA confirmation).
 
 ## Latest Validation Update (March 6, 2026)
 

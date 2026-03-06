@@ -40,7 +40,7 @@ Current hold scope:
 | DM-013-06 | 5 | In Progress (Location Wizard Tax + Step Flow UI) | 55% |
 | DM-013-07 | 5 | In Progress (UI Shell Only) `[BANK-RELATED: HOLD]` | 30% |
 | DM-013-08 | 3 | Not Started `[BANK-RELATED: HOLD]` | 0% |
-| DM-013-09 | 3 | Not Started | 0% |
+| DM-013-09 | 3 | Completed (QA Confirmed) | 100% |
 
 ## Current Phase
 
@@ -57,7 +57,29 @@ Current hold scope:
 
 1. DM-013-05 status actions were manually verified in UI and confirmed working.
 2. DM-013-06 and DM-013-07 wizard UI flow was validated for step rendering and form behavior.
-3. Banking-related persistence remains intentionally deferred due hold.
+3. DM-013-09 merchant list status/owner/filter/sort was manually validated and confirmed working.
+4. Banking-related persistence remains intentionally deferred due hold.
+
+## Completed in This Step (DM-013-09)
+
+1. Merchant list status filter now supports onboarding lifecycle statuses:
+- `created`
+- `onboarding`
+- `active`
+- `suspended`
+- `cancelled`
+2. Added status sort option in merchants table UI.
+3. Added owner identity display in merchant list table:
+- owner full name
+- owner email (when present)
+4. Added owner name display in merchant grid card view.
+5. Backend `getMerchants(...)` now filters lifecycle statuses using `merchants.onboarding_status`.
+
+## DM-013-09 QA Completed
+
+1. Status filter options validated in merchant list UI.
+2. Status sort option validated.
+3. Owner name/email display validated in list and grid views.
 
 ## Completed in This Step (DM-013-06 + DM-013-07 UI-only)
 

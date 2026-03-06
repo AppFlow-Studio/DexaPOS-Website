@@ -95,12 +95,48 @@ export async function getMerchants(
 
   // Apply status filter
   if (filters.status !== 'all') {
-    query = query.eq('derived_status', filters.status)
+    if (filters.status === 'inactive') {
+      query = query.eq('derived_status', 'inactive')
+    } else {
+      let statusScopeQuery = supabase
+        .from('merchants')
+        .select('id')
+        .eq('onboarding_status', filters.status)
+
+      if (effectiveMerchantIds !== undefined) {
+        if (effectiveMerchantIds.length === 0) {
+          return { merchants: [], total: 0 }
+        }
+        statusScopeQuery = statusScopeQuery.in('id', effectiveMerchantIds)
+      }
+
+      const { data: statusScopedRows, error: statusScopedError } = await statusScopeQuery
+
+      if (statusScopedError) {
+        console.error('[getMerchants] Status scope error:', statusScopedError)
+        throw new Error('Failed to filter merchants by onboarding status')
+      }
+
+      const statusScopedMerchantIds = Array.from(
+        new Set(
+          (statusScopedRows || [])
+            .map((row) => row.id)
+            .filter((id): id is string => typeof id === 'string' && id.length > 0)
+        )
+      )
+
+      if (statusScopedMerchantIds.length === 0) {
+        return { merchants: [], total: 0 }
+      }
+
+      query = query.in('id', statusScopedMerchantIds)
+    }
   }
 
   // Apply sorting
   const ascending = filters.sortOrder === 'asc'
-  query = query.order(filters.sortBy, { ascending })
+  const sortColumn = filters.sortBy === 'status' ? 'derived_status' : filters.sortBy
+  query = query.order(sortColumn, { ascending })
 
   // Apply pagination
   query = query.range(offset, offset + pageSize - 1)

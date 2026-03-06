@@ -94,8 +94,8 @@ export interface MerchantDetails extends MerchantSummary {
 
 export interface MerchantFilters {
   search: string
-  status: 'all' | 'active' | 'inactive' | 'onboarding'
-  sortBy: 'name' | 'created_at' | 'orders_today' | 'revenue_today'
+  status: 'all' | MerchantOnboardingStatus | 'inactive'
+  sortBy: 'name' | 'created_at' | 'status' | 'orders_today' | 'revenue_today'
   sortOrder: 'asc' | 'desc'
 }
 

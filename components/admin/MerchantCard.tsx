@@ -51,6 +51,11 @@ export function MerchantCard({ merchant, onClick }: MerchantCardProps) {
             </div>
             <div>
               <h3 className="font-semibold text-foreground">{merchant.name}</h3>
+              {(merchant.owner_first_name || merchant.owner_last_name) && (
+                <p className="text-xs text-muted-foreground">
+                  Owner: {`${merchant.owner_first_name || ''} ${merchant.owner_last_name || ''}`.trim()}
+                </p>
+              )}
               {merchant.type && (
                 <p className="text-sm text-muted-foreground capitalize">{merchant.type}</p>
               )}
