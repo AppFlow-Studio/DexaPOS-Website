@@ -16,8 +16,10 @@ import { ArrowLeft, ArrowRight, Loader2, X } from 'lucide-react'
 import { WizardSidebar } from './WizardSidebar'
 import { BasicInfoStep } from './steps/BasicInfoStep'
 import { AddressStep } from './steps/AddressStep'
+import { TaxComplianceStep } from './steps/TaxComplianceStep'
+import { BankingPayoutsStep } from './steps/BankingPayoutsStep'
 import { BusinessHoursStep } from './steps/BusinessHoursStep'
-import { MenuModeStep } from './steps/MenuModeStep'
+import { AssignManagerStep } from './steps/AssignManagerStep'
 import { ReviewStep } from './steps/ReviewStep'
 import { CreateLocation } from '@/app/dashboard/actions/locations'
 import { SyncGlobalMenusToLocation } from '@/app/dashboard/actions/location-menus'
@@ -27,6 +29,8 @@ import {
     LocationFormStep2,
     LocationFormStep3,
     LocationFormStep4,
+    LocationFormStep5,
+    LocationFormStep6,
     DEFAULT_BUSINESS_HOURS,
     createLocationSchema
 } from '@/types/merchant_locations'
@@ -36,13 +40,15 @@ interface CreateLocationWizardProps {
     clerkOrgId: string
 }
 
-const TOTAL_STEPS = 5
+const TOTAL_STEPS = 7
 
 const STEP_TITLES = [
     { title: 'Location Info', description: 'Basic information about this location' },
     { title: 'Address', description: 'Where is this location?' },
+    { title: 'Tax & Compliance', description: 'Tax identity and rate for this location' },
+    { title: 'Banking & Payouts', description: 'Payout destination and schedule (UI only)' },
     { title: 'Business Hours', description: 'When are you open?' },
-    { title: 'Menu Configuration', description: 'How should the menu work?' },
+    { title: 'Assign Manager', description: 'Invite or assign a manager to this location' },
     { title: 'Review & Create', description: 'Confirm your location details' },
 ]
 
@@ -58,7 +64,25 @@ const initialFormData: LocationFormData = {
     postal_code: '',
     country: 'US',
     timezone: 'America/New_York',
+    ein: '',
+    tax_id: '',
+    sales_tax_rate: '8.75',
+    bank_name: '',
+    account_holder_name: '',
+    routing_number: '',
+    account_number: '',
+    confirm_account_number: '',
+    account_type: 'checking',
+    payout_frequency: 'daily',
+    payout_day_of_week: '1',
+    payout_day_of_month: '1',
+    minimum_payout_amount: '0.00',
+    use_merchant_billing_profile: false,
     business_hours: DEFAULT_BUSINESS_HOURS,
+    manager_assignment_type: 'skip',
+    manager_invite_name: '',
+    manager_invite_email: '',
+    existing_manager_identifier: '',
     uses_global_menu: true,
 }
 
@@ -135,6 +159,38 @@ export function CreateLocationWizard({ clerkOrgId }: CreateLocationWizardProps) 
                 break
 
             case 3:
+                if (!formData.ein || formData.ein.replace(/\D/g, '').length !== 9) {
+                    newErrors.ein = 'EIN must be 9 digits (e.g., 12-3456789)'
+                }
+                if (!formData.sales_tax_rate) {
+                    newErrors.sales_tax_rate = 'Sales tax rate is required'
+                } else {
+                    const rate = Number(formData.sales_tax_rate)
+                    if (Number.isNaN(rate) || rate < 0 || rate > 100) {
+                        newErrors.sales_tax_rate = 'Sales tax rate must be between 0 and 100'
+                    }
+                }
+                break
+
+            case 4:
+                if (formData.routing_number && formData.routing_number.length !== 9) {
+                    newErrors.routing_number = 'Routing number must be 9 digits'
+                }
+                if (
+                    (formData.account_number || formData.confirm_account_number) &&
+                    formData.account_number !== formData.confirm_account_number
+                ) {
+                    newErrors.confirm_account_number = 'Account number confirmation must match'
+                }
+                if (
+                    formData.minimum_payout_amount &&
+                    Number.isNaN(Number(formData.minimum_payout_amount))
+                ) {
+                    newErrors.minimum_payout_amount = 'Minimum payout must be a valid amount'
+                }
+                break
+
+            case 5:
                 // Business hours validation - check if close time > open time
                 const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const
                 days.forEach(day => {
@@ -147,11 +203,21 @@ export function CreateLocationWizard({ clerkOrgId }: CreateLocationWizardProps) 
                 })
                 break
 
-            case 4:
-                // Menu mode is always valid (boolean)
+            case 6:
+                if (formData.manager_assignment_type === 'invite_new') {
+                    if (!formData.manager_invite_name.trim()) {
+                        newErrors.manager_invite_name = 'Manager name is required when inviting'
+                    }
+                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.manager_invite_email)) {
+                        newErrors.manager_invite_email = 'Valid manager email is required'
+                    }
+                }
+                if (formData.manager_assignment_type === 'assign_existing' && !formData.existing_manager_identifier.trim()) {
+                    newErrors.existing_manager_identifier = 'Existing user identifier is required'
+                }
                 break
 
-            case 5:
+            case 7:
                 // Review step - validate all
                 try {
                     createLocationSchema.parse({
@@ -221,6 +287,9 @@ export function CreateLocationWizard({ clerkOrgId }: CreateLocationWizardProps) 
                 postal_code: formData.postal_code,
                 country: formData.country,
                 timezone: formData.timezone,
+                pricing_strategy: 'manual',
+                dual_pricing_percentage: 4.0,
+                use_merchant_pricing_defaults: true,
                 is_active: true,
                 is_accepting_orders: true,
                 business_hours: formData.business_hours,
@@ -300,7 +369,7 @@ export function CreateLocationWizard({ clerkOrgId }: CreateLocationWizardProps) 
                 )
             case 3:
                 return (
-                    <BusinessHoursStep
+                    <TaxComplianceStep
                         data={formData as LocationFormStep3}
                         onChange={updateFormData}
                         errors={errors}
@@ -308,12 +377,29 @@ export function CreateLocationWizard({ clerkOrgId }: CreateLocationWizardProps) 
                 )
             case 4:
                 return (
-                    <MenuModeStep
+                    <BankingPayoutsStep
                         data={formData as LocationFormStep4}
                         onChange={updateFormData}
+                        errors={errors}
                     />
                 )
             case 5:
+                return (
+                    <BusinessHoursStep
+                        data={formData as LocationFormStep5}
+                        onChange={updateFormData}
+                        errors={errors}
+                    />
+                )
+            case 6:
+                return (
+                    <AssignManagerStep
+                        data={formData as LocationFormStep6}
+                        onChange={updateFormData}
+                        errors={errors}
+                    />
+                )
+            case 7:
                 return (
                     <ReviewStep
                         data={formData}
@@ -355,7 +441,7 @@ export function CreateLocationWizard({ clerkOrgId }: CreateLocationWizardProps) 
 
                     {/* Form Content */}
                     <div className="flex-1 overflow-auto p-8">
-                        <div className="max-w-2xl">
+                        <div className="max-w-3xl">
                             {renderStep()}
                         </div>
                     </div>

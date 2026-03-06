@@ -1,7 +1,7 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { Building2, MapPin, Clock, Utensils, CheckCircle2, Check } from 'lucide-react'
+import { Building2, MapPin, ShieldCheck, Landmark, Clock, UserCog, CheckCircle2, Check } from 'lucide-react'
 
 interface Step {
     id: number
@@ -12,9 +12,11 @@ interface Step {
 const steps: Step[] = [
     { id: 1, title: 'Location info', icon: Building2 },
     { id: 2, title: 'Location address', icon: MapPin },
-    { id: 3, title: 'Business hours', icon: Clock },
-    { id: 4, title: 'Menu configuration', icon: Utensils },
-    { id: 5, title: 'Review & create', icon: CheckCircle2 },
+    { id: 3, title: 'Tax & compliance', icon: ShieldCheck },
+    { id: 4, title: 'Banking & payouts', icon: Landmark },
+    { id: 5, title: 'Business hours', icon: Clock },
+    { id: 6, title: 'Assign manager', icon: UserCog },
+    { id: 7, title: 'Review & create', icon: CheckCircle2 },
 ]
 
 interface WizardSidebarProps {

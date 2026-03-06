@@ -14,8 +14,16 @@ This workstream covers `DM-013-01` through `DM-013-09` with a total of **35 poin
 2. `DM-013-02`: Implemented in code. Pending migration apply + QA.
 3. `DM-013-03`: Core implemented (wizard + server action). Pending final QA and carrier non-HQ path decision.
 4. `DM-013-04`: Core implemented (merchant/admin billing routes + save/load actions). Pending processor token UI hardening + QA.
-5. `DM-013-05`: Implemented in code (status actions + checklist + auto-activation trigger). Pending migration apply + QA.
-6. `DM-013-06` to `DM-013-09`: Not started.
+5. `DM-013-05`: Completed (status actions + checklist + auto-activation trigger + QA confirmation).
+6. `DM-013-06`: In progress (location wizard Tax UI step added).
+7. `DM-013-07`: In progress in UI only (banking step shell added, backend wiring deferred due hold).
+8. `DM-013-08` and `DM-013-09`: Not started.
+
+## Latest Validation Update (March 6, 2026)
+
+1. Status-management flow (`DM-013-05`) is user-validated.
+2. Location wizard UI updates for `DM-013-06` and `DM-013-07` are user-validated at the UI layer.
+3. Banking persistence/tokenization remains paused under bank-related hold policy.
 
 ## Banking Work Hold
 
@@ -79,7 +87,8 @@ Tickets currently under hold:
 - rollback Clerk org if DB insert fails,
 - do not insert merchant if Clerk org creation fails.
 4. Reuse existing location wizard patterns for added steps.
-5. Reuse existing audit-log pipeline for status/banking/tax changes.
+5. Menu Configuration step in location onboarding is replaced by Assign Manager (invite new or assign existing).
+6. Reuse existing audit-log pipeline for status/banking/tax changes.
 
 ## Security/Compliance Notes
 

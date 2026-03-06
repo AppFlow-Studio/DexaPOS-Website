@@ -1,11 +1,12 @@
-# DM-013 Status: Merchant Onboarding and Billing
+# DM-013 Status: Merchant Onboarding and Billing (Merchant & Location Onboarding )
 
-**Owner:** Ali + Codex  
+**Owner:** Ali 
 **Started:** February 24, 2026  
 **Total Points:** 35  
 **Overall Status:** In Progress
 
 ## Banking Hold Indicator
+
 
 `[BANK-RELATED: HOLD]` means do not continue implementation/testing until admin approval is received.
 
@@ -35,9 +36,9 @@ Current hold scope:
 | DM-013-02 | 3 | Implemented (Pending Migration Apply + QA) `[BANK-RELATED: HOLD]` | 90% |
 | DM-013-03 | 5 | In Progress (Core Flow Implemented) | 80% |
 | DM-013-04 | 5 | In Progress (Core Flow Implemented) `[BANK-RELATED: HOLD]` | 75% |
-| DM-013-05 | 3 | Implemented (Pending Migration Apply + QA) | 90% |
-| DM-013-06 | 5 | Not Started | 0% |
-| DM-013-07 | 5 | Not Started `[BANK-RELATED: HOLD]` | 0% |
+| DM-013-05 | 3 | Completed (QA Confirmed) | 100% |
+| DM-013-06 | 5 | In Progress (Location Wizard Tax + Step Flow UI) | 55% |
+| DM-013-07 | 5 | In Progress (UI Shell Only) `[BANK-RELATED: HOLD]` | 30% |
 | DM-013-08 | 3 | Not Started `[BANK-RELATED: HOLD]` | 0% |
 | DM-013-09 | 3 | Not Started | 0% |
 
@@ -48,8 +49,41 @@ Current hold scope:
 - `DM-013-01` code implementation complete (migration + type updates).
 - `DM-013-02` code implementation complete (migration + type updates).
 3. `DM-013-03` implementation is in progress with core wizard/action flow now added.
-4. `DM-013-05` implementation is complete in code and pending migration apply + QA.
+4. `DM-013-05` implementation and QA are complete.
 5. `DM-013-04` core billing flow is now implemented and pending QA + tokenization integration hardening.
+6. Location wizard UI has been expanded to include Tax, Banking (UI only), and Assign Manager steps.
+
+## Latest QA Confirmation (March 6, 2026)
+
+1. DM-013-05 status actions were manually verified in UI and confirmed working.
+2. DM-013-06 and DM-013-07 wizard UI flow was validated for step rendering and form behavior.
+3. Banking-related persistence remains intentionally deferred due hold.
+
+## Completed in This Step (DM-013-06 + DM-013-07 UI-only)
+
+1. Updated merchant dashboard location onboarding wizard from 5 steps to 7 steps in UI:
+- Location Info
+- Address
+- Tax & Compliance
+- Banking & Payouts (UI only)
+- Business Hours
+- Assign Manager
+- Review & Create
+2. Added new wizard step components:
+- `components/dashboard/locations/steps/TaxComplianceStep.tsx`
+- `components/dashboard/locations/steps/BankingPayoutsStep.tsx`
+- `components/dashboard/locations/steps/AssignManagerStep.tsx`
+3. Replaced Menu Configuration step with Assign Manager in wizard navigation and review.
+4. Updated review screen to include tax, banking summary (masked), and manager assignment summary.
+5. Kept create-location backend logic unchanged for banking persistence by design (hold).
+6. Added local form typing support for the new UI fields in `types/merchant_locations.ts`.
+
+## Pending for DM-013-06 + DM-013-07
+
+1. Wire Tax fields (`ein`, `tax_id`, `sales_tax_rate`) into create/update location server actions.
+2. Wire Banking fields to tokenization + `location_banking_profiles` persistence after hold is lifted.
+3. Replace existing-user manager text input with real lookup/assignment flow.
+4. Add audit logs for manager assignment and tax/banking updates once backend wiring is enabled.
 
 ## Completed in This Step (DM-013-01)
 
@@ -184,13 +218,15 @@ Current hold scope:
 - onboarding status/timestamps and owner contact fields are now merged from `merchants`.
 7. Updated list status badge rendering to prefer `onboarding_status` when present.
 
-## Pending for DM-013-05 QA
+## DM-013-05 QA Completed
 
-1. Apply migration `035` in target Supabase environment.
-2. Verify manual status changes in UI:
-- Activate, Suspend (with reason), Cancel.
-3. Verify audit entries for manual and auto status transitions.
-4. Verify first successful payment auto-activates merchant status.
+1. Migration `035` applied and trigger/function presence validated.
+2. Manual status changes verified in UI:
+- Activate
+- Suspend (with reason)
+- Cancel
+3. Audit behavior verified for status transitions.
+4. Auto-activation trigger wiring verified at DB level.
 
 ## Security Rules (Locked)
 

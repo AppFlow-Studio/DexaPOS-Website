@@ -150,7 +150,43 @@ Expected:
 3. Complete 3 steps and submit.
 4. Confirm redirect to merchant detail page and owner invite sent.
 
+## D. DM-013-06 + DM-013-07 (Location Wizard UI)
+
+1. Login as merchant owner.
+2. Open `/dashboard/locations/new`.
+3. Verify wizard now shows 7 steps in sidebar:
+- Location Info
+- Location Address
+- Tax & Compliance
+- Banking & Payouts
+- Business Hours
+- Assign Manager
+- Review & Create
+4. Complete Tax step:
+- EIN accepts `12-3456789` format.
+- Sales tax rate accepts numeric percent.
+5. Complete Banking step `[BANK-RELATED: HOLD]`:
+- UI fields render for bank account + payout schedule.
+- Weekly and monthly frequency reveal day selectors.
+- "Use merchant billing ACH details" toggle appears.
+6. Complete Assign Manager step:
+- Can choose Skip / Invite New / Assign Existing.
+- Invite mode shows name/email fields.
+- Existing mode shows identifier field.
+7. On Review step, verify tax/banking/manager sections are visible and editable via "Edit".
+
+Expected for this phase:
+1. UI flow and field capture works.
+2. Banking and manager persistence logic is not required in this phase (UI-only).
+
 ## 5) Known Remaining Gaps (Not QA failure)
 
 1. DM-013-03 carrier non-HQ auto-assign path is blocked by current `/manage` HQ-only routing model.
 2. DM-013-04 card collection uses token input now; replace with processor SDK UI (Stripe Elements or equivalent) in next pass.
+3. DM-013-07 banking save/tokenization wiring remains intentionally deferred due bank-related hold.
+
+## 6) Latest Confirmed Results (March 6, 2026)
+
+1. DM-013-05 status controls were validated in UI and confirmed.
+2. DM-013-06/07 location wizard UI checks were completed and confirmed.
+3. Banking logic remains intentionally excluded from this confirmation due hold.

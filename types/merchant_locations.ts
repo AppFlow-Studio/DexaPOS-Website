@@ -740,17 +740,47 @@ export interface LocationFormStep2 {
 }
 
 export interface LocationFormStep3 {
-  business_hours: BusinessHours;
+  ein: string;
+  tax_id: string;
+  sales_tax_rate: string;
 }
 
 export interface LocationFormStep4 {
+  bank_name: string;
+  account_holder_name: string;
+  routing_number: string;
+  account_number: string;
+  confirm_account_number: string;
+  account_type: 'checking' | 'savings';
+  payout_frequency: 'daily' | 'weekly' | 'monthly';
+  payout_day_of_week: string;
+  payout_day_of_month: string;
+  minimum_payout_amount: string;
+  use_merchant_billing_profile: boolean;
+}
+
+export interface LocationFormStep5 {
+  business_hours: BusinessHours;
+}
+
+export interface LocationFormStep6 {
+  manager_assignment_type: 'skip' | 'invite_new' | 'assign_existing';
+  manager_invite_name: string;
+  manager_invite_email: string;
+  existing_manager_identifier: string;
+}
+
+export interface LocationFormHiddenFields {
   uses_global_menu: boolean;
 }
 
 export type LocationFormData = LocationFormStep1 &
   LocationFormStep2 &
   LocationFormStep3 &
-  LocationFormStep4;
+  LocationFormStep4 &
+  LocationFormStep5 &
+  LocationFormStep6 &
+  LocationFormHiddenFields;
 
 // Invite form
 export interface InviteStaffFormData {
