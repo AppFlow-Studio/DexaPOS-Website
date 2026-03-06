@@ -1,5 +1,4 @@
 'use client'
-//TODO : ADD Tax Rate Configuration
 import { useState, useEffect } from 'react'
 import { Location } from '@/types/merchant_locations'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -44,6 +43,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { useLocationStore } from '@/stores/location-store'
 import { useEffectivePricing } from '@/app/dashboard/hooks/useEffectivePricing'
+import { LocationTaxComplianceCard } from '@/components/dashboard/locations/LocationTaxComplianceCard'
 
 interface SettingsTabProps {
     location: Location
@@ -69,7 +69,7 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
     // Sync when location prop changes
     useEffect(() => {
         setUseMerchantDefaults(location.use_merchant_pricing_defaults)
-    }, [location.use_merchant_pricing_defaults])
+    }, [location])
 
     const handleToggleOrders = async () => {
         setIsTogglingOrders(true)
@@ -368,6 +368,8 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
                 </CardContent>
             </Card>
 
+            <LocationTaxComplianceCard location={location} onUpdated={onUpdate} />
+
             {/* Location Status */}
             <Card>
                 <CardHeader className="pb-3">
@@ -498,6 +500,7 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
         </div>
     )
 }

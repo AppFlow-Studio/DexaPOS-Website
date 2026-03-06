@@ -1,5 +1,5 @@
-import React from 'react'
+import { redirect } from 'next/navigation'
 
-export default function CreateMerchantPage() {
-    return <div>Create Merchant</div>
+export default function LegacyCreateMerchantPage() {
+  redirect('/manage/merchants/new')
 }

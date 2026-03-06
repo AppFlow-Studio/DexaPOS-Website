@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -17,8 +17,6 @@ import {
   FileText,
   Plus,
   ChevronRight,
-  ChevronUp,
-  ChevronDown,
   Receipt,
   RotateCcw,
   MapPin,
@@ -26,34 +24,15 @@ import {
   MessageSquare,
   X,
   Loader2,
-  TrendingUp,
-  TrendingDown,
-  Minus,
-  Tag,
-  StickyNote,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Card, CardContent} from "@/components/ui/card";
-
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { cn } from "@/lib/utils";
 import {
   useCustomerProfile,
   useAddCustomerTag,
   useUpdateCustomerNotes,
-  useCustomerSpendTrend,
-  useCustomerVisitPattern,
-  useCustomerTopItems,
-  useCustomerChannelTrend,
-  useCustomerActivityTimeline,
-  useCustomerPercentileWithClerkOrgId,
-  useCustomerVisitTrend,
 } from "../hooks/useCustomers";
 import type {
   CustomerListItem,
@@ -62,9 +41,8 @@ import type {
 } from "@/types/customer";
 import {
   getCustomerDisplayName,
-  transformChannelTrendForChart,
+  transformOrderChannelsForChart,
   formatActivityTime,
-  formatRelativeDate,
   ACTIVITY_DISPLAY_MAP,
 } from "@/types/customer";
 import {
@@ -74,19 +52,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
-import { useLocationStore } from "@/stores/location-store";
-import { useCustomerOrders } from "../hooks/useCustomerOrders";
-import { OrderDetailSheet } from "@/components/dashboard/orders/OrderDetailSheet";
-import { useCustomerReservations, useCustomerWaitlist, useCustomerDineSessions } from "../hooks/useCustomerBookings";
-import { DetailsTab } from "./tabs/DetailsTab";
-import { LoyaltyTab } from "./tabs/LoyaltyTab";
-import { MarketingTab } from "./tabs/MarketingTab";
-import { OverviewTab } from "./tabs/OverviewTab";
-import { BookingsTab } from "./tabs/BookingsTab";
-import { FeedbackTab } from "./tabs/FeedbackTab";
-import { OrdersTab } from "./tabs/OrdersTab";
-import { useAddFeedbackResponse, useCustomerFeedback, useUpdateFeedbackFlag } from "../hooks/useCustomerFeedback";
 
 interface CustomerProfileSheetProps {
   customer: CustomerListItem | null;
@@ -95,7 +60,7 @@ interface CustomerProfileSheetProps {
 }
 
 // =============================================================================
-// Activity Icon Component (legacy - for CustomerActivity type)
+// Activity Icon Component
 // =============================================================================
 
 function ActivityIcon({ type }: { type: CustomerActivityType }) {
@@ -124,164 +89,225 @@ function ActivityIcon({ type }: { type: CustomerActivityType }) {
 }
 
 // =============================================================================
-// Enhanced Timeline Activity Icon (for unified timeline from RPC)
+// Activity Item Component
 // =============================================================================
 
-function TimelineActivityIcon({ type }: { type: string }) {
-  const iconClass = "h-5 w-5";
+function ActivityItem({ activity }: { activity: CustomerActivity }) {
+  const config = ACTIVITY_DISPLAY_MAP[activity.activity_type];
+  const { time, date } = formatActivityTime(activity.created_at);
+  const metadata = activity.metadata;
 
-  const config: Record<string, { icon: React.ReactNode; bg: string; color: string }> = {
-    order:       { icon: <Receipt className={iconClass} />,       bg: "bg-blue-100 dark:bg-blue-900/30",   color: "text-blue-600 dark:text-blue-400" },
-    refund:      { icon: <RotateCcw className={iconClass} />,     bg: "bg-red-100 dark:bg-red-900/30",     color: "text-red-600 dark:text-red-400" },
-    tag_added:   { icon: <Tag className={iconClass} />,           bg: "bg-purple-100 dark:bg-purple-900/30", color: "text-purple-600 dark:text-purple-400" },
-    tag_removed: { icon: <Tag className={iconClass} />,           bg: "bg-gray-100 dark:bg-gray-900/30",   color: "text-gray-500 dark:text-gray-400" },
-    note_added:  { icon: <StickyNote className={iconClass} />,    bg: "bg-yellow-100 dark:bg-yellow-900/30", color: "text-yellow-600 dark:text-yellow-400" },
-    loyalty:     { icon: <Gift className={iconClass} />,          bg: "bg-green-100 dark:bg-green-900/30", color: "text-green-600 dark:text-green-400" },
-    feedback:    { icon: <MessageSquare className={iconClass} />, bg: "bg-orange-100 dark:bg-orange-900/30", color: "text-orange-600 dark:text-orange-400" },
-    visit:       { icon: <MapPin className={iconClass} />,        bg: "bg-teal-100 dark:bg-teal-900/30",   color: "text-teal-600 dark:text-teal-400" },
-  };
+  // Build activity description based on type
+  const renderActivityContent = () => {
+    switch (activity.activity_type) {
+      case "order":
+        return (
+          <>
+            <div className="flex items-center gap-2 mb-1">
+              <span className={cn("font-semibold text-base", config.color)}>
+                Order
+              </span>
+              {metadata?.order_total && (
+                <>
+                  <span className="text-muted-foreground">for</span>
+                  <span className="font-medium text-foreground">
+                    ${metadata.order_total.toFixed(2)}
+                  </span>
+                </>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Completed
+              {metadata?.order_type && ` • ${metadata.order_type}`}
+              {metadata?.item_count && ` • ${metadata.item_count} items`}
+            </p>
+          </>
+        );
 
-  const entry = config[type] ?? {
-    icon: <Receipt className={iconClass} />,
-    bg: "bg-muted",
-    color: "text-muted-foreground",
+      case "refund":
+        return (
+          <>
+            <div className="flex items-center gap-2 mb-1">
+              <span className={cn("font-semibold text-base", config.color)}>
+                Refund
+              </span>
+              {metadata?.refund_amount && (
+                <>
+                  <span className="text-muted-foreground">for</span>
+                  <span className="font-medium text-foreground line-through decoration-muted-foreground/60">
+                    ${metadata.refund_amount.toFixed(2)}
+                  </span>
+                </>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {metadata?.refund_reason || "Refunded to card"}
+            </p>
+          </>
+        );
+
+      case "visit":
+        return (
+          <>
+            <div className="flex items-center gap-2 mb-1">
+              <span className={cn("font-semibold text-base", config.color)}>
+                Visit
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Customer checked in
+              {metadata?.notes && ` • ${metadata.notes}`}
+            </p>
+          </>
+        );
+
+      case "loyalty":
+        return (
+          <>
+            <div className="flex items-center gap-2 mb-1">
+              <span className={cn("font-semibold text-base", config.color)}>
+                Loyalty
+              </span>
+              {metadata?.points_earned && (
+                <span className="font-medium text-foreground">
+                  +{metadata.points_earned} pts
+                </span>
+              )}
+              {metadata?.points_redeemed && (
+                <span className="font-medium text-foreground">
+                  -{metadata.points_redeemed} pts
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {metadata?.reward_name || "Points updated"}
+            </p>
+          </>
+        );
+
+      case "feedback":
+        return (
+          <>
+            <div className="flex items-center gap-2 mb-1">
+              <span className={cn("font-semibold text-base", config.color)}>
+                Feedback
+              </span>
+              {metadata?.rating && (
+                <span className="font-medium text-foreground">
+                  {metadata.rating}/5 ⭐
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {metadata?.comment || "Feedback submitted"}
+            </p>
+          </>
+        );
+
+      default:
+        return (
+          <div className="flex items-center gap-2 mb-1">
+            <span className="font-semibold text-base text-muted-foreground">
+              Activity
+            </span>
+          </div>
+        );
+    }
   };
 
   return (
-    <div className={cn("h-10 w-10 rounded-lg flex items-center justify-center shrink-0", entry.bg, entry.color)}>
-      {entry.icon}
+    <div className="flex items-start gap-4 group cursor-pointer hover:opacity-80 transition-opacity">
+      <ActivityIcon type={activity.activity_type} />
+      <div className="flex-1 min-w-0">{renderActivityContent()}</div>
+      <div className="text-right flex items-center gap-3 text-sm text-muted-foreground">
+        <span>{time}</span>
+        <span>{date}</span>
+        <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
+      </div>
     </div>
   );
 }
 
 // =============================================================================
-// Activity Item Component (legacy)
+// Metric Card Component
 // =============================================================================
 
-
-
-// =============================================================================
-// Enhanced Timeline Item (from RPC unified timeline)
-// =============================================================================
-
-
-
-// =============================================================================
-// Metric Card Component (Enhanced with subtitle)
-// =============================================================================
-
-
+function MetricCard({
+  title,
+  value,
+  className,
+  isLoading,
+}: {
+  title: string;
+  value: string;
+  className?: string;
+  isLoading?: boolean;
+}) {
+  return (
+    <Card
+      className={cn("flex flex-col justify-center p-5 h-[110px]", className)}
+    >
+      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
+        {title}
+      </span>
+      {isLoading ? (
+        <div className="h-8 w-20 bg-muted animate-pulse rounded" />
+      ) : (
+        <span className="text-2xl font-bold text-foreground tracking-tight">
+          {value}
+        </span>
+      )}
+    </Card>
+  );
+}
 
 // =============================================================================
 // Add Tag Dialog
 // =============================================================================
-
-const SUGGESTED_TAGS = [
-  "VIP",
-  "REGULAR",
-  "NEW",
-  "CORPORATE",
-  "FRIEND_OF_OWNER",
-  "INFLUENCER",
-  "COMPLAINT_HISTORY",
-  "CATERING_CLIENT",
-];
-
-const formatTagForDisplay = (tag: string): string => {
-  return tag
-    .split("_")
-    .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
-    .join(" ");
-};
 
 function AddTagDialog({
   open,
   onOpenChange,
   onAdd,
   isLoading,
-  existingTags = [],
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAdd: (tag: string) => void;
   isLoading: boolean;
-  existingTags?: string[];
 }) {
-  const [customTag, setCustomTag] = useState("");
+  const [tag, setTag] = useState("");
 
-  const suggestedNewTags = SUGGESTED_TAGS.filter(
-    (tag) => !existingTags.includes(tag.toUpperCase())
-  );
-
-  const handleAddSuggestedTag = (tag: string) => {
-    onAdd(tag);
-    onOpenChange(false);
-  };
-
-  const handleAddCustomTag = () => {
-    if (customTag.trim()) {
-      onAdd(customTag.trim().toUpperCase());
-      setCustomTag("");
-      onOpenChange(false);
+  const handleSubmit = () => {
+    if (tag.trim()) {
+      onAdd(tag.trim());
+      setTag("");
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-125">
+      <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
           <DialogTitle>Add Tag</DialogTitle>
         </DialogHeader>
-
-        <div className="space-y-4 py-4">
-          {/* Suggested Tags Dropdown */}
-          <div>
-            <label className="text-sm font-medium mb-2 block">Suggested Tags</label>
-            <Select onValueChange={handleAddSuggestedTag}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select from suggested tags..." />
-              </SelectTrigger>
-              <SelectContent>
-                {suggestedNewTags.length > 0 ? (
-                  suggestedNewTags.map(tag => (
-                    <SelectItem key={tag} value={tag}>
-                      {formatTagForDisplay(tag)}
-                    </SelectItem>
-                  ))
-                ) : (
-                  <div className="text-xs text-muted-foreground p-2">
-                    All suggested tags already added
-                  </div>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Custom Tag Input */}
-          <div>
-            <label className="text-sm font-medium mb-2 block">Custom Tag</label>
-            <div className="flex gap-2">
-              <Input
-                placeholder="Or create a custom tag..."
-                value={customTag}
-                onChange={(e) => setCustomTag(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleAddCustomTag()}
-                autoFocus
-              />
-              <Button
-                onClick={handleAddCustomTag}
-                disabled={!customTag.trim() || isLoading}
-                size="sm"
-              >
-                {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Add
-              </Button>
-            </div>
-          </div>
+        <div className="py-4">
+          <Input
+            placeholder="Enter tag name..."
+            value={tag}
+            onChange={(e) => setTag(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+            autoFocus
+          />
         </div>
-
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={!tag.trim() || isLoading}>
+            {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Add Tag
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -307,9 +333,13 @@ function AddNoteDialog({
 }) {
   const [notes, setNotes] = useState(currentNotes || "");
 
+  const handleSubmit = () => {
+    onSave(notes);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-125">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Customer Notes</DialogTitle>
         </DialogHeader>
@@ -323,8 +353,10 @@ function AddNoteDialog({
           />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={() => onSave(notes)} disabled={isLoading}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={isLoading}>
             {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Save Notes
           </Button>
@@ -333,26 +365,6 @@ function AddNoteDialog({
     </Dialog>
   );
 }
-
-// =============================================================================
-// Bookings Tab Content Component
-// =============================================================================
-
-
-// =============================================================================
-// Feedback Tab Content Component
-// =============================================================================
-
-
-
-// =============================================================================
-// Orders Tab Content Component
-// =============================================================================
-
-type DateRangeFilter = "30d" | "90d" | "6mo" | "1yr" | "all";
-type StatusFilter = "all" | "completed" | "void" | "refund";
-type SortField = "date" | "total" | "items" | "status";
-
 
 // =============================================================================
 // Main Component
@@ -365,35 +377,11 @@ export function CustomerProfileSheet({
 }: CustomerProfileSheetProps) {
   const [showAddTag, setShowAddTag] = useState(false);
   const [showAddNote, setShowAddNote] = useState(false);
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const [isOrderDetailOpen, setIsOrderDetailOpen] = useState(false);
 
-  const { data: userInfo } = useUserInfo();
-  const clerkOrgId = userInfo?.members?.[0]?.organizations?.id || null;
-  const merchantId = userInfo?.members?.[0]?.organizations?.merchants?.id || null;
-  const { selectedLocationId } = useLocationStore();
-  const isLocationFiltered = selectedLocationId && selectedLocationId !== "all";
-
-  // Existing profile data
+  // Fetch full profile when sheet opens
   const { data: profile, isLoading: isLoadingProfile } = useCustomerProfile(
     open && customer ? customer.id : null
   );
-
-  // New enhanced analytics
-  const customerId = open && customer ? customer.id : null;
-  const { data: spendTrend, isLoading: isLoadingSpend } = useCustomerSpendTrend(customerId);
-
-  // Location-filtered orders for accurate KPI cards
-  const { data: locationOrders = [] } = useCustomerOrders(
-    isLocationFiltered ? customerId : null,
-    selectedLocationId
-  );
-  const { data: visitPattern } = useCustomerVisitPattern(customerId);
-  const { data: topItems, isLoading: isLoadingItems } = useCustomerTopItems(customerId);
-  const { data: channelTrend, isLoading: isLoadingChannels } = useCustomerChannelTrend(customerId);
-  const { data: activityTimeline, isLoading: isLoadingTimeline } = useCustomerActivityTimeline(customerId);
-  const { data: percentile } = useCustomerPercentileWithClerkOrgId(customerId, clerkOrgId);
-  const { data: visitTrend } = useCustomerVisitTrend(customerId);
 
   // Mutations
   const addTagMutation = useAddCustomerTag();
@@ -401,270 +389,338 @@ export function CustomerProfileSheet({
 
   if (!customer) return null;
 
+  // Get customer data - prefer profile data if loaded, fallback to list item
   const customerData = profile?.customer || customer;
-  const orderChannels = transformChannelTrendForChart(channelTrend || null);
+  const orderChannels = transformOrderChannelsForChart(profile?.order_channels || null);
+  const mostOrderedItems = profile?.most_ordered_items || [];
+  const recentActivity = profile?.recent_activity || [];
+  const totalVisits = profile?.customer?.visits ?? customer.visits ?? 0;
 
-  // When location is selected, compute KPIs from location-filtered orders
-  // Otherwise use the merchant-wide profile/RPC data
-  const locationSpend = isLocationFiltered
-    ? locationOrders.reduce((sum, o: any) => sum + (Number(o.total_amount) || 0), 0)
-    : null;
-  const locationVisits = isLocationFiltered ? locationOrders.length : null;
-  const locationLastOrder = isLocationFiltered && locationOrders.length > 0
-    ? locationOrders.reduce((latest: string | null, o: any) => {
-        const d = o.created_at || o.order_date;
-        return d && (!latest || d > latest) ? d : latest;
-      }, null as string | null)
-    : null;
+  // Format last order date
+  const lastOrderDate = profile?.customer?.last_order_date
+    ? new Date(profile.customer.last_order_date).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "N/A";
 
-  const totalVisits = locationVisits ?? profile?.customer?.visits ?? customer.visits ?? 0;
-
-  const lifetimeSpend = locationSpend ?? (
-    spendTrend && spendTrend.length > 0
-      ? spendTrend.reduce((sum, month) => sum + (month.total_spend || 0), 0)
-      : (profile?.customer?.lifetime_spend ?? customer.lifetime_spend ?? 0)
-  );
-
-  const avgSpend = isLocationFiltered
-    ? (locationOrders.length > 0 ? locationSpend! / locationOrders.length : 0)
-    : (profile?.customer?.avg_spend ?? customer.avg_spend ?? 0);
+  // Calculate metrics
+  const lifetimeSpend = profile?.customer?.lifetime_spend ?? customer.lifetime_spend ?? 0;
+  const avgSpend = profile?.customer?.avg_spend ?? customer.avg_spend ?? 0;
   const avgTip = profile?.customer?.avg_tip_percent ?? 0;
 
-  // Last visit relative + absolute
-  const lastVisitRaw = (isLocationFiltered ? locationLastOrder : null)
-    ?? profile?.customer?.last_visit ?? customer.last_visit ?? null;
-  const lastVisitRelative = formatRelativeDate(lastVisitRaw);
-  const lastVisitAbsolute = lastVisitRaw
-    ? new Date(lastVisitRaw).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-    : null;
-
-  // Customer since
-  const createdAt = profile?.customer?.created_at ?? null;
-  const customerSince = createdAt
-    ? (() => {
-        const months = Math.floor((Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24 * 30));
-        if (months < 1) return "Less than a month";
-        if (months === 1) return "1 month";
-        if (months < 12) return `${months} months`;
-        const years = Math.floor(months / 12);
-        return `${years} year${years > 1 ? "s" : ""}`;
-      })()
-    : null;
-
-  // Visit trend
-  const visitTrendDir =
-    visitTrend?.trend_direction === "↑" ? "up" :
-    visitTrend?.trend_direction === "↓" ? "down" : "flat";
-  const visitTrendLabel = visitTrend?.trend_percentage
-    ? `${Math.abs(visitTrend.trend_percentage)}%`
-    : "";
-
-  // Percentile badge
-  const percentileBadge = percentile?.is_top_tier
-    ? `Top ${Math.round(100 - percentile.percentile)}%`
-    : null;
-
-  // Visit pattern summary: "Usually visits on Saturdays around 11 AM"
-  const peakPattern = visitPattern?.[0];
-  const visitPatternSummary = peakPattern
-    ? `Usually visits on ${peakPattern.day_of_week}s around ${
-        peakPattern.hour_of_day === 0
-          ? "12 AM"
-          : peakPattern.hour_of_day < 12
-          ? `${peakPattern.hour_of_day} AM`
-          : peakPattern.hour_of_day === 12
-          ? "12 PM"
-          : `${peakPattern.hour_of_day - 12} PM`
-      }`
-    : null;
-
-  // Channel trend label: detect main shifting channel
-  const dominantChannelTrend = channelTrend?.find(
-    (c) => Math.abs((c.percentage_recent ?? 0) - (c.percentage_previous ?? 0)) > 10
-  );
-  const channelTrendText = dominantChannelTrend
-    ? `${dominantChannelTrend.trend_label} ${dominantChannelTrend.channel}`
-    : null;
-
-  // Calculate total orders from channel trend data
-  const totalOrdersRecent = channelTrend
-    ? channelTrend.reduce((sum, channel) => sum + (channel.count_recent || 0), 0)
-    : 0;
-
   const handleAddTag = (tag: string) => {
-    addTagMutation.mutate({ customerId: customer.id, tag }, { onSuccess: () => setShowAddTag(false) });
+    addTagMutation.mutate(
+      { customerId: customer.id, tag },
+      {
+        onSuccess: () => setShowAddTag(false),
+      }
+    );
   };
 
   const handleSaveNotes = (notes: string) => {
-    updateNotesMutation.mutate({ customerId: customer.id, notes }, { onSuccess: () => setShowAddNote(false) });
+    updateNotesMutation.mutate(
+      { customerId: customer.id, notes },
+      {
+        onSuccess: () => setShowAddNote(false),
+      }
+    );
   };
 
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="sm:max-w-225 w-full overflow-y-auto px-0 bg-background">
-          <div className="px-8 py-8 border-b border-border/50 bg-gradient-to-b from-muted/20 to-background">
-            <SheetHeader className="space-y-5">
-              <div className="flex justify-between items-start gap-4">
-                <div className="space-y-4 flex-1">
-                  <SheetTitle className="text-4xl font-bold tracking-tight text-left text-foreground">
+        <SheetContent className="sm:max-w-[900px] w-full overflow-y-auto px-0 bg-[#F8F9FB] dark:bg-background">
+          <div className="px-6 py-6 border-b bg-background">
+            <SheetHeader className="space-y-4">
+              <div className="flex justify-between items-start">
+                <div className="space-y-2">
+                  <SheetTitle className="text-3xl font-bold tracking-tight text-left">
                     {getCustomerDisplayName(customerData as any)}
                   </SheetTitle>
-                  <div className="flex gap-2.5 flex-wrap items-center">
+                  <div className="flex gap-2 flex-wrap">
+                    {/* Display existing tags */}
                     {profile?.customer?.tags?.map((tag) => (
-                      <Badge key={tag} variant="secondary" className="px-3 py-1.5 text-xs font-semibold rounded-full">
+                      <Badge
+                        key={tag}
+                        variant="secondary"
+                        className="h-7 text-xs rounded-full"
+                      >
                         {tag}
                       </Badge>
                     ))}
                     <Button
                       variant="outline"
                       size="sm"
-                      className="px-3 py-1.5 text-xs font-medium rounded-full bg-muted/50 border-muted/40 text-muted-foreground hover:bg-muted/70 hover:text-foreground transition-colors"
+                      className="h-7 text-xs rounded-full bg-muted/50 border-muted-foreground/20 text-muted-foreground hover:bg-muted hover:text-foreground"
                       onClick={() => setShowAddTag(true)}
                     >
-                      <Plus className="w-3.5 h-3.5 mr-1.5" /> Tag
+                      <Plus className="w-3 h-3 mr-1" /> ADD TAG
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                      className="h-7 text-xs text-muted-foreground hover:text-foreground px-2"
                       onClick={() => setShowAddNote(true)}
                     >
-                      <FileText className="w-3.5 h-3.5 mr-1.5" /> Note
+                      <FileText className="w-3 h-3 mr-2" /> add note
                     </Button>
                   </div>
                 </div>
 
-                <div className="flex flex-col items-end gap-2.5 text-sm bg-muted/30 rounded-lg p-4 border border-muted/50">
-                  <div className="flex items-center gap-2.5 text-foreground font-semibold">
-                    <Phone className="h-4 w-4 text-primary" />
-                    {customerData.phone || <span className="text-muted-foreground">No phone</span>}
+                <div className="flex flex-col items-end gap-1.5 text-sm">
+                  <div className="flex items-center gap-2 text-foreground/80 font-medium">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    {customerData.phone || "No phone"}
                   </div>
-                  <div className="flex items-center gap-2.5 text-foreground font-semibold">
-                    <Mail className="h-4 w-4 text-primary" />
-                    {customerData.email || <span className="text-muted-foreground">No email</span>}
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Mail className="h-4 w-4" />
+                    {customerData.email || "No email address"}
                   </div>
                 </div>
               </div>
             </SheetHeader>
 
-            {/* Tab Configs with counts from top-level hooks */}
             <Tabs defaultValue="overview" className="mt-8">
-              <TabsList className="bg-transparent h-auto p-0 space-x-8 border-b border-border/50 rounded-none w-full justify-start">
-                <TabsTrigger
-                  value="overview"
-                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground"
-                >
-                  Overview
-                </TabsTrigger>
-                <TabsTrigger
-                  value="orders"
-                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground"
-                >
-                  Orders
-                </TabsTrigger>
-                <TabsTrigger
-                  value="bookings"
-                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground"
-                >
-                  Bookings
-                </TabsTrigger>
-                <TabsTrigger
-                  value="feedback"
-                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground"
-                >
-                  Feedback
-                </TabsTrigger>
-                <TabsTrigger
-                  value="loyalty"
-                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground"
-                >
-                  Loyalty
-                </TabsTrigger>
-                <TabsTrigger
-                  value="marketing"
-                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground"
-                >
-                  Marketing
-                </TabsTrigger>
-                <TabsTrigger
-                  value="details"
-                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-muted-foreground data-[state=active]:text-foreground font-semibold bg-transparent shadow-none border-b-2 border-transparent transition-colors hover:text-foreground"
-                >
-                  Details
-                </TabsTrigger>
+              <TabsList className="bg-transparent h-auto p-0 space-x-6 border-b rounded-none w-full justify-start">
+                {[
+                  { name: "Overview", count: null },
+                  { name: "Orders", count: profile?.customer?.total_orders ?? customer.total_orders ?? 0 },
+                  { name: "Bookings", count: 0 },
+                  { name: "Feedback", count: 0 },
+                  { name: "Loyalty", count: null },
+                  { name: "Marketing", count: null },
+                  { name: "Details", count: null },
+                ].map((tab) => (
+                  <TabsTrigger
+                    key={tab.name}
+                    value={tab.name.toLowerCase()}
+                    className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2 text-muted-foreground data-[state=active]:text-foreground font-medium bg-transparent shadow-none border-b-2 border-transparent transition-none"
+                  >
+                    {tab.name}
+                    {tab.count !== null && (
+                      <span className="ml-1.5 text-xs text-muted-foreground font-normal">
+                        {tab.count}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                ))}
               </TabsList>
 
-              <div className="px-8 py-8">
-                <TabsContent value="overview" className="space-y-8 animate-in fade-in-50 duration-300 m-0">
-                  <OverviewTab
-                    lastVisitRelative={lastVisitRelative}
-                    lastVisitAbsolute={lastVisitAbsolute}
-                    totalVisits={totalVisits}
-                    visitTrendLabel={visitTrendLabel}
-                    visitTrendDir={visitTrendDir}
-                    lifetimeSpend={lifetimeSpend}
-                    percentileBadge={percentileBadge}
-                    avgSpend={avgSpend}
-                    avgTip={avgTip}
-                    customerSince={customerSince}
-                    isLoadingProfile={isLoadingProfile}
-                    isLoadingSpend={isLoadingSpend}
-                    spendTrend={spendTrend || []}
-                    visitPattern={visitPattern || []}
-                    visitPatternSummary={visitPatternSummary}
-                    isLoadingItems={isLoadingItems}
-                    topItems={topItems || []}
-                    isLoadingChannels={isLoadingChannels}
-                    orderChannels={orderChannels}
-                    channelTrendText={channelTrendText}
-                    activityTimeline={activityTimeline || []}
-                    isLoadingTimeline={isLoadingTimeline}
-                    onOrderClick={(orderId) => {
-                      setSelectedOrderId(orderId);
-                      setIsOrderDetailOpen(true);
-                    }}
-                    totalOrdersRecent={totalOrdersRecent}
-                  />
+              <div className="mt-6">
+                <TabsContent
+                  value="overview"
+                  className="space-y-6 animate-in fade-in-50 duration-300"
+                >
+                  {/* Metrics Grid */}
+                  <div className="grid grid-cols-4 gap-4">
+                    <MetricCard
+                      title="LAST ORDER"
+                      value={lastOrderDate}
+                      className="bg-white dark:bg-card border-none shadow-sm"
+                      isLoading={isLoadingProfile}
+                    />
+                    <MetricCard
+                      title="LIFETIME SPEND"
+                      value={`$${lifetimeSpend.toLocaleString()}`}
+                      className="bg-white dark:bg-card border-none shadow-sm"
+                      isLoading={isLoadingProfile}
+                    />
+                    <MetricCard
+                      title="AVERAGE SPEND"
+                      value={`$${avgSpend.toFixed(2)}`}
+                      className="bg-white dark:bg-card border-none shadow-sm"
+                      isLoading={isLoadingProfile}
+                    />
+                    <MetricCard
+                      title="AVERAGE TIP"
+                      value={`${avgTip.toFixed(1)}%`}
+                      className="bg-white dark:bg-card border-none shadow-sm"
+                      isLoading={isLoadingProfile}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Order Channels Chart */}
+                    <Card className="border-none shadow-sm bg-white dark:bg-card h-full">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                          ORDER CHANNELS
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="flex items-center justify-between pl-0">
+                        {isLoadingProfile ? (
+                          <div className="w-full h-[140px] flex items-center justify-center">
+                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                          </div>
+                        ) : orderChannels.length > 0 ? (
+                          <>
+                            <div className="space-y-3 pl-6 text-sm">
+                              {orderChannels.map((channel, idx) => (
+                                <div key={idx} className="flex items-center gap-2">
+                                  <span
+                                    className="w-2.5 h-2.5 rounded-full"
+                                    style={{ backgroundColor: channel.color }}
+                                  />
+                                  <span className="font-medium text-foreground">
+                                    {channel.name}
+                                  </span>
+                                  <span className="text-muted-foreground ml-auto">
+                                    {channel.value}%
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="h-[140px] w-[140px] relative">
+                              {/* Centered Total Visits count */}
+                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <span className="text-xl font-bold">
+                                  {totalVisits}
+                                </span>
+                              </div>
+                              <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                  <Pie
+                                    data={orderChannels}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={45}
+                                    outerRadius={60}
+                                    paddingAngle={0}
+                                    dataKey="value"
+                                    stroke="none"
+                                  >
+                                    {orderChannels.map((entry, index) => (
+                                      <Cell
+                                        key={`cell-${index}`}
+                                        fill={entry.color}
+                                      />
+                                    ))}
+                                  </Pie>
+                                  <Tooltip />
+                                </PieChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="w-full h-[140px] flex items-center justify-center text-muted-foreground text-sm">
+                            No order data yet
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Most Ordered Items */}
+                    <Card className="border-none shadow-sm bg-white dark:bg-card h-full">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                          MOST ORDERED ITEMS
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-2 px-6">
+                        {isLoadingProfile ? (
+                          <div className="space-y-4">
+                            {[1, 2, 3].map((i) => (
+                              <div
+                                key={i}
+                                className="h-6 bg-muted animate-pulse rounded"
+                              />
+                            ))}
+                          </div>
+                        ) : mostOrderedItems.length > 0 ? (
+                          <div className="space-y-4">
+                            {mostOrderedItems.map((item, i) => (
+                              <div
+                                key={item.item_id || i}
+                                className="flex items-center justify-between text-sm py-1 border-b last:border-0 border-muted/40"
+                              >
+                                <span className="font-medium text-foreground/90 truncate pr-4">
+                                  {item.item_name}
+                                </span>
+                                <span className="text-muted-foreground font-mono">
+                                  {item.total_quantity}x
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="h-[120px] flex items-center justify-center text-muted-foreground text-sm">
+                            No orders yet
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Activity Feed */}
+                  <div className="bg-white dark:bg-card rounded-lg p-6 shadow-sm">
+                    <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-6">
+                      ACTIVITY
+                    </h3>
+                    {isLoadingProfile ? (
+                      <div className="space-y-6">
+                        {[1, 2].map((i) => (
+                          <div key={i} className="flex items-start gap-4">
+                            <div className="h-10 w-10 bg-muted animate-pulse rounded-lg" />
+                            <div className="flex-1 space-y-2">
+                              <div className="h-4 w-32 bg-muted animate-pulse rounded" />
+                              <div className="h-3 w-48 bg-muted animate-pulse rounded" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : recentActivity.length > 0 ? (
+                      <div className="space-y-6">
+                        {recentActivity.map((activity) => (
+                          <ActivityItem key={activity.id} activity={activity} />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="h-32 flex items-center justify-center text-muted-foreground text-sm">
+                        No activity recorded yet
+                      </div>
+                    )}
+                  </div>
                 </TabsContent>
 
-                {/* Orders Tab */}
-                <TabsContent value="orders" className="space-y-8 animate-in fade-in-50 duration-300 m-0">
-                  {customer && <OrdersTab customer={customer} />}
-                </TabsContent>
-
-                {/* Bookings Tab */}
-                <TabsContent value="bookings" className="space-y-8 animate-in fade-in-50 duration-300 m-0">
-                  {customer && <BookingsTab customer={customer} />}
-                </TabsContent>
-
-                {/* Feedback Tab */}
-                <TabsContent value="feedback" className="space-y-8 animate-in fade-in-50 duration-300 m-0">
-                  {customer && <FeedbackTab customer={customer} />}
-                </TabsContent>
-
-                {/* Loyalty Tab */}
-                <TabsContent value="loyalty" className="space-y-8 animate-in fade-in-50 duration-300 m-0">
-                  {customer && <LoyaltyTab customer={customer} merchantId={merchantId} />}
-                </TabsContent>
-
-                {/* Marketing Tab */}
-                <TabsContent value="marketing" className="space-y-8 animate-in fade-in-50 duration-300 m-0">
-                  {customer && <MarketingTab customer={customer} merchantId={merchantId} />}
-                </TabsContent>
-
-                {/* Details Tab */}
-                <TabsContent value="details" className="space-y-8 animate-in fade-in-50 duration-300 m-0">
-                  {customer && <DetailsTab customer={customer} merchantId={merchantId} />}
-                </TabsContent>
+                {/* Placeholder tabs */}
+                {[
+                  "orders",
+                  "bookings",
+                  "feedback",
+                  "loyalty",
+                  "marketing",
+                  "details",
+                ].map((tab) => (
+                  <TabsContent
+                    key={tab}
+                    value={tab}
+                    className="h-64 flex items-center justify-center text-muted-foreground bg-white dark:bg-card rounded-lg border-2 border-dashed"
+                  >
+                    {tab.charAt(0).toUpperCase() + tab.slice(1)} view coming soon
+                  </TabsContent>
+                ))}
               </div>
             </Tabs>
           </div>
         </SheetContent>
       </Sheet>
 
-      <AddTagDialog open={showAddTag} onOpenChange={setShowAddTag} onAdd={handleAddTag} isLoading={addTagMutation.isPending} existingTags={profile?.customer?.tags || []} />
-      <AddNoteDialog open={showAddNote} onOpenChange={setShowAddNote} onSave={handleSaveNotes} isLoading={updateNotesMutation.isPending} currentNotes={profile?.customer?.notes || null} />
+      {/* Dialogs */}
+      <AddTagDialog
+        open={showAddTag}
+        onOpenChange={setShowAddTag}
+        onAdd={handleAddTag}
+        isLoading={addTagMutation.isPending}
+      />
+      <AddNoteDialog
+        open={showAddNote}
+        onOpenChange={setShowAddNote}
+        onSave={handleSaveNotes}
+        isLoading={updateNotesMutation.isPending}
+        currentNotes={profile?.customer?.notes || null}
+      />
     </>
   );
 }

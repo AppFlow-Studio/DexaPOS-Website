@@ -29,7 +29,6 @@ export interface ReceiptTemplate {
   // Extras
   show_barcode: boolean;
   show_qr_code: boolean;
-  show_loyalty_rewards: boolean;
 
   // Kitchen specific
   large_item_text: boolean;
@@ -54,7 +53,6 @@ export interface ReceiptTemplateFormData {
   show_order_type: boolean;
   show_barcode: boolean;
   show_qr_code: boolean;
-  show_loyalty_rewards: boolean;
   large_item_text: boolean;
   show_mods_large: boolean;
   group_by_station: boolean;
@@ -75,7 +73,6 @@ export interface UpsertReceiptTemplateInput {
   show_order_type?: boolean;
   show_barcode?: boolean;
   show_qr_code?: boolean;
-  show_loyalty_rewards?: boolean;
   large_item_text?: boolean;
   show_mods_large?: boolean;
   group_by_station?: boolean;

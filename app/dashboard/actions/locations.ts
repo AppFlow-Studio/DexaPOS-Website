@@ -130,6 +130,12 @@ export async function CreateLocation(
       is_active: data.is_active ?? true,
       is_accepting_orders: data.is_accepting_orders ?? true,
       business_hours: data.business_hours || {},
+      ein: data.ein || null,
+      tax_id: data.tax_id || null,
+      sales_tax_rate: data.sales_tax_rate ?? null,
+      tax_registration_status: data.tax_registration_status || 'pending',
+      onboarding_step: data.onboarding_step ?? 0,
+      onboarding_completed: data.onboarding_completed ?? false,
       uses_global_menu: data.uses_global_menu ?? true,
       public_metadata: data.public_metadata || {},
     })
@@ -198,6 +204,14 @@ export async function UpdateLocation(
     updateData.is_accepting_orders = data.is_accepting_orders;
   if (data.business_hours !== undefined)
     updateData.business_hours = data.business_hours;
+  if (data.ein !== undefined) updateData.ein = data.ein || null;
+  if (data.tax_id !== undefined) updateData.tax_id = data.tax_id || null;
+  if (data.sales_tax_rate !== undefined) updateData.sales_tax_rate = data.sales_tax_rate;
+  if (data.tax_registration_status !== undefined)
+    updateData.tax_registration_status = data.tax_registration_status;
+  if (data.onboarding_step !== undefined) updateData.onboarding_step = data.onboarding_step;
+  if (data.onboarding_completed !== undefined)
+    updateData.onboarding_completed = data.onboarding_completed;
   if (data.uses_global_menu !== undefined)
     updateData.uses_global_menu = data.uses_global_menu;
   if (data.public_metadata !== undefined)

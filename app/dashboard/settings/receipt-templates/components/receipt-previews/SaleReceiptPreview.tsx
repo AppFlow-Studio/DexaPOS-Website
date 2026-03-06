@@ -131,37 +131,6 @@ export function SaleReceiptPreview({ formState }: SaleReceiptPreviewProps) {
         </>
       )}
 
-      {/* Loyalty Section */}
-      {formState.show_loyalty_rewards && (
-        <>
-          <DottedLine />
-          <div className="text-center font-bold text-xs mb-1">REWARDS SUMMARY</div>
-          <DottedLine />
-
-          {/* Mock loyalty programs */}
-          <div className="text-[10px] space-y-1">
-            <div>☕ Coffee Card: +1 punch (8/9)</div>
-            <div className="text-zinc-500 pl-2 text-[9px]">1 more to free coffee!</div>
-
-            <div className="mt-2">⭐ VIP Points: +18 pts (358)</div>
-            <div className="text-zinc-500 pl-2 text-[9px]">142 pts to next reward</div>
-          </div>
-
-          <DottedLine />
-          <div className="text-center text-[10px] text-zinc-600">
-            🎁 You have 1 reward available!
-          </div>
-          <div className="text-center text-[9px] text-zinc-500 mt-1">
-            Show your phone at checkout to redeem.
-          </div>
-
-          <DottedLine />
-          <div className="text-center text-[9px] text-zinc-600">
-            Earn rewards → ask your server!
-          </div>
-        </>
-      )}
-
       {/* Barcode / QR */}
       {(formState.show_barcode || formState.show_qr_code) && (
         <div className="flex justify-center gap-3 mt-3">

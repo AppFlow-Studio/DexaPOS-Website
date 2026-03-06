@@ -5,7 +5,6 @@ import { ChartContainer, type ChartConfig } from '@/components/ui/chart'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { DollarSign } from 'lucide-react'
 import type { RevenueBreakdown } from '@/types/analytics'
-import { getAdaptiveTickFormatter, extractMonetaryValues } from '@/lib/analytics/currency-formatter'
 
 const COLORS = {
   subtotal: '#0A5C9E',    // Dexa blue
@@ -63,16 +62,6 @@ export function RevenueBreakdownCard({ data, isLoading }: RevenueBreakdownCardPr
     discounts: Math.max(-d.discounts, 0), // Negative, so show positive
   })) || []
 
-  // Get adaptive formatter based on actual data range
-  const monetaryValues = extractMonetaryValues(chartData, [
-    'subtotal',
-    'tax',
-    'tips',
-    'serviceCharges',
-    'discounts',
-  ])
-  const adaptiveTickFormatter = getAdaptiveTickFormatter(monetaryValues)
-
   return (
     <ChartCard
       title="Revenue Breakdown"
@@ -128,7 +117,7 @@ export function RevenueBreakdownCard({ data, isLoading }: RevenueBreakdownCardPr
                     tickLine={false}
                     axisLine={false}
                     tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
-                    tickFormatter={adaptiveTickFormatter}
+                    tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
                   />
                   <Tooltip
                     cursor={{ fill: 'hsl(var(--muted)/0.3)' }}

@@ -8,9 +8,12 @@ import type {
   MerchantFilters,
   MerchantSummary,
   MerchantDetails,
+  MerchantOnboardingChecklist,
+  MerchantOnboardingStatus,
   LocationSummary,
   MerchantSettingsUpdate,
   UpdateMerchantResult,
+  UpdateMerchantStatusResult,
   ToggleLocationResult,
   MerchantHealthSummary,
 } from '@/types/merchant'
@@ -92,12 +95,48 @@ export async function getMerchants(
 
   // Apply status filter
   if (filters.status !== 'all') {
-    query = query.eq('derived_status', filters.status)
+    if (filters.status === 'inactive') {
+      query = query.eq('derived_status', 'inactive')
+    } else {
+      let statusScopeQuery = supabase
+        .from('merchants')
+        .select('id')
+        .eq('onboarding_status', filters.status)
+
+      if (effectiveMerchantIds !== undefined) {
+        if (effectiveMerchantIds.length === 0) {
+          return { merchants: [], total: 0 }
+        }
+        statusScopeQuery = statusScopeQuery.in('id', effectiveMerchantIds)
+      }
+
+      const { data: statusScopedRows, error: statusScopedError } = await statusScopeQuery
+
+      if (statusScopedError) {
+        console.error('[getMerchants] Status scope error:', statusScopedError)
+        throw new Error('Failed to filter merchants by onboarding status')
+      }
+
+      const statusScopedMerchantIds = Array.from(
+        new Set(
+          (statusScopedRows || [])
+            .map((row) => row.id)
+            .filter((id): id is string => typeof id === 'string' && id.length > 0)
+        )
+      )
+
+      if (statusScopedMerchantIds.length === 0) {
+        return { merchants: [], total: 0 }
+      }
+
+      query = query.in('id', statusScopedMerchantIds)
+    }
   }
 
   // Apply sorting
   const ascending = filters.sortOrder === 'asc'
-  query = query.order(filters.sortBy, { ascending })
+  const sortColumn = filters.sortBy === 'status' ? 'derived_status' : filters.sortBy
+  query = query.order(sortColumn, { ascending })
 
   // Apply pagination
   query = query.range(offset, offset + pageSize - 1)
@@ -113,26 +152,61 @@ export async function getMerchants(
 
   if (merchants.length > 0) {
     const merchantIds = merchants.map((merchant) => merchant.id)
-    const { data: noteRows, error: notesError } = await supabase
-      .from('merchant_notes')
-      .select('merchant_id')
-      .in('merchant_id', merchantIds)
+    const [{ data: noteRows, error: notesError }, { data: merchantRows, error: merchantRowsError }] =
+      await Promise.all([
+        supabase.from('merchant_notes').select('merchant_id').in('merchant_id', merchantIds),
+        supabase
+          .from('merchants')
+          .select(
+            `
+              id,
+              onboarding_status,
+              onboarding_completed_at,
+              activated_at,
+              owner_first_name,
+              owner_last_name,
+              owner_email,
+              owner_phone
+            `
+          )
+          .in('id', merchantIds),
+      ])
 
     // Gracefully handle environments that have not applied migration 032 yet.
     if (notesError && notesError.code !== '42P01') {
       console.error('[getMerchants] Notes count error:', notesError)
-    } else if (!notesError && noteRows) {
-      const noteCountMap = noteRows.reduce<Record<string, number>>((acc, row) => {
-        if (!row.merchant_id) return acc
-        acc[row.merchant_id] = (acc[row.merchant_id] || 0) + 1
-        return acc
-      }, {})
-
-      merchants = merchants.map((merchant) => ({
-        ...merchant,
-        notes_count: noteCountMap[merchant.id] || 0,
-      }))
     }
+
+    if (merchantRowsError) {
+      console.error('[getMerchants] Merchant lifecycle fields error:', merchantRowsError)
+    }
+
+    const noteCountMap = (noteRows || []).reduce<Record<string, number>>((acc, row) => {
+      if (!row.merchant_id) return acc
+      acc[row.merchant_id] = (acc[row.merchant_id] || 0) + 1
+      return acc
+    }, {})
+
+    const merchantLifecycleMap = new Map(
+      (merchantRows || []).map((row) => [
+        row.id,
+        {
+          onboarding_status: row.onboarding_status as MerchantOnboardingStatus | undefined,
+          onboarding_completed_at: row.onboarding_completed_at,
+          activated_at: row.activated_at,
+          owner_first_name: row.owner_first_name,
+          owner_last_name: row.owner_last_name,
+          owner_email: row.owner_email,
+          owner_phone: row.owner_phone,
+        },
+      ])
+    )
+
+    merchants = merchants.map((merchant) => ({
+      ...merchant,
+      ...(merchantLifecycleMap.get(merchant.id) || {}),
+      notes_count: noteCountMap[merchant.id] || 0,
+    }))
   }
 
   return {
@@ -188,6 +262,38 @@ export async function getMerchantDetails(
     return null
   }
 
+  const { data: merchantLifecycle, error: merchantLifecycleError } = await supabase
+    .from('merchants')
+    .select(
+      `
+        id,
+        business_legal_name,
+        dba_name,
+        business_type,
+        owner_first_name,
+        owner_last_name,
+        owner_email,
+        owner_phone,
+        ein_last_four,
+        onboarding_status,
+        onboarding_completed_at,
+        activated_at,
+        business_address_line1,
+        business_address_line2,
+        business_city,
+        business_state,
+        business_postal_code,
+        business_country
+      `
+    )
+    .eq('id', merchant.id)
+    .single()
+
+  if (merchantLifecycleError || !merchantLifecycle) {
+    console.error('[getMerchantDetails] Merchant lifecycle error:', merchantLifecycleError)
+    return null
+  }
+
   // Get locations
   const { data: locations, error: locationsError } = await supabase
     .from('locations')
@@ -210,6 +316,28 @@ export async function getMerchantDetails(
 
   if (locationsError) {
     console.error('[getMerchantDetails] Locations error:', locationsError)
+  }
+
+  const [{ count: billingProfileCount, error: billingProfileError }, { count: capturedPaymentsCount, error: capturedPaymentsError }] =
+    await Promise.all([
+      supabase
+        .from('merchant_billing_profiles')
+        .select('id', { count: 'exact', head: true })
+        .eq('merchant_id', merchant.id)
+        .eq('is_active', true),
+      supabase
+        .from('order_payments')
+        .select('id', { count: 'exact', head: true })
+        .eq('merchant_id', merchant.id)
+        .in('status', ['captured', 'succeeded']),
+    ])
+
+  if (billingProfileError && billingProfileError.code !== '42P01') {
+    console.error('[getMerchantDetails] Billing profile count error:', billingProfileError)
+  }
+
+  if (capturedPaymentsError) {
+    console.error('[getMerchantDetails] Captured payment count error:', capturedPaymentsError)
   }
 
   // Get today's start for metrics
@@ -240,10 +368,40 @@ export async function getMerchantDetails(
     })
   )
 
+  const onboardingStatus =
+    (merchantLifecycle.onboarding_status as MerchantOnboardingStatus | null) ||
+    (merchant.derived_status === 'active' ? 'active' : 'onboarding')
+
+  const onboardingChecklist: MerchantOnboardingChecklist = {
+    businessInfo: Boolean(merchantLifecycle.business_legal_name && merchantLifecycle.owner_email),
+    ownerInvited: Boolean(merchant.clerk_org_id),
+    billingAdded: (billingProfileCount || 0) > 0,
+    firstLocation: (locationsWithMetrics || []).length > 0,
+    firstPayment: onboardingStatus === 'active' || (capturedPaymentsCount || 0) > 0,
+  }
+
   return {
     ...(merchant as MerchantSummary),
     pricing_strategy: merchantPricing?.pricing_strategy as 'manual' | 'dual' | undefined,
     dual_pricing_percentage: merchantPricing?.dual_pricing_percentage,
+    business_legal_name: merchantLifecycle.business_legal_name,
+    dba_name: merchantLifecycle.dba_name,
+    business_type: merchantLifecycle.business_type,
+    owner_first_name: merchantLifecycle.owner_first_name,
+    owner_last_name: merchantLifecycle.owner_last_name,
+    owner_email: merchantLifecycle.owner_email,
+    owner_phone: merchantLifecycle.owner_phone,
+    ein_last_four: merchantLifecycle.ein_last_four,
+    onboarding_status: onboardingStatus,
+    onboarding_completed_at: merchantLifecycle.onboarding_completed_at,
+    activated_at: merchantLifecycle.activated_at,
+    business_address_line1: merchantLifecycle.business_address_line1,
+    business_address_line2: merchantLifecycle.business_address_line2,
+    business_city: merchantLifecycle.business_city,
+    business_state: merchantLifecycle.business_state,
+    business_postal_code: merchantLifecycle.business_postal_code,
+    business_country: merchantLifecycle.business_country,
+    onboarding_checklist: onboardingChecklist,
     locations: locationsWithMetrics,
   }
 }
@@ -312,6 +470,103 @@ export async function updateMerchantSettings(
 
   revalidatePath(`/manage/merchants/${merchantId}`)
   revalidatePath('/manage/merchants')
+
+  return { success: true }
+}
+
+// ============================================================================
+// UPDATE MERCHANT ONBOARDING STATUS
+// ============================================================================
+
+export async function updateMerchantOnboardingStatus(params: {
+  merchantId: string
+  newStatus: 'active' | 'suspended' | 'cancelled'
+  reason?: string
+}): Promise<UpdateMerchantStatusResult> {
+  const { userId } = await assertHQPermission('hq.merchant.update')
+
+  const supabase = createServerSupabaseClient()
+  const { data: merchant, error: merchantError } = await supabase
+    .from('merchants')
+    .select(
+      `
+        id,
+        clerk_org_id,
+        name,
+        onboarding_status,
+        onboarding_completed_at,
+        activated_at
+      `
+    )
+    .eq('id', params.merchantId)
+    .single()
+
+  if (merchantError || !merchant) {
+    console.error('[updateMerchantOnboardingStatus] Merchant lookup error:', merchantError)
+    return { success: false, error: 'Merchant not found.' }
+  }
+
+  if (merchant.onboarding_status === params.newStatus) {
+    return { success: true }
+  }
+
+  const nowIso = new Date().toISOString()
+  const reason = params.reason?.trim()
+
+  const updates: Record<string, unknown> = {
+    onboarding_status: params.newStatus,
+    updated_at: nowIso,
+  }
+
+  if (params.newStatus === 'active') {
+    updates.activated_at = merchant.activated_at || nowIso
+    updates.onboarding_completed_at = merchant.onboarding_completed_at || nowIso
+  }
+
+  const { error: updateError } = await supabase
+    .from('merchants')
+    .update(updates)
+    .eq('id', params.merchantId)
+
+  if (updateError) {
+    console.error('[updateMerchantOnboardingStatus] Update error:', updateError)
+    return { success: false, error: updateError.message }
+  }
+
+  await logAdminAction('MERCHANT_UPDATED', {
+    merchantId: params.merchantId,
+    clerkOrgId: merchant.clerk_org_id,
+    resourceType: 'merchant',
+    resourceId: params.merchantId,
+    resourceName: merchant.name || params.merchantId,
+    severity: params.newStatus === 'active' ? 'info' : 'warning',
+    changes: {
+      before: {
+        onboarding_status: merchant.onboarding_status,
+        activated_at: merchant.activated_at,
+        onboarding_completed_at: merchant.onboarding_completed_at,
+      },
+      after: {
+        onboarding_status: params.newStatus,
+        activated_at: (updates.activated_at as string | undefined) || merchant.activated_at,
+        onboarding_completed_at:
+          (updates.onboarding_completed_at as string | undefined) || merchant.onboarding_completed_at,
+      },
+      reason,
+    },
+    metadata: {
+      source: 'updateMerchantOnboardingStatus',
+      changed_by_user_id: userId,
+      reason: reason || null,
+    },
+  })
+
+  revalidatePath('/manage/merchants')
+  revalidatePath(`/manage/merchants/${params.merchantId}`)
+
+  if (merchant.clerk_org_id) {
+    revalidatePath(`/manage/merchants/${merchant.clerk_org_id}`)
+  }
 
   return { success: true }
 }

@@ -36,6 +36,16 @@ import { useAdminMerchantAccess } from '@/app/manage/hooks/useAdminMerchantAcces
 import { PermissionGate } from '@/components/admin/PermissionGate'
 import type { MerchantFilters } from '@/types/merchant'
 import { DEFAULT_MERCHANT_FILTERS } from '@/types/merchant'
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import type { MerchantSummary } from '@/types/merchant'
 import Link from 'next/link'
 import Image from 'next/image'
 export default function MerchantsPage() {
@@ -87,7 +97,7 @@ export default function MerchantsPage() {
                     </p>
                 </div>
                 <PermissionGate permission="hq.merchant.create">
-                    <Link href="/manage/create-merchant">
+                    <Link href="/manage/merchants/new">
                         <Button>Create Merchant</Button>
                     </Link>
                 </PermissionGate>
@@ -150,9 +160,12 @@ export default function MerchantsPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Status</SelectItem>
-                                    <SelectItem value="active">Active</SelectItem>
-                                    <SelectItem value="inactive">Inactive</SelectItem>
+                                    <SelectItem value="created">Created</SelectItem>
                                     <SelectItem value="onboarding">Onboarding</SelectItem>
+                                    <SelectItem value="active">Active</SelectItem>
+                                    <SelectItem value="suspended">Suspended</SelectItem>
+                                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                                    <SelectItem value="inactive">Inactive</SelectItem>
                                 </SelectContent>
                             </Select>
 
@@ -166,6 +179,7 @@ export default function MerchantsPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="name">Name</SelectItem>
+                                    <SelectItem value="status">Status</SelectItem>
                                     <SelectItem value="created_at">Date Created</SelectItem>
                                     <SelectItem value="orders_today">Orders Today</SelectItem>
                                     <SelectItem value="revenue_today">Revenue Today</SelectItem>
@@ -368,17 +382,6 @@ function MerchantGridSkeleton() {
     )
 }
 
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
-import type { MerchantSummary } from '@/types/merchant'
-
 function MerchantListView({
     merchants,
     onMerchantClick,
@@ -395,7 +398,10 @@ function MerchantListView({
     }
 
     const statusColors: Record<string, string> = {
+        created: 'bg-slate-100 text-slate-700 dark:bg-slate-900/50 dark:text-slate-300',
         active: 'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400',
+        suspended: 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400',
+        cancelled: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-300',
         inactive: 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400',
         onboarding: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-400',
     }
@@ -405,6 +411,7 @@ function MerchantListView({
             <TableHeader>
                 <TableRow>
                     <TableHead>Merchant</TableHead>
+                    <TableHead>Owner</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Locations</TableHead>
                     <TableHead className="text-right">Staff</TableHead>
@@ -415,7 +422,9 @@ function MerchantListView({
                 </TableRow>
             </TableHeader>
             <TableBody>
-                {merchants.map((merchant) => (
+                {merchants.map((merchant) => {
+                    const merchantStatus = merchant.onboarding_status || merchant.derived_status
+                    return (
                     <TableRow
                         key={merchant.id}
                         className="cursor-pointer"
@@ -435,8 +444,18 @@ function MerchantListView({
                             </div>
                         </TableCell>
                         <TableCell>
-                            <Badge className={statusColors[merchant.derived_status]}>
-                                {merchant.derived_status}
+                            <div className="flex flex-col">
+                                <span className="font-medium">
+                                    {`${merchant.owner_first_name || ''} ${merchant.owner_last_name || ''}`.trim() || '-'}
+                                </span>
+                                {merchant.owner_email && (
+                                    <span className="text-xs text-muted-foreground">{merchant.owner_email}</span>
+                                )}
+                            </div>
+                        </TableCell>
+                        <TableCell>
+                            <Badge className={statusColors[merchantStatus] || statusColors.onboarding}>
+                                {merchantStatus.replace('_', ' ')}
                             </Badge>
                         </TableCell>
                         <TableCell className="text-right">
@@ -465,15 +484,9 @@ function MerchantListView({
                             {new Date(merchant.created_at).toLocaleDateString()}
                         </TableCell>
                     </TableRow>
-                ))}
+                    )
+                })}
             </TableBody>
         </Table>
     )
 }
-
-// ============================================================================
-// MERCHANT HEALTH GRID COMPONENTS
-// ============================================================================
-
-import type { MerchantHealthSummary } from '@/types/merchant'
-import { formatDistanceToNow } from 'date-fns'
