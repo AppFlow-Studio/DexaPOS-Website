@@ -111,6 +111,7 @@ import {
 } from "@/app/dashboard/actions/menu-items-rpc";
 import { RecipeManager } from "@/app/dashboard/menu/components/RecipeManager";
 import { PriceInputGroup } from "@/components/dashboard/locations/PriceInputGroup";
+import { useEffectivePricing } from "@/app/dashboard/hooks/useEffectivePricing";
 import {
   usePrepStations,
   useCategoryPrepDefaults,
@@ -757,6 +758,7 @@ export function NewEditItemFormSheet({
   const queryClient = useQueryClient();
   const { selectedLocationId, locations } = useLocationStore();
   const isAllLocations = useIsAllLocations();
+  const { pricingStrategy: effectivePricingStrategy, dualPricingPercentage: effectiveDualPercentage } = useEffectivePricing();
 
   if (editItem) {
     console.log("[NEW EDIT ITEM FORM SHEET] editItem", editItem);
@@ -820,9 +822,10 @@ export function NewEditItemFormSheet({
 
   // Determine which price to show in the form based on context
   const getPriceForContext = React.useCallback(() => {
-    if (!editItem) return { price: 0, cashPrice: null };
+    if (!editItem) return { price: 0, cashPrice: null, deliveryPrice: null as number | null };
 
     const levels = editItem.price_levels;
+    const l1Delivery = levels?.level_1_delivery ?? editItem.delivery_price ?? null;
 
     // 5-level price cascade resolution
     switch (editingContext.level) {
@@ -830,6 +833,7 @@ export function NewEditItemFormSheet({
         return {
           price: levels?.level_1_base ?? editItem.price,
           cashPrice: levels?.level_1_cash ?? editItem.cash_price,
+          deliveryPrice: l1Delivery,
         };
       case 2: // Location Item Override
         return {
@@ -841,6 +845,8 @@ export function NewEditItemFormSheet({
             levels?.level_2_location_item_cash ??
             levels?.level_1_cash ??
             editItem.cash_price,
+          deliveryPrice:
+            levels?.level_2_location_item_delivery ?? l1Delivery,
         };
       case 3: // Category Price
         return {
@@ -850,6 +856,8 @@ export function NewEditItemFormSheet({
             levels?.level_3_category_cash ??
             levels?.level_1_cash ??
             editItem.cash_price,
+          deliveryPrice:
+            levels?.level_3_category_delivery ?? l1Delivery,
         };
       case 4: // Location + Category
         return {
@@ -865,6 +873,11 @@ export function NewEditItemFormSheet({
             levels?.level_2_location_item_cash ??
             levels?.level_1_cash ??
             editItem.cash_price,
+          deliveryPrice:
+            levels?.level_4_location_category_delivery ??
+            levels?.level_3_category_delivery ??
+            levels?.level_2_location_item_delivery ??
+            l1Delivery,
         };
       case 5: // Location + Menu + Category
         return {
@@ -882,9 +895,15 @@ export function NewEditItemFormSheet({
             levels?.level_2_location_item_cash ??
             levels?.level_1_cash ??
             editItem.cash_price,
+          deliveryPrice:
+            levels?.level_5_location_menu_delivery ??
+            levels?.level_4_location_category_delivery ??
+            levels?.level_3_category_delivery ??
+            levels?.level_2_location_item_delivery ??
+            l1Delivery,
         };
       default:
-        return { price: editItem.price, cashPrice: editItem.cash_price };
+        return { price: editItem.price, cashPrice: editItem.cash_price, deliveryPrice: editItem.delivery_price ?? null };
     }
   }, [editItem, editingContext.level]);
 
@@ -895,6 +914,7 @@ export function NewEditItemFormSheet({
       description: "",
       price: 0,
       cash_price: undefined,
+      delivery_price: null,
       image_url: "",
       availability: true,
       allergens: [],
@@ -912,14 +932,14 @@ export function NewEditItemFormSheet({
   // Reset form when editItem or context changes
   React.useEffect(() => {
     if (editItem) {
-      const { price, cashPrice } = getPriceForContext();
+      const { price, cashPrice, deliveryPrice } = getPriceForContext();
 
       form.reset({
         name: editItem.name || "",
         description: editItem.description || "",
         price: price,
         cash_price: cashPrice ?? undefined,
-        delivery_price: editItem.delivery_price ?? null,
+        delivery_price: deliveryPrice,
         image_url: editItem.image || editItem.image_url || "",
         availability: editItem.availability ?? true,
         allergens: editItem.allergens || [],
@@ -1092,6 +1112,7 @@ export function NewEditItemFormSheet({
           categoryId: categoryId || null, // NEW: Category context for L3/L4/L5
           menuId: menuId || null,
           locationId: isAllLocations ? null : selectedLocationId,
+          isMenuLocationOwned,
           price: values.price,
           cashPrice: values.cash_price ?? null,
           deliveryPrice: values.delivery_price ?? null,
@@ -1135,6 +1156,7 @@ export function NewEditItemFormSheet({
             description: values.description,
             price: values.price,
             cash_price: values.cash_price ?? undefined,
+            delivery_price: values.delivery_price ?? null,
             image: values.image_url ?? undefined,
             availability: values.availability,
             allergens: values.allergens,
@@ -1156,12 +1178,14 @@ export function NewEditItemFormSheet({
       }
 
       // Success message based on context
+      const itemName = values.name;
+      const contextName = menuName || categoryName || "menu";
       const levelMessages: Record<number, string> = {
-        1: "Global item updated",
-        2: `Location pricing updated for ${currentLocationName}`,
-        3: `Menu pricing updated for "${menuName}"`,
-        4: `Menu pricing updated at ${currentLocationName}`,
-        5: `Your menu pricing updated`,
+        1: `"${itemName}" updated globally`,
+        2: `"${itemName}" location pricing updated for ${currentLocationName}`,
+        3: `"${itemName}" category pricing updated for "${contextName}"`,
+        4: `"${itemName}" location + category pricing updated at ${currentLocationName}`,
+        5: `"${itemName}" menu pricing updated`,
       };
 
       toast.success(editItem ? "Item Updated" : "Item Created", {
@@ -1567,7 +1591,7 @@ export function NewEditItemFormSheet({
                       />
 
                       {/* Card Background Color */}
-                      <FormField
+                      {/* <FormField
                         control={form.control}
                         name="card_bg_color"
                         render={({ field }: { field: any }) => (
@@ -1602,7 +1626,7 @@ export function NewEditItemFormSheet({
                             <FormMessage />
                           </FormItem>
                         )}
-                      />
+                      /> */}
                     </TabsContent>
 
                     {/* TAB 2: PRICING & INVENTORY */}
@@ -1643,6 +1667,8 @@ export function NewEditItemFormSheet({
                               onCashPriceChange={(val) => form.setValue("cash_price", val, { shouldValidate: true })}
                               label={editingContext.priceLabel}
                               disabled={!editItem}
+                              pricingStrategy={effectivePricingStrategy}
+                              dualPricingPercentage={effectiveDualPercentage}
                           />
                           <div className="flex gap-4 px-4">
                               <div className="flex-1">
@@ -1663,7 +1689,6 @@ export function NewEditItemFormSheet({
                       </div>
 
                       {/* Delivery Pricing */}
-                      {editItem && (
                         <div className="space-y-3">
                           {/* Delivery price input — always shown */}
                           <div className="p-3 rounded-lg border border-amber-200 bg-amber-50/30 space-y-2">
@@ -1693,7 +1718,6 @@ export function NewEditItemFormSheet({
                             )}
                           </div>
                         </div>
-                      )}
 
                       {/* Reset Button */}
                       {editItem && editingContext.resetLabel && (

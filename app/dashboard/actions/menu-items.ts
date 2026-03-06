@@ -366,6 +366,7 @@ export async function CreateMenuItem(
     description?: string;
     price: number;
     cash_price?: number;
+    delivery_price?: number | null;
     image?: string;
     meal_types?: ("Lunch" | "Dinner" | "Brunch" | "Specials")[];
     allergens?: string[];
@@ -405,6 +406,7 @@ export async function CreateMenuItem(
       description: data.description || null,
       price: data.price,
       cash_price: data.cash_price || null,
+      delivery_price: data.delivery_price ?? null,
       image: data.image || null,
       meal_types: data.meal_types || [],
       allergens: data.allergens || [],

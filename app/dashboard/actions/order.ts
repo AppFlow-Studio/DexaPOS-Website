@@ -1311,3 +1311,52 @@ export async function GetOrderFullHistory(
 
   return full;
 }
+
+/**
+ * Get all orders for a specific customer
+ */
+export async function GetCustomerOrders(
+  customerId: string,
+  locationId?: string
+): Promise<OrderResponse[]> {
+  if (!customerId) {
+    return [];
+  }
+
+  const supabase = createServiceRoleClient();
+
+  try {
+    let query = supabase
+      .from("orders")
+      .select(
+        `
+        *,
+        created_by_staff:staff_profiles!orders_created_by_staff_id_fkey(first_name, last_name, display_name),
+        created_by_user:users!orders_created_by_user_id_fkey(first_name, last_name),
+        order_items(
+          *,
+          order_item_modifiers(*)
+        ),
+        order_payments(*)
+        `
+      )
+      .eq("customer_id", customerId)
+      .order("created_at", { ascending: false });
+
+    if (locationId && locationId !== "all") {
+      query = query.eq("location_id", locationId);
+    }
+
+    const { data: orders, error } = await query;
+
+    if (error) {
+      console.error("[GetCustomerOrders] Error fetching customer orders:", error);
+      return [];
+    }
+
+    return orders as OrderResponse[];
+  } catch (err) {
+    console.error("[GetCustomerOrders] Exception:", err);
+    return [];
+  }
+}

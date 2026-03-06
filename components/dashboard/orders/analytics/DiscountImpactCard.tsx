@@ -6,6 +6,7 @@ import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell, ResponsiveContainer } from 'recharts'
 import { Percent } from 'lucide-react'
 import type { DiscountImpact } from '@/types/analytics'
+import { getAdaptiveTickFormatter, extractMonetaryValues } from '@/lib/analytics/currency-formatter'
 
 const COLORS = [
   '#3B82F6', // Blue
@@ -32,6 +33,10 @@ export function DiscountImpactCard({ data, isLoading }: DiscountImpactCardProps)
     }).format(amount)
 
   const isEmpty = !data || (data.bySource.length === 0 && data.totalDiscounts === 0)
+
+  // Get adaptive formatter based on actual discount amounts
+  const monetaryValues = extractMonetaryValues(data?.bySource || [], ['amount'])
+  const adaptiveTickFormatter = getAdaptiveTickFormatter(monetaryValues)
 
   return (
     <ChartCard
@@ -96,7 +101,7 @@ export function DiscountImpactCard({ data, isLoading }: DiscountImpactCardProps)
                       <XAxis
                         type="number"
                         tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
-                        tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                        tickFormatter={adaptiveTickFormatter}
                       />
                       <YAxis
                         type="category"

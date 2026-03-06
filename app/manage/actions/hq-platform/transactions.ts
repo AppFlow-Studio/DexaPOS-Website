@@ -340,15 +340,27 @@ export interface PlatformMerchantBreakdownFilters {
 interface PlatformMerchantBreakdownRpcRow {
   merchant_id: string | null
   merchant_name: string | null
-  location_count: number | string | null
+  location_count?: number | string | null
+  total_locations?: number | string | null
+  active_locations?: number | string | null
+  order_count?: number | string | null
   transaction_count: number | string | null
   card_revenue: number | string | null
   cash_revenue: number | string | null
   total_revenue: number | string | null
   avg_ticket: number | string | null
   tip_total: number | string | null
+  total_fees?: number | string | null
   void_count: number | string | null
+  refund_count?: number | string | null
+  void_refund_amount?: number | string | null
   void_rate_pct: number | string | null
+  unsettled_amount?: number | string | null
+  cash_discount_count?: number | string | null
+  last_transaction_at?: string | null
+  prior_total_revenue?: number | string | null
+  revenue_change_pct?: number | string | null
+  payment_method_breakdown?: unknown
   daily_revenue_trend: unknown
 }
 
@@ -361,14 +373,30 @@ export interface PlatformMerchantBreakdown {
   merchant_id: string
   merchant_name: string
   location_count: number
+  total_locations?: number
+  active_locations?: number
+  order_count?: number
   transaction_count: number
   card_revenue: number
   cash_revenue: number
   total_revenue: number
   avg_ticket: number
   tip_total: number
+  total_fees?: number
   void_count: number
+  refund_count?: number
+  void_refund_amount?: number
   void_rate_pct: number
+  unsettled_amount?: number
+  cash_discount_count?: number
+  last_transaction_at?: string
+  prior_total_revenue?: number
+  revenue_change_pct?: number
+  payment_method_breakdown?: Array<{
+    method?: string
+    count: number
+    amount: number
+  }>
   daily_revenue_trend: PlatformMerchantBreakdownDailyPoint[]
 }
 
@@ -1063,18 +1091,74 @@ function mapRpcRowToMerchantBreakdown(
     }))
     .filter((point) => point.date.length > 0)
 
+  const methodBreakdown = asArray<any>(row.payment_method_breakdown).map((entry) => ({
+    method: typeof entry?.method === 'string' ? entry.method : undefined,
+    count: Number(entry?.count || 0),
+    amount: Number(entry?.amount || 0),
+  }))
+
+  const totalLocations =
+    row.total_locations !== null && row.total_locations !== undefined
+      ? Number(row.total_locations)
+      : row.location_count !== null && row.location_count !== undefined
+        ? Number(row.location_count)
+        : row.active_locations !== null && row.active_locations !== undefined
+          ? Number(row.active_locations)
+          : 0
+
+  const activeLocations =
+    row.active_locations !== null && row.active_locations !== undefined
+      ? Number(row.active_locations)
+      : undefined
+
   return {
     merchant_id: row.merchant_id || '',
     merchant_name: row.merchant_name || 'Unknown',
-    location_count: Number(row.location_count || 0),
+    location_count: totalLocations,
+    total_locations: totalLocations,
+    active_locations: activeLocations,
+    order_count:
+      row.order_count !== null && row.order_count !== undefined
+        ? Number(row.order_count)
+        : undefined,
     transaction_count: Number(row.transaction_count || 0),
     card_revenue: Number(row.card_revenue || 0),
     cash_revenue: Number(row.cash_revenue || 0),
     total_revenue: Number(row.total_revenue || 0),
     avg_ticket: Number(row.avg_ticket || 0),
     tip_total: Number(row.tip_total || 0),
+    total_fees:
+      row.total_fees !== null && row.total_fees !== undefined
+        ? Number(row.total_fees)
+        : undefined,
     void_count: Number(row.void_count || 0),
+    refund_count:
+      row.refund_count !== null && row.refund_count !== undefined
+        ? Number(row.refund_count)
+        : undefined,
+    void_refund_amount:
+      row.void_refund_amount !== null && row.void_refund_amount !== undefined
+        ? Number(row.void_refund_amount)
+        : undefined,
     void_rate_pct: Number(row.void_rate_pct || 0),
+    unsettled_amount:
+      row.unsettled_amount !== null && row.unsettled_amount !== undefined
+        ? Number(row.unsettled_amount)
+        : undefined,
+    cash_discount_count:
+      row.cash_discount_count !== null && row.cash_discount_count !== undefined
+        ? Number(row.cash_discount_count)
+        : undefined,
+    last_transaction_at: row.last_transaction_at || undefined,
+    prior_total_revenue:
+      row.prior_total_revenue !== null && row.prior_total_revenue !== undefined
+        ? Number(row.prior_total_revenue)
+        : undefined,
+    revenue_change_pct:
+      row.revenue_change_pct !== null && row.revenue_change_pct !== undefined
+        ? Number(row.revenue_change_pct)
+        : undefined,
+    payment_method_breakdown: methodBreakdown,
     daily_revenue_trend: trend,
   }
 }

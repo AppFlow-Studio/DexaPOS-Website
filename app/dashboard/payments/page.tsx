@@ -79,12 +79,13 @@ function computePaymentSummary(payments: PaymentRecord[]): PaymentSummary {
     mEntry.amount += pTotal;
     methodMap.set(p.payment_method, mEntry);
 
-    // By card type
-    if (p.card_type) {
-      const cEntry = cardTypeMap.get(p.card_type) || { count: 0, amount: 0 };
+    // By card type — fall back to Castles data
+    const cardType = p.card_type || p.processor_response?.castles_transaction?.cardType;
+    if (cardType) {
+      const cEntry = cardTypeMap.get(cardType) || { count: 0, amount: 0 };
       cEntry.count++;
       cEntry.amount += pTotal;
-      cardTypeMap.set(p.card_type, cEntry);
+      cardTypeMap.set(cardType, cEntry);
     }
 
     // By status
@@ -102,9 +103,9 @@ function computePaymentSummary(payments: PaymentRecord[]): PaymentSummary {
       dailyMap.set(day, dEntry);
     }
 
-    // By entry mode — fall back to processor_response.entry_type
+    // By entry mode — fall back to processor_response.entry_type, then Castles
     const entryMode =
-      p.card_entry_mode || p.processor_response?.entry_type || "unknown";
+      p.card_entry_mode || p.processor_response?.entry_type || p.processor_response?.castles_transaction?.entryMode || "unknown";
     const eEntry = entryModeMap.get(entryMode) || { count: 0, amount: 0 };
     eEntry.count++;
     eEntry.amount += pTotal;

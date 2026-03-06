@@ -5,6 +5,7 @@ import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer } from 'recharts'
 import { CreditCard } from 'lucide-react'
 import type { DualPricingComparison } from '@/types/analytics'
+import { getAdaptiveTickFormatter, extractMonetaryValues } from '@/lib/analytics/currency-formatter'
 
 const COLORS = {
   cardRevenue: '#0A5C9E', // Dexa blue
@@ -48,6 +49,10 @@ export function DualPricingCard({ data, isLoading }: DualPricingCardProps) {
     cardRevenue: d.cardRevenue,
     cashRevenue: d.cashRevenue,
   }))
+
+  // Get adaptive formatter based on actual data range
+  const monetaryValues = extractMonetaryValues(chartData, ['cardRevenue', 'cashRevenue'])
+  const adaptiveTickFormatter = getAdaptiveTickFormatter(monetaryValues)
 
   return (
     <ChartCard
@@ -99,7 +104,7 @@ export function DualPricingCard({ data, isLoading }: DualPricingCardProps) {
                     tickLine={false}
                     axisLine={false}
                     tick={{ fontSize: 12 }}
-                    tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                    tickFormatter={adaptiveTickFormatter}
                   />
                   <ChartTooltip
                     cursor={{ fill: 'rgba(0, 0, 0, 0.1)' }}

@@ -174,7 +174,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
         const search = searchTerm.toLowerCase()
         return (
             terminal.terminal_name.toLowerCase().includes(search) ||
-            terminal.tpn.toLowerCase().includes(search) ||
+            terminal.register_id?.toLowerCase().includes(search) ||
             terminal.location_name.toLowerCase().includes(search)
         )
     })
@@ -581,7 +581,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                 <TableRow>
                                                     <TableHead>Terminal</TableHead>
                                                     <TableHead>Type</TableHead>
-                                                    <TableHead>TPN</TableHead>
+                                                    <TableHead>Register ID</TableHead>
                                                     <TableHead>Environment</TableHead>
                                                     <TableHead>Assigned Station</TableHead>
                                                     <TableHead>Status</TableHead>
@@ -615,7 +615,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                         </TableCell>
                                                         <TableCell>
                                                             <code className="text-sm bg-muted px-2 py-1 rounded">
-                                                                {terminal.tpn}
+                                                                {terminal.register_id}
                                                             </code>
                                                         </TableCell>
                                                         <TableCell>

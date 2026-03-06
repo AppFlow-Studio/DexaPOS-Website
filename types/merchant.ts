@@ -14,6 +14,8 @@ export interface MerchantSummary {
   created_at: string
   updated_at: string | null
   public_metadata: Record<string, unknown> | null
+  pricing_strategy?: 'manual' | 'dual'
+  dual_pricing_percentage?: number
   total_locations: number
   active_locations: number
   active_staff_count: number
@@ -40,6 +42,7 @@ export interface LocationSummary {
   timezone: string | null
   pricing_strategy?: 'manual' | 'dual'
   dual_pricing_percentage?: number
+  use_merchant_pricing_defaults?: boolean
   orders_today: number
   revenue_today: number
 }
@@ -85,6 +88,8 @@ export interface MerchantSettingsUpdate {
   name?: string
   type?: string
   public_metadata?: Record<string, unknown>
+  pricing_strategy?: 'manual' | 'dual'
+  dual_pricing_percentage?: number
 }
 
 export interface ToggleLocationResult {

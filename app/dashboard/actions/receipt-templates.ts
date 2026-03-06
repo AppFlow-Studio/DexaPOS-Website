@@ -37,6 +37,7 @@ export interface ReceiptTemplate {
   show_order_type: boolean;
   show_barcode: boolean;
   show_qr_code: boolean;
+  show_loyalty_rewards: boolean;
   large_item_text: boolean;
   show_mods_large: boolean;
   group_by_station: boolean;
@@ -59,6 +60,7 @@ export interface UpsertReceiptTemplateInput {
   show_order_type?: boolean;
   show_barcode?: boolean;
   show_qr_code?: boolean;
+  show_loyalty_rewards?: boolean;
   large_item_text?: boolean;
   show_mods_large?: boolean;
   group_by_station?: boolean;
@@ -176,6 +178,7 @@ const DEFAULT_TEMPLATE_VALUES: Record<
     show_order_type: true,
     show_barcode: true,
     show_qr_code: false,
+    show_loyalty_rewards: true,
     large_item_text: false,
     show_mods_large: false,
     group_by_station: false,
@@ -193,6 +196,7 @@ const DEFAULT_TEMPLATE_VALUES: Record<
     show_order_type: true,
     show_barcode: false,
     show_qr_code: false,
+    show_loyalty_rewards: false,
     large_item_text: true,
     show_mods_large: true,
     group_by_station: true,
@@ -210,6 +214,7 @@ const DEFAULT_TEMPLATE_VALUES: Record<
     show_order_type: true,
     show_barcode: false,
     show_qr_code: false,
+    show_loyalty_rewards: false,
     large_item_text: false,
     show_mods_large: false,
     group_by_station: false,
@@ -227,6 +232,7 @@ const DEFAULT_TEMPLATE_VALUES: Record<
     show_order_type: false,
     show_barcode: false,
     show_qr_code: false,
+    show_loyalty_rewards: false,
     large_item_text: false,
     show_mods_large: false,
     group_by_station: false,
@@ -244,6 +250,7 @@ const DEFAULT_TEMPLATE_VALUES: Record<
     show_order_type: false,
     show_barcode: false,
     show_qr_code: false,
+    show_loyalty_rewards: false,
     large_item_text: false,
     show_mods_large: false,
     group_by_station: false,
@@ -261,6 +268,7 @@ const DEFAULT_TEMPLATE_VALUES: Record<
     show_order_type: false,
     show_barcode: false,
     show_qr_code: false,
+    show_loyalty_rewards: false,
     large_item_text: false,
     show_mods_large: false,
     group_by_station: false,
@@ -278,6 +286,7 @@ const DEFAULT_TEMPLATE_VALUES: Record<
     show_order_type: true,
     show_barcode: true,
     show_qr_code: true,
+    show_loyalty_rewards: true,
     large_item_text: false,
     show_mods_large: false,
     group_by_station: false,
@@ -334,6 +343,7 @@ export async function initializeDefaultTemplates(
         show_order_type: defaults.show_order_type ?? true,
         show_barcode: defaults.show_barcode ?? false,
         show_qr_code: defaults.show_qr_code ?? false,
+        show_loyalty_rewards: defaults.show_loyalty_rewards ?? false,
         large_item_text: defaults.large_item_text ?? false,
         show_mods_large: defaults.show_mods_large ?? false,
         group_by_station: defaults.group_by_station ?? false,
@@ -427,6 +437,7 @@ export async function upsertReceiptTemplate(
       show_order_type: input.show_order_type ?? true,
       show_barcode: input.show_barcode ?? false,
       show_qr_code: input.show_qr_code ?? false,
+      show_loyalty_rewards: input.show_loyalty_rewards ?? false,
       large_item_text: input.large_item_text ?? false,
       show_mods_large: input.show_mods_large ?? false,
       group_by_station: input.group_by_station ?? false,
