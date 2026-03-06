@@ -12,10 +12,10 @@ This workstream covers `DM-013-01` through `DM-013-09` with a total of **35 poin
 
 1. `DM-013-01`: Implemented in code. Pending migration apply + QA.
 2. `DM-013-02`: Implemented in code. Pending migration apply + QA.
-3. `DM-013-03`: Core implemented (wizard + server action). Pending final QA and carrier non-HQ path decision.
+3. `DM-013-03`: Core implemented (wizard + server action). Remaining blocker: carrier-admin path under `/manage` is blocked by HQ-only middleware.
 4. `DM-013-04`: Core implemented (merchant/admin billing routes + save/load actions). Pending processor token UI hardening + QA.
 5. `DM-013-05`: Completed (status actions + checklist + auto-activation trigger + QA confirmation).
-6. `DM-013-06`: In progress (wizard UI + tax persistence + manager assignment wiring complete; QA pending).
+6. `DM-013-06`: Completed for non-banking scope (wizard UI + tax persistence + manager assignment wiring + searchable picker + audit events; QA confirmed).
 7. `DM-013-07`: In progress in UI only (banking step shell added, backend wiring deferred due hold).
 8. `DM-013-08`: In progress (tax settings management + dedicated location settings route implemented; banking management still held).
 9. `DM-013-09`: Completed (owner column + lifecycle status filter/sort + QA confirmation).
@@ -27,7 +27,13 @@ This workstream covers `DM-013-01` through `DM-013-09` with a total of **35 poin
 3. Banking persistence/tokenization remains paused under bank-related hold policy.
 4. Location settings tax/compliance editing (`DM-013-08` partial) is implemented and pending QA pass.
 5. Dedicated route `/dashboard/locations/[locationId]/settings` is now available for tax/compliance management and banking read-only visibility.
-6. Location wizard manager assignment now runs on submit (invite-new and assign-existing modes), pending QA.
+6. Location wizard manager assignment now runs on submit (invite-new and assign-existing modes) and is QA-validated.
+
+## Non-Banking Wrap Summary
+
+1. Closed: `DM-013-05`, `DM-013-06`, `DM-013-09`.
+2. Partially closed: `DM-013-08` (tax/compliance done; banking remains hold-scoped).
+3. Remaining non-banking blocker: `DM-013-03` carrier-admin create path requires a `/manage` access model decision.
 
 ## Banking Work Hold
 
@@ -39,6 +45,9 @@ Tickets currently under hold:
 3. `DM-013-04`
 4. `DM-013-07`
 5. `DM-013-08` (banking-specific parts)
+
+Notion marker to use:
+1. `[BANK-RELATED: HOLD]`
 
 ## Locked Product Rules
 

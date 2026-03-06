@@ -22,7 +22,11 @@ import { BusinessHoursStep } from './steps/BusinessHoursStep'
 import { AssignManagerStep } from './steps/AssignManagerStep'
 import { ReviewStep } from './steps/ReviewStep'
 import { CreateLocation } from '@/app/dashboard/actions/locations'
-import { ApplyLocationManagerAssignment } from '@/app/dashboard/actions/location-members'
+import {
+    ApplyLocationManagerAssignment,
+    GetManagerAssignableUsers,
+    type ManagerAssignableUser,
+} from '@/app/dashboard/actions/location-members'
 import { SyncGlobalMenusToLocation } from '@/app/dashboard/actions/location-menus'
 import {
     LocationFormData,
@@ -99,6 +103,9 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [showExitDialog, setShowExitDialog] = useState(false)
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+    const [managerCandidates, setManagerCandidates] = useState<ManagerAssignableUser[]>([])
+    const [isLoadingManagerCandidates, setIsLoadingManagerCandidates] = useState(false)
+    const [managerCandidatesError, setManagerCandidatesError] = useState<string | null>(null)
 
     // Track unsaved changes
     useEffect(() => {
@@ -117,6 +124,38 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
         window.addEventListener('beforeunload', handleBeforeUnload)
         return () => window.removeEventListener('beforeunload', handleBeforeUnload)
     }, [hasUnsavedChanges])
+
+    const loadManagerCandidates = useCallback(async () => {
+        if (!clerkOrgId) return
+        setIsLoadingManagerCandidates(true)
+        setManagerCandidatesError(null)
+        try {
+            const users = await GetManagerAssignableUsers(clerkOrgId)
+            setManagerCandidates(users)
+        } catch (_error) {
+            setManagerCandidatesError('Unable to load existing users.')
+        } finally {
+            setIsLoadingManagerCandidates(false)
+        }
+    }, [clerkOrgId])
+
+    useEffect(() => {
+        const shouldLoadCandidates =
+            currentStep === 6 &&
+            formData.manager_assignment_type === 'assign_existing' &&
+            managerCandidates.length === 0 &&
+            !isLoadingManagerCandidates
+
+        if (shouldLoadCandidates) {
+            loadManagerCandidates()
+        }
+    }, [
+        currentStep,
+        formData.manager_assignment_type,
+        managerCandidates.length,
+        isLoadingManagerCandidates,
+        loadManagerCandidates,
+    ])
 
     const updateFormData = useCallback((stepData: Partial<LocationFormData>) => {
         setFormData(prev => ({ ...prev, ...stepData }))
@@ -432,6 +471,10 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
                         data={formData as LocationFormStep6}
                         onChange={updateFormData}
                         errors={errors}
+                        managerCandidates={managerCandidates}
+                        isLoadingCandidates={isLoadingManagerCandidates}
+                        candidatesError={managerCandidatesError}
+                        onRetryLoadCandidates={loadManagerCandidates}
                     />
                 )
             case 7:

@@ -2,6 +2,14 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { LocationMemberWithDetails, LocationInviteWithDetails } from '@/types/merchant_locations'
+import { LogAuditEvent } from './audit-logs'
+
+export interface ManagerAssignableUser {
+    user_id: string
+    email: string
+    full_name: string
+    role_code: string | null
+}
 
 // ============================================================================
 // GET OPERATIONS
@@ -391,6 +399,56 @@ export async function CancelLocationInvite(inviteId: string) {
     return { data: invite }
 }
 
+export async function GetManagerAssignableUsers(clerkOrgId: string): Promise<ManagerAssignableUser[]> {
+    if (!clerkOrgId) {
+        return []
+    }
+
+    const supabase = createServerSupabaseClient()
+    const { data, error } = await supabase
+        .from('members')
+        .select(`
+            user_id,
+            role,
+            users!inner(
+                id,
+                email,
+                first_name,
+                last_name
+            )
+        `)
+        .eq('organization_id', clerkOrgId)
+
+    if (error) {
+        console.error('[GetManagerAssignableUsers] Error:', error)
+        return []
+    }
+
+    const mapped = (data || [])
+        .map((row: any) => {
+            const user = row.users || {}
+            const fullName = [user.first_name, user.last_name]
+                .filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
+                .join(' ')
+                .trim()
+
+            return {
+                user_id: row.user_id as string,
+                email: (user.email as string) || '',
+                full_name: fullName || (user.email as string) || row.user_id,
+                role_code: (row.role as string) || null,
+            }
+        })
+        .filter((row) => typeof row.user_id === 'string' && row.user_id.length > 0)
+
+    const deduped = Array.from(
+        new Map(mapped.map((row) => [row.user_id, row])).values()
+    )
+
+    deduped.sort((a, b) => a.full_name.localeCompare(b.full_name))
+    return deduped
+}
+
 // ============================================================================
 // ONBOARDING HELPER
 // ============================================================================
@@ -408,6 +466,17 @@ export async function ApplyLocationManagerAssignment(params: {
         return { success: true as const }
     }
 
+    const supabase = createServerSupabaseClient()
+    const { data: locationInfo, error: locationInfoError } = await supabase
+        .from('locations')
+        .select('id, merchant_id, name')
+        .eq('id', params.locationId)
+        .single()
+
+    if (locationInfoError || !locationInfo) {
+        return { error: 'Location not found for manager assignment.' }
+    }
+
     if (normalizedType === 'invite_new') {
         if (!params.invitedByUserId || !params.managerInviteEmail) {
             return { error: 'Missing inviter or manager email for manager invite flow.' }
@@ -423,6 +492,28 @@ export async function ApplyLocationManagerAssignment(params: {
             return { error: inviteResult.error }
         }
 
+        await LogAuditEvent({
+            merchantId: locationInfo.merchant_id,
+            locationId: locationInfo.id,
+            action: `Invited Manager: ${params.managerInviteEmail.trim()}`,
+            actionCategory: 'staff',
+            resourceType: 'location_invite',
+            resourceId: inviteResult.data?.id,
+            resourceName: params.managerInviteEmail.trim(),
+            changes: {
+                after: {
+                    assignment_type: 'invite_new',
+                    role_code: 'merchant.manager',
+                    email: params.managerInviteEmail.trim(),
+                },
+            },
+            metadata: {
+                location_id: locationInfo.id,
+                location_name: locationInfo.name,
+                manager_assignment: true,
+            },
+        })
+
         return { success: true as const, mode: 'invite_new' as const }
     }
 
@@ -431,8 +522,6 @@ export async function ApplyLocationManagerAssignment(params: {
         if (!identifier) {
             return { error: 'Missing existing manager identifier.' }
         }
-
-        const supabase = createServerSupabaseClient()
 
         const { data: userById, error: userByIdError } = await supabase
             .from('users')
@@ -473,6 +562,29 @@ export async function ApplyLocationManagerAssignment(params: {
         if (addMemberResult.error) {
             return { error: addMemberResult.error }
         }
+
+        await LogAuditEvent({
+            merchantId: locationInfo.merchant_id,
+            locationId: locationInfo.id,
+            action: `Assigned Manager: ${resolvedUser.email || resolvedUser.id}`,
+            actionCategory: 'staff',
+            resourceType: 'location_member',
+            resourceId: addMemberResult.data?.id,
+            resourceName: resolvedUser.email || resolvedUser.id,
+            changes: {
+                after: {
+                    assignment_type: 'assign_existing',
+                    role_code: 'merchant.manager',
+                    user_id: resolvedUser.id,
+                    email: resolvedUser.email || null,
+                },
+            },
+            metadata: {
+                location_id: locationInfo.id,
+                location_name: locationInfo.name,
+                manager_assignment: true,
+            },
+        })
 
         return { success: true as const, mode: 'assign_existing' as const }
     }

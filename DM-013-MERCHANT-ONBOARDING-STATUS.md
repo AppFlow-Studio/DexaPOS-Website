@@ -3,7 +3,7 @@
 **Owner:** Ali 
 **Started:** February 24, 2026  
 **Total Points:** 35  
-**Overall Status:** In Progress
+**Overall Status:** In Progress (Non-banking scope wrapped; banking scope held)
 
 ## Banking Hold Indicator
 
@@ -16,6 +16,16 @@ Current hold scope:
 3. `DM-013-04` (merchant billing UI/flows)
 4. `DM-013-07` (location banking & payouts wizard step)
 5. `DM-013-08` (location tax & banking management where banking fields are involved)
+
+## Notion Marker List (Banking)
+
+Use this marker in Notion: `[BANK-RELATED: HOLD]`
+
+1. `DM-013-01` `[BANK-RELATED: HOLD]`
+2. `DM-013-02` `[BANK-RELATED: HOLD]`
+3. `DM-013-04` `[BANK-RELATED: HOLD]`
+4. `DM-013-07` `[BANK-RELATED: HOLD]`
+5. `DM-013-08` `[BANK-RELATED: HOLD]` (banking sub-scope only; tax sub-scope is active)
 
 ## What This Workstream Covers
 
@@ -34,10 +44,10 @@ Current hold scope:
 |---|---:|---|---:|
 | DM-013-01 | 3 | Implemented (Pending Migration Apply + QA) `[BANK-RELATED: HOLD]` | 90% |
 | DM-013-02 | 3 | Implemented (Pending Migration Apply + QA) `[BANK-RELATED: HOLD]` | 90% |
-| DM-013-03 | 5 | In Progress (Core Flow Implemented) | 80% |
+| DM-013-03 | 5 | In Progress (Core Flow implemented; carrier `/manage` access path blocked by HQ-only middleware) | 85% |
 | DM-013-04 | 5 | In Progress (Core Flow Implemented) `[BANK-RELATED: HOLD]` | 75% |
 | DM-013-05 | 3 | Completed (QA Confirmed) | 100% |
-| DM-013-06 | 5 | In Progress (UI + backend wiring complete, manager assignment wired, QA pending) | 95% |
+| DM-013-06 | 5 | Completed (QA Confirmed, non-banking scope) | 100% |
 | DM-013-07 | 5 | In Progress (UI Shell Only) `[BANK-RELATED: HOLD]` | 30% |
 | DM-013-08 | 3 | In Progress (Tax settings + dedicated route implemented, banking scope on hold) `[BANK-RELATED: HOLD]` | 60% |
 | DM-013-09 | 3 | Completed (QA Confirmed) | 100% |
@@ -62,6 +72,14 @@ Current hold scope:
 4. Banking-related persistence remains intentionally deferred due hold.
 5. DM-013-08 tax settings implementation is ready for manual QA.
 6. DM-013-08 dedicated location settings route is implemented and ready for QA.
+
+## Non-Banking Wrap-Up (March 6, 2026)
+
+1. DM-013-05 is complete and QA confirmed.
+2. DM-013-06 is complete and QA confirmed (tax persistence + assign-manager flow + audit events).
+3. DM-013-09 is complete and QA confirmed.
+4. DM-013-08 non-banking tax scope is implemented; only banking scope remains held.
+5. Remaining non-banking blocker: DM-013-03 carrier-admin create flow under `/manage` (current middleware is HQ-only).
 
 ## Completed in This Step (DM-013-09)
 
@@ -98,6 +116,8 @@ Current hold scope:
 4. Location wizard now executes manager assignment behavior on submit:
 - invite new manager -> creates location invite with `merchant.manager`
 - assign existing manager -> resolves user by ID/email and creates `location_members` assignment
+5. Assign Existing Manager now uses searchable user picker (no raw free-text required).
+6. Manager assignment actions now emit explicit audit log events.
 
 ## Completed in This Step (DM-013-06 + DM-013-07 UI-only)
 
@@ -120,10 +140,8 @@ Current hold scope:
 
 ## Pending for DM-013-06 + DM-013-07
 
-1. Run QA pass for tax field persistence in create/update location flows.
-2. Wire Banking fields to tokenization + `location_banking_profiles` persistence after hold is lifted.
-3. Replace existing-user manager text input with real searchable user picker UX.
-4. Add audit logs for manager assignment and tax/banking updates once backend wiring is enabled.
+1. Wire Banking fields to tokenization + `location_banking_profiles` persistence after hold is lifted.
+2. Add audit logs for banking updates once backend wiring is enabled.
 
 ## Completed in This Step (DM-013-08 Tax Settings)
 

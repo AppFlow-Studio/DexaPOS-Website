@@ -172,7 +172,7 @@ Expected:
 6. Complete Assign Manager step:
 - Can choose Skip / Invite New / Assign Existing.
 - Invite mode shows name/email fields.
-- Existing mode shows identifier field.
+- Existing mode shows searchable user picker (name/email).
 7. On Review step, verify tax/banking/manager sections are visible and editable via "Edit".
 8. Submit with `Invite New` manager mode:
 - confirm location is created
@@ -180,11 +180,21 @@ Expected:
 9. Submit with `Assign Existing` manager mode (using existing user email or `user_...` ID):
 - confirm location is created
 - confirm user appears in location Team tab with manager role
+10. Verify manager assignment audit entries:
+
+```sql
+select created_at, action, action_category, resource_type, resource_name, location_id
+from audit_logs
+where action ilike '%manager%'
+order by created_at desc
+limit 20;
+```
 
 Expected for this phase:
 1. UI flow and field capture works.
 2. Manager assignment executes for invite/assign-existing flows.
-3. Banking persistence logic remains deferred due hold.
+3. Manager assignment emits audit events.
+4. Banking persistence logic remains deferred due hold.
 
 ## E. DM-013-09 (Admin Merchant List Status/Owner)
 
