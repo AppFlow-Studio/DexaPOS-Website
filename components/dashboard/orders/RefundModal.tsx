@@ -108,14 +108,29 @@ export function RefundModal({
   const payments = order.order_payments || [];
   const items = (order.order_items || []) as RefundableItem[];
 
-  // Eligible payments: captured or paid
-  const eligiblePayments = payments.filter((p) =>
-    ["captured", "paid"].includes(p.status)
+  // Eligible payments: captured or paid (from order; use fullHistory.payments when order has no payments)
+  const historyPayments = fullHistory?.payments ?? [];
+  const paymentsForEligible =
+    payments.length > 0 ? payments : historyPayments;
+  const eligiblePayments = paymentsForEligible.filter((p: { status?: string }) =>
+    ["captured", "paid"].includes(String(p.status ?? "").toLowerCase())
   );
   const primaryPayment = eligiblePayments[0];
 
-  // Total paid and refunded
-  const totalPaid = Number(order.amount_paid) || 0;
+  // Total paid: prefer fullHistory.order.amount_paid, else order.amount_paid, else sum from fullHistory.payments, else sum from order.order_payments
+  const fromOrderAmount =
+    fullHistory?.order?.amount_paid != null
+      ? Number(fullHistory.order.amount_paid)
+      : Number(order.amount_paid);
+  const fromEligibleSum =
+    eligiblePayments.length > 0
+      ? eligiblePayments.reduce(
+          (sum: number, p: { amount?: number; total_amount?: number }) =>
+            sum + Number(p.amount ?? p.total_amount ?? 0),
+          0
+        )
+      : 0;
+  const totalPaid = fromOrderAmount > 0 ? fromOrderAmount : fromEligibleSum;
   const totalRefunded =
     payments.reduce(
       (sum, p) => sum + Number((p as { refunded_amount?: number }).refunded_amount ?? 0),

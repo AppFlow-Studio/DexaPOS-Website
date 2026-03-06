@@ -1423,14 +1423,15 @@ export function OrderDetailFullPage({
           <span className="text-muted-foreground">●</span>
           <PaymentStatusBadge status={order.payment_status} />
           <div className="flex-1 min-w-0" />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5">
-                Actions
-                <ChevronDown className="h-3.5 w-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+          <div className="hidden md:block">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  Actions
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
               {orderActions.canSendReceipt && (
                 <DropdownMenuItem onClick={() => setIsSendReceiptOpen(true)}>
                   <Mail className="h-4 w-4 mr-2" />
@@ -1470,7 +1471,8 @@ export function OrderDetailFullPage({
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
-          </DropdownMenu>
+            </DropdownMenu>
+          </div>
         </div>
 
         {order.order_number && (

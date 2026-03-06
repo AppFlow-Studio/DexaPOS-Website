@@ -52,8 +52,6 @@ import {
   Hash,
   Receipt,
   ChevronRight,
-  MoreHorizontal,
-  ExternalLink,
   MessageSquare,
   CheckCircle2,
   Flame,
@@ -1009,31 +1007,6 @@ export function OrderDetailSheet({
                     <Mail className="h-4 w-4 mr-1.5" />
                     Send Receipt
                   </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 rounded-lg"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={handleViewMoreDetails}>
-                        <ExternalLink className="h-4 w-4 mr-2" />
-                        Full Details
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setIsReceiptOpen(true)}>
-                        <Printer className="h-4 w-4 mr-2" />
-                        Print Receipt
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setIsSendReceiptOpen(true)}>
-                        <Mail className="h-4 w-4 mr-2" />
-                        Send Receipt
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
                 </div>
               </div>
 

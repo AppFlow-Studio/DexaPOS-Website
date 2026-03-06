@@ -186,9 +186,9 @@ export function OrderActionBar({
     </div>
   );
 
-  // Mobile: FAB with expandable menu
+  // Mobile: FAB with expandable menu — positioned at top
   const mobileFab = (
-    <div className="fixed bottom-20 right-4 z-40 md:hidden">
+    <div className="fixed top-20 right-5 z-40 md:hidden">
       <DropdownMenu open={fabOpen} onOpenChange={setFabOpen}>
         <DropdownMenuTrigger asChild>
           <Button
@@ -201,7 +201,7 @@ export function OrderActionBar({
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="end"
-          side="top"
+          side="bottom"
           sideOffset={8}
           className="w-56"
         >
@@ -294,11 +294,10 @@ export function OrderActionBar({
     <TooltipProvider delayDuration={300}>
       {/* Desktop: full action bar */}
       <div className="hidden md:block">{desktopBar}</div>
-      {/* Mobile: compact bar (wraps) + FAB for quick access */}
+      {/* Mobile: action bar (wraps) + FAB */}
       <div className="flex flex-wrap items-center gap-2 md:hidden">
         {desktopBar}
       </div>
-      {/* Mobile FAB: expandable menu for quick access */}
       {isMobile && hasAnyAction && mobileFab}
     </TooltipProvider>
   );
