@@ -64,7 +64,7 @@ import {
   RefreshCw,
   Wifi,
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import {
   GetOrderDetails,
@@ -89,6 +89,14 @@ import {
 } from "./EnhancedPayments";
 import { ReversalsList } from "./ReversalsSection";
 import { KitchenSection, hasKitchenData } from "./KitchenSection";
+import { RefundModal } from "./RefundModal";
+import { VoidModal } from "./VoidModal";
+import { SendReceiptModal } from "./SendReceiptModal";
+import { AssignCustomerModal } from "./AssignCustomerModal";
+import { AdjustTipModal } from "./AdjustTipModal";
+import { ReprintDropdown } from "./ReprintDropdown";
+import { assignCustomerToOrder } from "@/app/actions/orders/assign-customer";
+import { toast } from "sonner";
 
 interface OrderDetailSheetProps {
   order: Order | OrderResponse | null;
@@ -98,6 +106,10 @@ interface OrderDetailSheetProps {
   fullPageUrlPattern?: (orderId: string) => string;
   /** When true (e.g. HQ/Carrier admin view), hide Refund/Void actions */
   readOnly?: boolean;
+  /** When true, show Refund button (requires refund permission). Defaults to true. */
+  canRefund?: boolean;
+  /** When true, show Void button (requires void permission). Defaults to true. Hidden for admins. */
+  canVoid?: boolean;
 }
 
 function formatCurrency(amount: number): string {
@@ -207,12 +219,24 @@ function EnhancedPaymentsSection({
   isLoading,
   cashDiscountApplied,
   totalDue,
+  orderVoidedAt = null,
+  orderVoidedByName = null,
+  orderVoidedBy = null,
+  orderVoidReason = null,
+  onAdjustTip,
+  showAdjustTip,
 }: {
   basicPayments: OrderPayment[];
   richPayments: RichPayment[] | null;
   isLoading: boolean;
   cashDiscountApplied: boolean;
   totalDue: number;
+  orderVoidedAt?: string | null;
+  orderVoidedByName?: string | null;
+  orderVoidedBy?: string | null;
+  orderVoidReason?: string | null;
+  onAdjustTip?: () => void;
+  showAdjustTip?: boolean;
 }) {
   const useRich = richPayments && richPayments.length > 0;
   const paymentCount = useRich ? richPayments.length : basicPayments.length;
@@ -221,6 +245,14 @@ function EnhancedPaymentsSection({
     <SectionCard
       title={`Payments${paymentCount > 0 ? ` (${paymentCount})` : ""}`}
       icon={<CreditCard className="h-4 w-4" />}
+      action={
+        showAdjustTip && onAdjustTip ? (
+          <Button variant="outline" size="sm" onClick={onAdjustTip}>
+            <DollarSign className="h-3.5 w-3.5 mr-1.5" />
+            Adjust Tip
+          </Button>
+        ) : undefined
+      }
     >
       <EnhancedPaymentsList
         basicPayments={basicPayments}
@@ -228,6 +260,10 @@ function EnhancedPaymentsSection({
         isLoading={isLoading}
         cashDiscountApplied={cashDiscountApplied}
         totalDue={totalDue}
+        orderVoidedAt={orderVoidedAt}
+        orderVoidedByName={orderVoidedByName}
+        orderVoidedBy={orderVoidedBy}
+        orderVoidReason={orderVoidReason}
       />
     </SectionCard>
   );
@@ -762,10 +798,19 @@ export function OrderDetailSheet({
   onOpenChange,
   fullPageUrlPattern,
   readOnly = false,
+  canRefund = true,
+  canVoid = true,
 }: OrderDetailSheetProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const selectedLocation = useSelectedLocation();
   const [isReceiptOpen, setIsReceiptOpen] = React.useState(false);
+  const [isSendReceiptOpen, setIsSendReceiptOpen] = React.useState(false);
+  const [isRefundOpen, setIsRefundOpen] = React.useState(false);
+  const [isVoidOpen, setIsVoidOpen] = React.useState(false);
+  const [isAdjustTipOpen, setIsAdjustTipOpen] = React.useState(false);
+  const [assignCustomerOpen, setAssignCustomerOpen] = React.useState(false);
+  const [removingCustomer, setRemovingCustomer] = React.useState(false);
 
   const { data: orderDetails, isLoading } = useQuery({
     queryKey: ["order-details", order?.id],
@@ -795,13 +840,53 @@ export function OrderDetailSheet({
     enabled: !!order && open,
   });
 
+  const handleRefundSuccess = React.useCallback(() => {
+    const orderId = order?.id;
+    if (!orderId) return;
+    queryClient.invalidateQueries({ queryKey: ["order-details", orderId] });
+    queryClient.invalidateQueries({ queryKey: ["order-full-history", orderId] });
+  }, [queryClient, order?.id]);
+
+  const handleAssignCustomerSuccess = React.useCallback(() => {
+    const orderId = order?.id;
+    if (!orderId) return;
+    queryClient.invalidateQueries({ queryKey: ["order-details", orderId] });
+    queryClient.invalidateQueries({ queryKey: ["order-full-history", orderId] });
+  }, [queryClient, order?.id]);
+
+  const handleAdjustTipSuccess = React.useCallback(() => {
+    const orderId = order?.id;
+    if (!orderId) return;
+    queryClient.invalidateQueries({ queryKey: ["order-details", orderId] });
+    queryClient.invalidateQueries({ queryKey: ["order-full-history", orderId] });
+  }, [queryClient, order?.id]);
+
+  // Derive payments before early return so useMemo runs unconditionally (Rules of Hooks)
+  const payments = ((orderDetails || order) as OrderResponse | null)?.order_payments ?? [];
+  const eligibleTipPayments = React.useMemo(() => {
+    const ELIGIBLE_STATUSES = ["captured", "paid"] as const;
+    return (payments as OrderPayment[]).filter((p) => {
+      const method = String(p.payment_method ?? "").toLowerCase();
+      const isCard =
+        method.startsWith("card_") ||
+        ["card_spinapi", "card_dvpaylite", "card_manual"].includes(method);
+      if (!isCard) return false;
+      const status = String(p.status ?? "").toLowerCase().replace(/-/g, "_");
+      if (!ELIGIBLE_STATUSES.includes(status)) return false;
+      if (status === "void") return false;
+      const pm = p as { is_voided?: boolean; is_settled?: boolean };
+      if (pm.is_voided) return false;
+      if (pm.is_settled) return false;
+      return true;
+    });
+  }, [payments]);
+
   if (!order) return null;
 
   const displayOrder = (orderDetails || order) as OrderResponse;
   const items = (displayOrder.order_items || []) as (OrderItem & {
     order_item_modifiers?: OrderItemModifier[];
   })[];
-  const payments = (displayOrder.order_payments || []) as OrderPayment[];
   const tableSessions = (displayOrder.table_sessions ||
     []) as TableSessionWithEvents[];
 
@@ -846,10 +931,9 @@ export function OrderDetailSheet({
     null;
   const isDineIn = displayOrder.order_type === "dine_in";
 
-  const customerName =
-    fullHistory?.order?.customer_name ?? displayOrder.customer_name ?? null;
-  const customerPhone =
-    fullHistory?.order?.customer_phone ?? displayOrder.customer_phone ?? null;
+  // Use displayOrder only so all customer fields update together (same query)
+  const customerName = displayOrder.customer_name ?? null;
+  const customerPhone = displayOrder.customer_phone ?? null;
   const customerEmail = displayOrder.customer_email ?? null;
   const hasCustomer = !!(customerName || customerPhone || customerEmail);
 
@@ -857,6 +941,30 @@ export function OrderDetailSheet({
     fullHistory?.order?.internal_notes ?? displayOrder.internal_notes ?? null;
 
   const itemCount = items.reduce((sum, i) => sum + (i.is_voided ? 0 : Number(i.quantity) || 1), 0);
+
+  const hasRefundablePayment = (payments as OrderPayment[]).some((p) =>
+    ["captured", "paid"].includes(p.status)
+  );
+
+  const canShowAdjustTip =
+    !readOnly &&
+    eligibleTipPayments.length > 0 &&
+    displayOrder.status !== "void" &&
+    displayOrder.status !== "cancelled";
+
+  const canShowRefund =
+    canRefund &&
+    !readOnly &&
+    displayOrder.status !== "void" &&
+    displayOrder.status !== "refunded" &&
+    displayOrder.status !== "cancelled" &&
+    hasRefundablePayment;
+
+  const VOID_DISABLED_STATUSES = ["completed", "void", "cancelled", "refunded"];
+  const canShowVoid =
+    canVoid &&
+    !readOnly &&
+    !VOID_DISABLED_STATUSES.includes(displayOrder.status);
 
   return (
     <>
@@ -888,21 +996,19 @@ export function OrderDetailSheet({
                 </div>
                 <div className="flex items-center gap-2 shrink-0 mr-8">
                   <OrderStatusBadge status={displayOrder.status} />
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <Printer className="h-4 w-4 mr-1.5" />
-                        Reprint
-                        <ChevronDown className="h-3.5 w-3.5 ml-1" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => setIsReceiptOpen(true)}>
-                        <Printer className="h-4 w-4 mr-2" />
-                        Print Receipt
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <ReprintDropdown
+                    orderId={displayOrder.id}
+                    locationId={displayOrder.location_id ?? null}
+                    dialogElevation="high"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsSendReceiptOpen(true)}
+                  >
+                    <Mail className="h-4 w-4 mr-1.5" />
+                    Send Receipt
+                  </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
@@ -921,6 +1027,10 @@ export function OrderDetailSheet({
                       <DropdownMenuItem onClick={() => setIsReceiptOpen(true)}>
                         <Printer className="h-4 w-4 mr-2" />
                         Print Receipt
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setIsSendReceiptOpen(true)}>
+                        <Mail className="h-4 w-4 mr-2" />
+                        Send Receipt
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -1033,11 +1143,11 @@ export function OrderDetailSheet({
               )}
 
               {/* Customer card */}
-              {hasCustomer && (
-                <SectionCard
-                  title="Customer"
-                  icon={<User className="h-4 w-4" />}
-                >
+              <SectionCard
+                title="Customer"
+                icon={<User className="h-4 w-4" />}
+              >
+                {hasCustomer ? (
                   <div className="space-y-2">
                     {customerName && (
                       <div className="flex items-center gap-2 text-sm">
@@ -1057,9 +1167,58 @@ export function OrderDetailSheet({
                         <span>{customerPhone}</span>
                       </div>
                     )}
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAssignCustomerOpen(true)}
+                      >
+                        Change
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        disabled={removingCustomer}
+                        onClick={async () => {
+                          if (!displayOrder?.id) return;
+                          setRemovingCustomer(true);
+                          try {
+                            const res = await assignCustomerToOrder({
+                              orderId: displayOrder.id,
+                              remove: true,
+                            });
+                            if (res.success) {
+                              toast.success("Customer removed from order.");
+                              handleAssignCustomerSuccess();
+                            } else {
+                              toast.error(res.error ?? "Failed to remove customer");
+                            }
+                          } finally {
+                            setRemovingCustomer(false);
+                          }
+                        }}
+                      >
+                        {removingCustomer ? "Removing…" : "Remove"}
+                      </Button>
+                    </div>
                   </div>
-                </SectionCard>
-              )}
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">No customer assigned</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setAssignCustomerOpen(true)}
+                    >
+                      Assign Customer
+                    </Button>
+                  </div>
+                )}
+              </SectionCard>
 
               {/* ─── Order Items (Enhanced) ─── */}
               <EnhancedItemsSection
@@ -1389,6 +1548,12 @@ export function OrderDetailSheet({
                 isLoading={isLoading || isHistoryLoading}
                 cashDiscountApplied={!!displayOrder.cash_discount_applied}
                 totalDue={displayOrder.total_amount}
+                orderVoidedAt={fullHistory?.order?.voided_at ?? null}
+                orderVoidedByName={fullHistory?.order?.voided_by_name ?? null}
+                orderVoidedBy={fullHistory?.order?.voided_by ?? null}
+                orderVoidReason={fullHistory?.order?.void_reason ?? null}
+                onAdjustTip={canShowAdjustTip ? () => setIsAdjustTipOpen(true) : undefined}
+                showAdjustTip={canShowAdjustTip}
               />
 
               {/* ─── Refunds & Reversals ─── */}
@@ -1457,28 +1622,52 @@ export function OrderDetailSheet({
                   <Printer className="h-4 w-4 mr-1.5" />
                   Receipt
                 </Button>
-                {!readOnly &&
-                  displayOrder.status !== "void" &&
-                  displayOrder.status !== "cancelled" && (
-                    <>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  size="sm"
+                  onClick={() => setIsSendReceiptOpen(true)}
+                >
+                  <Mail className="h-4 w-4 mr-1.5" />
+                  Send Receipt
+                </Button>
+                {!readOnly && (canShowRefund || canShowVoid || canShowAdjustTip) && (
+                  <>
+                    {canShowAdjustTip && (
                       <Button
                         variant="outline"
                         className="flex-1"
                         size="sm"
+                        onClick={() => setIsAdjustTipOpen(true)}
+                      >
+                        <DollarSign className="h-4 w-4 mr-1.5" />
+                        Adjust Tip
+                      </Button>
+                    )}
+                    {canShowRefund && (
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        size="sm"
+                        onClick={() => setIsRefundOpen(true)}
                       >
                         <RotateCcw className="h-4 w-4 mr-1.5" />
                         Refund
                       </Button>
+                    )}
+                    {canShowVoid && (
                       <Button
                         variant="destructive"
                         className="flex-1"
                         size="sm"
+                        onClick={() => setIsVoidOpen(true)}
                       >
-                        <X className="h-4 w-4 mr-1.5" />
-                        Void
+                        <Ban className="h-4 w-4 mr-1.5" />
+                        Void Order
                       </Button>
-                    </>
-                  )}
+                    )}
+                  </>
+                )}
               </div>
             </div>
           </BottomSheetFooter>
@@ -1490,6 +1679,47 @@ export function OrderDetailSheet({
         location={selectedLocation}
         open={isReceiptOpen}
         onOpenChange={setIsReceiptOpen}
+      />
+      <SendReceiptModal
+        order={displayOrder}
+        open={isSendReceiptOpen}
+        onOpenChange={setIsSendReceiptOpen}
+      />
+      <RefundModal
+        order={displayOrder}
+        fullHistory={fullHistory ?? undefined}
+        open={isRefundOpen}
+        onOpenChange={setIsRefundOpen}
+        onSuccess={handleRefundSuccess}
+      />
+      <VoidModal
+        order={displayOrder}
+        open={isVoidOpen}
+        onOpenChange={setIsVoidOpen}
+        onSuccess={handleRefundSuccess}
+      />
+      <AssignCustomerModal
+        order={displayOrder as OrderResponse & { merchant_id?: string }}
+        open={assignCustomerOpen}
+        onOpenChange={setAssignCustomerOpen}
+        onSuccess={handleAssignCustomerSuccess}
+      />
+      <AdjustTipModal
+        orderId={displayOrder.id}
+        displayNumber={displayOrder.display_number ?? displayOrder.order_number}
+        eligiblePayments={eligibleTipPayments.map((p) => ({
+          id: p.id,
+          amount: Number(p.amount) || 0,
+          tip_amount: Number(p.tip_amount) || 0,
+          total_amount: Number(p.total_amount) || 0,
+          payment_method: p.payment_method,
+          status: p.status,
+          card_type: (p as { card_type?: string }).card_type,
+          card_last_four: (p as { card_last_four?: string }).card_last_four,
+        }))}
+        open={isAdjustTipOpen}
+        onOpenChange={setIsAdjustTipOpen}
+        onSuccess={handleAdjustTipSuccess}
       />
     </>
   );
