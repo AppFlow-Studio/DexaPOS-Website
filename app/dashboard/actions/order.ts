@@ -682,6 +682,10 @@ export async function GetOrderFullHistory(
     amount_due: order.amount_due,
     effective_total: order.effective_total ?? null,
     internal_notes: order.internal_notes ?? null,
+    voided_at: (order as any).voided_at ?? null,
+    voided_by_name: getStaffName((order as any).voided_by),
+    voided_by: (order as any).voided_by ?? null,
+    void_reason: (order as any).void_reason ?? null,
   };
 
   const paymentEvents = (paymentEventsRes?.data || []) as any[];
@@ -746,10 +750,15 @@ export async function GetOrderFullHistory(
         change_given: op.change_given ?? null,
         voided_at: op.voided_at ?? null,
         voided_by_name: getStaffName(op.voided_by),
+        voided_by: op.voided_by ?? null,
         void_reason: op.void_reason ?? null,
         tip_adjusted_at: op.tip_adjusted_at ?? null,
         original_tip_amount: op.original_tip_amount != null ? Number(op.original_tip_amount) : null,
-        tip_adjusted_by_staff_id: op.tip_adjusted_by ?? null,
+        tip_adjusted_by_name: getStaffName(op.tip_adjusted_by) ?? null,
+        result_code: op.result_code ?? null,
+        response_message: op.response_message ?? op.dejavoo_response_message ?? null,
+        split_count: op.split_count ?? null,
+        split_portion_index: op.split_portion_index ?? null,
         covers_items: op.covers_items ?? null,
         payment_items: paymentItems.length ? paymentItems : null,
         events,
@@ -1078,8 +1087,8 @@ export async function GetOrderFullHistory(
           category: "payment",
           event_type: "payment_tip_adjusted",
           description: `Tip adjusted${tipStr}`,
-          actor_name: getStaffName((p as any).tip_adjusted_by_staff_id) ?? null,
-          actor_role: (p as any).tip_adjusted_by_staff_id ? "Staff" : null,
+          actor_name: p.tip_adjusted_by_name ?? null,
+          actor_role: p.tip_adjusted_by_name ? "Staff" : null,
           details: {
             payment_id: p.id,
             tip_amount: p.tip_amount,

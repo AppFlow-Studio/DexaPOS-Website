@@ -7,11 +7,16 @@ import { GetOrders } from "../actions/order";
 import { Order, OrderResponse } from "@/types/order-management";
 
 /**
- * Get clerk organization ID from user info
+ * Get clerk organization ID from user info.
+ * Must use clerk_org_id (Clerk org ID) for GetOrders merchant lookup, not organizations.id.
  */
 function useClerkOrgId() {
   const { data: userInfo } = useUserInfo();
-  return userInfo?.members?.[0]?.organizations?.id || "";
+  return (
+    userInfo?.members?.[0]?.organizations?.clerk_org_id ||
+    userInfo?.members?.[0]?.organizations?.id ||
+    ""
+  );
 }
 
 /**
