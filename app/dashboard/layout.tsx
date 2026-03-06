@@ -63,6 +63,7 @@ import {
   Flame,
   Mail,
   Gift,
+  DollarSign,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -232,6 +233,11 @@ const navMain = [
         title: "Payments",
         url: "/dashboard/payments",
         icon: CreditCard,
+      },
+      {
+        title: "Tips",
+        url: "/dashboard/tips",
+        icon: DollarSign,
       },
     ],
   },
@@ -534,6 +540,17 @@ function MerchantSidebar() {
                       <Link href="/dashboard/settings/loyalty">
                         <Gift className="h-3 w-3" />
                         <span>Loyalty & Rewards</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={pathname.startsWith("/dashboard/settings/tips")}
+                    >
+                      <Link href="/dashboard/settings/tips">
+                        <DollarSign className="h-3 w-3" />
+                        <span>Tip Configuration</span>
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
