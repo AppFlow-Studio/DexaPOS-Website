@@ -33,7 +33,7 @@ import {
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
 import { Plus, AlertTriangle, Loader2, Gift, Sparkles } from 'lucide-react';
-import { useUserInfo } from '@/app/manage/hooks/useUserInfo..ts';
+import { useUserInfo} from '@/app/manage/hooks/useUserInfo.';
 import { useLocationStore } from '../../hooks/useLocationScoped';
 import { GetMenuItems } from '../../actions/menu-items';
 import type { LoyaltyProgram, Promotion } from '../../actions/loyalty-programs';

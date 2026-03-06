@@ -22,6 +22,13 @@ export type PromotionInsert = Database["public"]["Tables"]["promotions"]["Insert
 export type PromotionUpdate = Database["public"]["Tables"]["promotions"]["Update"];
 
 export interface ProgramWithStats extends LoyaltyProgram {
+  [x: string]:
+  // ============================================================================
+  // Loyalty Programs Server Actions
+  // Description: CRUD operations for managing loyalty programs and promotions
+  // ============================================================================
+  any // ============================================================================
+  ;
   enrollment_count: number;
   total_points_issued: number;
   total_rewards_given: number;
