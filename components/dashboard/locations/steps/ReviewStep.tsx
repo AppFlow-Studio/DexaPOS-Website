@@ -1,10 +1,9 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LocationFormData, US_STATES, US_TIMEZONES, BusinessHours, DayHours } from '@/types/merchant_locations'
-import { Building2, MapPin, Clock, Utensils, Edit2, Globe, Layers } from 'lucide-react'
+import { Building2, MapPin, ShieldCheck, Landmark, Clock, UserCog, Edit2 } from 'lucide-react'
 
 interface ReviewStepProps {
     data: LocationFormData
@@ -55,7 +54,7 @@ function InfoRow({ label, value }: { label: string; value?: string | null }) {
     return (
         <div className="flex justify-between py-1.5 border-b last:border-0">
             <span className="text-sm text-muted-foreground">{label}</span>
-            <span className="text-sm font-medium">{value || '—'}</span>
+            <span className="text-sm font-medium">{value || '-'}</span>
         </div>
     )
 }
@@ -85,6 +84,29 @@ function formatBusinessHours(hours: BusinessHours): { day: string; hours: string
     })
 }
 
+function formatEinForDisplay(ein: string): string {
+    const digits = ein.replace(/\D/g, '')
+    if (!digits) return '-'
+    const last4 = digits.slice(-4).padStart(4, '*')
+    return `**-***${last4}`
+}
+
+function maskLastFour(value: string): string {
+    const digits = value.replace(/\D/g, '')
+    if (!digits) return '-'
+    return `****${digits.slice(-4).padStart(4, '*')}`
+}
+
+function getPayoutLabel(data: LocationFormData): string {
+    if (data.payout_frequency === 'weekly') {
+        return `Weekly (day ${data.payout_day_of_week})`
+    }
+    if (data.payout_frequency === 'monthly') {
+        return `Monthly (day ${data.payout_day_of_month})`
+    }
+    return 'Daily'
+}
+
 export function ReviewStep({ data, onEditStep }: ReviewStepProps) {
     const stateName = US_STATES.find(s => s.code === data.state)?.name || data.state
     const timezoneName = US_TIMEZONES.find(t => t.value === data.timezone)?.label || data.timezone
@@ -96,7 +118,6 @@ export function ReviewStep({ data, onEditStep }: ReviewStepProps) {
                 Please review the information below before creating your location.
             </p>
 
-            {/* Basic Info */}
             <ReviewSection title="Location Info" icon={Building2} step={1} onEdit={onEditStep}>
                 <div className="space-y-0">
                     <InfoRow label="Name" value={data.name} />
@@ -106,7 +127,6 @@ export function ReviewStep({ data, onEditStep }: ReviewStepProps) {
                 </div>
             </ReviewSection>
 
-            {/* Address */}
             <ReviewSection title="Address" icon={MapPin} step={2} onEdit={onEditStep}>
                 <div className="space-y-0">
                     <InfoRow label="Street" value={data.address_line1} />
@@ -121,8 +141,34 @@ export function ReviewStep({ data, onEditStep }: ReviewStepProps) {
                 </div>
             </ReviewSection>
 
-            {/* Business Hours */}
-            <ReviewSection title="Business Hours" icon={Clock} step={3} onEdit={onEditStep}>
+            <ReviewSection title="Tax & Compliance" icon={ShieldCheck} step={3} onEdit={onEditStep}>
+                <div className="space-y-0">
+                    <InfoRow label="EIN" value={formatEinForDisplay(data.ein)} />
+                    <InfoRow label="State Tax ID" value={data.tax_id} />
+                    <InfoRow label="Sales Tax Rate" value={data.sales_tax_rate ? `${data.sales_tax_rate}%` : '-'} />
+                </div>
+            </ReviewSection>
+
+            <ReviewSection title="Banking & Payouts" icon={Landmark} step={4} onEdit={onEditStep}>
+                <div className="space-y-0">
+                    <InfoRow label="Use Merchant Billing Profile" value={data.use_merchant_billing_profile ? 'Yes' : 'No'} />
+                    <InfoRow label="Bank Name" value={data.bank_name} />
+                    <InfoRow label="Account Holder" value={data.account_holder_name} />
+                    <InfoRow label="Routing" value={maskLastFour(data.routing_number)} />
+                    <InfoRow label="Account" value={maskLastFour(data.account_number)} />
+                    <InfoRow label="Account Type" value={data.account_type} />
+                    <InfoRow label="Payout Frequency" value={getPayoutLabel(data)} />
+                    <InfoRow
+                        label="Minimum Payout"
+                        value={data.minimum_payout_amount ? `$${data.minimum_payout_amount}` : '$0.00'}
+                    />
+                </div>
+                <p className="text-xs text-muted-foreground mt-3">
+                    Banking entries are captured in UI for now. Save/tokenization wiring is deferred.
+                </p>
+            </ReviewSection>
+
+            <ReviewSection title="Business Hours" icon={Clock} step={5} onEdit={onEditStep}>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                     {formattedHours.map(({ day, hours }) => (
                         <div key={day} className="flex justify-between py-1">
@@ -135,42 +181,37 @@ export function ReviewStep({ data, onEditStep }: ReviewStepProps) {
                 </div>
             </ReviewSection>
 
-            {/* Menu Configuration */}
-            <ReviewSection title="Menu Configuration" icon={Utensils} step={4} onEdit={onEditStep}>
-                <div className="flex items-center gap-3">
-                    <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${data.uses_global_menu ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-purple-100 dark:bg-purple-900/30'}`}>
-                        {data.uses_global_menu ? (
-                            <Globe className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                        ) : (
-                            <Layers className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                        )}
-                    </div>
-                    <div>
-                        <div className="font-medium">
-                            {data.uses_global_menu ? 'Global Menu' : 'Custom Menu'}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                            {data.uses_global_menu
-                                ? 'Uses shared menu from all locations'
-                                : 'Independent menu for this location'
-                            }
-                        </div>
-                    </div>
-                    <Badge variant={data.uses_global_menu ? 'default' : 'secondary'} className="ml-auto">
-                        {data.uses_global_menu ? 'Shared' : 'Independent'}
-                    </Badge>
+            <ReviewSection title="Assign Manager" icon={UserCog} step={6} onEdit={onEditStep}>
+                <div className="space-y-0">
+                    <InfoRow
+                        label="Assignment Type"
+                        value={
+                            data.manager_assignment_type === 'invite_new'
+                                ? 'Invite New Manager'
+                                : data.manager_assignment_type === 'assign_existing'
+                                    ? 'Assign Existing User'
+                                    : 'Skip for Now'
+                        }
+                    />
+                    {data.manager_assignment_type === 'invite_new' && (
+                        <>
+                            <InfoRow label="Manager Name" value={data.manager_invite_name} />
+                            <InfoRow label="Manager Email" value={data.manager_invite_email} />
+                        </>
+                    )}
+                    {data.manager_assignment_type === 'assign_existing' && (
+                        <InfoRow label="Existing User" value={data.existing_manager_identifier} />
+                    )}
                 </div>
             </ReviewSection>
 
-            {/* Summary */}
             <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 mt-6">
                 <h4 className="font-medium text-sm mb-2">Ready to create?</h4>
                 <p className="text-sm text-muted-foreground">
                     Click "Create Location" below to add <strong>{data.name}</strong> to your merchant account.
-                    You'll be able to manage staff, customize the menu, and configure additional settings after creation.
+                    Banking and manager automation logic will be finalized in the next backend phase.
                 </p>
             </div>
         </div>
     )
 }
-

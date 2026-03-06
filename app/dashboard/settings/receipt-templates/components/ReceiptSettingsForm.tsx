@@ -54,7 +54,7 @@ export function ReceiptSettingsForm({
     visibility.show_order_type;
 
   const showExtrasSection =
-    visibility.show_barcode || visibility.show_qr_code || visibility.show_loyalty_rewards;
+    visibility.show_barcode || visibility.show_qr_code;
 
   const showKitchenSection =
     visibility.large_item_text ||
@@ -183,15 +183,6 @@ export function ReceiptSettingsForm({
               description="Print a QR code for digital receipts"
               checked={formState.show_qr_code}
               onCheckedChange={(v) => onChange({ show_qr_code: v })}
-            />
-          )}
-
-          {visibility.show_loyalty_rewards && (
-            <ToggleField
-              label="Show Loyalty Rewards"
-              description="Display customer loyalty program balance and progress"
-              checked={formState.show_loyalty_rewards}
-              onCheckedChange={(v) => onChange({ show_loyalty_rewards: v })}
             />
           )}
         </div>

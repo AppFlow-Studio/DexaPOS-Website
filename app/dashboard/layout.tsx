@@ -61,8 +61,6 @@ import {
   Monitor,
   MonitorPlay,
   Flame,
-  Mail,
-  Gift,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -207,16 +205,6 @@ const navMain = [
             url: "/dashboard/reports/voids",
           },
         ],
-      },
-    ],
-  },
-  {
-    title: "Marketing",
-    items: [
-      {
-        title: "Campaigns",
-        url: "/dashboard/campaigns",
-        icon: Mail,
       },
     ],
   },
@@ -529,11 +517,13 @@ function MerchantSidebar() {
                   <SidebarMenuSubItem>
                     <SidebarMenuSubButton
                       asChild
-                      isActive={pathname === "/dashboard/settings/loyalty"}
+                      isActive={pathname.startsWith(
+                        "/dashboard/settings/pricing"
+                      )}
                     >
-                      <Link href="/dashboard/settings/loyalty">
-                        <Gift className="h-3 w-3" />
-                        <span>Loyalty & Rewards</span>
+                      <Link href="/dashboard/settings/pricing">
+                        <CreditCard className="h-3 w-3" />
+                        <span>Pricing</span>
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
@@ -663,7 +653,7 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
           )}
           <span
             className={cn(
-              "max-w-37.5 truncate transition-colors duration-200",
+              "max-w-[150px] truncate transition-colors duration-200",
               isAllLocations ? "text-muted-foreground" : "font-medium"
             )}
           >
