@@ -32,6 +32,7 @@ import { SchedulesTab } from './components/SchedulesTab'
 import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
 import { NotesTab } from './components/NotesTab'
 import { OrdersTab } from './components/OrdersTab'
+import { OnboardingStatusCard } from './components/OnboardingStatusCard'
 
 export default function MerchantDetailsPage() {
     const { merchantId } = useParams()
@@ -39,6 +40,7 @@ export default function MerchantDetailsPage() {
     const { data: merchantDetails, isLoading, isError, refetch } = useAdminMerchantDetails(merchantId as string)
     const canManageDevices = hasPermission('users.manage')
     const canViewSettings = hasPermission('users.manage')
+    const canManageMerchantStatus = hasPermission('hq.merchant.update')
 
     if (isLoading) {
         return (
@@ -59,6 +61,16 @@ export default function MerchantDetailsPage() {
                 </Button>
             </div>
         )
+    }
+
+    const merchantLifecycleStatus = merchantDetails.onboarding_status || merchantDetails.derived_status
+    const headerStatusClass: Record<string, string> = {
+        created: 'bg-slate-100 text-slate-700 border-slate-300',
+        onboarding: 'bg-amber-100 text-amber-700 border-amber-300',
+        active: 'bg-emerald-100 text-emerald-700 border-emerald-300',
+        suspended: 'bg-red-100 text-red-700 border-red-300',
+        cancelled: 'bg-zinc-200 text-zinc-700 border-zinc-300',
+        inactive: 'bg-red-100 text-red-700 border-red-300',
     }
 
     return (
@@ -87,8 +99,8 @@ export default function MerchantDetailsPage() {
                                 <CardTitle className="text-2xl font-semibold">{merchantDetails.name}</CardTitle>
                                 <div className="flex items-center gap-2 mt-1">
                                     <Badge variant="outline">ID: {merchantDetails.clerk_org_id}</Badge>
-                                    <Badge variant={merchantDetails.derived_status === 'active' ? 'default' : 'secondary'}>
-                                        {merchantDetails.derived_status}
+                                    <Badge className={headerStatusClass[merchantLifecycleStatus] || headerStatusClass.onboarding}>
+                                        {merchantLifecycleStatus.replace('_', ' ')}
                                     </Badge>
                                     <span className="text-xs text-muted-foreground">
                                         Created {new Date(merchantDetails.created_at).toLocaleDateString()}
@@ -97,6 +109,9 @@ export default function MerchantDetailsPage() {
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm" asChild>
+                                <Link href={`/manage/merchants/${merchantId as string}/billing`}>Billing</Link>
+                            </Button>
                             {canViewSettings && (
                                 <Button variant="outline" size="sm">
                                     <Settings className="h-4 w-4 mr-2" /> Settings
@@ -107,6 +122,13 @@ export default function MerchantDetailsPage() {
                     </div>
                 </CardHeader>
                 <CardContent>
+                    <div className="mb-6">
+                        <OnboardingStatusCard
+                            merchant={merchantDetails}
+                            canManageStatus={canManageMerchantStatus}
+                        />
+                    </div>
+
                     {/* Tabs */}
                     <Tabs defaultValue="overview" className="w-full">
                         <TabsList className="w-full justify-start overflow-x-auto overflow-y-hidden flex-nowrap bg-muted/50 p-1 h-auto gap-1">

@@ -4,8 +4,11 @@ import * as React from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
-  Banknote,
-  CreditCard,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   DollarSign,
   Ban,
   XCircle,
@@ -43,7 +46,7 @@ function formatShortTime(dateString: string | null | undefined): string | null {
   if (!dateString) return null;
   const d = new Date(dateString);
   if (isNaN(d.getTime())) return null;
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit" });
 }
 
 // ─── Types ───
@@ -51,11 +54,6 @@ function formatShortTime(dateString: string | null | undefined): string | null {
 export type RichPayment = NonNullable<OrderFullHistory["payments"]>[number];
 
 // ─── Icon / Label Helpers ───
-
-function paymentMethodIcon(method: string) {
-  if (method === "cash") return <Banknote className="h-4 w-4" />;
-  return <CreditCard className="h-4 w-4" />;
-}
 
 function formatPaymentMethodLabel(method: string): string {
   const labels: Record<string, string> = {
@@ -136,17 +134,23 @@ function basicToRich(p: OrderPayment): RichPayment {
     processed_by_name: null,
     amount_tendered: null,
     change_given: null,
-    voided_at: null,
-    voided_by_name: null,
-    void_reason: null,
+    voided_at: (p as any).voided_at ?? null,
+    voided_by_name: (p as any).voided_by_name ?? null,
+    voided_by: (p as any).voided_by ?? null,
+    void_reason: (p as any).void_reason ?? null,
     tip_adjusted_at: null,
     original_tip_amount: null,
+    tip_adjusted_by_name: null,
+    result_code: null,
+    response_message: null,
+    split_count: null,
+    split_portion_index: null,
     covers_items: null,
     payment_items: (p.order_payment_items || []).map((opi) => ({
       item_name: opi.order_items?.item_name ?? "Item",
       quantity_paid: opi.quantity_paid,
       subtotal_paid: Number(opi.subtotal_paid) || 0,
-      tax_paid: Number(opi.tax_paid) || null,
+      tax_paid: Number(opi.tax_paid) ?? null,
     })),
     events: [],
   };
@@ -154,22 +158,58 @@ function basicToRich(p: OrderPayment): RichPayment {
 
 // ─── Enhanced Payment Card ───
 
+function paymentEventSeverity(eventType: string): "success" | "error" | "warning" | "info" {
+  switch (eventType) {
+    case "captured":
+    case "approved":
+    case "authorized":
+    case "settled":
+      return "success";
+    case "failed":
+    case "declined":
+    case "timeout":
+      return "error";
+    case "voided":
+    case "refunded":
+    case "cancelled":
+      return "warning";
+    default:
+      return "info";
+  }
+}
+
 export function EnhancedPaymentCard({
   payment,
   index,
   total,
   cashDiscountApplied,
+  orderVoidedAt = null,
+  orderVoidedByName = null,
+  orderVoidedBy = null,
+  orderVoidReason = null,
 }: {
   payment: RichPayment;
   index: number;
   total: number;
   cashDiscountApplied: boolean;
+  orderVoidedAt?: string | null;
+  orderVoidedByName?: string | null;
+  orderVoidedBy?: string | null;
+  orderVoidReason?: string | null;
 }) {
-  const [isExpanded, setIsExpanded] = React.useState(false);
+  const [open, setOpen] = React.useState(false);
   const isCash = payment.payment_method === "cash";
   const isVoided = payment.status === "void";
+  const hasOrderVoid =
+    !!(orderVoidedAt || orderVoidedByName || orderVoidedBy || orderVoidReason);
+  const showVoidInCard = isVoided || hasOrderVoid;
   const isFailed = payment.status === "failed" || payment.status === "declined";
   const isSplit = total > 1;
+  const splitIndex = payment.split_portion_index != null ? payment.split_portion_index + 1 : index;
+  const splitTotal = payment.split_count ?? total;
+  // Header always shows position-in-list (index/total); expanded "Split portion" can use API split_portion_index/split_count when present
+  const displayIndex = index;
+  const displayTotal = total;
 
   const methodLabel = formatPaymentMethodLabel(payment.payment_method);
   const cardInfo =
@@ -195,416 +235,534 @@ export function EnhancedPaymentCard({
   const failedEvent = isFailed
     ? payment.events.find((e) => e.event_type === "failed" || e.event_type === "declined")
     : null;
+  const paymentResultCode = payment.result_code ?? failedEvent?.result_code;
+  const paymentResponseMessage = payment.response_message ?? failedEvent?.response_message;
 
   const tipWasAdjusted = !!(payment.tip_adjusted_at && payment.original_tip_amount != null);
+  const isSuccessStatus =
+    payment.status === "captured" || payment.status === "paid" || payment.status === "authorized";
+
+  // Collapsed second line: "$43.22 + $5.00 tip = $48.22 · Visa ****4242"
+  const collapsedAmountLine = [
+    formatCurrency(payment.amount),
+    payment.tip_amount > 0 ? `+ ${formatCurrency(payment.tip_amount)} tip` : null,
+    `= ${formatCurrency(payment.total_amount)}`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const collapsedDetailParts: string[] = [];
+  if (cardInfo) collapsedDetailParts.push(cardInfo);
+  if (isCash && payment.amount_tendered != null) {
+    collapsedDetailParts.push(`Tendered ${formatCurrency(payment.amount_tendered)}`);
+  }
+  if (payment.created_at && !cardInfo && !isCash) {
+    collapsedDetailParts.push(formatDate(payment.created_at));
+  }
+  const collapsedDetailLine =
+    collapsedDetailParts.length > 0 ? ` · ${collapsedDetailParts.join(" · ")}` : "";
 
   return (
-    <div
-      className={cn(
-        "rounded-lg border bg-card overflow-hidden transition-colors",
-        isVoided && "border-red-200 dark:border-red-800/50",
-        isFailed && "border-red-200 dark:border-red-800/50"
-      )}
-    >
-      {/* Collapsed Header */}
+    <Collapsible open={open} onOpenChange={setOpen}>
       <div
         className={cn(
-          "flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors",
-          isVoided && "bg-red-50/50 dark:bg-red-950/10"
+          "rounded-lg border bg-card overflow-hidden transition-colors",
+          showVoidInCard && "border-red-200 dark:border-red-800/50",
+          isFailed && "border-red-200 dark:border-red-800/50"
         )}
-        onClick={() => setIsExpanded(!isExpanded)}
       >
-        <div className="flex items-center gap-3 min-w-0">
-          <div
-            className={cn(
-              "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-              isVoided
-                ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
-                : isFailed
-                  ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
-                  : isCash
-                    ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
-                    : "bg-muted text-muted-foreground"
-            )}
-          >
-            {paymentMethodIcon(payment.payment_method)}
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <p className="text-sm font-medium">
-                {methodLabel} Payment
-                {isSplit && (
-                  <span className="text-muted-foreground font-normal">
-                    {" "}
-                    ({index}/{total})
-                  </span>
-                )}
-              </p>
-            </div>
-            <p className="text-xs text-muted-foreground truncate">
-              {cardInfo && <span>{cardInfo}</span>}
-              {cardInfo && payment.tip_amount > 0 && <span> &middot; </span>}
-              {payment.tip_amount > 0 && (
-                <span>
-                  Tip:{" "}
-                  {tipWasAdjusted && (
-                    <span className="line-through mr-1">
-                      {formatCurrency(payment.original_tip_amount!)}
-                    </span>
-                  )}
-                  {formatCurrency(payment.tip_amount)}
-                </span>
-              )}
-              {!cardInfo && !payment.tip_amount && isCash && payment.amount_tendered && (
-                <span>
-                  Tendered: {formatCurrency(payment.amount_tendered)}
-                  {payment.change_given
-                    ? ` · Change: ${formatCurrency(payment.change_given)}`
-                    : ""}
-                </span>
-              )}
-              {!cardInfo && !payment.tip_amount && !isCash && payment.created_at && (
-                <span>{formatDate(payment.created_at)}</span>
-              )}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2.5 shrink-0">
-          <div className="text-right">
-            <p
+        {/* Collapsed: payment icon, method + amount + status */}
+        <CollapsibleTrigger
+          className={cn(
+            "w-full flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors text-left",
+            showVoidInCard && "bg-red-50/50 dark:bg-red-950/10"
+          )}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <span
               className={cn(
-                "text-sm font-semibold",
-                isVoided && "line-through text-muted-foreground"
+                "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base",
+                isVoided
+                  ? "bg-red-100 dark:bg-red-900/30"
+                  : isFailed
+                    ? "bg-red-100 dark:bg-red-900/30"
+                    : isCash
+                      ? "bg-green-100 dark:bg-green-900/30"
+                      : "bg-muted"
               )}
             >
-              {formatCurrency(payment.total_amount)}
-            </p>
-            <PaymentStatusBadge status={payment.status} />
+              {isCash ? "💵" : "💳"}
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-medium flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span>
+                  {methodLabel} Payment
+                  {isSplit && (
+                    <span className="text-muted-foreground font-normal">
+                      {" "}
+                      #{displayIndex} ({displayIndex}/{displayTotal})
+                    </span>
+                  )}
+                </span>
+                <span className="flex items-center gap-1">
+                  <PaymentStatusBadge status={payment.status} />
+                  {isSuccessStatus && (
+                    <span className="text-emerald-600 dark:text-emerald-400" aria-hidden>
+                      ✅
+                    </span>
+                  )}
+                </span>
+              </p>
+              <p className="text-xs text-muted-foreground truncate mt-0.5">
+                <span className={cn(showVoidInCard && "line-through")}>
+                  {collapsedAmountLine}
+                </span>
+                {collapsedDetailLine}
+              </p>
+            </div>
           </div>
           <ChevronDown
             className={cn(
-              "h-4 w-4 text-muted-foreground transition-transform",
-              isExpanded && "rotate-180"
+              "h-4 w-4 text-muted-foreground shrink-0 transition-transform",
+              open && "rotate-180"
             )}
           />
-        </div>
-      </div>
+        </CollapsibleTrigger>
 
-      {/* Items summary (collapsed) */}
-      {!isExpanded && itemSummary && (
-        <div className="px-4 pb-2.5 -mt-1">
-          <p className="text-[11px] text-muted-foreground truncate">
-            Items: {itemSummary}
-          </p>
-        </div>
-      )}
+        {/* Items summary when collapsed */}
+        {!open && itemSummary && (
+          <div className="px-4 pb-2.5 -mt-1">
+            <p className="text-[11px] text-muted-foreground truncate">
+              Items: {itemSummary}
+            </p>
+          </div>
+        )}
 
-      {/* Expanded Details */}
-      {isExpanded && (
-        <div className="border-t">
-          {/* Amount breakdown */}
-          <div className="px-4 py-3 space-y-1.5 text-xs">
-            <div className="flex justify-between">
+        <CollapsibleContent>
+          <div className="border-t">
+            {/* Amounts grid */}
+            <div className="px-4 py-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs items-baseline">
               <span className="text-muted-foreground">Amount</span>
               <span>{formatCurrency(payment.amount)}</span>
-            </div>
-            {payment.tip_amount > 0 && (
-              <>
-                {tipWasAdjusted && (
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Original Tip</span>
-                    <span className="line-through">
-                      {formatCurrency(payment.original_tip_amount!)}
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between">
+              {payment.tip_amount > 0 && (
+                <>
+                  {tipWasAdjusted && (
+                    <>
+                      <span className="text-muted-foreground">Original Tip</span>
+                      <span className="line-through text-muted-foreground">
+                        {formatCurrency(payment.original_tip_amount!)}
+                      </span>
+                    </>
+                  )}
                   <span className="text-muted-foreground">
                     {tipWasAdjusted ? "Adjusted Tip" : "Tip"}
                   </span>
                   <span>{formatCurrency(payment.tip_amount)}</span>
-                </div>
-                {tipWasAdjusted && payment.tip_adjusted_at && (
-                  <p className="text-[11px] text-muted-foreground text-right">
-                    Adjusted {formatDate(payment.tip_adjusted_at)}
-                  </p>
-                )}
-              </>
-            )}
-            <div className="flex justify-between font-medium border-t pt-1.5">
-              <span>Total</span>
-              <span>{formatCurrency(payment.total_amount)}</span>
-            </div>
-          </div>
-
-          {/* Card / Cash details */}
-          {(hasCardDetails || isCash) && (
-            <div className="border-t px-4 py-3 space-y-1.5 text-xs">
-              {cardInfo && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Card</span>
-                  <span className="font-mono">{cardInfo}</span>
-                </div>
-              )}
-              {authCode && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Auth Code</span>
-                  <span className="font-mono">{authCode}</span>
-                </div>
-              )}
-              {payment.transaction_id && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Transaction ID</span>
-                  <span className="font-mono text-[11px] truncate max-w-[180px]">
-                    {payment.transaction_id}
-                  </span>
-                </div>
-              )}
-              {payment.psp_reference && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">PSP Reference</span>
-                  <span className="font-mono text-[11px] truncate max-w-[180px]">
-                    {payment.psp_reference}
-                  </span>
-                </div>
-              )}
-              {isCash && payment.amount_tendered != null && (
-                <>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Amount Tendered</span>
-                    <span>{formatCurrency(payment.amount_tendered)}</span>
-                  </div>
-                  {payment.change_given != null && payment.change_given > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Change Given</span>
-                      <span>{formatCurrency(payment.change_given)}</span>
-                    </div>
+                  {tipWasAdjusted && payment.tip_adjusted_at && (
+                    <span className="text-muted-foreground col-span-2 text-right">
+                      Adjusted {formatDate(payment.tip_adjusted_at)}
+                      {payment.tip_adjusted_by_name
+                        ? ` by ${payment.tip_adjusted_by_name}`
+                        : ""}
+                    </span>
                   )}
                 </>
               )}
+              <span className="text-muted-foreground font-medium pt-1.5 border-t col-span-2 mt-1" />
+              <span className="text-muted-foreground font-medium border-t pt-1.5">Total</span>
+              <span className="font-medium pt-1.5 border-t">
+                {formatCurrency(payment.total_amount)}
+              </span>
             </div>
-          )}
 
-          {/* Terminal info */}
-          {hasTerminalInfo && (
-            <div className="border-t px-4 py-3 space-y-1.5 text-xs">
-              {payment.terminal_type && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Terminal Type</span>
-                  <span className="font-mono">{payment.terminal_type}</span>
+            {/* Card info: card_type, card_last_four, auth_code, authorization_code */}
+            {hasCardDetails && !isCash && (
+              <div className="border-t px-4 py-3">
+                <p className="text-[11px] font-medium text-muted-foreground mb-2">Card</p>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
+                  {cardInfo && (
+                    <>
+                      <span className="text-muted-foreground">Card</span>
+                      <span className="font-mono">{cardInfo}</span>
+                    </>
+                  )}
+                  {authCode && (
+                    <>
+                      <span className="text-muted-foreground">Auth code</span>
+                      <span className="font-mono">{authCode}</span>
+                    </>
+                  )}
+                  {payment.authorization_code && !payment.auth_code && (
+                    <>
+                      <span className="text-muted-foreground">Authorization code</span>
+                      <span className="font-mono">{payment.authorization_code}</span>
+                    </>
+                  )}
                 </div>
-              )}
-              {payment.terminal_id && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Terminal</span>
-                  <span className="font-mono text-[11px] truncate max-w-[180px]">
-                    {payment.terminal_id}
+              </div>
+            )}
+
+            {/* References: psp_reference, transaction_id */}
+            {(payment.psp_reference || payment.transaction_id) && (
+              <div className="border-t px-4 py-3">
+                <p className="text-[11px] font-medium text-muted-foreground mb-2">References</p>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
+                  {payment.transaction_id && (
+                    <>
+                      <span className="text-muted-foreground">Transaction ID</span>
+                      <span className="font-mono text-[11px] truncate max-w-[220px]">
+                        {payment.transaction_id}
+                      </span>
+                    </>
+                  )}
+                  {payment.psp_reference && (
+                    <>
+                      <span className="text-muted-foreground">PSP Reference</span>
+                      <span className="font-mono text-[11px] truncate max-w-[220px]">
+                        {payment.psp_reference}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Cash details: amount_tendered, change_given (cash only) */}
+            {isCash && (
+              <div className="border-t px-4 py-3">
+                <p className="text-[11px] font-medium text-muted-foreground mb-2">Cash</p>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
+                  <span className="text-muted-foreground">Amount Tendered</span>
+                  <span>
+                    {payment.amount_tendered != null
+                      ? formatCurrency(payment.amount_tendered)
+                      : "—"}
+                  </span>
+                  <span className="text-muted-foreground">Change Given</span>
+                  <span>
+                    {payment.change_given != null
+                      ? formatCurrency(payment.change_given)
+                      : payment.amount_tendered != null
+                        ? formatCurrency(
+                            Math.max(0, payment.amount_tendered - payment.total_amount)
+                          )
+                        : "—"}
                   </span>
                 </div>
-              )}
-              {batchNum && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Batch #</span>
-                  <span className="font-mono">{batchNum}</span>
-                </div>
-              )}
-              {invoiceNum && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Invoice #</span>
-                  <span className="font-mono">{invoiceNum}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Timestamps & staff */}
-          <div className="border-t px-4 py-3 space-y-1.5 text-xs">
-            {payment.authorized_at && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Authorized</span>
-                <span>{formatDate(payment.authorized_at)}</span>
               </div>
             )}
-            {payment.captured_at && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Captured</span>
-                <span>{formatDate(payment.captured_at)}</span>
+
+            {/* Terminal: terminal_type, terminal_id, batch_number, dejavoo_* */}
+            {hasTerminalInfo && (
+              <div className="border-t px-4 py-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
+                {payment.terminal_type && (
+                  <>
+                    <span className="text-muted-foreground">Terminal Type</span>
+                    <span className="font-mono">{payment.terminal_type}</span>
+                  </>
+                )}
+                {payment.terminal_id && (
+                  <>
+                    <span className="text-muted-foreground">Terminal</span>
+                    <span className="font-mono text-[11px] truncate max-w-[180px]">
+                      {payment.terminal_id}
+                    </span>
+                  </>
+                )}
+                {batchNum && (
+                  <>
+                    <span className="text-muted-foreground">Batch #</span>
+                    <span className="font-mono">{batchNum}</span>
+                  </>
+                )}
+                {invoiceNum && (
+                  <>
+                    <span className="text-muted-foreground">Invoice #</span>
+                    <span className="font-mono">{invoiceNum}</span>
+                  </>
+                )}
               </div>
             )}
-            {payment.approved_at && !payment.authorized_at && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Approved</span>
-                <span>{formatDate(payment.approved_at)}</span>
-              </div>
-            )}
-            {!payment.authorized_at && !payment.captured_at && !payment.approved_at && payment.created_at && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Initiated</span>
-                <span>{formatDate(payment.created_at)}</span>
-              </div>
-            )}
-            {payment.processed_by_name && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Processed by</span>
-                <span>{payment.processed_by_name}</span>
-              </div>
-            )}
-          </div>
 
-          {/* Cash discount flag */}
-          {cashDiscountApplied && isCash && (
-            <div className="border-t px-4 py-2.5">
-              <div className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-800">
-                <DollarSign className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
-                <span className="text-xs text-green-700 dark:text-green-400">
-                  Cash discount applied
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Voided details */}
-          {isVoided && (
-            <div className="border-t px-4 py-3 bg-red-50/50 dark:bg-red-950/10 space-y-1.5">
-              <div className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
-                <Ban className="h-3 w-3" />
-                <span className="font-medium">
-                  Voided{payment.voided_at ? `: ${formatDate(payment.voided_at)}` : ""}
-                  {payment.voided_by_name ? ` by ${payment.voided_by_name}` : ""}
-                </span>
-              </div>
-              {payment.void_reason && (
-                <p className="text-xs text-red-600/80 dark:text-red-400/80 pl-[18px]">
-                  Reason: {payment.void_reason}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Failed payment details */}
-          {isFailed && failedEvent && (
-            <div className="border-t px-4 py-3 bg-red-50/50 dark:bg-red-950/10 space-y-1.5">
-              <div className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
-                <XCircle className="h-3 w-3" />
-                <span className="font-medium">Payment {payment.status}</span>
-              </div>
-              {failedEvent.result_code && (
-                <p className="text-xs text-red-600/80 dark:text-red-400/80 pl-[18px]">
-                  Code: {failedEvent.result_code}
-                </p>
-              )}
-              {failedEvent.response_message && (
-                <p className="text-xs text-red-600/80 dark:text-red-400/80 pl-[18px]">
-                  {failedEvent.response_message}
-                </p>
-              )}
-              {failedEvent.reason && (
-                <p className="text-xs text-red-600/80 dark:text-red-400/80 pl-[18px]">
-                  Reason: {failedEvent.reason}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Items covered */}
-          {paymentItems.length > 0 && (
+            {/* Timestamps: authorized_at, captured_at, approved_at, created_at · Staff: processed_by_name */}
             <div className="border-t px-4 py-3">
-              <p className="text-[11px] font-medium text-muted-foreground mb-2">
-                Items covered
-              </p>
-              <div className="space-y-1.5">
-                {paymentItems.map((pi, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between text-xs"
-                  >
-                    <span>
-                      {pi.item_name}{" "}
-                      <span className="text-muted-foreground">
-                        ({pi.quantity_paid}x)
-                      </span>
-                    </span>
-                    <span className="font-medium">
-                      {formatCurrency(pi.subtotal_paid)}
-                    </span>
-                  </div>
-                ))}
-                {paymentItems.some((pi) => pi.tax_paid != null && pi.tax_paid > 0) && (
-                  <div className="flex items-center justify-between text-xs border-t pt-1.5 mt-1.5">
-                    <span className="text-muted-foreground">Tax</span>
-                    <span className="font-medium">
-                      {formatCurrency(
-                        paymentItems.reduce(
-                          (sum, pi) => sum + (Number(pi.tax_paid) || 0),
-                          0
-                        )
-                      )}
-                    </span>
-                  </div>
+              <p className="text-[11px] font-medium text-muted-foreground mb-2">Timestamps</p>
+              <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
+                {payment.authorized_at && (
+                  <>
+                    <span className="text-muted-foreground">Authorized</span>
+                    <span>{formatDate(payment.authorized_at)}</span>
+                  </>
+                )}
+                {payment.captured_at && (
+                  <>
+                    <span className="text-muted-foreground">Captured</span>
+                    <span>{formatDate(payment.captured_at)}</span>
+                  </>
+                )}
+                {payment.approved_at && (
+                  <>
+                    <span className="text-muted-foreground">Approved</span>
+                    <span>{formatDate(payment.approved_at)}</span>
+                  </>
+                )}
+                {payment.created_at && (
+                  <>
+                    <span className="text-muted-foreground">Created</span>
+                    <span>{formatDate(payment.created_at)}</span>
+                  </>
+                )}
+                {payment.processed_by_name && (
+                  <>
+                    <span className="text-muted-foreground pt-1.5 border-t col-span-2 mt-1" />
+                    <span className="text-muted-foreground pt-1.5 border-t">Processed by</span>
+                    <span className="pt-1.5 border-t">{payment.processed_by_name}</span>
+                  </>
                 )}
               </div>
             </div>
-          )}
 
-          {/* Payment event log */}
-          {hasEvents && (
-            <div className="border-t px-4 py-3">
-              <p className="text-[11px] font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
-                <Activity className="h-3 w-3" />
-                Payment Event Log
-              </p>
-              <div className="relative ml-1">
-                <div className="absolute left-[5px] top-1.5 bottom-1.5 w-px bg-border" />
-                <div className="space-y-0">
-                  {payment.events.map((evt, i) => {
-                    const evtTime = formatShortTime(evt.timestamp);
-                    const evtLabel = paymentEventLabel(evt.event_type);
-                    const extras: string[] = [];
-                    if (evt.amount != null) extras.push(formatCurrency(evt.amount));
-                    if (evt.auth_code) extras.push(`Auth: ${evt.auth_code}`);
-                    if (evt.new_status) extras.push(`via ${evt.new_status.replace("_", " ")}`);
-
-                    return (
-                      <div
-                        key={i}
-                        className="relative flex items-start gap-2.5 py-1.5"
-                      >
-                        <div className="relative z-10 mt-0.5 shrink-0">
-                          {paymentEventIcon(evt.event_type)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs leading-snug">
-                            <span className="text-muted-foreground font-mono mr-1.5">
-                              {evtTime}
-                            </span>
-                            {evtLabel}
-                            {extras.length > 0 && (
-                              <span className="text-muted-foreground">
-                                {" "}({extras.join(" · ")})
-                              </span>
-                            )}
-                          </p>
-                          {evt.response_message && (
-                            <p className="text-[11px] text-muted-foreground mt-0.5">
-                              {evt.response_message}
-                            </p>
-                          )}
-                          {evt.staff_name && (
-                            <p className="text-[11px] text-muted-foreground">
-                              by {evt.staff_name}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+            {/* Cash discount flag */}
+            {cashDiscountApplied && isCash && (
+              <div className="border-t px-4 py-2.5">
+                <div className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-800">
+                  <DollarSign className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                  <span className="text-xs text-green-700 dark:text-green-400">
+                    Cash discount applied
+                  </span>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+            )}
+
+            {/* Voided: payment-level or order-level voided_at, voided_by, void_reason */}
+            {showVoidInCard && (
+              <div className="border-t px-4 py-3 bg-red-50/50 dark:bg-red-950/10 space-y-2">
+                <div className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
+                  <Ban className="h-3 w-3 shrink-0" />
+                  <span className="font-medium">
+                    {isVoided ? "Voided" : "Order voided"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs text-red-700/90 dark:text-red-300/90">
+                  <span className="text-muted-foreground">Voided at</span>
+                  <span>
+                    {(payment.voided_at ?? orderVoidedAt)
+                      ? formatDate(payment.voided_at ?? orderVoidedAt!)
+                      : "—"}
+                  </span>
+                  <span className="text-muted-foreground">Voided by</span>
+                  <span>
+                    {payment.voided_by_name ??
+                      orderVoidedByName ??
+                      (payment.voided_by || orderVoidedBy
+                        ? `Staff (${String(payment.voided_by || orderVoidedBy).slice(0, 8)}…)`
+                        : "—")}
+                  </span>
+                  <span className="text-muted-foreground">Void reason</span>
+                  <span>{payment.void_reason ?? orderVoidReason ?? "—"}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Failed: payment-level or event-level result_code, response_message */}
+            {isFailed && (paymentResultCode || paymentResponseMessage || failedEvent?.reason) && (
+              <div className="border-t px-4 py-3 bg-red-50/50 dark:bg-red-950/10 space-y-1.5">
+                <div className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
+                  <XCircle className="h-3 w-3 shrink-0" />
+                  <span className="font-medium">Payment {payment.status}</span>
+                </div>
+                {paymentResultCode && (
+                  <p className="text-xs text-red-600/80 dark:text-red-400/80 pl-5">
+                    Code: {paymentResultCode}
+                  </p>
+                )}
+                {paymentResponseMessage && (
+                  <p className="text-xs text-red-600/80 dark:text-red-400/80 pl-5">
+                    {paymentResponseMessage}
+                  </p>
+                )}
+                {failedEvent?.reason && !paymentResponseMessage && (
+                  <p className="text-xs text-red-600/80 dark:text-red-400/80 pl-5">
+                    Reason: {failedEvent.reason}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Split info: split_count, split_portion_index, covers_items, payment_items[] */}
+            {isSplit && (
+              <div className="border-t px-4 py-3">
+                <p className="text-[11px] font-medium text-muted-foreground mb-2">
+                  Split
+                </p>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs mb-2">
+                  {payment.split_count != null && (
+                    <>
+                      <span className="text-muted-foreground">Split count</span>
+                      <span className="font-mono">{payment.split_count}</span>
+                    </>
+                  )}
+                  <span className="text-muted-foreground">Portion</span>
+                  <span className="font-mono">
+                    {displayIndex} of {payment.split_count ?? displayTotal}
+                  </span>
+                </div>
+                {payment.covers_items?.length ? (
+                  <p className="text-[11px] text-muted-foreground mb-1.5">
+                    Covers: {payment.covers_items.join(", ")}
+                  </p>
+                ) : null}
+                {paymentItems.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] font-medium text-muted-foreground">Payment items</p>
+                    {paymentItems.map((pi, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center justify-between text-xs"
+                      >
+                        <span>
+                          {pi.item_name}{" "}
+                          <span className="text-muted-foreground">({pi.quantity_paid}x)</span>
+                        </span>
+                        <span className="font-medium">{formatCurrency(pi.subtotal_paid)}</span>
+                      </div>
+                    ))}
+                    {paymentItems.some((pi) => pi.tax_paid != null && pi.tax_paid > 0) && (
+                      <div className="flex items-center justify-between text-xs border-t pt-1.5 mt-1.5">
+                        <span className="text-muted-foreground">Tax</span>
+                        <span className="font-medium">
+                          {formatCurrency(
+                            paymentItems.reduce(
+                              (sum, pi) => sum + (Number(pi.tax_paid) || 0),
+                              0
+                            )
+                          )}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Items covered (when not split) */}
+            {paymentItems.length > 0 && !isSplit && (
+              <div className="border-t px-4 py-3">
+                <p className="text-[11px] font-medium text-muted-foreground mb-2">
+                  Items covered
+                </p>
+                <div className="space-y-1.5">
+                  {paymentItems.map((pi, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between text-xs"
+                    >
+                      <span>
+                        {pi.item_name}{" "}
+                        <span className="text-muted-foreground">({pi.quantity_paid}x)</span>
+                      </span>
+                      <span className="font-medium">{formatCurrency(pi.subtotal_paid)}</span>
+                    </div>
+                  ))}
+                  {paymentItems.some((pi) => pi.tax_paid != null && pi.tax_paid > 0) && (
+                    <div className="flex items-center justify-between text-xs border-t pt-1.5 mt-1.5">
+                      <span className="text-muted-foreground">Tax</span>
+                      <span className="font-medium">
+                        {formatCurrency(
+                          paymentItems.reduce(
+                            (sum, pi) => sum + (Number(pi.tax_paid) || 0),
+                            0
+                          )
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Payment Event Sub-Timeline (boxed, severity coloring) */}
+            {hasEvents && (
+              <div className="border-t px-4 py-3">
+                <div className="rounded-lg border bg-muted/30 overflow-hidden">
+                  <div className="px-3 py-2 border-b bg-muted/50 text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
+                    <Activity className="h-3 w-3" />
+                    Payment Event Log
+                  </div>
+                  <div className="p-3 space-y-0">
+                    {payment.events.map((evt, i) => {
+                      const evtTime = formatShortTime(evt.timestamp);
+                      const evtLabel = paymentEventLabel(evt.event_type);
+                      const severity = paymentEventSeverity(evt.event_type);
+                      const extras: string[] = [];
+                      if (evt.amount != null) extras.push(formatCurrency(evt.amount));
+                      if (evt.auth_code) extras.push(`Auth: ${evt.auth_code}`);
+                      if (evt.new_status) extras.push(`via ${evt.new_status.replace("_", " ")}`);
+                      if (i === 0 && evt.event_type === "initiated") {
+                        extras.push(`via ${methodLabel}`);
+                      }
+                      const severityBorder =
+                        severity === "success"
+                          ? "border-l-emerald-500"
+                          : severity === "error"
+                            ? "border-l-red-500"
+                            : severity === "warning"
+                              ? "border-l-amber-500"
+                              : "border-l-muted-foreground/50";
+
+                      return (
+                        <div
+                          key={i}
+                          className={cn(
+                            "relative flex items-start gap-2.5 py-2 pl-3 border-l-2 ml-1 -ml-px",
+                            severityBorder
+                          )}
+                        >
+                          <div className="shrink-0 mt-0.5">
+                            {paymentEventIcon(evt.event_type)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs leading-snug">
+                              <span className="text-muted-foreground font-mono mr-1.5">
+                                {evtTime}
+                              </span>
+                              {severity === "success" && (
+                                <span className="text-emerald-600 dark:text-emerald-400 mr-1" aria-hidden>✅</span>
+                              )}
+                              {evtLabel}
+                              {extras.length > 0 && (
+                                <span className="text-muted-foreground">
+                                  {" "}
+                                  ({extras.join(" · ")})
+                                </span>
+                              )}
+                            </p>
+                            {evt.response_message && (
+                              <p
+                                className={cn(
+                                  "text-[11px] mt-0.5",
+                                  severity === "error"
+                                    ? "text-red-600 dark:text-red-400"
+                                    : "text-muted-foreground"
+                                )}
+                              >
+                                {evt.response_message}
+                              </p>
+                            )}
+                            {evt.staff_name && (
+                              <p className="text-[11px] text-muted-foreground">by {evt.staff_name}</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
   );
 }
 
@@ -616,12 +774,20 @@ export function EnhancedPaymentsList({
   isLoading,
   cashDiscountApplied,
   totalDue,
+  orderVoidedAt = null,
+  orderVoidedByName = null,
+  orderVoidedBy = null,
+  orderVoidReason = null,
 }: {
   basicPayments: OrderPayment[];
   richPayments: RichPayment[] | null;
   isLoading: boolean;
   cashDiscountApplied: boolean;
   totalDue: number;
+  orderVoidedAt?: string | null;
+  orderVoidedByName?: string | null;
+  orderVoidedBy?: string | null;
+  orderVoidReason?: string | null;
 }) {
   const useRich = richPayments && richPayments.length > 0;
   const paymentCount = useRich ? richPayments.length : basicPayments.length;
@@ -664,6 +830,10 @@ export function EnhancedPaymentsList({
           index={i + 1}
           total={paymentCount}
           cashDiscountApplied={cashDiscountApplied}
+          orderVoidedAt={orderVoidedAt}
+          orderVoidedByName={orderVoidedByName}
+          orderVoidedBy={orderVoidedBy}
+          orderVoidReason={orderVoidReason}
         />
       ))}
 
