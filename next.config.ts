@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  turbopack: {
+    root: process.cwd(),
+  },
+  serverExternalPackages: ["resend", "twilio"],
   eslint: {
     ignoreDuringBuilds: true,
   },

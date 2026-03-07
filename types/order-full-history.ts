@@ -56,6 +56,10 @@ export interface OrderFullHistory {
     amount_due: number;
     effective_total: number | null;
     internal_notes: string | null;
+    voided_at: string | null;
+    voided_by_name: string | null;
+    voided_by: string | null;
+    void_reason: string | null;
   };
 
   items: Array<{
@@ -120,9 +124,15 @@ export interface OrderFullHistory {
     change_given: number | null;
     voided_at: string | null;
     voided_by_name: string | null;
+    voided_by: string | null;
     void_reason: string | null;
     tip_adjusted_at: string | null;
     original_tip_amount: number | null;
+    tip_adjusted_by_name: string | null;
+    result_code: string | null;
+    response_message: string | null;
+    split_count: number | null;
+    split_portion_index: number | null;
     covers_items: string[] | null;
     payment_items: Array<{
       item_name: string;
@@ -136,6 +146,7 @@ export interface OrderFullHistory {
       previous_status: string | null;
       new_status: string | null;
       amount: number | null;
+      tip_amount?: number | null;
       auth_code: string | null;
       result_code: string | null;
       response_message: string | null;

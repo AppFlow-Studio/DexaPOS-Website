@@ -2,16 +2,7 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
-import {
-  CheckCircle2,
-  Clock,
-  Flame,
-  Ban,
-  Timer,
-  ChefHat,
-  ArrowRight,
-} from "lucide-react";
+import { Timer, ArrowRight } from "lucide-react";
 import type { OrderFullHistory } from "@/types/order-full-history";
 
 type RichItem = NonNullable<OrderFullHistory["items"]>[number];
@@ -229,6 +220,7 @@ function KitchenItemRow({ item }: { item: RichItem }) {
   const isVoided = item.is_voided;
   const hasKitchenStatus = !!item.kitchen_status;
   const timestamps = getStageTimestamps(item);
+  const completedTimeStr = formatShortTime(item.completed_at);
 
   const prepDuration = (() => {
     const start = item.fire_time ?? item.created_at;
@@ -241,12 +233,13 @@ function KitchenItemRow({ item }: { item: RichItem }) {
   return (
     <div
       className={cn(
-        "flex items-center gap-3 py-2 first:pt-0 last:pb-0",
-        isVoided && "opacity-50"
+        "flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0",
+        isVoided && "opacity-60"
       )}
     >
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {isVoided && <span className="text-muted-foreground" aria-hidden>⊘</span>}
           <span
             className={cn(
               "text-sm truncate",
@@ -256,35 +249,23 @@ function KitchenItemRow({ item }: { item: RichItem }) {
             {item.item_name}
           </span>
           {isVoided && (
-            <Badge
-              variant="destructive"
-              className="text-[9px] px-1 py-0 h-3.5 shrink-0"
-            >
-              VOIDED
-            </Badge>
+            <span className="text-xs text-muted-foreground font-medium">
+              VOIDED {!item.kitchen_status ? "(never prepared)" : ""}
+            </span>
           )}
         </div>
 
-        {isVoided ? (
-          <p className="text-[10px] text-muted-foreground mt-0.5">
-            {item.kitchen_status
-              ? `Voided at ${item.kitchen_status} stage`
-              : "Never sent to kitchen"}
-          </p>
-        ) : hasKitchenStatus ? (
-          <div className="mt-1">
+        {!isVoided && hasKitchenStatus && (
+          <div className="mt-1.5">
             <KitchenStatusPipeline status={item.kitchen_status} timestamps={timestamps} />
           </div>
-        ) : (
-          <p className="text-[10px] text-muted-foreground mt-0.5">
-            Fulfilled immediately
-          </p>
         )}
       </div>
 
-      {!isVoided && prepDuration && item.kitchen_status === "completed" && (
-        <span className="text-[11px] text-muted-foreground shrink-0 tabular-nums">
-          {prepDuration}
+      {/* Completion time on the right */}
+      {!isVoided && item.kitchen_status === "completed" && completedTimeStr && (
+        <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
+          {completedTimeStr}
         </span>
       )}
     </div>
@@ -304,61 +285,63 @@ interface CourseGroup {
 function CourseCard({ course }: { course: CourseGroup }) {
   const fireTimeStr = formatShortTime(course.fireTime);
   const lastCompletedStr = formatShortTime(course.lastCompletedAt);
+  const isCompleted = course.overallStatus.label === "Completed";
 
   return (
     <div className="rounded-lg border overflow-hidden">
-      {/* Course header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b">
+      {/* Course header: "Course 1 — Appetizers" with "COMPLETED ✅" */}
+      <div className="flex items-center justify-between px-3 py-2.5 bg-muted/30 border-b">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold">
+            <span className="text-sm font-semibold text-foreground">
               {course.label}
             </span>
           </div>
-          {/* Timing row */}
+          {/* Course-level timing: Fired · Completed · Duration */}
           {(fireTimeStr || lastCompletedStr) && (
-            <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
               {fireTimeStr && (
-                <span className="flex items-center gap-0.5">
-                  <Flame className="h-2.5 w-2.5" />
+                <span>
                   Fired: {fireTimeStr}
                 </span>
               )}
               {fireTimeStr && lastCompletedStr && (
-                <span className="text-muted-foreground/30">·</span>
+                <span className="text-muted-foreground/50">·</span>
               )}
               {lastCompletedStr && (
-                <span className="flex items-center gap-0.5">
-                  <CheckCircle2 className="h-2.5 w-2.5" />
+                <span>
                   Completed: {lastCompletedStr}
                 </span>
               )}
               {course.durationMinutes != null && (
                 <>
-                  <span className="text-muted-foreground/30">·</span>
-                  <span className="flex items-center gap-0.5">
-                    <Timer className="h-2.5 w-2.5" />
-                    {formatDuration(course.durationMinutes)}
+                  <span className="text-muted-foreground/50">·</span>
+                  <span>
+                    Duration: {formatDuration(course.durationMinutes)}
                   </span>
                 </>
               )}
             </div>
           )}
         </div>
-        <Badge
-          variant="outline"
+        <span
           className={cn(
-            "text-[10px] px-1.5 py-0 h-4 shrink-0 font-medium border-0",
-            course.overallStatus.bgColor,
+            "text-xs font-semibold shrink-0 flex items-center gap-1",
             course.overallStatus.color
           )}
         >
-          {course.overallStatus.label}
-        </Badge>
+          {isCompleted ? (
+            <>
+              COMPLETED <span aria-hidden>✅</span>
+            </>
+          ) : (
+            course.overallStatus.label
+          )}
+        </span>
       </div>
 
-      {/* Items */}
-      <div className="px-3 py-2 divide-y">
+      {/* Items in box */}
+      <div className="px-3 py-2 divide-y divide-border">
         {course.items.map((item) => (
           <KitchenItemRow key={item.id} item={item} />
         ))}
@@ -372,7 +355,7 @@ function CourseCard({ course }: { course: CourseGroup }) {
 function KitchenPerformanceSummary({ items }: { items: RichItem[] }) {
   const stats = React.useMemo(() => {
     const completedItems = items.filter(
-      (i) => !i.is_voided && i.completed_at && i.created_at
+      (i) => !i.is_voided && i.completed_at && (i.fire_time || i.created_at)
     );
 
     if (completedItems.length === 0) return null;
@@ -387,32 +370,68 @@ function KitchenPerformanceSummary({ items }: { items: RichItem[] }) {
 
     if (durations.length === 0) return null;
 
-    const total = durations.reduce((sum, d) => sum + d.minutes, 0);
-    const avg = Math.round((total / durations.length) * 10) / 10;
+    const totalPrep = durations.reduce((sum, d) => sum + d.minutes, 0);
+    const avg = Math.round((totalPrep / durations.length) * 10) / 10;
     const longest = durations.reduce((max, d) =>
       d.minutes > max.minutes ? d : max
     );
 
-    return { avg, longest, count: durations.length };
+    // Total kitchen time: first fire to last completion across all items
+    const allStarts = items
+      .filter((i) => !i.is_voided && (i.fire_time || i.created_at))
+      .map((i) => new Date(i.fire_time ?? i.created_at!).getTime());
+    const allEnds = items
+      .filter((i) => !i.is_voided && i.completed_at)
+      .map((i) => new Date(i.completed_at!).getTime());
+    const firstStart = allStarts.length ? Math.min(...allStarts) : null;
+    const lastEnd = allEnds.length ? Math.max(...allEnds) : null;
+    const totalKitchenMinutes =
+      firstStart != null && lastEnd != null
+        ? Math.round((lastEnd - firstStart) / 60000)
+        : null;
+
+    return {
+      avg,
+      longest,
+      count: durations.length,
+      totalKitchenMinutes,
+    };
   }, [items]);
 
   if (!stats) return null;
 
   return (
-    <div className="flex items-center gap-4 rounded-lg bg-muted/40 border px-3 py-2.5">
+    <div className="rounded-lg bg-muted/40 border px-3 py-2.5 space-y-1">
       <div className="flex items-center gap-1.5 text-muted-foreground">
-        <Timer className="h-3.5 w-3.5" />
-        <span className="text-[11px] font-medium">Kitchen Performance</span>
+        <Timer className="h-3.5 w-3.5" aria-hidden />
+        <span className="text-xs font-semibold uppercase tracking-wider">
+          Kitchen Performance
+        </span>
       </div>
-      <div className="flex items-center gap-3 text-xs">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-foreground">
         <span>
-          Avg prep: <span className="font-medium text-foreground">{formatDuration(Math.round(stats.avg))}</span>
+          Avg prep time:{" "}
+          <span className="font-medium">{formatDuration(stats.avg)}</span>
         </span>
-        <span className="text-muted-foreground/30">·</span>
+        <span className="text-muted-foreground/50">·</span>
         <span>
-          Longest: <span className="font-medium text-foreground">{stats.longest.name}</span>{" "}
-          <span className="text-muted-foreground">({formatDuration(stats.longest.minutes)})</span>
+          Longest item:{" "}
+          <span className="font-medium">{stats.longest.name}</span>{" "}
+          <span className="text-muted-foreground">
+            ({formatDuration(stats.longest.minutes)})
+          </span>
         </span>
+        {stats.totalKitchenMinutes != null && (
+          <>
+            <span className="text-muted-foreground/50">·</span>
+            <span>
+              Total kitchen time:{" "}
+              <span className="font-medium">
+                {formatDuration(stats.totalKitchenMinutes)}
+              </span>
+            </span>
+          </>
+        )}
       </div>
     </div>
   );

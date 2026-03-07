@@ -228,6 +228,8 @@ function ReversalCard({ reversal }: { reversal: Reversal }) {
     <div
       className={cn(
         "rounded-lg border bg-card overflow-hidden transition-colors",
+        isCompleted && "border-emerald-200 dark:border-emerald-800/50",
+        !isCompleted && !isFailed && "border-amber-200 dark:border-amber-800/50",
         isFailed && "border-red-200 dark:border-red-800/50"
       )}
     >
@@ -428,7 +430,7 @@ function ReversalCard({ reversal }: { reversal: Reversal }) {
             <div className="border-t px-4 py-3">
               <p className="text-[11px] font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
                 <Package className="h-3 w-3" />
-                Refunded Items
+                Per-item refund breakdown
               </p>
               <div className="space-y-2">
                 {reversal.refund_items.map((ri, i) => {
@@ -458,6 +460,8 @@ function ReversalCard({ reversal }: { reversal: Reversal }) {
                             <span>Tax: {formatCurrency(taxAmt)}</span>
                           </>
                         )}
+                        <span>&middot;</span>
+                        <span>Total: {formatCurrency(lineTotal)}</span>
                       </div>
                       {ri.reason && (
                         <p className="text-[11px] text-muted-foreground">
@@ -494,11 +498,18 @@ function ChargebackCard({ chargeback }: { chargeback: Chargeback }) {
   const days = chargeback.defense_deadline ? daysRemaining(chargeback.defense_deadline) : null;
   const deadlineUrgent = days != null && days <= 7 && days > 0;
   const deadlinePassed = days != null && days <= 0;
+  const defendable =
+    chargeback.defense_deadline &&
+    !isResolved &&
+    days != null &&
+    days > 0;
 
   return (
     <div
       className={cn(
         "rounded-lg border bg-card overflow-hidden transition-colors",
+        isResolved && chargeback.status === "won" && "border-emerald-200 dark:border-emerald-800/50",
+        isResolved && chargeback.status === "lost" && "border-red-200 dark:border-red-800/50",
         !isResolved && "border-amber-200 dark:border-amber-800/50"
       )}
     >
@@ -524,13 +535,29 @@ function ChargebackCard({ chargeback }: { chargeback: Chargeback }) {
             <p className="text-sm font-medium">Chargeback</p>
             <p className="text-xs text-muted-foreground truncate">
               {chargeback.reason_description || chargeback.reason_code}
+              {defendable && days != null && (
+                <span className="text-amber-600 dark:text-amber-400 font-medium">
+                  {" "}
+                  · {days} day{days !== 1 ? "s" : ""} remaining
+                </span>
+              )}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2.5 shrink-0">
           <div className="text-right">
             <p className="text-sm font-semibold">{formatCurrency(chargeback.amount)}</p>
-            <ChargebackStatusBadge status={chargeback.status} />
+            <div className="flex items-center gap-1.5 justify-end flex-wrap">
+              {defendable && (
+                <Badge
+                  variant="outline"
+                  className="text-[10px] px-1.5 py-0 h-4 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800"
+                >
+                  Defendable
+                </Badge>
+              )}
+              <ChargebackStatusBadge status={chargeback.status} />
+            </div>
           </div>
           <ChevronDown
             className={cn(
@@ -555,21 +582,32 @@ function ChargebackCard({ chargeback }: { chargeback: Chargeback }) {
             </div>
           )}
           <div className="flex justify-between">
+            <span className="text-muted-foreground">Amount</span>
+            <span className="font-medium">{formatCurrency(chargeback.amount)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Status</span>
+            <ChargebackStatusBadge status={chargeback.status} />
+          </div>
+          <div className="flex justify-between">
             <span className="text-muted-foreground">Received</span>
             <span>{formatDateOnly(chargeback.received_at)}</span>
           </div>
           {chargeback.defense_deadline && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Defense Deadline</span>
+            <div className="flex justify-between items-center gap-2">
+              <span className="text-muted-foreground shrink-0">Defense deadline</span>
               <span
                 className={cn(
+                  "text-right",
                   deadlinePassed && "text-red-600 dark:text-red-400 font-medium",
                   deadlineUrgent && !deadlinePassed && "text-amber-600 dark:text-amber-400 font-medium"
                 )}
               >
                 {formatDateOnly(chargeback.defense_deadline)}
                 {days != null && !deadlinePassed && (
-                  <span className="ml-1">({days} day{days !== 1 ? "s" : ""} remaining)</span>
+                  <span className="ml-1">
+                    ({days} day{days !== 1 ? "s" : ""} remaining)
+                  </span>
                 )}
                 {deadlinePassed && (
                   <span className="ml-1">(deadline passed)</span>
@@ -577,10 +615,6 @@ function ChargebackCard({ chargeback }: { chargeback: Chargeback }) {
               </span>
             </div>
           )}
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Status</span>
-            <span className="capitalize">{chargeback.status.replace(/_/g, " ")}</span>
-          </div>
           {chargeback.resolution && (
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground shrink-0">Resolution</span>
@@ -651,6 +685,9 @@ export function ReversalsList({
 
   return (
     <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Voids, refunds, partial refunds, and chargebacks. Read-only display.
+      </p>
       {/* Reversals */}
       {reversalCount > 0 && (
         <div className="space-y-2">

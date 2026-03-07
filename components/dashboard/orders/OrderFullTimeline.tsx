@@ -124,19 +124,19 @@ const SEVERITY_CONFIG: Record<
   },
   success: {
     label: "success",
-    dotColor: "bg-emerald-500",
+    dotColor: "bg-green-600 dark:bg-green-500",
     badgeClass:
       "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800",
   },
   warning: {
     label: "warning",
-    dotColor: "bg-amber-500",
+    dotColor: "bg-amber-600 dark:bg-amber-500",
     badgeClass:
       "bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800",
   },
   error: {
     label: "error",
-    dotColor: "bg-red-500",
+    dotColor: "bg-red-600 dark:bg-red-500",
     badgeClass:
       "bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800",
   },
@@ -175,18 +175,20 @@ function formatRelativeToOrder(
   const base = new Date(orderCreatedAt).getTime();
   if (isNaN(d) || isNaN(base)) return dateString;
   const diffMs = d - base;
-  if (diffMs <= 0) return "Order start";
+  if (diffMs <= 0) return "At order created";
   const diffSec = Math.floor(diffMs / 1000);
-  if (diffSec < 60) return `+${diffSec}s`;
+  if (diffSec < 60) return `${diffSec} sec after order created`;
   const diffMin = Math.floor(diffSec / 60);
   const remainSec = diffSec % 60;
   if (diffMin < 60)
-    return remainSec > 0 ? `+${diffMin}m ${remainSec}s` : `+${diffMin}m`;
+    return remainSec > 0
+      ? `${diffMin} min ${remainSec} sec after order created`
+      : `${diffMin} min after order created`;
   const diffHour = Math.floor(diffMin / 60);
   const remainMin = diffMin % 60;
   return remainMin > 0
-    ? `+${diffHour}h ${remainMin}m`
-    : `+${diffHour}h`;
+    ? `${diffHour} hr ${remainMin} min after order created`
+    : `${diffHour} hr after order created`;
 }
 
 function formatDetailValue(value: unknown, depth = 0): string {
@@ -246,9 +248,7 @@ function CategoryFilterBar({
                 : "bg-muted/30 text-muted-foreground/60 border-transparent hover:bg-muted/50 hover:text-muted-foreground"
             )}
           >
-            <span className={cn("shrink-0", isActive ? cfg.color : "opacity-50")}>
-              {cfg.icon}
-            </span>
+            <span aria-hidden>{cfg.emoji}</span>
             {cfg.label}
             <span
               className={cn(
@@ -316,8 +316,8 @@ function TimelineEventRow({
                 {timeStr}
               </span>
               <div className="flex items-center gap-1.5 min-w-0">
-                <span className={cn("shrink-0", catCfg.color)}>
-                  {catCfg.icon}
+                <span className="shrink-0" aria-hidden>
+                  {catCfg.emoji}
                 </span>
                 <span className="text-sm leading-snug break-words">
                   {event.description}
@@ -526,8 +526,8 @@ export function OrderFullTimeline({
                 )}
               />
             </button>
-            <span className="text-[10px] text-muted-foreground/60">
-              {filteredTimeline.length} of {timeline.length} events
+            <span className="text-xs text-muted-foreground">
+              Showing {filteredTimeline.length} of {timeline.length} events
             </span>
           </div>
         </div>
@@ -535,7 +535,7 @@ export function OrderFullTimeline({
         {/* Timeline */}
         {filteredTimeline.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4 text-center">
-            No events match the selected filters.
+            No events found for selected filters
           </p>
         ) : (
           <div className="relative">
