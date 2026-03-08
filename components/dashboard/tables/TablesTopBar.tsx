@@ -88,7 +88,7 @@ export function TablesTopBar({
                 </div>
                 <Button variant="default" size="sm" onClick={onEditLayout}>
                     <Edit className="h-4 w-4 mr-2" />
-                    Edit Layout
+                    Edit Mode
                 </Button>
             </div>
         </div>
