@@ -167,6 +167,10 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
             setNewPlanName('')
             // Update store with new floor plans
             useFloorPlanStore.setState({ floorPlans: result.floorPlans })
+            // Refetch React Query cache
+            await queryClient.refetchQueries({
+                queryKey: ['floor-plans', locationId]
+            })
             await handleFloorPlanChange(id)
             toast.success(`Floor plan "${newPlanName.trim()}" created`)
         } catch (e: any) {
