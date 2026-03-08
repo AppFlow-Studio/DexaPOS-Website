@@ -88,33 +88,6 @@ import { useLocationTaxRates } from "../../hooks/useTaxRates";
 import { TAX_CATEGORY_LABELS } from "@/types/tax";
 import { AVAILABLE_CHANNELS } from "@/types/inventory";
 import { DeleteMenuItem } from "../../actions/menu-items";
-import {
-  CreateItemInCategory,
-  AddItemToCategory,
-} from "../../actions/item-assignments";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import {
-  BottomSheet,
-  BottomSheetContent,
-  BottomSheetHeader,
-  BottomSheetBody,
-  BottomSheetFooter,
-  BottomSheetTitle,
-  BottomSheetDescription,
-} from "@/components/ui/bottom-sheet";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2 } from "lucide-react";
 import { CreateItemWizard } from "@/components/dashboard/menu/items/CreateItemWizard";
 
 // ============================================================================
@@ -138,6 +111,7 @@ function mapFlatItemToEditItem(
     description: item.description ?? undefined,
     price: item.base_price,
     cash_price: item.base_cash_price,
+    delivery_price: item.base_delivery_price ?? null,
     image: item.image ?? undefined,
     location_id: item.location_id ?? null,
     availability: item.effective_availability,
@@ -147,6 +121,7 @@ function mapFlatItemToEditItem(
     category_items: item.categories.map((c) => ({ id: c.id, name: c.name })),
     effective_price: item.effective_price,
     effective_cash_price: item.effective_cash_price,
+    effective_delivery_price: item.effective_delivery_price ?? null,
     price_levels: {
       level_1_base: item.base_price,
       level_1_cash: item.base_cash_price,
@@ -161,6 +136,11 @@ function mapFlatItemToEditItem(
       level_4_location_category_cash: null,
       level_5_location_menu: null,
       level_5_location_menu_cash: null,
+      level_1_delivery: item.base_delivery_price ?? null,
+      level_2_location_item_delivery: item.location_override?.custom_delivery_price ?? null,
+      level_3_category_delivery: null,
+      level_4_location_category_delivery: null,
+      level_5_location_menu_delivery: null,
     },
     has_location_item_override: item.has_location_override,
     menu_item_modifier_groups: item.modifier_groups,
@@ -240,7 +220,7 @@ function ItemCard({
     >
       <Card
         className={cn(
-          "overflow-hidden transition-all duration-300 h-full",
+          "overflow-hidden transition-all duration-300 h-full py-0.5",
           "hover:shadow-lg hover:scale-[1.02] hover:border-primary/50",
           hasOverride && "ring-1 ring-amber-200",
           !item.effective_availability && "opacity-70",
@@ -471,7 +451,7 @@ function ItemCard({
             <Button
               size="sm"
               variant="destructive"
-              className="h-8 bg-red-500/95 hover:bg-red-600 shadow-lg"
+              className="h-8 bg-red-500/95 hover:bg-red-600 shadow-lg mt-5"
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete();

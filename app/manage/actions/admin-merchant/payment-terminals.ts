@@ -7,7 +7,7 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { assertHQPermission } from '@/lib/admin/auth'
-import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
+import { logAdminAction } from '@/lib/admin/log-admin-action'
 import { maskAuthKey } from '@/app/dashboard/settings/stations/utils/terminal-helpers'
 import bcrypt from 'bcryptjs'
 
@@ -28,9 +28,8 @@ export interface PaymentTerminal {
   terminal_type: TerminalType
   terminal_model: string | null
   serial_number: string | null
-  tpn: string
   auth_key: string
-  register_id: string | null
+  register_id: string
   api_environment: ApiEnvironment
   api_base_url: string | null
   spin_proxy_timeout: number
@@ -65,9 +64,8 @@ export interface CreatePaymentTerminalInput {
   terminal_type: TerminalType
   terminal_model?: string | null
   serial_number?: string | null
-  tpn: string
   auth_key: string
-  register_id?: string | null
+  register_id: string
   api_environment?: ApiEnvironment
   connection_type?: ConnectionType
   local_ip_address?: string | null
@@ -81,9 +79,8 @@ export interface UpdatePaymentTerminalInput {
   terminal_name?: string
   terminal_model?: string | null
   serial_number?: string | null
-  tpn?: string
   auth_key?: string
-  register_id?: string | null
+  register_id?: string
   api_environment?: ApiEnvironment
   api_base_url?: string | null
   spin_proxy_timeout?: number
@@ -335,18 +332,18 @@ export async function adminCreateTerminal(
 
     const supabase = createServerSupabaseClient()
 
-    // Validate TPN uniqueness per merchant
-    const { data: existingTpn } = await supabase
+    // Validate RegisterId uniqueness per merchant
+    const { data: existingRegisterId } = await supabase
       .from('payment_terminals')
       .select('id')
       .eq('merchant_id', merchantId)
-      .eq('tpn', input.tpn)
+      .eq('register_id', input.register_id)
       .single()
 
-    if (existingTpn) {
+    if (existingRegisterId) {
       return {
         success: false,
-        error: `Terminal with TPN "${input.tpn}" already exists`,
+        error: `Terminal with Register ID "${input.register_id}" already exists`,
         data: null,
       }
     }
@@ -363,10 +360,8 @@ export async function adminCreateTerminal(
         terminal_type: input.terminal_type,
         terminal_model: input.terminal_model || null,
         serial_number: input.serial_number || null,
-        tpn: input.tpn,
         auth_key: input.auth_key,
-        register_id: input.register_id || null,
-        tpn_encrypted: bcrypt.hashSync(input.tpn) || null,
+        register_id: input.register_id,
         auth_key_encrypted: bcrypt.hashSync(input.auth_key) || null,
         api_environment: input.api_environment || 'sandbox',
         connection_type: input.connection_type || 'cloud',
@@ -403,16 +398,25 @@ export async function adminCreateTerminal(
       auth_key: maskAuthKey(data.auth_key),
     }
 
-    // Log audit event
-    await LogAuditEvent({
-      merchantId: merchantId,
-      action: `HQ Admin Created Payment Terminal: ${input.terminal_name}`,
-      actionCategory: 'settings',
+    await logAdminAction('TERMINAL_PAIRED', {
+      merchantId,
+      locationId: input.location_id,
       resourceType: 'payment_terminal',
       resourceId: data.id,
       resourceName: input.terminal_name,
-      locationId: input.location_id,
-      metadata: { tpn: input.tpn, created_by_admin: userId },
+      changes: {
+        after: {
+          terminal_name: input.terminal_name,
+          terminal_type: input.terminal_type,
+          station_id: input.station_id || null,
+          location_id: input.location_id,
+        },
+      },
+      metadata: {
+        register_id: input.register_id,
+        created_by_admin: userId,
+        source: 'adminCreateTerminal',
+      },
     })
 
     return { success: true, data: maskedData as PaymentTerminal, error: null }
@@ -441,6 +445,11 @@ export async function adminUpdateTerminal(
     const { userId } = await assertHQPermission('hq.merchant.update')
 
     const supabase = createServerSupabaseClient()
+    const { data: beforeTerminal } = await supabase
+      .from('payment_terminals')
+      .select('id, merchant_id, location_id, terminal_name, terminal_model, serial_number, station_id, api_environment, connection_type, is_active')
+      .eq('id', terminalId)
+      .single()
 
     const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
@@ -449,7 +458,6 @@ export async function adminUpdateTerminal(
     if (input.terminal_name !== undefined) updateData.terminal_name = input.terminal_name
     if (input.terminal_model !== undefined) updateData.terminal_model = input.terminal_model
     if (input.serial_number !== undefined) updateData.serial_number = input.serial_number
-    if (input.tpn !== undefined) updateData.tpn = input.tpn
     if (input.auth_key !== undefined) updateData.auth_key = input.auth_key
     if (input.register_id !== undefined) updateData.register_id = input.register_id
     if (input.api_environment !== undefined) updateData.api_environment = input.api_environment
@@ -489,17 +497,20 @@ export async function adminUpdateTerminal(
       auth_key: maskAuthKey(data.auth_key),
     }
 
-    // Log audit event
-    await LogAuditEvent({
+    await logAdminAction('DEVICE_CONFIG_CHANGED', {
       merchantId: data.merchant_id,
-      action: `HQ Admin Updated Payment Terminal: ${data.terminal_name}`,
-      actionCategory: 'settings',
+      locationId: data.location_id,
       resourceType: 'payment_terminal',
       resourceId: terminalId,
       resourceName: data.terminal_name,
-      locationId: data.location_id,
-      changes: { after: updateData },
-      metadata: { updated_by_admin: userId },
+      changes: {
+        before: beforeTerminal as unknown as Record<string, unknown>,
+        after: updateData,
+      },
+      metadata: {
+        updated_by_admin: userId,
+        source: 'adminUpdateTerminal',
+      },
     })
 
     return { success: true, data: maskedData as PaymentTerminal, error: null }
@@ -568,16 +579,24 @@ export async function adminLinkTerminalToStation(
       .eq('id', stationId)
       .single()
 
-    // Log audit event
-    await LogAuditEvent({
+    await logAdminAction('TERMINAL_PAIRED', {
       merchantId: data.merchant_id,
-      action: `HQ Admin Linked Terminal ${data.terminal_name} to Station ${station?.station_name || 'Unknown'}`,
-      actionCategory: 'settings',
+      locationId: data.location_id,
       resourceType: 'payment_terminal',
       resourceId: terminalId,
       resourceName: data.terminal_name,
-      locationId: data.location_id,
-      metadata: { station_id: stationId, station_name: station?.station_name, linked_by_admin: userId },
+      changes: {
+        station_id: {
+          old: null,
+          new: stationId,
+        },
+      },
+      metadata: {
+        station_id: stationId,
+        station_name: station?.station_name,
+        linked_by_admin: userId,
+        source: 'adminLinkTerminalToStation',
+      },
     })
 
     return { success: true, data: maskedData as PaymentTerminal, error: null }
@@ -599,6 +618,11 @@ export async function adminUnlinkTerminalFromStation(terminalId: string) {
     const { userId } = await assertHQPermission('hq.merchant.update')
 
     const supabase = createServerSupabaseClient()
+    const { data: beforeTerminal } = await supabase
+      .from('payment_terminals')
+      .select('station_id')
+      .eq('id', terminalId)
+      .single()
 
     const { data, error } = await supabase
       .from('payment_terminals')
@@ -621,16 +645,22 @@ export async function adminUnlinkTerminalFromStation(terminalId: string) {
       auth_key: maskAuthKey(data.auth_key),
     }
 
-    // Log audit event
-    await LogAuditEvent({
+    await logAdminAction('TERMINAL_UNPAIRED', {
       merchantId: data.merchant_id,
-      action: `HQ Admin Unlinked Terminal ${data.terminal_name} from Station`,
-      actionCategory: 'settings',
+      locationId: data.location_id,
       resourceType: 'payment_terminal',
       resourceId: terminalId,
       resourceName: data.terminal_name,
-      locationId: data.location_id,
-      metadata: { unlinked_by_admin: userId },
+      changes: {
+        station_id: {
+          old: beforeTerminal?.station_id || null,
+          new: null,
+        },
+      },
+      metadata: {
+        unlinked_by_admin: userId,
+        source: 'adminUnlinkTerminalFromStation',
+      },
     })
 
     return { success: true, data: maskedData as PaymentTerminal, error: null }
@@ -660,7 +690,7 @@ export async function adminDeleteTerminal(terminalId: string) {
     // Fetch details before delete
     const { data: terminal } = await supabase
       .from('payment_terminals')
-      .select('terminal_name, merchant_id, location_id, tpn')
+      .select('terminal_name, merchant_id, location_id, register_id')
       .eq('id', terminalId)
       .single()
 
@@ -676,15 +706,27 @@ export async function adminDeleteTerminal(terminalId: string) {
 
     // Log audit event
     if (terminal) {
-      await LogAuditEvent({
+      await logAdminAction('TERMINAL_UNPAIRED', {
         merchantId: terminal.merchant_id,
-        action: `HQ Admin Deleted Terminal: ${terminal.terminal_name}`,
-        actionCategory: 'settings',
+        locationId: terminal.location_id,
         resourceType: 'payment_terminal',
         resourceId: terminalId,
         resourceName: terminal.terminal_name,
-        locationId: terminal.location_id,
-        metadata: { tpn: terminal.tpn, deleted_by_admin: userId },
+        changes: {
+          before: {
+            terminal_name: terminal.terminal_name,
+            register_id: terminal.register_id,
+            deleted: false,
+          },
+          after: {
+            deleted: true,
+          },
+        },
+        metadata: {
+          register_id: terminal.register_id,
+          deleted_by_admin: userId,
+          source: 'adminDeleteTerminal',
+        },
       })
     }
 
@@ -744,7 +786,7 @@ export async function adminTestTerminalConnection(terminalId: string) {
 
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_DEJAVOO_SPIN_API}/spin/v2/Common/TerminalStatus?request.tpn=${terminal.tpn}&request.registerId=${terminal.register_id}&request.authkey=${terminal.auth_key}`,
+        `${process.env.NEXT_PUBLIC_DEJAVOO_SPIN_API}/spin/v2/Common/TerminalStatus?request.registerId=${terminal.register_id}&request.authkey=${terminal.auth_key}`,
         requestOptions
       )
       const result = await response.json()

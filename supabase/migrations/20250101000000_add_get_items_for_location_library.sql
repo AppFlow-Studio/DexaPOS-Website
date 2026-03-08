@@ -35,6 +35,7 @@ BEGIN
                 -- Level 1: Base price
                 'base_price', mi.price,
                 'base_cash_price', mi.cash_price,
+                'base_delivery_price', mi.delivery_price,
                 'base_availability', mi.availability,
 
                 -- Level 2: Location item override (if exists)
@@ -50,7 +51,8 @@ BEGIN
                         'current_stock', lio.current_stock,
                         'tax_category', lio.tax_category,
                         'is_tax_exempt', lio.is_tax_exempt,
-                        'available_channels', lio.available_channels
+                        'available_channels', lio.available_channels,
+                        'custom_delivery_price', lio.custom_delivery_price
                     )
                     ELSE NULL
                 END,
@@ -66,6 +68,11 @@ BEGIN
                 'effective_cash_price', COALESCE(
                     lio.custom_cash_price,
                     mi.cash_price
+                ),
+
+                'effective_delivery_price', COALESCE(
+                    lio.custom_delivery_price,       -- L2: Location item override
+                    mi.delivery_price                -- L1: Base
                 ),
 
                 'effective_availability', COALESCE(

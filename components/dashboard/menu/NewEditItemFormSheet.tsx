@@ -111,6 +111,7 @@ import {
 } from "@/app/dashboard/actions/menu-items-rpc";
 import { RecipeManager } from "@/app/dashboard/menu/components/RecipeManager";
 import { PriceInputGroup } from "@/components/dashboard/locations/PriceInputGroup";
+import { useEffectivePricing } from "@/app/dashboard/hooks/useEffectivePricing";
 import {
   usePrepStations,
   useCategoryPrepDefaults,
@@ -133,6 +134,12 @@ interface PriceLevels {
   level_4_location_category_cash?: number | null;
   level_5_location_menu: number | null; // NEW: Location + Menu + Category
   level_5_location_menu_cash?: number | null;
+  // Delivery pricing
+  level_1_delivery: number | null;
+  level_2_location_item_delivery?: number | null;
+  level_3_category_delivery?: number | null;
+  level_4_location_category_delivery?: number | null;
+  level_5_location_menu_delivery?: number | null;
 }
 
 export interface EditItemWithOverrides {
@@ -213,7 +220,11 @@ export interface EditItemWithOverrides {
   price_levels?: PriceLevels;
   effective_price?: number;
   effective_cash_price?: number | null;
+  effective_delivery_price?: number | null;
   current_level?: 1 | 2 | 3 | 4 | 5;
+
+  // Delivery pricing
+  delivery_price?: number | null;
 
   // Prep Station (KDS Routing - migration 022)
   prep_station_id?: string | null;
@@ -284,6 +295,7 @@ const itemSchema = z.object({
     .min(0, "Cash price must be positive")
     .optional()
     .nullable(),
+  delivery_price: z.number().min(0).optional().nullable(),
   image_url: z.string().optional(),
   availability: z.boolean().default(true),
   allergens: z.array(z.string()).default([]),
@@ -746,6 +758,7 @@ export function NewEditItemFormSheet({
   const queryClient = useQueryClient();
   const { selectedLocationId, locations } = useLocationStore();
   const isAllLocations = useIsAllLocations();
+  const { pricingStrategy: effectivePricingStrategy, dualPricingPercentage: effectiveDualPercentage } = useEffectivePricing();
 
   if (editItem) {
     console.log("[NEW EDIT ITEM FORM SHEET] editItem", editItem);
@@ -809,9 +822,10 @@ export function NewEditItemFormSheet({
 
   // Determine which price to show in the form based on context
   const getPriceForContext = React.useCallback(() => {
-    if (!editItem) return { price: 0, cashPrice: null };
+    if (!editItem) return { price: 0, cashPrice: null, deliveryPrice: null as number | null };
 
     const levels = editItem.price_levels;
+    const l1Delivery = levels?.level_1_delivery ?? editItem.delivery_price ?? null;
 
     // 5-level price cascade resolution
     switch (editingContext.level) {
@@ -819,6 +833,7 @@ export function NewEditItemFormSheet({
         return {
           price: levels?.level_1_base ?? editItem.price,
           cashPrice: levels?.level_1_cash ?? editItem.cash_price,
+          deliveryPrice: l1Delivery,
         };
       case 2: // Location Item Override
         return {
@@ -830,6 +845,8 @@ export function NewEditItemFormSheet({
             levels?.level_2_location_item_cash ??
             levels?.level_1_cash ??
             editItem.cash_price,
+          deliveryPrice:
+            levels?.level_2_location_item_delivery ?? l1Delivery,
         };
       case 3: // Category Price
         return {
@@ -839,6 +856,8 @@ export function NewEditItemFormSheet({
             levels?.level_3_category_cash ??
             levels?.level_1_cash ??
             editItem.cash_price,
+          deliveryPrice:
+            levels?.level_3_category_delivery ?? l1Delivery,
         };
       case 4: // Location + Category
         return {
@@ -854,6 +873,11 @@ export function NewEditItemFormSheet({
             levels?.level_2_location_item_cash ??
             levels?.level_1_cash ??
             editItem.cash_price,
+          deliveryPrice:
+            levels?.level_4_location_category_delivery ??
+            levels?.level_3_category_delivery ??
+            levels?.level_2_location_item_delivery ??
+            l1Delivery,
         };
       case 5: // Location + Menu + Category
         return {
@@ -871,9 +895,15 @@ export function NewEditItemFormSheet({
             levels?.level_2_location_item_cash ??
             levels?.level_1_cash ??
             editItem.cash_price,
+          deliveryPrice:
+            levels?.level_5_location_menu_delivery ??
+            levels?.level_4_location_category_delivery ??
+            levels?.level_3_category_delivery ??
+            levels?.level_2_location_item_delivery ??
+            l1Delivery,
         };
       default:
-        return { price: editItem.price, cashPrice: editItem.cash_price };
+        return { price: editItem.price, cashPrice: editItem.cash_price, deliveryPrice: editItem.delivery_price ?? null };
     }
   }, [editItem, editingContext.level]);
 
@@ -884,6 +914,7 @@ export function NewEditItemFormSheet({
       description: "",
       price: 0,
       cash_price: undefined,
+      delivery_price: null,
       image_url: "",
       availability: true,
       allergens: [],
@@ -901,13 +932,14 @@ export function NewEditItemFormSheet({
   // Reset form when editItem or context changes
   React.useEffect(() => {
     if (editItem) {
-      const { price, cashPrice } = getPriceForContext();
+      const { price, cashPrice, deliveryPrice } = getPriceForContext();
 
       form.reset({
         name: editItem.name || "",
         description: editItem.description || "",
         price: price,
         cash_price: cashPrice ?? undefined,
+        delivery_price: deliveryPrice,
         image_url: editItem.image || editItem.image_url || "",
         availability: editItem.availability ?? true,
         allergens: editItem.allergens || [],
@@ -957,6 +989,7 @@ export function NewEditItemFormSheet({
         description: "",
         price: 0,
         cash_price: undefined,
+        delivery_price: null,
         image_url: "",
         availability: true,
         allergens: [],
@@ -1079,8 +1112,10 @@ export function NewEditItemFormSheet({
           categoryId: categoryId || null, // NEW: Category context for L3/L4/L5
           menuId: menuId || null,
           locationId: isAllLocations ? null : selectedLocationId,
+          isMenuLocationOwned,
           price: values.price,
           cashPrice: values.cash_price ?? null,
+          deliveryPrice: values.delivery_price ?? null,
           availability: values.availability,
         };
 
@@ -1121,6 +1156,7 @@ export function NewEditItemFormSheet({
             description: values.description,
             price: values.price,
             cash_price: values.cash_price ?? undefined,
+            delivery_price: values.delivery_price ?? null,
             image: values.image_url ?? undefined,
             availability: values.availability,
             allergens: values.allergens,
@@ -1142,12 +1178,14 @@ export function NewEditItemFormSheet({
       }
 
       // Success message based on context
+      const itemName = values.name;
+      const contextName = menuName || categoryName || "menu";
       const levelMessages: Record<number, string> = {
-        1: "Global item updated",
-        2: `Location pricing updated for ${currentLocationName}`,
-        3: `Menu pricing updated for "${menuName}"`,
-        4: `Menu pricing updated at ${currentLocationName}`,
-        5: `Your menu pricing updated`,
+        1: `"${itemName}" updated globally`,
+        2: `"${itemName}" location pricing updated for ${currentLocationName}`,
+        3: `"${itemName}" category pricing updated for "${contextName}"`,
+        4: `"${itemName}" location + category pricing updated at ${currentLocationName}`,
+        5: `"${itemName}" menu pricing updated`,
       };
 
       toast.success(editItem ? "Item Updated" : "Item Created", {
@@ -1204,6 +1242,7 @@ export function NewEditItemFormSheet({
           icon={<Globe className="h-3 w-3" />}
           price={levels.level_1_base}
           cashPrice={levels.level_1_cash}
+          deliveryPrice={levels.level_1_delivery}
           isCurrentLevel={currentLevel === 1}
           isActive={levels.level_1_base !== null}
         />
@@ -1216,6 +1255,7 @@ export function NewEditItemFormSheet({
             icon={<Building2 className="h-3 w-3" />}
             price={levels.level_2_location_item}
             cashPrice={levels.level_2_location_item_cash}
+            deliveryPrice={levels.level_2_location_item_delivery}
             modifier={levels.level_2_modifier}
             modifierType={levels.level_2_modifier_type}
             isCurrentLevel={currentLevel === 2}
@@ -1235,6 +1275,7 @@ export function NewEditItemFormSheet({
             icon={<Tag className="h-3 w-3" />}
             price={levels.level_3_category}
             cashPrice={levels.level_3_category_cash}
+            deliveryPrice={levels.level_3_category_delivery}
             isCurrentLevel={currentLevel === 3}
             isActive={levels.level_3_category !== null}
             isOverride
@@ -1249,6 +1290,7 @@ export function NewEditItemFormSheet({
             icon={<MapPin className="h-3 w-3" />}
             price={levels.level_4_location_category}
             cashPrice={levels.level_4_location_category_cash}
+            deliveryPrice={levels.level_4_location_category_delivery}
             isCurrentLevel={currentLevel === 4}
             isActive={levels.level_4_location_category !== null}
             isOverride
@@ -1263,6 +1305,7 @@ export function NewEditItemFormSheet({
             icon={<MenuIcon className="h-3 w-3" />}
             price={levels.level_5_location_menu}
             cashPrice={levels.level_5_location_menu_cash}
+            deliveryPrice={levels.level_5_location_menu_delivery}
             isCurrentLevel={currentLevel === 5}
             isActive={levels.level_5_location_menu !== null}
             isOverride
@@ -1277,6 +1320,15 @@ export function NewEditItemFormSheet({
               ${editItem.effective_price?.toFixed(2)}
             </span>
           </div>
+          {/* Effective Delivery Price */}
+          {editItem.effective_delivery_price != null && (
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-sm font-medium text-amber-700">Delivery Price:</span>
+              <span className="text-lg font-bold text-amber-600">
+                ${editItem.effective_delivery_price.toFixed(2)}
+              </span>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1539,7 +1591,7 @@ export function NewEditItemFormSheet({
                       />
 
                       {/* Card Background Color */}
-                      <FormField
+                      {/* <FormField
                         control={form.control}
                         name="card_bg_color"
                         render={({ field }: { field: any }) => (
@@ -1574,7 +1626,7 @@ export function NewEditItemFormSheet({
                             <FormMessage />
                           </FormItem>
                         )}
-                      />
+                      /> */}
                     </TabsContent>
 
                     {/* TAB 2: PRICING & INVENTORY */}
@@ -1615,6 +1667,8 @@ export function NewEditItemFormSheet({
                               onCashPriceChange={(val) => form.setValue("cash_price", val, { shouldValidate: true })}
                               label={editingContext.priceLabel}
                               disabled={!editItem}
+                              pricingStrategy={effectivePricingStrategy}
+                              dualPricingPercentage={effectiveDualPercentage}
                           />
                           <div className="flex gap-4 px-4">
                               <div className="flex-1">
@@ -1633,6 +1687,37 @@ export function NewEditItemFormSheet({
                               </div>
                           </div>
                       </div>
+
+                      {/* Delivery Pricing */}
+                        <div className="space-y-3">
+                          {/* Delivery price input — always shown */}
+                          <div className="p-3 rounded-lg border border-amber-200 bg-amber-50/30 space-y-2">
+                            <label className="text-sm font-medium text-amber-800">
+                              {editingContext.priceLabel} (Delivery)
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-600 font-medium">$</span>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="0.00"
+                                className="pl-7 border-amber-300 focus:ring-amber-500"
+                                value={form.watch("delivery_price") ?? ""}
+                                onChange={(e) => {
+                                  const val = e.target.value === "" ? null : parseFloat(e.target.value);
+                                  form.setValue("delivery_price", val, { shouldValidate: true });
+                                }}
+                              />
+                            </div>
+                            {/* Fallback display */}
+                            {(form.watch("delivery_price") === null || form.watch("delivery_price") === undefined) && (
+                              <p className="text-xs text-muted-foreground">
+                                No delivery price set — card price will be used as fallback
+                              </p>
+                            )}
+                          </div>
+                        </div>
 
                       {/* Reset Button */}
                       {editItem && editingContext.resetLabel && (
@@ -2690,6 +2775,7 @@ interface PriceLevelRowProps {
   icon: React.ReactNode;
   price: number | null;
   cashPrice?: number | null;
+  deliveryPrice?: number | null;
   modifier?: number | null;
   modifierType?: "add" | "percent" | null;
   isCurrentLevel: boolean;
@@ -2703,6 +2789,7 @@ function PriceLevelRow({
   icon,
   price,
   cashPrice,
+  deliveryPrice,
   modifier,
   modifierType,
   isCurrentLevel,
@@ -2736,7 +2823,7 @@ function PriceLevelRow({
           </Badge>
         )}
       </div>
-      <div className="text-right">
+      <div className="flex items-center gap-3 text-right">
         {price !== null ? (
           <span
             className={cn("font-medium", isCurrentLevel && "text-blue-600")}
@@ -2751,6 +2838,11 @@ function PriceLevelRow({
           </span>
         ) : (
           <span className="text-muted-foreground">—</span>
+        )}
+        {deliveryPrice !== null && deliveryPrice !== undefined && (
+          <div className="text-amber-600 text-xs">
+            <span className="text-muted-foreground">Del:</span> ${deliveryPrice.toFixed(2)}
+          </div>
         )}
       </div>
     </div>

@@ -65,7 +65,13 @@ import { MenuCategoriesTab } from "@/components/dashboard/menu/menuId/MenuCatego
 import { MenuSchedulesTab } from "@/components/dashboard/menu/menuId/MenuSchedulesTab";
 import { MenuSettingsTab } from "@/components/dashboard/menu/menuId/MenuSettingsTab";
 import { MenuPreviewModal } from "@/components/dashboard/menu/menuId/MenuPreviewModal";
+import { MenuOrderOutTab } from "@/components/dashboard/menu/menuId/MenuOrderOutTab";
 import { useClerkOrgId } from "../../hooks/useLocationScoped";
+import { useOrderOutStatus } from "../../online-ordering/hooks/useOrderOutStatus";
+import {
+  useOrderOutMenuSync,
+  useMenuPayloadDiff,
+} from "../../hooks/useOrderOutMenuSync";
 
 export default function MenuDetailPage() {
   const params = useParams();
@@ -151,6 +157,35 @@ export default function MenuDetailPage() {
 
   // Preview modal state
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  // OrderOut
+  const { data: orderOutStatus } = useOrderOutStatus(
+    clerkOrgId,
+    selectedLocationId || ""
+  );
+  const canUploadToOrderOut =
+    !isAllLocations && !!orderOutStatus?.data?.hasRestaurant;
+
+  // Sync status for OrderOut tab indicator
+  const { data: syncStatusResult } = useOrderOutMenuSync(
+    clerkOrgId,
+    selectedLocationId || "",
+    menuId
+  );
+  const { data: diffResult } = useMenuPayloadDiff(
+    clerkOrgId,
+    selectedLocationId || "",
+    menuId
+  );
+  const syncData = syncStatusResult?.data;
+  const diffData = diffResult?.data ?? null;
+  const orderOutTabDot = (() => {
+    if (!canUploadToOrderOut || !syncData?.lastSync) return null;
+    if (syncData.lastSync.status === "failed") return "red";
+    if (diffData?.hasChanges) return "amber";
+    if (syncData.lastSync.status === "success") return "green";
+    return null;
+  })();
 
   // Initialize settings when menu loads (categories collapsed by default)
   useEffect(() => {
@@ -264,6 +299,9 @@ export default function MenuDetailPage() {
       availability: mi.effective_availability ?? true,
       allergens: mi.allergens ?? [],
       card_bg_color: mi.card_bg_color ?? undefined,
+      // Delivery pricing
+      delivery_price: priceLevels.level_1_delivery ?? null,
+      effective_delivery_price: (mi as any).effective_delivery_price ?? null,
       category_items: [
         { id: category.category_id, name: category.category?.name || "" },
       ],
@@ -299,6 +337,12 @@ export default function MenuDetailPage() {
           (mi as any).location_menu_override?.custom_cash_price ??
           priceLevels.level_5_location_menu_cash ??
           null,
+        // Delivery pricing levels
+        level_1_delivery: priceLevels.level_1_delivery ?? null,
+        level_2_location_item_delivery: priceLevels.level_2_location_item_delivery ?? null,
+        level_3_category_delivery: priceLevels.level_3_category_delivery ?? null,
+        level_4_location_category_delivery: priceLevels.level_4_location_category_delivery ?? null,
+        level_5_location_menu_delivery: priceLevels.level_5_location_menu_delivery ?? null,
       },
       effective_price: mi.effective_price,
       effective_cash_price: mi.effective_cash_price,
@@ -961,6 +1005,22 @@ export default function MenuDetailPage() {
             )}
           </TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
+          {canUploadToOrderOut && (
+            <TabsTrigger value="orderout" className="flex items-center gap-1.5">
+              OrderOut
+              {orderOutTabDot && (
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    orderOutTabDot === "green"
+                      ? "bg-green-500"
+                      : orderOutTabDot === "amber"
+                        ? "bg-amber-500"
+                        : "bg-red-500"
+                  }`}
+                />
+              )}
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
@@ -1050,6 +1110,17 @@ export default function MenuDetailPage() {
             onDeleteMenu={() => setIsDeleteDialogOpen(true)}
           />
         </TabsContent>
+
+        {canUploadToOrderOut && (
+          <TabsContent value="orderout" className="space-y-4">
+            <MenuOrderOutTab
+              menuId={menuId}
+              locationId={selectedLocationId || ""}
+              clerkOrgId={clerkOrgId}
+              menuName={menu.name}
+            />
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Delete Menu Confirmation */}
@@ -1187,6 +1258,7 @@ export default function MenuDetailPage() {
         categoryId={editingCategoryContext?.id}
         categoryName={editingCategoryContext?.name}
         menuId={menuId}
+        menuName={menu?.name}
         categories={(menu?.categories || []).map((c) => ({
           id: c.category_id,
           name: c.category?.name || "",
@@ -1234,6 +1306,7 @@ export default function MenuDetailPage() {
             : undefined
         }
       />
+
     </div>
   );
 }

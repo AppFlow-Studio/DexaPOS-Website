@@ -56,7 +56,6 @@ import {
   Tag,
   Banknote,
   FileText,
-  MonitorSmartphone,
   Globe,
   GitCompare,
   Monitor,
@@ -433,7 +432,7 @@ function MerchantSidebar() {
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
-          {/* Settings with Devices submenu */}
+          {/* Settings submenu */}
           <SidebarMenuItem>
             <Collapsible
               defaultOpen={pathname.startsWith("/dashboard/settings")}
@@ -455,25 +454,11 @@ function MerchantSidebar() {
                       asChild
                       isActive={
                         pathname === "/dashboard/settings" &&
-                        !pathname.includes("/devices") &&
                         !pathname.includes("/stations")
                       }
                     >
                       <Link href="/dashboard/settings">
                         <span>General</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={pathname.startsWith(
-                        "/dashboard/settings/devices"
-                      )}
-                    >
-                      <Link href="/dashboard/settings/devices">
-                        <MonitorSmartphone className="h-3 w-3" />
-                        <span>Devices</span>
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
@@ -526,6 +511,19 @@ function MerchantSidebar() {
                       <Link href="/dashboard/settings/receipt-templates">
                         <Receipt className="h-3 w-3" />
                         <span>Receipt Templates</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={pathname.startsWith(
+                        "/dashboard/settings/pricing"
+                      )}
+                    >
+                      <Link href="/dashboard/settings/pricing">
+                        <CreditCard className="h-3 w-3" />
+                        <span>Pricing</span>
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>

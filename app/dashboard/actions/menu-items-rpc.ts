@@ -67,11 +67,13 @@ export interface FlatItem {
   // Base prices (Level 1)
   base_price: number;
   base_cash_price: number | null;
+  base_delivery_price: number | null;
   base_availability: boolean;
 
   // Effective values (computed with overrides)
   effective_price: number;
   effective_cash_price: number | null;
+  effective_delivery_price: number | null;
   effective_availability: boolean;
 
   // Override flags
@@ -97,6 +99,7 @@ export interface FlatItem {
     id: string;
     custom_price: number | null;
     custom_cash_price: number | null;
+    custom_delivery_price: number | null;
     price_modifier: number | null;
     price_modifier_type: string | null;
     is_available: boolean;
@@ -358,11 +361,13 @@ export async function getItemsForLocationFlat(
     // Base prices (L1)
     base_price: item.base_price,
     base_cash_price: item.base_cash_price,
+    base_delivery_price: item.base_delivery_price ?? null,
     base_availability: item.base_availability ?? true,
 
     // Effective prices (L2 > L1 ONLY, no category prices!)
     effective_price: item.effective_price,
     effective_cash_price: item.effective_cash_price,
+    effective_delivery_price: item.effective_delivery_price ?? null,
     effective_availability: item.effective_availability ?? true,
 
     // Override flags
@@ -442,6 +447,7 @@ export interface UpdateItemParams {
   description?: string;
   price?: number | null;
   cashPrice?: number | null;
+  deliveryPrice?: number | null;
   image?: string;
   availability?: boolean;
   allergens?: string[];
@@ -468,6 +474,9 @@ export interface UpdateItemParams {
 
   // Modifier linking
   modifier_group_ids?: string[];
+
+  // Location-owned menu flag (skip RPC, update category_items directly)
+  isMenuLocationOwned?: boolean;
 }
 
 export interface UpdateResult {
@@ -808,7 +817,6 @@ export async function updateItemOverride(
         updateData.available_channels = params.availableChannels;
         changesLog.available_channels = params.availableChannels;
       }
-
       const { error } = await supabase
         .from("menu_items")
         .update(updateData)
@@ -897,6 +905,7 @@ export async function updateItemOverride(
   if (
     params.price !== undefined ||
     params.cashPrice !== undefined ||
+    params.deliveryPrice !== undefined ||
     params.availability !== undefined ||
     params.priceModifier !== undefined ||
     params.displayOrder !== undefined ||
@@ -904,35 +913,61 @@ export async function updateItemOverride(
     params.stockTrackingMode !== undefined ||
     params.currentStock !== undefined
   ) {
-    const { data, error } = await supabase.rpc(
-      "upsert_category_item_override",
-      {
-        p_menu_item_id: params.menuItemId,
-        p_category_id: params.categoryId || null,
-        p_menu_id: params.menuId || null,
-        p_location_id: locationId || null,
-        p_custom_price: params.price,
-        p_custom_cash_price: params.cashPrice,
-        p_is_available: params.availability,
-        p_price_modifier: params.priceModifier,
-        p_price_modifier_type: params.priceModifierType,
-        p_display_order: params.displayOrder,
-        p_is_featured: params.isFeatured,
-        p_stock_tracking_mode: params.stockTrackingMode,
-        p_current_stock: params.currentStock,
-      },
-    );
+    if (params.isMenuLocationOwned && params.categoryId && params.menuId) {
+      // Location-owned menus: update category_items directly (the source of truth).
+      // The RPC rejects this case by design since there's no need for L5 overrides.
+      const updatePayload: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+      };
+      if (params.price !== undefined) updatePayload.custom_price = params.price ?? null;
+      if (params.cashPrice !== undefined) updatePayload.custom_cash_price = params.cashPrice ?? null;
+      if (params.deliveryPrice !== undefined) updatePayload.custom_delivery_price = params.deliveryPrice ?? null;
+      if (params.availability !== undefined) updatePayload.is_available = params.availability ?? true;
+      if (params.displayOrder !== undefined) updatePayload.display_order = params.displayOrder;
+      if (params.isFeatured !== undefined) updatePayload.is_featured = params.isFeatured;
 
-    if (error) {
-      return { success: false, error: error.message };
+      const { error } = await supabase
+        .from("category_items")
+        .update(updatePayload)
+        .eq("category_id", params.categoryId)
+        .eq("menu_item_id", params.menuItemId);
+
+      if (error) return { success: false, error: error.message };
+      finalUpdateResult = { success: true, action: "updated", level: 3, table: "category_items" };
+    } else {
+      const { data, error } = await supabase.rpc(
+        "upsert_category_item_override",
+        {
+          p_menu_item_id: params.menuItemId,
+          p_category_id: params.categoryId || null,
+          p_menu_id: params.menuId || null,
+          p_location_id: locationId || null,
+          p_custom_price: params.price,
+          p_custom_cash_price: params.cashPrice,
+          p_custom_delivery_price: params.deliveryPrice,
+          p_is_available: params.availability,
+          p_price_modifier: params.priceModifier,
+          p_price_modifier_type: params.priceModifierType,
+          p_display_order: params.displayOrder,
+          p_is_featured: params.isFeatured,
+          p_stock_tracking_mode: params.stockTrackingMode,
+          p_current_stock: params.currentStock,
+        },
+      );
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      finalUpdateResult = data as UpdateResult;
     }
-
-    finalUpdateResult = data as UpdateResult;
 
     if (finalUpdateResult.success) {
       if (params.price !== undefined) changesLog.price = params.price;
       if (params.cashPrice !== undefined)
         changesLog.cash_price = params.cashPrice;
+      if (params.deliveryPrice !== undefined)
+        changesLog.delivery_price = params.deliveryPrice;
       if (params.availability !== undefined)
         changesLog.availability = params.availability;
       if (params.priceModifier !== undefined)

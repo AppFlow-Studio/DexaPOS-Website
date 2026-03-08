@@ -31,10 +31,18 @@ export interface Location {
   timezone: string;
   pricing_strategy: 'manual' | 'dual';
   dual_pricing_percentage: number;
+  use_merchant_pricing_defaults: boolean;
   is_active: boolean;
   is_accepting_orders: boolean;
   business_hours: BusinessHours;
   uses_global_menu: boolean;
+  ein: string | null;
+  ein_last_four: string | null;
+  tax_id: string | null;
+  sales_tax_rate: number | null;
+  tax_registration_status: 'pending' | 'verified' | 'expired' | null;
+  onboarding_step: number;
+  onboarding_completed: boolean;
   public_metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -327,9 +335,20 @@ export const createLocationSchema = z.object({
   timezone: z.string().default('America/New_York'),
   pricing_strategy: z.enum(['manual', 'dual']).default('manual'),
   dual_pricing_percentage: z.number().min(0).max(100).default(4.0),
+  use_merchant_pricing_defaults: z.boolean().default(true),
   is_active: z.boolean().default(true),
   is_accepting_orders: z.boolean().default(true),
   business_hours: businessHoursSchema.default({}),
+  ein: z
+    .string()
+    .regex(/^\d{2}-?\d{7}$/, 'EIN must be 9 digits (with optional dash)')
+    .nullable()
+    .optional(),
+  tax_id: z.string().max(100).nullable().optional(),
+  sales_tax_rate: z.number().min(0).max(1).nullable().optional(),
+  tax_registration_status: z.enum(['pending', 'verified', 'expired']).default('pending'),
+  onboarding_step: z.number().int().min(0).max(7).default(0),
+  onboarding_completed: z.boolean().default(false),
   uses_global_menu: z.boolean().default(true),
   public_metadata: z.record(z.unknown()).default({}),
 });
@@ -733,21 +752,52 @@ export interface LocationFormStep2 {
   city: string;
   state: string;
   postal_code: string;
+  country: string;
   timezone: string;
 }
 
 export interface LocationFormStep3 {
-  business_hours: BusinessHours;
+  ein: string;
+  tax_id: string;
+  sales_tax_rate: string;
 }
 
 export interface LocationFormStep4 {
+  bank_name: string;
+  account_holder_name: string;
+  routing_number: string;
+  account_number: string;
+  confirm_account_number: string;
+  account_type: 'checking' | 'savings';
+  payout_frequency: 'daily' | 'weekly' | 'monthly';
+  payout_day_of_week: string;
+  payout_day_of_month: string;
+  minimum_payout_amount: string;
+  use_merchant_billing_profile: boolean;
+}
+
+export interface LocationFormStep5 {
+  business_hours: BusinessHours;
+}
+
+export interface LocationFormStep6 {
+  manager_assignment_type: 'skip' | 'invite_new' | 'assign_existing';
+  manager_invite_name: string;
+  manager_invite_email: string;
+  existing_manager_identifier: string;
+}
+
+export interface LocationFormHiddenFields {
   uses_global_menu: boolean;
 }
 
 export type LocationFormData = LocationFormStep1 &
   LocationFormStep2 &
   LocationFormStep3 &
-  LocationFormStep4;
+  LocationFormStep4 &
+  LocationFormStep5 &
+  LocationFormStep6 &
+  LocationFormHiddenFields;
 
 // Invite form
 export interface InviteStaffFormData {

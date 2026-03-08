@@ -13,6 +13,15 @@ import {
   GetSalesByItemReport,
   GetCashFlowReport,
   GetFinancialKPIs,
+  GetRevenueBreakdown,
+  GetDualPricingComparison,
+  GetDiscountImpact,
+  GetSalesSummaryReport,
+  GetHourlySalesReport,
+  GetKitchenPerformance,
+  GetTablePerformance,
+  GetStaffPerformance,
+  GetOrderFlow,
   GetRevenueByCategoryReport,
   GetTransactionVolumeReport,
   GetNetCollectedBySourceReport,
@@ -28,6 +37,17 @@ import {
   NetCollectedBySourceReport,
   TaxableRevenueByTenderReport,
 } from "../actions/order-analytics";
+import type {
+  RevenueBreakdown,
+  DualPricingComparison,
+  DiscountImpact,
+  SalesSummaryRow,
+  HourlySalesRow,
+  KitchenPerformanceStats,
+  TablePerformanceStats,
+  StaffPerformanceStats,
+  OrderFlowStats,
+} from "@/types/analytics";
 import {
   GetWaterfallReport,
   WaterfallReport,
@@ -345,6 +365,10 @@ export function useFinancialKPIs(
   });
 }
 
+// ============================================================================
+// Temur-Dev: Financial Report Hooks
+// ============================================================================
+
 /**
  * Waterfall Report Hook
  */
@@ -528,6 +552,306 @@ export function useTaxableRevenueByTenderReport(
         dateFrom,
         dateTo
       ),
+    enabled: !!clerkOrgId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+// ============================================================================
+// Phase 1: New Hooks
+// ============================================================================
+
+export function useRevenueBreakdown(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
+
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId =
+    locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
+
+  return useQuery<RevenueBreakdown>({
+    queryKey: [
+      "revenue-breakdown",
+      clerkOrgId,
+      effectiveLocationId,
+      dateFrom.toISOString(),
+      dateTo.toISOString(),
+    ],
+    queryFn: () =>
+      GetRevenueBreakdown(clerkOrgId, effectiveLocationId, dateFrom, dateTo),
+    enabled: !!clerkOrgId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useDualPricingComparison(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
+
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId =
+    locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
+
+  return useQuery<DualPricingComparison>({
+    queryKey: [
+      "dual-pricing",
+      clerkOrgId,
+      effectiveLocationId,
+      dateFrom.toISOString(),
+      dateTo.toISOString(),
+    ],
+    queryFn: () =>
+      GetDualPricingComparison(
+        clerkOrgId,
+        effectiveLocationId,
+        dateFrom,
+        dateTo
+      ),
+    enabled: !!clerkOrgId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useDiscountImpact(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
+
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId =
+    locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
+
+  return useQuery<DiscountImpact>({
+    queryKey: [
+      "discount-impact",
+      clerkOrgId,
+      effectiveLocationId,
+      dateFrom.toISOString(),
+      dateTo.toISOString(),
+    ],
+    queryFn: () =>
+      GetDiscountImpact(clerkOrgId, effectiveLocationId, dateFrom, dateTo),
+    enabled: !!clerkOrgId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useSalesSummaryReport(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
+
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId =
+    locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
+
+  return useQuery<SalesSummaryRow[]>({
+    queryKey: [
+      "sales-summary-report",
+      clerkOrgId,
+      effectiveLocationId,
+      dateFrom.toISOString(),
+      dateTo.toISOString(),
+    ],
+    queryFn: () =>
+      GetSalesSummaryReport(clerkOrgId, effectiveLocationId, dateFrom, dateTo),
+    enabled: !!clerkOrgId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useHourlySalesReport(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
+
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId =
+    locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
+
+  return useQuery<HourlySalesRow[]>({
+    queryKey: [
+      "hourly-sales-report",
+      clerkOrgId,
+      effectiveLocationId,
+      dateFrom.toISOString(),
+      dateTo.toISOString(),
+    ],
+    queryFn: () =>
+      GetHourlySalesReport(clerkOrgId, effectiveLocationId, dateFrom, dateTo),
+    enabled: !!clerkOrgId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+// ============================================================================
+// Phase 2: Kitchen Performance Hooks
+// ============================================================================
+
+export function useKitchenPerformance(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
+
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId =
+    locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
+
+  return useQuery<KitchenPerformanceStats | null>({
+    queryKey: [
+      "kitchen-performance",
+      clerkOrgId,
+      effectiveLocationId,
+      dateFrom.toISOString(),
+      dateTo.toISOString(),
+    ],
+    queryFn: () =>
+      GetKitchenPerformance(clerkOrgId, effectiveLocationId, dateFrom, dateTo),
+    enabled: !!clerkOrgId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useTablePerformance(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
+
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId =
+    locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
+
+  return useQuery<TablePerformanceStats | null>({
+    queryKey: [
+      "table-performance",
+      clerkOrgId,
+      effectiveLocationId,
+      dateFrom.toISOString(),
+      dateTo.toISOString(),
+    ],
+    queryFn: () =>
+      GetTablePerformance(clerkOrgId, effectiveLocationId, dateFrom, dateTo),
+    enabled: !!clerkOrgId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+// ============================================================================
+// Phase 4: Staff Performance
+// ============================================================================
+
+export function useStaffPerformance(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
+
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId =
+    locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
+
+  return useQuery<StaffPerformanceStats | null>({
+    queryKey: [
+      "staff-performance",
+      clerkOrgId,
+      effectiveLocationId,
+      dateFrom.toISOString(),
+      dateTo.toISOString(),
+    ],
+    queryFn: () =>
+      GetStaffPerformance(clerkOrgId, effectiveLocationId, dateFrom, dateTo),
+    enabled: !!clerkOrgId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+// ============================================================================
+// Phase 5: Order Flow
+// ============================================================================
+
+export function useOrderFlow(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
+
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId =
+    locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
+
+  return useQuery<OrderFlowStats | null>({
+    queryKey: [
+      "order-flow",
+      clerkOrgId,
+      effectiveLocationId,
+      dateFrom.toISOString(),
+      dateTo.toISOString(),
+    ],
+    queryFn: () =>
+      GetOrderFlow(clerkOrgId, effectiveLocationId, dateFrom, dateTo),
     enabled: !!clerkOrgId,
     staleTime: 2 * 60 * 1000,
     refetchOnWindowFocus: false,

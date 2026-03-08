@@ -1,15 +1,17 @@
 "use client";
 
 import {
-  useLocationStations,
+  useStationsWithHeartbeats,
   useDeleteStation,
   useDeleteMultipleStations,
   useDeactivateStation,
   useReactivateStation,
   Station,
+  StationWithHeartbeat,
   StationType,
   getStationTypeLabel,
 } from "./hooks/useStations";
+import { useDeviceRealtime } from "./hooks/useDeviceRealtime";
 import { StationsTable } from "./components/StationsTable";
 import { StationCard } from "./components/StationCard";
 import { AddStationDialog } from "./components/AddStationDialog";
@@ -54,7 +56,7 @@ import {
 } from "@/stores/location-store";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 
-type SortColumn = "name" | "station_number" | "status" | "lastSync";
+type SortColumn = "name" | "station_number" | "status" | "lastSeen";
 type SortDirection = "asc" | "desc";
 
 const ITEMS_PER_PAGE = 10;
@@ -66,13 +68,16 @@ export default function StationsPage() {
   const { data: userInfo } = useUserInfo();
   const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
 
-  // Fetch stations using React Query
+  // Fetch stations with heartbeat data
   const {
     data: stations = [],
     isLoading,
     isError,
     error,
-  } = useLocationStations(selectedLocationId);
+  } = useStationsWithHeartbeats(selectedLocationId);
+
+  // Subscribe to real-time heartbeat updates
+  useDeviceRealtime(selectedLocationId);
 
   // Mutations
   const deleteStationMutation = useDeleteStation();
@@ -84,7 +89,7 @@ export default function StationsPage() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [editingStation, setEditingStation] = useState<Station | null>(null);
+  const [editingStation, setEditingStation] = useState<StationWithHeartbeat | null>(null);
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [mounted, setMounted] = useState(false);
@@ -96,7 +101,7 @@ export default function StationsPage() {
   const [selectedStationIds, setSelectedStationIds] = useState<string[]>([]);
 
   // Delete confirmation dialog state
-  const [stationToDelete, setStationToDelete] = useState<Station | null>(null);
+  const [stationToDelete, setStationToDelete] = useState<StationWithHeartbeat | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   // Bulk delete dialog state
@@ -140,9 +145,15 @@ export default function StationsPage() {
     // Status filter
     if (statusFilter !== "all") {
       if (statusFilter === "online") {
-        result = result.filter((station) => station.is_online && station.is_active);
+        result = result.filter((station) => {
+          const online = station.latest_heartbeat?.is_online ?? station.is_online;
+          return online && station.is_active;
+        });
       } else if (statusFilter === "offline") {
-        result = result.filter((station) => !station.is_online && station.is_active);
+        result = result.filter((station) => {
+          const online = station.latest_heartbeat?.is_online ?? station.is_online;
+          return !online && station.is_active;
+        });
       } else if (statusFilter === "inactive") {
         result = result.filter((station) => !station.is_active);
       }
@@ -161,13 +172,17 @@ export default function StationsPage() {
             comparison = (a.station_number || 0) - (b.station_number || 0);
             break;
           case "status":
-            const statusA = !a.is_active ? 2 : a.is_online ? 0 : 1;
-            const statusB = !b.is_active ? 2 : b.is_online ? 0 : 1;
+            const onlineA = a.latest_heartbeat?.is_online ?? a.is_online;
+            const onlineB = b.latest_heartbeat?.is_online ?? b.is_online;
+            const statusA = !a.is_active ? 2 : onlineA ? 0 : 1;
+            const statusB = !b.is_active ? 2 : onlineB ? 0 : 1;
             comparison = statusA - statusB;
             break;
-          case "lastSync":
-            const dateA = a.last_sync_at ? new Date(a.last_sync_at).getTime() : 0;
-            const dateB = b.last_sync_at ? new Date(b.last_sync_at).getTime() : 0;
+          case "lastSeen":
+            const tsA = a.latest_heartbeat?.heartbeat_at || a.last_heartbeat_at;
+            const tsB = b.latest_heartbeat?.heartbeat_at || b.last_heartbeat_at;
+            const dateA = tsA ? new Date(tsA).getTime() : 0;
+            const dateB = tsB ? new Date(tsB).getTime() : 0;
             comparison = dateA - dateB;
             break;
         }
@@ -205,7 +220,7 @@ export default function StationsPage() {
     }
   };
 
-  const handleEdit = (station: Station) => {
+  const handleEdit = (station: StationWithHeartbeat) => {
     setEditingStation(station);
     setIsAddDialogOpen(true);
   };

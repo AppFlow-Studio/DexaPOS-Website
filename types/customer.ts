@@ -7,6 +7,7 @@
  */
 export type CustomerActivityType =
   | "order"
+  | "order_linked"
   | "refund"
   | "visit"
   | "loyalty"
@@ -162,6 +163,11 @@ export const ACTIVITY_DISPLAY_MAP: Record<
 > = {
   order: {
     label: "Order",
+    color: "text-blue-600 dark:text-blue-400",
+    bgColor: "bg-blue-50 dark:bg-blue-900/20",
+  },
+  order_linked: {
+    label: "Order linked",
     color: "text-blue-600 dark:text-blue-400",
     bgColor: "bg-blue-50 dark:bg-blue-900/20",
   },

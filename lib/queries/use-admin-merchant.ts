@@ -18,12 +18,15 @@ import {
 import {
   getMerchantDetails,
   updateMerchantSettings,
+  updateMerchantOnboardingStatus,
 } from '@/app/manage/actions/merchants'
 
 import type {
   MerchantDetails,
   MerchantSettingsUpdate,
+  MerchantOnboardingStatus,
   UpdateMerchantResult,
+  UpdateMerchantStatusResult,
 } from '@/types/merchant'
 
 // Orders actions
@@ -95,6 +98,29 @@ export function useAdminUpdateMerchant() {
       if (result.success) {
         queryClient.invalidateQueries({
           queryKey: adminKeys.merchantDetail(variables.merchantId),
+        })
+      }
+    },
+  })
+}
+
+export function useAdminUpdateMerchantStatus() {
+  const queryClient = useQueryClient()
+
+  return useMutation<
+    UpdateMerchantStatusResult,
+    Error,
+    { merchantId: string; newStatus: Extract<MerchantOnboardingStatus, 'active' | 'suspended' | 'cancelled'>; reason?: string }
+  >({
+    mutationFn: ({ merchantId, newStatus, reason }) =>
+      updateMerchantOnboardingStatus({ merchantId, newStatus, reason }),
+    onSuccess: (result, variables) => {
+      if (result.success) {
+        queryClient.invalidateQueries({
+          queryKey: adminKeys.merchantDetail(variables.merchantId),
+        })
+        queryClient.invalidateQueries({
+          queryKey: adminKeys.merchants(),
         })
       }
     },

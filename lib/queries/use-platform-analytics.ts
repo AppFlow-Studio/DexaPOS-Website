@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
   getPlatformKPIs,
   getPlatformSalesTrend,
@@ -19,8 +19,25 @@ import {
   getKDSThroughputAnalytics,
   getAuditLogAnalytics,
   getLocationDensity,
+  type PlatformAuditLogFilters,
+  type PlatformAuditLogsResult,
 } from '@/app/manage/actions/hq-platform/analytics'
-import { getPlatformTransactions } from '@/app/manage/actions/hq-platform/transactions'
+import {
+  getPlatformChargebacks,
+  getPlatformMerchantBreakdown,
+  getPlatformPaymentAuditLogs,
+  getPlatformSettlementBatchPayments,
+  getPlatformSettlementBatches,
+  getPlatformTransactionDetails,
+  getPlatformTransactionSummary,
+  getPlatformTransactionStats,
+  getPlatformTransactions,
+  PlatformChargebackFilters,
+  PlatformPaymentAuditLogFilters,
+  PlatformMerchantBreakdownFilters,
+  PlatformSettlementBatchFilters,
+  PlatformTransactionFilters
+} from '@/app/manage/actions/hq-platform/transactions'
 
 export const platformKeys = {
   all: ['platform'] as const,
@@ -28,7 +45,6 @@ export const platformKeys = {
   salesTrend: () => [...platformKeys.all, 'sales-trend'] as const,
   topMerchants: () => [...platformKeys.all, 'top-merchants'] as const,
   gpvConcentration: (days: number) => [...platformKeys.all, 'gpv-concentration', days] as const,
-  transactions: (limit: number, offset: number) => [...platformKeys.all, 'transactions', { limit, offset }] as const,
   churnWarnings: () => [...platformKeys.all, 'churn-warnings'] as const,
   deviceStability: (days: number) => [...platformKeys.all, 'device-stability', days] as const,
   versionDrillDown: (version: string, days: number) => [...platformKeys.all, 'version-drilldown', version, days] as const,
@@ -46,6 +62,20 @@ export const platformKeys = {
   kdsThroughput: (days: number) => [...platformKeys.all, 'kds-throughput', days] as const,
   auditLogAnalytics: (days: number) => [...platformKeys.all, 'audit-log-analytics', days] as const,
   locationDensity: () => [...platformKeys.all, 'location-density'] as const,
+  transactions: (limit: number, offset: number, filters?: PlatformTransactionFilters) => [...platformKeys.all, 'transactions', { limit, offset, ...filters }] as const,
+  transactionStats: (filters?: PlatformTransactionFilters) => [...platformKeys.all, 'transaction-stats', filters] as const,
+  transactionSummary: (filters?: PlatformTransactionFilters) => [...platformKeys.all, 'transaction-summary', filters] as const,
+  merchantBreakdown: (filters?: PlatformMerchantBreakdownFilters) => [...platformKeys.all, 'merchant-breakdown', filters] as const,
+  settlementBatches: (filters?: PlatformSettlementBatchFilters) => [...platformKeys.all, 'settlement-batches', filters] as const,
+  settlementBatchPayments: (batchId: string | null, merchantId?: string) =>
+    [...platformKeys.all, 'settlement-batch-payments', batchId, merchantId] as const,
+  chargebacks: (filters?: PlatformChargebackFilters, limit: number = 50, offset: number = 0) =>
+    [...platformKeys.all, 'chargebacks', filters, limit, offset] as const,
+  paymentAuditLogs: (filters?: PlatformPaymentAuditLogFilters, limit: number = 50, offset: number = 0) =>
+    [...platformKeys.all, 'payment-audit-logs', filters, limit, offset] as const,
+  transactionDetails: (transactionId: string | null) => [...platformKeys.all, 'transaction-details', transactionId] as const,
+  auditLogs: (filters?: PlatformAuditLogFilters, limit: number = 50, offset: number = 0) =>
+    [...platformKeys.all, 'audit-logs', filters, limit, offset] as const,
 }
 
 export function usePlatformKPIs() {
@@ -77,17 +107,96 @@ export function useGPVConcentration(days: number = 30) {
   })
 }
 
-export function usePlatformTransactions(limit: number = 50, offset: number = 0) {
+export function usePlatformTransactions(limit: number = 50, offset: number = 0, filters?: PlatformTransactionFilters) {
   return useQuery({
-    queryKey: platformKeys.transactions(limit, offset),
-    queryFn: () => getPlatformTransactions(limit, offset),
+    queryKey: platformKeys.transactions(limit, offset, filters),
+    queryFn: () => getPlatformTransactions(limit, offset, filters),
+    placeholderData: keepPreviousData,
   })
 }
 
-export function usePlatformAuditLogs(filters?: any, limit: number = 50, offset: number = 0) {
+export function usePlatformTransactionStats(filters?: PlatformTransactionFilters) {
   return useQuery({
-    queryKey: [...platformKeys.all, 'audit-logs', filters, limit, offset],
-    queryFn: () => import('@/app/manage/actions/hq-platform/analytics').then(m => m.getPlatformAuditLogs(filters, limit, offset)),
+    queryKey: platformKeys.transactionStats(filters),
+    queryFn: () => getPlatformTransactionStats(filters),
+  })
+}
+
+export function usePlatformTransactionSummary(filters?: PlatformTransactionFilters) {
+  return useQuery({
+    queryKey: platformKeys.transactionSummary(filters),
+    queryFn: () => getPlatformTransactionSummary(filters),
+  })
+}
+
+export function usePlatformMerchantBreakdown(filters?: PlatformMerchantBreakdownFilters) {
+  return useQuery({
+    queryKey: platformKeys.merchantBreakdown(filters),
+    queryFn: () => getPlatformMerchantBreakdown(filters),
+  })
+}
+
+export function usePlatformSettlementBatches(filters?: PlatformSettlementBatchFilters) {
+  return useQuery({
+    queryKey: platformKeys.settlementBatches(filters),
+    queryFn: () => getPlatformSettlementBatches(filters),
+  })
+}
+
+export function usePlatformSettlementBatchPayments(
+  batchId: string | null,
+  merchantId?: string,
+  enabled: boolean = true
+) {
+  return useQuery({
+    queryKey: platformKeys.settlementBatchPayments(batchId, merchantId),
+    queryFn: () => getPlatformSettlementBatchPayments(batchId!, merchantId),
+    enabled: enabled && !!batchId,
+    staleTime: 30_000,
+  })
+}
+
+export function usePlatformChargebacks(
+  filters?: PlatformChargebackFilters,
+  limit: number = 50,
+  offset: number = 0
+) {
+  return useQuery({
+    queryKey: platformKeys.chargebacks(filters, limit, offset),
+    queryFn: () => getPlatformChargebacks(filters, limit, offset),
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function usePlatformPaymentAuditLogs(
+  filters?: PlatformPaymentAuditLogFilters,
+  limit: number = 50,
+  offset: number = 0
+) {
+  return useQuery({
+    queryKey: platformKeys.paymentAuditLogs(filters, limit, offset),
+    queryFn: () => getPlatformPaymentAuditLogs(filters, limit, offset),
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function usePlatformTransactionDetails(transactionId: string | null, enabled: boolean = true) {
+  return useQuery({
+    queryKey: platformKeys.transactionDetails(transactionId),
+    queryFn: () => getPlatformTransactionDetails(transactionId!),
+    enabled: enabled && !!transactionId,
+    staleTime: 30_000,
+  })
+}
+
+export function usePlatformAuditLogs(filters?: PlatformAuditLogFilters, limit: number = 50, offset: number = 0) {
+  return useQuery({
+    queryKey: platformKeys.auditLogs(filters, limit, offset),
+    queryFn: async (): Promise<PlatformAuditLogsResult> =>
+      import('@/app/manage/actions/hq-platform/analytics').then((m) =>
+        m.getPlatformAuditLogs(filters, limit, offset)
+      ),
+    placeholderData: keepPreviousData,
   })
 }
 

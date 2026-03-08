@@ -8,6 +8,7 @@ import {
   getMerchantStats,
   updateMerchantSettings,
   toggleLocationStatus,
+  getMerchantHealthGrid,
 } from '@/app/manage/actions/merchants'
 import type { MerchantFilters, MerchantSettingsUpdate } from '@/types/merchant'
 
@@ -103,5 +104,18 @@ export function useToggleLocation() {
         queryKey: adminKeys.merchantDetail(variables.merchantId),
       })
     },
+  })
+}
+
+// ============================================================================
+// MERCHANT HEALTH GRID QUERY
+// ============================================================================
+
+export function useMerchantHealthGrid(accessibleMerchantIds?: string[]) {
+  return useQuery({
+    queryKey: [...adminKeys.merchantHealthGrid(), accessibleMerchantIds],
+    queryFn: () => getMerchantHealthGrid(accessibleMerchantIds),
+    staleTime: 45_000,
+    refetchInterval: 60_000,
   })
 }

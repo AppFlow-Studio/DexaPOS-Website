@@ -206,6 +206,84 @@ export interface ChurnWarningData {
   totalGPVAtRisk: number
 }
 
+export interface PlatformAuditLogFilters {
+  search?: string
+  actionCategory?: string
+  severity?: string
+  actor?: string
+  merchantIds?: string[]
+  dateFrom?: string
+  dateTo?: string
+  status?: 'success' | 'failed'
+  resourceType?: string
+}
+
+export interface PlatformAuditLogRow {
+  id: string
+  created_at: string
+  actor_user_id?: string
+  actor_email?: string
+  actor_name?: string
+  actor_role?: string
+  action: string
+  action_category?: string
+  severity?: string
+  resource_type?: string
+  resource_id?: string
+  resource_name?: string
+  status?: string
+  error_message?: string
+  merchant_id?: string
+  merchant_name?: string
+  location_id?: string
+  location_name?: string
+  changes?: Record<string, unknown> | null
+  metadata?: Record<string, unknown> | null
+}
+
+export interface PlatformAuditLogsResult {
+  data: PlatformAuditLogRow[]
+  total: number
+}
+
+export interface PlatformAuditLogsExportResult {
+  data: PlatformAuditLogRow[]
+  total: number
+  cap: number
+  capped: boolean
+}
+
+async function getAssignedMerchantScope(
+  userId: string,
+  roleCode?: string | null
+): Promise<string[] | null> {
+  if (roleCode === 'hq.super_admin') {
+    return null
+  }
+
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from('admin_merchant_access')
+    .select('merchant_id')
+    .eq('admin_user_id', userId)
+    .eq('is_active', true)
+
+  if (error) {
+    console.error('[getAssignedMerchantScope:analytics] Error:', error)
+    return []
+  }
+
+  return Array.from(
+    new Set(
+      (data ?? [])
+        .map((row: any) => row.merchant_id)
+        .filter((merchantId: unknown): merchantId is string =>
+          typeof merchantId === 'string' && merchantId.length > 0
+        )
+    )
+  )
+}
+
 // ============================================================================
 // PLATFORM ACTIONS
 // ============================================================================
@@ -384,7 +462,7 @@ export async function getPlatformKPIs(): Promise<PlatformKPIs> {
  * Also carries order count for GPV/Order Count chart toggle.
  */
 export async function getPlatformSalesTrend(): Promise<PlatformSalesTrend[]> {
-  await assertHQPermission('hq.org.view')
+  const { userId, role } = await assertHQPermission('hq.merchant.view')
 
   const supabase = createServerSupabaseClient()
 
@@ -464,56 +542,163 @@ export async function getPlatformSalesTrend(): Promise<PlatformSalesTrend[]> {
  * Get top merchants by revenue
  */
 export async function getTopMerchants(limit: number = 5): Promise<PlatformTopMerchant[]> {
-  await assertHQPermission('hq.merchant.view')
+  const { userId, role } = await assertHQPermission('hq.merchant.view')
 
   const supabase = createServerSupabaseClient()
-  
-  // This usually requires a complex join or a materialized view for performance
-  // For now, we'll fetch summarized data
-  const { data, error } = await supabase.rpc('get_top_performing_merchants', {
-    p_limit: limit,
-    p_days: 30
-  })
-
-  if (error || !data) {
-    console.error('[getTopMerchants] Error:', error)
+  const merchantScope = await getAssignedMerchantScope(userId, role?.role_code)
+  if (merchantScope !== null && merchantScope.length === 0) {
     return []
   }
 
-  return data as PlatformTopMerchant[]
+  const thirtyDaysAgo = new Date()
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+  let ordersQuery = supabase
+    .from('orders')
+    .select('merchant_id, total_amount')
+    .not('status', 'in', '(draft,cancelled,void)')
+    .gte('created_at', thirtyDaysAgo.toISOString())
+
+  if (merchantScope !== null) {
+    ordersQuery = ordersQuery.in('merchant_id', merchantScope)
+  }
+
+  const { data: ordersData, error: ordersError } = await ordersQuery
+  if (ordersError || !ordersData) {
+    console.error('[getTopMerchants:orders] Error:', ordersError)
+    return []
+  }
+
+  const byMerchant = new Map<string, { revenue: number; transactions: number }>()
+  for (const row of ordersData) {
+    const merchantId = row.merchant_id
+    if (!merchantId) continue
+    const entry = byMerchant.get(merchantId) ?? { revenue: 0, transactions: 0 }
+    entry.revenue += Number(row.total_amount || 0)
+    entry.transactions += 1
+    byMerchant.set(merchantId, entry)
+  }
+
+  const merchantIds = Array.from(byMerchant.keys())
+  if (merchantIds.length === 0) return []
+
+  const { data: merchantsData, error: merchantsError } = await supabase
+    .from('merchants')
+    .select('id, name')
+    .in('id', merchantIds)
+
+  if (merchantsError) {
+    console.error('[getTopMerchants:merchants] Error:', merchantsError)
+  }
+
+  const merchantNameById = new Map<string, string>(
+    (merchantsData ?? []).map((merchant) => [merchant.id, merchant.name || 'Unknown'])
+  )
+
+  return merchantIds
+    .map((merchantId) => {
+      const stats = byMerchant.get(merchantId)!
+      return {
+        id: merchantId,
+        name: merchantNameById.get(merchantId) || 'Unknown',
+        revenue: stats.revenue,
+        transactions: stats.transactions,
+        growth: 0,
+      }
+    })
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, Math.max(1, limit))
 }
 
 /**
  * Get platform-wide audit logs
  */
 export async function getPlatformAuditLogs(
-  filters?: any,
+  filters?: PlatformAuditLogFilters,
   limit: number = 50,
   offset: number = 0
-): Promise<{ data: any[], total: number }> {
-  await assertHQPermission('hq.org.view')
+): Promise<PlatformAuditLogsResult> {
+  await assertHQPermission('system.audit.view')
 
-  const supabase = createServerSupabaseClient()
+  let supabase = createServerSupabaseClient()
+  try {
+    supabase = createServiceRoleClient()
+  } catch (error) {
+    console.warn('[getPlatformAuditLogs] Service-role client unavailable, falling back to user-scoped client.')
+  }
 
   let query = supabase
     .from('audit_logs')
     .select(`
-      *,
-      merchants!inner(name),
+      id,
+      created_at,
+      actor_user_id,
+      actor_email,
+      actor_name,
+      actor_role,
+      action,
+      action_category,
+      severity,
+      resource_type,
+      resource_id,
+      resource_name,
+      status,
+      error_message,
+      merchant_id,
+      location_id,
+      changes,
+      metadata,
+      merchants(name),
       location:locations(id, name)
     `, { count: 'exact' })
     .order('created_at', { ascending: false })
 
   if (filters?.search) {
-    query = query.or(`action.ilike.%${filters.search}%,actor_name.ilike.%${filters.search}%,resource_name.ilike.%${filters.search}%`)
+    const term = filters.search.trim()
+    if (term.length > 0) {
+      query = query.or(
+        `action.ilike.%${term}%,actor_name.ilike.%${term}%,actor_email.ilike.%${term}%,resource_name.ilike.%${term}%,resource_type.ilike.%${term}%`
+      )
+    }
   }
 
-  if (filters?.action_category) {
-    query = query.eq('action_category', filters.action_category)
+  if (filters?.actionCategory) {
+    query = query.eq('action_category', filters.actionCategory)
   }
 
   if (filters?.severity) {
     query = query.eq('severity', filters.severity)
+  }
+
+  if (filters?.actor) {
+    const actorTerm = filters.actor.trim()
+    if (actorTerm.length > 0) {
+      query = query.or(
+        `actor_name.ilike.%${actorTerm}%,actor_email.ilike.%${actorTerm}%,actor_user_id.ilike.%${actorTerm}%`
+      )
+    }
+  }
+
+  if (filters?.dateFrom) {
+    query = query.gte('created_at', filters.dateFrom)
+  }
+
+  if (filters?.dateTo) {
+    query = query.lte('created_at', filters.dateTo)
+  }
+
+  if (filters?.status === 'success') {
+    query = query.or('status.eq.success,status.is.null')
+  } else if (filters?.status === 'failed') {
+    query = query.or('status.eq.failed,status.eq.error')
+  }
+
+  if (filters?.resourceType) {
+    query = query.eq('resource_type', filters.resourceType)
+  }
+
+  if (filters?.merchantIds && filters.merchantIds.length > 0) {
+    query = query.in('merchant_id', filters.merchantIds)
   }
 
   query = query.range(offset, offset + limit - 1)
@@ -525,8 +710,38 @@ export async function getPlatformAuditLogs(
     return { data: [], total: 0 }
   }
 
+  const rows: PlatformAuditLogRow[] = (data || []).map((row: any) => {
+    const merchantRaw = row.merchants
+    const locationRaw = row.location
+    const merchant = Array.isArray(merchantRaw) ? merchantRaw[0] : merchantRaw
+    const location = Array.isArray(locationRaw) ? locationRaw[0] : locationRaw
+
+    return {
+      id: row.id,
+      created_at: row.created_at,
+      actor_user_id: row.actor_user_id || undefined,
+      actor_email: row.actor_email || undefined,
+      actor_name: row.actor_name || undefined,
+      actor_role: row.actor_role || undefined,
+      action: row.action || 'unknown_action',
+      action_category: row.action_category || undefined,
+      severity: row.severity || undefined,
+      resource_type: row.resource_type || undefined,
+      resource_id: row.resource_id || undefined,
+      resource_name: row.resource_name || undefined,
+      status: row.status || undefined,
+      error_message: row.error_message || undefined,
+      merchant_id: row.merchant_id || undefined,
+      merchant_name: merchant?.name || undefined,
+      location_id: row.location_id || undefined,
+      location_name: location?.name || undefined,
+      changes: row.changes || null,
+      metadata: row.metadata || null,
+    }
+  })
+
   return {
-    data: data || [],
+    data: rows,
     total: count || 0
   }
 }
@@ -3964,4 +4179,19 @@ const STATE_NAME_MAP: Record<string, string> = {
   OK:'Oklahoma',OR:'Oregon',PA:'Pennsylvania',RI:'Rhode Island',SC:'South Carolina',
   SD:'South Dakota',TN:'Tennessee',TX:'Texas',UT:'Utah',VT:'Vermont',
   VA:'Virginia',WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',DC:'D.C.',
+}
+
+export async function getPlatformAuditLogsExport(
+  filters?: PlatformAuditLogFilters,
+  cap: number = 5000
+): Promise<PlatformAuditLogsExportResult> {
+  const normalizedCap = Math.max(1, Math.min(cap, 10000))
+  const result = await getPlatformAuditLogs(filters, normalizedCap, 0)
+
+  return {
+    data: result.data,
+    total: result.total,
+    cap: normalizedCap,
+    capped: result.total > normalizedCap,
+  }
 }

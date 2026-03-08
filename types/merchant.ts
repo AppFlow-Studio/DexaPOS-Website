@@ -5,6 +5,21 @@
 // MERCHANT SUMMARY (from admin_merchant_summary view)
 // ============================================================================
 
+export type MerchantOnboardingStatus =
+  | 'created'
+  | 'onboarding'
+  | 'active'
+  | 'suspended'
+  | 'cancelled'
+
+export interface MerchantOnboardingChecklist {
+  businessInfo: boolean
+  ownerInvited: boolean
+  billingAdded: boolean
+  firstLocation: boolean
+  firstPayment: boolean
+}
+
 export interface MerchantSummary {
   id: string
   name: string
@@ -14,6 +29,8 @@ export interface MerchantSummary {
   created_at: string
   updated_at: string | null
   public_metadata: Record<string, unknown> | null
+  pricing_strategy?: 'manual' | 'dual'
+  dual_pricing_percentage?: number
   total_locations: number
   active_locations: number
   active_staff_count: number
@@ -21,6 +38,14 @@ export interface MerchantSummary {
   revenue_today: number
   last_order_at: string | null
   derived_status: 'active' | 'inactive' | 'onboarding'
+  onboarding_status?: MerchantOnboardingStatus
+  onboarding_completed_at?: string | null
+  activated_at?: string | null
+  owner_first_name?: string | null
+  owner_last_name?: string | null
+  owner_email?: string | null
+  owner_phone?: string | null
+  notes_count?: number
 }
 
 // ============================================================================
@@ -39,6 +64,7 @@ export interface LocationSummary {
   timezone: string | null
   pricing_strategy?: 'manual' | 'dual'
   dual_pricing_percentage?: number
+  use_merchant_pricing_defaults?: boolean
   orders_today: number
   revenue_today: number
 }
@@ -48,6 +74,17 @@ export interface LocationSummary {
 // ============================================================================
 
 export interface MerchantDetails extends MerchantSummary {
+  business_legal_name?: string | null
+  dba_name?: string | null
+  business_type?: string | null
+  ein_last_four?: string | null
+  business_address_line1?: string | null
+  business_address_line2?: string | null
+  business_city?: string | null
+  business_state?: string | null
+  business_postal_code?: string | null
+  business_country?: string | null
+  onboarding_checklist?: MerchantOnboardingChecklist
   locations: LocationSummary[]
 }
 
@@ -57,8 +94,8 @@ export interface MerchantDetails extends MerchantSummary {
 
 export interface MerchantFilters {
   search: string
-  status: 'all' | 'active' | 'inactive' | 'onboarding'
-  sortBy: 'name' | 'created_at' | 'orders_today' | 'revenue_today'
+  status: 'all' | MerchantOnboardingStatus | 'inactive'
+  sortBy: 'name' | 'created_at' | 'status' | 'orders_today' | 'revenue_today'
   sortOrder: 'asc' | 'desc'
 }
 
@@ -84,6 +121,8 @@ export interface MerchantSettingsUpdate {
   name?: string
   type?: string
   public_metadata?: Record<string, unknown>
+  pricing_strategy?: 'manual' | 'dual'
+  dual_pricing_percentage?: number
 }
 
 export interface ToggleLocationResult {
@@ -94,4 +133,21 @@ export interface ToggleLocationResult {
 export interface UpdateMerchantResult {
   success: boolean
   error?: string
+}
+
+export interface UpdateMerchantStatusResult {
+  success: boolean
+  error?: string
+}
+
+// ============================================================================
+// MERCHANT HEALTH GRID
+// ============================================================================
+
+export interface MerchantHealthSummary extends MerchantSummary {
+  healthScore: number
+  healthTier: 'green' | 'yellow' | 'red'
+  alerts: string[]
+  totalStations: number
+  onlineStations: number
 }

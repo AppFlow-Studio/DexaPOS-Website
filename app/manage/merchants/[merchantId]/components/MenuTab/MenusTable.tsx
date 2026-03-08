@@ -736,7 +736,7 @@ function MenuRow({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <Link
-                  href={`/manage/merchants/${clerkOrgId}/menu/${menu.id}`}
+                  href={`/manage/merchants/${clerkOrgId}/menu/${menu.id}${locationId ? `?location=${locationId}` : ''}`}
                   className="font-medium truncate hover:underline"
                   onClick={(e) => e.stopPropagation()}
                 >
@@ -806,7 +806,7 @@ function MenuRow({
                     Quick View
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href={`/manage/merchants/${clerkOrgId}/menu/${menu.id}`}>
+                    <Link href={`/manage/merchants/${clerkOrgId}/menu/${menu.id}${locationId ? `?location=${locationId}` : ''}`}>
                       <Pencil className="h-4 w-4 mr-2" />
                       Manage Structure
                     </Link>

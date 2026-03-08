@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 export default function NewLocationPage() {
     const { data: userInfo, isLoading } = useUserInfo()
     const clerkOrgId = userInfo?.members?.[0]?.organizations?.id
+    const actorUserId = userInfo?.id
 
     if (isLoading) {
         return (
@@ -40,6 +41,6 @@ export default function NewLocationPage() {
         )
     }
 
-    return <CreateLocationWizard clerkOrgId={clerkOrgId} />
+    return <CreateLocationWizard clerkOrgId={clerkOrgId} actorUserId={actorUserId} />
 }
 

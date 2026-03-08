@@ -50,6 +50,7 @@ BEGIN
                             -- Category-level price
                             'category_price', ci.custom_price,
                             'category_cash_price', ci.custom_cash_price,
+                            'category_delivery_price', ci.custom_delivery_price,
                             'category_is_available', ci.is_available,
                             
                             'menu_item', json_build_object(
@@ -64,6 +65,7 @@ BEGIN
                                 -- Level 1: Base price
                                 'base_price', mi.price,
                                 'base_cash_price', mi.cash_price,
+                                'base_delivery_price', mi.delivery_price,
                                 'base_availability', mi.availability,
                                 
                                 -- Level 2: Location item override
@@ -72,6 +74,7 @@ BEGIN
                                         'id', lio.id,
                                         'custom_price', lio.custom_price,
                                         'custom_cash_price', lio.custom_cash_price,
+                                        'custom_delivery_price', lio.custom_delivery_price,
                                         'price_modifier', lio.price_modifier,
                                         'price_modifier_type', lio.price_modifier_type,
                                         'is_available', lio.is_available,
@@ -87,6 +90,7 @@ BEGIN
                                         'id', lcio.id,
                                         'custom_price', lcio.custom_price,
                                         'custom_cash_price', lcio.custom_cash_price,
+                                        'custom_delivery_price', lcio.custom_delivery_price,
                                         'is_available', lcio.is_available
                                     )
                                     ELSE NULL
@@ -106,7 +110,14 @@ BEGIN
                                     lio.custom_cash_price,
                                     mi.cash_price
                                 ),
-                                
+
+                                'effective_delivery_price', COALESCE(
+                                    lcio.custom_delivery_price,
+                                    ci.custom_delivery_price,
+                                    lio.custom_delivery_price,
+                                    mi.delivery_price
+                                ),
+
                                 -- Availability (AND logic)
                                 'effective_availability', (
                                     mi.availability = true
@@ -114,7 +125,7 @@ BEGIN
                                     AND COALESCE(ci.is_available, true) = true
                                     AND COALESCE(lcio.is_available, true) = true
                                 ),
-                                
+
                                 -- Price source
                                 'price_source', CASE
                                     WHEN lcio.custom_price IS NOT NULL THEN 'location_category'
@@ -122,7 +133,7 @@ BEGIN
                                     WHEN lio.custom_price IS NOT NULL THEN 'location_item'
                                     ELSE 'base'
                                 END,
-                                
+
                                 -- Override flags
                                 'has_location_item_override', (lio.id IS NOT NULL),
                                 'has_category_price', (ci.custom_price IS NOT NULL),
@@ -250,7 +261,12 @@ BEGIN
                                         'level_2_modifier_type', lio.price_modifier_type,
                                         'level_3_category', ci.custom_price,
                                         'level_4_location_category', lcio.custom_price,
-                                        'level_5_location_menu', lmio.custom_price
+                                        'level_5_location_menu', lmio.custom_price,
+                                        'level_1_delivery', mi.delivery_price,
+                                        'level_2_location_item_delivery', lio.custom_delivery_price,
+                                        'level_3_category_delivery', ci.custom_delivery_price,
+                                        'level_4_location_category_delivery', lcio.custom_delivery_price,
+                                        'level_5_location_menu_delivery', lmio.custom_delivery_price
                                     ),
                                     
                                     -- ============================================
@@ -286,7 +302,7 @@ BEGIN
                                     END,
                                     
                                     'effective_cash_price', CASE
-                                        WHEN m.location_id IS NOT NULL THEN 
+                                        WHEN m.location_id IS NOT NULL THEN
                                             COALESCE(ci.custom_cash_price, mi.cash_price)
                                         ELSE COALESCE(
                                             lmio.custom_cash_price,
@@ -296,7 +312,19 @@ BEGIN
                                             mi.cash_price
                                         )
                                     END,
-                                    
+
+                                    'effective_delivery_price', CASE
+                                        WHEN m.location_id IS NOT NULL THEN
+                                            COALESCE(ci.custom_delivery_price, mi.delivery_price)
+                                        ELSE COALESCE(
+                                            lmio.custom_delivery_price,
+                                            lcio.custom_delivery_price,
+                                            ci.custom_delivery_price,
+                                            lio.custom_delivery_price,
+                                            mi.delivery_price
+                                        )
+                                    END,
+
                                     -- ============================================
                                     -- AVAILABILITY (AND Logic through all levels)
                                     -- ============================================
@@ -470,7 +498,8 @@ CREATE OR REPLACE FUNCTION upsert_category_item_override(
     p_display_order INTEGER DEFAULT NULL,
     p_is_featured BOOLEAN DEFAULT NULL,
     p_stock_tracking_mode TEXT DEFAULT NULL,
-    p_current_stock INTEGER DEFAULT NULL
+    p_current_stock INTEGER DEFAULT NULL,
+    p_custom_delivery_price DECIMAL(10,2) DEFAULT NULL
 )
 RETURNS JSON
 LANGUAGE plpgsql
@@ -493,11 +522,12 @@ BEGIN
             v_update_table := 'menu_items';
             
             UPDATE menu_items
-            SET 
+            SET
                 price = COALESCE(p_custom_price, price),
                 cash_price = COALESCE(p_custom_cash_price, cash_price),
                 availability = COALESCE(p_is_available, availability),
                 stock_tracking_mode = COALESCE(p_stock_tracking_mode, stock_tracking_mode),
+                delivery_price = COALESCE(p_custom_delivery_price, delivery_price),
                 updated_at = NOW()
             WHERE id = p_menu_item_id;
             
@@ -507,18 +537,19 @@ BEGIN
             v_update_table := 'location_item_overrides';
             
             v_is_empty := (
-                p_custom_price IS NULL AND 
-                p_custom_cash_price IS NULL AND 
+                p_custom_price IS NULL AND
+                p_custom_cash_price IS NULL AND
+                p_custom_delivery_price IS NULL AND
                 p_price_modifier IS NULL AND
                 (p_is_available IS NULL OR p_is_available = true) AND
                 p_stock_tracking_mode IS NULL AND
                 p_current_stock IS NULL
             );
-            
+
             IF v_is_empty THEN
                 DELETE FROM location_item_overrides
                 WHERE location_id = p_location_id AND menu_item_id = p_menu_item_id;
-                
+
                 RETURN json_build_object(
                     'success', true,
                     'action', 'deleted',
@@ -528,21 +559,22 @@ BEGIN
             ELSE
                 INSERT INTO location_item_overrides (
                     location_id, menu_item_id,
-                    custom_price, custom_cash_price,
+                    custom_price, custom_cash_price, custom_delivery_price,
                     price_modifier, price_modifier_type,
                     is_available, stock_tracking_mode, current_stock,
                     created_at, updated_at
                 ) VALUES (
                     p_location_id, p_menu_item_id,
-                    p_custom_price, p_custom_cash_price,
+                    p_custom_price, p_custom_cash_price, p_custom_delivery_price,
                     p_price_modifier, p_price_modifier_type,
                     p_is_available, p_stock_tracking_mode, p_current_stock,
                     NOW(), NOW()
                 )
-                ON CONFLICT (location_id, menu_item_id) 
+                ON CONFLICT (location_id, menu_item_id)
                 DO UPDATE SET
                     custom_price = COALESCE(EXCLUDED.custom_price, location_item_overrides.custom_price),
                     custom_cash_price = COALESCE(EXCLUDED.custom_cash_price, location_item_overrides.custom_cash_price),
+                    custom_delivery_price = COALESCE(EXCLUDED.custom_delivery_price, location_item_overrides.custom_delivery_price),
                     price_modifier = COALESCE(EXCLUDED.price_modifier, location_item_overrides.price_modifier),
                     price_modifier_type = COALESCE(EXCLUDED.price_modifier_type, location_item_overrides.price_modifier_type),
                     is_available = COALESCE(EXCLUDED.is_available, location_item_overrides.is_available),
@@ -563,9 +595,10 @@ BEGIN
             v_update_table := 'category_items';
             
             UPDATE category_items
-            SET 
+            SET
                 custom_price = p_custom_price,
                 custom_cash_price = p_custom_cash_price,
+                custom_delivery_price = p_custom_delivery_price,
                 is_available = COALESCE(p_is_available, is_available),
                 display_order = COALESCE(p_display_order, display_order),
                 is_featured = COALESCE(p_is_featured, is_featured),
@@ -578,19 +611,20 @@ BEGIN
             v_update_table := 'location_category_item_overrides';
             
             v_is_empty := (
-                p_custom_price IS NULL AND 
-                p_custom_cash_price IS NULL AND 
+                p_custom_price IS NULL AND
+                p_custom_cash_price IS NULL AND
+                p_custom_delivery_price IS NULL AND
                 (p_is_available IS NULL OR p_is_available = true) AND
                 p_display_order IS NULL AND
                 p_is_featured IS NULL
             );
-            
+
             IF v_is_empty THEN
                 DELETE FROM location_category_item_overrides
-                WHERE location_id = p_location_id 
-                  AND category_id = p_category_id 
+                WHERE location_id = p_location_id
+                  AND category_id = p_category_id
                   AND menu_item_id = p_menu_item_id;
-                  
+
                 RETURN json_build_object(
                     'success', true,
                     'action', 'deleted',
@@ -600,19 +634,20 @@ BEGIN
             ELSE
                 INSERT INTO location_category_item_overrides (
                     location_id, category_id, menu_item_id,
-                    custom_price, custom_cash_price, is_available,
+                    custom_price, custom_cash_price, custom_delivery_price, is_available,
                     display_order, is_featured,
                     created_at, updated_at
                 ) VALUES (
                     p_location_id, p_category_id, p_menu_item_id,
-                    p_custom_price, p_custom_cash_price, p_is_available,
+                    p_custom_price, p_custom_cash_price, p_custom_delivery_price, p_is_available,
                     p_display_order, p_is_featured,
                     NOW(), NOW()
                 )
-                ON CONFLICT (location_id, category_id, menu_item_id) 
+                ON CONFLICT (location_id, category_id, menu_item_id)
                 DO UPDATE SET
                     custom_price = EXCLUDED.custom_price,
                     custom_cash_price = EXCLUDED.custom_cash_price,
+                    custom_delivery_price = EXCLUDED.custom_delivery_price,
                     is_available = EXCLUDED.is_available,
                     display_order = EXCLUDED.display_order,
                     is_featured = EXCLUDED.is_featured,
@@ -636,18 +671,19 @@ BEGIN
             END IF;
             
             v_is_empty := (
-                p_custom_price IS NULL AND 
-                p_custom_cash_price IS NULL AND 
+                p_custom_price IS NULL AND
+                p_custom_cash_price IS NULL AND
+                p_custom_delivery_price IS NULL AND
                 (p_is_available IS NULL OR p_is_available = true)
             );
-            
+
             IF v_is_empty THEN
                 DELETE FROM location_menu_item_overrides
-                WHERE location_id = p_location_id 
-                  AND menu_id = p_menu_id 
+                WHERE location_id = p_location_id
+                  AND menu_id = p_menu_id
                   AND category_id = p_category_id
                   AND menu_item_id = p_menu_item_id;
-                  
+
                 RETURN json_build_object(
                     'success', true,
                     'action', 'deleted',
@@ -657,17 +693,18 @@ BEGIN
             ELSE
                 INSERT INTO location_menu_item_overrides (
                     location_id, menu_id, category_id, menu_item_id,
-                    custom_price, custom_cash_price, is_available,
+                    custom_price, custom_cash_price, custom_delivery_price, is_available,
                     created_at, updated_at
                 ) VALUES (
                     p_location_id, p_menu_id, p_category_id, p_menu_item_id,
-                    p_custom_price, p_custom_cash_price, COALESCE(p_is_available, true),
+                    p_custom_price, p_custom_cash_price, p_custom_delivery_price, COALESCE(p_is_available, true),
                     NOW(), NOW()
                 )
-                ON CONFLICT (location_id, menu_id, category_id, menu_item_id) 
+                ON CONFLICT (location_id, menu_id, category_id, menu_item_id)
                 DO UPDATE SET
                     custom_price = EXCLUDED.custom_price,
                     custom_cash_price = EXCLUDED.custom_cash_price,
+                    custom_delivery_price = EXCLUDED.custom_delivery_price,
                     is_available = EXCLUDED.is_available,
                     updated_at = NOW();
             END IF;
@@ -907,7 +944,7 @@ $$;
 
 GRANT EXECUTE ON FUNCTION get_categories_for_location(UUID, UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_menu_with_categories(UUID, UUID) TO authenticated;
-GRANT EXECUTE ON FUNCTION upsert_category_item_override(UUID, UUID, UUID, UUID, DECIMAL, DECIMAL, BOOLEAN, DECIMAL, TEXT, INTEGER, BOOLEAN, TEXT, INTEGER) TO authenticated;
+GRANT EXECUTE ON FUNCTION upsert_category_item_override(UUID, UUID, UUID, UUID, DECIMAL, DECIMAL, BOOLEAN, DECIMAL, TEXT, INTEGER, BOOLEAN, TEXT, INTEGER, DECIMAL) TO authenticated;
 GRANT EXECUTE ON FUNCTION add_item_to_category(UUID, UUID, INTEGER, DECIMAL, BOOLEAN) TO authenticated;
 GRANT EXECUTE ON FUNCTION remove_item_from_category(UUID, UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION add_category_to_menu(UUID, UUID, INTEGER, TEXT) TO authenticated;
@@ -998,6 +1035,7 @@ BEGIN
                             -- Category-level price
                             'category_price', ci.custom_price,
                             'category_cash_price', ci.custom_cash_price,
+                            'category_delivery_price', ci.custom_delivery_price,
                             'category_is_available', ci.is_available,
                             
                             'menu_item', json_build_object(
@@ -1012,6 +1050,7 @@ BEGIN
                                 -- Level 1: Base price
                                 'base_price', mi.price,
                                 'base_cash_price', mi.cash_price,
+                                'base_delivery_price', mi.delivery_price,
                                 'base_availability', mi.availability,
                                 
                                 -- Level 2: Location item override
@@ -1020,6 +1059,7 @@ BEGIN
                                         'id', lio.id,
                                         'custom_price', lio.custom_price,
                                         'custom_cash_price', lio.custom_cash_price,
+                                        'custom_delivery_price', lio.custom_delivery_price,
                                         'price_modifier', lio.price_modifier,
                                         'price_modifier_type', lio.price_modifier_type,
                                         'is_available', lio.is_available,
@@ -1035,6 +1075,7 @@ BEGIN
                                         'id', lcio.id,
                                         'custom_price', lcio.custom_price,
                                         'custom_cash_price', lcio.custom_cash_price,
+                                        'custom_delivery_price', lcio.custom_delivery_price,
                                         'is_available', lcio.is_available
                                     )
                                     ELSE NULL
@@ -1054,7 +1095,14 @@ BEGIN
                                     lio.custom_cash_price,
                                     mi.cash_price
                                 ),
-                                
+
+                                'effective_delivery_price', COALESCE(
+                                    lcio.custom_delivery_price,
+                                    ci.custom_delivery_price,
+                                    lio.custom_delivery_price,
+                                    mi.delivery_price
+                                ),
+
                                 -- Availability (AND logic)
                                 'effective_availability', (
                                     mi.availability = true
@@ -1062,7 +1110,7 @@ BEGIN
                                     AND COALESCE(ci.is_available, true) = true
                                     AND COALESCE(lcio.is_available, true) = true
                                 ),
-                                
+
                                 -- Price source
                                 'price_source', CASE
                                     WHEN lcio.custom_price IS NOT NULL THEN 'location_category'
@@ -1070,7 +1118,7 @@ BEGIN
                                     WHEN lio.custom_price IS NOT NULL THEN 'location_item'
                                     ELSE 'base'
                                 END,
-                                
+
                                 -- Override flags
                                 'has_location_item_override', (lio.id IS NOT NULL),
                                 'has_category_price', (ci.custom_price IS NOT NULL),

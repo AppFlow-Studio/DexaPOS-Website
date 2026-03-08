@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Building2, MapPin, Users, ShoppingCart, DollarSign } from 'lucide-react'
+import { Building2, MapPin, Users, ShoppingCart, DollarSign, MessageSquare } from 'lucide-react'
 import type { MerchantSummary } from '@/types/merchant'
 import { formatDistanceToNow } from 'date-fns'
 import Image from 'next/image'
@@ -22,12 +22,17 @@ const formatCurrency = (amount: number) => {
 }
 
 const statusColors: Record<string, string> = {
+  created: 'bg-slate-100 text-slate-700 dark:bg-slate-900/50 dark:text-slate-300',
   active: 'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400',
+  suspended: 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400',
+  cancelled: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-300',
   inactive: 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400',
   onboarding: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-400',
 }
 
 export function MerchantCard({ merchant, onClick }: MerchantCardProps) {
+  const merchantStatus = merchant.onboarding_status || merchant.derived_status
+
   return (
     <Card
       className="cursor-pointer hover:shadow-md transition-shadow"
@@ -46,13 +51,18 @@ export function MerchantCard({ merchant, onClick }: MerchantCardProps) {
             </div>
             <div>
               <h3 className="font-semibold text-foreground">{merchant.name}</h3>
+              {(merchant.owner_first_name || merchant.owner_last_name) && (
+                <p className="text-xs text-muted-foreground">
+                  Owner: {`${merchant.owner_first_name || ''} ${merchant.owner_last_name || ''}`.trim()}
+                </p>
+              )}
               {merchant.type && (
                 <p className="text-sm text-muted-foreground capitalize">{merchant.type}</p>
               )}
             </div>
           </div>
-          <Badge className={statusColors[merchant.derived_status] || statusColors.onboarding}>
-            {merchant.derived_status}
+          <Badge className={statusColors[merchantStatus] || statusColors.onboarding}>
+            {merchantStatus.replace('_', ' ')}
           </Badge>
         </div>
 
@@ -81,12 +91,18 @@ export function MerchantCard({ merchant, onClick }: MerchantCardProps) {
         </div>
 
         {/* Footer */}
-        <div className="mt-4 pt-3 border-t border-border">
+        <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
           <p className="text-xs text-muted-foreground">
             {merchant.last_order_at
               ? `Last order ${formatDistanceToNow(new Date(merchant.last_order_at), { addSuffix: true })}`
               : 'No orders yet'}
           </p>
+          {(merchant.notes_count || 0) > 0 && (
+            <div className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <MessageSquare className="h-3.5 w-3.5" />
+              {merchant.notes_count}
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

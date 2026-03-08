@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -36,27 +36,32 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
     Search,
-    Filter,
     MoreHorizontal,
-    Plus,
     UserPlus,
     Mail,
-    Phone,
-    MapPin,
-    Calendar,
-    Shield,
     Edit,
-    Trash2,
     Eye,
     UserCheck,
     UserX,
+    KeyRound,
+    Copy,
 } from 'lucide-react'
 import { useOrganizationUsers } from '../hooks/useOrganizationUsers'
 import { useAuth, useUser } from '@clerk/nextjs'
-import { SendOrganizationMembersInviteButton } from '../organizations/[organizationId]/components/SendOrganizationMembersInviteButton'
+// import { SendOrganizationMembersInviteButton } from '../organizations/[organizationId]/components/SendOrganizationMembersInviteButton'
 import { useOrganizationInfo } from '../hooks/useOrganizationInfo'
 import { useRouter } from 'next/navigation'
 import { AdminInviteWizard } from '../organizations/[organizationId]/components/AdminInviteWizard'
+import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
+import { ClerkResendInvitationAdmin } from '../organizations/actions/clerk-resend-invitation-admin'
+import { ClerkRevokeInvitation } from '../organizations/actions/clerk-revoke-invitation'
+import { toast } from 'sonner'
+import {
+    changeAdminUserRole,
+    deactivateAdminUser,
+    resetAdminUserPassword,
+} from '../actions/admin-user-management'
+import { HQ_ROLES, type HQRoleCode } from '@/types/admin'
 
 // HQ Organization ID for direct admin invites
 const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID || 'org_33z36QibAMZy6kc2xZNYmDl5duh'
@@ -75,18 +80,51 @@ const statusColors = {
     Pending: 'outline',
 }
 
+const inviteStatusVariants: Record<string, "default" | "destructive" | "outline" | "secondary"> = {
+    pending: 'outline',
+    accepted: 'default',
+    revoked: 'secondary',
+    direct_created: 'default',
+}
+
 export default function UsersPage() {
     const router = useRouter()
     const { userId, orgId } = useAuth()
+    const { hasPermission, role_level, isLoading: permissionsLoading } = useAdminPermissions()
+    const canManageUsers = hasPermission('users.manage')
     const [searchTerm, setSearchTerm] = useState('')
     const [roleFilter, setRoleFilter] = useState('all')
     const [statusFilter, setStatusFilter] = useState('all')
     const [isAddUserOpen, setIsAddUserOpen] = useState(false)
     const [activeTab, setActiveTab] = useState('users')
     const [isAdminInviteOpen, setIsAdminInviteOpen] = useState(false)
+    const [inviteActionId, setInviteActionId] = useState<string | null>(null)
+    const [isEditRoleDialogOpen, setIsEditRoleDialogOpen] = useState(false)
+    const [selectedMemberForRoleEdit, setSelectedMemberForRoleEdit] = useState<any | null>(null)
+    const [selectedRoleCode, setSelectedRoleCode] = useState<HQRoleCode>('hq.manager')
+    const [userActionId, setUserActionId] = useState<string | null>(null)
+    const [resetPasswordResult, setResetPasswordResult] = useState<{
+        userName: string
+        userEmail: string
+        tempPassword: string
+    } | null>(null)
+    const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false)
     const { user } = useUser()
-    const { data: users, isLoading, error } = useOrganizationUsers(orgId as string)
-    const { data: organizationInfo, refetch: refetchOrganizationInfo } = useOrganizationInfo(user?.publicMetadata.organizationId as string)
+    const fallbackOrgId = user?.publicMetadata?.organizationId as string | undefined
+    const resolvedOrganizationId = DEXA_HQ_ORG_ID || fallbackOrgId || (orgId as string)
+    const { data: users, isLoading, error, refetch: refetchUsers } = useOrganizationUsers(resolvedOrganizationId as string)
+    const { data: organizationInfo, refetch: refetchOrganizationInfo } = useOrganizationInfo(resolvedOrganizationId as string)
+    const adminInvites = organizationInfo?.pending_org_admin_invites || []
+
+    useEffect(() => {
+        if (permissionsLoading) return
+        if (!canManageUsers) {
+            router.replace('/manage?denied=1&required=users.manage')
+        }
+    }, [canManageUsers, permissionsLoading, router])
+
+    if (permissionsLoading) return <div>Loading...</div>
+    if (!canManageUsers) return <div>Redirecting...</div>
 
     if (isLoading) return <div>Loading...</div>
     if (error) return <div>Error: {error.message}</div>
@@ -119,6 +157,161 @@ export default function UsersPage() {
         return `${first_name.charAt(0)}${last_name.charAt(0)}`.toUpperCase()
     }
 
+    const getInviteDisplayName = (invite: any) => {
+        const fullName = `${invite.first_name || ''} ${invite.last_name || ''}`.trim()
+        if (fullName) return fullName
+        return invite.email?.split('@')?.[0] || 'Pending admin'
+    }
+
+    const getInviteStatusLabel = (status?: string | null) => {
+        if (!status) return 'Unknown'
+        return status
+            .split('_')
+            .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(' ')
+    }
+
+    const openEditRoleDialog = (member: any) => {
+        const currentRole = member?.role as HQRoleCode | undefined
+        setSelectedMemberForRoleEdit(member)
+        setSelectedRoleCode(
+            currentRole && HQ_ROLES[currentRole] ? currentRole : 'hq.manager'
+        )
+        setIsEditRoleDialogOpen(true)
+    }
+
+    const handleSaveRole = async () => {
+        if (!selectedMemberForRoleEdit?.users?.id) return
+        const actionId = `role:${selectedMemberForRoleEdit.users.id}`
+        setUserActionId(actionId)
+        try {
+            const result = await changeAdminUserRole({
+                userId: selectedMemberForRoleEdit.users.id,
+                roleCode: selectedRoleCode,
+                organizationId: resolvedOrganizationId,
+            })
+            if (!result.success) {
+                toast.error(result.message || 'Failed to update role')
+                return
+            }
+            toast.success('Role updated successfully')
+            setIsEditRoleDialogOpen(false)
+            setSelectedMemberForRoleEdit(null)
+            await refetchUsers()
+        } catch (error) {
+            console.error('[UsersPage] Failed to update role:', error)
+            toast.error('Failed to update role')
+        } finally {
+            setUserActionId(null)
+        }
+    }
+
+    const handleDeactivateUser = async (member: any) => {
+        const userIdToDeactivate = member?.users?.id as string | undefined
+        if (!userIdToDeactivate) return
+
+        const userName = `${member?.users?.first_name || ''} ${member?.users?.last_name || ''}`.trim() || member?.users?.email || 'this user'
+        const confirmed = window.confirm(`Deactivate ${userName}? They will no longer be able to sign in.`)
+        if (!confirmed) return
+
+        const actionId = `deactivate:${userIdToDeactivate}`
+        setUserActionId(actionId)
+        try {
+            const result = await deactivateAdminUser({
+                userId: userIdToDeactivate,
+                organizationId: resolvedOrganizationId,
+            })
+            if (!result.success) {
+                toast.error(result.message || 'Failed to deactivate user')
+                return
+            }
+            toast.success('User deactivated')
+            await refetchUsers()
+        } catch (error) {
+            console.error('[UsersPage] Failed to deactivate user:', error)
+            toast.error('Failed to deactivate user')
+        } finally {
+            setUserActionId(null)
+        }
+    }
+
+    const handleResetPassword = async (member: any) => {
+        const userIdToReset = member?.users?.id as string | undefined
+        if (!userIdToReset) return
+
+        const actionId = `reset:${userIdToReset}`
+        setUserActionId(actionId)
+        try {
+            const result = await resetAdminUserPassword({
+                userId: userIdToReset,
+                organizationId: resolvedOrganizationId,
+            })
+            if (!result.success || !result.tempPassword) {
+                toast.error(result.message || 'Failed to reset password')
+                return
+            }
+            setResetPasswordResult({
+                userName: `${member?.users?.first_name || ''} ${member?.users?.last_name || ''}`.trim() || member?.users?.email || userIdToReset,
+                userEmail: member?.users?.email || '',
+                tempPassword: result.tempPassword,
+            })
+            setIsResetPasswordDialogOpen(true)
+            await refetchUsers()
+        } catch (error) {
+            console.error('[UsersPage] Failed to reset password:', error)
+            toast.error('Failed to reset password')
+        } finally {
+            setUserActionId(null)
+        }
+    }
+
+    const handleCopyTempPassword = async () => {
+        if (!resetPasswordResult?.tempPassword) return
+        try {
+            await navigator.clipboard.writeText(resetPasswordResult.tempPassword)
+            toast.success('Temporary password copied')
+        } catch (error) {
+            console.error('[UsersPage] Failed to copy temp password:', error)
+            toast.error('Failed to copy password')
+        }
+    }
+
+    const handleResendInvite = async (invitationId: string) => {
+        setInviteActionId(invitationId)
+        try {
+            const result = await ClerkResendInvitationAdmin(invitationId)
+            if (result?.success) {
+                toast.success('Invitation resent')
+                await refetchOrganizationInfo()
+                return
+            }
+            toast.error(result?.message || 'Failed to resend invitation')
+        } catch (error) {
+            console.error('[UsersPage] Resend invite failed:', error)
+            toast.error('Failed to resend invitation')
+        } finally {
+            setInviteActionId(null)
+        }
+    }
+
+    const handleRevokeInvite = async (invitationId: string) => {
+        setInviteActionId(invitationId)
+        try {
+            const result = await ClerkRevokeInvitation(invitationId)
+            if (result?.success) {
+                toast.success('Invitation revoked')
+                await refetchOrganizationInfo()
+                return
+            }
+            toast.error(result?.message || 'Failed to revoke invitation')
+        } catch (error) {
+            console.error('[UsersPage] Revoke invite failed:', error)
+            toast.error('Failed to revoke invitation')
+        } finally {
+            setInviteActionId(null)
+        }
+    }
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -137,7 +330,6 @@ export default function UsersPage() {
                         <UserPlus className="h-4 w-4 mr-2" />
                         Invite Admin
                     </Button>
-                    <SendOrganizationMembersInviteButton organizationId={user?.publicMetadata.organizationId as string} refetch={() => refetchOrganizationInfo()} role_types='hq' />
                 </div>
                 <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
                     <DialogTrigger asChild>
@@ -210,7 +402,7 @@ export default function UsersPage() {
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
                 <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="users">Users</TabsTrigger>
-                    <TabsTrigger value="invites">Pending Invites</TabsTrigger>
+                    <TabsTrigger value="invites">Invites</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="users" className="space-y-4">
@@ -328,14 +520,15 @@ export default function UsersPage() {
                                     <TableRow>
                                         <TableHead>User</TableHead>
                                         <TableHead>Role</TableHead>
-                                        {/* <TableHead>Status</TableHead> */}
-                                        <TableHead>Last Login</TableHead>
+                                        <TableHead>Assigned Merchants</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead>Last Active</TableHead>
                                         <TableHead>Join Date</TableHead>
                                         <TableHead className="w-12.5"></TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {filteredUsers?.map((user) => (
+                                    {filteredUsers?.map((user ) => (
                                         <TableRow key={user.id} className="cursor-pointer" onClick={() => router.push(`/manage/users/${user.users.id}`)}>
                                             <TableCell>
                                                 <div className="flex items-center space-x-3">
@@ -354,46 +547,73 @@ export default function UsersPage() {
                                                     {user?.role}
                                                 </Badge>
                                             </TableCell>
-                                            {/* <TableCell>
-                                        <Badge variant={statusColors[user.public_metadata.status as keyof typeof statusColors]}>
-                                            {user.public_metadata.status}
-                                        </Badge>
-                                    </TableCell> */}
-                                            {/* <TableCell className="text-sm">{formatDate(user.lastLogin)}</TableCell> */}
+                                            <TableCell className="text-sm">
+                                                {user?.assigned_merchant_count || 0}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant={(statusColors[(user?.users?.public_metadata?.status || 'Active') as keyof typeof statusColors] || 'secondary') as "default" | "destructive" | "outline" | "secondary"}>
+                                                    {user?.users?.public_metadata?.status || 'Active'}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-sm">{formatDate(user?.users?.updated_at || user.created_at)}</TableCell>
                                             <TableCell className="text-sm">{formatDate(user.created_at)}</TableCell>
                                             <TableCell>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" size="icon">
-                                                            <MoreHorizontal className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                        <DropdownMenuItem>
-                                                            <Eye className="mr-2 h-4 w-4" />
-                                                            View Details
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem>
-                                                            <Edit className="mr-2 h-4 w-4" />
-                                                            Edit User
-                                                        </DropdownMenuItem>
-                                                        {/* <DropdownMenuSeparator />
-                                                {user.public_metadata.status === 'Active' ? (
-                                                    <DropdownMenuItem className="text-yellow-600">
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                onClick={(event) => event.stopPropagation()}
+                                                            >
+                                                                <MoreHorizontal className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                            <DropdownMenuItem
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation()
+                                                                    router.push(`/manage/users/${user.users.id}`)
+                                                                }}
+                                                            >
+                                                                <Eye className="mr-2 h-4 w-4" />
+                                                                View Details
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation()
+                                                                    openEditRoleDialog(user)
+                                                                }}
+                                                                disabled={userActionId === `role:${user.users.id}`}
+                                                            >
+                                                                <Edit className="mr-2 h-4 w-4" />
+                                                                Edit Role
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation()
+                                                                    void handleResetPassword(user)
+                                                                }}
+                                                                disabled={userActionId === `reset:${user.users.id}`}
+                                                            >
+                                                                <KeyRound className="mr-2 h-4 w-4" />
+                                                                Reset Password
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuSeparator />
+                                                            <DropdownMenuItem
+                                                                className="text-yellow-600"
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation()
+                                                                    void handleDeactivateUser(user)
+                                                                }}
+                                                                disabled={
+                                                                    userActionId === `deactivate:${user.users.id}` ||
+                                                                    (user?.users?.public_metadata?.status || 'Active') === 'Inactive'
+                                                                }
+                                                            >
                                                         <UserX className="mr-2 h-4 w-4" />
                                                         Deactivate
-                                                    </DropdownMenuItem>
-                                                ) : (
-                                                    <DropdownMenuItem className="text-green-600">
-                                                        <UserCheck className="mr-2 h-4 w-4" />
-                                                        Activate
-                                                    </DropdownMenuItem>
-                                                )}
-                                                <DropdownMenuItem className="text-red-600">
-                                                    <Trash2 className="mr-2 h-4 w-4" />
-                                                    Delete User
-                                                </DropdownMenuItem> */}
+                                                            </DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </TableCell>
@@ -410,8 +630,8 @@ export default function UsersPage() {
                         <CardHeader>
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <CardTitle>Pending Invites</CardTitle>
-                                    <CardDescription>Manage pending role invitations</CardDescription>
+                                    <CardTitle>Invites</CardTitle>
+                                    <CardDescription>Manage admin and member invitations</CardDescription>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Input placeholder="Search invites..." className="w-72" />
@@ -422,7 +642,6 @@ export default function UsersPage() {
                                         <UserPlus className="h-4 w-4 mr-2" />
                                         Invite Admin
                                     </Button>
-                                    <SendOrganizationMembersInviteButton organizationId={user?.publicMetadata.organizationId as string} refetch={() => refetchOrganizationInfo()} role_types='hq' />
                                 </div>
                             </div>
                         </CardHeader>
@@ -432,37 +651,35 @@ export default function UsersPage() {
                                     <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
                                         <Mail className="h-6 w-6 text-muted-foreground" />
                                     </div>
-                                    <div className="text-sm text-muted-foreground">No pending invites.</div>
+                                    <div className="text-sm text-muted-foreground">No invites found.</div>
                                 </div>
                             )}
 
-                            {organizationInfo?.pending_org_admin_invites?.length > 0 && (
+                            {adminInvites.length > 0 && (
                                 <div className="mb-6">
                                     <div className="text-sm font-medium mb-3">Admin Invites</div>
                                     <div className="divide-y rounded-md border">
-                                        {organizationInfo.pending_org_admin_invites.map((inv: any) => (
+                                        {adminInvites.map((inv: any) => (
                                             <div key={inv.id} className="flex items-center justify-between p-4">
                                                 <div className="flex items-center gap-3">
                                                     <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
                                                         {(inv.email?.[0] || 'A').toUpperCase()}
                                                     </div>
                                                     <div>
-                                                        <div className={`font-medium ${inv.status === 'pending' ? 'text-yellow-500' :
-                                                            inv.status === 'revoked' ? 'text-red-500' :
-                                                                inv.status === 'accepted' ? 'text-green-500' :
-                                                                    inv.status === 'expired' ? 'text-red-500' :
-                                                                        inv.status === 'cancelled' ? 'text-red-500' :
-                                                                            inv.status === 'failed' ? 'text-red-500' : 'text-red-500'
-                                                            }`}>
-                                                            {inv.status === 'pending' ? 'Pending Invitation' :
-                                                                inv.status === 'revoked' ? 'Invitation Revoked' :
-                                                                    inv.status === 'accepted' ? 'Invitation Accepted' :
-                                                                        inv.status === 'expired' ? 'Invitation Expired' :
-                                                                            inv.status === 'cancelled' ? 'Invitation Cancelled' :
-                                                                                inv.status === 'failed' ? 'Invitation Failed' : 'Invitation Revoked'
-                                                            }
+                                                        <div className="font-medium">
+                                                            {getInviteDisplayName(inv)}
                                                         </div>
                                                         <div className="text-sm text-muted-foreground">{inv.email}</div>
+                                                        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                                            <span>Invited by {inv.invited_by_user?.first_name || inv.invited_by || 'Unknown'}</span>
+                                                            <span>{formatDate(inv.created_at)}</span>
+                                                            <Badge
+                                                                variant={inviteStatusVariants[(inv.status || '').toLowerCase()] || 'secondary'}
+                                                                className="text-[10px] uppercase tracking-wide"
+                                                            >
+                                                                {getInviteStatusLabel(inv.status)}
+                                                            </Badge>
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-4">
@@ -476,9 +693,28 @@ export default function UsersPage() {
                                                         <DropdownMenuContent align="end">
                                                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                                             <DropdownMenuItem>Copy invite link</DropdownMenuItem>
-                                                            <DropdownMenuItem>Resend</DropdownMenuItem>
+                                                            <DropdownMenuItem
+                                                                disabled={
+                                                                    !inv.clerk_invite_id ||
+                                                                    inviteActionId === inv.clerk_invite_id ||
+                                                                    inv.status !== 'pending'
+                                                                }
+                                                                onClick={() => void handleResendInvite(inv.clerk_invite_id)}
+                                                            >
+                                                                Resend
+                                                            </DropdownMenuItem>
                                                             <DropdownMenuSeparator />
-                                                            <DropdownMenuItem className="text-red-600">Revoke</DropdownMenuItem>
+                                                            <DropdownMenuItem
+                                                                className="text-red-600"
+                                                                disabled={
+                                                                    !inv.clerk_invite_id ||
+                                                                    inviteActionId === inv.clerk_invite_id ||
+                                                                    inv.status !== 'pending'
+                                                                }
+                                                                onClick={() => void handleRevokeInvite(inv.clerk_invite_id)}
+                                                            >
+                                                                Revoke
+                                                            </DropdownMenuItem>
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 </div>
@@ -538,8 +774,88 @@ export default function UsersPage() {
                 onOpenChange={setIsAdminInviteOpen}
                 onSuccess={() => {
                     refetchOrganizationInfo()
+                    refetchUsers()
                 }}
             />
+
+            <Dialog open={isEditRoleDialogOpen} onOpenChange={setIsEditRoleDialogOpen}>
+                <DialogContent onClick={(event) => event.stopPropagation()}>
+                    <DialogHeader>
+                        <DialogTitle>Edit User Role</DialogTitle>
+                        <DialogDescription>
+                            Update the HQ role for{' '}
+                            <span className="font-medium">
+                                {selectedMemberForRoleEdit?.users?.email || 'selected user'}
+                            </span>
+                            .
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-2 py-2">
+                        <Label htmlFor="role-code">Role</Label>
+                        <Select value={selectedRoleCode} onValueChange={(value) => setSelectedRoleCode(value as HQRoleCode)}>
+                            <SelectTrigger id="role-code">
+                                <SelectValue placeholder="Select role" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {Object.values(HQ_ROLES)
+                                    .filter((role) => role.level <= role_level)
+                                    .sort((a, b) => b.level - a.level)
+                                    .map((role) => (
+                                        <SelectItem key={role.code} value={role.code}>
+                                            {role.name} ({role.code})
+                                        </SelectItem>
+                                    ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsEditRoleDialogOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={() => void handleSaveRole()}
+                            disabled={!selectedMemberForRoleEdit || userActionId === `role:${selectedMemberForRoleEdit?.users?.id}`}
+                        >
+                            {userActionId === `role:${selectedMemberForRoleEdit?.users?.id}` ? 'Saving...' : 'Save Role'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={isResetPasswordDialogOpen}
+                onOpenChange={(open) => {
+                    setIsResetPasswordDialogOpen(open)
+                    if (!open) {
+                        setResetPasswordResult(null)
+                    }
+                }}
+            >
+                <DialogContent onClick={(event) => event.stopPropagation()}>
+                    <DialogHeader>
+                        <DialogTitle>Temporary Password Generated</DialogTitle>
+                        <DialogDescription>
+                            Share this with{' '}
+                            <span className="font-medium">{resetPasswordResult?.userName || 'the user'}</span>{' '}
+                            securely. It is shown only once.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="rounded-md border bg-muted/40 p-3">
+                        <div className="text-xs text-muted-foreground mb-1">{resetPasswordResult?.userEmail}</div>
+                        <div className="font-mono text-sm break-all">{resetPasswordResult?.tempPassword}</div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => void handleCopyTempPassword()}>
+                            <Copy className="h-4 w-4 mr-2" />
+                            Copy
+                        </Button>
+                        <Button onClick={() => setIsResetPasswordDialogOpen(false)}>
+                            Done
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
+

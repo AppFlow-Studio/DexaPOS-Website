@@ -17,8 +17,9 @@ import { Label } from '@/components/ui/label'
 import { useLocationTaxRates, useUpsertTaxRate, useDeactivateTaxRate } from '../hooks/useTaxRates'
 import { useLocationStore, useIsAllLocations, useSelectedLocation } from '@/stores/location-store'
 import { TAX_CATEGORIES, TAX_CATEGORY_LABELS, TAX_CATEGORY_DESCRIPTIONS, TaxCategory } from '@/types/tax'
-import { Plus, Edit, Trash2, AlertCircle, DollarSign, MapPin } from 'lucide-react'
+import { Plus, Edit, Trash2, AlertCircle, DollarSign, MapPin, CreditCard } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
+import Link from 'next/link'
 
 // ============================================================================
 // Main Component
@@ -86,9 +87,17 @@ export default function TaxSettingsPage() {
     if (isAllLocations) {
         return (
             <div className="space-y-6">
-                <div>
-                    <h2 className="text-2xl font-bold">Tax Settings</h2>
-                    <p className="text-muted-foreground">Configure location-specific tax rates</p>
+                <div className="flex items-center justify-between gap-3">
+                    <div>
+                        <h2 className="text-2xl font-bold">Tax Settings</h2>
+                        <p className="text-muted-foreground">Configure location-specific tax rates</p>
+                    </div>
+                    <Button variant="outline" asChild>
+                        <Link href="/dashboard/settings/billing">
+                            <CreditCard className="mr-2 h-4 w-4" />
+                            Billing Method
+                        </Link>
+                    </Button>
                 </div>
 
                 <Card>
@@ -112,11 +121,19 @@ export default function TaxSettingsPage() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div>
-                <h2 className="text-2xl font-bold">Tax Settings</h2>
-                <p className="text-muted-foreground">
-                    Configure tax rates for <span className="font-medium">{selectedLocation?.name}</span>
-                </p>
+            <div className="flex items-center justify-between gap-3">
+                <div>
+                    <h2 className="text-2xl font-bold">Tax Settings</h2>
+                    <p className="text-muted-foreground">
+                        Configure tax rates for <span className="font-medium">{selectedLocation?.name}</span>
+                    </p>
+                </div>
+                <Button variant="outline" asChild>
+                    <Link href="/dashboard/settings/billing">
+                        <CreditCard className="mr-2 h-4 w-4" />
+                        Billing Method
+                    </Link>
+                </Button>
             </div>
 
             {/* Info Alert */}

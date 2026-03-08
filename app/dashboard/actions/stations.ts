@@ -356,12 +356,11 @@ export async function getStationsWithHeartbeats(locationId: string) {
   try {
     const supabase = createServerSupabaseClient();
 
-    // Fetch active stations for the location
+    // Fetch all stations for the location (including deactivated)
     const { data: stations, error: stationsError } = await supabase
       .from("stations")
       .select("*")
       .eq("location_id", locationId)
-      .eq("is_active", true)
       .order("station_number", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: false });
 

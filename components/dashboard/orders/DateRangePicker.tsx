@@ -17,9 +17,9 @@ import { cn } from '@/lib/utils'
 
 export type DatePreset =
     | 'today'
+    | 'yesterday'
     | 'last_7_days'
     | 'last_30_days'
-    | 'last_90_days'
     | 'this_month'
     | 'last_month'
     | 'custom'
@@ -30,6 +30,7 @@ interface DateRangePickerProps {
     onDateRangeChange: (from: Date | null, to: Date | null) => void
     preset?: DatePreset
     onPresetChange?: (preset: DatePreset) => void
+    initializeWhenEmpty?: boolean
     className?: string
 }
 
@@ -38,8 +39,21 @@ const PRESETS: Array<{ value: DatePreset; label: string; getDates: () => { from:
         value: 'today',
         label: 'Today',
         getDates: () => {
-            const to = new Date()
             const from = new Date()
+            const to = new Date()
+            from.setHours(0, 0, 0, 0)
+            return { from, to }
+        },
+    },
+    {
+        value: 'yesterday',
+        label: 'Yesterday',
+        getDates: () => {
+            const from = new Date()
+            from.setDate(from.getDate() - 1)
+            from.setHours(0, 0, 0, 0)
+            const to = new Date(from)
+            to.setHours(23, 59, 59, 999)
             return { from, to }
         },
     },
@@ -47,9 +61,10 @@ const PRESETS: Array<{ value: DatePreset; label: string; getDates: () => { from:
         value: 'last_7_days',
         label: 'Last 7 days',
         getDates: () => {
-            const to = new Date()
             const from = new Date()
-            from.setDate(from.getDate() - 7)
+            const to = new Date()
+            from.setDate(from.getDate() - 6)
+            from.setHours(0, 0, 0, 0)
             return { from, to }
         },
     },
@@ -57,19 +72,10 @@ const PRESETS: Array<{ value: DatePreset; label: string; getDates: () => { from:
         value: 'last_30_days',
         label: 'Last 30 days',
         getDates: () => {
-            const to = new Date()
             const from = new Date()
-            from.setDate(from.getDate() - 30)
-            return { from, to }
-        },
-    },
-    {
-        value: 'last_90_days',
-        label: 'Last 90 days',
-        getDates: () => {
             const to = new Date()
-            const from = new Date()
-            from.setDate(from.getDate() - 90)
+            from.setDate(from.getDate() - 29)
+            from.setHours(0, 0, 0, 0)
             return { from, to }
         },
     },
@@ -119,24 +125,32 @@ export function DateRangePicker({
     onDateRangeChange,
     preset = 'last_7_days',
     onPresetChange,
+    initializeWhenEmpty = true,
     className,
 }: DateRangePickerProps) {
-    const [isCustomOpen, setIsCustomOpen] = React.useState(false)
+    const [showCustomInputs, setShowCustomInputs] = React.useState(preset === 'custom')
     const [customFrom, setCustomFrom] = React.useState<string>('')
     const [customTo, setCustomTo] = React.useState<string>('')
 
     // Initialize with preset if dates are null
     React.useEffect(() => {
+        if (!initializeWhenEmpty) return
         if (!dateFrom || !dateTo) {
             const presetConfig = PRESETS.find(p => p.value === preset) || PRESETS[0]
             const { from, to } = presetConfig.getDates()
             onDateRangeChange(from, to)
         }
-    }, [])
+    }, [initializeWhenEmpty])
+
+    React.useEffect(() => {
+        if (preset === 'custom') {
+            setShowCustomInputs(true)
+        }
+    }, [preset])
 
     const handlePresetSelect = (presetValue: DatePreset) => {
         if (presetValue === 'custom') {
-            setIsCustomOpen(true)
+            setShowCustomInputs(true)
             if (dateFrom && dateTo) {
                 setCustomFrom(formatDateForInput(dateFrom))
                 setCustomTo(formatDateForInput(dateTo))
@@ -145,6 +159,7 @@ export function DateRangePicker({
             return
         }
 
+        setShowCustomInputs(false)
         const presetConfig = PRESETS.find(p => p.value === presetValue)
         if (presetConfig) {
             const { from, to } = presetConfig.getDates()
@@ -160,7 +175,6 @@ export function DateRangePicker({
             from.setHours(0, 0, 0, 0)
             to.setHours(23, 59, 59, 999)
             onDateRangeChange(from, to)
-            setIsCustomOpen(false)
             onPresetChange?.('custom')
         }
     }
@@ -172,7 +186,7 @@ export function DateRangePicker({
 
     return (
         <div className={cn('flex items-center gap-2', className)}>
-            <DropdownMenu open={isCustomOpen} onOpenChange={setIsCustomOpen}>
+            <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
                     <Button variant="outline" className="gap-2">
                         <Calendar className="h-4 w-4" />
@@ -180,13 +194,18 @@ export function DateRangePicker({
                         <ChevronDown className="h-4 w-4" />
                     </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuContent align="start" className="w-72 z-[200]">
                     <DropdownMenuLabel>Presets</DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     {PRESETS.map((presetOption) => (
                         <DropdownMenuItem
                             key={presetOption.value}
-                            onClick={() => handlePresetSelect(presetOption.value)}
+                            onSelect={(event) => {
+                                if (presetOption.value === 'custom') {
+                                    event.preventDefault()
+                                }
+                                handlePresetSelect(presetOption.value)
+                            }}
                             className={cn(
                                 preset === presetOption.value && 'bg-accent'
                             )}
@@ -194,38 +213,42 @@ export function DateRangePicker({
                             {presetOption.label}
                         </DropdownMenuItem>
                     ))}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Custom Range</DropdownMenuLabel>
-                    <div className="p-2 space-y-2">
-                        <div className="space-y-1">
-                            <Label htmlFor="custom-from" className="text-xs">From</Label>
-                            <Input
-                                id="custom-from"
-                                type="date"
-                                value={customFrom}
-                                onChange={(e) => setCustomFrom(e.target.value)}
-                                className="h-8"
-                            />
-                        </div>
-                        <div className="space-y-1">
-                            <Label htmlFor="custom-to" className="text-xs">To</Label>
-                            <Input
-                                id="custom-to"
-                                type="date"
-                                value={customTo}
-                                onChange={(e) => setCustomTo(e.target.value)}
-                                className="h-8"
-                            />
-                        </div>
-                        <Button
-                            size="sm"
-                            onClick={handleCustomDateApply}
-                            className="w-full"
-                            disabled={!customFrom || !customTo}
-                        >
-                            Apply
-                        </Button>
-                    </div>
+                    {showCustomInputs && (
+                        <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel>Custom Range</DropdownMenuLabel>
+                            <div className="p-2 space-y-2">
+                                <div className="space-y-1">
+                                    <Label htmlFor="custom-from" className="text-xs">From</Label>
+                                    <Input
+                                        id="custom-from"
+                                        type="date"
+                                        value={customFrom}
+                                        onChange={(e) => setCustomFrom(e.target.value)}
+                                        className="h-8"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label htmlFor="custom-to" className="text-xs">To</Label>
+                                    <Input
+                                        id="custom-to"
+                                        type="date"
+                                        value={customTo}
+                                        onChange={(e) => setCustomTo(e.target.value)}
+                                        className="h-8"
+                                    />
+                                </div>
+                                <Button
+                                    size="sm"
+                                    onClick={handleCustomDateApply}
+                                    className="w-full"
+                                    disabled={!customFrom || !customTo}
+                                >
+                                    Apply
+                                </Button>
+                            </div>
+                        </>
+                    )}
                 </DropdownMenuContent>
             </DropdownMenu>
         </div>

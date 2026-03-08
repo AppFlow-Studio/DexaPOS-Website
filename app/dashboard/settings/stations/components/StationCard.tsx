@@ -14,10 +14,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Station,
+  StationWithHeartbeat,
   getStationTypeLabel,
   getStationTypeIcon,
   getSyncRoleLabel,
+  formatLastSeen,
 } from "../hooks/useStations";
 import {
   MoreHorizontal,
@@ -28,12 +29,12 @@ import {
   PowerOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatDistanceToNow, format } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
 import { motion } from "framer-motion";
 
 interface StationCardProps {
-  station: Station;
-  onEdit: (station: Station) => void;
+  station: StationWithHeartbeat;
+  onEdit: (station: StationWithHeartbeat) => void;
   onRemove: (stationId: string) => void;
   onDeactivate: (stationId: string) => void;
   onReactivate: (stationId: string) => void;
@@ -41,8 +42,8 @@ interface StationCardProps {
   onSelect: (selected: boolean) => void;
 }
 
-function StatusBadge({ station }: { station: Station }) {
-  const isOnline = station.is_online;
+function StatusBadge({ station }: { station: StationWithHeartbeat }) {
+  const isOnline = station.latest_heartbeat?.is_online ?? station.is_online;
   const isActive = station.is_active;
 
   if (!isActive) {
@@ -105,7 +106,7 @@ function StatusBadge({ station }: { station: Station }) {
   );
 }
 
-function SyncRoleBadge({ role }: { role: Station["sync_role"] }) {
+function SyncRoleBadge({ role }: { role: StationWithHeartbeat["sync_role"] }) {
   const isLeader = role === "leader";
 
   return (
@@ -127,7 +128,7 @@ function StationIcon({
   type,
   className,
 }: {
-  type: Station["station_type"];
+  type: StationWithHeartbeat["station_type"];
   className?: string;
 }) {
   const label = getStationTypeLabel(type);
@@ -157,7 +158,8 @@ export function StationCard({
   onSelect,
 }: StationCardProps) {
   const router = useRouter();
-  const isOffline = !station.is_online;
+  const isOnline = station.latest_heartbeat?.is_online ?? station.is_online;
+  const isOffline = !isOnline;
   const isInactive = !station.is_active;
 
   const handleCardClick = () => {
@@ -272,11 +274,12 @@ export function StationCard({
               </div>
             )}
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Last Sync</span>
+              <span className="text-muted-foreground">Last Seen</span>
               <span>
-                {station.last_sync_at
-                  ? format(new Date(station.last_sync_at), "MMM d, h:mm a")
-                  : "—"}
+                {formatLastSeen(
+                  station.latest_heartbeat?.heartbeat_at,
+                  station.last_heartbeat_at
+                )}
               </span>
             </div>
           </div>
