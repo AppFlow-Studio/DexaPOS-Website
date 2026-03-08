@@ -943,7 +943,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
               </TableBody>
             </Table>
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-3">
             <Button variant="outline" onClick={handleCopyPinResults}>
               <Copy className="mr-2 h-4 w-4" />
               Copy All

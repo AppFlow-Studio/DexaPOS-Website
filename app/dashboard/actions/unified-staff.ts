@@ -1,6 +1,7 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import {
   UnifiedStaffMember,
   InviteStaffFormData,
@@ -245,7 +246,8 @@ export async function CreatePOSStaff(
     }
 
     // 4. Create member record (links to organization)
-    const { data: member, error: memberError } = await supabase
+    // Must use service role client — members table has no RLS INSERT policy
+    const { data: member, error: memberError } = await createServiceRoleClient()
       .from("members")
       .insert({
         user_id: null, // No Clerk user
@@ -486,7 +488,8 @@ export async function CreateClerkUserDirectly(
     }
 
     // 6. Eagerly create member record — use Clerk membership ID so webhook upsert is a no-op
-    const { data: member, error: memberError } = await supabase
+    // Must use service role client — members table has no RLS INSERT policy
+    const { data: member, error: memberError } = await createServiceRoleClient()
       .from("members")
       .insert({
         id: membership.id,
@@ -657,22 +660,65 @@ export async function InviteClerkStaff(
     // 3. Create Clerk organization invitation
     const clerk = await clerkClient();
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-    const invitation = await clerk.organizations.createOrganizationInvitation({
-      organizationId: clerkOrgId,
-      emailAddress: formData.email,
-      role: "org:member",
-      ...(appUrl && { redirectUrl: `${appUrl}/dashboard` }),
-      publicMetadata: {
-        creationType: "invitation", // Mark as invitation flow
-        roleCode: formData.role_code,
+
+    // Clerk requires inviterUserId to be an org:admin.
+    // Find the first org:admin member; if none, temporarily promote the current user.
+    let inviterUserId = userId;
+    let temporarilyPromoted = false;
+    try {
+      const memberships = await clerk.organizations.getOrganizationMembershipList({
         organizationId: clerkOrgId,
-        merchantId: merchantId,
-        locationAssignments: locationAssignmentsWithPin,
-        firstName: formData.first_name,
-        lastName: formData.last_name,
-        phone: formData.phone,
-      },
-    });
+        limit: 50,
+      });
+      const adminMember = memberships.data.find((m) => m.role === "org:admin");
+      if (adminMember?.publicUserData?.userId) {
+        inviterUserId = adminMember.publicUserData.userId;
+      } else {
+        // No org:admin exists — promote current user temporarily so Clerk accepts the invite
+        await clerk.organizations.updateOrganizationMembership({
+          organizationId: clerkOrgId,
+          userId: inviterUserId,
+          role: "org:admin",
+        });
+        temporarilyPromoted = true;
+      }
+    } catch {
+      // Non-fatal — use current userId as fallback
+    }
+
+    let invitation: Awaited<ReturnType<typeof clerk.organizations.createOrganizationInvitation>> | undefined;
+    try {
+      invitation = await clerk.organizations.createOrganizationInvitation({
+        organizationId: clerkOrgId,
+        inviterUserId,
+        emailAddress: formData.email,
+        role: "org:member",
+        ...(appUrl && { redirectUrl: `${appUrl}/dashboard` }),
+        publicMetadata: {
+          creationType: "invitation", // Mark as invitation flow
+          roleCode: formData.role_code,
+          organizationId: clerkOrgId,
+          merchantId: merchantId,
+          locationAssignments: locationAssignmentsWithPin,
+          firstName: formData.first_name,
+          lastName: formData.last_name,
+          phone: formData.phone,
+        },
+      });
+    } finally {
+      // Revert temporary promotion if we made it
+      if (temporarilyPromoted) {
+        try {
+          await clerk.organizations.updateOrganizationMembership({
+            organizationId: clerkOrgId,
+            userId: inviterUserId,
+            role: "org:member",
+          });
+        } catch {
+          // Non-fatal — leave as org:admin if revert fails
+        }
+      }
+    }
 
     if (!invitation || !invitation.id) {
       return { error: "Failed to create invitation" };
@@ -728,6 +774,12 @@ export async function InviteClerkStaff(
     };
   } catch (error) {
     console.error("[InviteClerkStaff] Unexpected error:", error);
+    console.error("[InviteClerkStaff] Clerk error details:", (error as any)?.errors);
+    const clerkErrors = (error as any)?.errors;
+    if (clerkErrors?.length) {
+      const msg = clerkErrors.map((e: any) => e.longMessage || e.message).join("; ");
+      return { error: msg };
+    }
     return { error: "An unexpected error occurred" };
   }
 }
@@ -1627,18 +1679,9 @@ export async function UpdateStaffProfile(
     if (updates.email !== undefined) profilePayload.email = updates.email;
     if (updates.phone !== undefined) profilePayload.phone = updates.phone;
 
-    // Compute display_name if name fields changed
-    if (updates.first_name !== undefined || updates.last_name !== undefined) {
-      // Fetch current profile for the unchanged half
-      const { data: currentProfile } = await supabase
-        .from("staff_profiles")
-        .select("first_name, last_name")
-        .eq("id", member.staff_profile_id)
-        .single();
-      const fn = updates.first_name ?? currentProfile?.first_name ?? "";
-      const ln = updates.last_name ?? currentProfile?.last_name ?? "";
-      profilePayload.display_name = `${fn} ${ln}`.trim();
-    }
+    // NOTE: display_name is a GENERATED ALWAYS column computed from
+    // first_name || ' ' || last_name — do NOT include it in the update
+    // payload or PostgreSQL will reject the query.
 
     // 3. Update staff_profiles
     const { error: profileError } = await supabase
@@ -1697,8 +1740,7 @@ export async function UpdateStaffProfile(
 
     // Audit
     const staffName =
-      profilePayload.display_name ??
-      `${updates.first_name ?? ""} ${updates.last_name ?? ""}`.trim() ??
+      `${updates.first_name ?? ""} ${updates.last_name ?? ""}`.trim() ||
       "Staff";
     if (member.organization_id) {
       await LogAuditEvent({
