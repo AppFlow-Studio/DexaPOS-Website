@@ -290,12 +290,17 @@ async function handleUserUpdated(ctx: WebhookContext): Promise<Response> {
 
   logEvent(eventType, 'Processing user update', { userId: event.data.id })
 
+  const firstName = event.data.first_name || ''
+  const lastName = event.data.last_name || ''
+  const email = event.data.email_addresses?.[0]?.email_address || ''
+  const displayName = `${firstName} ${lastName}`.trim()
+
   const { data: user, error } = await supabase
     .from('users')
     .update({
-      first_name: event.data.first_name || '',
-      last_name: event.data.last_name || '',
-      email: event.data.email_addresses?.[0]?.email_address || '',
+      first_name: firstName,
+      last_name: lastName,
+      email,
       avatar_url: event.data.image_url,
       public_metadata: event.data.public_metadata || {},
       updated_at: new Date(event.data.updated_at).toISOString(),
@@ -307,6 +312,23 @@ async function handleUserUpdated(ctx: WebhookContext): Promise<Response> {
   if (error) {
     logError(eventType, 'Failed to update user', error)
     return errorResponse(error.message, 500)
+  }
+
+  // Also sync changes to staff_profiles if one is linked to this user
+  const { error: spError } = await supabase
+    .from('staff_profiles')
+    .update({
+      first_name: firstName,
+      last_name: lastName,
+      email,
+      display_name: displayName,
+      updated_at: new Date(event.data.updated_at).toISOString(),
+    })
+    .eq('user_id', event.data.id)
+
+  if (spError) {
+    logError(eventType, 'Failed to sync staff_profiles (non-fatal)', spError)
+    // Non-fatal — users table is already updated
   }
 
   logEvent(eventType, 'User updated successfully', { userId: event.data.id })
@@ -555,24 +577,120 @@ async function handleMerchantMembershipCreated(
 
   logEvent(eventType, 'Processing merchant membership', { userId, merchantId })
 
-  // Get user from Clerk for full details
-  const user = await clerkClient.users.getUser(userId)
-
-  // Get location assignments
-  const locationAssignments = 
-    event.data?.public_metadata?.locationAssignments ||
-    userMetadata?.locationAssignments ||
-    []
-
-  // Determine role
-  const roleCode = 
+  // Determine role and creation type up-front (used in both paths)
+  const roleCode =
     event.data?.public_metadata?.roleCode ||
     userMetadata?.roleCode ||
     'staff'
 
-  // Check creation type
   const creationType = userMetadata?.creationType || 'invitation'
   const isDirectCreation = creationType === 'direct'
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // PROMOTION PATH: POS-only staff being upgraded to a Clerk account.
+  // The invite/direct-creation call embeds the existing staffProfileId in
+  // publicMetadata so we know to UPDATE existing rows rather than INSERT new.
+  // ──────────────────────────────────────────────────────────────────────────
+  const promotionStaffProfileId: string | undefined =
+    event.data?.public_metadata?.staffProfileId ||
+    userMetadata?.staffProfileId
+
+  if (promotionStaffProfileId) {
+    logEvent(eventType, 'PROMOTION PATH — updating existing POS staff to Clerk user', {
+      staffProfileId: promotionStaffProfileId,
+      userId,
+      roleCode,
+    })
+
+    // 1. Update staff_profiles: link to Clerk user and flip account_type
+    const { error: profileUpdateError } = await supabase
+      .from('staff_profiles')
+      .update({
+        user_id: userId,
+        account_type: 'clerk',
+        updated_at: updatedAt,
+      })
+      .eq('id', promotionStaffProfileId)
+      .eq('merchant_id', merchantId)
+
+    if (profileUpdateError) {
+      logError(eventType, 'Promotion: failed to update staff_profile', profileUpdateError)
+      return errorResponse(profileUpdateError.message, 500)
+    }
+
+    // 2. Update location_members: link user_id and set new role
+    const { error: locMembersUpdateError } = await supabase
+      .from('location_members')
+      .update({
+        user_id: userId,
+        role_code: roleCode,
+        updated_at: updatedAt,
+      })
+      .eq('staff_profile_id', promotionStaffProfileId)
+
+    if (locMembersUpdateError) {
+      logError(eventType, 'Promotion: failed to update location_members', locMembersUpdateError)
+      return errorResponse(locMembersUpdateError.message, 500)
+    }
+
+    // 3. Update the existing POS members row to link the Clerk user_id.
+    //    Uses .eq('staff_profile_id') so it is idempotent on webhook retries.
+    const { error: memberUpdateError } = await supabase
+      .from('members')
+      .update({
+        user_id: userId,
+        role: roleCode,
+        updated_at: updatedAt,
+      })
+      .eq('staff_profile_id', promotionStaffProfileId)
+      .eq('organization_id', organizationId)
+
+    if (memberUpdateError) {
+      logError(eventType, 'Promotion: failed to update members', memberUpdateError)
+      return errorResponse(memberUpdateError.message, 500)
+    }
+
+    logEvent(eventType, 'Promotion complete', { staffProfileId: promotionStaffProfileId, userId })
+    return successResponse({ promoted: true, staff_profile_id: promotionStaffProfileId }, 'POS staff promoted to Clerk user')
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // NEW USER PATH (invitation or direct creation — no existing POS profile)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // Get user from Clerk for full details
+  const user = await clerkClient.users.getUser(userId)
+
+  // Get location assignments
+  const rawLocationAssignments: any[] =
+    event.data?.public_metadata?.locationAssignments ||
+    userMetadata?.locationAssignments ||
+    []
+
+  // For owner / admin roles, expand to ALL merchant locations so that
+  // every existing and future location is covered — even if the server
+  // action already wrote them eagerly, any gaps are filled here.
+  const ADMIN_ROLE_CODES = ['merchant.owner', 'merchant.admin']
+  let locationAssignments = rawLocationAssignments
+  if (ADMIN_ROLE_CODES.includes(roleCode) && merchantId) {
+    const { data: allLocs } = await supabase
+      .from('locations')
+      .select('id')
+      .eq('merchant_id', merchantId)
+
+    if (allLocs && allLocs.length > 0) {
+      const existingLocIds = new Set(rawLocationAssignments.map((a: any) => a.locationId))
+      const additionalLocs = allLocs
+        .filter((l: any) => !existingLocIds.has(l.id))
+        .map((l: any) => ({ locationId: l.id, roleCode, isPrimaryLocation: false }))
+      locationAssignments = [...rawLocationAssignments, ...additionalLocs]
+      logEvent(eventType, 'Admin role — expanded location assignments', {
+        roleCode,
+        original: rawLocationAssignments.length,
+        expanded: locationAssignments.length,
+      })
+    }
+  }
 
   // Get or create staff profile
   let staffProfile
@@ -628,7 +746,8 @@ async function handleMerchantMembershipCreated(
     return errorResponse(memberResult.error || 'Failed to create member', 500)
   }
 
-  // Create location_members records
+  // Create location_members records — skip any that already exist (server action may have
+  // written them eagerly before this webhook fired)
   if (locationAssignments && locationAssignments.length > 0) {
     const locationMembersData = locationAssignments.map((assignment: any) => ({
       location_id: assignment.locationId,
@@ -645,16 +764,36 @@ async function handleMerchantMembershipCreated(
       updated_at: updatedAt,
     }))
 
-    const { error: locationMembersError } = await supabase
+    // Fetch which location assignments already exist to avoid duplicate-key errors
+    const { data: existingAssignments } = await supabase
       .from('location_members')
-      .insert(locationMembersData)
+      .select('location_id')
+      .eq('user_id', userId)
 
-    if (locationMembersError) {
-      logError(eventType, 'Failed to create location members', locationMembersError)
-      return errorResponse(locationMembersError.message, 500)
+    const existingLocationIds = new Set(
+      (existingAssignments || []).map((row: any) => row.location_id)
+    )
+
+    const newAssignments = locationMembersData.filter(
+      (row: any) => !existingLocationIds.has(row.location_id)
+    )
+
+    if (newAssignments.length > 0) {
+      const { error: locationMembersError } = await supabase
+        .from('location_members')
+        .insert(newAssignments)
+
+      if (locationMembersError) {
+        logError(eventType, 'Failed to create location members', locationMembersError)
+        return errorResponse(locationMembersError.message, 500)
+      }
+
+      logEvent(eventType, 'Created location members', { count: newAssignments.length })
+    } else {
+      logEvent(eventType, 'Location members already exist, skipping insert (idempotent)', {
+        skipped: locationMembersData.length,
+      })
     }
-
-    logEvent(eventType, 'Created location members', { count: locationMembersData.length })
   }
 
   // Update location_invites if this was from an invitation

@@ -1,4 +1,4 @@
--- ============================================================================
+clear-- ============================================================================
 -- NEW RPC: get_items_for_location_library
 -- Purpose: Get items for Items Library view with ONLY L2 & L1 pricing
 -- Category prices (L3, L4) are excluded from the effective_price cascade

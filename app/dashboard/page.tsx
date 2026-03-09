@@ -21,6 +21,8 @@ import {
   Clock,
   CheckCircle,
   AlertCircle,
+  Lock,
+  X,
 } from "lucide-react";
 import {
   useLocationStore,
@@ -64,7 +66,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
-import { useUnifiedStaff } from "./hooks/useStaff";
+import { useUnifiedStaff, usePinStatus } from "./hooks/useStaff";
 import { DashboardWaterfallCard } from "./components/DashboardWaterfallCard";
 import {
   NetRevenueByCategoryCard,
@@ -86,6 +88,8 @@ export default function MerchantDashboardPage() {
     useLocationScopedSchedules();
   const { data: orders, isLoading: ordersLoading } = useOrders();
   const { data: staffMembers, isLoading: staffLoading } = useUnifiedStaff();
+  const { data: pinStatus } = usePinStatus();
+  const [pinBannerDismissed, setPinBannerDismissed] = useState(false);
 
   // Date ranges for analytics
   const today = useMemo(() => {
@@ -331,6 +335,37 @@ export default function MerchantDashboardPage() {
                     </CardContent>
                 </Card>
             )} */}
+
+      {/* PIN setup banner — shown when user has POS assignments but no PIN yet */}
+      {!pinBannerDismissed &&
+        pinStatus &&
+        pinStatus.locationCount > 0 &&
+        !pinStatus.hasPinSet && (
+          <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+            <Lock className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                Set up your POS PIN
+              </p>
+              <p className="text-sm text-amber-700 dark:text-amber-300">
+                You have access to {pinStatus.locationCount} location
+                {pinStatus.locationCount !== 1 ? "s" : ""} but no POS PIN is
+                set. Add one so you can sign in at the terminal.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/dashboard/staff">Set PIN</Link>
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-amber-600 hover:text-amber-800 dark:text-amber-400"
+              onClick={() => setPinBannerDismissed(true)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
 
       {/* Stats Overview */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

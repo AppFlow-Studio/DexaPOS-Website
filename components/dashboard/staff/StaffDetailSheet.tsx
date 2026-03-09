@@ -45,6 +45,7 @@ import {
   Info,
   Loader2,
   ChevronRight,
+  Shield,
 } from "lucide-react";
 import { LocationAssignmentSheet } from "./LocationAssignmentSheet";
 import { LocationAssignment } from "@/types/staff";
@@ -54,12 +55,17 @@ import {
   useResetStaffPIN,
   useUpdateStaffAssignment,
   useUpgradePOSToClerk,
+  useDemoteClerkToPOS,
   useStaffMember,
+  useUpdateStaffProfile,
+  useAddStaffToLocation,
+  useRemoveStaffFromLocation,
 } from "@/app/dashboard/hooks/useStaff";
 import { toast } from "sonner";
 import { GetMerchantRoles } from "@/app/dashboard/actions/staff-invite";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { StaffActivityLog } from "./StaffActivityLog";
+import { useLocationStore } from "@/stores/location-store";
 
 interface StaffDetailSheetProps {
   staff: UnifiedStaffMember | null;
@@ -72,20 +78,21 @@ export function StaffDetailSheet({
   open,
   onOpenChange,
 }: StaffDetailSheetProps) {
-  if (!staff) return null;
-
+  // ── All hooks MUST be called before any conditional return ──
   const deactivateStaff = useDeactivateStaff();
   const reactivateStaff = useReactivateStaff();
   const resetPIN = useResetStaffPIN();
   const updateAssignment = useUpdateStaffAssignment();
   const upgradePOSToClerk = useUpgradePOSToClerk();
+  const demoteClerkToPOS = useDemoteClerkToPOS();
+  const updateProfile = useUpdateStaffProfile();
+  const addToLocation = useAddStaffToLocation();
+  const removeFromLocation = useRemoveStaffFromLocation();
   const { data: userInfo } = useUserInfo();
+  const { locations: allLocations } = useLocationStore();
 
   // Fetch fresh staff data
   const { data: freshStaff } = useStaffMember(staff?.member_id);
-
-  // Use fresh data if available, otherwise fallback to prop
-  const displayStaff = freshStaff || staff;
 
   // Edit mode state
   const [isEditMode, setIsEditMode] = React.useState(false);
@@ -94,6 +101,18 @@ export function StaffDetailSheet({
     React.useState<EmploymentType | null>(null);
   const [editedHourlyRate, setEditedHourlyRate] = React.useState<string>("");
   const [roles, setRoles] = React.useState<RolesModel[]>([]);
+
+  // Profile edit state
+  const [isProfileEditMode, setIsProfileEditMode] = React.useState(false);
+  const [editedFirstName, setEditedFirstName] = React.useState("");
+  const [editedLastName, setEditedLastName] = React.useState("");
+  const [editedEmail, setEditedEmail] = React.useState("");
+  const [editedPhone, setEditedPhone] = React.useState("");
+
+  // Location management state
+  const [showAddLocation, setShowAddLocation] = React.useState(false);
+  const [addLocationId, setAddLocationId] = React.useState<string>("");
+  const [addLocationRole, setAddLocationRole] = React.useState<string>("");
 
   // Upgrade mode state
   const [showUpgradeDialog, setShowUpgradeDialog] = React.useState(false);
@@ -104,36 +123,82 @@ export function StaffDetailSheet({
     React.useState<string | null>(null);
   const [isLocationSheetOpen, setIsLocationSheetOpen] = React.useState(false);
 
+  // Use fresh data if available, otherwise fallback to prop
+  const displayStaff = freshStaff || staff;
+
   // Derived selected assignment - SINGLE SOURCE OF TRUTH
-  // This ensures that when displayStaff updates, the selected assignment also updates instantly
   const selectedAssignment = React.useMemo(
     () =>
-      displayStaff.location_assignments.find(
+      displayStaff?.location_assignments?.find(
         (a) => a.location_id === selectedAssignmentLocationId
       ) || null,
-    [displayStaff.location_assignments, selectedAssignmentLocationId]
+    [displayStaff?.location_assignments, selectedAssignmentLocationId]
   );
 
-  const initials = `${displayStaff.first_name?.[0] || ""}${
-    displayStaff.last_name?.[0] || ""
+  const initials = `${displayStaff?.first_name?.[0] || ""}${
+    displayStaff?.last_name?.[0] || ""
   }`.toUpperCase();
 
-  const activeLocations = displayStaff.location_assignments.filter(
+  const activeLocations = displayStaff?.location_assignments?.filter(
     (a) => a.is_active
-  );
-  const primaryLocation = displayStaff.location_assignments.find(
+  ) ?? [];
+  const primaryLocation = displayStaff?.location_assignments?.find(
     (a) => a.is_primary
   );
-  const hasPin = displayStaff.location_assignments.some((a) => a.has_pin);
+  const hasPin = displayStaff?.location_assignments?.some((a) => a.has_pin) ?? false;
 
   // Get current user's role level for filtering assignable roles
   const currentUserLevel = React.useMemo(() => {
-    if (!userInfo?.members?.[0]) return 100; // Fallback to high level
+    if (!userInfo?.members?.[0]) return 100;
     const member = userInfo.members[0];
     const roleCode = member.role_code || member.role;
     const role = roles.find((r) => r.code === roleCode);
     return role?.level || 100;
   }, [userInfo, roles]);
+
+  // Load roles when edit mode is enabled
+  React.useEffect(() => {
+    if (open && (isEditMode || showAddLocation)) {
+      GetMerchantRoles().then((rolesData) => {
+        setRoles(rolesData);
+      });
+    }
+  }, [open, isEditMode, showAddLocation]);
+
+  // Reset edit state when staff changes
+  React.useEffect(() => {
+    if (staff && primaryLocation) {
+      setEditedRole(primaryLocation.role_code);
+      setEditedEmploymentType(
+        primaryLocation.employment_type as EmploymentType | null
+      );
+      setEditedHourlyRate(primaryLocation.hourly_rate?.toString() || "");
+    }
+    setIsEditMode(false);
+    // Reset profile edit state
+    if (staff) {
+      setEditedFirstName(staff.first_name);
+      setEditedLastName(staff.last_name);
+      setEditedEmail(staff.email || "");
+      setEditedPhone(staff.phone || "");
+    }
+    setIsProfileEditMode(false);
+    setShowAddLocation(false);
+  }, [staff?.member_id]);
+
+  // ── Location management derived values ──────────────────────────────────
+  const assignedLocationIds = (displayStaff?.location_assignments ?? [])
+    .filter((a) => a.is_active)
+    .map((a) => a.location_id);
+
+  const availableLocationsToAdd = allLocations.filter(
+    (loc) => !assignedLocationIds.includes(loc.id)
+  );
+
+  // Early return AFTER all hooks (React Rules of Hooks)
+  if (!staff || !displayStaff) return null;
+
+  // ── Handler functions (safe to use after early return) ──────────────────
 
   const handleStatusToggle = () => {
     if (!primaryLocation) {
@@ -169,27 +234,6 @@ export function StaffDetailSheet({
       locationId: primaryLocation.location_id,
     });
   };
-
-  // Load roles when edit mode is enabled
-  React.useEffect(() => {
-    if (open && isEditMode) {
-      GetMerchantRoles().then((rolesData) => {
-        setRoles(rolesData);
-      });
-    }
-  }, [open, isEditMode]);
-
-  // Reset edit state when staff changes
-  React.useEffect(() => {
-    if (staff && primaryLocation) {
-      setEditedRole(primaryLocation.role_code);
-      setEditedEmploymentType(
-        primaryLocation.employment_type as EmploymentType | null
-      );
-      setEditedHourlyRate(primaryLocation.hourly_rate?.toString() || "");
-    }
-    setIsEditMode(false);
-  }, [staff?.member_id]);
 
   const handleSaveChanges = () => {
     if (!primaryLocation) {
@@ -273,6 +317,71 @@ export function StaffDetailSheet({
     setUpgradeEmail("");
   };
 
+  // ── Profile edit handlers ─────────────────────────────────────────
+  const handleSaveProfile = () => {
+    const updates: Record<string, string | null> = {};
+    if (editedFirstName !== staff.first_name)
+      updates.first_name = editedFirstName;
+    if (editedLastName !== staff.last_name) updates.last_name = editedLastName;
+    if ((editedEmail || null) !== (staff.email || null))
+      updates.email = editedEmail || null;
+    if ((editedPhone || null) !== (staff.phone || null))
+      updates.phone = editedPhone || null;
+
+    if (Object.keys(updates).length === 0) {
+      setIsProfileEditMode(false);
+      toast.info("No changes to save");
+      return;
+    }
+
+    updateProfile.mutate(
+      { memberId: staff.member_id, updates },
+      {
+        onSuccess: (result) => {
+          if (!result.error) setIsProfileEditMode(false);
+        },
+      }
+    );
+  };
+
+  const handleCancelProfileEdit = () => {
+    setEditedFirstName(staff.first_name);
+    setEditedLastName(staff.last_name);
+    setEditedEmail(staff.email || "");
+    setEditedPhone(staff.phone || "");
+    setIsProfileEditMode(false);
+  };
+
+  const handleAddToLocation = () => {
+    if (!addLocationId || !addLocationRole) {
+      toast.error("Select a location and role");
+      return;
+    }
+    addToLocation.mutate(
+      {
+        memberId: staff.member_id,
+        locationId: addLocationId,
+        roleCode: addLocationRole,
+      },
+      {
+        onSuccess: (result) => {
+          if (!result.error) {
+            setShowAddLocation(false);
+            setAddLocationId("");
+            setAddLocationRole("");
+          }
+        },
+      }
+    );
+  };
+
+  const handleRemoveFromLocation = (locationId: string) => {
+    removeFromLocation.mutate({
+      memberId: staff.member_id,
+      locationId,
+    });
+  };
+
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange}>
       <BottomSheetContent className="w-full max-w-7xl mx-auto" height="95">
@@ -284,43 +393,133 @@ export function StaffDetailSheet({
           </BottomSheetDescription>
         </BottomSheetHeader>
         <BottomSheetBody className="flex-1 overflow-y-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr_1fr] gap-6">
             {/* Profile column */}
             <div className="space-y-4">
+              {/* Avatar + name header row */}
               <div className="flex items-center gap-3">
-                <Avatar className="h-12 w-12">
+                <Avatar className="h-12 w-12 shrink-0">
                   <AvatarImage
                     src={staff.avatar_url || undefined}
                     alt={staff.display_name}
                   />
                   <AvatarFallback>{initials}</AvatarFallback>
                 </Avatar>
-                <div className="space-y-1">
+                <div className="flex-1 min-w-0 space-y-0.5">
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-base">
-                      {staff.first_name} {staff.last_name}
+                    <span className="font-semibold text-base truncate">
+                      {displayStaff.first_name} {displayStaff.last_name}
                     </span>
                     {!staff.is_clerk_user && (
-                      <Badge variant="outline" className="gap-1 text-xs">
+                      <Badge
+                        variant="outline"
+                        className="gap-1 text-xs shrink-0"
+                      >
                         <Lock className="h-3 w-3" />
                         POS only
                       </Badge>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 ml-auto shrink-0"
+                      onClick={() => setIsProfileEditMode(true)}
+                    >
+                      <Edit className="h-3 w-3" />
+                    </Button>
                   </div>
-                  {staff.email && (
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Mail className="h-3 w-3" />
-                      {staff.email}
+                  {displayStaff.email && (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground truncate">
+                      <Mail className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{displayStaff.email}</span>
                     </div>
                   )}
-                  {staff.phone && (
+                  {displayStaff.phone && (
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Phone className="h-3 w-3" />
-                      {staff.phone}
+                      <Phone className="h-3 w-3 shrink-0" />
+                      {displayStaff.phone}
                     </div>
                   )}
                 </div>
               </div>
+
+              {/* Profile edit form — expanded below avatar, not crammed beside it */}
+              {isProfileEditMode && (
+                <div className="rounded-lg border bg-muted/20 p-4 space-y-3">
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Edit profile
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">First Name</Label>
+                      <Input
+                        value={editedFirstName}
+                        onChange={(e) => setEditedFirstName(e.target.value)}
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Last Name</Label>
+                      <Input
+                        value={editedLastName}
+                        onChange={(e) => setEditedLastName(e.target.value)}
+                        className="h-9"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Email</Label>
+                    <Input
+                      type="email"
+                      value={editedEmail}
+                      onChange={(e) => setEditedEmail(e.target.value)}
+                      className="h-9"
+                      placeholder="user@example.com"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Phone</Label>
+                    <Input
+                      type="tel"
+                      value={editedPhone}
+                      onChange={(e) => setEditedPhone(e.target.value)}
+                      className="h-9"
+                      placeholder="+1234567890"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="flex-1 gap-1"
+                      onClick={handleSaveProfile}
+                      disabled={updateProfile.isPending}
+                    >
+                      {updateProfile.isPending ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Save className="h-3 w-3" />
+                      )}
+                      Save
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 gap-1"
+                      onClick={handleCancelProfileEdit}
+                      disabled={updateProfile.isPending}
+                    >
+                      <X className="h-3 w-3" />
+                      Cancel
+                    </Button>
+                  </div>
+                  {staff.is_clerk_user && (
+                    <p className="text-[10px] text-muted-foreground">
+                      Name changes will sync to the authentication provider.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <Separator />
 
@@ -661,6 +860,48 @@ export function StaffDetailSheet({
                 </div>
               )}
 
+              {/* Demote to POS-Only — only for Clerk staff */}
+              {staff.is_clerk_user && staff.user_id && (
+                <div className="rounded-xl border border-orange-200 bg-orange-50/30 dark:bg-orange-950/10 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-orange-500" />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">
+                        Demote to POS-Only
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        Revoke dashboard access. Staff will keep POS PIN
+                        access.
+                      </span>
+                    </div>
+                  </div>
+                  <div className="pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1 w-full border-orange-300 text-orange-600 hover:bg-orange-50"
+                      onClick={() => {
+                        if (
+                          confirm(
+                            `Demote ${displayStaff.display_name} to POS-only? This will revoke their dashboard access.`
+                          )
+                        ) {
+                          demoteClerkToPOS.mutate(staff.member_id);
+                        }
+                      }}
+                      disabled={demoteClerkToPOS.isPending}
+                    >
+                      {demoteClerkToPOS.isPending ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Shield className="h-3 w-3" />
+                      )}
+                      Demote Account
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Locations overview - Clickable */}
               <div className="rounded-xl border bg-muted/10 p-4 space-y-3">
                 <div className="flex items-center justify-between">
@@ -668,10 +909,95 @@ export function StaffDetailSheet({
                     <MapPin className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm font-medium">Locations</span>
                   </div>
-                  <Badge variant="outline" className="text-xs">
-                    {activeLocations.length} active
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">
+                      {activeLocations.length} active
+                    </Badge>
+                    {availableLocationsToAdd.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-6 text-xs gap-1"
+                        onClick={() => {
+                          setShowAddLocation(!showAddLocation);
+                          // Pre-select a role from primary assignment
+                          if (primaryLocation) {
+                            setAddLocationRole(primaryLocation.role_code);
+                          }
+                        }}
+                      >
+                        + Add
+                      </Button>
+                    )}
+                  </div>
                 </div>
+
+                {/* Add to location form */}
+                {showAddLocation && (
+                  <div className="space-y-2 rounded-lg border p-3 bg-muted/30">
+                    <Label className="text-xs">Location</Label>
+                    <Select
+                      value={addLocationId}
+                      onValueChange={setAddLocationId}
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Select location" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableLocationsToAdd.map((loc) => (
+                          <SelectItem key={loc.id} value={loc.id}>
+                            {loc.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Label className="text-xs">Role</Label>
+                    <Select
+                      value={addLocationRole}
+                      onValueChange={setAddLocationRole}
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Select role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {roles
+                          .filter((r) => r.level <= currentUserLevel)
+                          .map((r) => (
+                            <SelectItem key={r.code} value={r.code}>
+                              {r.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        size="sm"
+                        className="flex-1 h-7 text-xs"
+                        onClick={handleAddToLocation}
+                        disabled={
+                          addToLocation.isPending ||
+                          !addLocationId ||
+                          !addLocationRole
+                        }
+                      >
+                        {addToLocation.isPending ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          "Add"
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 h-7 text-xs"
+                        onClick={() => setShowAddLocation(false)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 <p className="text-xs text-muted-foreground">
                   Click a location to manage role, status, and PIN
                 </p>
@@ -679,25 +1005,29 @@ export function StaffDetailSheet({
                   {displayStaff.location_assignments.map((assignment) => (
                     <button
                       key={assignment.location_id + assignment.role_code}
-                      onClick={() => {
-                        setSelectedAssignmentLocationId(assignment.location_id);
-                        setIsLocationSheetOpen(true);
-                      }}
+                      type="button"
                       className={cn(
-                        "w-full flex items-center justify-between text-xs py-2 px-2 rounded-lg",
-                        "hover:bg-muted/50 transition-colors text-left",
+                        "w-full flex items-center justify-between text-xs py-2.5 px-3 rounded-lg",
+                        "hover:bg-muted/50 transition-colors text-left cursor-pointer",
+                        "border border-transparent hover:border-border",
                         !assignment.is_active && "opacity-60"
                       )}
+                      onClick={() => {
+                        setSelectedAssignmentLocationId(
+                          assignment.location_id
+                        );
+                        setIsLocationSheetOpen(true);
+                      }}
                     >
-                      <div className="flex flex-col">
-                        <span className="font-medium">
+                      <div className="flex-1 flex flex-col min-w-0">
+                        <span className="font-medium truncate">
                           {assignment.location_name}
                         </span>
                         <span className="text-muted-foreground">
                           {assignment.role_name}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 shrink-0 ml-2">
                         {assignment.is_primary && (
                           <Badge variant="default" className="text-[10px]">
                             Primary
@@ -716,6 +1046,24 @@ export function StaffDetailSheet({
                             <Lock className="h-3 w-3" />
                             PIN
                           </Badge>
+                        )}
+                        {/* Remove from location (only non-primary, active) */}
+                        {assignment.is_active && !assignment.is_primary && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveFromLocation(
+                                assignment.location_id
+                              );
+                            }}
+                            disabled={removeFromLocation.isPending}
+                            title="Remove from location"
+                          >
+                            <UserX className="h-3 w-3" />
+                          </Button>
                         )}
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       </div>
@@ -739,13 +1087,13 @@ export function StaffDetailSheet({
             </div>
 
             {/* Logs / activity column */}
-            <div className="space-y-4 lg:col-span-1 h-full min-h-[300px]">
-              <div className="rounded-xl border bg-card h-full flex flex-col">
-                <div className="p-4 border-b flex items-center gap-2">
+            <div className="lg:col-span-1">
+              <div className="rounded-xl border bg-card flex flex-col min-h-[400px] lg:min-h-0 lg:h-full">
+                <div className="p-4 border-b flex items-center gap-2 shrink-0">
                   <Activity className="h-4 w-4 text-muted-foreground" />
                   <span className="font-medium">Activity log</span>
                 </div>
-                <div className="flex-1 min-h-0 bg-muted/5">
+                <div className="flex-1 min-h-0 overflow-hidden bg-muted/5">
                   <StaffActivityLog
                     staffProfileId={displayStaff.staff_profile_id}
                     userId={displayStaff.user_id}
@@ -755,7 +1103,8 @@ export function StaffDetailSheet({
             </div>
           </div>
         </BottomSheetBody>
-        <BottomSheetFooter className="flex items-center justify-between">
+        <BottomSheetFooter>
+          <div className="flex items-center justify-between w-full">
           <div className="text-xs text-muted-foreground">
             Member ID: {displayStaff.member_id}
           </div>
@@ -790,6 +1139,7 @@ export function StaffDetailSheet({
                 Reactivate
               </Button>
             )}
+          </div>
           </div>
         </BottomSheetFooter>
       </BottomSheetContent>
