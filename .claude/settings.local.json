@@ -3,6 +3,9 @@
     "allow": [
       "Bash(npx tsc:*)",
       "Bash(npx next lint:*)",
+      "Bash(xargs grep -l \"webhook\\\\|organizationMembership\\\\|clerk\")",
+      "Bash(xargs grep -l \"organizationMembership\\\\|org:membership\\\\|webhook\")",
+      "Bash(xargs grep -l \"webhook\")",
       "Bash(ls:*)",
       "Bash(grep:*)",
       "Bash(find:*)",

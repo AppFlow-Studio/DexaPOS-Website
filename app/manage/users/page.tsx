@@ -335,7 +335,7 @@ export default function UsersPage() {
                     <DialogTrigger asChild>
                         <Button className="hidden">Add User</Button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
+                    <DialogContent className="sm:max-w-106.25">
                         <DialogHeader>
                             <DialogTitle>Add New User</DialogTitle>
                             <DialogDescription>
@@ -485,7 +485,7 @@ export default function UsersPage() {
                                 </div>
                                 <div className="flex gap-2">
                                     <Select value={roleFilter} onValueChange={setRoleFilter}>
-                                        <SelectTrigger className="w-[140px]">
+                                        <SelectTrigger className="w-35">
                                             <SelectValue placeholder="Role" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -497,7 +497,7 @@ export default function UsersPage() {
                                         </SelectContent>
                                     </Select>
                                     <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                        <SelectTrigger className="w-[140px]">
+                                        <SelectTrigger className="w-35">
                                             <SelectValue placeholder="Status" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -524,7 +524,7 @@ export default function UsersPage() {
                                         <TableHead>Status</TableHead>
                                         <TableHead>Last Active</TableHead>
                                         <TableHead>Join Date</TableHead>
-                                        <TableHead className="w-[50px]"></TableHead>
+                                        <TableHead className="w-12.5"></TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>

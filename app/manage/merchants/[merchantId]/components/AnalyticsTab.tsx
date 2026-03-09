@@ -236,7 +236,7 @@ export function AnalyticsTab({ merchantInfo }: AnalyticsTabProps) {
                             value={locationId || 'all'}
                             onValueChange={(value) => setLocationId(value === 'all' ? null : value)}
                         >
-                            <SelectTrigger className="w-[180px]">
+                            <SelectTrigger className="w-45">
                                 <SelectValue placeholder="All Locations" />
                             </SelectTrigger>
                             <SelectContent>
@@ -329,13 +329,13 @@ export function AnalyticsTab({ merchantInfo }: AnalyticsTabProps) {
                     </CardHeader>
                     <CardContent>
                         {salesLoading || !merchantId ? (
-                            <Skeleton className="h-[300px] w-full" />
+                            <Skeleton className="h-75 w-full" />
                         ) : !salesByDate || salesByDate.length === 0 ? (
-                            <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                            <div className="h-75 flex items-center justify-center text-muted-foreground">
                                 No sales data available for selected period
                             </div>
                         ) : (
-                            <ChartContainer config={salesChartConfig} className="h-[300px] w-full">
+                            <ChartContainer config={salesChartConfig} className="h-75 w-full">
                                 <AreaChart data={salesByDate} margin={{ left: 12, right: 12 }}>
                                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
                                     <XAxis
@@ -382,15 +382,15 @@ export function AnalyticsTab({ merchantInfo }: AnalyticsTabProps) {
                     </CardHeader>
                     <CardContent>
                         {isLoading ? (
-                            <div className="h-[300px] flex items-center justify-center">
-                                <Skeleton className="h-[200px] w-[200px] rounded-full" />
+                            <div className="h-75 flex items-center justify-center">
+                                <Skeleton className="h-50 w-50 rounded-full" />
                             </div>
                         ) : orderTypeData.length === 0 ? (
-                            <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                            <div className="h-75 flex items-center justify-center text-muted-foreground">
                                 No order data available
                             </div>
                         ) : (
-                            <div className="h-[300px]">
+                            <div className="h-75">
                                 <ChartContainer config={orderTypeConfig} className="h-full w-full">
                                     <PieChart>
                                         <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
@@ -434,13 +434,13 @@ export function AnalyticsTab({ merchantInfo }: AnalyticsTabProps) {
                 </CardHeader>
                 <CardContent>
                     {paymentsLoading || !merchantId ? (
-                        <Skeleton className="h-[200px] w-full" />
+                        <Skeleton className="h-50 w-full" />
                     ) : paymentData.length === 0 ? (
-                        <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                        <div className="h-50 flex items-center justify-center text-muted-foreground">
                             No payment data available
                         </div>
                     ) : (
-                        <ChartContainer config={paymentChartConfig} className="h-[200px] w-full">
+                        <ChartContainer config={paymentChartConfig} className="h-50 w-full">
                             <BarChart data={paymentData} layout="vertical" margin={{ left: 80, right: 30 }}>
                                 <CartesianGrid horizontal={false} strokeDasharray="3 3" />
                                 <XAxis

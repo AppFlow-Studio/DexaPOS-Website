@@ -15,11 +15,21 @@ import {
   DeactivateStaffMember,
   ReactivateStaffMember,
   UpgradePOSStaffToClerk,
+  DemoteClerkToPOSOnly,
+  GetCurrentUserPinStatus,
+  UpdateStaffProfile,
+  UpdateStaffProfileData,
+  AddStaffToLocation,
+  RemoveStaffFromLocation,
+  BulkDeactivateStaff,
+  BulkResetPINs,
+  BulkAssignRole,
 } from "../actions/unified-staff";
 import {
   InviteStaffFormData,
   UnifiedStaffMember,
   UpdateStaffAssignmentData,
+  BulkPinResetResult,
 } from "@/types/staff";
 import { toast } from "sonner";
 import { CredentialToast } from "@/components/ui/credential-toast";
@@ -407,6 +417,23 @@ export function useReactivateStaff() {
 }
 
 /**
+ * Check if the currently-logged-in Clerk user has a POS PIN set.
+ * Used to drive the dashboard PIN-setup banner.
+ */
+export function usePinStatus() {
+  const clerkOrgId = useClerkOrgId();
+  const { data: userInfo } = useUserInfo();
+  const userId = userInfo?.id;
+
+  return useQuery({
+    queryKey: ["pin-status", clerkOrgId, userId],
+    queryFn: () => GetCurrentUserPinStatus(clerkOrgId, userId ?? ""),
+    enabled: !!clerkOrgId && !!userId,
+    staleTime: 60_000, // 1 minute — PIN status doesn't change often
+  });
+}
+
+/**
  * Upgrade POS-only staff to Clerk dashboard user
  */
 export function useUpgradePOSToClerk() {
@@ -446,6 +473,277 @@ export function useUpgradePOSToClerk() {
         description: "An unexpected error occurred",
       });
       console.error("Upgrade POS to Clerk error:", error);
+    },
+  });
+}
+
+/**
+ * Demote a Clerk dashboard user back to POS-only.
+ * Revokes org membership and reverts account_type.
+ */
+export function useDemoteClerkToPOS() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (memberId: string) => DemoteClerkToPOSOnly(memberId),
+    onSuccess: (result) => {
+      if (result.error) {
+        toast.error("Demotion failed", { description: result.error });
+        return;
+      }
+
+      toast.success("Staff demoted to POS-only", {
+        description: "Dashboard access has been revoked.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["unified-staff"] });
+      queryClient.invalidateQueries({ queryKey: ["staff-member"] });
+    },
+    onError: (error) => {
+      toast.error("Demotion failed", {
+        description: "An unexpected error occurred",
+      });
+      console.error("Demote Clerk to POS error:", error);
+    },
+  });
+}
+
+// ============================================================================
+// Profile & Location Management Hooks
+// ============================================================================
+
+/**
+ * Update staff profile (name, email, phone) with Clerk sync
+ */
+export function useUpdateStaffProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      memberId,
+      updates,
+    }: {
+      memberId: string;
+      updates: UpdateStaffProfileData;
+    }) => UpdateStaffProfile(memberId, updates),
+    onSuccess: async (result, variables) => {
+      if (result.error) {
+        toast.error("Update failed", { description: result.error });
+        return;
+      }
+
+      await queryClient.refetchQueries({
+        queryKey: ["staff-member", variables.memberId],
+        type: "active",
+        exact: true,
+      });
+
+      toast.success("Profile updated");
+      queryClient.invalidateQueries({ queryKey: ["unified-staff"] });
+    },
+    onError: (error) => {
+      toast.error("Update failed", {
+        description: "An unexpected error occurred",
+      });
+      console.error("Update staff profile error:", error);
+    },
+  });
+}
+
+/**
+ * Add staff member to a location
+ */
+export function useAddStaffToLocation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      memberId,
+      locationId,
+      roleCode,
+      isPrimary,
+    }: {
+      memberId: string;
+      locationId: string;
+      roleCode: string;
+      isPrimary?: boolean;
+    }) => AddStaffToLocation(memberId, locationId, roleCode, isPrimary),
+    onSuccess: async (result, variables) => {
+      if (result.error) {
+        toast.error("Failed to add to location", { description: result.error });
+        return;
+      }
+
+      await queryClient.refetchQueries({
+        queryKey: ["staff-member", variables.memberId],
+        type: "active",
+        exact: true,
+      });
+
+      toast.success("Staff added to location");
+      queryClient.invalidateQueries({ queryKey: ["unified-staff"] });
+    },
+    onError: (error) => {
+      toast.error("Failed to add to location", {
+        description: "An unexpected error occurred",
+      });
+      console.error("Add staff to location error:", error);
+    },
+  });
+}
+
+/**
+ * Remove staff member from a location (soft-delete via is_active = false)
+ */
+export function useRemoveStaffFromLocation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      memberId,
+      locationId,
+    }: {
+      memberId: string;
+      locationId: string;
+    }) => RemoveStaffFromLocation(memberId, locationId),
+    onSuccess: async (result, variables) => {
+      if (result.error) {
+        toast.error("Failed to remove from location", {
+          description: result.error,
+        });
+        return;
+      }
+
+      await queryClient.refetchQueries({
+        queryKey: ["staff-member", variables.memberId],
+        type: "active",
+        exact: true,
+      });
+
+      toast.success("Staff removed from location");
+      queryClient.invalidateQueries({ queryKey: ["unified-staff"] });
+    },
+    onError: (error) => {
+      toast.error("Failed to remove from location", {
+        description: "An unexpected error occurred",
+      });
+      console.error("Remove staff from location error:", error);
+    },
+  });
+}
+
+// ============================================================================
+// Bulk Operation Hooks
+// ============================================================================
+
+/**
+ * Bulk deactivate staff members
+ */
+export function useBulkDeactivateStaff() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (memberIds: string[]) => BulkDeactivateStaff(memberIds),
+    onSuccess: (result) => {
+      if (result.error) {
+        toast.error("Bulk deactivation failed", { description: result.error });
+        return;
+      }
+
+      const { deactivated, errors } = result.data!;
+      if (errors.length > 0) {
+        toast.warning(
+          `Deactivated ${deactivated} staff, ${errors.length} failed`,
+        );
+      } else {
+        toast.success(`Deactivated ${deactivated} staff member(s)`);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["unified-staff"] });
+      queryClient.invalidateQueries({ queryKey: ["staff-member"] });
+    },
+    onError: (error) => {
+      toast.error("Bulk deactivation failed", {
+        description: "An unexpected error occurred",
+      });
+      console.error("Bulk deactivate error:", error);
+    },
+  });
+}
+
+/**
+ * Bulk reset PINs — returns the list of new PINs for export
+ */
+export function useBulkResetPINs() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (memberIds: string[]) => BulkResetPINs(memberIds),
+    onSuccess: (result) => {
+      if (result.error) {
+        toast.error("Bulk PIN reset failed", { description: result.error });
+        return;
+      }
+
+      const { results, errors } = result.data!;
+      if (errors.length > 0) {
+        toast.warning(
+          `Reset ${results.length} PINs, ${errors.length} failed`,
+        );
+      } else {
+        toast.success(`Reset ${results.length} PIN(s) successfully`);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["unified-staff"] });
+      queryClient.invalidateQueries({ queryKey: ["staff-member"] });
+    },
+    onError: (error) => {
+      toast.error("Bulk PIN reset failed", {
+        description: "An unexpected error occurred",
+      });
+      console.error("Bulk PIN reset error:", error);
+    },
+  });
+}
+
+/**
+ * Bulk assign role to staff members
+ */
+export function useBulkAssignRole() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      memberIds,
+      roleCode,
+    }: {
+      memberIds: string[];
+      roleCode: string;
+    }) => BulkAssignRole(memberIds, roleCode),
+    onSuccess: (result) => {
+      if (result.error) {
+        toast.error("Bulk role assignment failed", {
+          description: result.error,
+        });
+        return;
+      }
+
+      const { updated, errors } = result.data!;
+      if (errors.length > 0) {
+        toast.warning(
+          `Updated ${updated} staff, ${errors.length} failed`,
+        );
+      } else {
+        toast.success(`Role assigned to ${updated} staff member(s)`);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["unified-staff"] });
+      queryClient.invalidateQueries({ queryKey: ["staff-member"] });
+    },
+    onError: (error) => {
+      toast.error("Bulk role assignment failed", {
+        description: "An unexpected error occurred",
+      });
+      console.error("Bulk assign role error:", error);
     },
   });
 }
