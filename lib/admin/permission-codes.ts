@@ -15,6 +15,7 @@ export const PERMISSION_ALIASES: Record<string, HQPermission> = {
   'users.manage': 'hq.team.manage',
   'roles.manage': 'hq.team.manage',
   'audit.view': 'system.audit.view',
+  'device-catalog.manage': 'system.config.manage',
 }
 
 export function resolvePermissionCode(code: PermissionCode): HQPermission | null {

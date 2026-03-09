@@ -1375,6 +1375,60 @@ export type Database = {
           },
         ]
       }
+      device_catalog: {
+        Row: {
+          id: string
+          device_category: string
+          manufacturer: string
+          model_name: string
+          model_sku: string | null
+          hardware_revision: string | null
+          specs: Record<string, unknown>
+          unit_cost_cents: number | null
+          monthly_fee_cents: number | null
+          is_active: boolean
+          discontinued_at: string | null
+          image_url: string | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          device_category: string
+          manufacturer: string
+          model_name: string
+          model_sku?: string | null
+          hardware_revision?: string | null
+          specs?: Record<string, unknown>
+          unit_cost_cents?: number | null
+          monthly_fee_cents?: number | null
+          is_active?: boolean
+          discontinued_at?: string | null
+          image_url?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          device_category?: string
+          manufacturer?: string
+          model_name?: string
+          model_sku?: string | null
+          hardware_revision?: string | null
+          specs?: Record<string, unknown>
+          unit_cost_cents?: number | null
+          monthly_fee_cents?: number | null
+          is_active?: boolean
+          discontinued_at?: string | null
+          image_url?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       device_alerts: {
         Row: {
           acknowledged_at: string | null

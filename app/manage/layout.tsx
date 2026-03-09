@@ -48,6 +48,7 @@ import {
     ShieldCheck,
     History,
     LogOut,
+    Monitor,
     LucideIcon,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -136,6 +137,17 @@ const navMain: NavGroup[] = [
                 icon: History,
                 requiredPermission: 'audit.view',
             }
+        ]
+    },
+    {
+        title: "Config",
+        items: [
+            {
+                title: 'Device Catalog',
+                url: '/manage/device-catalog',
+                icon: Monitor,
+                requiredPermission: 'system.config.manage' as PermissionCode,
+            },
         ]
     }
 ]
