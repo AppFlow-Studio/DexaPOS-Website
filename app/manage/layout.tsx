@@ -403,7 +403,7 @@ export default function ManageLayout({
                 <DeniedParamHandler />
             </Suspense>
             <AppSidebar />
-            <main className="flex-1 flex flex-col">
+            <main className="flex-1 flex flex-col min-w-0">
                 <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
                     <SidebarTrigger className="-ml-1" />
                     <div className="flex items-center gap-2">
@@ -419,7 +419,7 @@ export default function ManageLayout({
                         </Button>
                     </div>
                 </header>
-                <div className="flex-1 overflow-auto p-6">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 min-w-0">
                     {children}
                 </div>
             </main>

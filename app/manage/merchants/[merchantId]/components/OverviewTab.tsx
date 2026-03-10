@@ -195,7 +195,7 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                     </CardHeader>
                     <CardContent>
                         {salesTrendData.length > 0 ? (
-                            <ChartContainer config={chartConfig} className="h-[300px] w-full">
+                            <ChartContainer config={chartConfig} className="h-75 w-full">
                                 <AreaChart data={salesTrendData}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                     <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} minTickGap={32} />
@@ -211,7 +211,7 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                                 </AreaChart>
                             </ChartContainer>
                         ) : (
-                            <div className="flex items-center justify-center h-[300px] text-muted-foreground">No data available</div>
+                            <div className="flex items-center justify-center h-75 text-muted-foreground">No data available</div>
                         )}
                     </CardContent>
                 </Card>
@@ -224,7 +224,7 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                     </CardHeader>
                     <CardContent>
                         {orderTypeData.length > 0 ? (
-                             <ChartContainer config={chartConfig} className="h-[300px] w-full">
+                             <ChartContainer config={chartConfig} className="h-75 w-full">
                                 <PieChart>
                                     <Pie
                                         data={orderTypeData}
@@ -243,7 +243,7 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                                 </PieChart>
                             </ChartContainer>
                         ) : (
-                             <div className="flex items-center justify-center h-[300px] text-muted-foreground">No data available</div>
+                             <div className="flex items-center justify-center h-75 text-muted-foreground">No data available</div>
                         )}
                         <div className="flex flex-wrap justify-center gap-4 mt-4">
                             {orderTypeData.map((type) => (

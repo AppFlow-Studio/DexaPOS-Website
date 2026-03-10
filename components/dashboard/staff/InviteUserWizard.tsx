@@ -142,6 +142,7 @@ export function InviteUserWizard({
   const [lastName, setLastName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [phone, setPhone] = React.useState("");
+  const [phoneError, setPhoneError] = React.useState("");
   const [selectedRoleCode, setSelectedRoleCode] = React.useState<string>("");
   const [selectedLocationIds, setSelectedLocationIds] = React.useState<
     Set<string>
@@ -192,6 +193,7 @@ export function InviteUserWizard({
       setLastName("");
       setEmail("");
       setPhone("");
+      setPhoneError("");
       setSelectedRoleCode("");
       setSelectedLocationIds(new Set());
       setPrimaryLocationId(null);
@@ -215,6 +217,8 @@ export function InviteUserWizard({
       case "details":
         // Name is always required
         if (!firstName.trim() || !lastName.trim()) return false;
+        // Block if phone has a format error
+        if (phoneError) return false;
         // Email is required for Clerk, optional for POS
         if (staffType === "clerk") {
           return email.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -351,6 +355,18 @@ export function InviteUserWizard({
   }, [filteredRoles, staffType]);
 
   const selectedRole = filteredRoles.find((r) => r.code === selectedRoleCode);
+  const isAdminRole = (selectedRole?.level ?? 0) >= 9;
+
+  // Auto-select all locations when an owner/admin role is chosen
+  React.useEffect(() => {
+    if (isAdminRole && locations.length > 0) {
+      setSelectedLocationIds(new Set(locations.map((l) => l.id)));
+      if (!primaryLocationId) {
+        setPrimaryLocationId(locations[0].id);
+      }
+    }
+  }, [isAdminRole, locations]);
+
   const selectedLocations = locations.filter((loc) =>
     selectedLocationIds.has(loc.id),
   );
@@ -403,8 +419,8 @@ export function InviteUserWizard({
                       isCompleted && !isActive && "bg-primary/10 text-primary",
                       !isAccessible && "opacity-50 cursor-not-allowed",
                       isAccessible &&
-                        !isActive &&
-                        "hover:bg-muted cursor-pointer",
+                      !isActive &&
+                      "hover:bg-muted cursor-pointer",
                     )}
                     onClick={() => isAccessible && setCurrentStep(step.key)}
                   >
@@ -412,13 +428,13 @@ export function InviteUserWizard({
                       className={cn(
                         "flex items-center justify-center w-6 h-6 rounded-full border-2 transition-colors",
                         isActive &&
-                          "border-primary-foreground bg-primary-foreground text-primary",
+                        "border-primary-foreground bg-primary-foreground text-primary",
                         isCompleted &&
-                          !isActive &&
-                          "border-primary bg-primary text-primary-foreground",
                         !isActive &&
-                          !isCompleted &&
-                          "border-muted-foreground/30",
+                        "border-primary bg-primary text-primary-foreground",
+                        !isActive &&
+                        !isCompleted &&
+                        "border-muted-foreground/30",
                       )}
                     >
                       {isCompleted && !isActive ? (
@@ -707,10 +723,28 @@ export function InviteUserWizard({
                         <Input
                           id="phone"
                           type="tel"
-                          placeholder="+1 (555) 123-4567"
+                          placeholder="+15551234567"
                           value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setPhone(val);
+                            if (val && !/^\+[1-9]\d{7,14}$/.test(val)) {
+                              setPhoneError(
+                                "Must be E.164 format — start with + and country code, e.g. +15551234567",
+                              );
+                            } else {
+                              setPhoneError("");
+                            }
+                          }}
+                          className={phoneError ? "border-destructive" : ""}
                         />
+                        {phoneError ? (
+                          <p className="text-xs text-destructive">{phoneError}</p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            Include country code, e.g. +1 for US, +44 for UK
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
@@ -799,10 +833,29 @@ export function InviteUserWizard({
                   {/* Step 3: Assign Locations */}
                   {currentStep === "locations" && (
                     <div className="space-y-4">
-                      <div className="text-sm text-muted-foreground">
-                        Select one or more locations where this team member will
-                        have access.
-                      </div>
+                      {isAdminRole ? (
+                        /* ── Admin / Owner: auto-assigned, show info banner ── */
+                        <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+                          <Info className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
+                          <div>
+                            <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                              Auto-assigned to all locations
+                            </p>
+                            <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">
+                              Owners and Admins automatically receive access to
+                              all {locations.length} location
+                              {locations.length !== 1 ? "s" : ""}. Any new
+                              locations added in the future will also be
+                              provisioned automatically.
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-muted-foreground">
+                          Select one or more locations where this team member
+                          will have access.
+                        </div>
+                      )}
                       <div className="space-y-2">
                         {locations.length === 0 ? (
                           <div className="text-center py-8 text-muted-foreground">
@@ -818,17 +871,22 @@ export function InviteUserWizard({
                               <div
                                 key={location.id}
                                 className={cn(
-                                  "flex items-center gap-4 p-4 rounded-lg border-2 transition-all cursor-pointer",
-                                  isSelected
-                                    ? "border-primary bg-primary/5"
-                                    : "border-muted hover:border-primary/50",
+                                  "flex items-center gap-4 p-4 rounded-lg border-2 transition-all",
+                                  isAdminRole
+                                    ? "cursor-default border-primary/40 bg-primary/5 opacity-80"
+                                    : isSelected
+                                      ? "cursor-pointer border-primary bg-primary/5"
+                                      : "cursor-pointer border-muted hover:border-primary/50",
                                 )}
-                                onClick={() => toggleLocation(location.id)}
+                                onClick={() =>
+                                  !isAdminRole && toggleLocation(location.id)
+                                }
                               >
                                 <Checkbox
                                   checked={isSelected}
+                                  disabled={isAdminRole}
                                   onCheckedChange={() =>
-                                    toggleLocation(location.id)
+                                    !isAdminRole && toggleLocation(location.id)
                                   }
                                 />
                                 <div className="flex-1">
@@ -911,58 +969,58 @@ export function InviteUserWizard({
                       {/* PIN Setup - shown for POS staff or Clerk with POS enabled */}
                       {(staffType === "pos" ||
                         (staffType === "clerk" && enablePosAccess)) && (
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <Label>PIN Code</Label>
-                              <p className="text-sm text-muted-foreground">
-                                Used for POS login at assigned locations
-                              </p>
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Label>PIN Code</Label>
+                                <p className="text-sm text-muted-foreground">
+                                  Used for POS login at assigned locations
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Label htmlFor="autoPin">Auto-generate</Label>
+                                <Switch
+                                  id="autoPin"
+                                  checked={autoGeneratePin}
+                                  onCheckedChange={setAutoGeneratePin}
+                                />
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <Label htmlFor="autoPin">Auto-generate</Label>
-                              <Switch
-                                id="autoPin"
-                                checked={autoGeneratePin}
-                                onCheckedChange={setAutoGeneratePin}
-                              />
-                            </div>
+
+                            {!autoGeneratePin && (
+                              <div className="space-y-2">
+                                <Label htmlFor="pinCode">
+                                  Enter PIN (4-6 digits)
+                                </Label>
+                                <Input
+                                  id="pinCode"
+                                  type="text"
+                                  placeholder="1234"
+                                  maxLength={6}
+                                  value={pinCode}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    if (/^\d*$/.test(value)) {
+                                      setPinCode(value);
+                                    }
+                                  }}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  Must be 4-6 digits
+                                </p>
+                              </div>
+                            )}
+
+                            {autoGeneratePin && (
+                              <div className="rounded-lg border bg-muted/30 p-3">
+                                <p className="text-sm text-muted-foreground">
+                                  A 4-digit PIN will be automatically generated
+                                  and shown after creation
+                                </p>
+                              </div>
+                            )}
                           </div>
-
-                          {!autoGeneratePin && (
-                            <div className="space-y-2">
-                              <Label htmlFor="pinCode">
-                                Enter PIN (4-6 digits)
-                              </Label>
-                              <Input
-                                id="pinCode"
-                                type="text"
-                                placeholder="1234"
-                                maxLength={6}
-                                value={pinCode}
-                                onChange={(e) => {
-                                  const value = e.target.value;
-                                  if (/^\d*$/.test(value)) {
-                                    setPinCode(value);
-                                  }
-                                }}
-                              />
-                              <p className="text-xs text-muted-foreground">
-                                Must be 4-6 digits
-                              </p>
-                            </div>
-                          )}
-
-                          {autoGeneratePin && (
-                            <div className="rounded-lg border bg-muted/30 p-3">
-                              <p className="text-sm text-muted-foreground">
-                                A 4-digit PIN will be automatically generated
-                                and shown after creation
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                        )}
 
                       {/* Employment Details - only for POS staff */}
                       {staffType === "pos" && (
@@ -1096,53 +1154,53 @@ export function InviteUserWizard({
                       {/* POS-specific details */}
                       {(staffType === "pos" ||
                         (staffType === "clerk" && enablePosAccess)) && (
-                        <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-                          <div className="font-medium text-sm flex items-center gap-2">
-                            <Lock className="h-4 w-4" />
-                            POS Configuration
-                            {staffType === "clerk" && (
-                              <Badge variant="outline" className="text-xs">
-                                Optional
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="space-y-2 text-sm">
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">
-                                PIN Code:
-                              </span>
-                              <span>
-                                {autoGeneratePin
-                                  ? "Auto-generated"
-                                  : "Custom PIN set"}
-                              </span>
-                            </div>
-                            {staffType === "pos" && employmentType && (
-                              <div className="flex items-center justify-between">
-                                <span className="text-muted-foreground">
-                                  Employment:
-                                </span>
-                                <Badge
-                                  variant="outline"
-                                  className="text-xs capitalize"
-                                >
-                                  {employmentType.replace("-", " ")}
+                          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                            <div className="font-medium text-sm flex items-center gap-2">
+                              <Lock className="h-4 w-4" />
+                              POS Configuration
+                              {staffType === "clerk" && (
+                                <Badge variant="outline" className="text-xs">
+                                  Optional
                                 </Badge>
-                              </div>
-                            )}
-                            {hourlyRate && (
+                              )}
+                            </div>
+                            <div className="space-y-2 text-sm">
                               <div className="flex items-center justify-between">
                                 <span className="text-muted-foreground">
-                                  Hourly Rate:
+                                  PIN Code:
                                 </span>
                                 <span>
-                                  ${parseFloat(hourlyRate).toFixed(2)}/hour
+                                  {autoGeneratePin
+                                    ? "Auto-generated"
+                                    : "Custom PIN set"}
                                 </span>
                               </div>
-                            )}
+                              {staffType === "pos" && employmentType && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-muted-foreground">
+                                    Employment:
+                                  </span>
+                                  <Badge
+                                    variant="outline"
+                                    className="text-xs capitalize"
+                                  >
+                                    {employmentType.replace("-", " ")}
+                                  </Badge>
+                                </div>
+                              )}
+                              {hourlyRate && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-muted-foreground">
+                                    Hourly Rate:
+                                  </span>
+                                  <span>
+                                    ${parseFloat(hourlyRate).toFixed(2)}/hour
+                                  </span>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
 
                       {/* Locations */}
                       <div>
@@ -1208,16 +1266,17 @@ export function InviteUserWizard({
                   disabled={
                     !canGoNext() ||
                     createPOSStaff.isPending ||
-                    inviteClerkStaff.isPending
+                    inviteClerkStaff.isPending ||
+                    createClerkUserDirectly.isPending
                   }
                   className="gap-2"
                 >
                   {currentStepIndex === STEPS.length - 1 ? (
                     <>
-                      {createPOSStaff.isPending || inviteClerkStaff.isPending
+                      {createPOSStaff.isPending || inviteClerkStaff.isPending || createClerkUserDirectly.isPending
                         ? "Processing..."
                         : staffType === "clerk"
-                          ? "Send Invite"
+                          ? creationMethod === "direct" ? "Create Account" : "Send Invite"
                           : "Create Staff"}
                       <ChevronRight className="h-4 w-4" />
                     </>
