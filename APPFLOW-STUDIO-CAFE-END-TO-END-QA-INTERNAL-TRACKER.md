@@ -38,10 +38,10 @@ Source ticket: user-provided E2E QA checklist (March 9, 2026).
 
 | Flow | Name | Status | Notes |
 |---|---|---|---|
-| 1 | Admin -> Owner Onboarding | Blocked | Invite flow fails with `merchants_clerk_org_id_fkey` FK constraint |
+| 1 | Admin -> Owner Onboarding | In Progress | FK blocker resolved; step 1/2 and DB association passed, continue remaining checks |
 | 2 | Owner -> Staff and Access Management | Blocked | Second invited email can log in but is not mapped to `merchant.owner` |
 | 3 | Menu Setup | Pending |  |
-| 4 | Location Management | Pending |  |
+| 4 | Location Management | In Progress | New location creation and per-location menu/category setup confirmed |
 | 5 | Core POS Smoke Test | Pending |  |
 
 ## High-Risk Assertions
@@ -158,13 +158,23 @@ limit 20;
 |---|---|---|---|---|---|
 | 2026-03-10 | 1 | Admin invite owner | Blocked | Error: `insert or update on table "merchants" violates foreign key constraint "merchants_clerk_org_id_fkey"` | No fix yet, document-only per request |
 | 2026-03-10 | 2 | Owner invite second owner | Blocked | Invite accepted/login works, but DB role check has no `merchant.owner` for second email | Keep as blocker, continue other non-owner-dependent checks |
+| 2026-03-11 | Admin merchant detail open | Blocked -> Retest Pending | Module-not-found for `resend` and `twilio` from `app/actions/orders/send-receipt.ts` | Added packages locally (`pnpm add resend twilio`), re-test page load |
+| 2026-03-11 | 1 | Steps 1-2 + owner membership check | Pass | Merchant wizard create/invite succeeded; owner linked in `members` | Keep original blocker log entry as historical evidence |
+| 2026-03-11 | Admin merchants list visibility | Pass | Non-active merchants now visible in admin merchant list | Fixed client-side scoping to apply only for `hq.manager` |
+| 2026-03-11 | Location wizard manager invite | Blocked -> Fix Applied (retest pending) | Error `42501`: new row violates RLS policy for `location_invites`; no email sent | Patched manager-invite path to create Clerk invitation + service-role DB insert + explicit permission check |
+| 2026-03-12 | 1/2 | Merchant invitation retest (another merchant) | Pass | User confirmation | Invitation flow worked in latest QA run |
+| 2026-03-12 | 4 | New location with menu + categories | Pass | User confirmation | Location creation succeeded; menu/category setup worked for that location |
+| 2026-03-12 | 4 | Location wizard manager invite retest | Pass | User confirmation | Invite path now works in QA run; prior `42501` not reproduced |
 
 ## Defects
 
 | ID | Severity | Flow | Summary | Repro | Status | Owner |
 |---|---|---|---|---|---|---|
-| BUG-001 | High | 1 | Merchant invite fails due FK `merchants_clerk_org_id_fkey` on `merchants` insert/update | `/manage/users` -> invite/create new merchant -> submit | Open | Ali |
+| BUG-001 | High | 1 | Merchant invite fails due FK `merchants_clerk_org_id_fkey` on `merchants` insert/update | `/manage/users` -> invite/create new merchant -> submit | Fixed (2026-03-11) | Ali |
 | BUG-002 | High | 2 | Owner-to-owner flow fails role mapping: accepted second invite does not produce `merchant.owner` role | Invite second owner -> accept -> login -> query `members.role` by email | Open | Ali |
+| BUG-003 | Medium | Admin merchant detail | Missing runtime deps (`resend`, `twilio`) caused compile failure on merchant detail route | Open `/manage/merchants/<org_id>` -> Next compile fails in `app/actions/orders/send-receipt.ts` | Retest Pending | Ali |
+| BUG-004 | Medium | Admin merchants list | Merchant list showed only active merchants due non-manager users being over-scoped by client access filter | Login as platform admin -> open `/manage/merchants` -> onboarding/non-active rows missing | Fixed (2026-03-11) | Ali |
+| BUG-005 | High | Location wizard manager invite | Invite flow failed with `location_invites` RLS violation (`42501`) and no invitation email dispatch | Create location -> Assign Manager `invite_new` -> submit | Fixed (2026-03-12, retest passed) | Ali |
 
 ## Exit Criteria
 

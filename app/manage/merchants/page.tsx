@@ -51,24 +51,26 @@ import Image from 'next/image'
 export default function MerchantsPage() {
     const router = useRouter()
     const { userId } = useAuth()
-    const { canCreateMerchants, isSuperAdmin, isLoading: authLoading } = useAdminAuth()
+    const { canCreateMerchants, role, isLoading: authLoading } = useAdminAuth()
     const [page, setPage] = useState(1)
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
     const [filters, setFilters] = useState<MerchantFilters>(DEFAULT_MERCHANT_FILTERS)
 
+    const isManagerScoped = role?.role_code === 'hq.manager'
+    const scopedAdminUserId = isManagerScoped ? (userId || '') : ''
+
     // Fetch accessible merchant IDs for non-super-admins
-    const { data: merchantAccess, isLoading: accessLoading } = useAdminMerchantAccess(userId || '')
+    const { data: merchantAccess, isLoading: accessLoading } = useAdminMerchantAccess(scopedAdminUserId)
 
     // Debounce search to avoid too many requests
     const debouncedSearch = useDebounce(filters.search, 300)
     const activeFilters = { ...filters, search: debouncedSearch }
 
-    // Determine which merchant IDs to fetch
-    // Super admin: undefined (fetch all)
-    // Others: only their accessible merchant IDs
-    const accessibleMerchantIds = isSuperAdmin 
-        ? undefined 
-        : merchantAccess?.map(access => access.merchantId)
+    // Determine which merchant IDs to fetch.
+    // Only HQ managers are scoped via admin_merchant_access.
+    // Platform/super admins use server-side role checks and can fetch all.
+    const accessibleMerchantIds =
+        isManagerScoped ? merchantAccess?.map((access) => access.merchantId) : undefined
 
     // Fetch data with role-based filtering
     const { data, isLoading, isFetching, refetch } = useMerchants(
@@ -240,11 +242,11 @@ export default function MerchantsPage() {
                     </div>
 
                     {/* Content */}
-                    {isLoading || authLoading || (!isSuperAdmin && accessLoading) ? (
+                    {isLoading || authLoading || (isManagerScoped && accessLoading) ? (
                         <MerchantGridSkeleton />
                     ) : data?.merchants.length === 0 ? (
                         <div className="text-center py-12">
-                            {!isSuperAdmin && (!merchantAccess || merchantAccess.length === 0) ? (
+                            {isManagerScoped && (!merchantAccess || merchantAccess.length === 0) ? (
                                 <div className="flex flex-col items-center gap-3">
                                     <ShieldAlert className="h-12 w-12 text-muted-foreground" />
                                     <div>
