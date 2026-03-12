@@ -64,6 +64,8 @@ export const RuntimeFloorPlanView = forwardRef<RuntimeFloorPlanViewRef, RuntimeF
     const transformRef = useRef({ x: 0, y: 0, scale: 1 })
     const scaleRef = useRef(1)
     const [interactionMode, setInteractionMode] = useState<'select' | 'pan'>('select')
+    // Track whether a table node is actively being dragged so the canvas pan gesture is suppressed
+    const isDraggingTableRef = useRef(false)
 
     // Ensure design mode always uses select mode
     React.useEffect(() => {
@@ -86,6 +88,8 @@ export const RuntimeFloorPlanView = forwardRef<RuntimeFloorPlanViewRef, RuntimeF
     useGesture(
         {
             onDrag: ({ offset: [dx, dy], event }) => {
+                // Suppress canvas panning while a table node drag is in progress
+                if (isDraggingTableRef.current) return
                 const isTable = (event.target as HTMLElement).closest('[data-table-node]')
                 if (isDesignMode && interactionMode === 'select' && isTable) return
 
@@ -209,7 +213,21 @@ export const RuntimeFloorPlanView = forwardRef<RuntimeFloorPlanViewRef, RuntimeF
         }
     }, [initialTables.length, floorPlan?.id, fitToView])
 
-    // --- 3. DROP HANDLERS (CRITICAL) ---
+    // --- 3. TABLE DRAG TRACKING ---
+    // These wrappers set/unset isDraggingTableRef so the canvas pan gesture
+    // is suppressed while a table is being moved, preventing the whole canvas
+    // from shifting alongside the dragged table.
+    const handleTableDragStart = React.useCallback(() => {
+        isDraggingTableRef.current = true
+        onTableDragStart?.()
+    }, [onTableDragStart])
+
+    const handleTableDragEnd = React.useCallback(() => {
+        isDraggingTableRef.current = false
+        onTableDragEnd?.()
+    }, [onTableDragEnd])
+
+    // --- 4. DROP HANDLERS (CRITICAL) ---
     const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault() // REQUIRED to allow dropping
         e.dataTransfer.dropEffect = 'copy'
@@ -309,8 +327,8 @@ export const RuntimeFloorPlanView = forwardRef<RuntimeFloorPlanViewRef, RuntimeF
                                     onRotateEnd={onRotateEnd}
 
                                     onDelete={() => onRemoveTable?.(table.id)}
-                                    onDragStart={onTableDragStart}
-                                    onDragEnd={onTableDragEnd}
+                                    onDragStart={handleTableDragStart}
+                                    onDragEnd={handleTableDragEnd}
 
                                     statusColor={getTableStatusColor(session?.status)}
                                     billAmount={session?.total_amount}

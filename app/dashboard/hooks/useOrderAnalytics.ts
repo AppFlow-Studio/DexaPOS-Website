@@ -52,6 +52,10 @@ import {
   GetWaterfallReport,
   WaterfallReport,
 } from "../actions/waterfall-report";
+import {
+  GetOnlineOrderingAnalytics,
+  OnlineOrderingAnalytics,
+} from "../actions/online-ordering-analytics";
 
 /**
  * Get clerk organization ID from user info
@@ -782,6 +786,46 @@ export function useTablePerformance(
     ],
     queryFn: () =>
       GetTablePerformance(clerkOrgId, effectiveLocationId, dateFrom, dateTo),
+    enabled: !!clerkOrgId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+// ============================================================================
+// Online Ordering Channel Analytics
+// ============================================================================
+
+export function useOnlineOrderingAnalytics(
+  dateFrom: Date,
+  dateTo: Date,
+  orgIdOverride?: string,
+  locationIdOverride?: string | null
+) {
+  const userOrgId = useClerkOrgId();
+  const clerkOrgId = orgIdOverride || userOrgId;
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
+
+  const storeLocationId = isAllLocations ? null : selectedLocationId;
+  const effectiveLocationId =
+    locationIdOverride !== undefined ? locationIdOverride : storeLocationId;
+
+  return useQuery<OnlineOrderingAnalytics>({
+    queryKey: [
+      "online-ordering-analytics",
+      clerkOrgId,
+      effectiveLocationId,
+      dateFrom.toISOString(),
+      dateTo.toISOString(),
+    ],
+    queryFn: () =>
+      GetOnlineOrderingAnalytics(
+        clerkOrgId,
+        effectiveLocationId,
+        dateFrom,
+        dateTo
+      ),
     enabled: !!clerkOrgId,
     staleTime: 2 * 60 * 1000,
     refetchOnWindowFocus: false,

@@ -10,7 +10,7 @@ import { PeriodCard, WeeklyScheduleCard } from "./ScheduleCards";
 import { PeriodWizard, QuickScheduleModal } from "./Wizards";
 import { EditWeeklyScheduleModal } from "../EditWeeklyScheduleModal";
 import { useRouter } from "next/navigation";
-import { format, addDays } from "date-fns";
+import { format, addDays, differenceInDays } from "date-fns";
 
 export function ScheduleDashboard() {
   const router = useRouter();
@@ -44,12 +44,12 @@ export function ScheduleDashboard() {
     setEditingPeriod(null);
   };
 
-  const handleCreateWeekly = (startDate: string) => {
-    const endDate = format(addDays(new Date(startDate), 6), "yyyy-MM-dd");
-    const name = `Week of ${format(new Date(startDate), "MMM dd")} - ${format(
-      new Date(endDate),
-      "MMM dd, yyyy"
-    )}`;
+  const handleCreateWeekly = (startDate: string, numberOfWeeks: number = 1) => {
+    const totalDays = numberOfWeeks * 7 - 1;
+    const endDate = format(addDays(new Date(startDate), totalDays), "yyyy-MM-dd");
+    const name = numberOfWeeks === 1
+      ? `Week of ${format(new Date(startDate), "MMM dd")} - ${format(new Date(endDate), "MMM dd, yyyy")}`
+      : `${format(new Date(startDate), "MMM dd")} - ${format(new Date(endDate), "MMM dd, yyyy")} (${numberOfWeeks} weeks)`;
 
     const newId = addWeeklySchedule({
       name,
@@ -65,13 +65,17 @@ export function ScheduleDashboard() {
     router.push(`/dashboard/schedules/${newId}`);
   };
 
-  const handleSaveWeeklyEdit = (startDate: string) => {
+  const handleSaveWeeklyEdit = (startDate: string, numberOfWeeks?: number) => {
     if (!editingWeekly) return;
-    const endDate = format(addDays(new Date(startDate), 6), "yyyy-MM-dd");
-    const name = `Week of ${format(new Date(startDate), "MMM dd")} - ${format(
-      new Date(endDate),
-      "MMM dd, yyyy"
-    )}`;
+    // Preserve original duration if numberOfWeeks not explicitly changed
+    const weeks = numberOfWeeks ?? Math.max(1, Math.round(
+      (differenceInDays(new Date(editingWeekly.endDate), new Date(editingWeekly.startDate)) + 1) / 7
+    ));
+    const totalDays = weeks * 7 - 1;
+    const endDate = format(addDays(new Date(startDate), totalDays), "yyyy-MM-dd");
+    const name = weeks === 1
+      ? `Week of ${format(new Date(startDate), "MMM dd")} - ${format(new Date(endDate), "MMM dd, yyyy")}`
+      : `${format(new Date(startDate), "MMM dd")} - ${format(new Date(endDate), "MMM dd, yyyy")} (${weeks} weeks)`;
     updateWeeklySchedule(editingWeekly.id, { name, startDate, endDate });
     setEditingWeekly(null);
   };
@@ -236,6 +240,7 @@ export function ScheduleDashboard() {
         onOpenChange={(open) => !open && setEditingWeekly(null)}
         onSave={handleSaveWeeklyEdit}
         initialDate={editingWeekly?.startDate}
+        initialEndDate={editingWeekly?.endDate}
         scheduleName={editingWeekly?.name}
       />
     </div>
