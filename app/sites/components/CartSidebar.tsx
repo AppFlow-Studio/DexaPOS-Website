@@ -1,30 +1,26 @@
 "use client";
 
-import { useState } from "react";
-import { CheckoutDialog } from "./CheckoutDialog";
-
+import { useRouter } from "next/navigation";
 import { useCart } from "../hooks/useCart";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { Minus, Plus, X, Leaf, ShoppingBag } from "lucide-react";
-
+import { motion, AnimatePresence } from "framer-motion";
 import { OnlineOrderingConfig } from "@/types/site";
+import { useStorefrontPath } from "../lib/use-storefront-path";
 
 interface CartSidebarProps {
   config?: Partial<OnlineOrderingConfig>;
+  storeConfigId?: string;
+  slug: string;
 }
 
-export function CartSidebar({ config }: CartSidebarProps) {
+export function CartSidebar({ config, storeConfigId, slug }: CartSidebarProps) {
+  const router = useRouter();
+  const storePath = useStorefrontPath(slug);
   const {
     items,
     isOpen,
@@ -36,190 +32,304 @@ export function CartSidebar({ config }: CartSidebarProps) {
     setGoGreen,
   } = useCart();
 
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const subtotal = getSubtotal();
-  const taxRate = 0.08; // Fixed 8% tax for now
+  const taxRate = 0.08;
   const tax = subtotal * taxRate;
   const total = subtotal + tax;
 
+  const handleCheckout = () => {
+    setOpen(false);
+    router.push(storePath("/checkout"));
+  };
+
   return (
-    <Sheet open={isOpen} onOpenChange={setOpen}>
-      <SheetContent className="w-full sm:max-w-md flex flex-col p-0 gap-0">
-        {/* Header */}
-        <SheetHeader className="p-4 border-b bg-white shrink-0">
-          <div className="flex items-center justify-between">
-            <SheetTitle className="text-lg font-bold">Your Order</SheetTitle>
-            <button
-              onClick={() => setOpen(false)}
-              className="p-1.5 hover:bg-gray-100 rounded-full transition-colors"
-            >
-              <X className="h-5 w-5 text-gray-500" />
-            </button>
-          </div>
-        </SheetHeader>
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-60"
+            style={{
+              backgroundColor: "rgba(0,0,0,0.5)",
+              backdropFilter: "blur(4px)",
+            }}
+          />
 
-        {/* Cart Items */}
-        <ScrollArea className="flex-1">
-          {items.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-[300px] text-center px-6">
-              <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                <ShoppingBag className="h-8 w-8 text-gray-400" />
-              </div>
-              <p className="font-medium text-gray-900 mb-1">
-                Your cart is empty
-              </p>
-              <p className="text-sm text-gray-500">Add items to get started</p>
+          {/* Bottom Sheet */}
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 30, stiffness: 300 }}
+            className="fixed bottom-0 left-0 right-0 z-70 flex flex-col"
+            style={{
+              maxHeight: "85vh",
+              backgroundColor: "var(--bg)",
+              borderRadius: "20px 20px 0 0",
+              fontFamily: "var(--font)",
+              boxShadow: "0 -8px 40px rgba(0,0,0,0.15)",
+            }}
+          >
+            {/* Drag Handle */}
+            <div className="flex justify-center pt-3 pb-1 shrink-0">
+              <div
+                className="w-10 h-1 rounded-full"
+                style={{ backgroundColor: "var(--border)" }}
+              />
             </div>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {items.map((item) => (
-                <div
-                  key={item.cartItemId}
-                  className="p-4 hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex gap-3">
-                    {/* Item Image */}
-                    {item.image && (
-                      <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 shrink-0">
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    )}
 
-                    {/* Item Details */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-start gap-2">
-                        <div className="min-w-0">
-                          <h4 className="font-medium text-gray-900 line-clamp-1">
-                            {item.name}
-                          </h4>
-                          {item.selectedModifiers &&
-                            item.selectedModifiers.length > 0 && (
-                              <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">
-                                {item.selectedModifiers
-                                  .map((m) => m.name)
-                                  .join(", ")}
-                              </p>
-                            )}
-                          {item.notes && (
-                            <p className="text-xs text-gray-400 italic mt-0.5 line-clamp-1">
-                              "{item.notes}"
-                            </p>
-                          )}
-                        </div>
-                        <span className="font-semibold text-gray-900 shrink-0">
-                          ${(item.totalPrice * item.quantity).toFixed(2)}
-                        </span>
-                      </div>
+            {/* Header */}
+            <div
+              className="px-6 py-3 flex items-center justify-between shrink-0"
+              style={{ borderBottom: "1px solid var(--border)" }}
+            >
+              <h2
+                className="text-xl font-bold"
+                style={{
+                  color: "var(--text)",
+                  fontFamily: "var(--font-display)",
+                }}
+              >
+                Your Order
+              </h2>
+              <button
+                onClick={() => setOpen(false)}
+                className="p-2 rounded-xl transition-colors"
+                style={{
+                  backgroundColor: "var(--card)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text)",
+                }}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
 
-                      {/* Quantity Controls */}
-                      <div className="flex items-center justify-between mt-3">
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => removeItem(item.cartItemId)}
-                            className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                            aria-label="Remove item"
+            {/* Cart Items */}
+            <ScrollArea className="flex-1 overflow-auto">
+              {items.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[250px] text-center px-6">
+                  <div
+                    className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
+                    style={{ backgroundColor: "var(--card)" }}
+                  >
+                    <ShoppingBag
+                      className="h-8 w-8"
+                      style={{ color: "var(--text-secondary)" }}
+                    />
+                  </div>
+                  <p className="font-medium mb-1" style={{ color: "var(--text)" }}>
+                    Your cart is empty
+                  </p>
+                  <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                    Add items to get started
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  {items.map((item) => (
+                    <div
+                      key={item.cartItemId}
+                      className="px-6 py-4 transition-colors"
+                      style={{ borderBottom: "1px solid var(--border)" }}
+                    >
+                      <div className="flex gap-3">
+                        {item.image && (
+                          <div
+                            className="w-14 h-14 overflow-hidden shrink-0"
+                            style={{
+                              borderRadius: "var(--radius)",
+                              backgroundColor: "var(--card)",
+                            }}
                           >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-                        <div className="flex items-center border border-gray-200 rounded-full h-8">
-                          <button
-                            className="w-8 h-full flex items-center justify-center hover:bg-gray-100 rounded-l-full transition-colors"
-                            onClick={() =>
-                              updateQuantity(item.cartItemId, item.quantity - 1)
-                            }
-                          >
-                            <Minus className="h-3 w-3" />
-                          </button>
-                          <span className="w-8 text-center text-sm font-medium">
-                            {item.quantity}
-                          </span>
-                          <button
-                            className="w-8 h-full flex items-center justify-center hover:bg-gray-100 rounded-r-full transition-colors"
-                            onClick={() =>
-                              updateQuantity(item.cartItemId, item.quantity + 1)
-                            }
-                          >
-                            <Plus className="h-3 w-3" />
-                          </button>
+                            <img
+                              src={item.image}
+                              alt={item.name}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        )}
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="min-w-0">
+                              <h4
+                                className="font-semibold line-clamp-1 text-[15px]"
+                                style={{ color: "var(--text)" }}
+                              >
+                                {item.name}
+                              </h4>
+                              {item.selectedModifiers &&
+                                item.selectedModifiers.length > 0 && (
+                                  <p
+                                    className="text-xs mt-0.5 line-clamp-1"
+                                    style={{ color: "var(--text-secondary)" }}
+                                  >
+                                    {item.selectedModifiers
+                                      .map((m) => m.name)
+                                      .join(", ")}
+                                  </p>
+                                )}
+                              {item.notes && (
+                                <p
+                                  className="text-xs italic mt-0.5 line-clamp-1"
+                                  style={{ color: "var(--text-secondary)", opacity: 0.7 }}
+                                >
+                                  &ldquo;{item.notes}&rdquo;
+                                </p>
+                              )}
+                            </div>
+                            <span
+                              className="font-bold shrink-0 text-[15px]"
+                              style={{ color: "var(--text)" }}
+                            >
+                              ${(item.totalPrice * item.quantity).toFixed(2)}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between mt-3">
+                            <button
+                              onClick={() => removeItem(item.cartItemId)}
+                              className="p-1 transition-colors"
+                              style={{ color: "var(--text-secondary)" }}
+                              aria-label="Remove item"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                            <div
+                              className="flex items-center h-8"
+                              style={{
+                                border: "1px solid var(--border)",
+                                borderRadius: "var(--radius)",
+                              }}
+                            >
+                              <button
+                                className="w-8 h-full flex items-center justify-center transition-colors"
+                                style={{ color: "var(--text)" }}
+                                onClick={() =>
+                                  updateQuantity(
+                                    item.cartItemId,
+                                    item.quantity - 1
+                                  )
+                                }
+                              >
+                                <Minus className="h-3 w-3" />
+                              </button>
+                              <span
+                                className="w-8 text-center text-sm font-bold"
+                                style={{ color: "var(--text)" }}
+                              >
+                                {item.quantity}
+                              </span>
+                              <button
+                                className="w-8 h-full flex items-center justify-center transition-colors"
+                                style={{
+                                  backgroundColor: "var(--primary)",
+                                  color: "#FFFFFF",
+                                  borderRadius: `0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0`,
+                                }}
+                                onClick={() =>
+                                  updateQuantity(
+                                    item.cartItemId,
+                                    item.quantity + 1
+                                  )
+                                }
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+
+            {/* Footer */}
+            {items.length > 0 && (
+              <div className="shrink-0" style={{ borderTop: "1px solid var(--border)" }}>
+                {/* Go Green */}
+                <div
+                  className="px-6 py-3 flex items-center justify-between"
+                  style={{ borderBottom: "1px solid var(--border)" }}
+                >
+                  <div className="flex items-center gap-2">
+                    <Leaf
+                      className={cn("h-4 w-4", goGreen ? "text-green-600" : "")}
+                      style={{ color: goGreen ? undefined : "var(--text-secondary)" }}
+                    />
+                    <div>
+                      <Label
+                        htmlFor="go-green"
+                        className="text-sm font-medium cursor-pointer"
+                        style={{ color: "var(--text)" }}
+                      >
+                        Go Green
+                      </Label>
+                      <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                        Skip the plastic cutlery
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    id="go-green"
+                    checked={goGreen}
+                    onCheckedChange={setGoGreen}
+                  />
+                </div>
+
+                {/* Price Summary */}
+                <div className="px-6 py-3 space-y-1.5 text-sm">
+                  <div className="flex justify-between" style={{ color: "var(--text-secondary)" }}>
+                    <span>Subtotal</span>
+                    <span>${subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between" style={{ color: "var(--text-secondary)" }}>
+                    <span>Tax (8%)</span>
+                    <span>${tax.toFixed(2)}</span>
+                  </div>
+                  <div
+                    className="flex justify-between text-lg font-bold pt-3 mt-2"
+                    style={{
+                      color: "var(--text)",
+                      borderTop: "2px solid var(--border)",
+                    }}
+                  >
+                    <span>Total</span>
+                    <span>${total.toFixed(2)}</span>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </ScrollArea>
 
-        {/* Footer - Sticky */}
-        <div className="border-t bg-white shrink-0">
-          {/* Go Green Option */}
-          <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100">
-            <div className="flex items-center gap-2">
-              <Leaf
-                className={cn(
-                  "h-4 w-4",
-                  goGreen ? "text-green-600" : "text-gray-400"
-                )}
-              />
-              <div>
-                <Label
-                  htmlFor="go-green"
-                  className="text-sm font-medium cursor-pointer"
-                >
-                  Go Green
-                </Label>
-                <p className="text-xs text-gray-500">
-                  Skip the plastic cutlery
-                </p>
+                {/* Checkout Button */}
+                <div className="px-6 pb-6 pt-2">
+                  <button
+                    className="w-full py-4 font-bold text-base transition-all"
+                    style={{
+                      backgroundColor: "var(--primary)",
+                      color: "#FFFFFF",
+                      borderRadius: "var(--radius)",
+                      border: "none",
+                      boxShadow: "0 4px 16px color-mix(in srgb, var(--primary) 40%, transparent)",
+                      fontFamily: "var(--font)",
+                    }}
+                    disabled={items.length === 0}
+                    onClick={handleCheckout}
+                  >
+                    Checkout · ${total.toFixed(2)}
+                  </button>
+                </div>
               </div>
-            </div>
-            <Switch
-              id="go-green"
-              checked={goGreen}
-              onCheckedChange={setGoGreen}
-            />
-          </div>
-
-          {/* Price Summary */}
-          <div className="px-4 py-3 space-y-1.5 text-sm">
-            <div className="flex justify-between text-gray-600">
-              <span>Subtotal</span>
-              <span>${subtotal.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-gray-600">
-              <span>Tax (8%)</span>
-              <span>${tax.toFixed(2)}</span>
-            </div>
-          </div>
-
-          {/* Checkout Button */}
-          <div className="p-4 pt-0">
-            <Button
-              className="w-full h-12 bg-gray-900 hover:bg-gray-800 text-white font-semibold text-base rounded-lg shadow-sm"
-              disabled={items.length === 0}
-              onClick={() => setIsCheckoutOpen(true)}
-            >
-              <span>Checkout</span>
-              <span className="ml-auto">${total.toFixed(2)}</span>
-            </Button>
-          </div>
-        </div>
-      </SheetContent>
-
-      <CheckoutDialog
-        isOpen={isCheckoutOpen}
-        onOpenChange={setIsCheckoutOpen}
-        subtotal={subtotal}
-        tax={tax}
-        total={total}
-        config={config}
-      />
-    </Sheet>
+            )}
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 }

@@ -13,9 +13,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 interface OrdersSheetProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
+  slug: string;
 }
 
-export function OrdersSheet({ isOpen, onOpenChange }: OrdersSheetProps) {
+export function OrdersSheet({ isOpen, onOpenChange, slug }: OrdersSheetProps) {
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-md flex flex-col p-0">
@@ -29,7 +30,7 @@ export function OrdersSheet({ isOpen, onOpenChange }: OrdersSheetProps) {
         </SheetHeader>
 
         <ScrollArea className="flex-1 p-6">
-          <OrdersPanel />
+          <OrdersPanel slug={slug} />
         </ScrollArea>
       </SheetContent>
     </Sheet>

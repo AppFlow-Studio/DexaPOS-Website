@@ -1,8 +1,7 @@
 "use client";
 
 import { useCart } from "../hooks/useCart";
-import { Button } from "@/components/ui/button";
-import { ShoppingCart, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export function FloatingCartBar() {
@@ -10,7 +9,6 @@ export function FloatingCartBar() {
   const subtotal = getSubtotal();
   const itemCount = getTotalItems();
 
-  // Don't render if cart is empty
   if (items.length === 0) {
     return null;
   }
@@ -27,45 +25,39 @@ export function FloatingCartBar() {
         <motion.div
           key={itemCount}
           initial={{ scale: 1 }}
-          animate={{ scale: [1, 1.02, 1] }}
-          transition={{ duration: 0.2 }}
+          animate={{ scale: [1, 1.03, 1] }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
           className="container mx-auto max-w-lg"
         >
           <div
-            className="bg-gray-900 dark:bg-gray-800 text-white rounded-2xl shadow-2xl px-4 py-3 flex items-center justify-between gap-4 border border-gray-700"
+            onClick={() => setOpen(true)}
+            className="cursor-pointer flex items-center justify-between gap-4 px-5 py-3.5"
             style={{
+              backgroundColor: "var(--primary)",
+              color: "var(--primary-text)",
+              borderRadius: "var(--radius)",
               boxShadow:
-                "0 -4px 20px rgba(0, 0, 0, 0.15), 0 8px 30px rgba(0, 0, 0, 0.25)",
+                "0 8px 32px color-mix(in srgb, var(--primary) 40%, transparent), 0 2px 8px rgba(0,0,0,0.12)",
+              fontFamily: "var(--font)",
             }}
           >
-            {/* Left: Cart Icon + Item Count */}
             <div className="flex items-center gap-3">
-              <div className="relative">
-                <ShoppingCart className="h-5 w-5 text-gray-300" />
-                <span className="absolute -top-2 -right-2 bg-[var(--primary)] text-white text-[10px] font-bold h-4 w-4 flex items-center justify-center rounded-full">
-                  {itemCount}
-                </span>
+              <div
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-sm font-bold"
+                style={{
+                  backgroundColor: "color-mix(in srgb, var(--primary-text) 20%, transparent)",
+                }}
+              >
+                {itemCount}
               </div>
-              <div className="hidden sm:block">
-                <p className="text-sm text-gray-400">
-                  {itemCount} {itemCount === 1 ? "item" : "items"}
-                </p>
-              </div>
+              <span className="font-semibold text-[15px]">View Cart</span>
             </div>
-
-            {/* Center: Subtotal */}
-            <div className="flex-1 text-center sm:text-left">
-              <p className="text-lg font-bold">${subtotal.toFixed(2)}</p>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-base">
+                ${subtotal.toFixed(2)}
+              </span>
+              <ArrowRight className="h-4 w-4 opacity-70" />
             </div>
-
-            {/* Right: CTA Button */}
-            <Button
-              onClick={() => setOpen(true)}
-              className="bg-[var(--primary)] hover:opacity-90 text-white font-semibold px-6 h-10 rounded-xl shadow-lg transition-all hover:scale-105 active:scale-95"
-            >
-              <span className="mr-2">View Cart</span>
-              <ArrowRight className="h-4 w-4" />
-            </Button>
           </div>
         </motion.div>
       </motion.div>

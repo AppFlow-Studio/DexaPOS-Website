@@ -1,7 +1,7 @@
 "use server";
 
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { Site } from "@/types/site";
+import { Site, SiteThemeConfig, OnlineOrderingConfig } from "@/types/site";
 import {
   StorefrontMenu,
   StorefrontCategory,
@@ -20,212 +20,253 @@ export interface StorefrontData {
     phone: string | null;
     email: string | null;
     business_hours: any;
+    latitude?: number | null;
+    longitude?: number | null;
   } | null;
   menus: StorefrontMenu[];
 }
 
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function mapStoreConfigToSite(config: any): Site {
+  const themeConfig: SiteThemeConfig = {
+    primaryColor: config.primary_color,
+    secondaryColor: config.secondary_color,
+    accentColor: config.accent_color,
+    backgroundColor: config.background_color,
+    textColor: config.text_color,
+    fontFamily: config.font_family,
+    templateId: config.template_id,
+    heroImageUrl: config.hero_image_url,
+    faviconUrl: config.favicon_url,
+    headerStyle: config.header_style,
+    headerTextColor: config.header_text_color,
+  };
+
+  const onlineOrderingConfig: OnlineOrderingConfig = {
+    operatingHours: config.operating_hours,
+    pickupEnabled: config.accepts_pickup,
+    deliveryEnabled: config.accepts_delivery,
+    minimumOrderAmount: config.min_order_cents ? config.min_order_cents / 100 : 0,
+    preparationLeadTime: config.estimated_prep_minutes,
+    futureOrderMaxDays: config.max_future_order_days,
+    tippingEnabled: config.tip_enabled,
+    tipConfig: config.tip_presets
+      ? { presetPercentages: config.tip_presets }
+      : undefined,
+    baseDeliveryFee: config.delivery_fee_cents
+      ? config.delivery_fee_cents / 100
+      : 0,
+    freeDeliveryThreshold: config.free_delivery_threshold_cents
+      ? config.free_delivery_threshold_cents / 100
+      : undefined,
+  };
+
+  return {
+    id: config.id,
+    merchant_id: config.merchant_id,
+    location_id: config.location_id,
+    subdomain: config.slug,
+    custom_domain: config.custom_domain,
+    title: config.store_name,
+    description: config.description,
+    logo_url: config.logo_url,
+    banner_text: null,
+    address: config.address,
+    theme_config: themeConfig,
+    online_ordering_config: onlineOrderingConfig,
+    is_active: config.is_active,
+    created_at: config.created_at,
+    updated_at: config.updated_at,
+  };
+}
+
 export async function getStorefrontData(
-  locationId: string
+  slugOrId: string
+): Promise<StorefrontData> {
+  const supabase = createServiceRoleClient();
+  const isUuid = UUID_REGEX.test(slugOrId);
+
+  // 1. Fetch store config by slug or location_id
+  let storeConfigQuery = supabase
+    .from("online_store_config")
+    .select("*");
+
+  if (isUuid) {
+    storeConfigQuery = storeConfigQuery.eq("location_id", slugOrId);
+  } else {
+    storeConfigQuery = storeConfigQuery.eq("slug", slugOrId);
+  }
+
+  const { data: storeConfig, error: configError } =
+    await storeConfigQuery.single();
+
+  // Fallback: try legacy sites table if no online_store_config found
+  if (configError || !storeConfig) {
+    return getStorefrontDataLegacy(slugOrId, isUuid);
+  }
+
+  const site = mapStoreConfigToSite(storeConfig);
+  const locationId = storeConfig.location_id;
+
+  // 2. Fetch location
+  const { data: location, error: locationError } = await supabase
+    .from("locations")
+    .select(
+      "id, name, address_line1, city, state, postal_code, phone, email, business_hours, merchant_id, latitude, longitude"
+    )
+    .eq("id", locationId)
+    .single();
+
+  if (locationError || !location) {
+    return { site, location: null, menus: [] };
+  }
+
+  const merchantId = location.merchant_id;
+
+  // 3. Fetch menus + categories + items + modifiers (same logic as before)
+  const menus = await fetchMenus(supabase, merchantId, locationId);
+
+  return { site, location, menus };
+}
+
+async function getStorefrontDataLegacy(
+  slugOrId: string,
+  isUuid: boolean
 ): Promise<StorefrontData> {
   const supabase = createServiceRoleClient();
 
-  // 1. Fetch Site and Location (including merchant_id)
-  const [siteResult, locationResult] = await Promise.all([
-    supabase.from("sites").select("*").eq("location_id", locationId).single(),
-    supabase
-      .from("locations")
-      .select(
-        "id, name, address_line1, city, state, postal_code, phone, email, business_hours, merchant_id"
-      )
-      .eq("id", locationId)
-      .single(),
-  ]);
-
-  if (locationResult.error || !locationResult.data) {
-    console.error("DEBUG: Location Fetch Error", locationResult.error);
-    return { site: siteResult.data, location: null, menus: [] };
+  let siteQuery = supabase.from("sites").select("*");
+  if (isUuid) {
+    siteQuery = siteQuery.eq("location_id", slugOrId);
+  } else {
+    siteQuery = siteQuery.eq("subdomain", slugOrId);
   }
 
-  const merchantId = locationResult.data.merchant_id;
+  const { data: siteData } = await siteQuery.single();
 
-  // 2. Fetch MENUS (Both Global and Location-Specific)
-  // Logic: merchant_id matches AND (location_id is null OR location_id is this location)
+  const locationId = isUuid ? slugOrId : siteData?.location_id;
+  if (!locationId) {
+    return { site: siteData, location: null, menus: [] };
+  }
+
+  const { data: location } = await supabase
+    .from("locations")
+    .select(
+      "id, name, address_line1, city, state, postal_code, phone, email, business_hours, merchant_id, latitude, longitude"
+    )
+    .eq("id", locationId)
+    .single();
+
+  if (!location) {
+    return { site: siteData, location: null, menus: [] };
+  }
+
+  const menus = await fetchMenus(supabase, location.merchant_id, locationId);
+
+  return { site: siteData, location, menus };
+}
+
+async function fetchMenus(
+  supabase: any,
+  merchantId: string,
+  locationId: string
+): Promise<StorefrontMenu[]> {
   const { data: rawMenus, error: menuError } = await supabase
     .from("menus")
-    .select(
-      `
-      id,
-      name,
-      display_order,
-      menu_categories (
-        category:categories (
-          id,
-          name,
-          display_order
-        )
-      )
-    `
-    )
+    .select("id, name, display_order")
     .eq("merchant_id", merchantId)
     .eq("is_active", true)
     .or(`location_id.is.null,location_id.eq.${locationId}`)
     .order("display_order", { ascending: true });
 
-  if (menuError) {
-    console.error("DEBUG: Menu Fetch Error", menuError);
-    return { site: siteResult.data, location: locationResult.data, menus: [] };
-  }
+  if (menuError || !rawMenus || rawMenus.length === 0) return [];
 
-  // 3. Extract Category IDs to fetch items
-  const allCategoryIds = new Set<string>();
-  (rawMenus || []).forEach((m: any) => {
-    m.menu_categories?.forEach((mc: any) => {
-      if (mc.category?.id) allCategoryIds.add(mc.category.id);
-    });
-  });
+  const rpcResults = await Promise.all(
+    rawMenus.map((m: any) =>
+      supabase.rpc("get_menu_with_categories", {
+        p_menu_id: m.id,
+        p_location_id: locationId,
+      })
+    )
+  );
 
-  // 4. Fetch Items for these Categories
-  let itemsMap = new Map<string, any[]>();
-  let allItemIds = new Set<string>();
-
-  if (allCategoryIds.size > 0) {
-    const { data: itemsData, error: itemsError } = await supabase
-      .from("category_items")
-      .select(
-        `
-        category_id,
-        item:menu_items (
-          id,
-          name,
-          description,
-          price,
-          image,
-          availability
-        )
-      `
-      )
-      .in("category_id", Array.from(allCategoryIds));
-
-    if (!itemsError && itemsData) {
-      itemsData.forEach((row: any) => {
-        const catId = row.category_id;
-        const item = row.item;
-        if (item && item.availability) {
-          if (!itemsMap.has(catId)) itemsMap.set(catId, []);
-          itemsMap.get(catId)?.push(item);
-          allItemIds.add(item.id);
-        }
-      });
-    }
-  }
-
-  // 5. Fetch Modifiers for these Items (The "Customize" Step)
-  let itemModifiersMap = new Map<string, any[]>();
-
-  if (allItemIds.size > 0) {
-    // A. Link Items to Groups
-    const { data: itemGroups, error: itemGroupsError } = await supabase
-      .from("menu_item_modifier_groups")
-      .select("menu_item_id, modifier_group_id, display_order")
-      .in("menu_item_id", Array.from(allItemIds))
-      .order("display_order");
-
-    if (!itemGroupsError && itemGroups) {
-      const allGroupIds = new Set<string>(
-        itemGroups.map((ig: any) => ig.modifier_group_id)
-      );
-
-      if (allGroupIds.size > 0) {
-        // B. Fetch Group Details
-        const { data: groups, error: groupsError } = await supabase
-          .from("modifier_groups")
-          .select("id, name, min_selections, max_selections, is_required")
-          .in("id", Array.from(allGroupIds));
-
-        // C. Fetch Group Options
-        const { data: options, error: optionsError } = await supabase
-          .from("modifier_group_items")
-          .select(
-            "modifier_group_id, id, name, price_modifier, display_order, is_active"
-          )
-          .in("modifier_group_id", Array.from(allGroupIds))
-          .eq("is_active", true)
-          .order("display_order");
-
-        const groupsMap = new Map(groups?.map((g: any) => [g.id, g]));
-        const optionsMap = new Map<string, any[]>();
-
-        options?.forEach((opt: any) => {
-          if (!optionsMap.has(opt.modifier_group_id))
-            optionsMap.set(opt.modifier_group_id, []);
-          optionsMap.get(opt.modifier_group_id)?.push({
-            id: opt.id,
-            name: opt.name,
-            price: Number(opt.price_modifier),
-            is_active: opt.is_active,
-            display_order: opt.display_order,
-          });
-        });
-
-        // Assemble Item Modifiers
-        itemGroups.forEach((ig: any) => {
-          const groupDetails = groupsMap.get(ig.modifier_group_id);
-          const groupOptions = optionsMap.get(ig.modifier_group_id) || [];
-
-          if (groupDetails) {
-            const fullGroup = {
-              ...groupDetails,
-              required: groupDetails.is_required, // mapping db col to type
-              options: groupOptions,
-            };
-
-            if (!itemModifiersMap.has(ig.menu_item_id))
-              itemModifiersMap.set(ig.menu_item_id, []);
-            itemModifiersMap.get(ig.menu_item_id)?.push(fullGroup);
-          }
-        });
-      }
-    }
-  }
-
-  // 6. Final Merge
-  const menus: StorefrontMenu[] = (rawMenus || [])
-    .map((m: any) => {
-      const categories: StorefrontCategory[] = (m.menu_categories || [])
-        .map((mc: any) => {
-          const cat = mc.category;
-          if (!cat) return null;
-
-          // Merge Items with their Modifiers
-          const itemsRaw = itemsMap.get(cat.id) || [];
-          const items: StorefrontItem[] = itemsRaw.map((item) => ({
-            ...item,
-            modifier_groups: itemModifiersMap.get(item.id) || [],
-          }));
-
-          return {
-            id: cat.id,
-            name: cat.name,
-            display_order: cat.display_order,
-            items,
-          };
-        })
-        .filter((cat: any) => cat !== null); // Filter null cats
-
-      // Only include menu if it has categories
-      if (categories.length === 0) return null;
-
-      return {
-        id: m.id,
-        name: m.name,
-        categories,
-      };
+  return rpcResults
+    .map(({ data }: any) => {
+      if (!data) return null;
+      return mapRpcMenuToStorefront(data);
     })
     .filter((m): m is StorefrontMenu => m !== null);
+}
+
+function mapRpcMenuToStorefront(rpcMenu: any): StorefrontMenu | null {
+  const rpcCategories = rpcMenu.categories || [];
+
+  const categories: StorefrontCategory[] = rpcCategories
+    .filter((mc: any) => mc.is_active !== false)
+    .map((mc: any) => {
+      const cat = mc.category;
+      if (!cat) return null;
+
+      const rpcItems = mc.items || [];
+      const items: StorefrontItem[] = rpcItems
+        .filter((ci: any) => ci.menu_item?.effective_availability !== false)
+        .map((ci: any) => {
+          const mi = ci.menu_item;
+          const cardPrice = Number(mi.effective_price) || 0;
+          const deliveryPrice = mi.effective_delivery_price != null
+            ? Number(mi.effective_delivery_price)
+            : null;
+          const displayPrice = deliveryPrice ?? cardPrice;
+
+          const modifierGroups = (mi.modifier_groups || [])
+            .filter((mg: any) => mg.is_active !== false)
+            .map((mg: any) => ({
+              id: mg.id,
+              name: mg.name,
+              min_selections: mg.min_selections,
+              max_selections: mg.max_selections,
+              required: mg.is_required,
+              options: (mg.items || [])
+                .filter((opt: any) => opt.is_active !== false)
+                .map((opt: any) => ({
+                  id: opt.id,
+                  name: opt.name,
+                  price: Number(opt.price_modifier) || 0,
+                  is_active: true,
+                  display_order: 0,
+                })),
+            }));
+
+          return {
+            id: mi.id,
+            name: mi.name,
+            description: mi.description,
+            price: displayPrice,
+            delivery_price: displayPrice,
+            image: mi.image,
+            availability: mi.effective_availability !== false,
+            modifier_groups: modifierGroups,
+          } satisfies StorefrontItem;
+        });
+
+      if (items.length === 0) return null;
+
+      return {
+        id: cat.id,
+        name: cat.name,
+        display_order: mc.display_order ?? 0,
+        items,
+      } satisfies StorefrontCategory;
+    })
+    .filter((cat: any): cat is StorefrontCategory => cat !== null);
+
+  if (categories.length === 0) return null;
 
   return {
-    site: siteResult.data,
-    location: locationResult.data,
-    menus,
+    id: rpcMenu.id,
+    name: rpcMenu.name,
+    categories,
   };
 }

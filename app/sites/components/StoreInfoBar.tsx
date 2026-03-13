@@ -1,7 +1,7 @@
 "use client";
 
 import { Site } from "@/types/site";
-import { MapPin, Clock } from "lucide-react";
+import { MapPin, Clock, Store, Truck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemo } from "react";
 
@@ -17,11 +17,9 @@ interface StoreInfoBarProps {
   className?: string;
 }
 
-// Helper to get today's hours in a readable format
 function getTodayHoursString(businessHours: any): string | null {
   if (!businessHours) return null;
 
-  // Parse if string
   let parsed = businessHours;
   if (typeof businessHours === "string") {
     try {
@@ -31,7 +29,6 @@ function getTodayHoursString(businessHours: any): string | null {
     }
   }
 
-  // Get current day
   const days = [
     "sunday",
     "monday",
@@ -46,20 +43,14 @@ function getTodayHoursString(businessHours: any): string | null {
 
   if (!schedule) return null;
 
-  // Check if closed
   const isEnabled = schedule.enabled ?? !schedule.closed;
   if (!isEnabled) return "Closed today";
-
-  // 24 hours
   if (schedule.is24Hours) return "Open 24 hours";
 
-  // Get times
   const openTime = schedule.from || schedule.open;
   const closeTime = schedule.to || schedule.close;
-
   if (!openTime || !closeTime) return null;
 
-  // Format times
   const formatTime = (time: string): string => {
     const [hours, minutes] = time.split(":").map(Number);
     const period = hours >= 12 ? "PM" : "AM";
@@ -74,9 +65,9 @@ function getTodayHoursString(businessHours: any): string | null {
 export function StoreInfoBar({ site, location, className }: StoreInfoBarProps) {
   const storeName = site?.title || location.name;
   const logoUrl = site?.logo_url;
-  const primaryColor = site?.theme_config?.primaryColor || "#3b82f6";
+  const pickupEnabled = site?.online_ordering_config?.pickupEnabled !== false;
+  const deliveryEnabled = site?.online_ordering_config?.deliveryEnabled === true;
 
-  // Get business hours - prefer online ordering hours, fallback to location hours
   const rawBusinessHours =
     site?.online_ordering_config?.operatingHours ||
     (location as any).business_hours;
@@ -87,14 +78,24 @@ export function StoreInfoBar({ site, location, className }: StoreInfoBarProps) {
   );
 
   return (
-    <div className={cn("bg-white border-b border-gray-100", className)}>
+    <div
+      className={cn("", className)}
+      style={{
+        backgroundColor: "var(--bg)",
+        borderBottom: "1px solid var(--border)",
+      }}
+    >
       <div className="container mx-auto px-4 py-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          {/* Store Info - Left Side */}
-          <div className="flex items-center gap-4">
-            {/* Logo */}
+          <div className="flex items-center gap-3.5">
             {logoUrl ? (
-              <div className="h-14 w-14 rounded-xl overflow-hidden shadow-sm border border-gray-100 shrink-0">
+              <div
+                className="h-13 w-13 overflow-hidden shrink-0 ring-2 shadow-md"
+                style={{
+                  borderRadius: "var(--radius)",
+                  ringColor: "var(--border)",
+                }}
+              >
                 <img
                   src={logoUrl}
                   alt={storeName}
@@ -103,50 +104,76 @@ export function StoreInfoBar({ site, location, className }: StoreInfoBarProps) {
               </div>
             ) : (
               <div
-                className="h-14 w-14 rounded-xl flex items-center justify-center shrink-0 text-white font-bold text-xl shadow-sm"
-                style={{ backgroundColor: primaryColor }}
+                className="h-13 w-13 flex items-center justify-center shrink-0 font-bold text-xl shadow-md ring-2"
+                style={{
+                  backgroundColor: "var(--primary)",
+                  color: "var(--primary-text)",
+                  borderRadius: "var(--radius)",
+                  ringColor: "color-mix(in srgb, var(--primary) 30%, transparent)",
+                }}
               >
                 {storeName.charAt(0).toUpperCase()}
               </div>
             )}
 
-            {/* Name & Details */}
             <div className="min-w-0">
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
+              <h1
+                className="text-xl sm:text-2xl font-bold truncate leading-tight"
+                style={{
+                  color: "var(--text)",
+                  fontFamily: "var(--font-display)",
+                }}
+              >
                 {storeName}
               </h1>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-sm text-gray-600">
-                {/* Address */}
+              <div
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-sm"
+                style={{ color: "var(--text-secondary)" }}
+              >
                 <div className="flex items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                  <MapPin className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--primary)" }} />
                   <span className="truncate">
                     {location.address_line1}, {location.city}, {location.state}
                   </span>
                 </div>
-                {/* Hours */}
                 {todayHours && (
                   <div className="flex items-center gap-1.5">
-                    <Clock className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-                    <span>Online ordering: {todayHours}</span>
+                    <Clock className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--primary)" }} />
+                    <span>{todayHours}</span>
                   </div>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Right Side - Ready Time / Delivery Toggle (optional - can be added later) */}
-          {/* 
-          <div className="flex items-center gap-3">
-            <div className="text-sm text-gray-600">
-              <p className="font-semibold text-gray-900">Ready by 10:50 AM</p>
-              <p className="text-xs">schedule at checkout</p>
+          {(pickupEnabled || deliveryEnabled) && (
+            <div className="flex items-center gap-2 shrink-0">
+              {pickupEnabled && (
+                <span
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full"
+                  style={{
+                    backgroundColor: "color-mix(in srgb, var(--primary) 10%, transparent)",
+                    color: "var(--primary)",
+                  }}
+                >
+                  <Store className="h-3 w-3" />
+                  Pickup
+                </span>
+              )}
+              {deliveryEnabled && (
+                <span
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full"
+                  style={{
+                    backgroundColor: "color-mix(in srgb, var(--primary) 10%, transparent)",
+                    color: "var(--primary)",
+                  }}
+                >
+                  <Truck className="h-3 w-3" />
+                  Delivery
+                </span>
+              )}
             </div>
-            <div className="flex bg-gray-100 rounded-full p-0.5">
-              <button className="px-4 py-1.5 text-sm rounded-full">Delivery</button>
-              <button className="px-4 py-1.5 text-sm rounded-full bg-gray-900 text-white">Pickup</button>
-            </div>
-          </div>
-          */}
+          )}
         </div>
       </div>
     </div>

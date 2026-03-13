@@ -6574,6 +6574,478 @@ export type Database = {
           },
         ]
       }
+      phone_verifications: {
+        Row: {
+          id: string
+          phone: string
+          code: string
+          merchant_id: string
+          attempts: number
+          max_attempts: number
+          expires_at: string
+          verified_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          phone: string
+          code: string
+          merchant_id: string
+          attempts?: number
+          max_attempts?: number
+          expires_at?: string
+          verified_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          phone?: string
+          code?: string
+          merchant_id?: string
+          attempts?: number
+          max_attempts?: number
+          expires_at?: string
+          verified_at?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phone_verifications_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_saved_addresses: {
+        Row: {
+          id: string
+          customer_id: string
+          label: string
+          address_line1: string
+          address_line2: string | null
+          city: string
+          state: string
+          postal_code: string
+          delivery_notes: string | null
+          is_default: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          customer_id: string
+          label?: string
+          address_line1: string
+          address_line2?: string | null
+          city: string
+          state: string
+          postal_code: string
+          delivery_notes?: string | null
+          is_default?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          customer_id?: string
+          label?: string
+          address_line1?: string
+          address_line2?: string | null
+          city?: string
+          state?: string
+          postal_code?: string
+          delivery_notes?: string | null
+          is_default?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_saved_addresses_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      online_order_sessions: {
+        Row: {
+          id: string
+          store_config_id: string
+          session_token: string | null
+          customer_id: string | null
+          customer_phone: string | null
+          customer_name: string | null
+          customer_email: string | null
+          supabase_auth_id: string | null
+          is_authenticated: boolean
+          order_type: string | null
+          delivery_address: Json | null
+          delivery_zone_id: string | null
+          cart_data: Json | null
+          loyalty_points_balance: number | null
+          loyalty_points_to_apply: number | null
+          order_id: string | null
+          requested_time: string | null
+          created_at: string
+          updated_at: string
+          expires_at: string | null
+        }
+        Insert: {
+          id?: string
+          store_config_id: string
+          session_token?: string | null
+          customer_id?: string | null
+          customer_phone?: string | null
+          customer_name?: string | null
+          customer_email?: string | null
+          supabase_auth_id?: string | null
+          is_authenticated?: boolean
+          order_type?: string | null
+          delivery_address?: Json | null
+          delivery_zone_id?: string | null
+          cart_data?: Json | null
+          loyalty_points_balance?: number | null
+          loyalty_points_to_apply?: number | null
+          order_id?: string | null
+          requested_time?: string | null
+          created_at?: string
+          updated_at?: string
+          expires_at?: string | null
+        }
+        Update: {
+          id?: string
+          store_config_id?: string
+          session_token?: string | null
+          customer_id?: string | null
+          customer_phone?: string | null
+          customer_name?: string | null
+          customer_email?: string | null
+          supabase_auth_id?: string | null
+          is_authenticated?: boolean
+          order_type?: string | null
+          delivery_address?: Json | null
+          delivery_zone_id?: string | null
+          cart_data?: Json | null
+          loyalty_points_balance?: number | null
+          loyalty_points_to_apply?: number | null
+          order_id?: string | null
+          requested_time?: string | null
+          created_at?: string
+          updated_at?: string
+          expires_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "online_order_sessions_store_config_id_fkey"
+            columns: ["store_config_id"]
+            isOneToOne: false
+            referencedRelation: "online_store_config"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "online_order_sessions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "online_order_sessions_delivery_zone_id_fkey"
+            columns: ["delivery_zone_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_zones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "online_order_sessions_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      online_store_config: {
+        Row: {
+          id: string
+          merchant_id: string
+          location_id: string
+          slug: string
+          custom_domain: string | null
+          store_name: string
+          template_id: string
+          primary_color: string
+          secondary_color: string | null
+          accent_color: string | null
+          background_color: string
+          text_color: string
+          font_family: string | null
+          logo_url: string | null
+          hero_image_url: string | null
+          favicon_url: string | null
+          og_image_url: string | null
+          description: string | null
+          phone: string | null
+          email: string | null
+          address: Json | null
+          operating_hours: Json
+          is_active: boolean
+          accepts_pickup: boolean
+          accepts_delivery: boolean
+          min_order_cents: number | null
+          estimated_prep_minutes: number | null
+          max_future_order_days: number | null
+          delivery_fee_cents: number | null
+          free_delivery_threshold_cents: number | null
+          delivery_radius_miles: number | null
+          tip_enabled: boolean
+          tip_presets: Json | null
+          ipospays_tpn: string | null
+          meta_title: string | null
+          meta_description: string | null
+          google_analytics_id: string | null
+          facebook_pixel_id: string | null
+          header_style: string
+          header_text_color: string | null
+          published_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          merchant_id: string
+          location_id: string
+          slug: string
+          custom_domain?: string | null
+          store_name: string
+          template_id?: string
+          primary_color?: string
+          secondary_color?: string | null
+          accent_color?: string | null
+          background_color?: string
+          text_color?: string
+          font_family?: string | null
+          logo_url?: string | null
+          hero_image_url?: string | null
+          favicon_url?: string | null
+          og_image_url?: string | null
+          description?: string | null
+          phone?: string | null
+          email?: string | null
+          address?: Json | null
+          operating_hours?: Json
+          is_active?: boolean
+          accepts_pickup?: boolean
+          accepts_delivery?: boolean
+          min_order_cents?: number | null
+          estimated_prep_minutes?: number | null
+          max_future_order_days?: number | null
+          delivery_fee_cents?: number | null
+          free_delivery_threshold_cents?: number | null
+          delivery_radius_miles?: number | null
+          tip_enabled?: boolean
+          tip_presets?: Json | null
+          ipospays_tpn?: string | null
+          meta_title?: string | null
+          meta_description?: string | null
+          google_analytics_id?: string | null
+          facebook_pixel_id?: string | null
+          header_style?: string
+          header_text_color?: string | null
+          published_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          merchant_id?: string
+          location_id?: string
+          slug?: string
+          custom_domain?: string | null
+          store_name?: string
+          template_id?: string
+          primary_color?: string
+          secondary_color?: string | null
+          accent_color?: string | null
+          background_color?: string
+          text_color?: string
+          font_family?: string | null
+          logo_url?: string | null
+          hero_image_url?: string | null
+          favicon_url?: string | null
+          og_image_url?: string | null
+          description?: string | null
+          phone?: string | null
+          email?: string | null
+          address?: Json | null
+          operating_hours?: Json
+          is_active?: boolean
+          accepts_pickup?: boolean
+          accepts_delivery?: boolean
+          min_order_cents?: number | null
+          estimated_prep_minutes?: number | null
+          max_future_order_days?: number | null
+          delivery_fee_cents?: number | null
+          free_delivery_threshold_cents?: number | null
+          delivery_radius_miles?: number | null
+          tip_enabled?: boolean
+          tip_presets?: Json | null
+          ipospays_tpn?: string | null
+          meta_title?: string | null
+          meta_description?: string | null
+          google_analytics_id?: string | null
+          facebook_pixel_id?: string | null
+          header_style?: string
+          header_text_color?: string | null
+          published_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "online_store_config_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "online_store_config_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      online_store_pages: {
+        Row: {
+          id: string
+          store_config_id: string
+          page_type: string
+          section_type: string
+          title: string | null
+          subtitle: string | null
+          body_text: string | null
+          image_url: string | null
+          images: Json | null
+          cta_text: string | null
+          cta_link: string | null
+          display_order: number
+          is_visible: boolean
+          style_overrides: Json | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          store_config_id: string
+          page_type?: string
+          section_type: string
+          title?: string | null
+          subtitle?: string | null
+          body_text?: string | null
+          image_url?: string | null
+          images?: Json | null
+          cta_text?: string | null
+          cta_link?: string | null
+          display_order?: number
+          is_visible?: boolean
+          style_overrides?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          store_config_id?: string
+          page_type?: string
+          section_type?: string
+          title?: string | null
+          subtitle?: string | null
+          body_text?: string | null
+          image_url?: string | null
+          images?: Json | null
+          cta_text?: string | null
+          cta_link?: string | null
+          display_order?: number
+          is_visible?: boolean
+          style_overrides?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "online_store_pages_store_config_id_fkey"
+            columns: ["store_config_id"]
+            isOneToOne: false
+            referencedRelation: "online_store_config"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      delivery_zones: {
+        Row: {
+          id: string
+          store_config_id: string
+          zone_name: string
+          zone_type: string
+          radius_miles: number | null
+          polygon_coordinates: Json | null
+          delivery_fee_cents: number
+          min_order_cents: number | null
+          free_delivery_threshold_cents: number | null
+          estimated_minutes: number | null
+          is_active: boolean
+          display_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          store_config_id: string
+          zone_name: string
+          zone_type: string
+          radius_miles?: number | null
+          polygon_coordinates?: Json | null
+          delivery_fee_cents?: number
+          min_order_cents?: number | null
+          free_delivery_threshold_cents?: number | null
+          estimated_minutes?: number | null
+          is_active?: boolean
+          display_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          store_config_id?: string
+          zone_name?: string
+          zone_type?: string
+          radius_miles?: number | null
+          polygon_coordinates?: Json | null
+          delivery_fee_cents?: number
+          min_order_cents?: number | null
+          free_delivery_threshold_cents?: number | null
+          estimated_minutes?: number | null
+          is_active?: boolean
+          display_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_zones_store_config_id_fkey"
+            columns: ["store_config_id"]
+            isOneToOne: false
+            referencedRelation: "online_store_config"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       open_item_categories: {
         Row: {
           created_at: string
