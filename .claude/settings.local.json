@@ -24,7 +24,9 @@
       "Bash(tail:*)",
       "Bash(git diff:*)",
       "Bash(git stash:*)",
-      "Bash(npx next:*)"
+      "Bash(npx next:*)",
+      "WebFetch(domain:docs.ipospays.com)",
+      "Bash(for file:*)"
     ]
   }
 }

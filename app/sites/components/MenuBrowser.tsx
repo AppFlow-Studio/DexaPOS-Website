@@ -41,7 +41,6 @@ export function MenuBrowser({ menus }: MenuBrowserProps) {
 
   const activeMenu = menus.find((m) => m.id === activeMenuId);
 
-  // Auto-set the first category as active when menu changes
   useEffect(() => {
     if (activeMenu?.categories?.length) {
       setActiveCategory(activeMenu.categories[0].id);
@@ -60,20 +59,14 @@ export function MenuBrowser({ menus }: MenuBrowserProps) {
       const offset = 80;
       const elementPosition = element.getBoundingClientRect().top;
       const offsetPosition = elementPosition + window.pageYOffset - offset;
-
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: "smooth",
-      });
+      window.scrollTo({ top: offsetPosition, behavior: "smooth" });
     }
   };
 
-  // Filter items based on search query
   const filteredCategories = useMemo(() => {
     if (!activeMenu?.categories || !searchQuery.trim()) {
       return activeMenu?.categories || [];
     }
-
     const query = searchQuery.toLowerCase().trim();
     return activeMenu.categories
       .map((category) => ({
@@ -90,12 +83,17 @@ export function MenuBrowser({ menus }: MenuBrowserProps) {
   if (!activeMenu || menus.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
-        <div className="bg-muted rounded-full p-4 mb-4">
-          <ImageIcon className="h-8 w-8 text-muted-foreground" />
+        <div
+          className="rounded-full p-4 mb-4"
+          style={{ backgroundColor: "var(--card)" }}
+        >
+          <ImageIcon className="h-8 w-8" style={{ color: "var(--text-secondary)" }} />
         </div>
-        <h3 className="text-xl font-semibold">No menus available</h3>
-        <p className="text-muted-foreground mt-2">
-          This location hasn't set up their online menu yet.
+        <h3 className="text-xl font-semibold" style={{ color: "var(--text)" }}>
+          No menus available
+        </h3>
+        <p className="mt-2" style={{ color: "var(--text-secondary)" }}>
+          This location hasn&apos;t set up their online menu yet.
         </p>
       </div>
     );
@@ -124,19 +122,28 @@ export function MenuBrowser({ menus }: MenuBrowserProps) {
               className="flex items-center gap-2"
             >
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search
+                  className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4"
+                  style={{ color: "var(--text-secondary)" }}
+                />
                 <Input
                   type="text"
                   placeholder="Search menu items..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-10 h-11 bg-white border-gray-200 shadow-sm"
+                  className="pl-10 pr-10 h-11 shadow-sm"
+                  style={{
+                    backgroundColor: "var(--card)",
+                    borderColor: "var(--border)",
+                    color: "var(--text)",
+                  }}
                   autoFocus
                 />
                 {searchQuery && (
                   <button
                     onClick={() => setSearchQuery("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-3 top-1/2 -translate-y-1/2"
+                    style={{ color: "var(--text-secondary)" }}
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -150,6 +157,7 @@ export function MenuBrowser({ menus }: MenuBrowserProps) {
                   setSearchQuery("");
                 }}
                 className="shrink-0"
+                style={{ color: "var(--text)" }}
               >
                 <X className="h-5 w-5" />
               </Button>
@@ -164,7 +172,12 @@ export function MenuBrowser({ menus }: MenuBrowserProps) {
                 variant="outline"
                 size="sm"
                 onClick={() => setIsSearchOpen(true)}
-                className="gap-2 bg-white shadow-sm"
+                className="gap-2 shadow-sm"
+                style={{
+                  backgroundColor: "var(--card)",
+                  borderColor: "var(--border)",
+                  color: "var(--text-secondary)",
+                }}
               >
                 <Search className="h-4 w-4" />
                 <span className="hidden sm:inline">Search menu</span>
@@ -174,12 +187,24 @@ export function MenuBrowser({ menus }: MenuBrowserProps) {
         </AnimatePresence>
       </div>
 
-      {/* Mobile Menu Selector + Category Pills - Compact layout */}
-      <div className="lg:hidden sticky top-[64px] z-30 bg-gray-50/95 backdrop-blur-sm -mx-4 px-4 py-3 space-y-3 shadow-sm border-b">
-        {/* Menu Dropdown - Only show if multiple menus */}
+      {/* Mobile Menu Selector + Category Pills */}
+      <div
+        className="lg:hidden sticky top-[64px] z-30 backdrop-blur-sm -mx-4 px-4 py-3 space-y-3 shadow-sm"
+        style={{
+          backgroundColor: "color-mix(in srgb, var(--bg) 95%, transparent)",
+          borderBottom: "1px solid var(--border)",
+        }}
+      >
         {menus.length > 1 && (
           <Select value={activeMenuId} onValueChange={setActiveMenuId}>
-            <SelectTrigger className="w-full bg-white border-gray-200 h-10 font-medium text-gray-900 shadow-sm">
+            <SelectTrigger
+              className="w-full h-10 font-medium shadow-sm"
+              style={{
+                backgroundColor: "var(--card)",
+                borderColor: "var(--border)",
+                color: "var(--text)",
+              }}
+            >
               <SelectValue placeholder="Select Menu" />
             </SelectTrigger>
             <SelectContent className="z-50">
@@ -196,18 +221,24 @@ export function MenuBrowser({ menus }: MenuBrowserProps) {
           </Select>
         )}
 
-        {/* Category Pills */}
         <div className="flex overflow-x-auto no-scrollbar gap-2 pb-1">
           {categories.map((cat) => (
             <button
               key={cat.id}
               onClick={() => scrollToCategory(cat.id)}
-              className={cn(
-                "px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-full transition-all border shrink-0",
-                activeCategory === cat.id
-                  ? "bg-[var(--primary)] text-white border-[var(--primary)] shadow-sm"
-                  : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
-              )}
+              className="px-3.5 py-1.5 text-xs font-semibold whitespace-nowrap transition-all duration-200 shrink-0"
+              style={{
+                borderRadius: "var(--radius)",
+                backgroundColor:
+                  activeCategory === cat.id ? "var(--primary)" : "var(--card)",
+                color:
+                  activeCategory === cat.id ? "var(--primary-text)" : "var(--text-secondary)",
+                border: `1px solid ${activeCategory === cat.id ? "var(--primary)" : "var(--border)"}`,
+                boxShadow:
+                  activeCategory === cat.id
+                    ? "0 2px 8px color-mix(in srgb, var(--primary) 30%, transparent)"
+                    : "none",
+              }}
             >
               {cat.name}
             </button>
@@ -217,17 +248,28 @@ export function MenuBrowser({ menus }: MenuBrowserProps) {
 
       {/* Desktop Menu Tabs */}
       {menus.length > 1 && (
-        <div className="hidden lg:flex overflow-x-auto pb-1 gap-2 border-b no-scrollbar sticky top-[64px] z-30 bg-gray-50/95 pt-2">
+        <div
+          className="hidden lg:flex overflow-x-auto pb-1 gap-2 no-scrollbar sticky top-[64px] z-30 pt-2"
+          style={{
+            backgroundColor: "color-mix(in srgb, var(--bg) 95%, transparent)",
+            borderBottom: "1px solid var(--border)",
+          }}
+        >
           {menus.map((menu) => (
             <button
               key={menu.id}
               onClick={() => setActiveMenuId(menu.id)}
-              className={cn(
-                "px-4 py-2 text-sm font-bold whitespace-nowrap rounded-t-lg transition-colors border-b-2 -mb-[1px]",
-                activeMenuId === menu.id
-                  ? "border-[var(--primary)] text-[var(--primary)] bg-white"
-                  : "border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-100/50"
-              )}
+              className="px-4 py-2 text-sm font-bold whitespace-nowrap rounded-t-lg transition-colors border-b-2 -mb-[1px]"
+              style={{
+                borderColor:
+                  activeMenuId === menu.id ? "var(--primary)" : "transparent",
+                color:
+                  activeMenuId === menu.id
+                    ? "var(--primary)"
+                    : "var(--text-secondary)",
+                backgroundColor:
+                  activeMenuId === menu.id ? "var(--card)" : "transparent",
+              }}
             >
               {menu.name}
             </button>
@@ -238,7 +280,10 @@ export function MenuBrowser({ menus }: MenuBrowserProps) {
       <div className="flex flex-col lg:flex-row gap-8 relative items-start">
         {/* Desktop Sidebar Nav */}
         <aside className="hidden lg:block w-64 sticky top-32 shrink-0 max-h-[calc(100vh-8rem)] overflow-y-auto pr-4">
-          <h3 className="font-bold text-lg mb-4 px-2 text-gray-900">
+          <h3
+            className="font-bold text-lg mb-4 px-2"
+            style={{ color: "var(--text)" }}
+          >
             Categories
           </h3>
           <nav className="space-y-1">
@@ -246,12 +291,24 @@ export function MenuBrowser({ menus }: MenuBrowserProps) {
               <button
                 key={cat.id}
                 onClick={() => scrollToCategory(cat.id)}
-                className={cn(
-                  "w-full text-left px-3 py-2 text-sm font-medium rounded-md transition-colors",
-                  activeCategory === cat.id
-                    ? "bg-white text-[var(--primary)] shadow-sm border-l-4 border-[var(--primary)]"
-                    : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-                )}
+                className="w-full text-left px-3 py-2 text-sm font-medium transition-colors"
+                style={{
+                  borderRadius: "var(--radius)",
+                  backgroundColor:
+                    activeCategory === cat.id ? "var(--card)" : "transparent",
+                  color:
+                    activeCategory === cat.id
+                      ? "var(--primary)"
+                      : "var(--text-secondary)",
+                  borderLeft:
+                    activeCategory === cat.id
+                      ? "4px solid var(--primary)"
+                      : "4px solid transparent",
+                  boxShadow:
+                    activeCategory === cat.id
+                      ? "0 1px 3px rgba(0,0,0,0.08)"
+                      : "none",
+                }}
               >
                 {cat.name}
               </button>
@@ -267,21 +324,28 @@ export function MenuBrowser({ menus }: MenuBrowserProps) {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
             >
               {categories.map((category) => (
                 <section
                   key={category.id}
                   id={`category-${category.id}`}
-                  className="scroll-mt-32 mb-10"
+                  className="scroll-mt-32 mb-12"
                 >
-                  <div className="mb-6 border-b pb-2">
-                    <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
+                  <div className="mb-6 flex items-center gap-3">
+                    <div
+                      className="w-1 h-7 rounded-full"
+                      style={{ backgroundColor: "var(--primary)" }}
+                    />
+                    <h2
+                      className="text-2xl font-bold tracking-tight"
+                      style={{ color: "var(--text)", fontFamily: "var(--font-display)" }}
+                    >
                       {category.name}
                     </h2>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     {category.items.map((item) => (
                       <ItemCard
                         key={item.id}
@@ -309,65 +373,101 @@ function ItemCard({
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 12 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-50px" }}
-      transition={{ duration: 0.3 }}
+      viewport={{ once: true, margin: "-40px" }}
+      transition={{ duration: 0.35, ease: "easeOut" }}
       onClick={onClick}
-      className="group bg-white rounded-2xl border border-gray-100 hover:border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden flex flex-row cursor-pointer min-h-[140px]"
+      className="group overflow-hidden flex flex-row cursor-pointer min-h-[140px] transition-all duration-300"
+      style={{
+        backgroundColor: "var(--card)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--radius)",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = "0 4px 20px rgba(0,0,0,0.08)";
+        e.currentTarget.style.transform = "translateY(-2px)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.04)";
+        e.currentTarget.style.transform = "translateY(0)";
+      }}
     >
-      {/* Content Side - Left */}
       <div className="flex-1 p-4 flex flex-col justify-between min-w-0">
         <div>
-          <h4 className="font-bold text-gray-900 text-base mb-1.5 group-hover:text-[var(--primary)] transition-colors line-clamp-2 leading-tight">
+          <h4
+            className="font-bold text-base mb-1.5 leading-tight line-clamp-2 group-hover:text-[var(--primary)] transition-colors duration-200"
+            style={{ color: "var(--text)" }}
+          >
             {item.name}
           </h4>
           {item.description && (
-            <p className="text-sm text-gray-500 line-clamp-2 leading-relaxed">
+            <p
+              className="text-sm line-clamp-2 leading-relaxed"
+              style={{ color: "var(--text-secondary)" }}
+            >
               {item.description}
             </p>
           )}
         </div>
-
-        {/* Price - Bottom Left */}
         <div className="mt-3">
-          <span className="font-bold text-gray-900 text-base">
+          <span
+            className="font-bold text-base"
+            style={{ color: "var(--primary)" }}
+          >
             ${item.price.toFixed(2)}
           </span>
         </div>
       </div>
 
-      {/* Image Side - Right */}
       <div className="w-32 sm:w-36 shrink-0 relative">
         {item.image ? (
-          <div className="h-full w-full bg-gray-100 relative overflow-hidden">
+          <div
+            className="h-full w-full relative overflow-hidden"
+            style={{ backgroundColor: "var(--border)" }}
+          >
             <img
               src={item.image}
               alt={item.name}
               className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               loading="lazy"
             />
-            {/* Add Button Overlay */}
+            <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/30 to-transparent pointer-events-none" />
             <div className="absolute bottom-2 right-2">
-              <Button
-                size="sm"
-                className="rounded-full w-8 h-8 p-0 bg-white hover:bg-gray-100 text-gray-900 shadow-lg border border-gray-200 group-hover:scale-110 transition-transform"
+              <button
+                className="rounded-full w-8 h-8 flex items-center justify-center shadow-lg transition-all duration-200 group-hover:scale-110"
+                style={{
+                  backgroundColor: "var(--primary)",
+                  color: "var(--primary-text)",
+                }}
               >
                 <Plus className="h-4 w-4" />
-              </Button>
+              </button>
             </div>
           </div>
         ) : (
-          <div className="h-full w-full bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center relative">
-            <ImageIcon className="h-8 w-8 text-gray-300" />
-            {/* Add Button for no-image items */}
+          <div
+            className="h-full w-full flex items-center justify-center relative"
+            style={{
+              background:
+                "linear-gradient(135deg, var(--card) 0%, var(--border) 100%)",
+            }}
+          >
+            <ImageIcon
+              className="h-8 w-8 opacity-30"
+              style={{ color: "var(--text-secondary)" }}
+            />
             <div className="absolute bottom-2 right-2">
-              <Button
-                size="sm"
-                className="rounded-full w-8 h-8 p-0 bg-[var(--primary)] hover:bg-[var(--primary)]/90 text-white shadow-md"
+              <button
+                className="rounded-full w-8 h-8 flex items-center justify-center shadow-lg transition-all duration-200 group-hover:scale-110"
+                style={{
+                  backgroundColor: "var(--primary)",
+                  color: "var(--primary-text)",
+                }}
               >
                 <Plus className="h-4 w-4" />
-              </Button>
+              </button>
             </div>
           </div>
         )}

@@ -7,11 +7,10 @@ import {
 } from "../actions";
 import { toast } from "sonner";
 
-// Types
 export interface DaySchedule {
   enabled: boolean;
-  from: string; // "09:00"
-  to: string; // "21:00"
+  from: string;
+  to: string;
   is24Hours: boolean;
 }
 
@@ -25,98 +24,69 @@ export interface WeeklySchedule {
   sunday: DaySchedule;
 }
 
-export interface TipConfig {
-  calculationMethod: "subtotal" | "total"; // Pre-tax vs post-tax
-  presetPercentages: number[]; // e.g., [10, 15, 20]
-  smartTipEnabled: boolean;
-  smartTipThreshold: number; // Order amount threshold
-  smartTipAmounts: number[]; // Fixed amounts for small orders, e.g., [1, 2, 3]
-  allowCustomTip: boolean;
-}
-
-export interface DeliveryZone {
-  id: string;
-  name: string;
-  radiusMiles: number;
-  fee: number;
-  minimumOrder: number;
-}
-
 export interface OnlineOrderingSettings {
-  id: string; // This might be site ID or generated
+  id: string;
   locationId: string;
 
-  // General Settings
+  // Identity
   enabled: boolean;
   storeName: string;
   storeSlug: string;
-  storeUrl: string;
+  description: string;
   phone: string;
   email: string;
   address: string;
 
-  // Visibility
-  hideFromLocationPicker: boolean;
-  dontMarkClosedOutsideHours: boolean;
+  // Template & Branding
+  templateId: "classic" | "bold" | "minimal";
+  primaryColor: string;
+  secondaryColor: string;
+  accentColor: string | null;
+  backgroundColor: string;
+  textColor: string;
+  fontFamily: string;
 
-  // Notifications
-  sendEmailOnNewOrder: boolean;
-  notificationEmail: string;
-
-  // Automation
-  autoAcceptOrders: boolean;
-  autoClosePaidOrders: boolean;
-
-  // Hours
-  operatingHours: WeeklySchedule;
-  useCustomDeliveryHours: boolean;
-  deliveryHours: WeeklySchedule;
-
-  // Branding
+  // Assets
   logoUrl: string | null;
   heroImageUrl: string | null;
   faviconUrl: string | null;
-  bannerText: string | null;
-  primaryColor: string;
-  secondaryColor: string;
-  headerStyle: "primary" | "dark" | "light";
+  ogImageUrl: string | null;
 
-  // Pickup & Delivery
+  // Hours
+  operatingHours: WeeklySchedule;
+
+  // Ordering
   pickupEnabled: boolean;
   deliveryEnabled: boolean;
-  preparationLeadTime: number; // minutes
-  acceptFutureOrdersOnly: boolean;
-  futureOrderMinDays: number;
+  preparationLeadTime: number;
   futureOrderMaxDays: number;
   minimumOrderAmount: number;
 
-  // Payment
-  acceptOnlinePayments: boolean;
-  acceptCashOnDelivery: boolean;
-  acceptCardOnDelivery: boolean;
+  // Delivery
+  baseDeliveryFee: number;
+  freeDeliveryThreshold: number;
+  deliveryRadiusMiles: number | null;
 
   // Tipping
   tippingEnabled: boolean;
-  tipConfig: TipConfig;
+  tipPresets: number[];
 
-  // Delivery Zones
-  baseDeliveryFee: number;
-  freeDeliveryThreshold: number;
-  deliveryZones: DeliveryZone[];
+  // Payment
+  ipospaysTpn: string;
 
-  // Third-party Integrations
-  onfleetEnabled: boolean;
-  onfleetApiKey: string;
-  shipdayEnabled: boolean;
-  shipdayApiKey: string;
+  // SEO
+  metaTitle: string;
+  metaDescription: string;
 
-  // Convenience Fee
-  convenienceFeeEnabled: boolean;
-  convenienceFeePercent: number;
-  convenienceFeeFlat: number;
+  // Header
+  headerStyle: "filled" | "transparent" | "outlined";
+  headerTextColor: string | null;
+
+  // Analytics
+  googleAnalyticsId: string;
+  facebookPixelId: string;
 }
 
-// Default schedule
 const createDefaultDaySchedule = (enabled = false): DaySchedule => ({
   enabled,
   from: "09:00",
@@ -141,11 +111,9 @@ const sanitizeSchedule = (schedule: any): WeeklySchedule => {
   const sanitized: any = {};
 
   for (const day of dayOrder) {
-    // If the day exists in the incoming schedule, merge it with defaults
-    // Otherwise use default
     if (schedule[day]) {
       sanitized[day] = {
-        enabled: schedule[day].enabled ?? false, // Default to disabled if missing
+        enabled: schedule[day].enabled ?? false,
         from: schedule[day].from || "09:00",
         to: schedule[day].to || "21:00",
         is24Hours: schedule[day].is24Hours ?? false,
@@ -165,81 +133,55 @@ const createDefaultSettings = (
   id: `temp_${locationId}`,
   locationId,
 
-  // General
   enabled: false,
   storeName: locationName,
-  storeSlug: locationName.toLowerCase().replace(/\s+/g, "-"),
-  storeUrl: "",
+  storeSlug: locationName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, ""),
+  description: "",
   phone: "",
   email: "",
   address: "",
 
-  // Visibility
-  hideFromLocationPicker: false,
-  dontMarkClosedOutsideHours: false,
+  templateId: "classic",
+  primaryColor: "#2DD4BF",
+  secondaryColor: "#10b981",
+  accentColor: null,
+  backgroundColor: "#FFFFFF",
+  textColor: "#111827",
+  fontFamily: "DM Sans",
 
-  // Notifications
-  sendEmailOnNewOrder: true,
-  notificationEmail: "",
-
-  // Automation
-  autoAcceptOrders: false,
-  autoClosePaidOrders: false,
-
-  // Hours
-  operatingHours: createDefaultWeeklySchedule(),
-  useCustomDeliveryHours: false,
-  deliveryHours: createDefaultWeeklySchedule(),
-
-  // Branding
   logoUrl: null,
   heroImageUrl: null,
   faviconUrl: null,
-  bannerText: null,
-  primaryColor: "#3b82f6",
-  secondaryColor: "#10b981",
-  headerStyle: "primary",
+  ogImageUrl: null,
 
-  // Pickup & Delivery
+  operatingHours: createDefaultWeeklySchedule(),
+
   pickupEnabled: true,
   deliveryEnabled: false,
-  preparationLeadTime: 15,
-  acceptFutureOrdersOnly: false,
-  futureOrderMinDays: 1,
-  futureOrderMaxDays: 7,
+  preparationLeadTime: 20,
+  futureOrderMaxDays: 0,
   minimumOrderAmount: 0,
 
-  // Payment
-  acceptOnlinePayments: true,
-  acceptCashOnDelivery: false,
-  acceptCardOnDelivery: false,
-
-  // Tipping
-  tippingEnabled: true,
-  tipConfig: {
-    calculationMethod: "subtotal",
-    presetPercentages: [15, 18, 20],
-    smartTipEnabled: false,
-    smartTipThreshold: 10,
-    smartTipAmounts: [1, 2, 3],
-    allowCustomTip: true,
-  },
-
-  // Delivery
-  baseDeliveryFee: 5,
+  baseDeliveryFee: 0,
   freeDeliveryThreshold: 0,
-  deliveryZones: [],
+  deliveryRadiusMiles: null,
 
-  // Integrations
-  onfleetEnabled: false,
-  onfleetApiKey: "",
-  shipdayEnabled: false,
-  shipdayApiKey: "",
+  tippingEnabled: true,
+  tipPresets: [15, 18, 20, 25],
 
-  // Convenience Fee
-  convenienceFeeEnabled: false,
-  convenienceFeePercent: 0,
-  convenienceFeeFlat: 0,
+  ipospaysTpn: "",
+
+  headerStyle: "filled",
+  headerTextColor: null,
+
+  metaTitle: "",
+  metaDescription: "",
+
+  googleAnalyticsId: "",
+  facebookPixelId: "",
 });
 
 interface OnlineOrderingStore {
@@ -248,14 +190,13 @@ interface OnlineOrderingStore {
   isSaving: boolean;
   dirtyLocations: Set<string>;
 
-  // Actions
   loadSettings: (locationId: string) => Promise<void>;
   updateSettings: (
     locationId: string,
     updates: Partial<OnlineOrderingSettings>
-  ) => void; // Now synchronous, local only
-  saveSettings: (locationId: string) => Promise<void>; // Network call
-  discardChanges: (locationId: string) => Promise<void>; // Reload from DB
+  ) => void;
+  saveSettings: (locationId: string) => Promise<void>;
+  discardChanges: (locationId: string) => Promise<void>;
   createSettings: (
     locationId: string,
     locationName: string
@@ -275,26 +216,19 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
       try {
         const data = await getOnlineOrderingSettings(locationId);
         if (data) {
-          // Sanitize operating hours if present
           if (data.operatingHours) {
             data.operatingHours = sanitizeSchedule(data.operatingHours);
           }
-          if (data.deliveryHours) {
-            data.deliveryHours = sanitizeSchedule(data.deliveryHours);
-          }
 
-          // Merge with default to ensure full shape
           const mergedSettings = {
             ...createDefaultSettings(locationId, data.storeName || ""),
             ...data,
           };
 
           set((state) => {
-            // Remove existing if present to replace
             const filtered = state.settings.filter(
               (s) => s.locationId !== locationId
             );
-            // Clear dirty flag since we just loaded fresh data
             const newDirty = new Set(state.dirtyLocations);
             newDirty.delete(locationId);
             return {
@@ -311,7 +245,6 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
       }
     },
 
-    // Local-only update (no network call)
     updateSettings: (
       locationId: string,
       updates: Partial<OnlineOrderingSettings>
@@ -328,7 +261,6 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
       });
     },
 
-    // Save to database
     saveSettings: async (locationId: string) => {
       const currentSettings = get().settings.find(
         (s) => s.locationId === locationId
@@ -341,7 +273,6 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
       set({ isSaving: true });
       try {
         await saveOnlineOrderingSettings(locationId, currentSettings);
-        // Clear dirty flag on success
         set((state) => {
           const newDirty = new Set(state.dirtyLocations);
           newDirty.delete(locationId);
@@ -356,7 +287,6 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
       }
     },
 
-    // Discard changes by reloading from DB
     discardChanges: async (locationId: string) => {
       await get().loadSettings(locationId);
       toast.info("Changes discarded");
@@ -365,12 +295,10 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
     createSettings: async (locationId: string, locationName: string) => {
       const newSettings = createDefaultSettings(locationId, locationName);
 
-      // Add to local state first
       set((state) => ({
         settings: [...state.settings, newSettings],
       }));
 
-      // Start persisting (this will create the site entry)
       try {
         await saveOnlineOrderingSettings(locationId, newSettings);
       } catch (error) {
@@ -381,14 +309,12 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
       return newSettings;
     },
 
-    // Check if location has unsaved changes
     isDirty: (locationId: string) => {
       return get().dirtyLocations.has(locationId);
     },
   })
 );
 
-// Helper function to format hours for display
 export function formatTimeDisplay(time: string): string {
   const [hours, minutes] = time.split(":").map(Number);
   const period = hours >= 12 ? "PM" : "AM";
@@ -396,7 +322,6 @@ export function formatTimeDisplay(time: string): string {
   return `${displayHours}:${minutes.toString().padStart(2, "0")} ${period}`;
 }
 
-// Helper function to get day label
 export function getDayLabel(day: keyof WeeklySchedule): string {
   const labels: Record<keyof WeeklySchedule, string> = {
     monday: "Monday",
@@ -410,7 +335,6 @@ export function getDayLabel(day: keyof WeeklySchedule): string {
   return labels[day];
 }
 
-// Day order for iteration
 export const dayOrder: (keyof WeeklySchedule)[] = [
   "monday",
   "tuesday",

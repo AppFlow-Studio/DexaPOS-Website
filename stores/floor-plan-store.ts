@@ -31,6 +31,9 @@ import {
     UpdateTablePositionsBatchAction,
     UpdateTableNameAction,
     UpdateTableRotationAction,
+    UpdateTablePropertiesAction,
+    UpdateFloorPlanAction,
+    DeleteFloorPlanAction,
     RemoveTableAction,
     LoadWaitlistAction,
     LoadReservationsAction,
@@ -72,6 +75,8 @@ interface FloorPlanState {
     // Floor Plan Actions
     setActiveFloorPlan: (floorPlanId: string) => Promise<void>;
     createFloorPlan: (name: string, description?: string) => Promise<string>;
+    updateFloorPlan: (floorPlanId: string, updates: { name?: string; description?: string; is_default?: boolean; canvas_width?: number; canvas_height?: number }) => Promise<void>;
+    deleteFloorPlan: (floorPlanId: string) => Promise<void>;
     loadFloorPlanStatus: () => Promise<void>;
 
     // Table Design Actions (Design Mode)
@@ -85,6 +90,7 @@ interface FloorPlanState {
     updateTablePositionInDraft: (tableId: string, x: number, y: number) => void;
     updateTableRotationInDraft: (tableId: string, rotation: number) => void;
     updateTableNameInDraft: (tableId: string, name: string) => void;
+    updateTableSizeInDraft: (tableId: string, width: number, height: number) => void;
     removeTableFromDraft: (tableId: string) => void;
 
     // Batch save draft to database
@@ -100,6 +106,7 @@ interface FloorPlanState {
     toggleTableSelection: (tableId: string) => void;
     clearSelection: () => void;
     selectMultipleTables: (tableIds: string[]) => void;
+    selectTablesInBounds: (minX: number, minY: number, maxX: number, maxY: number) => void;
 
     // Waitlist Actions
     loadWaitlist: () => Promise<void>;
@@ -303,6 +310,27 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                     return floorPlanId;
                 },
 
+                updateFloorPlan: async (floorPlanId, updates) => {
+                    await UpdateFloorPlanAction(floorPlanId, updates);
+                    const locationId = get().locationId;
+                    if (locationId) {
+                        const floorPlans = await InitializeFloorPlan(locationId);
+                        set({ floorPlans: floorPlans || [] });
+                    }
+                },
+
+                deleteFloorPlan: async (floorPlanId) => {
+                    await DeleteFloorPlanAction(floorPlanId);
+                    const locationId = get().locationId;
+                    if (locationId) {
+                        const floorPlans = await InitializeFloorPlan(locationId);
+                        const remaining = floorPlans || [];
+                        const newActive = remaining.find(fp => fp.is_default) || remaining[0];
+                        set({ floorPlans: remaining, activeFloorPlanId: newActive?.id || null });
+                        if (newActive) await get().setActiveFloorPlan(newActive.id);
+                    }
+                },
+
                 loadFloorPlanStatus: async () => {
                     const floorPlanId = get().activeFloorPlanId;
                     if (!floorPlanId) return;
@@ -335,6 +363,14 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                 // ====================================================================
 
                 initializeDraft: (tables: FloorPlanObject[]) => {
+                    const tablesSummary = tables.map(t => ({
+                        id: t.id.substring(0, 8),
+                        name: t.name,
+                        shape_id: t.shape_id,
+                        category: t.category
+                    }));
+                    console.log('[initializeDraft] Loading', tables.length, 'tables');
+                    console.table(tablesSummary);
                     set({
                         draftTables: tables.map(t => ({ ...t })), // Deep clone
                         originalTables: tables.map(t => ({ ...t })), // Deep clone
@@ -419,6 +455,15 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                     }));
                 },
 
+                updateTableSizeInDraft: (tableId: string, width: number, height: number) => {
+                    get().saveSnapshot();
+                    set(state => ({
+                        draftTables: state.draftTables.map(t =>
+                            t.id === tableId ? { ...t, width, height } : t
+                        )
+                    }));
+                },
+
                 removeTableFromDraft: (tableId: string) => {
                     get().saveSnapshot();
                     set(state => ({
@@ -434,12 +479,25 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                     const draftTables = get().draftTables;
                     const originalTables = get().originalTables;
 
+                    console.log('[saveDraftToDatabase] Starting save', {
+                        draftCount: draftTables.length,
+                        originalCount: originalTables.length,
+                        floorPlanId,
+                        draftTableNames: draftTables.map(t => ({ id: t.id.substring(0, 8), name: t.name }))
+                    });
+
                     // Identify changes
                     const originalMap = new Map(originalTables.map(t => [t.id, t]));
                     const draftMap = new Map(draftTables.map(t => [t.id, t]));
 
                     const toAdd = draftTables.filter(t => !originalMap.has(t.id) || t.id.startsWith('temp-'));
                     const toRemove = originalTables.filter(t => !draftMap.has(t.id) && !t.id.startsWith('temp-'));
+                    const PROPERTY_FIELDS = [
+                        'name', 'capacity', 'min_capacity', 'is_reservable', 'is_combinable',
+                        'default_turn_time', 'section_id', 'zone_name', 'label_override', 'color_override',
+                        'width', 'height'
+                    ] as const;
+
                     const toUpdate = draftTables.filter(t => {
                         const original = originalMap.get(t.id);
                         if (!original || t.id.startsWith('temp-')) return false;
@@ -447,8 +505,15 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                             t.x !== original.x ||
                             t.y !== original.y ||
                             t.rotation !== original.rotation ||
-                            t.name !== original.name
+                            PROPERTY_FIELDS.some(field => (t as any)[field] !== (original as any)[field])
                         );
+                    });
+
+                    console.log('[saveDraftToDatabase] Changes identified', {
+                        toAdd: toAdd.length,
+                        toRemove: toRemove.length,
+                        toUpdate: toUpdate.length,
+                        addingTables: toAdd.map(t => ({ id: t.id.substring(0, 8), name: t.name, shape: t.shape_id }))
                     });
 
                     const promises: Promise<any>[] = [];
@@ -457,24 +522,32 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                     // Add new tables
                     for (const table of toAdd) {
                         const shapeDef = TABLE_SHAPES[table.shape_id];
-                        if (!shapeDef) continue;
+                        if (!shapeDef) {
+                            console.warn(`Shape ${table.shape_id} not found in TABLE_SHAPES, skipping table ${table.id}`);
+                            continue;
+                        }
 
                         const isTemp = table.id.startsWith('temp-');
 
-                        const result = await AddTableAction(floorPlanId, {
-                            shape_id: table.shape_id,
-                            category: table.category,
-                            x: table.x,
-                            y: table.y,
-                            rotation: table.rotation,
-                            capacity: table.capacity,
-                            width: table.width,
-                            height: table.height,
-                            name: table.name,
-                        });
+                        try {
+                            const result = await AddTableAction(floorPlanId, {
+                                shape_id: table.shape_id,
+                                category: table.category,
+                                x: table.x,
+                                y: table.y,
+                                rotation: table.rotation,
+                                capacity: table.capacity,
+                                width: table.width,
+                                height: table.height,
+                                name: table.name,
+                            });
 
-                        if (isTemp && result?.objectId) {
-                            tempIdToRealIdMap.set(table.id, result.objectId);
+                            if (isTemp && result?.objectId) {
+                                tempIdToRealIdMap.set(table.id, result.objectId);
+                            }
+                        } catch (error) {
+                            console.error(`Failed to add table ${table.id}:`, error);
+                            throw error; // Re-throw to fail the entire save
                         }
                     }
 
@@ -502,11 +575,21 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                         promises.push(UpdateTablePositionsBatchAction(positionUpdates));
                     }
 
-                    // Update names individually
+                    // Update properties (includes name, capacity, color, etc.)
                     for (const table of toUpdate) {
                         const original = originalMap.get(table.id);
-                        if (original && table.name !== original.name) {
-                            promises.push(UpdateTableNameAction(table.id, table.name));
+                        if (!original) continue;
+
+                        // Build a diff of changed properties
+                        const changedProps: Record<string, unknown> = {};
+                        for (const field of PROPERTY_FIELDS) {
+                            if ((table as any)[field] !== (original as any)[field]) {
+                                changedProps[field] = (table as any)[field] ?? null;
+                            }
+                        }
+
+                        if (Object.keys(changedProps).length > 0) {
+                            promises.push(UpdateTablePropertiesAction(table.id, changedProps));
                         }
                     }
 
@@ -529,6 +612,10 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                         const updatedFloorPlan = floorPlans?.find(fp => fp.id === floorPlanId);
 
                         if (updatedFloorPlan?.objects) {
+                            console.log('[saveDraftToDatabase] Reloaded from database', {
+                                objectCount: updatedFloorPlan.objects.length,
+                                objectNames: updatedFloorPlan.objects.map(t => t.name)
+                            });
                             // Update draft and original with fresh data from database
                             set({
                                 draftTables: updatedFloorPlan.objects.map(t => ({ ...t })),
@@ -538,6 +625,7 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                                 lastDraftSavedAt: new Date()
                             });
                         } else {
+                            console.warn('[saveDraftToDatabase] No objects returned from database reload, using fallback');
                             // Fallback: use current draft with real IDs
                             const updatedDraft = get().draftTables;
                             set({
@@ -569,7 +657,12 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                         if (!draftMap.has(table.id) && !table.id.startsWith('temp-')) return true;
                     }
 
-                    // Check for updates
+                    // Check for updates (position + all properties)
+                    const PROP_FIELDS = [
+                        'name', 'capacity', 'min_capacity', 'is_reservable', 'is_combinable',
+                        'default_turn_time', 'section_id', 'zone_name', 'label_override', 'color_override',
+                        'width', 'height'
+                    ];
                     for (const table of draft) {
                         const originalTable = originalMap.get(table.id);
                         if (!originalTable) continue;
@@ -578,7 +671,7 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                             table.x !== originalTable.x ||
                             table.y !== originalTable.y ||
                             table.rotation !== originalTable.rotation ||
-                            table.name !== originalTable.name
+                            PROP_FIELDS.some(f => (table as any)[f] !== (originalTable as any)[f])
                         ) {
                             return true;
                         }
@@ -673,6 +766,22 @@ export const useFloorPlanStore = create<FloorPlanState>()(
 
                 selectMultipleTables: (tableIds: string[]) => set({ selectedTableIds: tableIds }),
 
+                selectTablesInBounds: (minX: number, minY: number, maxX: number, maxY: number) => {
+                    const tablesInBounds = get().draftTables
+                        .filter(table => {
+                            const tableRight = table.x + (table.width || 100);
+                            const tableBottom = table.y + (table.height || 100);
+                            return (
+                                table.x < maxX &&
+                                tableRight > minX &&
+                                table.y < maxY &&
+                                tableBottom > minY
+                            );
+                        })
+                        .map(table => table.id);
+                    set({ selectedTableIds: tablesInBounds });
+                },
+
                 // ====================================================================
                 // WAITLIST ACTIONS
                 // ====================================================================
@@ -754,7 +863,7 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                 storage: createJSONStorage(() => localStorage),
                 partialize: (state) => ({
                     // Persist essential data and draft state
-                    activeFloorPlanId: state.activeFloorPlanId,
+                    // NOTE: Do NOT persist activeFloorPlanId - it should be controlled by the current view
                     isDesignMode: state.isDesignMode,
                     draftTables: state.draftTables,
                     originalTables: state.originalTables,

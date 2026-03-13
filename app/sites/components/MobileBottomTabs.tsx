@@ -37,10 +37,14 @@ export function MobileBottomTabs({
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden">
-      {/* Glassmorphism background */}
-      <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-t border-gray-200/50 dark:border-gray-700/50" />
+      <div
+        className="absolute inset-0 backdrop-blur-xl"
+        style={{
+          backgroundColor: "color-mix(in srgb, var(--bg) 85%, transparent)",
+          borderTop: "1px solid color-mix(in srgb, var(--border) 50%, transparent)",
+        }}
+      />
 
-      {/* Top shadow gradient */}
       <div className="absolute -top-4 left-0 right-0 h-4 bg-gradient-to-t from-black/5 to-transparent pointer-events-none" />
 
       <div className="relative flex items-center justify-around px-2 pb-safe">
@@ -81,12 +85,12 @@ export function MobileBottomTabs({
                   transition={{ type: "spring", damping: 15, stiffness: 300 }}
                 >
                   <Icon
-                    className={cn(
-                      "h-6 w-6 transition-colors duration-300",
-                      isActive
-                        ? "text-[var(--primary)]"
-                        : "text-gray-400 dark:text-gray-500"
-                    )}
+                    className="h-6 w-6 transition-colors duration-300"
+                    style={{
+                      color: isActive
+                        ? "var(--primary)"
+                        : "var(--text-secondary)",
+                    }}
                   />
                 </motion.div>
 
@@ -105,12 +109,12 @@ export function MobileBottomTabs({
 
               {/* Label */}
               <span
-                className={cn(
-                  "text-[11px] font-semibold tracking-wide transition-colors duration-300",
-                  isActive
-                    ? "text-[var(--primary)]"
-                    : "text-gray-500 dark:text-gray-400"
-                )}
+                className="text-[11px] font-semibold tracking-wide transition-colors duration-300"
+                style={{
+                  color: isActive
+                    ? "var(--primary)"
+                    : "var(--text-secondary)",
+                }}
               >
                 {tab.label}
               </span>

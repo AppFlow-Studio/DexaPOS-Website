@@ -22,10 +22,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Globe,
   Store,
@@ -33,7 +40,6 @@ import {
   Palette,
   Truck,
   CreditCard,
-  Bell,
   Phone,
   Mail,
   Upload,
@@ -42,24 +48,72 @@ import {
   ExternalLink,
   DollarSign,
   Percent,
-  Zap,
   Plus,
   Edit,
   Check,
   X,
   Building2,
-  MapPin,
   Loader2,
   Plug,
+  Search,
+  BarChart3,
+  MapPin,
+  Type,
+  Layout,
+  PanelTop,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { motion, AnimatePresence } from "framer-motion";
 import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
-import { useOrderOutStatus, useOnboardOrderOut } from "./hooks/useOrderOutStatus";
+import {
+  useOrderOutStatus,
+  useOnboardOrderOut,
+} from "./hooks/useOrderOutStatus";
 import { OrderOutTab } from "@/components/dashboard/orderout/OrderOutTab";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+
+const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "localhost:3000";
+
+function getStoreUrl(slug: string): string {
+  if (!slug) return "";
+  const isDev = ROOT_DOMAIN.includes("localhost");
+  if (isDev) return `http://${slug}.localhost:3000`;
+  return `https://order.${slug}.dexapos.com`;
+}
+
+const FONT_OPTIONS = [
+  "DM Sans",
+  "Inter",
+  "Poppins",
+  "Roboto",
+  "Open Sans",
+  "Lato",
+  "Montserrat",
+  "Playfair Display",
+];
+
+const TEMPLATES: {
+  id: "classic" | "bold" | "minimal";
+  name: string;
+  description: string;
+}[] = [
+  {
+    id: "classic",
+    name: "Classic",
+    description: "Clean layout with a traditional menu grid",
+  },
+  {
+    id: "bold",
+    name: "Bold",
+    description: "Large imagery with full-bleed hero sections",
+  },
+  {
+    id: "minimal",
+    name: "Minimal",
+    description: "Simple, text-focused with subtle accents",
+  },
+];
 
 export default function OnlineOrderingPage() {
   const {
@@ -75,20 +129,16 @@ export default function OnlineOrderingPage() {
   } = useOnlineOrderingSettings();
   const [mounted, setMounted] = useState(false);
   const [isHoursModalOpen, setIsHoursModalOpen] = useState(false);
-  const [hoursModalType, setHoursModalType] = useState<
-    "operating" | "delivery"
-  >("operating");
   const [isUploading, setIsUploading] = useState(false);
 
-  // Global location state
   const { selectedLocationId } = useLocationStore();
   const selectedLocation = useSelectedLocation();
   const isAllLocations = selectedLocationId === "all";
   const clerkOrgId = useClerkOrgId();
   const { data: userInfo } = useUserInfo();
-  const merchantName = userInfo?.members?.[0]?.organizations?.merchants?.name || "";
+  const merchantName =
+    userInfo?.members?.[0]?.organizations?.merchants?.name || "";
 
-  // OrderOut state
   const [showOrderOutForm, setShowOrderOutForm] = useState(false);
   const { data: orderOutData } = useOrderOutStatus(
     clerkOrgId || "",
@@ -97,23 +147,21 @@ export default function OnlineOrderingPage() {
   const orderOutStatus = orderOutData?.data;
   const onboardOrderOut = useOnboardOrderOut(clerkOrgId || "");
 
-  // File input refs
   const logoInputRef = useRef<HTMLInputElement>(null);
   const heroInputRef = useRef<HTMLInputElement>(null);
   const faviconInputRef = useRef<HTMLInputElement>(null);
+  const ogInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Fetch settings when location changes
   useEffect(() => {
     if (selectedLocationId && selectedLocationId !== "all") {
       loadSettings(selectedLocationId);
     }
   }, [selectedLocationId, loadSettings]);
 
-  // Get settings for the currently selected location
   const currentSettings = !isAllLocations
     ? settings.find((s) => s.locationId === selectedLocationId)
     : null;
@@ -123,117 +171,80 @@ export default function OnlineOrderingPage() {
     updateSettings(selectedLocationId, updates);
   };
 
-  // Setup online ordering for a location
   const handleSetupOnlineOrdering = () => {
     if (!selectedLocation || isAllLocations) return;
     createSettings(selectedLocationId, selectedLocation.name);
     toast.success("Online ordering settings created!");
   };
 
-  // File upload handler - uploads to Supabase Storage
   const handleFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
-    type: "logo" | "hero" | "favicon"
+    type: "logo" | "hero" | "favicon" | "og"
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    // Validate file type
     if (!file.type.startsWith("image/")) {
       toast.error("Please upload an image file");
       return;
     }
-
-    // Validate file size (5MB max)
     if (file.size > 5 * 1024 * 1024) {
       toast.error("File too large. Maximum size: 5MB");
       return;
     }
 
     setIsUploading(true);
-
     try {
-      // Create FormData for upload
       const formData = new FormData();
       formData.append("file", file);
-
-      // Determine folder based on type
       const folder =
-        type === "logo" ? "logos" : type === "hero" ? "banners" : "favicons";
+        type === "logo"
+          ? "logos"
+          : type === "hero"
+            ? "banners"
+            : type === "og"
+              ? "og-images"
+              : "favicons";
 
-      // Upload to Supabase Storage
       const result = await uploadStoreImage(
         formData,
         `${selectedLocationId}/${folder}`
       );
-
       if (!result.success || !result.url) {
         toast.error(result.error || "Upload failed");
         return;
       }
 
-      // Update settings with the new URL
-      switch (type) {
-        case "logo":
-          handleUpdate({ logoUrl: result.url });
-          break;
-        case "hero":
-          handleUpdate({ heroImageUrl: result.url });
-          break;
-        case "favicon":
-          handleUpdate({ faviconUrl: result.url });
-          break;
-      }
-
-      // Auto-save the new image URL to database
+      const keyMap = {
+        logo: "logoUrl",
+        hero: "heroImageUrl",
+        favicon: "faviconUrl",
+        og: "ogImageUrl",
+      } as const;
+      handleUpdate({ [keyMap[type]]: result.url });
       await saveSettings(selectedLocationId);
-
-      toast.success(
-        `${type.charAt(0).toUpperCase() + type.slice(1)} uploaded successfully`
-      );
-    } catch (error) {
-      console.error("Upload error:", error);
+      toast.success("Image uploaded");
+    } catch {
       toast.error("Failed to upload image");
     } finally {
       setIsUploading(false);
-      // Reset input
       e.target.value = "";
     }
   };
 
-  const removeImage = async (type: "logo" | "hero" | "favicon") => {
-    // Get the current URL to delete from storage
-    let currentUrl: string | null = null;
-    switch (type) {
-      case "logo":
-        currentUrl = currentSettings?.logoUrl || null;
-        handleUpdate({ logoUrl: null });
-        break;
-      case "hero":
-        currentUrl = currentSettings?.heroImageUrl || null;
-        handleUpdate({ heroImageUrl: null });
-        break;
-      case "favicon":
-        currentUrl = currentSettings?.faviconUrl || null;
-        handleUpdate({ faviconUrl: null });
-        break;
-    }
-
-    // Try to delete from storage (don't block on failure)
+  const removeImage = async (type: "logo" | "hero" | "favicon" | "og") => {
+    const keyMap = {
+      logo: "logoUrl",
+      hero: "heroImageUrl",
+      favicon: "faviconUrl",
+      og: "ogImageUrl",
+    } as const;
+    const currentUrl = currentSettings?.[keyMap[type]] || null;
+    handleUpdate({ [keyMap[type]]: null });
     if (currentUrl && currentUrl.includes("supabase")) {
       deleteStoreImage(currentUrl).catch(console.error);
     }
-
-    // Auto-save the removal to database
     await saveSettings(selectedLocationId);
-
     toast.success("Image removed");
-  };
-
-  // Open hours modal
-  const openHoursModal = (type: "operating" | "delivery") => {
-    setHoursModalType(type);
-    setIsHoursModalOpen(true);
   };
 
   if (!mounted || (isLoading && !isAllLocations)) {
@@ -244,14 +255,13 @@ export default function OnlineOrderingPage() {
     );
   }
 
-  // Show message when "All Locations" is selected
   if (isAllLocations) {
     return (
       <div className="space-y-6">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Online Ordering</h2>
           <p className="text-muted-foreground">
-            Configure your online ordering storefront and settings
+            Configure your online ordering storefront
           </p>
         </div>
         <Card>
@@ -262,8 +272,7 @@ export default function OnlineOrderingPage() {
             </h3>
             <p className="text-muted-foreground text-center max-w-md">
               Online ordering settings are configured per location. Please
-              select a specific location from the header dropdown to configure
-              its online ordering storefront.
+              select a specific location from the header dropdown.
             </p>
           </CardContent>
         </Card>
@@ -271,14 +280,13 @@ export default function OnlineOrderingPage() {
     );
   }
 
-  // Show setup button when no settings exist for this location
   if (!currentSettings) {
     return (
       <div className="space-y-6">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Online Ordering</h2>
           <p className="text-muted-foreground">
-            Configure your online ordering storefront and settings
+            Configure your online ordering storefront
           </p>
         </div>
         <Card>
@@ -292,7 +300,7 @@ export default function OnlineOrderingPage() {
               <span className="font-medium text-foreground">
                 {selectedLocation?.name || "this location"}
               </span>
-              . Set it up to start accepting online orders.
+              .
             </p>
             <Button onClick={handleSetupOnlineOrdering} size="lg">
               <Plus className="h-4 w-4 mr-2" />
@@ -303,6 +311,8 @@ export default function OnlineOrderingPage() {
       </div>
     );
   }
+
+  const storeUrl = getStoreUrl(currentSettings.storeSlug);
 
   return (
     <div className="space-y-6">
@@ -317,7 +327,6 @@ export default function OnlineOrderingPage() {
             </span>
           </p>
         </div>
-
         <div className="flex items-center gap-3">
           {isDirty(selectedLocationId) && (
             <>
@@ -336,7 +345,7 @@ export default function OnlineOrderingPage() {
                 disabled={isSaving}
               >
                 {isSaving ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
                   <Check className="h-4 w-4 mr-2" />
                 )}
@@ -344,13 +353,9 @@ export default function OnlineOrderingPage() {
               </Button>
             </>
           )}
-          {currentSettings.enabled && (
+          {currentSettings.enabled && storeUrl && (
             <Button variant="outline" size="sm" asChild>
-              <Link
-                href={`/sites/${currentSettings.locationId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <Link href={storeUrl} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-4 w-4 mr-2" />
                 Preview Store
               </Link>
@@ -359,7 +364,7 @@ export default function OnlineOrderingPage() {
         </div>
       </div>
 
-      {/* Enable/Disable Toggle */}
+      {/* Enable toggle */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-center justify-between">
@@ -381,6 +386,11 @@ export default function OnlineOrderingPage() {
                     ? "Your store is live and accepting online orders"
                     : "Enable to start accepting online orders"}
                 </p>
+                {currentSettings.enabled && storeUrl && (
+                  <p className="text-xs text-muted-foreground mt-0.5 font-mono">
+                    {storeUrl}
+                  </p>
+                )}
               </div>
             </div>
             <Switch
@@ -391,16 +401,12 @@ export default function OnlineOrderingPage() {
         </CardContent>
       </Card>
 
-      {/* Main Settings Tabs */}
-      <Tabs defaultValue="general" className="space-y-6">
+      {/* Tabs */}
+      <Tabs defaultValue="store" className="space-y-6">
         <TabsList className="w-full justify-start overflow-x-auto">
-          <TabsTrigger value="general" className="gap-2">
+          <TabsTrigger value="store" className="gap-2">
             <Store className="h-4 w-4" />
-            General
-          </TabsTrigger>
-          <TabsTrigger value="hours" className="gap-2">
-            <Clock className="h-4 w-4" />
-            Hours
+            Store Info
           </TabsTrigger>
           <TabsTrigger value="branding" className="gap-2">
             <Palette className="h-4 w-4" />
@@ -408,15 +414,11 @@ export default function OnlineOrderingPage() {
           </TabsTrigger>
           <TabsTrigger value="ordering" className="gap-2">
             <Truck className="h-4 w-4" />
-            Pickup & Delivery
+            Ordering
           </TabsTrigger>
           <TabsTrigger value="payment" className="gap-2">
             <CreditCard className="h-4 w-4" />
             Payment & Tips
-          </TabsTrigger>
-          <TabsTrigger value="automation" className="gap-2">
-            <Zap className="h-4 w-4" />
-            Automation
           </TabsTrigger>
           <TabsTrigger value="orderout" className="gap-2">
             <Plug className="h-4 w-4" />
@@ -424,11 +426,11 @@ export default function OnlineOrderingPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* General Settings Tab */}
-        <TabsContent value="general" className="space-y-6">
+        {/* ─── Store Info ─── */}
+        <TabsContent value="store" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Store Information</CardTitle>
+              <CardTitle>Store Details</CardTitle>
               <CardDescription>
                 Basic information about your online store
               </CardDescription>
@@ -448,34 +450,36 @@ export default function OnlineOrderingPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="storeSlug">Store URL Slug</Label>
-                  <div className="flex">
-                    <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-sm text-muted-foreground">
-                      /sites/
-                    </span>
-                    <Input
-                      id="storeSlug"
-                      value={currentSettings.storeSlug}
-                      onChange={(e) =>
-                        handleUpdate({
-                          storeSlug: e.target.value
-                            .toLowerCase()
-                            .replace(/\s+/g, "-"),
-                        })
-                      }
-                      className="rounded-l-none"
-                      placeholder="your-store"
-                    />
-                  </div>
+                  <Input
+                    id="storeSlug"
+                    value={currentSettings.storeSlug}
+                    onChange={(e) =>
+                      handleUpdate({
+                        storeSlug: e.target.value
+                          .toLowerCase()
+                          .replace(/[^a-z0-9-]/g, ""),
+                      })
+                    }
+                    placeholder="your-store"
+                  />
+                  {currentSettings.storeSlug && (
+                    <p className="text-xs text-muted-foreground font-mono">
+                      {getStoreUrl(currentSettings.storeSlug)}
+                    </p>
+                  )}
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="address">Address</Label>
-                <Input
-                  id="address"
-                  value={currentSettings.address}
-                  onChange={(e) => handleUpdate({ address: e.target.value })}
-                  placeholder="123 Main Street, City, State ZIP"
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={currentSettings.description}
+                  onChange={(e) =>
+                    handleUpdate({ description: e.target.value })
+                  }
+                  placeholder="A short description of your store..."
+                  rows={3}
                 />
               </div>
 
@@ -508,52 +512,24 @@ export default function OnlineOrderingPage() {
                   </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Visibility Settings</CardTitle>
-              <CardDescription>
-                Control how your store appears to customers
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Hide from location picker</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Don't show this store in the multi-location picker
-                  </p>
+              <div className="space-y-2">
+                <Label htmlFor="address">Address</Label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="address"
+                    value={currentSettings.address}
+                    onChange={(e) => handleUpdate({ address: e.target.value })}
+                    className="pl-10"
+                    placeholder="123 Main St, City, State ZIP"
+                  />
                 </div>
-                <Switch
-                  checked={currentSettings.hideFromLocationPicker}
-                  onCheckedChange={(hideFromLocationPicker) =>
-                    handleUpdate({ hideFromLocationPicker })
-                  }
-                />
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Don't mark as "Closed" outside hours</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Recommended for catering or pre-order only stores
-                  </p>
-                </div>
-                <Switch
-                  checked={currentSettings.dontMarkClosedOutsideHours}
-                  onCheckedChange={(dontMarkClosedOutsideHours) =>
-                    handleUpdate({ dontMarkClosedOutsideHours })
-                  }
-                />
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
 
-        {/* Hours Tab */}
-        <TabsContent value="hours" className="space-y-6">
+          {/* Operating Hours */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -563,14 +539,17 @@ export default function OnlineOrderingPage() {
                     Set when customers can place orders
                   </CardDescription>
                 </div>
-                <Button onClick={() => openHoursModal("operating")}>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsHoursModalOpen(true)}
+                >
                   <Edit className="h-4 w-4 mr-2" />
                   Edit Hours
                 </Button>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {dayOrder.map((day) => {
                   const schedule = currentSettings.operatingHours[day];
                   return (
@@ -583,7 +562,7 @@ export default function OnlineOrderingPage() {
                     >
                       <span
                         className={cn(
-                          "font-medium w-24",
+                          "font-medium w-24 text-sm",
                           !schedule.enabled && "text-muted-foreground"
                         )}
                       >
@@ -594,7 +573,7 @@ export default function OnlineOrderingPage() {
                           <span className="text-sm">Open 24 hours</span>
                         ) : (
                           <span className="text-sm">
-                            {formatTimeDisplay(schedule.from)} -{" "}
+                            {formatTimeDisplay(schedule.from)} –{" "}
                             {formatTimeDisplay(schedule.to)}
                           </span>
                         )
@@ -610,309 +589,404 @@ export default function OnlineOrderingPage() {
             </CardContent>
           </Card>
 
-          {currentSettings.deliveryEnabled && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Delivery Hours</CardTitle>
-                    <CardDescription>
-                      Set separate hours for delivery orders
-                    </CardDescription>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={currentSettings.useCustomDeliveryHours}
-                        onCheckedChange={(useCustomDeliveryHours) =>
-                          handleUpdate({ useCustomDeliveryHours })
-                        }
-                      />
-                      <Label className="text-sm">Custom hours</Label>
-                    </div>
-                    {currentSettings.useCustomDeliveryHours && (
-                      <Button
-                        variant="outline"
-                        onClick={() => openHoursModal("delivery")}
-                      >
-                        <Edit className="h-4 w-4 mr-2" />
-                        Edit
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-              {currentSettings.useCustomDeliveryHours && (
-                <CardContent>
-                  <div className="space-y-2">
-                    {dayOrder.map((day) => {
-                      const schedule = currentSettings.deliveryHours[day];
-                      return (
-                        <div
-                          key={day}
-                          className={cn(
-                            "flex items-center justify-between py-2 px-3 rounded-lg",
-                            schedule.enabled ? "bg-muted/30" : ""
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              "font-medium w-24",
-                              !schedule.enabled && "text-muted-foreground"
-                            )}
-                          >
-                            {getDayLabel(day)}
-                          </span>
-                          {schedule.enabled ? (
-                            schedule.is24Hours ? (
-                              <span className="text-sm">Open 24 hours</span>
-                            ) : (
-                              <span className="text-sm">
-                                {formatTimeDisplay(schedule.from)} -{" "}
-                                {formatTimeDisplay(schedule.to)}
-                              </span>
-                            )
-                          ) : (
-                            <span className="text-sm text-muted-foreground">
-                              Closed
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              )}
-            </Card>
-          )}
-        </TabsContent>
-
-        {/* Branding Tab */}
-        <TabsContent value="branding" className="space-y-6">
+          {/* SEO & Analytics */}
           <Card>
             <CardHeader>
-              <CardTitle>Store Images</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Search className="h-4 w-4" />
+                SEO & Analytics
+              </CardTitle>
               <CardDescription>
-                Upload your logo and banner images
+                Improve discoverability and track performance
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Logo Upload */}
-              <div className="space-y-3">
-                <Label>Store Logo</Label>
-                <div className="flex items-center gap-4">
-                  <div
-                    className={cn(
-                      "relative h-20 w-20 rounded-lg border-2 border-dashed flex items-center justify-center overflow-hidden transition-colors",
-                      currentSettings.logoUrl
-                        ? "border-transparent"
-                        : "border-muted-foreground/25 hover:border-primary/50 cursor-pointer"
-                    )}
-                    onClick={() =>
-                      !currentSettings.logoUrl && logoInputRef.current?.click()
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="metaTitle">Meta Title</Label>
+                  <Input
+                    id="metaTitle"
+                    value={currentSettings.metaTitle}
+                    onChange={(e) =>
+                      handleUpdate({ metaTitle: e.target.value })
                     }
-                  >
-                    {currentSettings.logoUrl ? (
-                      <img
-                        src={currentSettings.logoUrl}
-                        alt="Store logo"
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <Upload className="h-6 w-6 text-muted-foreground" />
-                    )}
-                  </div>
-                  <input
-                    ref={logoInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => handleFileUpload(e, "logo")}
+                    placeholder="Your Store — Order Online"
                   />
-                  <div className="flex-1">
-                    <p className="text-sm text-muted-foreground">
-                      Recommended: 200x200px, PNG or JPG
-                    </p>
-                    <div className="flex gap-2 mt-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => logoInputRef.current?.click()}
-                        disabled={isUploading}
-                      >
-                        {isUploading ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Uploading...
-                          </>
-                        ) : currentSettings.logoUrl ? (
-                          "Change"
-                        ) : (
-                          "Upload"
-                        )}
-                      </Button>
-                      {currentSettings.logoUrl && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive"
-                          onClick={() => removeImage("logo")}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="metaDescription">Meta Description</Label>
+                  <Input
+                    id="metaDescription"
+                    value={currentSettings.metaDescription}
+                    onChange={(e) =>
+                      handleUpdate({ metaDescription: e.target.value })
+                    }
+                    placeholder="Order food online for pickup or delivery..."
+                  />
                 </div>
               </div>
-
               <Separator />
-
-              {/* Hero Image Upload */}
-              <div className="space-y-3">
-                <Label>Hero Banner Image</Label>
-                <div
-                  className={cn(
-                    "relative h-40 w-full rounded-lg border-2 border-dashed flex items-center justify-center overflow-hidden transition-colors",
-                    currentSettings.heroImageUrl
-                      ? "border-transparent"
-                      : "border-muted-foreground/25 hover:border-primary/50 cursor-pointer"
-                  )}
-                  onClick={() =>
-                    !currentSettings.heroImageUrl &&
-                    heroInputRef.current?.click()
-                  }
-                >
-                  {currentSettings.heroImageUrl ? (
-                    <img
-                      src={currentSettings.heroImageUrl}
-                      alt="Hero banner"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="text-center">
-                      <Image className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">
-                        Click to upload hero image
-                      </p>
-                    </div>
-                  )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="gaId" className="flex items-center gap-2">
+                    <BarChart3 className="h-3.5 w-3.5" />
+                    Google Analytics ID
+                  </Label>
+                  <Input
+                    id="gaId"
+                    value={currentSettings.googleAnalyticsId}
+                    onChange={(e) =>
+                      handleUpdate({ googleAnalyticsId: e.target.value })
+                    }
+                    placeholder="G-XXXXXXXXXX"
+                    className="font-mono text-sm"
+                  />
                 </div>
-                <input
-                  ref={heroInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => handleFileUpload(e, "hero")}
-                />
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    Recommended: 1200x400px, PNG or JPG
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => heroInputRef.current?.click()}
-                      disabled={isUploading}
-                    >
-                      {isUploading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Uploading...
-                        </>
-                      ) : currentSettings.heroImageUrl ? (
-                        "Change"
-                      ) : (
-                        "Upload"
-                      )}
-                    </Button>
-                    {currentSettings.heroImageUrl && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive"
-                        onClick={() => removeImage("hero")}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                <div className="space-y-2">
+                  <Label htmlFor="fbPixel" className="flex items-center gap-2">
+                    <BarChart3 className="h-3.5 w-3.5" />
+                    Facebook Pixel ID
+                  </Label>
+                  <Input
+                    id="fbPixel"
+                    value={currentSettings.facebookPixelId}
+                    onChange={(e) =>
+                      handleUpdate({ facebookPixelId: e.target.value })
+                    }
+                    placeholder="123456789012345"
+                    className="font-mono text-sm"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ─── Branding & Template ─── */}
+        <TabsContent value="branding" className="space-y-6">
+          {/* Template Picker */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Layout className="h-4 w-4" />
+                Store Template
+              </CardTitle>
+              <CardDescription>
+                Choose the layout style for your online store
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 sm:grid-cols-3">
+                {TEMPLATES.map((tpl) => (
+                  <button
+                    key={tpl.id}
+                    type="button"
+                    onClick={() => handleUpdate({ templateId: tpl.id })}
+                    className={cn(
+                      "relative rounded-xl border-2 p-4 text-left transition-all hover:shadow-md",
+                      currentSettings.templateId === tpl.id
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "border-muted hover:border-muted-foreground/30"
                     )}
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Banner Text */}
-              <div className="space-y-3">
-                <Label htmlFor="bannerText">Banner Promotional Text</Label>
-                <Input
-                  id="bannerText"
-                  value={currentSettings.bannerText || ""}
-                  onChange={(e) =>
-                    handleUpdate({ bannerText: e.target.value || null })
-                  }
-                  placeholder="Say what you want in this banner!"
-                />
-                <p className="text-sm text-muted-foreground">
-                  This text appears above your store name on the hero banner
-                </p>
+                  >
+                    {currentSettings.templateId === tpl.id && (
+                      <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-primary flex items-center justify-center">
+                        <Check className="h-3 w-3 text-primary-foreground" />
+                      </div>
+                    )}
+                    <p className="font-semibold text-sm">{tpl.name}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {tpl.description}
+                    </p>
+                  </button>
+                ))}
               </div>
             </CardContent>
           </Card>
 
+          {/* Header Style */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <PanelTop className="h-4 w-4" />
+                Header Style
+              </CardTitle>
+              <CardDescription>
+                Choose how the navigation header appears on your store
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-3">
+                {(
+                  [
+                    {
+                      id: "filled" as const,
+                      name: "Filled",
+                      desc: "Solid primary color background",
+                    },
+                    {
+                      id: "transparent" as const,
+                      name: "Transparent",
+                      desc: "Overlays the hero banner",
+                    },
+                    {
+                      id: "outlined" as const,
+                      name: "Outlined",
+                      desc: "Light background with border",
+                    },
+                  ] as const
+                ).map((style) => (
+                  <button
+                    key={style.id}
+                    type="button"
+                    onClick={() => handleUpdate({ headerStyle: style.id })}
+                    className={cn(
+                      "relative rounded-xl border-2 p-4 text-left transition-all hover:shadow-md",
+                      currentSettings.headerStyle === style.id
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "border-muted hover:border-muted-foreground/30"
+                    )}
+                  >
+                    {currentSettings.headerStyle === style.id && (
+                      <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-primary flex items-center justify-center">
+                        <Check className="h-3 w-3 text-primary-foreground" />
+                      </div>
+                    )}
+                    <div
+                      className="mb-3 h-8 rounded-md border"
+                      style={{
+                        backgroundColor:
+                          style.id === "filled"
+                            ? currentSettings.primaryColor
+                            : style.id === "outlined"
+                              ? currentSettings.backgroundColor
+                              : "transparent",
+                        borderColor:
+                          style.id === "outlined"
+                            ? "var(--border)"
+                            : "transparent",
+                        borderBottomWidth:
+                          style.id === "outlined" ? 2 : undefined,
+                      }}
+                    />
+                    <p className="font-semibold text-sm">{style.name}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {style.desc}
+                    </p>
+                  </button>
+                ))}
+              </div>
+              <div className="space-y-2 max-w-xs">
+                <Label>
+                  Header Text Color Override{" "}
+                  <span className="text-muted-foreground text-xs">
+                    (optional)
+                  </span>
+                </Label>
+                <div className="flex items-center gap-3">
+                  <Input
+                    type="color"
+                    value={currentSettings.headerTextColor || "#FFFFFF"}
+                    onChange={(e) =>
+                      handleUpdate({ headerTextColor: e.target.value })
+                    }
+                    className="h-9 w-14 p-1 rounded cursor-pointer"
+                  />
+                  <Input
+                    type="text"
+                    value={currentSettings.headerTextColor || ""}
+                    placeholder="Auto (contrast-safe)"
+                    onChange={(e) =>
+                      handleUpdate({
+                        headerTextColor: e.target.value || null,
+                      })
+                    }
+                    className="flex-1"
+                  />
+                  {currentSettings.headerTextColor && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleUpdate({ headerTextColor: null })}
+                      title="Reset to auto"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Typography */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Type className="h-4 w-4" />
+                Typography
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-w-xs">
+                <Label>Font Family</Label>
+                <Select
+                  value={currentSettings.fontFamily}
+                  onValueChange={(fontFamily) => handleUpdate({ fontFamily })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FONT_OPTIONS.map((font) => (
+                      <SelectItem key={font} value={font}>
+                        <span style={{ fontFamily: font }}>{font}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Colors */}
           <Card>
             <CardHeader>
               <CardTitle>Brand Colors</CardTitle>
               <CardDescription>
-                Customize your store's color scheme
+                Customize your store&apos;s color scheme
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid gap-6 sm:grid-cols-2">
-                <DebouncedColorInput
-                  label="Primary Color"
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                <ColorInput
+                  label="Primary"
                   value={currentSettings.primaryColor}
-                  onChange={(val) => handleUpdate({ primaryColor: val })}
-                  placeholder="#3b82f6"
+                  onChange={(v) => handleUpdate({ primaryColor: v })}
                 />
-                <DebouncedColorInput
-                  label="Secondary Color"
+                <ColorInput
+                  label="Secondary"
                   value={currentSettings.secondaryColor}
-                  onChange={(val) => handleUpdate({ secondaryColor: val })}
-                  placeholder="#10b981"
+                  onChange={(v) => handleUpdate({ secondaryColor: v })}
+                />
+                <ColorInput
+                  label="Accent"
+                  value={currentSettings.accentColor || "#f59e0b"}
+                  onChange={(v) => handleUpdate({ accentColor: v })}
+                />
+                <ColorInput
+                  label="Background"
+                  value={currentSettings.backgroundColor}
+                  onChange={(v) => handleUpdate({ backgroundColor: v })}
+                />
+                <ColorInput
+                  label="Text"
+                  value={currentSettings.textColor}
+                  onChange={(v) => handleUpdate({ textColor: v })}
                 />
               </div>
-
-              {/* Color Preview */}
-              <div className="mt-6 p-4 rounded-lg border bg-background">
+              <div className="p-4 rounded-lg border bg-background">
                 <p className="text-sm text-muted-foreground mb-3">Preview</p>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                   <Button
+                    size="sm"
                     style={{ backgroundColor: currentSettings.primaryColor }}
                     className="text-white"
                   >
-                    Primary Button
+                    Primary
                   </Button>
                   <Button
+                    size="sm"
                     variant="outline"
                     style={{
                       borderColor: currentSettings.secondaryColor,
                       color: currentSettings.secondaryColor,
                     }}
                   >
-                    Secondary Button
+                    Secondary
                   </Button>
+                  <div
+                    className="h-8 w-8 rounded-full border"
+                    style={{
+                      backgroundColor:
+                        currentSettings.accentColor || "#f59e0b",
+                    }}
+                    title="Accent"
+                  />
+                  <div
+                    className="h-8 px-3 rounded flex items-center text-xs font-medium border"
+                    style={{
+                      backgroundColor: currentSettings.backgroundColor,
+                      color: currentSettings.textColor,
+                    }}
+                  >
+                    Text
+                  </div>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Image Uploads */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Store Images</CardTitle>
+              <CardDescription>
+                Upload logo, hero banner, favicon, and social sharing image
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <ImageUploadRow
+                label="Logo"
+                hint="200×200px, PNG or JPG"
+                url={currentSettings.logoUrl}
+                inputRef={logoInputRef}
+                isUploading={isUploading}
+                onUpload={(e) => handleFileUpload(e, "logo")}
+                onRemove={() => removeImage("logo")}
+                previewClass="h-16 w-16 rounded-lg"
+              />
+              <Separator />
+              <ImageUploadRow
+                label="Hero Banner"
+                hint="1200×400px, PNG or JPG"
+                url={currentSettings.heroImageUrl}
+                inputRef={heroInputRef}
+                isUploading={isUploading}
+                onUpload={(e) => handleFileUpload(e, "hero")}
+                onRemove={() => removeImage("hero")}
+                previewClass="h-24 w-full rounded-lg"
+                wide
+              />
+              <Separator />
+              <div className="grid gap-6 sm:grid-cols-2">
+                <ImageUploadRow
+                  label="Favicon"
+                  hint="32×32px, PNG"
+                  url={currentSettings.faviconUrl}
+                  inputRef={faviconInputRef}
+                  isUploading={isUploading}
+                  onUpload={(e) => handleFileUpload(e, "favicon")}
+                  onRemove={() => removeImage("favicon")}
+                  previewClass="h-10 w-10 rounded"
+                />
+                <ImageUploadRow
+                  label="OG Image"
+                  hint="1200×630px, social sharing"
+                  url={currentSettings.ogImageUrl}
+                  inputRef={ogInputRef}
+                  isUploading={isUploading}
+                  onUpload={(e) => handleFileUpload(e, "og")}
+                  onRemove={() => removeImage("og")}
+                  previewClass="h-16 w-28 rounded"
+                />
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Pickup & Delivery Tab */}
+        {/* ─── Ordering ─── */}
         <TabsContent value="ordering" className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-2">
-            {/* Pickup Card */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -928,9 +1002,9 @@ export default function OnlineOrderingPage() {
                       <Store className="h-5 w-5" />
                     </div>
                     <div>
-                      <CardTitle className="text-base">Pickup Orders</CardTitle>
+                      <CardTitle className="text-base">Pickup</CardTitle>
                       <CardDescription>
-                        Allow customers to pick up orders
+                        Customers pick up at your location
                       </CardDescription>
                     </div>
                   </div>
@@ -943,8 +1017,6 @@ export default function OnlineOrderingPage() {
                 </div>
               </CardHeader>
             </Card>
-
-            {/* Delivery Card */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -960,11 +1032,9 @@ export default function OnlineOrderingPage() {
                       <Truck className="h-5 w-5" />
                     </div>
                     <div>
-                      <CardTitle className="text-base">
-                        Delivery Orders
-                      </CardTitle>
+                      <CardTitle className="text-base">Delivery</CardTitle>
                       <CardDescription>
-                        Offer delivery to customers
+                        Deliver to customers
                       </CardDescription>
                     </div>
                   </div>
@@ -978,9 +1048,9 @@ export default function OnlineOrderingPage() {
               </CardHeader>
               {currentSettings.deliveryEnabled && (
                 <CardContent className="space-y-4">
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-4 sm:grid-cols-3">
                     <div className="space-y-2">
-                      <Label>Base Delivery Fee</Label>
+                      <Label>Delivery Fee</Label>
                       <div className="relative">
                         <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                         <Input
@@ -989,7 +1059,8 @@ export default function OnlineOrderingPage() {
                           value={currentSettings.baseDeliveryFee}
                           onChange={(e) =>
                             handleUpdate({
-                              baseDeliveryFee: parseFloat(e.target.value) || 0,
+                              baseDeliveryFee:
+                                parseFloat(e.target.value) || 0,
                             })
                           }
                           className="pl-10"
@@ -997,7 +1068,7 @@ export default function OnlineOrderingPage() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label>Free Delivery Threshold</Label>
+                      <Label>Free Delivery Above</Label>
                       <div className="relative">
                         <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                         <Input
@@ -1011,12 +1082,25 @@ export default function OnlineOrderingPage() {
                             })
                           }
                           className="pl-10"
-                          placeholder="0 = no free delivery"
+                          placeholder="0 = never free"
                         />
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        Set to 0 to disable free delivery
-                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Radius (miles)</Label>
+                      <Input
+                        type="number"
+                        step="0.5"
+                        value={currentSettings.deliveryRadiusMiles ?? ""}
+                        onChange={(e) =>
+                          handleUpdate({
+                            deliveryRadiusMiles: e.target.value
+                              ? parseFloat(e.target.value)
+                              : null,
+                          })
+                        }
+                        placeholder="e.g. 5"
+                      />
                     </div>
                   </div>
                 </CardContent>
@@ -1028,18 +1112,18 @@ export default function OnlineOrderingPage() {
             <CardHeader>
               <CardTitle>Order Settings</CardTitle>
               <CardDescription>
-                Configure order timing and requirements
+                Configure timing and order requirements
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid gap-6 sm:grid-cols-2">
+              <div className="grid gap-6 sm:grid-cols-3">
                 <div className="space-y-2">
-                  <Label>Preparation Lead Time (minutes)</Label>
+                  <Label>Prep Time (minutes)</Label>
                   <div className="flex items-center gap-4">
                     <Slider
                       value={[currentSettings.preparationLeadTime]}
-                      onValueChange={(values: number[]) =>
-                        handleUpdate({ preparationLeadTime: values[0] })
+                      onValueChange={(v: number[]) =>
+                        handleUpdate({ preparationLeadTime: v[0] })
                       }
                       max={120}
                       step={5}
@@ -1053,15 +1137,12 @@ export default function OnlineOrderingPage() {
                           preparationLeadTime: parseInt(e.target.value) || 0,
                         })
                       }
-                      className="w-20"
+                      className="w-16"
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Minimum time needed to prepare an order
-                  </p>
                 </div>
                 <div className="space-y-2">
-                  <Label>Minimum Order Amount</Label>
+                  <Label>Minimum Order</Label>
                   <div className="relative">
                     <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -1078,59 +1159,23 @@ export default function OnlineOrderingPage() {
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Set to 0 for no minimum
+                    0 = no minimum
                   </p>
                 </div>
-              </div>
-
-              <Separator />
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Accept Future Orders Only</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Don't allow "ASAP" orders, only scheduled
-                  </p>
-                </div>
-                <Switch
-                  checked={currentSettings.acceptFutureOrdersOnly}
-                  onCheckedChange={(acceptFutureOrdersOnly) =>
-                    handleUpdate({ acceptFutureOrdersOnly })
-                  }
-                />
-              </div>
-
-              <div className="grid gap-6 sm:grid-cols-2 pt-4">
                 <div className="space-y-2">
-                  <Label>Min Days in Future</Label>
+                  <Label>Future Order Days</Label>
                   <Input
                     type="number"
                     min={0}
-                    value={currentSettings.futureOrderMinDays}
-                    onChange={(e) =>
-                      handleUpdate({
-                        futureOrderMinDays: parseInt(e.target.value) || 0,
-                      })
-                    }
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Minimum days in advance (e.g. 1 = tomorrow)
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Max Days in Future</Label>
-                  <Input
-                    type="number"
-                    min={1}
                     value={currentSettings.futureOrderMaxDays}
                     onChange={(e) =>
                       handleUpdate({
-                        futureOrderMaxDays: parseInt(e.target.value) || 7,
+                        futureOrderMaxDays: parseInt(e.target.value) || 0,
                       })
                     }
                   />
                   <p className="text-xs text-muted-foreground">
-                    How far in advance can customers order
+                    0 = today only
                   </p>
                 </div>
               </div>
@@ -1138,68 +1183,31 @@ export default function OnlineOrderingPage() {
           </Card>
         </TabsContent>
 
-        {/* Payment & Tips Tab */}
+        {/* ─── Payment & Tips ─── */}
         <TabsContent value="payment" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Payment Methods</CardTitle>
+              <CardTitle>Payment Processing</CardTitle>
               <CardDescription>
-                Choose which payment methods to accept
+                Configure your iPOSPays terminal for online payments
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <CreditCard className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <Label>Accept Online Card Payments</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Process payments via integrated payment processor
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={currentSettings.acceptOnlinePayments}
-                  onCheckedChange={(acceptOnlinePayments) =>
-                    handleUpdate({ acceptOnlinePayments })
+            <CardContent>
+              <div className="space-y-2 max-w-md">
+                <Label htmlFor="tpn">iPOSPays TPN</Label>
+                <Input
+                  id="tpn"
+                  value={currentSettings.ipospaysTpn}
+                  onChange={(e) =>
+                    handleUpdate({ ipospaysTpn: e.target.value })
                   }
+                  placeholder="Enter your TPN"
+                  className="font-mono text-sm"
                 />
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <DollarSign className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <Label>Accept Cash on Delivery</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Allow customers to pay cash at the door
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={currentSettings.acceptCashOnDelivery}
-                  onCheckedChange={(acceptCashOnDelivery) =>
-                    handleUpdate({ acceptCashOnDelivery })
-                  }
-                />
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <CreditCard className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <Label>Accept Card on Delivery</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Allow customers to pay by card at the door
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={currentSettings.acceptCardOnDelivery}
-                  onCheckedChange={(acceptCardOnDelivery) =>
-                    handleUpdate({ acceptCardOnDelivery })
-                  }
-                />
+                <p className="text-xs text-muted-foreground">
+                  Terminal Processing Number for this location&apos;s online
+                  card payments
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -1210,7 +1218,7 @@ export default function OnlineOrderingPage() {
                 <div>
                   <CardTitle>Tipping</CardTitle>
                   <CardDescription>
-                    Configure tipping options for customers
+                    Configure tip options for customers at checkout
                   </CardDescription>
                 </div>
                 <Switch
@@ -1222,335 +1230,47 @@ export default function OnlineOrderingPage() {
               </div>
             </CardHeader>
             {currentSettings.tippingEnabled && (
-              <CardContent className="space-y-6">
+              <CardContent>
                 <div className="space-y-3">
-                  <Label>Tip Calculation Method</Label>
-                  <div className="flex gap-4">
-                    <Button
-                      variant={
-                        currentSettings.tipConfig.calculationMethod ===
-                        "subtotal"
-                          ? "default"
-                          : "outline"
-                      }
-                      onClick={() =>
-                        handleUpdate({
-                          tipConfig: {
-                            ...currentSettings.tipConfig,
-                            calculationMethod: "subtotal",
-                          },
-                        })
-                      }
-                    >
-                      Pre-Tax (Subtotal)
-                    </Button>
-                    <Button
-                      variant={
-                        currentSettings.tipConfig.calculationMethod === "total"
-                          ? "default"
-                          : "outline"
-                      }
-                      onClick={() =>
-                        handleUpdate({
-                          tipConfig: {
-                            ...currentSettings.tipConfig,
-                            calculationMethod: "total",
-                          },
-                        })
-                      }
-                    >
-                      Post-Tax (Total)
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <Label>Preset Tip Percentages</Label>
-                  <div className="flex gap-2">
-                    {currentSettings.tipConfig.presetPercentages.map(
-                      (percent, index) => (
-                        <div key={index} className="relative">
-                          <Input
-                            type="number"
-                            value={percent}
-                            onChange={(e) => {
-                              const newPercentages = [
-                                ...currentSettings.tipConfig.presetPercentages,
-                              ];
-                              newPercentages[index] =
-                                parseInt(e.target.value) || 0;
-                              handleUpdate({
-                                tipConfig: {
-                                  ...currentSettings.tipConfig,
-                                  presetPercentages: newPercentages,
-                                },
-                              });
-                            }}
-                            className="w-20 pr-6"
-                          />
-                          <Percent className="absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                        </div>
-                      )
-                    )}
-                  </div>
-                </div>
-
-                <Separator />
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Smart Tipping</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Show fixed dollar amounts for small orders (e.g. $1, $2,
-                      $3)
-                    </p>
-                  </div>
-                  <Switch
-                    checked={currentSettings.tipConfig.smartTipEnabled}
-                    onCheckedChange={(smartTipEnabled) =>
-                      handleUpdate({
-                        tipConfig: {
-                          ...currentSettings.tipConfig,
-                          smartTipEnabled,
-                        },
-                      })
-                    }
-                  />
-                </div>
-
-                {currentSettings.tipConfig.smartTipEnabled && (
-                  <div className="space-y-4 pl-4 border-l-2 ml-2">
-                    <div className="space-y-2">
-                      <Label>Order Threshold</Label>
-                      <div className="relative">
-                        <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Label>Tip Preset Percentages</Label>
+                  <div className="flex gap-2 flex-wrap">
+                    {currentSettings.tipPresets.map((pct, i) => (
+                      <div key={i} className="relative">
                         <Input
                           type="number"
-                          value={currentSettings.tipConfig.smartTipThreshold}
-                          onChange={(e) =>
-                            handleUpdate({
-                              tipConfig: {
-                                ...currentSettings.tipConfig,
-                                smartTipThreshold:
-                                  parseFloat(e.target.value) || 0,
-                              },
-                            })
-                          }
-                          className="pl-10 w-32"
+                          value={pct}
+                          onChange={(e) => {
+                            const updated = [...currentSettings.tipPresets];
+                            updated[i] = parseInt(e.target.value) || 0;
+                            handleUpdate({ tipPresets: updated });
+                          }}
+                          className="w-20 pr-6"
                         />
+                        <Percent className="absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        Orders below this amount will show fixed tips
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Fixed Tip Amounts</Label>
-                      <div className="flex gap-2">
-                        {currentSettings.tipConfig.smartTipAmounts.map(
-                          (amount, index) => (
-                            <div key={index} className="relative">
-                              <DollarSign className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                              <Input
-                                type="number"
-                                value={amount}
-                                onChange={(e) => {
-                                  const newAmounts = [
-                                    ...currentSettings.tipConfig
-                                      .smartTipAmounts,
-                                  ];
-                                  newAmounts[index] =
-                                    parseFloat(e.target.value) || 0;
-                                  handleUpdate({
-                                    tipConfig: {
-                                      ...currentSettings.tipConfig,
-                                      smartTipAmounts: newAmounts,
-                                    },
-                                  });
-                                }}
-                                className="w-20 pl-8"
-                              />
-                            </div>
-                          )
-                        )}
-                      </div>
-                    </div>
+                    ))}
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() =>
+                        handleUpdate({
+                          tipPresets: [...currentSettings.tipPresets, 25],
+                        })
+                      }
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
                   </div>
-                )}
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Allow Custom Tips</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Let customers enter a custom tip amount
-                    </p>
-                  </div>
-                  <Switch
-                    checked={currentSettings.tipConfig.allowCustomTip}
-                    onCheckedChange={(allowCustomTip) =>
-                      handleUpdate({
-                        tipConfig: {
-                          ...currentSettings.tipConfig,
-                          allowCustomTip,
-                        },
-                      })
-                    }
-                  />
-                </div>
-              </CardContent>
-            )}
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Convenience Fee</CardTitle>
-                  <CardDescription>
-                    Add a fee for online ordering
-                  </CardDescription>
-                </div>
-                <Switch
-                  checked={currentSettings.convenienceFeeEnabled}
-                  onCheckedChange={(convenienceFeeEnabled) =>
-                    handleUpdate({ convenienceFeeEnabled })
-                  }
-                />
-              </div>
-            </CardHeader>
-            {currentSettings.convenienceFeeEnabled && (
-              <CardContent>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Percentage Fee</Label>
-                    <div className="relative">
-                      <Input
-                        type="number"
-                        step="0.1"
-                        value={currentSettings.convenienceFeePercent}
-                        onChange={(e) =>
-                          handleUpdate({
-                            convenienceFeePercent:
-                              parseFloat(e.target.value) || 0,
-                          })
-                        }
-                        className="pr-8"
-                      />
-                      <Percent className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Flat Fee</Label>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={currentSettings.convenienceFeeFlat}
-                        onChange={(e) =>
-                          handleUpdate({
-                            convenienceFeeFlat: parseFloat(e.target.value) || 0,
-                          })
-                        }
-                        className="pl-10"
-                      />
-                    </div>
-                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    These percentages appear as quick-select buttons at checkout
+                  </p>
                 </div>
               </CardContent>
             )}
           </Card>
         </TabsContent>
 
-        {/* Automation Tab */}
-        <TabsContent value="automation" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Order Automation</CardTitle>
-              <CardDescription>
-                Automate order handling to save time
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Zap className="h-5 w-5 text-yellow-500" />
-                  <div>
-                    <Label>Automatically Accept All Orders</Label>
-                    <p className="text-sm text-muted-foreground">
-                      New orders will be accepted without manual confirmation
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={currentSettings.autoAcceptOrders}
-                  onCheckedChange={(autoAcceptOrders) =>
-                    handleUpdate({ autoAcceptOrders })
-                  }
-                />
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Check className="h-5 w-5 text-green-500" />
-                  <div>
-                    <Label>Auto-Close Paid Orders</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Automatically close orders that are paid upon acceptance
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={currentSettings.autoClosePaidOrders}
-                  onCheckedChange={(autoClosePaidOrders) =>
-                    handleUpdate({ autoClosePaidOrders })
-                  }
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Notifications</CardTitle>
-              <CardDescription>Get notified about new orders</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Bell className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <Label>Email on New Order</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Send an email notification for every new order
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={currentSettings.sendEmailOnNewOrder}
-                  onCheckedChange={(sendEmailOnNewOrder) =>
-                    handleUpdate({ sendEmailOnNewOrder })
-                  }
-                />
-              </div>
-              {currentSettings.sendEmailOnNewOrder && (
-                <div className="ml-8 space-y-2">
-                  <Label>Notification Email</Label>
-                  <Input
-                    type="email"
-                    value={currentSettings.notificationEmail}
-                    onChange={(e) =>
-                      handleUpdate({ notificationEmail: e.target.value })
-                    }
-                    placeholder="manager@yourstore.com"
-                  />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* OrderOut Tab */}
+        {/* ─── OrderOut ─── */}
         <TabsContent value="orderout" className="space-y-6">
           <OrderOutTab
             clerkOrgId={clerkOrgId || ""}
@@ -1572,86 +1292,138 @@ export default function OnlineOrderingPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Hours Modal */}
       <HoursConfigModal
         open={isHoursModalOpen}
         onOpenChange={setIsHoursModalOpen}
-        title={
-          hoursModalType === "operating" ? "Operating Hours" : "Delivery Hours"
-        }
-        description={
-          hoursModalType === "operating"
-            ? "Set when your store is open for orders"
-            : "Set specific hours for delivery orders"
-        }
-        schedule={
-          hoursModalType === "operating"
-            ? currentSettings.operatingHours
-            : currentSettings.deliveryHours
-        }
-        onSave={(schedule) => {
-          if (hoursModalType === "operating") {
-            handleUpdate({ operatingHours: schedule });
-          } else {
-            handleUpdate({ deliveryHours: schedule });
-          }
-        }}
+        title="Operating Hours"
+        description="Set when your store is open for orders"
+        schedule={currentSettings.operatingHours}
+        onSave={(schedule) => handleUpdate({ operatingHours: schedule })}
       />
     </div>
   );
 }
 
-function DebouncedColorInput({
+// ─── Sub-components ──────────────────────────────────────────────────
+
+function ColorInput({
   label,
   value,
   onChange,
-  placeholder,
 }: {
   label: string;
   value: string;
   onChange: (val: string) => void;
-  placeholder?: string;
 }) {
-  const [localValue, setLocalValue] = useState(value);
+  const [local, setLocal] = useState(value);
 
-  // Sync local state when external value changes
   useEffect(() => {
-    setLocalValue(value);
+    setLocal(value);
   }, [value]);
 
-  // Debounce updates
   useEffect(() => {
-    const handler = setTimeout(() => {
-      // Only fire update if the local value is different from the prop value
-      // This prevents loop if the prop update eventually triggers this effect
-      if (localValue !== value) {
-        onChange(localValue);
-      }
-    }, 500); // 500ms debounce
-
-    return () => clearTimeout(handler);
-  }, [localValue, onChange, value]);
+    const t = setTimeout(() => {
+      if (local !== value) onChange(local);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [local, onChange, value]);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <Label>{label}</Label>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         <input
           type="color"
-          value={localValue}
-          onChange={(e) => setLocalValue(e.target.value)}
-          className="h-10 w-16 rounded-lg border cursor-pointer"
+          value={local}
+          onChange={(e) => setLocal(e.target.value)}
+          className="h-9 w-12 rounded border cursor-pointer"
         />
         <Input
-          value={localValue}
-          onChange={(e) => setLocalValue(e.target.value)}
-          className="w-28 font-mono text-sm"
-          placeholder={placeholder}
+          value={local}
+          onChange={(e) => setLocal(e.target.value)}
+          className="w-24 font-mono text-xs"
         />
-        <div
-          className="h-10 flex-1 rounded-lg border"
-          style={{ backgroundColor: localValue }}
+      </div>
+    </div>
+  );
+}
+
+function ImageUploadRow({
+  label,
+  hint,
+  url,
+  inputRef,
+  isUploading,
+  onUpload,
+  onRemove,
+  previewClass,
+  wide,
+}: {
+  label: string;
+  hint: string;
+  url: string | null;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  isUploading: boolean;
+  onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onRemove: () => void;
+  previewClass: string;
+  wide?: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <div className={cn("flex gap-4", wide ? "flex-col" : "items-center")}>
+        {url ? (
+          <div className={cn("overflow-hidden border rounded", previewClass)}>
+            <img
+              src={url}
+              alt={label}
+              className="h-full w-full object-cover"
+            />
+          </div>
+        ) : (
+          <div
+            className={cn(
+              "border-2 border-dashed flex items-center justify-center cursor-pointer hover:border-primary/50 transition-colors",
+              previewClass,
+              wide ? "h-24" : ""
+            )}
+            onClick={() => inputRef.current?.click()}
+          >
+            <Upload className="h-5 w-5 text-muted-foreground" />
+          </div>
+        )}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={onUpload}
         />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => inputRef.current?.click()}
+            disabled={isUploading}
+          >
+            {isUploading ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : null}
+            {url ? "Change" : "Upload"}
+          </Button>
+          {url && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive"
+              onClick={onRemove}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+          <span className="text-xs text-muted-foreground">{hint}</span>
+        </div>
       </div>
     </div>
   );

@@ -8,10 +8,9 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { assertHQPermission } from '@/lib/admin/auth'
 import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
-import type { Site, SiteThemeConfig } from '@/types/site'
 
 // ============================================================================
-// Types (copied from merchant hooks for consistency)
+// Types
 // ============================================================================
 
 interface DaySchedule {
@@ -89,9 +88,6 @@ interface OnlineOrderingSettings {
 // READ Operations
 // ============================================================================
 
-/**
- * Get online ordering settings for a specific location (admin access)
- */
 export async function getAdminOnlineOrderingSettings(
   merchantId: string,
   locationId: string
@@ -101,7 +97,6 @@ export async function getAdminOnlineOrderingSettings(
 
     const supabase = createServerSupabaseClient()
 
-    // 1. Fetch Location Data
     const { data: location, error: locError } = await supabase
       .from('locations')
       .select('id, name, phone, email, address_line1, city, state, postal_code, business_hours')
@@ -113,19 +108,16 @@ export async function getAdminOnlineOrderingSettings(
       return { success: false, data: null, error: locError.message }
     }
 
-    // 2. Fetch Site Data
-    const { data: site, error: siteError } = await supabase
-      .from('sites')
+    const { data: config, error: configError } = await supabase
+      .from('online_store_config')
       .select('*')
       .eq('location_id', locationId)
       .single()
 
-    // Site might not exist yet - that's ok
-    if (siteError && siteError.code !== 'PGRST116') {
-      console.error('[getAdminOnlineOrderingSettings] Site error:', siteError)
+    if (configError && configError.code !== 'PGRST116') {
+      console.error('[getAdminOnlineOrderingSettings] Config error:', configError)
     }
 
-    // 3. Build settings
     const settings: Partial<OnlineOrderingSettings> = {
       locationId,
       storeName: location.name,
@@ -135,47 +127,40 @@ export async function getAdminOnlineOrderingSettings(
       operatingHours: location.business_hours as WeeklySchedule,
     }
 
-    if (site) {
-      // Map site data
-      settings.id = site.id
-      settings.enabled = site.is_active ?? false
-      settings.storeName = site.title || settings.storeName
-      settings.storeSlug = site.subdomain ?? ''
-      settings.logoUrl = site.logo_url
-      settings.bannerText = site.banner_text
-      settings.primaryColor = site.theme_config?.primaryColor ?? '#3b82f6'
-      settings.secondaryColor = site.theme_config?.secondaryColor ?? '#10b981'
-      settings.heroImageUrl = site.theme_config?.heroImageUrl
-      settings.faviconUrl = site.theme_config?.faviconUrl
+    if (config) {
+      settings.id = config.id
+      settings.enabled = config.is_active ?? false
+      settings.storeName = config.store_name || settings.storeName
+      settings.storeSlug = config.slug ?? ''
+      settings.logoUrl = config.logo_url
+      settings.heroImageUrl = config.hero_image_url
+      settings.faviconUrl = config.favicon_url
+      settings.primaryColor = config.primary_color ?? '#2DD4BF'
+      settings.secondaryColor = config.secondary_color ?? '#10b981'
+      settings.phone = config.phone ?? settings.phone
+      settings.email = config.email ?? settings.email
 
-      // Map online_ordering_config
-      const config = site.online_ordering_config as any
-      if (config) {
-        if (config.operatingHours) settings.operatingHours = config.operatingHours
-        settings.useCustomDeliveryHours = config.useCustomDeliveryHours
-        settings.deliveryHours = config.deliveryHours
-        settings.pickupEnabled = config.pickupEnabled
-        settings.deliveryEnabled = config.deliveryEnabled
-        settings.preparationLeadTime = config.preparationLeadTime
-        settings.acceptFutureOrdersOnly = config.acceptFutureOrdersOnly
-        settings.futureOrderMinDays = config.futureOrderMinDays
-        settings.futureOrderMaxDays = config.futureOrderMaxDays
-        settings.minimumOrderAmount = config.minimumOrderAmount
-        settings.tippingEnabled = config.tippingEnabled
-        settings.tipConfig = config.tipConfig
-        settings.baseDeliveryFee = config.baseDeliveryFee
-        settings.freeDeliveryThreshold = config.freeDeliveryThreshold
-        settings.acceptOnlinePayments = config.acceptOnlinePayments
-        settings.acceptCashOnDelivery = config.acceptCashOnDelivery
-        settings.acceptCardOnDelivery = config.acceptCardOnDelivery
-        settings.sendEmailOnNewOrder = config.sendEmailOnNewOrder
-        settings.notificationEmail = config.notificationEmail
-        settings.autoAcceptOrders = config.autoAcceptOrders
-        settings.autoClosePaidOrders = config.autoClosePaidOrders
-        settings.convenienceFeeEnabled = config.convenienceFeeEnabled
-        settings.convenienceFeePercent = config.convenienceFeePercent
-        settings.convenienceFeeFlat = config.convenienceFeeFlat
+      if (config.operating_hours) settings.operatingHours = config.operating_hours as WeeklySchedule
+      settings.pickupEnabled = config.accepts_pickup
+      settings.deliveryEnabled = config.accepts_delivery
+      settings.preparationLeadTime = config.estimated_prep_minutes
+      settings.futureOrderMaxDays = config.max_future_order_days
+      settings.minimumOrderAmount = config.min_order_cents ? config.min_order_cents / 100 : 0
+      settings.tippingEnabled = config.tip_enabled
+      if (config.tip_presets) {
+        settings.tipConfig = {
+          presetPercentages: config.tip_presets as number[],
+          calculationMethod: 'subtotal',
+          smartTipEnabled: false,
+          smartTipThreshold: 10,
+          smartTipAmounts: [1, 2, 3],
+          allowCustomTip: true,
+        }
       }
+      settings.baseDeliveryFee = config.delivery_fee_cents ? config.delivery_fee_cents / 100 : 0
+      settings.freeDeliveryThreshold = config.free_delivery_threshold_cents
+        ? config.free_delivery_threshold_cents / 100
+        : 0
     }
 
     return { success: true, data: settings, error: null }
@@ -189,16 +174,12 @@ export async function getAdminOnlineOrderingSettings(
   }
 }
 
-/**
- * Get all locations with their online ordering status for a merchant
- */
 export async function getAdminMerchantOnlineOrderingOverview(merchantId: string) {
   try {
     await assertHQPermission('hq.merchant.view')
 
     const supabase = createServerSupabaseClient()
 
-    // Get all locations for the merchant
     const { data: locations, error: locError } = await supabase
       .from('locations')
       .select('id, name')
@@ -216,27 +197,25 @@ export async function getAdminMerchantOnlineOrderingOverview(merchantId: string)
       return { success: true, data: [], error: null }
     }
 
-    // Get sites for these locations
-    const { data: sites, error: siteError } = await supabase
-      .from('sites')
-      .select('id, location_id, is_active, title, subdomain')
+    const { data: configs, error: configError } = await supabase
+      .from('online_store_config')
+      .select('id, location_id, is_active, store_name, slug')
       .in('location_id', locationIds)
 
-    if (siteError) {
-      console.error('[getAdminMerchantOnlineOrderingOverview] Site error:', siteError)
+    if (configError) {
+      console.error('[getAdminMerchantOnlineOrderingOverview] Config error:', configError)
     }
 
-    // Map locations with their site status
-    const siteMap = new Map(sites?.map((s) => [s.location_id, s]) || [])
+    const configMap = new Map(configs?.map((c) => [c.location_id, c]) || [])
     const result = locations?.map((loc) => {
-      const site = siteMap.get(loc.id)
+      const config = configMap.get(loc.id)
       return {
         locationId: loc.id,
         locationName: loc.name,
-        hasOnlineStore: !!site,
-        isEnabled: site?.is_active ?? false,
-        storeName: site?.title || loc.name,
-        storeSlug: site?.subdomain || null,
+        hasOnlineStore: !!config,
+        isEnabled: config?.is_active ?? false,
+        storeName: config?.store_name || loc.name,
+        storeSlug: config?.slug || null,
       }
     })
 
@@ -255,9 +234,6 @@ export async function getAdminMerchantOnlineOrderingOverview(merchantId: string)
 // WRITE Operations
 // ============================================================================
 
-/**
- * Save online ordering settings for a location (admin access)
- */
 export async function adminSaveOnlineOrderingSettings(
   merchantId: string,
   locationId: string,
@@ -268,7 +244,6 @@ export async function adminSaveOnlineOrderingSettings(
 
     const supabase = createServerSupabaseClient()
 
-    // 1. Update location contact info if provided
     const locationUpdates: Record<string, unknown> = {}
     if (settings.phone !== undefined) locationUpdates.phone = settings.phone
     if (settings.email !== undefined) locationUpdates.email = settings.email
@@ -288,103 +263,118 @@ export async function adminSaveOnlineOrderingSettings(
       }
     }
 
-    // 2. Check if site exists
-    const { data: existingSite } = await supabase
-      .from('sites')
-      .select('id, theme_config, online_ordering_config')
+    const { data: existingConfig } = await supabase
+      .from('online_store_config')
+      .select('*')
       .eq('location_id', locationId)
       .single()
 
-    const currentTheme = (existingSite?.theme_config as any) || {}
-    const currentConfig = (existingSite?.online_ordering_config as any) || {}
-
-    // Build theme config
-    const themeConfig: SiteThemeConfig = {
-      primaryColor: settings.primaryColor ?? currentTheme.primaryColor ?? '#3b82f6',
-      secondaryColor: settings.secondaryColor ?? currentTheme.secondaryColor ?? '#10b981',
-      heroImageUrl: settings.heroImageUrl ?? currentTheme.heroImageUrl,
-      faviconUrl: settings.faviconUrl ?? currentTheme.faviconUrl,
-      headerStyle: settings.headerStyle ?? currentTheme.headerStyle,
-    }
-
-    // Build online ordering config
-    const onlineOrderingConfig = {
-      ...currentConfig,
-      operatingHours: settings.operatingHours ?? currentConfig.operatingHours,
-      useCustomDeliveryHours: settings.useCustomDeliveryHours ?? currentConfig.useCustomDeliveryHours,
-      deliveryHours: settings.deliveryHours ?? currentConfig.deliveryHours,
-      pickupEnabled: settings.pickupEnabled ?? currentConfig.pickupEnabled,
-      deliveryEnabled: settings.deliveryEnabled ?? currentConfig.deliveryEnabled,
-      preparationLeadTime: settings.preparationLeadTime ?? currentConfig.preparationLeadTime,
-      acceptFutureOrdersOnly: settings.acceptFutureOrdersOnly ?? currentConfig.acceptFutureOrdersOnly,
-      futureOrderMinDays: settings.futureOrderMinDays ?? currentConfig.futureOrderMinDays,
-      futureOrderMaxDays: settings.futureOrderMaxDays ?? currentConfig.futureOrderMaxDays,
-      minimumOrderAmount: settings.minimumOrderAmount ?? currentConfig.minimumOrderAmount,
-      tippingEnabled: settings.tippingEnabled ?? currentConfig.tippingEnabled,
-      tipConfig: settings.tipConfig ?? currentConfig.tipConfig,
-      baseDeliveryFee: settings.baseDeliveryFee ?? currentConfig.baseDeliveryFee,
-      freeDeliveryThreshold: settings.freeDeliveryThreshold ?? currentConfig.freeDeliveryThreshold,
-      acceptOnlinePayments: settings.acceptOnlinePayments ?? currentConfig.acceptOnlinePayments,
-      acceptCashOnDelivery: settings.acceptCashOnDelivery ?? currentConfig.acceptCashOnDelivery,
-      acceptCardOnDelivery: settings.acceptCardOnDelivery ?? currentConfig.acceptCardOnDelivery,
-      sendEmailOnNewOrder: settings.sendEmailOnNewOrder ?? currentConfig.sendEmailOnNewOrder,
-      notificationEmail: settings.notificationEmail ?? currentConfig.notificationEmail,
-      autoAcceptOrders: settings.autoAcceptOrders ?? currentConfig.autoAcceptOrders,
-      autoClosePaidOrders: settings.autoClosePaidOrders ?? currentConfig.autoClosePaidOrders,
-      convenienceFeeEnabled: settings.convenienceFeeEnabled ?? currentConfig.convenienceFeeEnabled,
-      convenienceFeePercent: settings.convenienceFeePercent ?? currentConfig.convenienceFeePercent,
-      convenienceFeeFlat: settings.convenienceFeeFlat ?? currentConfig.convenienceFeeFlat,
-    }
-
-    // Build site data
-    const siteData: Record<string, unknown> = {
+    const configData: Record<string, unknown> = {
       location_id: locationId,
-      theme_config: themeConfig,
-      online_ordering_config: onlineOrderingConfig,
+      merchant_id: merchantId,
     }
 
-    if (settings.storeName !== undefined) siteData.title = settings.storeName
+    if (settings.storeName !== undefined) configData.store_name = settings.storeName
     if (settings.storeSlug !== undefined && settings.storeSlug !== '') {
-      siteData.subdomain = settings.storeSlug
+      configData.slug = settings.storeSlug
     }
-    if (settings.logoUrl !== undefined) siteData.logo_url = settings.logoUrl
-    if (settings.bannerText !== undefined) siteData.banner_text = settings.bannerText
-    if (settings.enabled !== undefined) siteData.is_active = settings.enabled
+    if (settings.enabled !== undefined) configData.is_active = settings.enabled
+    if (settings.logoUrl !== undefined) configData.logo_url = settings.logoUrl
+    if (settings.heroImageUrl !== undefined) configData.hero_image_url = settings.heroImageUrl
+    if (settings.faviconUrl !== undefined) configData.favicon_url = settings.faviconUrl
+    if (settings.primaryColor !== undefined) configData.primary_color = settings.primaryColor
+    if (settings.secondaryColor !== undefined) configData.secondary_color = settings.secondaryColor
+    if (settings.phone !== undefined) configData.phone = settings.phone
+    if (settings.email !== undefined) configData.email = settings.email
+    if (settings.operatingHours !== undefined) configData.operating_hours = settings.operatingHours
+    if (settings.pickupEnabled !== undefined) configData.accepts_pickup = settings.pickupEnabled
+    if (settings.deliveryEnabled !== undefined) configData.accepts_delivery = settings.deliveryEnabled
+    if (settings.minimumOrderAmount !== undefined)
+      configData.min_order_cents = Math.round(settings.minimumOrderAmount * 100)
+    if (settings.preparationLeadTime !== undefined)
+      configData.estimated_prep_minutes = settings.preparationLeadTime
+    if (settings.futureOrderMaxDays !== undefined)
+      configData.max_future_order_days = settings.futureOrderMaxDays
+    if (settings.baseDeliveryFee !== undefined)
+      configData.delivery_fee_cents = Math.round(settings.baseDeliveryFee * 100)
+    if (settings.freeDeliveryThreshold !== undefined)
+      configData.free_delivery_threshold_cents =
+        settings.freeDeliveryThreshold > 0
+          ? Math.round(settings.freeDeliveryThreshold * 100)
+          : null
+    if (settings.tippingEnabled !== undefined) configData.tip_enabled = settings.tippingEnabled
+    if (settings.tipConfig?.presetPercentages !== undefined)
+      configData.tip_presets = settings.tipConfig.presetPercentages
 
-    if (existingSite) {
-      // Update existing site
-      const { error: siteError } = await supabase
-        .from('sites')
-        .update(siteData)
-        .eq('id', existingSite.id)
+    if (existingConfig) {
+      const { error: updateError } = await supabase
+        .from('online_store_config')
+        .update(configData)
+        .eq('id', existingConfig.id)
 
-      if (siteError) {
-        console.error('[adminSaveOnlineOrderingSettings] Site update error:', siteError)
-        return { success: false, error: siteError.message }
+      if (updateError) {
+        console.error('[adminSaveOnlineOrderingSettings] Config update error:', updateError)
+        return { success: false, error: updateError.message }
       }
     } else {
-      // Create new site - need to get location name for defaults
       const { data: location } = await supabase
         .from('locations')
         .select('name')
         .eq('id', locationId)
         .single()
 
-      siteData.merchant_id = merchantId
-      if (!siteData.title) siteData.title = location?.name || 'Online Store'
-      if (!siteData.subdomain) {
-        siteData.subdomain = (location?.name || 'store').toLowerCase().replace(/\s+/g, '-')
+      if (!configData.store_name) configData.store_name = location?.name || 'Online Store'
+      if (!configData.slug) {
+        configData.slug = (location?.name || 'store')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '')
       }
 
-      const { error: siteError } = await supabase.from('sites').insert(siteData)
+      const { data: newConfig, error: insertError } = await supabase
+        .from('online_store_config')
+        .insert(configData)
+        .select('id')
+        .single()
 
-      if (siteError) {
-        console.error('[adminSaveOnlineOrderingSettings] Site insert error:', siteError)
-        return { success: false, error: siteError.message }
+      if (insertError) {
+        console.error('[adminSaveOnlineOrderingSettings] Config insert error:', insertError)
+        return { success: false, error: insertError.message }
+      }
+
+      if (newConfig) {
+        await supabase.from('online_store_pages').insert([
+          {
+            store_config_id: newConfig.id,
+            page_type: 'home',
+            section_type: 'hero',
+            title: configData.store_name as string,
+            subtitle: 'Order online for pickup or delivery',
+            cta_text: 'Order Now',
+            cta_link: '/menu',
+            display_order: 0,
+            is_visible: true,
+          },
+          {
+            store_config_id: newConfig.id,
+            page_type: 'home',
+            section_type: 'hours',
+            title: 'Hours',
+            display_order: 1,
+            is_visible: true,
+          },
+          {
+            store_config_id: newConfig.id,
+            page_type: 'home',
+            section_type: 'location_map',
+            title: 'Find Us',
+            display_order: 2,
+            is_visible: true,
+          },
+        ])
       }
     }
 
-    // Fetch location name for audit log
     const { data: loc } = await supabase
       .from('locations')
       .select('name')
@@ -392,13 +382,13 @@ export async function adminSaveOnlineOrderingSettings(
       .single()
 
     await LogAuditEvent({
-      merchantId: merchantId,
-      action: `HQ Admin Updated Online Ordering Settings`,
+      merchantId,
+      action: `HQ Admin Updated Online Store Config`,
       actionCategory: 'settings',
-      resourceType: 'online_ordering',
+      resourceType: 'online_store',
       resourceId: locationId,
       resourceName: loc?.name || 'Location',
-      locationId: locationId,
+      locationId,
       metadata: {
         location_name: loc?.name,
         updated_by_admin: userId,
@@ -416,9 +406,6 @@ export async function adminSaveOnlineOrderingSettings(
   }
 }
 
-/**
- * Toggle online store enabled/disabled (admin access)
- */
 export async function adminToggleOnlineStore(
   merchantId: string,
   locationId: string,
@@ -429,28 +416,26 @@ export async function adminToggleOnlineStore(
 
     const supabase = createServerSupabaseClient()
 
-    // Check if site exists
-    const { data: existingSite } = await supabase
-      .from('sites')
+    const { data: existingConfig } = await supabase
+      .from('online_store_config')
       .select('id')
       .eq('location_id', locationId)
       .single()
 
-    if (!existingSite) {
+    if (!existingConfig) {
       return { success: false, error: 'Online store not configured for this location' }
     }
 
     const { error } = await supabase
-      .from('sites')
+      .from('online_store_config')
       .update({ is_active: enabled })
-      .eq('id', existingSite.id)
+      .eq('id', existingConfig.id)
 
     if (error) {
       console.error('[adminToggleOnlineStore] Error:', error)
       return { success: false, error: error.message }
     }
 
-    // Fetch location name for audit log
     const { data: loc } = await supabase
       .from('locations')
       .select('name')
@@ -458,13 +443,13 @@ export async function adminToggleOnlineStore(
       .single()
 
     await LogAuditEvent({
-      merchantId: merchantId,
+      merchantId,
       action: `HQ Admin ${enabled ? 'Enabled' : 'Disabled'} Online Store`,
       actionCategory: 'settings',
-      resourceType: 'online_ordering',
+      resourceType: 'online_store',
       resourceId: locationId,
       resourceName: loc?.name || 'Location',
-      locationId: locationId,
+      locationId,
       metadata: {
         location_name: loc?.name,
         toggled_by_admin: userId,
@@ -482,9 +467,6 @@ export async function adminToggleOnlineStore(
   }
 }
 
-/**
- * Create/initialize online store for a location (admin access)
- */
 export async function adminCreateOnlineStore(
   merchantId: string,
   locationId: string,
@@ -495,51 +477,36 @@ export async function adminCreateOnlineStore(
 
     const supabase = createServerSupabaseClient()
 
-    // Check if site already exists
-    const { data: existingSite } = await supabase
-      .from('sites')
+    const { data: existingConfig } = await supabase
+      .from('online_store_config')
       .select('id')
       .eq('location_id', locationId)
       .single()
 
-    if (existingSite) {
+    if (existingConfig) {
       return { success: false, error: 'Online store already exists for this location' }
     }
 
-    // Create default site
-    const defaultSlug = locationName.toLowerCase().replace(/\s+/g, '-')
-    const { data: newSite, error } = await supabase
-      .from('sites')
+    const defaultSlug = locationName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+
+    const { data: newConfig, error } = await supabase
+      .from('online_store_config')
       .insert({
         merchant_id: merchantId,
         location_id: locationId,
-        title: locationName,
-        subdomain: defaultSlug,
+        store_name: locationName,
+        slug: defaultSlug,
         is_active: false,
-        theme_config: {
-          primaryColor: '#3b82f6',
-          secondaryColor: '#10b981',
-        },
-        online_ordering_config: {
-          pickupEnabled: true,
-          deliveryEnabled: false,
-          preparationLeadTime: 15,
-          minimumOrderAmount: 0,
-          tippingEnabled: true,
-          tipConfig: {
-            calculationMethod: 'subtotal',
-            presetPercentages: [15, 18, 20],
-            smartTipEnabled: false,
-            smartTipThreshold: 10,
-            smartTipAmounts: [1, 2, 3],
-            allowCustomTip: true,
-          },
-          acceptOnlinePayments: true,
-          acceptCashOnDelivery: false,
-          acceptCardOnDelivery: false,
-          autoAcceptOrders: false,
-          autoClosePaidOrders: false,
-        },
+        primary_color: '#2DD4BF',
+        accepts_pickup: true,
+        accepts_delivery: false,
+        estimated_prep_minutes: 15,
+        min_order_cents: 0,
+        tip_enabled: true,
+        tip_presets: [15, 18, 20],
       })
       .select()
       .single()
@@ -549,22 +516,55 @@ export async function adminCreateOnlineStore(
       return { success: false, error: error.message }
     }
 
+    // Seed default pages
+    if (newConfig) {
+      await supabase.from('online_store_pages').insert([
+        {
+          store_config_id: newConfig.id,
+          page_type: 'home',
+          section_type: 'hero',
+          title: locationName,
+          subtitle: 'Order online for pickup or delivery',
+          cta_text: 'Order Now',
+          cta_link: '/menu',
+          display_order: 0,
+          is_visible: true,
+        },
+        {
+          store_config_id: newConfig.id,
+          page_type: 'home',
+          section_type: 'hours',
+          title: 'Hours',
+          display_order: 1,
+          is_visible: true,
+        },
+        {
+          store_config_id: newConfig.id,
+          page_type: 'home',
+          section_type: 'location_map',
+          title: 'Find Us',
+          display_order: 2,
+          is_visible: true,
+        },
+      ])
+    }
+
     await LogAuditEvent({
-      merchantId: merchantId,
+      merchantId,
       action: `HQ Admin Created Online Store for ${locationName}`,
       actionCategory: 'settings',
-      resourceType: 'online_ordering',
+      resourceType: 'online_store',
       resourceId: locationId,
       resourceName: locationName,
-      locationId: locationId,
+      locationId,
       metadata: {
         location_name: locationName,
         created_by_admin: userId,
-        site_id: newSite.id,
+        config_id: newConfig.id,
       },
     })
 
-    return { success: true, data: newSite, error: null }
+    return { success: true, data: newConfig, error: null }
   } catch (error) {
     console.error('[adminCreateOnlineStore] Exception:', error)
     return {

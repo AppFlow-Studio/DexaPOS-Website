@@ -11,55 +11,73 @@ import { Button } from '@/components/ui/button'
 
 interface TableNodeProps {
     table: FloorPlanObject
+    allTables?: FloorPlanObject[]
     scaleRef: React.MutableRefObject<number>
     isSelected: boolean
+    selectedTableIds?: string[]
     isDesignMode: boolean
-    onSelect: () => void
+    onSelect: (e?: React.MouseEvent<HTMLDivElement>) => void
     onUpdatePosition: (id: string, x: number, y: number) => void
     onUpdateName: (id: string, name: string) => void
+    onUpdateSize?: (id: string, width: number, height: number) => void
     onUpdateRotation?: (id: string, rotation: number) => void
     onRotateEnd?: (id: string, rotation: number) => void
     onDoubleClick?: () => void
     onDelete?: () => void
     onDragStart?: () => void
     onDragEnd?: () => void
+    onBatchUpdatePositions?: (updates: Array<{ id: string; x: number; y: number }>) => void
     statusColor?: string
     billAmount?: number
 }
 
 export function TableNode({
     table,
+    allTables = [],
     scaleRef,
     isSelected,
+    selectedTableIds = [],
     isDesignMode,
     onSelect,
     onUpdatePosition,
     onUpdateName,
+    onUpdateSize,
     onUpdateRotation,
     onRotateEnd,
     onDelete,
     onDoubleClick,
     onDragStart,
     onDragEnd,
+    onBatchUpdatePositions,
     statusColor,
     billAmount
 }: TableNodeProps) {
     const elementRef = useRef<HTMLDivElement>(null)
     const rotateHandleRef = useRef<HTMLDivElement>(null)
+    const resizeHandleRef = useRef<HTMLDivElement>(null)
 
     // --- REFS FOR INSTANT LOCKING (Fixes the "Runaway" issue) ---
     const isRotatingRef = useRef(false)
+    const isResizingRef = useRef(false)
     const initialPosRef = useRef<{ x: number, y: number } | null>(null)
+    const initialSizeRef = useRef<{ width: number, height: number } | null>(null)
+    const initialSelectedPositionsRef = useRef<Map<string, { x: number; y: number }> | null>(null)
+    const batchInitialPositionsRef = useRef<Map<string, { x: number; y: number }> | null>(null)
 
     // UI State (Visuals only)
     const [isDragging, setIsDragging] = React.useState(false)
     const [isRotating, setIsRotating] = React.useState(false)
+    const [isResizing, setIsResizing] = React.useState(false)
     const [isEditing, setIsEditing] = React.useState(false)
     const [tempName, setTempName] = React.useState(table.name || '')
 
     const shape = TABLE_SHAPES[table.shape_id as keyof typeof TABLE_SHAPES]
-    if (!shape) return null
+    if (!shape) {
+        console.warn(`[TableNode] Shape not found for shape_id="${table.shape_id}" on table "${table.name}"`)
+        return null
+    }
 
+    console.log(`[TableNode] Rendering ${table.name} (${table.shape_id}) at (${table.x}, ${table.y})`)
     const TableComponent = shape.component
     const width = table.width || shape.width
     const height = table.height || shape.height
@@ -69,39 +87,74 @@ export function TableNode({
         {
             onDragStart: ({ event }) => {
                 // 1. INSTANTLY CHECK LOCK
-                if (isRotatingRef.current) return
+                if (isRotatingRef.current || isResizingRef.current) return
 
                 // 2. CHECK TARGET
                 const target = event.target as HTMLElement
                 // Explicitly ignore if clicking the handle (redundancy check)
                 if (target.closest('[data-rotate-handle]')) return
+                if (target.closest('[data-resize-handle]')) return
                 if (target.tagName === 'INPUT') return
 
                 event.stopPropagation()
                 if (!isDesignMode) return
 
-                onSelect()
+                // Only select if not already selected (preserve batch selection)
+                if (!isSelected) {
+                    onSelect()
+                }
                 setIsDragging(true)
                 onDragStart?.()
 
                 // 3. SET ANCHOR
                 initialPosRef.current = { x: table.x, y: table.y }
+
+                // 4. CAPTURE INITIAL POSITIONS FOR BATCH MOVE
+                if (selectedTableIds.length > 1) {
+                    const posMap = new Map<string, { x: number; y: number }>()
+                    selectedTableIds.forEach(id => {
+                        const selectedTable = allTables.find(t => t.id === id)
+                        if (selectedTable) {
+                            posMap.set(id, { x: selectedTable.x, y: selectedTable.y })
+                        }
+                    })
+                    batchInitialPositionsRef.current = posMap
+                }
             },
             onDrag: ({ movement: [mx, my] }) => {
                 // CHECK LOCK AGAIN
-                if (isRotatingRef.current || !initialPosRef.current || !isDesignMode) return
+                if (isRotatingRef.current || isResizingRef.current || !initialPosRef.current || !isDesignMode) return
 
                 const scale = scaleRef.current || 1
+                const deltaX = mx / scale
+                const deltaY = my / scale
 
-                // CALC POSITION
-                const newX = initialPosRef.current.x + (mx / scale)
-                const newY = initialPosRef.current.y + (my / scale)
+                // If multiple tables are selected, move all of them together with proper offsets
+                if (selectedTableIds.length > 1 && onBatchUpdatePositions && batchInitialPositionsRef.current) {
+                    const updates = selectedTableIds.map(id => {
+                        // Use the captured initial position from drag start
+                        const initialPos = batchInitialPositionsRef.current?.get(id)
+                        if (!initialPos) return { id, x: 0, y: 0 }
 
-                onUpdatePosition(table.id, newX, newY)
+                        // Apply the same delta to all selected tables
+                        return {
+                            id,
+                            x: initialPos.x + deltaX,
+                            y: initialPos.y + deltaY
+                        }
+                    })
+                    onBatchUpdatePositions(updates)
+                } else {
+                    // Single table move
+                    const newX = initialPosRef.current.x + deltaX
+                    const newY = initialPosRef.current.y + deltaY
+                    onUpdatePosition(table.id, newX, newY)
+                }
             },
             onDragEnd: () => {
                 setIsDragging(false)
                 initialPosRef.current = null
+                batchInitialPositionsRef.current = null
                 onDragEnd?.()
             }
         },
@@ -157,6 +210,42 @@ export function TableNode({
         }
     )
 
+    // --- 3. RESIZE GESTURE ---
+    useGesture(
+        {
+            onDragStart: ({ event }) => {
+                event.stopPropagation()
+                if (!isDesignMode) return
+
+                isResizingRef.current = true
+                setIsResizing(true)
+                onSelect()
+                onDragStart?.()
+
+                initialSizeRef.current = { width: width || 100, height: height || 100 }
+            },
+            onDrag: ({ movement: [mx, my] }) => {
+                if (!isDesignMode || !initialSizeRef.current || !isResizing) return
+
+                const newWidth = Math.max(50, initialSizeRef.current.width + mx)
+                const newHeight = Math.max(50, initialSizeRef.current.height + my)
+
+                onUpdateSize?.(table.id, newWidth, newHeight)
+            },
+            onDragEnd: () => {
+                isResizingRef.current = false
+                setIsResizing(false)
+                initialSizeRef.current = null
+                onDragEnd?.()
+            }
+        },
+        {
+            target: resizeHandleRef,
+            enabled: isDesignMode,
+            drag: { filterTaps: true }
+        }
+    )
+
     const handleNameSubmit = () => {
         setIsEditing(false)
         if (tempName !== table.name) {
@@ -177,9 +266,10 @@ export function TableNode({
                 height: height,
                 zIndex: isSelected || isDragging || isRotating ? 50 : 10
             }}
-            onClick={(e) => {
+            onClick={(e: React.MouseEvent<HTMLDivElement>) => {
                 e.stopPropagation()
-                onSelect()
+                // Pass event so parent can check shift/ctrl keys
+                onSelect(e)
             }}
             onDoubleClick={(e) => {
                 e.stopPropagation()
@@ -218,6 +308,18 @@ export function TableNode({
                         </div>
                     )}
 
+                    {/* RESIZE HANDLE */}
+                    {isDesignMode && (
+                        <div
+                            ref={resizeHandleRef}
+                            data-resize-handle
+                            className="absolute -bottom-3 -right-3 w-6 h-6 bg-white border-2 border-[#0d99ff] rounded-full shadow-lg cursor-se-resize z-50 touch-none hover:scale-125 transition-transform"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
+                            title="Drag to resize"
+                        />
+                    )}
+
                     {/* DELETE BUTTON */}
                     {isDesignMode && onDelete && (
                         <div
@@ -247,7 +349,7 @@ export function TableNode({
 
             {/* TABLE SHAPE */}
             <div className={cn("w-full h-full relative", (isDragging || isRotating) && "opacity-80")}>
-                <TableComponent color={statusColor || '#F1F1F1'} width={width} height={height} />
+                <TableComponent color={isDesignMode ? (statusColor || table.color_override || '#F1F1F1') : (table.color_override || '#F1F1F1')} width={width} height={height} />
             </div>
 
             {/* CAPACITY INDICATOR */}
