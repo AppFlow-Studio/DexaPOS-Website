@@ -9,6 +9,7 @@ interface TipSectionProps {
   customTip: string;
   onSelectPreset: (index: number) => void;
   onSelectCustom: () => void;
+  onSelectNoTip: () => void;
   onCustomTipChange: (value: string) => void;
 }
 
@@ -19,6 +20,7 @@ export function TipSection({
   customTip,
   onSelectPreset,
   onSelectCustom,
+  onSelectNoTip,
   onCustomTipChange,
 }: TipSectionProps) {
   return (
@@ -27,14 +29,26 @@ export function TipSection({
         Add a Tip
       </h2>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={onSelectNoTip}
+          className="flex-1 min-w-[70px] py-2.5 text-sm font-medium rounded-lg border transition-colors"
+          style={{
+            backgroundColor: selectedTipIndex === -1 ? "var(--primary)" : "transparent",
+            color: selectedTipIndex === -1 ? "#fff" : "var(--text)",
+            borderColor: selectedTipIndex === -1 ? "var(--primary)" : "var(--border)",
+            borderRadius: "var(--radius)",
+          }}
+        >
+          No Tip
+        </button>
         {tipPresets.map((pct, i) => {
           const amount = Math.round(subtotal * (pct / 100) * 100) / 100;
           return (
             <button
               key={pct}
               onClick={() => onSelectPreset(i)}
-              className="flex-1 py-2.5 text-center rounded-lg border transition-colors"
+              className="flex-1 min-w-[70px] py-2.5 text-center rounded-lg border transition-colors"
               style={{
                 backgroundColor: selectedTipIndex === i ? "var(--primary)" : "transparent",
                 color: selectedTipIndex === i ? "#fff" : "var(--text)",
@@ -49,7 +63,7 @@ export function TipSection({
         })}
         <button
           onClick={onSelectCustom}
-          className="flex-1 py-2.5 text-sm font-medium rounded-lg border transition-colors"
+          className="flex-1 min-w-[70px] py-2.5 text-sm font-medium rounded-lg border transition-colors"
           style={{
             backgroundColor: selectedTipIndex === null ? "var(--primary)" : "transparent",
             color: selectedTipIndex === null ? "#fff" : "var(--text)",

@@ -18,9 +18,16 @@ import { useStationDevices } from "../../hooks/useStationDevices";
 import { useStationTerminal } from "../../hooks/usePaymentTerminals";
 import {
   useStationPrinters,
+  useDeletePrinter,
   getPrinterRoleLabel,
   PrinterRole,
+  type Printer as PrinterType,
 } from "../../hooks/usePrinters";
+import {
+  useDeleteStationDevice,
+  getDeviceTypeIcon,
+  type StationDevice,
+} from "../../hooks/useStationDevices";
 import {
   Monitor,
   CreditCard,
@@ -44,6 +51,9 @@ import {
   MemoryStick,
   Nfc,
   TabletSmartphone,
+  Trash2,
+  Loader2,
+  AlertTriangle,
 } from "lucide-react";
 import {
   Select,
@@ -52,6 +62,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { format, formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -223,6 +243,31 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
   const { data: devices } = useStationDevices(station.id);
   const { data: terminal } = useStationTerminal(station.id);
   const { data: printers } = useStationPrinters(station.id);
+  const deletePrinterMutation = useDeletePrinter();
+  const deleteDeviceMutation = useDeleteStationDevice();
+
+  const [printerToDelete, setPrinterToDelete] = useState<PrinterType | null>(null);
+  const [deviceToDelete, setDeviceToDelete] = useState<StationDevice | null>(null);
+
+  const handleDeletePrinter = async () => {
+    if (!printerToDelete) return;
+    try {
+      await deletePrinterMutation.mutateAsync(printerToDelete.id);
+      setPrinterToDelete(null);
+    } catch {
+      // Error handled by mutation
+    }
+  };
+
+  const handleDeleteDevice = async () => {
+    if (!deviceToDelete) return;
+    try {
+      await deleteDeviceMutation.mutateAsync(deviceToDelete.id);
+      setDeviceToDelete(null);
+    } catch {
+      // Error handled by mutation
+    }
+  };
 
   // KDS-specific data
   const isKds = station.station_type === "kds";
@@ -741,12 +786,12 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
               {devices?.map((device) => (
                 <div
                   key={device.id}
-                  className="flex items-center gap-3 p-3 rounded-lg border bg-card"
+                  className="flex items-center gap-3 p-3 rounded-lg border bg-card group"
                 >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                    <Printer className="h-5 w-5 text-muted-foreground" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted shrink-0">
+                    {getDeviceTypeIcon(device.device_type)}
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium">{device.device_name}</p>
                     <p className="text-sm text-muted-foreground capitalize">
                       {device.device_type.replace(/_/g, " ")}
@@ -755,7 +800,7 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
                   <Badge
                     variant="outline"
                     className={cn(
-                      "ml-auto",
+                      "shrink-0",
                       device.is_connected
                         ? "border-green-500/50 text-green-600"
                         : "border-gray-400/50 text-gray-500"
@@ -763,17 +808,26 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
                   >
                     {device.is_connected ? "Online" : "Offline"}
                   </Badge>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => setDeviceToDelete(device)}
+                    title="Remove device"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               ))}
               {printers?.map((printer) => (
                 <div
                   key={printer.id}
-                  className="flex items-center gap-3 p-3 rounded-lg border bg-card"
+                  className="flex items-center gap-3 p-3 rounded-lg border bg-card group"
                 >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted shrink-0">
                     <Printer className="h-5 w-5 text-muted-foreground" />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium">{printer.printer_name}</p>
                     <p className="text-sm text-muted-foreground">
                       {getPrinterRoleLabel(printer.printer_role as PrinterRole)} Printer
@@ -782,7 +836,7 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
                   <Badge
                     variant="outline"
                     className={cn(
-                      "ml-auto",
+                      "shrink-0",
                       printer.is_connected
                         ? "border-green-500/50 text-green-600"
                         : "border-gray-400/50 text-gray-500"
@@ -790,12 +844,127 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
                   >
                     {printer.is_connected ? "Online" : "Offline"}
                   </Badge>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => setPrinterToDelete(printer)}
+                    title="Remove printer"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Remove Printer Confirmation */}
+      <AlertDialog
+        open={!!printerToDelete}
+        onOpenChange={(open) => !open && setPrinterToDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+              </div>
+              <AlertDialogTitle>Remove Printer</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="pt-3">
+              Are you sure you want to remove{" "}
+              <span className="font-semibold text-foreground">
+                {printerToDelete?.printer_name}
+              </span>
+              ? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {printerToDelete && (
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
+              <Printer className="h-8 w-8 text-muted-foreground" />
+              <div>
+                <p className="font-medium">{printerToDelete.printer_name}</p>
+                <p className="text-sm text-muted-foreground">
+                  {getPrinterRoleLabel(printerToDelete.printer_role as PrinterRole)} Printer
+                </p>
+              </div>
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeletePrinter}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deletePrinterMutation.isPending}
+            >
+              {deletePrinterMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Removing...
+                </>
+              ) : (
+                "Remove Printer"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Remove Device Confirmation */}
+      <AlertDialog
+        open={!!deviceToDelete}
+        onOpenChange={(open) => !open && setDeviceToDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+              </div>
+              <AlertDialogTitle>Remove Device</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="pt-3">
+              Are you sure you want to remove{" "}
+              <span className="font-semibold text-foreground">
+                {deviceToDelete?.device_name}
+              </span>
+              ? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deviceToDelete && (
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
+              <span className="text-2xl">
+                {getDeviceTypeIcon(deviceToDelete.device_type)}
+              </span>
+              <div>
+                <p className="font-medium">{deviceToDelete.device_name}</p>
+                <p className="text-sm text-muted-foreground capitalize">
+                  {deviceToDelete.device_type.replace(/_/g, " ")}
+                </p>
+              </div>
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteDevice}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteDeviceMutation.isPending}
+            >
+              {deleteDeviceMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Removing...
+                </>
+              ) : (
+                "Remove Device"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -397,7 +397,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .select('percentage')
     .eq('location_id', locationId)
     .eq('is_active', true)
-    .eq('tax_category', 'default')
+    .eq('tax_category', 'standard')
     .order('created_at', { ascending: true })
     .limit(1)
     .single()

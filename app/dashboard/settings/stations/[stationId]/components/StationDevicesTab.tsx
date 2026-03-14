@@ -102,48 +102,59 @@ function DeviceActionMenu({
   const isCashDrawer = device.device_type === "cash_drawer";
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={onTest} disabled={isTestingConnection}>
-          {isTestingConnection ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="mr-2 h-4 w-4" />
+    <div className="flex items-center gap-1">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+        onClick={onDelete}
+        title="Remove device"
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-8 w-8">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={onTest} disabled={isTestingConnection}>
+            {isTestingConnection ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" />
+            )}
+            Test Connection
+          </DropdownMenuItem>
+          {isPrinter && (
+            <DropdownMenuItem onClick={onTestPrint} disabled={isTestingPrint}>
+              {isTestingPrint ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Printer className="mr-2 h-4 w-4" />
+              )}
+              Test Print
+            </DropdownMenuItem>
           )}
-          Test Connection
-        </DropdownMenuItem>
-        {isPrinter && (
-          <DropdownMenuItem onClick={onTestPrint} disabled={isTestingPrint}>
-            {isTestingPrint ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Printer className="mr-2 h-4 w-4" />
-            )}
-            Test Print
+          {isCashDrawer && (
+            <DropdownMenuItem onClick={onOpenDrawer} disabled={isOpeningDrawer}>
+              {isOpeningDrawer ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <FolderOpen className="mr-2 h-4 w-4" />
+              )}
+              Open Drawer
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onDelete} className="text-destructive">
+            <Trash2 className="mr-2 h-4 w-4" />
+            Remove Device
           </DropdownMenuItem>
-        )}
-        {isCashDrawer && (
-          <DropdownMenuItem onClick={onOpenDrawer} disabled={isOpeningDrawer}>
-            {isOpeningDrawer ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <FolderOpen className="mr-2 h-4 w-4" />
-            )}
-            Open Drawer
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={onDelete} className="text-destructive">
-          <Trash2 className="mr-2 h-4 w-4" />
-          Remove Device
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
 
