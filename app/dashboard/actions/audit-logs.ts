@@ -74,7 +74,9 @@ export async function GetAuditLogs(
     query = query.eq("severity", filters.severity);
   }
 
-  if (filters?.resource_type) {
+  if (filters?.resource_types && filters.resource_types.length > 0) {
+    query = query.in("resource_type", filters.resource_types);
+  } else if (filters?.resource_type) {
     query = query.eq("resource_type", filters.resource_type);
   }
 

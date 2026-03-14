@@ -120,7 +120,7 @@ export async function AddTableAction(
   if (error) throw error;
 
   // Log Audit Event
-  LogAuditEvent({
+  await LogAuditEvent({
     action: `Added Table: ${tableData.name || "Table"}`,
     actionCategory: "settings",
     resourceType: "table",

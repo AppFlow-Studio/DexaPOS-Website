@@ -143,12 +143,6 @@ export async function inviteStaffMember(
 
         if (inviteError) throw inviteError;
 
-        return {
-          success: true,
-          inviteType: "clerk",
-          invitationId: invitation.id,
-        };
-
         // Log audit event
         await LogAuditEvent({
           merchantId: params.merchantId,
@@ -163,6 +157,12 @@ export async function inviteStaffMember(
             locations: params.locationAssignments.map((l) => l.locationId),
           },
         });
+
+        return {
+          success: true,
+          inviteType: "clerk",
+          invitationId: invitation.id,
+        };
       } else {
         return {
           success: false,
@@ -210,13 +210,6 @@ export async function inviteStaffMember(
         });
       }
 
-      return {
-        success: true,
-        inviteType: "pos_only",
-        inviteId: invite.id,
-        setupUrl: `${process.env.NEXT_PUBLIC_APP_URL}/setup/${inviteToken}`,
-      };
-
       // Log audit event
       await LogAuditEvent({
         merchantId: params.merchantId,
@@ -232,6 +225,13 @@ export async function inviteStaffMember(
           locations: params.locationAssignments.map((l: any) => l.locationId),
         },
       });
+
+      return {
+        success: true,
+        inviteType: "pos_only",
+        inviteId: invite.id,
+        setupUrl: `${process.env.NEXT_PUBLIC_APP_URL}/setup/${inviteToken}`,
+      };
     }
   } catch (error: any) {
     console.error("Invite error:", error);
@@ -284,12 +284,6 @@ export async function quickAddStaff(params: QuickAddStaffParams) {
 
     if (locationError) throw locationError;
 
-    return {
-      success: true,
-      staffId: staff.id,
-      displayName: staff.display_name,
-    };
-
     // Log audit event
     await LogAuditEvent({
       merchantId: params.merchantId,
@@ -305,6 +299,12 @@ export async function quickAddStaff(params: QuickAddStaffParams) {
       },
       changes: { after: staff as unknown as Record<string, unknown> },
     });
+
+    return {
+      success: true,
+      staffId: staff.id,
+      displayName: staff.display_name,
+    };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -516,6 +516,7 @@ export async function createCustomRole(params: CreateCustomRoleParams) {
       resourceType: "role",
       resourceId: role.id,
       resourceName: params.name,
+      severity: "warning",
       metadata: {
         role_code: roleCode,
         base_role_code: params.baseRoleCode,
