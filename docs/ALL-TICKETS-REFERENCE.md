@@ -26,6 +26,17 @@ Single index for active ticket streams and their source trackers.
 3. Notes:
 - Use local/private status docs outside this index when you do not want them included in PR scope.
 
+## Stream C: Device Registry Foundation
+
+1. Internal execution tracker:
+- `.planning/SPRINT-2026-03-14-DEVICE-REGISTRY-FOUNDATION-TRACKER.md`
+
+2. Plan:
+- `docs/SPRINT-2026-03-14-DEVICE-REGISTRY-FOUNDATION-PLAN.md`
+
+3. Continuation state:
+- `.planning/.continue-here.md`
+
 ## Notes
 
 1. Keep this file updated whenever a new ticket stream starts.
