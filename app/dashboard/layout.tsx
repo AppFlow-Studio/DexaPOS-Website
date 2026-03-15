@@ -37,6 +37,7 @@ import {
   BarChart3,
   Settings,
   HelpCircle,
+  MessageCircle,
   Search,
   MoreHorizontal,
   CreditCard,
@@ -242,8 +243,8 @@ const navFooter = [
   },
   {
     title: "Get Help",
-    url: "#",
-    icon: HelpCircle,
+    url: "/dashboard/support",
+    icon: MessageCircle,
   },
 ];
 
@@ -542,9 +543,12 @@ function MerchantSidebar() {
           </SidebarMenuItem>
           {/* Get Help */}
           <SidebarMenuItem>
-            <SidebarMenuButton asChild>
-              <Link href="#">
-                <HelpCircle className="h-4 w-4" />
+            <SidebarMenuButton
+              asChild
+              isActive={pathname.startsWith("/dashboard/support")}
+            >
+              <Link href="/dashboard/support">
+                <MessageCircle className="h-4 w-4" />
                 <span>Get Help</span>
               </Link>
             </SidebarMenuButton>
