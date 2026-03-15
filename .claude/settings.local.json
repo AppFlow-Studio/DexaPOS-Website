@@ -26,7 +26,11 @@
       "Bash(git stash:*)",
       "Bash(npx next:*)",
       "WebFetch(domain:docs.ipospays.com)",
-      "Bash(for file:*)"
+      "Bash(for file:*)",
+      "Bash(find /Users/temurbeksayfutdinov/Documents/AppFlowStudios/dexapos-website -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" -o -name \"*.js\" -o -name \"*.sql\" \\\\\\) 2>/dev/null | head -20)",
+      "Bash(find /Users/temurbeksayfutdinov/Documents/AppFlowStudios/dexapos-website/app/sites -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" \\\\\\) 2>/dev/null | head -20)",
+      "Bash(find /Users/temurbeksayfutdinov/Documents/AppFlowStudios/dexapos-website -maxdepth 1 -type f \\\\\\( -name \".env*\" -o -name \"*.env*\" \\\\\\) 2>/dev/null | head -10)",
+      "Bash(npm run:*)"
     ]
   }
 }

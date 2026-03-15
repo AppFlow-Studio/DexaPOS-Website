@@ -18,7 +18,7 @@ export async function getStoreTaxRate(storeConfigId: string): Promise<number> {
     .select("percentage")
     .eq("location_id", config.location_id)
     .eq("is_active", true)
-    .eq("tax_category", "default")
+    .eq("tax_category", "standard")
     .order("created_at", { ascending: true })
     .limit(1)
     .single();
@@ -131,7 +131,7 @@ export async function placeOrder(
     .select("percentage")
     .eq("location_id", locationId)
     .eq("is_active", true)
-    .eq("tax_category", "default")
+    .eq("tax_category", "standard")
     .order("created_at", { ascending: true })
     .limit(1)
     .single();
