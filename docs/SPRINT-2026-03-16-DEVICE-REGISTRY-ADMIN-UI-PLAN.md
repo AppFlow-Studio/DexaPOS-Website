@@ -2,11 +2,11 @@
 
 **Sprint focus date:** March 16, 2026  
 **Scope:** Device Registry admin UI epic on top of the completed database foundation  
-**Primary surfaces:** `/manage/devices`, registry detail flows, shared device-registry UI components
+**Primary surfaces:** `/manage/devices`, `/dashboard/devices`, registry detail flows, shared device-registry UI components
 
 ## Summary
 
-This follow-up ticket turns the completed device-registry schema into an admin-facing product surface.
+This follow-up ticket turns the completed device-registry schema into real product surfaces, starting with HQ and extending to the merchant read-only view where the route model already exists cleanly.
 
 This is a UI epic, but it should still be approached in slices:
 
@@ -43,6 +43,11 @@ The first implementation pass should prioritize the HQ inventory list and the sh
 - `Ctrl/Cmd+K` shortcut on registry routes
 - page jumps for inventory, overview, and catalog
 - live device lookup to matching detail pages
+10. Merchant progressive-disclosure surface:
+- read-only `/dashboard/devices`
+- card-first hardware grid scoped by the dashboard location selector
+- support-history sheet per device
+- merchant-only data actions and hooks using existing RLS
 
 ### Remaining In This Ticket
 
@@ -52,9 +57,8 @@ The first implementation pass should prioritize the HQ inventory list and the sh
 - import confirmation flow
 
 2. DR-09 Role-Based Progressive Disclosure
-- only if explicitly kept in scope for this ticket after HQ work is signed off
-- carrier read-only simplification
-- merchant simplified surface
+- merchant simplified surface is now implemented
+- carrier read-only simplification remains open because the repo does not yet have a clean carrier shell or route model
 
 ### Deferred By Instruction
 
@@ -145,6 +149,8 @@ The repo already has:
 
 4. Keep existing:
 - `/manage/device-catalog`
+5. Added for DR-09:
+- `/dashboard/devices`
 
 ## Acceptance For The First Pass
 
@@ -157,5 +163,6 @@ The repo already has:
 
 ## Sequencing After This Pass
 
-1. DR-05 Bulk Import Wizard
-2. DR-09 Role-based progressive disclosure
+1. DR-09 merchant simplified surface
+2. DR-05 Bulk Import Wizard
+3. Carrier progressive disclosure after a dedicated carrier shell decision
