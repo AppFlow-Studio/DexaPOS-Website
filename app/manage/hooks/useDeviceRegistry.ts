@@ -8,6 +8,7 @@ import {
   getAdminDeviceOverview,
   getAdminDeviceSummary,
   getDeviceTransitionTargets,
+  searchAdminDeviceRegistry,
 } from '../actions/device-registry'
 import type { AdminDeviceInventoryFilters, AssignDevicePayload } from '@/types/device-registry'
 
@@ -52,6 +53,21 @@ export function useAdminDeviceOverview() {
       return result.data
     },
     staleTime: 60_000,
+  })
+}
+
+export function useDeviceRegistryCommandSearch(query: string, enabled: boolean = true) {
+  return useQuery({
+    queryKey: [...REGISTRY_QUERY_KEY, 'command-search', query],
+    queryFn: async () => {
+      const result = await searchAdminDeviceRegistry(query)
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to search device registry')
+      }
+      return result.data ?? []
+    },
+    enabled: enabled && Boolean(query.trim()),
+    staleTime: 30_000,
   })
 }
 

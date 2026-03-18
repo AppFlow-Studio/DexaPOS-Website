@@ -11,6 +11,7 @@ import type {
   DeviceActivityItem,
   DeviceAssignmentRow,
   DeviceConfigHistoryRow,
+  DeviceRegistryCommandResult,
   DeviceOverviewChartDatum,
   DeviceOverviewData,
   DeviceOverviewKpis,
@@ -322,6 +323,60 @@ export async function getAdminDeviceOverview(): Promise<ActionResult<DeviceOverv
     }
   } catch (error) {
     console.error('[getAdminDeviceOverview] Exception:', error)
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }
+  }
+}
+
+export async function searchAdminDeviceRegistry(
+  query: string,
+  limit: number = 8
+): Promise<ActionResult<DeviceRegistryCommandResult[]>> {
+  try {
+    await assertHQPermission('system.config.manage')
+    const supabase = createServerSupabaseClient() as any
+    const trimmedQuery = query.trim()
+
+    if (!trimmedQuery) {
+      return { success: true, data: [], error: null }
+    }
+
+    const searchLimit = Math.min(Math.max(limit, 1), 12)
+    const term = `%${trimmedQuery}%`
+
+    const { data, error } = await supabase
+      .from('admin_device_inventory')
+      .select(
+        'id, serial_number, status, device_category, manufacturer, model_name, model_sku, merchant_name, location_name, updated_at'
+      )
+      .or(
+        [
+          `serial_number.ilike.${term}`,
+          `manufacturer.ilike.${term}`,
+          `model_name.ilike.${term}`,
+          `model_sku.ilike.${term}`,
+          `merchant_name.ilike.${term}`,
+          `location_name.ilike.${term}`,
+        ].join(',')
+      )
+      .order('updated_at', { ascending: false })
+      .limit(searchLimit)
+
+    if (error) {
+      console.error('[searchAdminDeviceRegistry] Error:', error)
+      return { success: false, data: null, error: error.message }
+    }
+
+    return {
+      success: true,
+      data: (data ?? []) as DeviceRegistryCommandResult[],
+      error: null,
+    }
+  } catch (error) {
+    console.error('[searchAdminDeviceRegistry] Exception:', error)
     return {
       success: false,
       data: null,

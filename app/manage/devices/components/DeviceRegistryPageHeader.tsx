@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react'
 
+import { DeviceRegistryCommandPaletteTrigger } from '@/app/manage/devices/components/DeviceRegistryCommandPalette'
 import { DeviceRegistrySectionNav } from '@/app/manage/devices/components/DeviceRegistrySectionNav'
 
 interface DeviceRegistryPageHeaderProps {
@@ -30,7 +31,10 @@ export function DeviceRegistryPageHeader({
         </div>
       </div>
 
-      {actions ? <div className="flex flex-wrap items-center gap-3">{actions}</div> : null}
+      <div className="flex flex-wrap items-center gap-3">
+        <DeviceRegistryCommandPaletteTrigger />
+        {actions}
+      </div>
     </div>
   )
 }

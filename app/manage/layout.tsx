@@ -62,6 +62,7 @@ import { Badge } from '@/components/ui/badge'
 import Image from 'next/image'
 import type { PermissionCode } from '@/lib/admin/permission-codes'
 import { toast } from 'sonner'
+import { DeviceRegistryCommandPaletteProvider } from '@/app/manage/devices/components/DeviceRegistryCommandPalette'
 
 // Navigation item type with optional permission requirement
 interface NavItem {
@@ -417,30 +418,32 @@ export default function ManageLayout({
 
     return (
         <SidebarProvider>
-            <Suspense>
-                <DeniedParamHandler />
-            </Suspense>
-            <AppSidebar />
-            <main className="flex-1 flex flex-col min-w-0">
-                <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-                    <SidebarTrigger className="-ml-1" />
-                    <div className="flex items-center gap-2">
-                        <h1 className="text-lg font-semibold">Dashboard</h1>
-                    </div>
-                    <div className="ml-auto flex flex-row items-center gap-2">
-                        <AnimatedThemeToggler />
-                        <Button variant="ghost" size="icon">
-                            <Search className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon">
-                            <Bell className="h-4 w-4" />
-                        </Button>
-                    </div>
-                </header>
-                <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 min-w-0">
+            <DeviceRegistryCommandPaletteProvider>
+                <Suspense>
+                    <DeniedParamHandler />
+                </Suspense>
+                <AppSidebar />
+                <main className="flex-1 flex flex-col min-w-0">
+                    <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+                        <SidebarTrigger className="-ml-1" />
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-lg font-semibold">Dashboard</h1>
+                        </div>
+                        <div className="ml-auto flex flex-row items-center gap-2">
+                            <AnimatedThemeToggler />
+                            <Button variant="ghost" size="icon">
+                                <Search className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon">
+                                <Bell className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    </header>
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 min-w-0">
                     {children}
-                </div>
-            </main>
+                    </div>
+                </main>
+            </DeviceRegistryCommandPaletteProvider>
         </SidebarProvider>
     )
 }

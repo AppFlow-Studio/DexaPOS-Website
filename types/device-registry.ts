@@ -212,3 +212,16 @@ export interface DeviceOverviewData {
   merchantBreakdown: DeviceOverviewMerchantDatum[]
   registrationTrend: DeviceOverviewMonthlyDatum[]
 }
+
+export interface DeviceRegistryCommandResult {
+  id: string
+  serial_number: string
+  status: DeviceLifecycleStatus
+  device_category: DeviceCategory
+  manufacturer: string
+  model_name: string
+  model_sku: string | null
+  merchant_name: string | null
+  location_name: string | null
+  updated_at: string
+}

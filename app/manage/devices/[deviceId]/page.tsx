@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { ArrowLeft, Boxes, Clock3, Link2, Package, ShieldAlert } from 'lucide-react'
 
 import { useAdminDeviceActivity, useAdminDeviceDetail } from '@/app/manage/hooks/useDeviceRegistry'
+import { DeviceRegistryCommandPaletteTrigger } from '@/app/manage/devices/components/DeviceRegistryCommandPalette'
 import { DeviceRegistrySectionNav } from '@/app/manage/devices/components/DeviceRegistrySectionNav'
 import { DeviceStatusTransitionDialog } from '@/app/manage/devices/components/DeviceStatusTransitionDialog'
 import { Badge } from '@/components/ui/badge'
@@ -123,6 +124,9 @@ export default function DeviceDetailPage() {
           </div>
 
           <div className="grid gap-2 text-sm text-muted-foreground">
+            <div className="pb-1">
+              <DeviceRegistryCommandPaletteTrigger />
+            </div>
             <div>Merchant: <span className="font-medium text-foreground">{device.merchant_name ?? 'DEXA HQ'}</span></div>
             <div>Location: <span className="font-medium text-foreground">{device.location_name ?? 'N/A'}</span></div>
             <div>Updated: <span className="font-medium text-foreground">{formatDateTime(device.updated_at)}</span></div>

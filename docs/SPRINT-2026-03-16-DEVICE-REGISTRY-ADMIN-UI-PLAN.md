@@ -38,6 +38,11 @@ The first implementation pass should prioritize the HQ inventory list and the sh
 - shared `DeviceRegistryPageHeader`
 - shared `DeviceRegistryMetricCard`
 - inventory, overview, and catalog now reuse the same top-of-page/header and metric-card patterns
+9. Registry command palette:
+- registry-only palette provider mounted in `/manage`
+- `Ctrl/Cmd+K` shortcut on registry routes
+- page jumps for inventory, overview, and catalog
+- live device lookup to matching detail pages
 
 ### Remaining In This Ticket
 
@@ -46,12 +51,7 @@ The first implementation pass should prioritize the HQ inventory list and the sh
 - validation preview
 - import confirmation flow
 
-2. DR-07 Keyboard Shortcuts + Command Palette
-- quick search / quick open
-- keyboard navigation
-- hotkey bindings
-
-3. DR-09 Role-Based Progressive Disclosure
+2. DR-09 Role-Based Progressive Disclosure
 - only if explicitly kept in scope for this ticket after HQ work is signed off
 - carrier read-only simplification
 - merchant simplified surface
@@ -158,5 +158,4 @@ The repo already has:
 ## Sequencing After This Pass
 
 1. DR-05 Bulk Import Wizard
-2. DR-07 Command Palette + shortcuts
-3. DR-09 Role-based progressive disclosure
+2. DR-09 Role-based progressive disclosure
