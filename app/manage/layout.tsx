@@ -143,6 +143,12 @@ const navMain: NavGroup[] = [
         title: "Config",
         items: [
             {
+                title: 'Device Registry',
+                url: '/manage/devices',
+                icon: Package,
+                requiredPermission: 'system.config.manage' as PermissionCode,
+            },
+            {
                 title: 'Device Catalog',
                 url: '/manage/device-catalog',
                 icon: Monitor,

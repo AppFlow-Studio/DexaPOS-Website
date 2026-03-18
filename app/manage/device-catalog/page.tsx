@@ -1,9 +1,12 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useMemo, useEffect } from 'react'
 import { toast } from 'sonner'
 import Image from 'next/image'
 import {
+  Boxes,
+  Factory,
   Monitor,
   Tablet,
   CreditCard,
@@ -23,6 +26,8 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
+import { DeviceRegistryMetricCard } from '@/app/manage/devices/components/DeviceRegistryMetricCard'
+import { DeviceRegistryPageHeader } from '@/app/manage/devices/components/DeviceRegistryPageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -64,7 +69,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 
@@ -182,7 +186,7 @@ const CATEGORY_SPEC_FIELDS: Record<DeviceCategory, SpecFieldDef[]> = {
 // ============================================================================
 
 function formatCents(cents: number | null): string {
-  if (cents === null || cents === undefined) return '—'
+  if (cents === null || cents === undefined) return 'N/A'
   return `$${(cents / 100).toFixed(2)}`
 }
 
@@ -210,7 +214,7 @@ function renderSpecsSummary(specs: Record<string, unknown>, category: DeviceCate
     if (specs.slots_coins) parts.push(`${specs.slots_coins} coin slots`)
     if (specs.dimensions) parts.push(`${specs.dimensions}"`)
   }
-  return parts.join(' · ') || ''
+  return parts.join(' / ') || ''
 }
 
 function specsFromDevice(specs: Record<string, unknown>): Record<string, string | number | boolean | string[]> {
@@ -353,26 +357,78 @@ export default function DeviceCatalogPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Device Catalog</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {isLoading ? '...' : `${stats.total} models · ${stats.active} active · ${stats.discontinued} discontinued`}
-          </p>
-        </div>
-        <Button onClick={openCreate} size="sm">
-          <Plus className="mr-2 h-4 w-4" />
-          Add device
-        </Button>
+      <DeviceRegistryPageHeader
+        title="Device catalog"
+        description="Supported hardware models, pricing defaults, and reusable specs for future inventory rows."
+        actions={
+          <>
+          <Button asChild variant="outline">
+            <Link href="/manage/devices">Open inventory</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/manage/devices/overview">Open overview</Link>
+          </Button>
+          <Button onClick={openCreate}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add device
+          </Button>
+          </>
+        }
+      />
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {[
+          {
+            label: 'Total models',
+            value: stats.total,
+            detail: 'Catalog entries across all categories',
+            icon: Boxes,
+          },
+          {
+            label: 'Active',
+            value: stats.active,
+            detail: 'Available for procurement and assignment',
+            icon: ToggleRight,
+          },
+          {
+            label: 'Discontinued',
+            value: stats.discontinued,
+            detail: 'Hidden from new rollouts but kept for history',
+            icon: ToggleLeft,
+          },
+          {
+            label: 'Manufacturers',
+            value: manufacturers.length,
+            detail: 'Distinct vendors currently represented',
+            icon: Factory,
+          },
+        ].map((card) => (
+          <DeviceRegistryMetricCard
+            key={card.label}
+            label={card.label}
+            value={card.value}
+            detail={card.detail}
+            icon={card.icon}
+          />
+        ))}
       </div>
 
-      {/* Filters */}
+      <Card className="border-dashed bg-muted/20">
+        <CardContent className="flex flex-col gap-2 p-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+          <div>
+            Catalog models do not create registry rows. The catalog defines supported hardware; the registry only fills after manual entry or a later bulk import.
+          </div>
+          <Button asChild size="sm" variant="outline">
+            <Link href="/manage/devices">Go to registry</Link>
+          </Button>
+        </CardContent>
+      </Card>
+
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[220px] max-w-sm">
+        <div className="relative min-w-[220px] flex-1 md:min-w-[280px] xl:max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search models…"
+            placeholder="Search models..."
             className="pl-9 h-9"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -405,7 +461,6 @@ export default function DeviceCatalogPage() {
 
       {/* Grouped list */}
       <Card className="overflow-hidden p-0">
-        <ScrollArea >
         {isLoading ? (
           <div className="p-6 space-y-4">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -434,7 +489,7 @@ export default function DeviceCatalogPage() {
             )}
           </div>
         ) : (
-          <ScrollArea className="max-h-[calc(100vh-300px)]">
+          <div className="max-h-[70vh] overflow-y-auto overscroll-contain">
             <div>
               {grouped.map((group, gi) => {
                 const catDef = CATEGORY_MAP[group.category]
@@ -458,7 +513,7 @@ export default function DeviceCatalogPage() {
                           {catDef?.label ?? group.category}
                         </span>
                         <span className="text-xs text-muted-foreground/60">
-                          — {group.items.length}
+                          - {group.items.length}
                         </span>
                       </button>
                     </CollapsibleTrigger>
@@ -563,9 +618,8 @@ export default function DeviceCatalogPage() {
                 )
               })}
             </div>
-          </ScrollArea>
+          </div>
         )}
-</ScrollArea>
       </Card>
 
       {/* Create / Edit Dialog */}
@@ -608,7 +662,7 @@ export default function DeviceCatalogPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -914,7 +968,7 @@ function DeviceFormDialog({
                     type="url"
                     value={imageUrl}
                     onChange={(e) => setImageUrl(e.target.value)}
-                    placeholder="https://…"
+                    placeholder="https://example.com/device.jpg"
                     className="h-9 flex-1"
                   />
                 </div>
@@ -926,7 +980,7 @@ function DeviceFormDialog({
                   rows={2}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Internal notes about this device…"
+                  placeholder="Internal notes about this device..."
                   className="resize-none"
                 />
               </div>
@@ -939,7 +993,7 @@ function DeviceFormDialog({
               Cancel
             </Button>
             <Button type="submit" size="sm" disabled={saving}>
-              {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Add device'}
+              {saving ? 'Saving...' : isEdit ? 'Save changes' : 'Add device'}
             </Button>
           </div>
         </form>
