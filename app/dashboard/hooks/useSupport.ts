@@ -8,9 +8,13 @@ import {
   CreateTicket,
   AddMessage,
   ReopenTicket,
+  GetSupportUploadUrl,
 } from "../actions/support";
-import { TicketStatus, TicketCategory } from "@/types/support-ticket";
+import { TicketStatus, TicketCategory, AttachmentInput } from "@/types/support-ticket";
 import { toast } from "sonner";
+
+// Re-export for use in components
+export { GetSupportUploadUrl };
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
 
@@ -58,6 +62,7 @@ export function useCreateTicket() {
       category: TicketCategory;
       locationId?: string;
       metadata?: Record<string, unknown>;
+      attachments?: AttachmentInput[];
     }) => {
       if (!clerkOrgId) throw new Error("Not authenticated");
       return CreateTicket(clerkOrgId, input);
@@ -83,9 +88,9 @@ export function useAddMessage(ticketId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (message: string) => {
+    mutationFn: ({ message, attachments = [] }: { message: string; attachments?: AttachmentInput[] }) => {
       if (!clerkOrgId) throw new Error("Not authenticated");
-      return AddMessage(clerkOrgId, ticketId, message);
+      return AddMessage(clerkOrgId, ticketId, message, attachments);
     },
     onSuccess: (result) => {
       if (result.error) {

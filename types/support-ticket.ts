@@ -48,6 +48,30 @@ export interface SupportTicket {
   tags: string[]
 }
 
+export interface SupportTicketAttachment {
+  id: string
+  ticket_id: string
+  message_id: string | null
+  uploaded_by: string
+  file_name: string
+  file_path: string
+  file_size: number
+  file_type: string
+  created_at: string
+}
+
+export interface SupportTicketAttachmentWithUrl extends SupportTicketAttachment {
+  signed_url?: string
+}
+
+/** Passed from the client after direct-upload to Supabase Storage */
+export interface AttachmentInput {
+  file_name: string
+  file_path: string
+  file_size: number
+  file_type: string
+}
+
 export interface SupportTicketMessage {
   id: string
   ticket_id: string
@@ -60,18 +84,7 @@ export interface SupportTicketMessage {
   edited_at: string | null
   read_by_merchant: boolean
   read_by_admin: boolean
-}
-
-export interface SupportTicketAttachment {
-  id: string
-  ticket_id: string
-  message_id: string | null
-  uploaded_by: string
-  file_name: string
-  file_path: string
-  file_size: number
-  file_type: string
-  created_at: string
+  attachments?: SupportTicketAttachmentWithUrl[]
 }
 
 export interface SupportTicketWithMessages extends SupportTicket {

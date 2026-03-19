@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -17,14 +17,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { useTicketDetail, useAddMessage, useReopenTicket } from "../../hooks/useSupport";
+import {
+  useTicketDetail,
+  useAddMessage,
+  useReopenTicket,
+  GetSupportUploadUrl,
+} from "../../hooks/useSupport";
+import { useClerkOrgId } from "../../hooks/useLocationScoped";
 import {
   TICKET_CATEGORY_LABELS,
   TICKET_STATUS_LABELS,
   TICKET_STATUS_COLORS,
-  TICKET_PRIORITY_COLORS,
   SupportTicketMessage,
+  AttachmentInput,
 } from "@/types/support-ticket";
+import AttachmentList from "@/components/support/AttachmentList";
+import FileUploadInput from "@/components/support/FileUploadInput";
 import { format, formatDistanceToNow, isToday, isYesterday } from "date-fns";
 
 function formatMessageTime(dateStr: string): string {
@@ -77,6 +85,9 @@ function MessageBubble({
           )}
         >
           <p className="whitespace-pre-wrap">{message.message}</p>
+          {message.attachments && message.attachments.length > 0 && (
+            <AttachmentList attachments={message.attachments} />
+          )}
         </div>
       </div>
     </div>
@@ -86,9 +97,12 @@ function MessageBubble({
 export default function TicketDetailPage() {
   const params = useParams();
   const ticketId = params.ticketId as string;
-  const router = useRouter();
+  const clerkOrgId = useClerkOrgId();
 
   const [reply, setReply] = useState("");
+  const [attachments, setAttachments] = useState<AttachmentInput[]>([]);
+  const [uploadSessionId] = useState(() => crypto.randomUUID());
+  const [uploadKey, setUploadKey] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -98,20 +112,26 @@ export default function TicketDetailPage() {
 
   const ticket = result?.data;
   const messages = ticket?.messages || [];
-
   const isResolved = ticket?.status === "resolved" || ticket?.status === "closed";
 
-  // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
+
+  const handleGetUploadUrl = async (fileName: string, fileId: string, sessionId: string) => {
+    if (!clerkOrgId) return { error: "Not authenticated" };
+    return GetSupportUploadUrl(clerkOrgId, fileName, fileId, sessionId);
+  };
 
   const handleSend = async () => {
     const trimmed = reply.trim();
     if (!trimmed || isSending) return;
 
+    // Reset state before await so the UI clears immediately
     setReply("");
-    await addMessage(trimmed);
+    setAttachments([]);
+    setUploadKey((k) => k + 1);
+    await addMessage({ message: trimmed, attachments });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -119,10 +139,6 @@ export default function TicketDetailPage() {
       e.preventDefault();
       handleSend();
     }
-  };
-
-  const handleReopen = async () => {
-    await reopenTicket(ticketId);
   };
 
   if (isLoading) {
@@ -206,7 +222,7 @@ export default function TicketDetailPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={handleReopen}
+              onClick={() => reopenTicket(ticketId)}
               disabled={isReopening}
             >
               {isReopening ? (
@@ -218,28 +234,37 @@ export default function TicketDetailPage() {
             </Button>
           </div>
         ) : (
-          <div className="flex gap-2 items-end">
-            <Textarea
-              ref={textareaRef}
-              value={reply}
-              onChange={(e) => setReply(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type your reply... (Enter to send, Shift+Enter for new line)"
-              className="resize-none min-h-[80px] max-h-[160px]"
+          <div className="space-y-2">
+            <FileUploadInput
+              key={uploadKey}
+              onUploadsChange={setAttachments}
+              getUploadUrl={handleGetUploadUrl}
+              sessionId={uploadSessionId}
               disabled={isSending}
             />
-            <Button
-              onClick={handleSend}
-              disabled={!reply.trim() || isSending}
-              size="icon"
-              className="shrink-0 h-[80px] w-10"
-            >
-              {isSending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
+            <div className="flex gap-2 items-end">
+              <Textarea
+                ref={textareaRef}
+                value={reply}
+                onChange={(e) => setReply(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Type your reply... (Enter to send, Shift+Enter for new line)"
+                className="resize-none min-h-[80px] max-h-[160px]"
+                disabled={isSending}
+              />
+              <Button
+                onClick={handleSend}
+                disabled={!reply.trim() || isSending}
+                size="icon"
+                className="shrink-0 h-[80px] w-10"
+              >
+                {isSending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           </div>
         )}
       </div>

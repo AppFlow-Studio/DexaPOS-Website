@@ -18,6 +18,8 @@ import {
   CheckCircle2,
   XCircle,
 } from "lucide-react";
+import AttachmentList from "@/components/support/AttachmentList";
+import FileUploadInput from "@/components/support/FileUploadInput";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +43,7 @@ import {
   AssignTicket,
   UpdateTicketPriority,
   UpdateTicketCategory,
+  GetAdminSupportUploadUrl,
 } from "../../actions/support";
 import {
   TICKET_CATEGORY_LABELS,
@@ -49,6 +52,7 @@ import {
   TICKET_PRIORITY_COLORS,
   TICKET_PRIORITY_LABELS,
   SupportTicketMessage,
+  AttachmentInput,
   TicketStatus,
   TicketPriority,
   TicketCategory,
@@ -109,6 +113,9 @@ function MessageBubble({ message }: { message: SupportTicketMessage }) {
           )}
         >
           <p className="whitespace-pre-wrap">{message.message}</p>
+          {message.attachments && message.attachments.length > 0 && (
+            <AttachmentList attachments={message.attachments} />
+          )}
         </div>
       </div>
     </div>
@@ -132,6 +139,8 @@ export default function AdminTicketDetailPage() {
 
   const [reply, setReply] = useState("");
   const [isInternal, setIsInternal] = useState(false);
+  const [attachments, setAttachments] = useState<AttachmentInput[]>([]);
+  const [uploadSessionId] = useState(() => crypto.randomUUID());
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const queryKey = ["admin-support-ticket", ticketId];
@@ -155,11 +164,12 @@ export default function AdminTicketDetailPage() {
   };
 
   const sendMutation = useMutation({
-    mutationFn: ({ msg, internal }: { msg: string; internal: boolean }) =>
-      AdminAddMessage(ticketId, msg, internal),
+    mutationFn: ({ msg, internal, atts }: { msg: string; internal: boolean; atts: AttachmentInput[] }) =>
+      AdminAddMessage(ticketId, msg, internal, atts),
     onSuccess: (res) => {
       if (res.error) { toast.error(res.error); return; }
       setReply("");
+      setAttachments([]);
       invalidate();
     },
     onError: () => toast.error("Failed to send message"),
@@ -201,10 +211,13 @@ export default function AdminTicketDetailPage() {
     },
   });
 
+  const handleGetUploadUrl = (fileName: string, fileId: string, _sessionId: string) =>
+    GetAdminSupportUploadUrl(ticketId, fileName, fileId);
+
   const handleSend = () => {
     const trimmed = reply.trim();
     if (!trimmed) return;
-    sendMutation.mutate({ msg: trimmed, internal: isInternal });
+    sendMutation.mutate({ msg: trimmed, internal: isInternal, atts: attachments });
   };
 
   if (isLoading) {
@@ -298,6 +311,12 @@ export default function AdminTicketDetailPage() {
               )}
             </Label>
           </div>
+          <FileUploadInput
+            onUploadsChange={setAttachments}
+            getUploadUrl={handleGetUploadUrl}
+            sessionId={uploadSessionId}
+            disabled={sendMutation.isPending}
+          />
           <div className="flex gap-2 items-end">
             <Textarea
               value={reply}

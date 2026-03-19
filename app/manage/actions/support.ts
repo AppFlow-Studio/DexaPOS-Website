@@ -5,6 +5,8 @@ import { currentUser } from "@clerk/nextjs/server";
 import {
   SupportTicket,
   SupportTicketWithMessages,
+  SupportTicketAttachmentWithUrl,
+  AttachmentInput,
   SupportDashboardStats,
   TicketFilters,
   TicketStatus,
@@ -137,14 +139,78 @@ export async function GetAdminTicketDetail(
       .in("id", unread);
   }
 
+  // Fetch attachments and generate signed URLs
+  const { data: attachments } = await supabase
+    .from("support_ticket_attachments")
+    .select("*")
+    .eq("ticket_id", ticketId)
+    .order("created_at", { ascending: true });
+
+  let attachmentsWithUrls: SupportTicketAttachmentWithUrl[] = [];
+  if (attachments && attachments.length > 0) {
+    const paths = attachments.map((a) => a.file_path);
+    const { data: signedData } = await supabase.storage
+      .from("support-attachments")
+      .createSignedUrls(paths, 3600);
+
+    const urlMap: Record<string, string> = {};
+    (signedData || []).forEach((item) => {
+      urlMap[item.path] = item.signedUrl;
+    });
+
+    attachmentsWithUrls = attachments.map((a) => ({
+      ...a,
+      signed_url: urlMap[a.file_path],
+    }));
+  }
+
+  // Group attachments by message_id
+  const attachmentsByMessageId = attachmentsWithUrls.reduce<
+    Record<string, SupportTicketAttachmentWithUrl[]>
+  >((acc, att) => {
+    const key = att.message_id ?? "__ticket__";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(att);
+    return acc;
+  }, {});
+
+  const messagesWithAttachments = (messages || []).map((m) => ({
+    ...m,
+    attachments: attachmentsByMessageId[m.id] || [],
+  }));
+
   return {
     data: {
       ...ticket,
       merchant: Array.isArray(ticket.merchant) ? ticket.merchant[0] : ticket.merchant,
       location: Array.isArray(ticket.location) ? ticket.location[0] : ticket.location,
-      messages: messages || [],
+      messages: messagesWithAttachments,
     },
   };
+}
+
+// ============================================================================
+// GET SIGNED UPLOAD URL (Admin)
+// ============================================================================
+
+export async function GetAdminSupportUploadUrl(
+  ticketId: string,
+  fileName: string,
+  fileId: string
+): Promise<{ signedUrl?: string; path?: string; error?: string }> {
+  const supabase = createServiceRoleClient();
+  const user = await currentUser();
+  if (!user) return { error: "Authentication required" };
+
+  const sanitizedName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `admin/tickets/${ticketId}/${fileId}_${sanitizedName}`;
+
+  const { data, error } = await supabase.storage
+    .from("support-attachments")
+    .createSignedUploadUrl(path);
+
+  if (error) return { error: error.message };
+  return { signedUrl: data.signedUrl, path };
 }
 
 // ============================================================================
@@ -154,7 +220,8 @@ export async function GetAdminTicketDetail(
 export async function AdminAddMessage(
   ticketId: string,
   message: string,
-  isInternal: boolean = false
+  isInternal: boolean = false,
+  attachments: AttachmentInput[] = []
 ): Promise<{ data?: { message_id: string }; error?: string }> {
   const supabase = createServiceRoleClient();
   const user = await currentUser();
@@ -163,13 +230,14 @@ export async function AdminAddMessage(
 
   const userName = user.fullName || user.firstName || "DEXA Support";
 
-  const { data, error } = await supabase.rpc("add_ticket_message", {
+  const { data, error } = await supabase.rpc("add_ticket_message_with_attachments", {
     p_ticket_id: ticketId,
     p_sender_id: user.id,
     p_sender_name: userName,
     p_sender_role: "admin",
     p_message: message,
     p_is_internal: isInternal,
+    p_attachments: attachments,
   });
 
   if (error) return { error: error.message };

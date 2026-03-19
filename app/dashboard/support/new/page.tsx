@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -24,9 +24,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { useCreateTicket } from "../../hooks/useSupport";
+import { useCreateTicket, GetSupportUploadUrl } from "../../hooks/useSupport";
+import { useClerkOrgId } from "../../hooks/useLocationScoped";
 import { useSelectedLocation, useLocationStore } from "@/stores/location-store";
-import { TicketCategory, TICKET_CATEGORY_LABELS } from "@/types/support-ticket";
+import { TicketCategory, TICKET_CATEGORY_LABELS, AttachmentInput } from "@/types/support-ticket";
+import FileUploadInput from "@/components/support/FileUploadInput";
 
 const schema = z.object({
   category: z.enum([
@@ -57,6 +59,11 @@ export default function NewTicketPage() {
   const { mutateAsync: createTicket, isPending } = useCreateTicket();
   const selectedLocation = useSelectedLocation();
   const { locations } = useLocationStore();
+  const clerkOrgId = useClerkOrgId();
+
+  // Stable upload session ID for this form instance
+  const uploadSessionId = useMemo(() => crypto.randomUUID(), []);
+  const [attachments, setAttachments] = useState<AttachmentInput[]>([]);
 
   const {
     register,
@@ -74,6 +81,11 @@ export default function NewTicketPage() {
 
   const selectedCategory = watch("category");
 
+  const handleGetUploadUrl = async (fileName: string, fileId: string, sessionId: string) => {
+    if (!clerkOrgId) return { error: "Not authenticated" };
+    return GetSupportUploadUrl(clerkOrgId, fileName, fileId, sessionId);
+  };
+
   const onSubmit = async (values: FormValues) => {
     const metadata: Record<string, unknown> = {
       userAgent: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
@@ -86,6 +98,7 @@ export default function NewTicketPage() {
       category: values.category,
       locationId: values.locationId,
       metadata,
+      attachments,
     });
 
     if (result?.data?.ticket_id) {
@@ -168,6 +181,20 @@ export default function NewTicketPage() {
           {errors.description && (
             <p className="text-xs text-destructive">{errors.description.message}</p>
           )}
+        </div>
+
+        {/* Attachments */}
+        <div className="space-y-2">
+          <Label>Screenshots / Files (optional)</Label>
+          <p className="text-xs text-muted-foreground">
+            Images (PNG, JPG, WebP) or PDFs. Max 3 files, 5MB each.
+          </p>
+          <FileUploadInput
+            onUploadsChange={setAttachments}
+            getUploadUrl={handleGetUploadUrl}
+            sessionId={uploadSessionId}
+            disabled={isPending}
+          />
         </div>
 
         {/* Location */}
