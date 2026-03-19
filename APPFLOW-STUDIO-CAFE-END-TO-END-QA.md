@@ -7,10 +7,32 @@ End-to-end developer QA for Appflow Studio Cafe, from admin invite through live 
 ## Run Info
 
 - Date: 2026-03-09
+- Last updated: 2026-03-13
 - Tester: Ali
 - Environment: Local/Dev
 - Merchant under test: Appflow Studio Cafe
-- Status: In progress (Flow 1 unblocked, continuing QA)
+- Status: In progress (Flows 1-4 passed; Flow 5 payment/receipt pending)
+
+## Senior Handoff Summary (2026-03-13)
+
+### Confirmed Passed
+
+- Flow 1 passed end-to-end (invite, acceptance, DB org association, dashboard access).
+- Flow 2 passed end-to-end (owner/staff/access management checks completed).
+- Flow 3 passed except one pending check: menu appearance cross-check on both dashboard and POS.
+- Flow 4 passed end-to-end (location creation + inheritance + overrides + owner assignment validation).
+- Admin merchant list now shows onboarding/non-active statuses correctly.
+- Location manager invite path retested successfully (previous RLS failure not reproduced).
+- New location creation works, and per-location menu/category setup works.
+
+### Open / Not Fully Closed
+
+- Flow 3: `Menu appears in dashboard + POS` not yet completed in this pass.
+- Flow 5: smoke test payment + receipt are still pending.
+
+### Deferred in This Pass
+
+- Full Flow 5 closure remains deferred until payment + receipt integration is finalized.
 
 ## Accounts You Need Before Starting
 
@@ -138,58 +160,57 @@ limit 20;
 
 ## Flow 1: Admin -> Owner Onboarding
 
-- Current blocker: inviting a new merchant fails with DB error  
-  `insert or update on table "merchants" violates foreign key constraint "merchants_clerk_org_id_fkey"`.
+- Historical blocker (`merchants_clerk_org_id_fkey`) is resolved.
 
 - [x] Admin invites owner from internal admin dashboard
 - [x] Invite email received and link works
 - [x] Clerk auth flow completes without errors
-- [ ] Owner lands on merchant dashboard successfully
-- [ ] Owner dashboard sections load (locations, staff, menu, orders, reporting, settings)
+- [x] Owner lands on merchant dashboard successfully
+- [x] Owner dashboard sections load (locations, staff, menu, orders, reporting, settings)
 - [x] DB confirms owner is linked to merchant org (`members`)
 
 ## Flow 2: Owner -> Staff and Access Management
 
-- Current blocker: second invited email can log in, but does not resolve to `merchant.owner` role after acceptance.
+- Historical owner role-mapping blocker is resolved in retest.
 
-- [ ] Owner invites second owner
-- [ ] Second owner accepts and sees same merchant dashboard
-- [ ] Owner invites employees for role types (manager/cashier/server)
-- [ ] Owner sets own 4-digit POS PIN
-- [ ] Owner has `location_members` at every location
-- [ ] Owner has `staff` at every location
-- [ ] Owner can authenticate on POS at any location with PIN
+- [x] Owner invites second owner
+- [x] Second owner accepts and sees same merchant dashboard
+- [x] Owner invites employees for role types (manager/cashier/server)
+- [x] Owner sets own 4-digit POS PIN
+- [x] Owner has `location_members` at every location
+- [x] Owner has `staff` at every location
+- [x] Owner can authenticate on POS at any location with PIN
 
 ## Flow 3: Menu Setup
 
-- [ ] Create menu (for example Main Menu / Drinks Menu)
-- [ ] Create categories and confirm order
-- [ ] Create menu items with pricing/tax/photo
-- [ ] Create modifier groups/options
-- [ ] Assign modifiers to relevant items
-- [ ] Configure menu schedule (if used)
+- [x] Create menu (for example Main Menu / Drinks Menu)
+- [x] Create categories and confirm order
+- [x] Create menu items with pricing/tax/photo
+- [x] Create modifier groups/options
+- [x] Assign modifiers to relevant items
+- [x] Configure menu schedule (if used)
 - [ ] Menu appears in dashboard + POS
-- [ ] POS item totals include modifier pricing correctly
-- [ ] Schedule visibility is correct by time window
+- [x] POS item totals include modifier pricing correctly
+- [x] Schedule visibility is correct by time window
 
 ## Flow 4: Location Management
 
 - [x] Create second location with address/tax/settings
 - [x] Verify location has access to merchant menu
-- [ ] Override item price/availability at location level
-- [ ] Override modifier behavior at location level
+- [x] Override item price/availability at location level
+- [x] Override modifier behavior at location level
 - [x] Override/reorder/hide categories at location level
-- [ ] Verify owner auto-added as staff + location member at new location
+- [x] Verify owner auto-added as staff + location member at new location
 
 ## Flow 5: POS Smoke Test
 
-- [ ] Login to POS at Studio Cafe using owner PIN
-- [ ] Create cart with item + modifiers
-- [ ] Apply discount (if enabled)
+- [x] Login to POS at Studio Cafe using owner PIN
+- [x] Create cart with item + modifiers
+- [x] Apply discount (if enabled)
 - [ ] Process card payment successfully
 - [ ] Print/view receipt
-- [ ] Verify order appears in POS history
-- [ ] Verify order appears in web dashboard order history
+- [x] Verify order appears in POS history
+- [x] Verify order appears in web dashboard order history
 - [ ] Verify receipt data totals/fields are accurate
 
 ## Live Feedback Log
@@ -205,19 +226,22 @@ limit 20;
 | 2026-03-12 | Merchant invitation retest (another merchant) | Pass | User confirmation | Invitation flow worked in latest QA run |
 | 2026-03-12 | Flow 4 / New location with menu + categories | Pass | User confirmation | New location creation succeeded and per-location menu/category setup worked |
 | 2026-03-12 | Flow 4 / Location wizard manager invite retest | Pass | User confirmation | Invite path now works in QA run (no RLS failure observed) |
+| 2026-03-13 | Flow 1 + Flow 2 full regression | Pass | User confirmation | Foreign-key/invite path stable; owner/staff/access flow completed successfully |
+| 2026-03-13 | Flow 3 completion pass | Partial Pass | User confirmation | All Flow 3 checks passed except `Menu appears in dashboard + POS` |
+| 2026-03-13 | Flow 5 smoke pass | Partial Pass | User confirmation | Smoke checks passed except payment + receipt items |
 
 ## Bug/Blocker Log
 
 | ID | Flow | Severity | Issue | Repro Steps | Screenshot/Link | Status |
 |---|---|---|---|---|---|---|
 | QA-001 | Flow 1 | High | Merchant invite fails on `merchants_clerk_org_id_fkey` FK constraint | 1) Go to `/manage/users` 2) Start invite/new merchant flow 3) Submit merchant invite 4) Observe FK error | Pending user evidence | Fixed (2026-03-11) |
-| QA-002 | Flow 2 | High | Owner-to-owner invite acceptance does not map second user to `merchant.owner` | 1) Invite second owner email 2) Accept invite/login 3) Run role query in DB 4) Observe no `merchant.owner` row | Pending user evidence | Open |
+| QA-002 | Flow 2 | High | Owner-to-owner invite acceptance does not map second user to `merchant.owner` | 1) Invite second owner email 2) Accept invite/login 3) Run role query in DB 4) Observe no `merchant.owner` row | Pending user evidence | Fixed (2026-03-13, retest passed) |
 | QA-003 | Admin merchant details access | Medium | Merchant details page failed to compile due missing packages `resend` and `twilio` imported by `send-receipt.ts` | 1) Open `/manage/merchants/<org_id>` 2) Observe module-not-found error 3) Install deps | Logged in QA, local env patched, pending retest |
 | QA-004 | Admin merchants list | Medium | Merchant list showed only active merchants; onboarding/suspended/cancelled were hidden | 1) Login as platform admin 2) Open `/manage/merchants` 3) Set status `All` 4) Observe only active merchants | Pending user evidence | Fixed (2026-03-11) |
 | QA-005 | Flow 4/Location wizard | High | Assign-manager invite failed with RLS (`42501`) and no invitation email | 1) Create new location 2) Choose `Invite new manager` 3) Submit 4) Observe RLS error + no inbox email | User console log captured | Fixed (2026-03-12, retest passed) |
 
 ## Final Signoff
 
-- [ ] All five flows passed end-to-end
+- [ ] All five flows passed end-to-end (Flow 3 dashboard/POS visibility check and Flow 5 payment/receipt still pending)
 - [ ] All blockers documented with repro and evidence
 - [ ] Ready for real merchant onboarding

@@ -174,6 +174,11 @@ const navMain = [
         icon: Package,
       },
       {
+        title: "Devices",
+        url: "/dashboard/devices",
+        icon: Monitor,
+      },
+      {
         title: "Audit Logs",
         url: "/dashboard/audit-logs",
         icon: GitCompare,

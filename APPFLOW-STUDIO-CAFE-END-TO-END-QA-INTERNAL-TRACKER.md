@@ -12,9 +12,33 @@ Source ticket: user-provided E2E QA checklist (March 9, 2026).
 ## Test Environment
 
 - Date: 2026-03-09
+- Last updated: 2026-03-13
 - Tester: Ali
 - Assistant support: Codex
 - Merchant target: Appflow Studio Cafe
+
+## Senior Handoff Snapshot (2026-03-13)
+
+### Passed in This QA Window
+
+- Flow 1 passed end-to-end (invite/auth/association/dashboard checks).
+- Flow 2 passed end-to-end (owner/staff/access checks).
+- Flow 4 passed end-to-end (location creation/inheritance/overrides/owner coverage).
+- Merchant list status visibility issue resolved and verified.
+- Location manager invite RLS issue resolved and retested successfully.
+- New location + per-location menu/category setup validated.
+
+### Remaining Risks
+
+- `BUG-003` remains retest pending (`resend`/`twilio` dependency state on admin merchant detail route).
+- Flow 3 still has one pending check: menu appearance validation on both dashboard and POS.
+- Flow 5 payment/receipt smoke not signed off (payment + receipt specific checks pending).
+
+### Recommended Next Session Start Point
+
+1. Retest `BUG-003` route load and mark pass/fail.
+2. Close Flow 3 final check (`Menu appears in dashboard + POS`).
+3. Finish Flow 5 payment + receipt + receipt data verification.
 
 ## Required Access Matrix
 
@@ -38,11 +62,11 @@ Source ticket: user-provided E2E QA checklist (March 9, 2026).
 
 | Flow | Name | Status | Notes |
 |---|---|---|---|
-| 1 | Admin -> Owner Onboarding | In Progress | FK blocker resolved; step 1/2 and DB association passed, continue remaining checks |
-| 2 | Owner -> Staff and Access Management | Blocked | Second invited email can log in but is not mapped to `merchant.owner` |
-| 3 | Menu Setup | Pending |  |
-| 4 | Location Management | In Progress | New location creation and per-location menu/category setup confirmed |
-| 5 | Core POS Smoke Test | Pending |  |
+| 1 | Admin -> Owner Onboarding | Passed | All Flow 1 checks completed |
+| 2 | Owner -> Staff and Access Management | Passed | All Flow 2 checks completed |
+| 3 | Menu Setup | In Progress | All checks passed except dashboard/POS appearance confirmation |
+| 4 | Location Management | Passed | All Flow 4 checks completed |
+| 5 | Core POS Smoke Test | In Progress | All checks passed except payment/receipt-specific items |
 
 ## High-Risk Assertions
 
@@ -165,13 +189,16 @@ limit 20;
 | 2026-03-12 | 1/2 | Merchant invitation retest (another merchant) | Pass | User confirmation | Invitation flow worked in latest QA run |
 | 2026-03-12 | 4 | New location with menu + categories | Pass | User confirmation | Location creation succeeded; menu/category setup worked for that location |
 | 2026-03-12 | 4 | Location wizard manager invite retest | Pass | User confirmation | Invite path now works in QA run; prior `42501` not reproduced |
+| 2026-03-13 | 1 + 2 | Full flow retest | Pass | User confirmation | Foreign-key and invite issues resolved; Flow 1 and Flow 2 fully passed |
+| 2026-03-13 | 3 | Menu setup completion | Partial Pass | User confirmation | Flow 3 passed except dashboard/POS appearance check |
+| 2026-03-13 | 5 | POS smoke completion | Partial Pass | User confirmation | Smoke passed except payment + receipt items |
 
 ## Defects
 
 | ID | Severity | Flow | Summary | Repro | Status | Owner |
 |---|---|---|---|---|---|---|
 | BUG-001 | High | 1 | Merchant invite fails due FK `merchants_clerk_org_id_fkey` on `merchants` insert/update | `/manage/users` -> invite/create new merchant -> submit | Fixed (2026-03-11) | Ali |
-| BUG-002 | High | 2 | Owner-to-owner flow fails role mapping: accepted second invite does not produce `merchant.owner` role | Invite second owner -> accept -> login -> query `members.role` by email | Open | Ali |
+| BUG-002 | High | 2 | Owner-to-owner flow fails role mapping: accepted second invite does not produce `merchant.owner` role | Invite second owner -> accept -> login -> query `members.role` by email | Fixed (2026-03-13, retest passed) | Ali |
 | BUG-003 | Medium | Admin merchant detail | Missing runtime deps (`resend`, `twilio`) caused compile failure on merchant detail route | Open `/manage/merchants/<org_id>` -> Next compile fails in `app/actions/orders/send-receipt.ts` | Retest Pending | Ali |
 | BUG-004 | Medium | Admin merchants list | Merchant list showed only active merchants due non-manager users being over-scoped by client access filter | Login as platform admin -> open `/manage/merchants` -> onboarding/non-active rows missing | Fixed (2026-03-11) | Ali |
 | BUG-005 | High | Location wizard manager invite | Invite flow failed with `location_invites` RLS violation (`42501`) and no invitation email dispatch | Create location -> Assign Manager `invite_new` -> submit | Fixed (2026-03-12, retest passed) | Ali |
