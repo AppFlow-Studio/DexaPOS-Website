@@ -32,7 +32,10 @@
       "Bash(if ! grep -q \"LogAuditEvent\" \"$file\")",
       "Bash(echo \"MISSING AUDIT: $file\")",
       "Bash(fi)",
-      "Bash(done)"
+      "Bash(done)",
+      "Skill(gsd:plan-phase)",
+      "Skill(gsd:plan-phase:*)",
+      "Bash(find 'c:/Users/HP i5/Desktop/mdptech/DexaPOS-website/DexaPOS-Website' -type f \\\\\\(-name *support* -o -name *ticket* \\\\\\))"
     ]
   }
 }

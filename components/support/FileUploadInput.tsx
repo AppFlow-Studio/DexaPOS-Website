@@ -2,7 +2,6 @@
 
 import React, { useRef, useState, useCallback } from "react";
 import { Paperclip, X, Loader2, CheckCircle2, AlertCircle, FileText } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { AttachmentInput } from "@/types/support-ticket";
 
@@ -13,22 +12,19 @@ const MAX_FILES = 3;
 export interface UploadedFileState {
   id: string;
   file: File;
-  preview?: string;       // object URL for images
+  preview?: string;
   status: "pending" | "uploading" | "done" | "error";
   errorMessage?: string;
-  result?: AttachmentInput; // available once status === "done"
+  result?: AttachmentInput;
 }
 
 interface FileUploadInputProps {
-  /** Called with the full list of successfully uploaded attachment inputs */
   onUploadsChange: (attachments: AttachmentInput[]) => void;
-  /** Server action that returns a signed upload URL and the final storage path */
   getUploadUrl: (
     fileName: string,
     fileId: string,
     sessionId: string
   ) => Promise<{ signedUrl?: string; path?: string; error?: string }>;
-  /** Stable session ID so all files in one form submission share a folder */
   sessionId: string;
   disabled?: boolean;
   className?: string;
@@ -43,6 +39,7 @@ export default function FileUploadInput({
 }: FileUploadInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<UploadedFileState[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
 
   const notifyParent = useCallback(
     (updated: UploadedFileState[]) => {
@@ -57,8 +54,6 @@ export default function FileUploadInput({
   const uploadFile = useCallback(
     async (fileState: UploadedFileState) => {
       const { file, id } = fileState;
-
-      // Get signed upload URL from server action
       const { signedUrl, path, error } = await getUploadUrl(file.name, id, sessionId);
 
       if (error || !signedUrl || !path) {
@@ -74,7 +69,6 @@ export default function FileUploadInput({
         return;
       }
 
-      // PUT directly to Supabase Storage via the signed URL
       try {
         const res = await fetch(signedUrl, {
           method: "PUT",
@@ -113,12 +107,9 @@ export default function FileUploadInput({
     [getUploadUrl, sessionId, notifyParent]
   );
 
-  const handleFileChange = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const selected = Array.from(e.target.files || []);
-      e.target.value = ""; // reset so same file can be re-selected
-
-      const remaining = MAX_FILES - files.length;
+  const processFiles = useCallback(
+    async (selected: File[], currentCount: number) => {
+      const remaining = MAX_FILES - currentCount;
       const toAdd = selected.slice(0, remaining);
 
       const newStates: UploadedFileState[] = toAdd.map((file) => {
@@ -127,27 +118,60 @@ export default function FileUploadInput({
           ? URL.createObjectURL(file)
           : undefined;
 
-        // Validate
         if (!ALLOWED_TYPES.includes(file.type)) {
-          return { id, file, preview, status: "error", errorMessage: "Only images and PDFs allowed" };
+          return { id, file, preview, status: "error" as const, errorMessage: "Only images and PDFs allowed" };
         }
         if (file.size > MAX_SIZE_MB * 1024 * 1024) {
-          return { id, file, preview, status: "error", errorMessage: `Max ${MAX_SIZE_MB}MB per file` };
+          return { id, file, preview, status: "error" as const, errorMessage: `Max ${MAX_SIZE_MB}MB per file` };
         }
 
-        return { id, file, preview, status: "uploading" };
+        return { id, file, preview, status: "uploading" as const };
       });
 
       setFiles((prev) => [...prev, ...newStates]);
 
-      // Start uploads for valid files
       for (const f of newStates) {
         if (f.status === "uploading") {
           uploadFile(f);
         }
       }
     },
-    [files.length, uploadFile]
+    [uploadFile]
+  );
+
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const selected = Array.from(e.target.files || []);
+      e.target.value = "";
+      await processFiles(selected, files.length);
+    },
+    [files.length, processFiles]
+  );
+
+  const handleDragOver = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      if (!disabled && files.length < MAX_FILES) {
+        setIsDragging(true);
+      }
+    },
+    [disabled, files.length]
+  );
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+      if (disabled || files.length >= MAX_FILES) return;
+      const dropped = Array.from(e.dataTransfer.files);
+      await processFiles(dropped, files.length);
+    },
+    [disabled, files.length, processFiles]
   );
 
   const removeFile = useCallback(
@@ -167,16 +191,7 @@ export default function FileUploadInput({
 
   return (
     <div className={cn("space-y-2", className)}>
-      {/* File list */}
-      {files.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {files.map((f) => (
-            <FileChip key={f.id} fileState={f} onRemove={removeFile} disabled={disabled} />
-          ))}
-        </div>
-      )}
-
-      {/* Add button */}
+      {/* Drop zone */}
       {canAddMore && (
         <>
           <input
@@ -188,21 +203,39 @@ export default function FileUploadInput({
             onChange={handleFileChange}
             disabled={disabled}
           />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs text-muted-foreground gap-1.5 px-2"
-            onClick={() => inputRef.current?.click()}
-            disabled={disabled}
+          <div
+            onClick={() => !disabled && inputRef.current?.click()}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={cn(
+              "border-2 border-dashed rounded-lg px-4 py-3 flex flex-col items-center gap-1.5 transition-colors select-none",
+              isDragging
+                ? "border-indigo-400 bg-indigo-50 cursor-copy"
+                : "border-border bg-muted/20 hover:border-muted-foreground/40 hover:bg-muted/40 cursor-pointer",
+              disabled && "opacity-50 cursor-not-allowed pointer-events-none"
+            )}
           >
-            <Paperclip className="h-3.5 w-3.5" />
-            {files.length === 0 ? "Attach files" : "Add more"}
-            <span className="text-muted-foreground/60">
-              ({files.length}/{MAX_FILES})
-            </span>
-          </Button>
+            <Paperclip
+              className={cn(
+                "h-4 w-4 transition-colors",
+                isDragging ? "text-indigo-500" : "text-muted-foreground"
+              )}
+            />
+            <p className={cn("text-xs text-center", isDragging ? "text-indigo-600" : "text-muted-foreground")}>
+              Drag files here or click to browse ({files.length}/{MAX_FILES} used)
+            </p>
+          </div>
         </>
+      )}
+
+      {/* File chips */}
+      {files.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {files.map((f) => (
+            <FileChip key={f.id} fileState={f} onRemove={removeFile} disabled={disabled} />
+          ))}
+        </div>
       )}
     </div>
   );
@@ -226,35 +259,23 @@ function FileChip({
         "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs max-w-[180px]",
         status === "error" && "border-destructive/50 bg-destructive/5 text-destructive",
         status === "done" && "border-green-200 bg-green-50 text-green-800",
-        (status === "uploading" || status === "pending") && "border-border bg-muted/50 text-muted-foreground"
+        (status === "uploading" || status === "pending") &&
+          "border-border bg-muted/50 text-muted-foreground"
       )}
       title={errorMessage}
     >
-      {/* Thumbnail for images, icon for PDFs */}
       {isImage && preview ? (
-        <img
-          src={preview}
-          alt={file.name}
-          className="h-5 w-5 rounded object-cover shrink-0"
-        />
+        <img src={preview} alt={file.name} className="h-5 w-5 rounded object-cover shrink-0" />
       ) : (
         <FileText className="h-3.5 w-3.5 shrink-0" />
       )}
 
       <span className="truncate max-w-[100px]">{file.name}</span>
 
-      {/* Status indicator */}
-      {status === "uploading" && (
-        <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-      )}
-      {status === "done" && (
-        <CheckCircle2 className="h-3 w-3 shrink-0 text-green-600" />
-      )}
-      {status === "error" && (
-        <AlertCircle className="h-3 w-3 shrink-0" />
-      )}
+      {status === "uploading" && <Loader2 className="h-3 w-3 animate-spin shrink-0" />}
+      {status === "done" && <CheckCircle2 className="h-3 w-3 shrink-0 text-green-600" />}
+      {status === "error" && <AlertCircle className="h-3 w-3 shrink-0" />}
 
-      {/* Remove button */}
       {!disabled && (
         <button
           type="button"

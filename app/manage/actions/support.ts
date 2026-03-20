@@ -331,6 +331,38 @@ export async function UpdateTicketCategory(
 }
 
 // ============================================================================
+// GET HQ TEAM MEMBERS (for ticket assignment dropdown)
+// ============================================================================
+
+export async function GetHQTeamMembers(): Promise<{
+  data?: { id: string; name: string }[];
+  error?: string;
+}> {
+  const supabase = createServiceRoleClient();
+  // organizations.id IS the Clerk org ID (text primary key) — no lookup needed
+  const hqOrgId =
+    process.env.DEXA_POS_INTERNAL_TEAM_ID || "org_33z36QibAMZy6kc2xZNYmDl5duh";
+
+  const { data: members, error } = await supabase
+    .from("members")
+    .select("user_id, users(id, first_name, last_name)")
+    .eq("organization_id", hqOrgId);
+
+  if (error) return { error: error.message };
+
+  const result = (members || [])
+    .map((m: any) => {
+      const u = Array.isArray(m.users) ? m.users[0] : m.users;
+      if (!u) return null;
+      const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || "Unknown";
+      return { id: u.id as string, name };
+    })
+    .filter((x): x is { id: string; name: string } => x !== null);
+
+  return { data: result };
+}
+
+// ============================================================================
 // GET SUPPORT STATS (Admin)
 // ============================================================================
 

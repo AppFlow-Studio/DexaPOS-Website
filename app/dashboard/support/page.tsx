@@ -22,7 +22,6 @@ import {
   TICKET_CATEGORY_LABELS,
   TICKET_STATUS_LABELS,
   TICKET_STATUS_COLORS,
-  TICKET_PRIORITY_COLORS,
   TicketStatus,
 } from "@/types/support-ticket";
 import { formatDistanceToNow } from "date-fns";
@@ -175,27 +174,27 @@ export default function SupportPage() {
         {isLoading ? (
           Array.from({ length: 3 }).map((_, i) => <TicketCardSkeleton key={i} />)
         ) : tickets.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
-              <Inbox className="h-6 w-6 text-muted-foreground" />
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="h-16 w-16 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4">
+              <Inbox className="h-8 w-8 text-indigo-400" />
             </div>
-            <p className="font-medium text-sm">
+            <p className="font-semibold text-base">
               {activeTab === "open"
-                ? "All quiet! No open tickets."
+                ? "No open tickets"
                 : activeTab === "resolved"
-                ? "No resolved tickets yet."
-                : "No tickets yet."}
+                ? "No resolved tickets yet"
+                : "No support tickets yet"}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {activeTab === "open"
-                ? "Need help? Open a new support ticket."
-                : ""}
+            <p className="text-sm text-muted-foreground mt-1.5 max-w-xs">
+              {activeTab === "open" || activeTab === "all"
+                ? "Need help from the DEXA team? Open a support ticket and we'll get back to you."
+                : "Resolved tickets will appear here."}
             </p>
-            {activeTab === "open" && (
-              <Button asChild variant="outline" size="sm" className="mt-4">
+            {(activeTab === "open" || activeTab === "all") && (
+              <Button asChild className="mt-5">
                 <Link href="/dashboard/support/new">
-                  <Plus className="h-3.5 w-3.5 mr-1.5" />
-                  New Ticket
+                  <Plus className="h-4 w-4 mr-2" />
+                  Open your first ticket
                 </Link>
               </Button>
             )}

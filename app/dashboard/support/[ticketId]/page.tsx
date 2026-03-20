@@ -1,16 +1,15 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useMemo } from "react";
-import { useParams, useRouter } from "next/navigation";
+import React, { useState, useRef, useEffect } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
   Send,
   Loader2,
   RefreshCw,
-  User,
-  Shield,
   AlertCircle,
+  MessageSquarePlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,13 +32,40 @@ import {
 } from "@/types/support-ticket";
 import AttachmentList from "@/components/support/AttachmentList";
 import FileUploadInput from "@/components/support/FileUploadInput";
-import { format, formatDistanceToNow, isToday, isYesterday } from "date-fns";
+import { format, isToday, isYesterday, isSameDay } from "date-fns";
 
 function formatMessageTime(dateStr: string): string {
   const date = new Date(dateStr);
-  if (isToday(date)) return format(date, "h:mm a");
-  if (isYesterday(date)) return `Yesterday at ${format(date, "h:mm a")}`;
-  return format(date, "MMM d, yyyy 'at' h:mm a");
+  return format(date, "MMM d 'at' h:mm a");
+}
+
+function formatDateSeparator(dateStr: string): string {
+  const date = new Date(dateStr);
+  if (isToday(date)) return "Today";
+  if (isYesterday(date)) return "Yesterday";
+  return format(date, "MMMM d, yyyy");
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+function DateSeparator({ date }: { date: string }) {
+  return (
+    <div className="flex items-center gap-3 py-2">
+      <div className="flex-1 h-px bg-border" />
+      <span className="text-xs text-muted-foreground font-medium whitespace-nowrap">
+        {formatDateSeparator(date)}
+      </span>
+      <div className="flex-1 h-px bg-border" />
+    </div>
+  );
 }
 
 function MessageBubble({
@@ -49,30 +75,33 @@ function MessageBubble({
   message: SupportTicketMessage;
   isOwn: boolean;
 }) {
+  const initials = message.sender_name ? getInitials(message.sender_name) : "?";
+
   return (
     <div className={cn("flex gap-3", isOwn && "flex-row-reverse")}>
       {/* Avatar */}
       <div
         className={cn(
-          "h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold",
+          "h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold",
           isOwn
-            ? "bg-primary/10 text-primary"
-            : "bg-blue-100 text-blue-700"
+            ? "bg-indigo-600 text-white"
+            : "bg-indigo-100 text-indigo-700"
         )}
       >
-        {isOwn ? (
-          <User className="h-4 w-4" />
-        ) : (
-          <Shield className="h-4 w-4" />
-        )}
+        {isOwn ? initials : "D"}
       </div>
 
       <div className={cn("max-w-[75%] space-y-1", isOwn && "items-end flex flex-col")}>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-muted-foreground">
-            {isOwn ? "You" : `${message.sender_name} from DEXA`}
+        {!isOwn && (
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+            DEXA Team
           </span>
-          <span className="text-xs text-muted-foreground">
+        )}
+        <div className={cn("flex items-center gap-2", isOwn && "flex-row-reverse")}>
+          <span className="text-xs font-medium text-muted-foreground">
+            {isOwn ? "You" : message.sender_name}
+          </span>
+          <span className="text-xs text-muted-foreground/70">
             {formatMessageTime(message.created_at)}
           </span>
         </div>
@@ -80,8 +109,8 @@ function MessageBubble({
           className={cn(
             "rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
             isOwn
-              ? "bg-primary text-primary-foreground rounded-tr-sm"
-              : "bg-muted text-foreground rounded-tl-sm"
+              ? "bg-indigo-600 text-white rounded-tr-sm"
+              : "bg-gray-100 text-gray-900 rounded-tl-sm"
           )}
         >
           <p className="whitespace-pre-wrap">{message.message}</p>
@@ -126,8 +155,6 @@ export default function TicketDetailPage() {
   const handleSend = async () => {
     const trimmed = reply.trim();
     if (!trimmed || isSending) return;
-
-    // Reset state before await so the UI clears immediately
     setReply("");
     setAttachments([]);
     setUploadKey((k) => k + 1);
@@ -167,6 +194,21 @@ export default function TicketDetailPage() {
     );
   }
 
+  // Build message list with date separators
+  const messagesWithSeparators: Array<
+    | { type: "message"; data: SupportTicketMessage }
+    | { type: "separator"; date: string; key: string }
+  > = [];
+  messages.forEach((msg, i) => {
+    const prev = messages[i - 1];
+    if (i === 0 || !isSameDay(new Date(msg.created_at), new Date(prev.created_at))) {
+      messagesWithSeparators.push({ type: "separator", date: msg.created_at, key: `sep-${i}` });
+    }
+    messagesWithSeparators.push({ type: "message", data: msg });
+  });
+
+  const canSend = !!reply.trim() && !isSending;
+
   return (
     <div className="max-w-2xl mx-auto flex flex-col" style={{ height: "calc(100vh - 120px)" }}>
       {/* Header */}
@@ -180,35 +222,52 @@ export default function TicketDetailPage() {
           <span className="text-sm text-muted-foreground">Back to tickets</span>
         </div>
 
-        <div className="space-y-1.5 px-1">
+        <div className="px-1 space-y-2">
+          <h1 className="font-semibold text-xl leading-snug">{ticket.subject}</h1>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs font-mono text-muted-foreground">{ticket.ticket_number}</span>
             <Badge
-              variant="outline"
-              className={cn("text-xs", TICKET_STATUS_COLORS[ticket.status])}
+              className={cn(
+                "text-xs rounded-full border font-medium",
+                TICKET_STATUS_COLORS[ticket.status]
+              )}
             >
               {TICKET_STATUS_LABELS[ticket.status]}
             </Badge>
-            <Badge variant="secondary" className="text-xs">
+            <Badge className="text-xs rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 font-medium">
               {TICKET_CATEGORY_LABELS[ticket.category]}
             </Badge>
+            <span className="text-xs text-muted-foreground">
+              Opened {format(new Date(ticket.created_at), "MMM d, yyyy")}
+            </span>
           </div>
-          <h1 className="font-semibold text-base leading-snug">{ticket.subject}</h1>
-          <p className="text-xs text-muted-foreground">
-            Opened {format(new Date(ticket.created_at), "MMM d, yyyy")}
-          </p>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto py-4 space-y-4 min-h-0">
-        {messages.map((msg) => (
-          <MessageBubble
-            key={msg.id}
-            message={msg}
-            isOwn={msg.sender_role === "merchant"}
-          />
-        ))}
+      <div className="flex-1 overflow-y-auto py-4 space-y-4 min-h-0 px-1">
+        {messages.length === 0 && !isLoading && (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="h-12 w-12 rounded-full bg-indigo-50 flex items-center justify-center mb-3">
+              <MessageSquarePlus className="h-6 w-6 text-indigo-400" />
+            </div>
+            <p className="font-medium text-sm">No messages yet</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Send your first message below.
+            </p>
+          </div>
+        )}
+        {messagesWithSeparators.map((item) =>
+          item.type === "separator" ? (
+            <DateSeparator key={item.key} date={item.date} />
+          ) : (
+            <MessageBubble
+              key={item.data.id}
+              message={item.data}
+              isOwn={item.data.sender_role === "merchant"}
+            />
+          )
+        )}
         <div ref={messagesEndRef} />
       </div>
 
@@ -248,15 +307,18 @@ export default function TicketDetailPage() {
                 value={reply}
                 onChange={(e) => setReply(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Type your reply... (Enter to send, Shift+Enter for new line)"
+                placeholder="Type your reply…"
                 className="resize-none min-h-[80px] max-h-[160px]"
                 disabled={isSending}
               />
               <Button
                 onClick={handleSend}
-                disabled={!reply.trim() || isSending}
+                disabled={!canSend}
                 size="icon"
-                className="shrink-0 h-[80px] w-10"
+                className={cn(
+                  "shrink-0 h-[80px] w-10 bg-indigo-600 hover:bg-indigo-700 transition-opacity",
+                  !canSend && "opacity-40 cursor-not-allowed"
+                )}
               >
                 {isSending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -265,6 +327,9 @@ export default function TicketDetailPage() {
                 )}
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground text-center">
+              Press Enter to send · Shift+Enter for new line
+            </p>
           </div>
         )}
       </div>

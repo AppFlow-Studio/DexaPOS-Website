@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import {
   MessageSquare,
@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   Search,
   ChevronRight,
-  Filter,
   RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,7 +28,6 @@ import { cn } from "@/lib/utils";
 import {
   GetAllTickets,
   GetSupportStats,
-  AssignTicket,
 } from "../actions/support";
 import {
   SupportTicket,
@@ -43,6 +41,14 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { useUserInfo } from "../hooks/useUserInfo.";
 
+const STATUS_TABS = [
+  { key: "open", label: "Open" },
+  { key: "in_progress", label: "In Progress" },
+  { key: "waiting_on_merchant", label: "Waiting" },
+  { key: "resolved", label: "Resolved" },
+  { key: "all", label: "All" },
+] as const;
+
 function StatCard({
   label,
   value,
@@ -55,16 +61,18 @@ function StatCard({
   suffix?: string;
 }) {
   return (
-    <div className="rounded-lg border bg-card p-4 flex items-start gap-3">
-      <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
-        <Icon className="h-4 w-4 text-muted-foreground" />
+    <div className="rounded-xl border bg-card p-5 flex items-start gap-4 shadow-sm">
+      <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+        <Icon className="h-5 w-5 text-muted-foreground" />
       </div>
       <div>
-        <p className="text-2xl font-bold leading-none">
+        <p className="text-2xl font-bold leading-none tabular-nums">
           {value}
-          {suffix && <span className="text-sm font-normal text-muted-foreground ml-1">{suffix}</span>}
+          {suffix && (
+            <span className="text-sm font-normal text-muted-foreground ml-1">{suffix}</span>
+          )}
         </p>
-        <p className="text-xs text-muted-foreground mt-1">{label}</p>
+        <p className="text-xs text-muted-foreground mt-1.5">{label}</p>
       </div>
     </div>
   );
@@ -78,22 +86,28 @@ function TicketRow({ ticket, onOpen }: { ticket: any; onOpen: () => void }) {
     <div
       onClick={onOpen}
       className={cn(
-        "flex items-center gap-3 px-4 py-3 border-b last:border-0 cursor-pointer hover:bg-muted/40 transition-colors",
-        isUrgent && !["resolved", "closed"].includes(ticket.status) && "border-l-4 border-l-red-400"
+        "flex items-center gap-3 px-4 py-3.5 border-b last:border-0 cursor-pointer hover:bg-muted/40 transition-colors",
+        isUrgent && !["resolved", "closed"].includes(ticket.status)
+          ? "border-l-4 border-l-red-400"
+          : "border-l-4 border-l-transparent"
       )}
     >
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 mb-0.5">
+        <div className="flex items-center gap-2 mb-1">
           <span className="text-xs font-mono text-muted-foreground">{ticket.ticket_number}</span>
           <Badge
-            variant="outline"
-            className={cn("text-xs", TICKET_STATUS_COLORS[ticket.status as keyof typeof TICKET_STATUS_COLORS])}
+            className={cn(
+              "text-xs rounded-full border font-medium",
+              TICKET_STATUS_COLORS[ticket.status as keyof typeof TICKET_STATUS_COLORS]
+            )}
           >
             {TICKET_STATUS_LABELS[ticket.status as keyof typeof TICKET_STATUS_LABELS]}
           </Badge>
           <Badge
-            variant="secondary"
-            className={cn("text-xs", TICKET_PRIORITY_COLORS[ticket.priority as keyof typeof TICKET_PRIORITY_COLORS])}
+            className={cn(
+              "text-xs rounded-full border font-medium",
+              TICKET_PRIORITY_COLORS[ticket.priority as keyof typeof TICKET_PRIORITY_COLORS]
+            )}
           >
             {TICKET_PRIORITY_LABELS[ticket.priority as keyof typeof TICKET_PRIORITY_LABELS]}
           </Badge>
@@ -111,7 +125,12 @@ function TicketRow({ ticket, onOpen }: { ticket: any; onOpen: () => void }) {
         <p className="text-xs text-muted-foreground">
           {formatDistanceToNow(new Date(ticket.last_message_at), { addSuffix: true })}
         </p>
-        <p className={cn("text-xs", isUnassigned ? "text-amber-600 font-medium" : "text-muted-foreground")}>
+        <p
+          className={cn(
+            "text-xs",
+            isUnassigned ? "text-amber-600 font-semibold" : "text-muted-foreground"
+          )}
+        >
           {isUnassigned ? "Unassigned" : ticket.assigned_to_name}
         </p>
       </div>
@@ -126,11 +145,13 @@ export default function AdminSupportPage() {
   const queryClient = useQueryClient();
   const { data: userInfo } = useUserInfo();
 
-  const [filters, setFilters] = useState<TicketFilters>({ status: "open" });
+  const [activeStatus, setActiveStatus] = useState<string>("open");
+  const [filters, setFilters] = useState<Omit<TicketFilters, "status">>({});
   const [search, setSearch] = useState("");
 
   const effectiveFilters: TicketFilters = {
     ...filters,
+    status: activeStatus as any,
     search: search || undefined,
   };
 
@@ -149,7 +170,10 @@ export default function AdminSupportPage() {
   const tickets = ticketsResult?.data || [];
   const total = ticketsResult?.total || 0;
 
-  const setFilter = <K extends keyof TicketFilters>(key: K, value: TicketFilters[K]) => {
+  const setFilter = <K extends keyof Omit<TicketFilters, "status">>(
+    key: K,
+    value: TicketFilters[K]
+  ) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -169,7 +193,9 @@ export default function AdminSupportPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => queryClient.invalidateQueries({ queryKey: ["admin-support-tickets"] })}
+          onClick={() =>
+            queryClient.invalidateQueries({ queryKey: ["admin-support-tickets"] })
+          }
         >
           <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
           Refresh
@@ -202,12 +228,30 @@ export default function AdminSupportPage() {
         />
       </div>
 
-      {/* Filters */}
+      {/* Status Tabs */}
+      <div className="flex gap-0 border-b">
+        {STATUS_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveStatus(tab.key)}
+            className={cn(
+              "px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap",
+              activeStatus === tab.key
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Secondary Filters */}
       <div className="flex flex-wrap gap-2 items-center">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search tickets..."
+            placeholder="Search by merchant or ticket #..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -215,24 +259,7 @@ export default function AdminSupportPage() {
         </div>
 
         <Select
-          value={filters.status || "all"}
-          onValueChange={(v) => setFilter("status", v as any)}
-        >
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="open">Open (all active)</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="waiting_on_merchant">Waiting on Merchant</SelectItem>
-            <SelectItem value="resolved">Resolved</SelectItem>
-            <SelectItem value="closed">Closed</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={filters.category || "all"}
+          value={(filters.category as string) || "all"}
           onValueChange={(v) => setFilter("category", v as any)}
         >
           <SelectTrigger className="w-40">
@@ -247,7 +274,7 @@ export default function AdminSupportPage() {
         </Select>
 
         <Select
-          value={filters.priority || "all"}
+          value={(filters.priority as string) || "all"}
           onValueChange={(v) => setFilter("priority", v as any)}
         >
           <SelectTrigger className="w-36">
@@ -263,10 +290,10 @@ export default function AdminSupportPage() {
         </Select>
 
         <Select
-          value={filters.assigned_to || "all"}
+          value={(filters.assigned_to as string) || "all"}
           onValueChange={(v) => setFilter("assigned_to", v as any)}
         >
-          <SelectTrigger className="w-36">
+          <SelectTrigger className="w-40">
             <SelectValue placeholder="Assigned To" />
           </SelectTrigger>
           <SelectContent>
@@ -280,11 +307,11 @@ export default function AdminSupportPage() {
       </div>
 
       {/* Tickets Table */}
-      <div className="rounded-lg border bg-card overflow-hidden">
+      <div className="rounded-xl border bg-card overflow-hidden shadow-sm">
         {ticketsLoading ? (
           <div className="divide-y">
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="px-4 py-3 flex items-center gap-3">
+              <div key={i} className="px-4 py-3.5 flex items-center gap-3">
                 <div className="flex-1 space-y-2">
                   <Skeleton className="h-4 w-32" />
                   <Skeleton className="h-4 w-64" />
@@ -304,8 +331,10 @@ export default function AdminSupportPage() {
           </div>
         ) : (
           <>
-            <div className="px-4 py-2 bg-muted/30 border-b flex items-center justify-between text-xs text-muted-foreground">
-              <span>{total} ticket{total !== 1 ? "s" : ""}</span>
+            <div className="px-4 py-2.5 bg-muted/30 border-b flex items-center justify-between text-xs text-muted-foreground">
+              <span>
+                {total} ticket{total !== 1 ? "s" : ""}
+              </span>
             </div>
             <div className="divide-y divide-border/50">
               {tickets.map((ticket: any) => (
