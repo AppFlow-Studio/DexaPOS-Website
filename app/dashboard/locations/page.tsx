@@ -1,16 +1,20 @@
 'use client'
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { MapPin, Plus, Building2, Edit, Trash2, Search, Phone, Mail, Clock, Globe, Layers, CheckCircle, XCircle, Settings } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Empty } from '@/components/ui/empty'
+import {
+    MapPin, Plus, Building2, Edit, Trash2, Search,
+    Phone, Mail, Clock, Globe, Layers, CheckCircle,
+    Settings, LayoutGrid, List, XCircle,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useLocations } from '../hooks/useLocations'
 import { useUserInfo } from '../../manage/hooks/useUserInfo.'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { Empty } from '@/components/ui/empty'
 import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { DeleteLocation } from '../actions/locations'
@@ -27,6 +31,8 @@ import { US_TIMEZONES, Location } from '@/types/merchant_locations'
 import { useLocationStore } from '@/stores/location-store'
 import { LocationDetailSheet } from '@/components/dashboard/locations/LocationDetailSheet'
 
+type ViewMode = 'grid' | 'list'
+
 export default function LocationsPage() {
     const { data: userInfo } = useUserInfo()
     const clerkOrgId = userInfo?.members?.[0]?.organizations?.id
@@ -34,18 +40,15 @@ export default function LocationsPage() {
     const router = useRouter()
     const queryClient = useQueryClient()
 
-    // Check if user can create locations (only merchant.admin or merchant.owner)
     const userRole = userInfo?.members?.[0]?.role as string | undefined
     const canCreateLocation = userRole === 'merchant.admin' || userRole === 'merchant.owner'
 
-    // Zustand store
     const { selectedLocationId, setSelectedLocation } = useLocationStore()
 
     const [searchTerm, setSearchTerm] = useState('')
+    const [viewMode, setViewMode] = useState<ViewMode>('grid')
     const [deletingLocation, setDeletingLocation] = useState<Location | null>(null)
     const [isDeleting, setIsDeleting] = useState(false)
-
-    // Location detail sheet state
     const [editingLocation, setEditingLocation] = useState<Location | null>(null)
     const [isSheetOpen, setIsSheetOpen] = useState(false)
 
@@ -62,14 +65,11 @@ export default function LocationsPage() {
 
     const handleDelete = async () => {
         if (!deletingLocation) return
-
         setIsDeleting(true)
         try {
             const result = await DeleteLocation(deletingLocation.id)
             if (result.error) {
-                toast.error('Delete Failed', {
-                    description: result.error
-                })
+                toast.error('Delete Failed', { description: result.error })
                 return
             }
             toast.success('Location Deleted', {
@@ -77,31 +77,21 @@ export default function LocationsPage() {
             })
             queryClient.invalidateQueries({ queryKey: ['locations'] })
             refetch()
-
-            // If deleted location was selected, reset selection
-            if (selectedLocationId === deletingLocation.id) {
-                setSelectedLocation('all')
-            }
-        } catch (error) {
-            toast.error('Delete Failed', {
-                description: 'Unable to delete the location. Please try again.'
-            })
+            if (selectedLocationId === deletingLocation.id) setSelectedLocation('all')
+        } catch {
+            toast.error('Delete Failed', { description: 'Unable to delete the location. Please try again.' })
         } finally {
             setIsDeleting(false)
             setDeletingLocation(null)
         }
     }
 
-    const getTimezoneLabel = (tz: string) => {
-        return US_TIMEZONES.find(t => t.value === tz)?.label || tz
-    }
+    const getTimezoneLabel = (tz: string) =>
+        US_TIMEZONES.find(t => t.value === tz)?.label || tz
 
     const handleSelectLocation = (location: Location) => {
         setSelectedLocation(location.id)
-        toast.success('Location Selected', {
-            description: `Now viewing ${location.name}`,
-            icon: <MapPin className="h-4 w-4" />,
-        })
+        toast.success(`Now viewing ${location.name}`)
     }
 
     const handleEditLocation = (location: Location) => {
@@ -111,310 +101,339 @@ export default function LocationsPage() {
 
     const handleSheetClose = () => {
         setIsSheetOpen(false)
-        // Small delay before clearing editing location to prevent UI flash
         setTimeout(() => setEditingLocation(null), 200)
     }
 
-    const handleLocationUpdate = () => {
-        refetch()
-    }
+    const isSelected = (id: string) => selectedLocationId === id
 
-    const isLocationSelected = (locationId: string) => {
-        return selectedLocationId === locationId
-    }
+    // ─── Shared action buttons ────────────────────────────────────────────────
+    const ActionButtons = ({ location, compact = false }: { location: Location; compact?: boolean }) => (
+        <div className={cn("flex items-center gap-1", compact ? "opacity-0 group-hover:opacity-100 transition-opacity" : "")}>
+            <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                onClick={(e) => { e.stopPropagation(); handleEditLocation(location) }}
+            >
+                <Edit className="h-4 w-4" />
+            </Button>
+            <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/locations/${location.id}/settings`) }}
+            >
+                <Settings className="h-4 w-4" />
+            </Button>
+            {canCreateLocation && (
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    onClick={(e) => { e.stopPropagation(); setDeletingLocation(location) }}
+                >
+                    <Trash2 className="h-4 w-4" />
+                </Button>
+            )}
+        </div>
+    )
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
-            <div className="flex items-center justify-between">
+
+            {/* ── Header ─────────────────────────────────────────────────────── */}
+            <div className="flex items-start justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Locations</h2>
-                    <p className="text-muted-foreground">
-                        Manage all your business locations and franchises
+                    <h1 className="text-2xl font-semibold tracking-tight">Locations</h1>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                        Manage your business locations and storefronts
                     </p>
                 </div>
                 {canCreateLocation && (
-                    <Button onClick={() => router.push('/dashboard/locations/new')} className="gap-2">
+                    <Button onClick={() => router.push('/dashboard/locations/new')} size="sm" className="gap-2">
                         <Plus className="h-4 w-4" />
                         Add Location
                     </Button>
                 )}
             </div>
 
-            {/* Stats Overview */}
-            <div className="grid gap-4 md:grid-cols-3">
-                <Card className="transition-all hover:shadow-md">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Locations</CardTitle>
-                        <Building2 className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{locationsList.length}</div>
-                        <p className="text-xs text-muted-foreground">
-                            All locations
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card className="transition-all hover:shadow-md">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active</CardTitle>
-                        <CheckCircle className="h-4 w-4 text-green-500" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-green-600">{activeLocations}</div>
-                        <p className="text-xs text-muted-foreground">
-                            Currently active
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card className="transition-all hover:shadow-md">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Accepting Orders</CardTitle>
-                        <MapPin className="h-4 w-4 text-primary" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-primary">{acceptingOrders}</div>
-                        <p className="text-xs text-muted-foreground">
-                            Taking orders now
-                        </p>
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* Currently Viewing Indicator */}
-            {selectedLocationId !== 'all' && (
-                <Card className="border-primary/50 bg-primary/5 animate-in fade-in slide-in-from-top-2 duration-300">
-                    <CardContent className="py-3">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                    <MapPin className="h-5 w-5 text-primary" />
-                                </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Currently viewing</p>
-                                    <p className="font-semibold">
-                                        {locationsList.find(l => l.id === selectedLocationId)?.name || 'Unknown Location'}
-                                    </p>
-                                </div>
-                            </div>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                    setSelectedLocation('all')
-                                    toast.info('Viewing all locations')
-                                }}
-                            >
-                                View All Locations
-                            </Button>
+            {/* ── Stats ──────────────────────────────────────────────────────── */}
+            <div className="grid grid-cols-3 gap-4">
+                {[
+                    { label: 'Total', value: locationsList.length, icon: Building2, color: 'text-muted-foreground' },
+                    { label: 'Active', value: activeLocations, icon: CheckCircle, color: 'text-emerald-500' },
+                    { label: 'Taking Orders', value: acceptingOrders, icon: MapPin, color: 'text-primary' },
+                ].map(stat => (
+                    <div key={stat.label} className="rounded-xl border bg-card px-4 py-3 flex items-center gap-3">
+                        <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                            <stat.icon className={cn("h-4 w-4", stat.color)} />
                         </div>
-                    </CardContent>
-                </Card>
-            )}
-
-            {/* Locations List */}
-            <Card>
-                <CardHeader>
-                    <div className="flex items-center justify-between">
                         <div>
-                            <CardTitle>All Locations</CardTitle>
-                            <CardDescription>Click a location to select it, or use the edit button to manage settings</CardDescription>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <div className="relative">
-                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="Search locations..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="pl-8 w-64"
-                                />
-                            </div>
+                            <p className="text-2xl font-bold leading-none">{isLoading ? '—' : stat.value}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{stat.label}</p>
                         </div>
                     </div>
-                </CardHeader>
-                <CardContent>
-                    {isLoading ? (
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                            {[1, 2, 3].map((i) => (
-                                <Skeleton key={i} className="h-48 w-full" />
-                            ))}
-                        </div>
-                    ) : filteredLocations.length === 0 ? (
-                        <Empty
-                            icon={MapPin}
-                            title={locationsList.length === 0 ? "No locations yet" : "No locations found"}
-                            description={
-                                locationsList.length === 0
-                                    ? canCreateLocation 
-                                        ? "Get started by adding your first business location"
-                                        : "Contact your admin to add a location"
-                                    : "Try adjusting your search terms"
-                            }
-                            action={
-                                locationsList.length === 0 && canCreateLocation ? (
-                                    <Button onClick={() => router.push('/dashboard/locations/new')}>
-                                        <Plus className="h-4 w-4 mr-2" />
-                                        Add Location
-                                    </Button>
-                                ) : null
-                            }
-                        />
-                    ) : (
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                            {filteredLocations.map((location, index) => (
-                                <Card
-                                    key={location.id}
-                                    className={cn(
-                                        "group transition-all cursor-pointer animate-in fade-in slide-in-from-bottom-4 overflow-hidden",
-                                        "hover:shadow-lg hover:border-primary/30",
-                                        isLocationSelected(location.id) && "ring-2 ring-primary border-primary"
-                                    )}
-                                    style={{ animationDelay: `${index * 50}ms` }}
-                                    onClick={() => handleSelectLocation(location)}
-                                >
-                                    <CardContent className="p-0">
-                                        {/* Header */}
-                                        <div className="p-4 border-b bg-muted/30">
-                                            <div className="flex items-start justify-between gap-2">
-                                                <div className="flex items-center gap-3 min-w-0">
-                                                    <div className={cn(
-                                                        "h-10 w-10 rounded-lg flex items-center justify-center shrink-0",
-                                                        location.is_active ? "bg-primary/10" : "bg-muted"
-                                                    )}>
-                                                        <MapPin className={cn(
-                                                            "h-5 w-5",
-                                                            location.is_active ? "text-primary" : "text-muted-foreground"
-                                                        )} />
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <h3 className="font-semibold truncate">{location.name}</h3>
-                                                        {location.code && (
-                                                            <p className="text-xs text-muted-foreground font-mono">
-                                                                {location.code}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-8 w-8"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            handleEditLocation(location)
-                                                        }}
-                                                    >
-                                                        <Edit className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-8 w-8"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            router.push(`/dashboard/locations/${location.id}/settings`)
-                                                        }}
-                                                    >
-                                                        <Settings className="h-4 w-4" />
-                                                    </Button>
-                                                    {canCreateLocation && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-8 w-8 text-destructive hover:text-destructive"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation()
-                                                                setDeletingLocation(location)
-                                                            }}
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
+                ))}
+            </div>
 
-                                        {/* Content */}
-                                        <div className="p-4 space-y-3">
-                                            {/* Address */}
-                                            <div className="flex items-start gap-2">
-                                                <Building2 className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                                                <div className="text-sm">
-                                                    <p>{location.address_line1}</p>
-                                                    {location.address_line2 && <p>{location.address_line2}</p>}
-                                                    <p className="text-muted-foreground">
-                                                        {location.city}, {location.state} {location.postal_code}
-                                                    </p>
-                                                </div>
-                                            </div>
+            {/* ── Active location banner ──────────────────────────────────────── */}
+            {selectedLocationId !== 'all' && (
+                <div className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="flex items-center gap-2 text-sm">
+                        <CheckCircle className="h-4 w-4 text-primary" />
+                        <span className="text-muted-foreground">Viewing</span>
+                        <span className="font-medium text-foreground">
+                            {locationsList.find(l => l.id === selectedLocationId)?.name}
+                        </span>
+                    </div>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                        onClick={() => { setSelectedLocation('all'); toast.info('Viewing all locations') }}
+                    >
+                        <XCircle className="h-3.5 w-3.5 mr-1" />
+                        Clear
+                    </Button>
+                </div>
+            )}
 
-                                            {/* Contact */}
-                                            <div className="flex flex-wrap gap-3 text-sm">
-                                                {location.phone && (
-                                                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                                                        <Phone className="h-3.5 w-3.5" />
-                                                        <span>{location.phone}</span>
-                                                    </div>
-                                                )}
-                                                {location.email && (
-                                                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                                                        <Mail className="h-3.5 w-3.5" />
-                                                        <span className="truncate max-w-[150px]">{location.email}</span>
-                                                    </div>
-                                                )}
-                                            </div>
+            {/* ── Toolbar ────────────────────────────────────────────────────── */}
+            <div className="flex items-center gap-3">
+                <div className="relative flex-1 max-w-sm">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <Input
+                        placeholder="Search locations..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-9"
+                    />
+                </div>
+                <div className="flex items-center rounded-lg border bg-muted/40 p-0.5 gap-0.5">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className={cn(
+                            "h-8 w-8 p-0 rounded-md",
+                            viewMode === 'grid' && "bg-background shadow-sm text-foreground"
+                        )}
+                        onClick={() => setViewMode('grid')}
+                    >
+                        <LayoutGrid className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className={cn(
+                            "h-8 w-8 p-0 rounded-md",
+                            viewMode === 'list' && "bg-background shadow-sm text-foreground"
+                        )}
+                        onClick={() => setViewMode('list')}
+                    >
+                        <List className="h-4 w-4" />
+                    </Button>
+                </div>
+                <p className="text-sm text-muted-foreground whitespace-nowrap">
+                    {isLoading ? '' : `${filteredLocations.length} location${filteredLocations.length !== 1 ? 's' : ''}`}
+                </p>
+            </div>
 
-                                            {/* Timezone */}
-                                            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                                                <Clock className="h-3.5 w-3.5" />
-                                                <span>{getTimezoneLabel(location.timezone)}</span>
-                                            </div>
+            {/* ── Content ────────────────────────────────────────────────────── */}
+            {isLoading ? (
+                viewMode === 'grid' ? (
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {[1, 2, 3].map(i => <Skeleton key={i} className="h-52 w-full rounded-xl" />)}
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
+                    </div>
+                )
+            ) : filteredLocations.length === 0 ? (
+                <div className="rounded-xl border bg-card">
+                    <Empty
+                        icon={MapPin}
+                        title={locationsList.length === 0 ? "No locations yet" : "No locations found"}
+                        description={
+                            locationsList.length === 0
+                                ? canCreateLocation
+                                    ? "Get started by adding your first business location"
+                                    : "Contact your admin to add a location"
+                                : "Try adjusting your search terms"
+                        }
+                        action={
+                            locationsList.length === 0 && canCreateLocation ? (
+                                <Button onClick={() => router.push('/dashboard/locations/new')}>
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Add Location
+                                </Button>
+                            ) : null
+                        }
+                    />
+                </div>
+            ) : viewMode === 'grid' ? (
 
-                                            {/* Status Badges */}
-                                            <div className="flex flex-wrap gap-2 pt-2">
-                                                <Badge variant={location.is_active ? "default" : "secondary"}>
-                                                    {location.is_active ? 'Active' : 'Inactive'}
-                                                </Badge>
-                                                <Badge variant={location.is_accepting_orders ? "default" : "outline"} className={
-                                                    location.is_accepting_orders ? "bg-green-600" : ""
-                                                }>
-                                                    {location.is_accepting_orders ? 'Accepting Orders' : 'Not Accepting'}
-                                                </Badge>
-                                                <Badge variant="outline" className="gap-1">
-                                                    {location.uses_global_menu ? (
-                                                        <>
-                                                            <Globe className="h-3 w-3" />
-                                                            Global Menu
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Layers className="h-3 w-3" />
-                                                            Custom Menu
-                                                        </>
-                                                    )}
-                                                </Badge>
-                                            </div>
-                                        </div>
-
-                                        {/* Selected Indicator */}
-                                        {isLocationSelected(location.id) && (
-                                            <div className="px-4 py-2 bg-primary/10 border-t border-primary/20">
-                                                <p className="text-xs text-primary font-medium flex items-center gap-1">
-                                                    <CheckCircle className="h-3.5 w-3.5" />
-                                                    Currently viewing this location
-                                                </p>
-                                            </div>
+                /* ── Grid view ─────────────────────────────────────────────── */
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {filteredLocations.map((location, index) => (
+                        <div
+                            key={location.id}
+                            className={cn(
+                                "group relative rounded-xl border bg-card p-5 cursor-pointer",
+                                "transition-all duration-150 hover:shadow-md hover:border-primary/30",
+                                "animate-in fade-in slide-in-from-bottom-3",
+                                isSelected(location.id) && "border-primary ring-1 ring-primary bg-primary/[0.02]"
+                            )}
+                            style={{ animationDelay: `${index * 40}ms` }}
+                            onClick={() => handleSelectLocation(location)}
+                        >
+                            {/* Top row */}
+                            <div className="flex items-start justify-between gap-2 mb-4">
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <div className={cn(
+                                        "h-10 w-10 rounded-lg flex items-center justify-center shrink-0",
+                                        location.is_active ? "bg-primary/10" : "bg-muted"
+                                    )}>
+                                        <MapPin className={cn("h-5 w-5", location.is_active ? "text-primary" : "text-muted-foreground")} />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="font-semibold leading-tight truncate">{location.name}</p>
+                                        {location.code && (
+                                            <p className="text-xs text-muted-foreground font-mono mt-0.5">{location.code}</p>
                                         )}
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+                                    </div>
+                                </div>
+                                <ActionButtons location={location} compact />
+                            </div>
 
-            {/* Delete Confirmation Dialog */}
+                            {/* Address */}
+                            <div className="flex items-start gap-2 mb-3">
+                                <Building2 className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                                <div className="text-sm text-muted-foreground leading-snug">
+                                    <p>{location.address_line1}</p>
+                                    <p>{location.city}, {location.state} {location.postal_code}</p>
+                                </div>
+                            </div>
+
+                            {/* Contact row */}
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mb-4">
+                                {location.phone && (
+                                    <span className="flex items-center gap-1">
+                                        <Phone className="h-3 w-3" />{location.phone}
+                                    </span>
+                                )}
+                                {location.timezone && (
+                                    <span className="flex items-center gap-1">
+                                        <Clock className="h-3 w-3" />{getTimezoneLabel(location.timezone)}
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Badges */}
+                            <div className="flex flex-wrap gap-1.5">
+                                <Badge
+                                    variant={location.is_active ? "default" : "secondary"}
+                                    className="text-xs px-2 py-0"
+                                >
+                                    {location.is_active ? 'Active' : 'Inactive'}
+                                </Badge>
+                                {location.is_accepting_orders && (
+                                    <Badge className="text-xs px-2 py-0 bg-emerald-600 hover:bg-emerald-600">
+                                        Taking Orders
+                                    </Badge>
+                                )}
+                                <Badge variant="outline" className="text-xs px-2 py-0 gap-1">
+                                    {location.uses_global_menu
+                                        ? <><Globe className="h-2.5 w-2.5" />Global Menu</>
+                                        : <><Layers className="h-2.5 w-2.5" />Custom Menu</>
+                                    }
+                                </Badge>
+                            </div>
+
+                            {/* Selected indicator */}
+                            {isSelected(location.id) && (
+                                <div className="absolute top-2.5 right-2.5">
+                                    <div className="h-2 w-2 rounded-full bg-primary" />
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+
+            ) : (
+
+                /* ── List view ─────────────────────────────────────────────── */
+                <div className="rounded-xl border bg-card divide-y overflow-hidden">
+                    {filteredLocations.map((location, index) => (
+                        <div
+                            key={location.id}
+                            className={cn(
+                                "group flex items-center gap-4 px-5 py-4 cursor-pointer",
+                                "transition-colors hover:bg-muted/40",
+                                "animate-in fade-in",
+                                isSelected(location.id) && "bg-primary/[0.03] border-l-2 border-l-primary"
+                            )}
+                            style={{ animationDelay: `${index * 30}ms` }}
+                            onClick={() => handleSelectLocation(location)}
+                        >
+                            {/* Icon */}
+                            <div className={cn(
+                                "h-10 w-10 rounded-lg flex items-center justify-center shrink-0",
+                                location.is_active ? "bg-primary/10" : "bg-muted"
+                            )}>
+                                <MapPin className={cn("h-5 w-5", location.is_active ? "text-primary" : "text-muted-foreground")} />
+                            </div>
+
+                            {/* Name + address */}
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                    <p className="font-medium leading-tight truncate">{location.name}</p>
+                                    {location.code && (
+                                        <span className="text-xs text-muted-foreground font-mono hidden sm:block">{location.code}</span>
+                                    )}
+                                </div>
+                                <p className="text-sm text-muted-foreground truncate mt-0.5">
+                                    {location.address_line1}, {location.city}, {location.state}
+                                </p>
+                            </div>
+
+                            {/* Contact */}
+                            <div className="hidden md:flex flex-col gap-1 text-xs text-muted-foreground min-w-0 w-36">
+                                {location.phone && (
+                                    <span className="flex items-center gap-1.5 truncate">
+                                        <Phone className="h-3 w-3 shrink-0" />{location.phone}
+                                    </span>
+                                )}
+                                {location.email && (
+                                    <span className="flex items-center gap-1.5 truncate">
+                                        <Mail className="h-3 w-3 shrink-0" />{location.email}
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Badges */}
+                            <div className="hidden lg:flex items-center gap-1.5 shrink-0">
+                                <Badge
+                                    variant={location.is_active ? "default" : "secondary"}
+                                    className="text-xs px-2 py-0"
+                                >
+                                    {location.is_active ? 'Active' : 'Inactive'}
+                                </Badge>
+                                {location.is_accepting_orders && (
+                                    <Badge className="text-xs px-2 py-0 bg-emerald-600 hover:bg-emerald-600">
+                                        Taking Orders
+                                    </Badge>
+                                )}
+                            </div>
+
+                            {/* Actions */}
+                            <ActionButtons location={location} compact />
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* ── Delete dialog ───────────────────────────────────────────────── */}
             <Dialog open={!!deletingLocation} onOpenChange={(open) => !open && setDeletingLocation(null)}>
                 <DialogContent>
                     <DialogHeader>
@@ -440,22 +459,19 @@ export default function LocationsPage() {
                                     Deleting...
                                 </>
                             ) : (
-                                <>
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    Delete Location
-                                </>
+                                <><Trash2 className="h-4 w-4 mr-2" />Delete Location</>
                             )}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
 
-            {/* Location Detail Sheet */}
+            {/* ── Edit sheet ──────────────────────────────────────────────────── */}
             <LocationDetailSheet
                 location={editingLocation}
                 open={isSheetOpen}
                 onOpenChange={handleSheetClose}
-                onUpdate={handleLocationUpdate}
+                onUpdate={refetch}
             />
         </div>
     )

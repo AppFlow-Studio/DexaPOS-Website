@@ -2,15 +2,63 @@
 
 import React, { useState, useMemo } from "react";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Card, CardContent } from "@/components/ui/card";
+  Activity,
+  AlertCircle,
+  AlertTriangle,
+  BookOpen,
+  Building2,
+  CalendarDays,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  CreditCard,
+  DollarSign,
+  FileText,
+  Flame,
+  FolderOpen,
+  GitBranch,
+  LayoutGrid,
+  ListPlus,
+  LogOut,
+  MapPin,
+  Monitor,
+  Package,
+  Percent,
+  Receipt,
+  RefreshCw,
+  Search,
+  Settings,
+  Shield,
+  ShoppingBag,
+  Square,
+  StickyNote,
+  Tablet,
+  Tag,
+  User,
+  UserCircle,
+  Users,
+  Utensils,
+  X,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { useAuditLogs } from "../hooks/useAuditLogs";
+import { useLocationStore } from "@/stores/location-store";
+import { subDays, startOfDay, endOfDay, format } from "date-fns";
+import { cn } from "@/lib/utils";
+import {
+  buildAuditSentence,
+  formatRelativeTime,
+  formatChangesForDisplay,
+  SEVERITY_BORDER_CLASS,
+  SEVERITY_ICON_BG,
+  SEVERITY_ICON_COLOR,
+  SEVERITY_CARD_BG,
+} from "@/lib/audit/sentence-templates";
+import type { AuditLogWithLocation } from "@/types/audit-log";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -18,831 +66,749 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import {
-  Search,
-  Filter,
-  Calendar as CalendarIcon,
-  User,
-  MapPin,
-  RefreshCw,
-  GitCompare,
-  ChevronDown,
-  ChevronUp,
-  Info,
-  AlertTriangle,
-  AlertCircle,
-  Clock,
-  Activity,
-  Shield,
-  FileText,
-  X,
-} from "lucide-react";
-import { useAuditLogs } from "../hooks/useAuditLogs";
-import { useLocationStore, useIsAllLocations } from "@/stores/location-store";
-import { format, subDays, startOfDay, endOfDay } from "date-fns";
-import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
-import { AuditCategory, AuditSeverity } from "@/types/audit-log";
 import { DateRange } from "react-day-picker";
 
-const SEVERITY_COLORS: Record<AuditSeverity, string> = {
-  info: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  warning:
-    "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-  critical: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+// ─── Icon Registry ────────────────────────────────────────────────────────────
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  Activity,
+  BookOpen,
+  Building2,
+  CalendarDays,
+  Clock,
+  CreditCard,
+  DollarSign,
+  FileText,
+  Flame,
+  FolderOpen,
+  GitBranch,
+  LayoutGrid,
+  ListPlus,
+  LogOut,
+  MapPin,
+  Monitor,
+  Package,
+  Percent,
+  Receipt,
+  Settings,
+  Shield,
+  ShoppingBag,
+  Square,
+  StickyNote,
+  Tablet,
+  Tag,
+  User,
+  UserCircle,
+  Users,
+  Utensils,
 };
 
-const SEVERITY_ICONS = {
-  info: <Info className="h-3 w-3" />,
-  warning: <AlertTriangle className="h-3 w-3" />,
-  critical: <AlertCircle className="h-3 w-3" />,
-};
-
-const formatKey = (key: string) => {
-  return key
-    .replace(/([A-Z])/g, " $1") // Add space before capital letters
-    .replace(/^./, (str) => str.toUpperCase()) // Capitalize first letter
-    .replace(/_/g, " ") // Replace underscores with spaces
-    .trim();
-};
-
-const RenderObject = ({
-  data,
+function DynamicIcon({
+  name,
   className,
 }: {
-  data: any;
+  name: string;
   className?: string;
-}) => {
-  if (!data || typeof data !== "object") return null;
+}) {
+  const Icon = ICON_MAP[name] ?? Activity;
+  return <Icon className={className} />;
+}
+
+// ─── Category Tabs ────────────────────────────────────────────────────────────
+
+const CATEGORY_TABS = [
+  { id: "all", label: "Everything", resourceTypes: null as string[] | null },
+  {
+    id: "menu",
+    label: "Menu Changes",
+    resourceTypes: ["menu", "menu_item", "category", "modifier_group", "discount"],
+  },
+  {
+    id: "staff",
+    label: "Staff & Access",
+    resourceTypes: ["staff_profile", "staff_member", "location_member"],
+  },
+  {
+    id: "orders",
+    label: "Orders & Payments",
+    resourceTypes: ["order", "order_item", "payment"],
+  },
+  {
+    id: "kitchen",
+    label: "Kitchen Setup",
+    resourceTypes: ["kds_display", "prep_station", "kds_routing_rule"],
+  },
+  {
+    id: "tables",
+    label: "Tables & Floor",
+    resourceTypes: ["floor_plan", "floor_plan_object", "table_sessions"],
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    resourceTypes: ["location", "station", "payment_terminal", "tax_rate"],
+  },
+  {
+    id: "cash",
+    label: "Cash & Sessions",
+    resourceTypes: ["cash_drawer", "station_session", "role"],
+  },
+] as const;
+
+type CategoryTabId = (typeof CATEGORY_TABS)[number]["id"];
+
+// ─── Date Presets ─────────────────────────────────────────────────────────────
+
+const DATE_PRESETS = [
+  { label: "Today", days: 0 },
+  { label: "7 days", days: 7 },
+  { label: "30 days", days: 30 },
+] as const;
+
+function getPresetRange(days: number): { from: Date; to: Date } {
+  const to = new Date();
+  const from = days === 0 ? startOfDay(to) : subDays(to, days);
+  return { from, to };
+}
+
+// ─── Category Label ───────────────────────────────────────────────────────────
+
+function getCategoryLabel(log: AuditLogWithLocation): string {
+  const tab = CATEGORY_TABS.find(
+    (t) => t.resourceTypes && log.resource_type && (t.resourceTypes as readonly string[]).includes(log.resource_type)
+  );
+  if (tab) return tab.label;
+
+  const catMap: Record<string, string> = {
+    menu: "Menu Changes",
+    staff: "Staff & Access",
+    user_management: "Staff & Access",
+    order: "Orders & Payments",
+    inventory: "Inventory",
+    settings: "Settings",
+    device: "Kitchen Setup",
+    authentication: "Authentication",
+    purchase_order: "Purchase Orders",
+    expense: "Expenses",
+    merchant: "Settings",
+    notes: "Notes",
+  };
+  return catMap[log.action_category] ?? log.action_category;
+}
+
+// ─── Timeline Card ────────────────────────────────────────────────────────────
+
+function AuditCard({
+  log,
+  onOpen,
+}: {
+  log: AuditLogWithLocation;
+  onOpen: (log: AuditLogWithLocation) => void;
+}) {
+  const { sentence, highlight, iconName } = buildAuditSentence(log);
+  const severity = log.severity ?? "info";
+  const borderClass = SEVERITY_BORDER_CLASS[severity] ?? SEVERITY_BORDER_CLASS.info;
+  const cardBg = SEVERITY_CARD_BG[severity] ?? "";
+  const iconBg = SEVERITY_ICON_BG[severity] ?? SEVERITY_ICON_BG.info;
+  const iconColor = SEVERITY_ICON_COLOR[severity] ?? SEVERITY_ICON_COLOR.info;
+  const categoryLabel = getCategoryLabel(log);
+  const relativeTime = formatRelativeTime(log.created_at);
 
   return (
-    <div
+    <button
+      type="button"
+      onClick={() => onOpen(log)}
       className={cn(
-        "grid gap-4 grid-cols-1",
-        Object.keys(data).length > 1 && "sm:grid-cols-2",
-        className,
+        "w-full text-left group rounded-xl border border-l-4 p-4 transition-all",
+        "hover:shadow-md hover:border-border/80",
+        "bg-card",
+        borderClass,
+        cardBg,
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       )}
     >
-      {Object.entries(data).map(([key, value]) => {
-        if (value === null || value === undefined) return null;
-        return (
-          <div key={key} className="flex flex-col gap-1.5 min-w-0">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
-              {formatKey(key)}
-            </span>
-            <div className="text-sm font-mono bg-muted/30 px-3 py-2 rounded-md break-all border border-muted/20 text-foreground/90">
-              {typeof value === "object" ? (
-                <div className="pl-2 border-l-2 border-muted mt-1">
-                  <RenderObject data={value} className="grid-cols-1 gap-y-2" />
-                </div>
-              ) : (
-                String(value)
+      <div className="flex items-start gap-3">
+        {/* Icon */}
+        <div
+          className={cn(
+            "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+            iconBg
+          )}
+        >
+          <DynamicIcon
+            name={iconName}
+            className={cn("h-4 w-4", iconColor)}
+          />
+        </div>
+
+        {/* Content */}
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium leading-snug text-foreground">
+            {sentence}
+          </p>
+
+          {highlight && (
+            <p className="mt-1 text-sm text-muted-foreground">{highlight}</p>
+          )}
+
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            <Clock className="h-3 w-3 shrink-0" />
+            <span>{relativeTime}</span>
+            <span>·</span>
+            <span>{categoryLabel}</span>
+            {severity !== "info" && (
+              <>
+                <span>·</span>
+                <Badge
+                  variant="secondary"
+                  className={cn(
+                    "h-4 px-1.5 text-[10px] border-none",
+                    severity === "warning" &&
+                      "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+                    severity === "critical" &&
+                      "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+                    severity === "error" &&
+                      "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+                  )}
+                >
+                  {severity === "critical" ? (
+                    <AlertCircle className="mr-0.5 h-2.5 w-2.5 inline" />
+                  ) : (
+                    <AlertTriangle className="mr-0.5 h-2.5 w-2.5 inline" />
+                  )}
+                  {severity}
+                </Badge>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Expand hint */}
+        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 mt-0.5" />
+      </div>
+    </button>
+  );
+}
+
+// ─── Detail Sheet ─────────────────────────────────────────────────────────────
+
+function AuditDetailSheet({
+  log,
+  open,
+  onClose,
+}: {
+  log: AuditLogWithLocation | null;
+  open: boolean;
+  onClose: () => void;
+}) {
+  if (!log) return null;
+
+  const { sentence, highlight, iconName } = buildAuditSentence(log);
+  const severity = log.severity ?? "info";
+  const iconBg = SEVERITY_ICON_BG[severity] ?? SEVERITY_ICON_BG.info;
+  const iconColor = SEVERITY_ICON_COLOR[severity] ?? SEVERITY_ICON_COLOR.info;
+  const changes = formatChangesForDisplay(log.changes);
+  const categoryLabel = getCategoryLabel(log);
+
+  return (
+    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetHeader className="pb-4">
+          <div className="flex items-start gap-3">
+            <div
+              className={cn(
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
+                iconBg
+              )}
+            >
+              <DynamicIcon name={iconName} className={cn("h-4 w-4", iconColor)} />
+            </div>
+            <div className="min-w-0">
+              <SheetTitle className="text-base font-semibold leading-snug text-left">
+                {sentence}
+              </SheetTitle>
+              {highlight && (
+                <p className="mt-1 text-sm text-muted-foreground">{highlight}</p>
               )}
             </div>
           </div>
-        );
-      })}
+        </SheetHeader>
+
+        {/* Meta info */}
+        <div className="space-y-4 pt-2">
+          <div className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/30 p-4 text-sm">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
+                Who
+              </p>
+              <p className="font-medium">{log.actor_name ?? "System"}</p>
+              {log.actor_role && (
+                <p className="text-xs text-muted-foreground capitalize">
+                  {log.actor_role}
+                </p>
+              )}
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
+                When
+              </p>
+              <p className="font-medium">
+                {format(new Date(log.created_at), "MMM d, yyyy")}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {format(new Date(log.created_at), "h:mm:ss a")}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
+                Category
+              </p>
+              <p className="font-medium">{categoryLabel}</p>
+            </div>
+            {log.location && (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
+                  Location
+                </p>
+                <p className="font-medium">{log.location.name}</p>
+              </div>
+            )}
+          </div>
+
+          {/* What changed */}
+          {changes.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                What changed
+              </p>
+              <div className="rounded-lg border overflow-hidden divide-y">
+                {changes.map((row, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-2.5 text-sm bg-background">
+                    {/* Field name spans top on mobile */}
+                    <div className="col-span-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">
+                      {row.field}
+                    </div>
+                    {/* From */}
+                    <div
+                      className={cn(
+                        "rounded px-2 py-1 text-xs font-mono break-all",
+                        row.from !== null
+                          ? "bg-red-50 text-red-800 dark:bg-red-950/20 dark:text-red-300"
+                          : "text-muted-foreground italic"
+                      )}
+                    >
+                      {row.from ?? "(new)"}
+                    </div>
+                    {/* Arrow */}
+                    <div className="flex justify-center text-muted-foreground text-xs">
+                      →
+                    </div>
+                    {/* To */}
+                    <div
+                      className={cn(
+                        "rounded px-2 py-1 text-xs font-mono break-all",
+                        row.to !== null
+                          ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-300"
+                          : "text-muted-foreground italic"
+                      )}
+                    >
+                      {row.to ?? "(removed)"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {changes.length === 0 && (
+            <div className="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">
+              No detailed change data recorded for this action.
+            </div>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ─── Skeleton Loader ──────────────────────────────────────────────────────────
+
+function TimelineSkeleton() {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="rounded-xl border border-l-4 border-l-transparent p-4 bg-card">
+          <div className="flex items-start gap-3">
+            <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-3.5 w-1/2" />
+              <Skeleton className="h-3 w-1/3" />
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
-};
+}
 
-const CATEGORY_ICONS: Record<string, React.ReactNode> = {
-  menu: <FileText className="h-3.5 w-3.5" />,
-  staff: <User className="h-3.5 w-3.5" />,
-  order: <Activity className="h-3.5 w-3.5" />,
-  inventory: <FileText className="h-3.5 w-3.5" />,
-  settings: <Shield className="h-3.5 w-3.5" />,
-  authentication: <Shield className="h-3.5 w-3.5" />,
-  purchase_order: <FileText className="h-3.5 w-3.5" />,
-  expense: <FileText className="h-3.5 w-3.5" />,
-};
-
-const CATEGORY_COLORS: Record<string, string> = {
-  menu: "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300",
-  staff:
-    "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
-  order:
-    "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
-  inventory:
-    "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
-  settings: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
-  authentication:
-    "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
-  purchase_order:
-    "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-  expense:
-    "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
-};
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AuditLogsPage() {
-  const { selectedLocationId, locations } = useLocationStore();
-  const isAllLocations = useIsAllLocations();
+  const { locations } = useLocationStore();
 
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 7),
-    to: new Date(),
-  });
+  // Filters
+  const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState<CategoryTabId>("all");
+  const [actorUserId, setActorUserId] = useState("");
+  const [datePreset, setDatePreset] = useState<number>(7);
+  const [customRange, setCustomRange] = useState<DateRange | undefined>();
+  const [showCustomPicker, setShowCustomPicker] = useState(false);
+  const [locationId, setLocationId] = useState("all");
 
-  const [filters, setFilters] = useState({
-    search: "",
-    location_id: selectedLocationId,
-    action_category: "" as AuditCategory | "",
-    severity: "" as AuditSeverity | "",
-    actor_user_id: "",
-  });
-
+  // Pagination
   const [page, setPage] = useState(1);
-  const pageSize = 50;
-  const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const pageSize = 30;
 
-  const { data, isLoading, refetch, isFetching } = useAuditLogs(
-    {
-      search: filters.search,
-      location_id: filters.location_id,
-      action_category: filters.action_category || undefined,
-      severity: filters.severity || undefined,
-      date_from: dateRange?.from
-        ? startOfDay(dateRange.from).toISOString()
-        : undefined,
-      date_to: dateRange?.to ? endOfDay(dateRange.to).toISOString() : undefined,
-    },
-    pageSize,
-    (page - 1) * pageSize,
+  // Detail sheet
+  const [selectedLog, setSelectedLog] = useState<AuditLogWithLocation | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  // Compute date range
+  const dateRange = useMemo(() => {
+    if (customRange?.from) {
+      return {
+        from: startOfDay(customRange.from).toISOString(),
+        to: endOfDay(customRange.to ?? customRange.from).toISOString(),
+      };
+    }
+    const { from, to } = getPresetRange(datePreset);
+    return {
+      from: startOfDay(from).toISOString(),
+      to: endOfDay(to).toISOString(),
+    };
+  }, [datePreset, customRange]);
+
+  // Active category tab → resource_types
+  const activeTabConfig = CATEGORY_TABS.find((t) => t.id === activeTab)!;
+  const resourceTypes = activeTabConfig.resourceTypes as string[] | null;
+
+  // Build filters
+  const filters = useMemo(
+    () => ({
+      search: search.trim() || undefined,
+      location_id: locationId,
+      resource_types: resourceTypes ?? undefined,
+      actor_user_id: actorUserId || undefined,
+      date_from: dateRange.from,
+      date_to: dateRange.to,
+    }),
+    [search, locationId, resourceTypes, actorUserId, dateRange]
   );
 
-  const handleFilterChange = (key: string, value: string) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
-    setPage(1); // Reset to first page on filter change
-  };
+  const { data, isLoading, isFetching, refetch } = useAuditLogs(
+    filters,
+    pageSize,
+    (page - 1) * pageSize
+  );
 
-  const clearFilters = () => {
-    setFilters({
-      search: "",
-      location_id: "all",
-      action_category: "",
-      severity: "",
-      actor_user_id: "",
-    });
-    setDateRange({
-      from: subDays(new Date(), 7),
-      to: new Date(),
-    });
-    setPage(1);
-  };
+  const logs = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  const logs = data?.data || [];
-  const total = data?.total || 0;
-
-  // Get unique actors from logs for the actor filter
+  // Build unique actor list from loaded logs for the staff dropdown
   const uniqueActors = useMemo(() => {
-    const actors = new Map<string, string>();
+    const map = new Map<string, string>();
     logs.forEach((log) => {
       if (log.actor_user_id && log.actor_name) {
-        actors.set(log.actor_user_id, log.actor_name);
+        map.set(log.actor_user_id, log.actor_name);
       }
     });
-    return Array.from(actors.entries()).map(([id, name]) => ({ id, name }));
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
   }, [logs]);
 
-  const hasActiveFilters =
-    filters.search ||
-    filters.action_category ||
-    filters.severity ||
-    filters.actor_user_id;
+  const hasActiveFilters = !!(search || actorUserId || customRange);
+
+  function handlePreset(days: number) {
+    setDatePreset(days);
+    setCustomRange(undefined);
+    setPage(1);
+  }
+
+  function handleTabChange(id: CategoryTabId) {
+    setActiveTab(id);
+    setPage(1);
+  }
+
+  function openDetail(log: AuditLogWithLocation) {
+    setSelectedLog(log);
+    setSheetOpen(true);
+  }
+
+  function clearFilters() {
+    setSearch("");
+    setActorUserId("");
+    setCustomRange(undefined);
+    setDatePreset(7);
+    setPage(1);
+  }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Premium Header */}
-      {/* Standard Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2">
+    <div className="space-y-5 animate-in fade-in duration-500">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Audit Logs</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Track all administrative actions across your organization
+          <h1 className="text-2xl font-bold tracking-tight">Activity Log</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            A plain-English record of every change made in your shop
           </p>
         </div>
-
-        <div className="flex items-center gap-3">
-          <Badge
-            variant="outline"
-            className="h-9 px-3 text-sm font-normal gap-2"
-          >
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="h-8 px-3 gap-1.5 font-normal">
             <Activity className="h-3.5 w-3.5 text-emerald-500" />
-            {total} logs
+            {total.toLocaleString()} entries
           </Badge>
           <Button
             variant="outline"
             size="sm"
+            className="h-8"
             onClick={() => refetch()}
             disabled={isFetching}
-            className="h-9"
           >
             <RefreshCw
-              className={cn("h-4 w-4 mr-2", isFetching && "animate-spin")}
+              className={cn("h-3.5 w-3.5 mr-1.5", isFetching && "animate-spin")}
             />
             Refresh
           </Button>
         </div>
       </div>
 
-      {/* Filters Card */}
-      <Card className="border-none shadow-lg bg-card/80 backdrop-blur-sm">
-        <CardContent className="p-6">
-          <div className="flex flex-col gap-4">
-            {/* Top row - Search and Date Range */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search actions, actors, resources..."
-                  className="pl-10 h-11 bg-background/50"
-                  value={filters.search}
-                  onChange={(e) => handleFilterChange("search", e.target.value)}
-                />
-              </div>
-
-              {/* Date Range Picker */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "h-11 justify-start text-left font-normal bg-background/50",
-                      !dateRange && "text-muted-foreground",
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
-                    {dateRange?.from ? (
-                      dateRange.to ? (
-                        <>
-                          {format(dateRange.from, "MMM d, yyyy")} -{" "}
-                          {format(dateRange.to, "MMM d, yyyy")}
-                        </>
-                      ) : (
-                        format(dateRange.from, "MMM d, yyyy")
-                      )
-                    ) : (
-                      <span>Select date range</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    initialFocus
-                    mode="range"
-                    defaultMonth={dateRange?.from}
-                    selected={dateRange}
-                    onSelect={setDateRange}
-                    numberOfMonths={2}
-                  />
-                  <div className="flex gap-2 p-3 border-t">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() =>
-                        setDateRange({
-                          from: subDays(new Date(), 7),
-                          to: new Date(),
-                        })
-                      }
-                    >
-                      Last 7 days
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() =>
-                        setDateRange({
-                          from: subDays(new Date(), 30),
-                          to: new Date(),
-                        })
-                      }
-                    >
-                      Last 30 days
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Bottom row - Filters */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {/* Location Filter */}
-              <Select
-                value={filters.location_id}
-                onValueChange={(val) => handleFilterChange("location_id", val)}
-              >
-                <SelectTrigger className="h-11 bg-background/50">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <SelectValue placeholder="All Locations" />
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Locations</SelectItem>
-                  {locations.map((loc) => (
-                    <SelectItem key={loc.id} value={loc.id}>
-                      {loc.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Category Filter */}
-              <Select
-                value={filters.action_category}
-                onValueChange={(val) =>
-                  handleFilterChange(
-                    "action_category",
-                    val === "all_categories" ? "" : val,
-                  )
-                }
-              >
-                <SelectTrigger className="h-11 bg-background/50">
-                  <div className="flex items-center gap-2">
-                    <Filter className="h-4 w-4 text-muted-foreground" />
-                    <SelectValue placeholder="All Categories" />
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all_categories">All Categories</SelectItem>
-                  <SelectItem value="menu">Menu & Items</SelectItem>
-                  <SelectItem value="staff">Staff & Access</SelectItem>
-                  <SelectItem value="order">Orders & Payments</SelectItem>
-                  <SelectItem value="inventory">Inventory</SelectItem>
-                  <SelectItem value="settings">Settings</SelectItem>
-                  <SelectItem value="authentication">Authentication</SelectItem>
-                  <SelectItem value="purchase_order">
-                    Purchase Orders
-                  </SelectItem>
-                  <SelectItem value="expense">Expenses</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {/* Severity Filter */}
-              <Select
-                value={filters.severity}
-                onValueChange={(val) =>
-                  handleFilterChange(
-                    "severity",
-                    val === "all_severities" ? "" : val,
-                  )
-                }
-              >
-                <SelectTrigger className="h-11 bg-background/50">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-muted-foreground" />
-                    <SelectValue placeholder="All Severities" />
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all_severities">All Severities</SelectItem>
-                  <SelectItem value="info">
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-blue-500" />
-                      Info
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="warning">
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-amber-500" />
-                      Warning
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="critical">
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-red-500" />
-                      Critical
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-
-              {/* Actor Filter */}
-              <Select
-                value={filters.actor_user_id}
-                onValueChange={(val) =>
-                  handleFilterChange(
-                    "actor_user_id",
-                    val === "all_actors" ? "" : val,
-                  )
-                }
-              >
-                <SelectTrigger className="h-11 bg-background/50">
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    <SelectValue placeholder="All Staff" />
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all_actors">All Staff</SelectItem>
-                  {uniqueActors.map((actor) => (
-                    <SelectItem key={actor.id} value={actor.id}>
-                      {actor.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Active Filters */}
-            {hasActiveFilters && (
-              <div className="flex items-center gap-2 pt-2">
-                <span className="text-xs text-muted-foreground">
-                  Active filters:
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {filters.search && (
-                    <Badge variant="secondary" className="gap-1 pr-1">
-                      Search: {filters.search}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-4 w-4 p-0 hover:bg-transparent"
-                        onClick={() => handleFilterChange("search", "")}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </Badge>
-                  )}
-                  {filters.action_category && (
-                    <Badge
-                      variant="secondary"
-                      className="gap-1 pr-1 capitalize"
-                    >
-                      {filters.action_category.replace("_", " ")}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-4 w-4 p-0 hover:bg-transparent"
-                        onClick={() =>
-                          handleFilterChange("action_category", "")
-                        }
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </Badge>
-                  )}
-                  {filters.severity && (
-                    <Badge
-                      variant="secondary"
-                      className="gap-1 pr-1 capitalize"
-                    >
-                      {filters.severity}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-4 w-4 p-0 hover:bg-transparent"
-                        onClick={() => handleFilterChange("severity", "")}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </Badge>
-                  )}
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs text-muted-foreground hover:text-foreground"
-                  onClick={clearFilters}
-                >
-                  Clear all
-                </Button>
-              </div>
-            )}
+      {/* Filters */}
+      <div className="space-y-3">
+        {/* Search + staff + location */}
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search what happened..."
+              className="pl-9 h-10"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+            />
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Logs Table */}
-      <Card className="border-none shadow-lg overflow-hidden">
-        <Table>
-          <TableHeader className="bg-muted/50">
-            <TableRow>
-              <TableHead className="w-45">
+          {/* Staff filter */}
+          <Select
+            value={actorUserId || "all"}
+            onValueChange={(v) => {
+              setActorUserId(v === "all" ? "" : v);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="h-10 w-full sm:w-44">
+              <div className="flex items-center gap-2">
+                <User className="h-3.5 w-3.5 text-muted-foreground" />
+                <SelectValue placeholder="All Staff" />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Staff</SelectItem>
+              {uniqueActors.map((a) => (
+                <SelectItem key={a.id} value={a.id}>
+                  {a.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Location filter (only if merchant has multiple locations) */}
+          {locations.length > 1 && (
+            <Select
+              value={locationId}
+              onValueChange={(v) => {
+                setLocationId(v);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="h-10 w-full sm:w-44">
                 <div className="flex items-center gap-2">
-                  <Clock className="h-3.5 w-3.5" />
-                  Timestamp
+                  <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                  <SelectValue placeholder="All Locations" />
                 </div>
-              </TableHead>
-              <TableHead>Action</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Actor</TableHead>
-              {isAllLocations && <TableHead>Location</TableHead>}
-              <TableHead>Severity</TableHead>
-              <TableHead className="w-12.5"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell>
-                    <Skeleton className="h-4 w-24" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-48" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-6 w-20 rounded-full" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-32" />
-                  </TableCell>
-                  {isAllLocations && (
-                    <TableCell>
-                      <Skeleton className="h-4 w-24" />
-                    </TableCell>
-                  )}
-                  <TableCell>
-                    <Skeleton className="h-6 w-16 rounded-full" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-4" />
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : logs.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={isAllLocations ? 7 : 6}
-                  className="h-64 text-center text-muted-foreground"
-                >
-                  <div className="flex flex-col items-center justify-center gap-3">
-                    <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center">
-                      <GitCompare className="h-8 w-8 opacity-20" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-foreground">
-                        No audit logs found
-                      </p>
-                      <p className="text-sm mt-1">
-                        Try adjusting your filters or date range
-                      </p>
-                    </div>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : (
-              logs.map((log) => (
-                <React.Fragment key={log.id}>
-                  <TableRow
-                    className={cn(
-                      "group cursor-pointer hover:bg-muted/30 transition-colors",
-                      expandedRow === log.id && "bg-muted/40",
-                    )}
-                    onClick={() =>
-                      setExpandedRow(expandedRow === log.id ? null : log.id)
-                    }
-                  >
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      <div className="flex flex-col">
-                        <span>
-                          {format(new Date(log.created_at), "MMM d, yyyy")}
-                        </span>
-                        <span className="text-[10px]">
-                          {format(new Date(log.created_at), "HH:mm:ss")}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-medium text-sm">
-                          {log.action}
-                        </span>
-                        {log.resource_name && (
-                          <span className="text-xs text-muted-foreground">
-                            {log.resource_type}: {log.resource_name}
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={cn(
-                          "text-[10px] h-6 px-2 gap-1.5 border-none capitalize",
-                          CATEGORY_COLORS[log.action_category] || "bg-gray-100",
-                        )}
-                      >
-                        {CATEGORY_ICONS[log.action_category]}
-                        {log.action_category.replace("_", " ")}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 rounded-full bg-linear-to-br from-primary/20 to-primary/10 flex items-center justify-center shrink-0 ring-2 ring-primary/10">
-                          <User className="h-3.5 w-3.5 text-primary" />
-                        </div>
-                        <span className="text-sm font-medium">
-                          {log.actor_name}
-                        </span>
-                      </div>
-                    </TableCell>
-                    {isAllLocations && (
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className="font-normal text-[10px] h-5 px-2 flex items-center gap-1 w-fit"
-                        >
-                          <MapPin className="h-2.5 w-2.5" />
-                          {log.location?.name || "Global"}
-                        </Badge>
-                      </TableCell>
-                    )}
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={cn(
-                          "text-[10px] h-6 px-2 gap-1.5 border-none",
-                          SEVERITY_COLORS[
-                            log.severity as keyof typeof SEVERITY_COLORS
-                          ],
-                        )}
-                      >
-                        {
-                          SEVERITY_ICONS[
-                            log.severity as keyof typeof SEVERITY_ICONS
-                          ]
-                        }
-                        <span className="capitalize">{log.severity}</span>
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {expandedRow === log.id ? (
-                        <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                      )}
-                    </TableCell>
-                  </TableRow>
-                  {expandedRow === log.id && (
-                    <TableRow className="bg-muted/20 border-none">
-                      <TableCell
-                        colSpan={isAllLocations ? 7 : 6}
-                        className="p-0"
-                      >
-                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8 animate-in slide-in-from-top-2 duration-200">
-                          {/* Changes Section */}
-                          <div className="space-y-3">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">
-                              Action Details
-                            </h4>
-                            <div className="rounded-xl border bg-background/80 p-5 space-y-4">
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">
-                                    Action Category
-                                  </p>
-                                  <Badge
-                                    variant="outline"
-                                    className="capitalize"
-                                  >
-                                    {log.action_category.replace("_", " ")}
-                                  </Badge>
-                                </div>
-                                <div>
-                                  <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">
-                                    Resource Type
-                                  </p>
-                                  <Badge
-                                    variant="outline"
-                                    className="capitalize"
-                                  >
-                                    {log.resource_type || "N/A"}
-                                  </Badge>
-                                </div>
-                              </div>
-                              {/* Resource ID hidden - managers don't need to see raw UUIDs */}
-                              {log.metadata &&
-                                Object.keys(log.metadata).length > 0 && (
-                                  <div>
-                                    <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-2">
-                                      Metadata
-                                    </p>
-                                    <div className="p-4 rounded-xl border border-dashed">
-                                      <RenderObject
-                                        data={log.metadata}
-                                        className="grid-cols-1 sm:grid-cols-1"
-                                      />
-                                    </div>
-                                  </div>
-                                )}
-                            </div>
-                          </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Locations</SelectItem>
+                {locations.map((loc) => (
+                  <SelectItem key={loc.id} value={loc.id}>
+                    {loc.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
 
-                          {/* Data Changes */}
-                          <div className="space-y-3">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">
-                              Data Changes
-                            </h4>
-                            <div className="rounded-xl border bg-background/80 overflow-hidden">
-                              {log.changes ? (
-                                <div className="p-5">
-                                  {/* Check for before/after structure or flat object */}
-                                  {(log.changes as any).after ||
-                                  (log.changes as any).before ? (
-                                    <div className="space-y-6">
-                                      {(log.changes as any).after && (
-                                        <div className="space-y-2">
-                                          <div className="flex items-center gap-2">
-                                            <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                                            <h5 className="text-[10px] uppercase font-bold text-muted-foreground">
-                                              New Values
-                                            </h5>
-                                          </div>
-                                          <div className="bg-emerald-500/5 p-4 rounded-lg border border-emerald-500/10">
-                                            <RenderObject
-                                              data={(log.changes as any).after}
-                                            />
-                                          </div>
-                                        </div>
-                                      )}
-                                      {(log.changes as any).before &&
-                                        Object.keys(
-                                          (log.changes as any).before || {},
-                                        ).length > 0 && (
-                                          <div className="space-y-2">
-                                            <div className="flex items-center gap-2">
-                                              <div className="h-2 w-2 rounded-full bg-amber-500" />
-                                              <h5 className="text-[10px] uppercase font-bold text-muted-foreground">
-                                                Previous Values
-                                              </h5>
-                                            </div>
-                                            <div className="bg-amber-500/5 p-4 rounded-lg border border-amber-500/10 opacity-75">
-                                              <RenderObject
-                                                data={
-                                                  (log.changes as any).before
-                                                }
-                                              />
-                                            </div>
-                                          </div>
-                                        )}
-                                    </div>
-                                  ) : (
-                                    <RenderObject data={log.changes} />
-                                  )}
-                                </div>
-                              ) : (
-                                <div className="p-8 text-center text-muted-foreground italic text-sm">
-                                  No structured data changes recorded for this
-                                  action.
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </React.Fragment>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </Card>
+        {/* Date presets + custom picker */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground shrink-0">Showing:</span>
+          {DATE_PRESETS.map((preset) => (
+            <Button
+              key={preset.days}
+              variant={
+                !customRange && datePreset === preset.days ? "default" : "outline"
+              }
+              size="sm"
+              className="h-7 px-3 text-xs"
+              onClick={() => handlePreset(preset.days)}
+            >
+              {preset.label}
+            </Button>
+          ))}
 
-      {/* Footer */}
-      <div className="flex items-center justify-between px-2">
-        <p className="text-sm text-muted-foreground">
-          Showing{" "}
-          <span className="font-medium text-foreground">
-            {Math.min((page - 1) * pageSize + 1, total)}-
-            {Math.min(page * pageSize, total)}
-          </span>{" "}
-          of <span className="font-medium text-foreground">{total}</span> total
-          logs
-        </p>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1 || isLoading}
-          >
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage((p) => p + 1)}
-            disabled={page * pageSize >= total || isLoading}
-          >
-            Next
-          </Button>
+          {/* Custom date range */}
+          <Popover open={showCustomPicker} onOpenChange={setShowCustomPicker}>
+            <PopoverTrigger asChild>
+              <Button
+                variant={customRange ? "default" : "outline"}
+                size="sm"
+                className="h-7 px-3 text-xs"
+              >
+                {customRange?.from
+                  ? customRange.to
+                    ? `${format(customRange.from, "MMM d")} – ${format(customRange.to, "MMM d")}`
+                    : format(customRange.from, "MMM d")
+                  : "Custom..."}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                initialFocus
+                mode="range"
+                selected={customRange}
+                onSelect={(range) => {
+                  setCustomRange(range);
+                  setPage(1);
+                  if (range?.from && range.to) setShowCustomPicker(false);
+                }}
+                numberOfMonths={2}
+              />
+            </PopoverContent>
+          </Popover>
+
+          {/* Clear filters */}
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground"
+              onClick={clearFilters}
+            >
+              <X className="h-3 w-3 mr-1" />
+              Clear
+            </Button>
+          )}
+        </div>
+
+        {/* Category tabs */}
+        <div className="flex flex-wrap gap-1.5">
+          {CATEGORY_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => handleTabChange(tab.id as CategoryTabId)}
+              className={cn(
+                "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                activeTab === tab.id
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
+
+      {/* Timeline */}
+      {isLoading ? (
+        <TimelineSkeleton />
+      ) : logs.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
+          <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center">
+            <Activity className="h-8 w-8 text-muted-foreground/30" />
+          </div>
+          <div>
+            <p className="font-semibold text-foreground">All quiet!</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              No changes were made during this period.
+            </p>
+          </div>
+          {hasActiveFilters && (
+            <Button variant="outline" size="sm" onClick={clearFilters}>
+              Clear filters
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          {logs.map((log) => (
+            <AuditCard key={log.id} log={log} onOpen={openDetail} />
+          ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {!isLoading && total > pageSize && (
+        <div className="flex items-center justify-between pt-2">
+          <p className="text-sm text-muted-foreground">
+            Showing{" "}
+            <span className="font-medium text-foreground">
+              {Math.min((page - 1) * pageSize + 1, total)}–
+              {Math.min(page * pageSize, total)}
+            </span>{" "}
+            of <span className="font-medium text-foreground">{total}</span>
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Detail Sheet */}
+      <AuditDetailSheet
+        log={selectedLog}
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+      />
     </div>
   );
 }

@@ -781,13 +781,15 @@ export function NewEditItemFormSheet({
   const [selectedModifiers, setSelectedModifiers] = React.useState<string[]>(
     [],
   );
-  const [activeTab, setActiveTab] = React.useState("general");
   const [expandedSections, setExpandedSections] = React.useState({
     pricing: true,
     categories: false,
     modifiers: false,
     allergens: false,
     advanced: false,
+    tax: false,
+    availability: false,
+    recipe: false,
   });
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isResetting, setIsResetting] = React.useState(false);
@@ -1122,15 +1124,14 @@ export function NewEditItemFormSheet({
         // Only include base fields if we can edit them (Level 1)
         if (editingContext.canEditBaseFields) {
           updateParams.name = values.name;
-          updateParams.description = values.description;
-          updateParams.image = values.image_url;
+          // Convert empty strings → undefined so the DB column stays null rather than ""
+          updateParams.description = values.description?.trim() || undefined;
+          updateParams.image = values.image_url?.trim() || undefined;
           updateParams.allergens = values.allergens;
           updateParams.cardBgColor = values.card_bg_color ?? undefined;
           updateParams.stockTrackingMode = values.stock_tracking_mode;
           // Tax & Inventory Control fields (migration 014)
           updateParams.taxCategory = values.tax_category;
-          updateParams.isTaxExempt = values.is_tax_exempt;
-          updateParams.availableChannels = values.available_channels;
           updateParams.isTaxExempt = values.is_tax_exempt;
           updateParams.availableChannels = values.available_channels;
         }
@@ -1153,11 +1154,11 @@ export function NewEditItemFormSheet({
           clerkOrgId,
           {
             name: values.name,
-            description: values.description,
+            description: values.description?.trim() || undefined,
             price: values.price,
             cash_price: values.cash_price ?? undefined,
             delivery_price: values.delivery_price ?? null,
-            image: values.image_url ?? undefined,
+            image: values.image_url?.trim() || undefined,
             availability: values.availability,
             allergens: values.allergens,
             card_bg_color: values.card_bg_color ?? undefined,
@@ -1448,24 +1449,10 @@ export function NewEditItemFormSheet({
                   onSubmit={form.handleSubmit(onSubmit)}
                   className="space-y-4"
                 >
-                  <Tabs
-                    value={activeTab}
-                    onValueChange={setActiveTab}
-                    className="w-full"
-                  >
-                    <TabsList className="grid w-full grid-cols-6 mb-6">
-                      <TabsTrigger value="general">General</TabsTrigger>
-                      <TabsTrigger value="pricing">Pricing</TabsTrigger>
-                      <TabsTrigger value="modifiers">Modifiers</TabsTrigger>
-                      <TabsTrigger value="recipe">Recipe</TabsTrigger>
-                      <TabsTrigger value="tax">Tax & Fees</TabsTrigger>
-                      <TabsTrigger value="availability">
-                        Availability
-                      </TabsTrigger>
-                    </TabsList>
+                  <div className="space-y-0">
 
-                    {/* TAB 1: GENERAL */}
-                    <TabsContent value="general" className="space-y-4">
+                    {/* SECTION 1: GENERAL */}
+                    <div className="space-y-4">
                       <div className="flex items-center gap-2 mb-4">
                         <Settings2 className="h-4 w-4 text-muted-foreground" />
                         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
@@ -1627,10 +1614,10 @@ export function NewEditItemFormSheet({
                           </FormItem>
                         )}
                       /> */}
-                    </TabsContent>
+                    </div>
 
-                    {/* TAB 2: PRICING & INVENTORY */}
-                    <TabsContent value="pricing" className="space-y-4">
+                    {/* SECTION 2: PRICING & INVENTORY */}
+                    <div className="space-y-4 border-t pt-6 mt-6">
                       <div className="flex items-center gap-2 mb-4">
                         <DollarSign className="h-4 w-4 text-green-500" />
                         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
@@ -1794,10 +1781,10 @@ export function NewEditItemFormSheet({
                           </FormItem>
                         )}
                       />
-                    </TabsContent>
+                    </div>
 
-                    {/* TAB 3: MODIFIERS */}
-                    <TabsContent value="modifiers" className="space-y-4">
+                    {/* SECTION 3: MODIFIERS */}
+                    <div className="space-y-4 border-t pt-6 mt-6">
                       <div className="flex items-center gap-2 mb-4">
                         <Layers className="h-4 w-4 text-purple-500" />
                         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
@@ -2167,10 +2154,24 @@ export function NewEditItemFormSheet({
                           </>
                         );
                       })()}
-                    </TabsContent>
+                    </div>
 
-                    {/* TAB 4: TAX & FEES */}
-                    <TabsContent value="tax" className="space-y-4">
+                    {/* SECTION 4: TAX & FEES (collapsible) */}
+                    <Collapsible
+                      open={expandedSections.tax}
+                      onOpenChange={() => toggleSection("tax")}
+                      className="border-t pt-4 mt-6"
+                    >
+                      <CollapsibleTrigger asChild>
+                        <button type="button" className="flex items-center justify-between w-full group">
+                          <div className="flex items-center gap-2">
+                            <DollarSign className="h-4 w-4 text-emerald-500" />
+                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Tax &amp; Fees</span>
+                          </div>
+                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.tax && "rotate-180")} />
+                        </button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-4 pt-4">
                       <div className="flex items-center gap-2 mb-4">
                         <DollarSign className="h-4 w-4 text-emerald-500" />
                         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
@@ -2345,10 +2346,25 @@ export function NewEditItemFormSheet({
                           </AlertDescription>
                         </Alert>
                       )}
-                    </TabsContent>
+                      </CollapsibleContent>
+                    </Collapsible>
 
-                    {/* TAB 4: AVAILABILITY */}
-                    <TabsContent value="availability" className="space-y-4">
+                    {/* SECTION 5: AVAILABILITY (collapsible) */}
+                    <Collapsible
+                      open={expandedSections.availability}
+                      onOpenChange={() => toggleSection("availability")}
+                      className="border-t pt-4 mt-2"
+                    >
+                      <CollapsibleTrigger asChild>
+                        <button type="button" className="flex items-center justify-between w-full group">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-blue-500" />
+                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Availability &amp; Channels</span>
+                          </div>
+                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.availability && "rotate-180")} />
+                        </button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-4 pt-4">
                       <div className="flex items-center gap-2 mb-4">
                         <CheckCircle2 className="h-4 w-4 text-blue-500" />
                         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
@@ -2617,10 +2633,26 @@ export function NewEditItemFormSheet({
                           </div>
                         )}
                       </div>
-                    </TabsContent>
+                      </CollapsibleContent>
+                    </Collapsible>
 
-                    {/* TAB: RECIPE */}
-                    <TabsContent value="recipe" className="space-y-4">
+                    {/* SECTION 6: RECIPE (collapsible, edit-only) */}
+                    {editItem && (
+                    <Collapsible
+                      open={expandedSections.recipe}
+                      onOpenChange={() => toggleSection("recipe")}
+                      className="border-t pt-4 mt-2"
+                    >
+                      <CollapsibleTrigger asChild>
+                        <button type="button" className="flex items-center justify-between w-full group">
+                          <div className="flex items-center gap-2">
+                            <Tag className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Recipe</span>
+                          </div>
+                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.recipe && "rotate-180")} />
+                        </button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-4 pt-4">
                       {editItem ? (
                         <RecipeManager
                           menuItemId={editItem.id}
@@ -2652,8 +2684,10 @@ export function NewEditItemFormSheet({
                           </p>
                         </div>
                       )}
-                    </TabsContent>
-                  </Tabs>
+                      </CollapsibleContent>
+                    </Collapsible>
+                    )}
+                  </div>
                 </form>
               </Form>
             </div>
