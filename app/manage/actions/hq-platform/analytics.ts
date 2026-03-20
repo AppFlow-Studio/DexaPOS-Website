@@ -216,6 +216,8 @@ export interface PlatformAuditLogFilters {
   dateTo?: string
   status?: 'success' | 'failed'
   resourceType?: string
+  /** Filter to rows that have a non-null error_message */
+  hasError?: boolean
 }
 
 export interface PlatformAuditLogRow {
@@ -237,6 +239,8 @@ export interface PlatformAuditLogRow {
   merchant_name?: string
   location_id?: string
   location_name?: string
+  organization_type?: string
+  organization_name?: string
   changes?: Record<string, unknown> | null
   metadata?: Record<string, unknown> | null
 }
@@ -646,6 +650,8 @@ export async function getPlatformAuditLogs(
       error_message,
       merchant_id,
       location_id,
+      organization_type,
+      organization_name,
       changes,
       metadata,
       merchants(name),
@@ -701,6 +707,10 @@ export async function getPlatformAuditLogs(
     query = query.in('merchant_id', filters.merchantIds)
   }
 
+  if (filters?.hasError) {
+    query = query.not('error_message', 'is', null)
+  }
+
   query = query.range(offset, offset + limit - 1)
 
   const { data, error, count } = await query
@@ -735,6 +745,8 @@ export async function getPlatformAuditLogs(
       merchant_name: merchant?.name || undefined,
       location_id: row.location_id || undefined,
       location_name: location?.name || undefined,
+      organization_type: row.organization_type || undefined,
+      organization_name: row.organization_name || undefined,
       changes: row.changes || null,
       metadata: row.metadata || null,
     }

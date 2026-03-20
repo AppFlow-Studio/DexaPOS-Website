@@ -1085,6 +1085,7 @@ export async function DeactivateStaffMember(
           resourceId: memberId,
           resourceName: resourceName,
           locationId: locationId,
+          severity: "critical",
         });
       }
     }
@@ -1167,6 +1168,7 @@ export async function ReactivateStaffMember(
           resourceId: memberId,
           resourceName: resourceName,
           locationId: locationId,
+          severity: "critical",
         });
       }
     }

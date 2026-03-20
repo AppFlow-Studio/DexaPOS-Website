@@ -31,8 +31,15 @@ import {
 interface QuickScheduleProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (startDate: string) => void;
+  onCreate: (startDate: string, numberOfWeeks: number) => void;
 }
+
+const WEEK_OPTIONS = [
+  { value: 1, label: "1 Week" },
+  { value: 2, label: "2 Weeks" },
+  { value: 3, label: "3 Weeks" },
+  { value: 4, label: "4 Weeks" },
+];
 
 export function QuickScheduleModal({
   isOpen,
@@ -42,19 +49,20 @@ export function QuickScheduleModal({
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
     new Date()
   );
+  const [numberOfWeeks, setNumberOfWeeks] = useState(1);
 
-  // Calculate week range
-  const weekRange = useMemo(() => {
+  // Calculate schedule range based on number of weeks
+  const scheduleRange = useMemo(() => {
     if (!selectedDate) return null;
     const weekStart = startOfWeek(selectedDate, { weekStartsOn: 0 });
-    const weekEnd = addDays(weekStart, 6);
-    return { start: weekStart, end: weekEnd };
-  }, [selectedDate]);
+    const rangeEnd = addDays(weekStart, numberOfWeeks * 7 - 1);
+    return { start: weekStart, end: rangeEnd };
+  }, [selectedDate, numberOfWeeks]);
 
   const handleCreate = () => {
     if (selectedDate) {
       const weekStart = startOfWeek(selectedDate, { weekStartsOn: 0 });
-      onCreate(format(weekStart, "yyyy-MM-dd"));
+      onCreate(format(weekStart, "yyyy-MM-dd"), numberOfWeeks);
       onClose();
     }
   };
@@ -65,10 +73,10 @@ export function QuickScheduleModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CalendarDays className="h-5 w-5 text-primary" />
-            New Weekly Schedule
+            New Schedule
           </DialogTitle>
           <DialogDescription>
-            Select a week to create a new schedule.
+            Select a start date and duration for your schedule.
           </DialogDescription>
         </DialogHeader>
 
@@ -85,14 +93,35 @@ export function QuickScheduleModal({
             </div>
           </div>
 
-          {weekRange && (
+          <div className="space-y-2">
+            <Label>Schedule Duration</Label>
+            <div className="flex gap-2">
+              {WEEK_OPTIONS.map((opt) => (
+                <Button
+                  key={opt.value}
+                  type="button"
+                  variant={numberOfWeeks === opt.value ? "default" : "outline"}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setNumberOfWeeks(opt.value)}
+                >
+                  {opt.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {scheduleRange && (
             <div className="p-3 bg-muted/50 rounded-lg border">
               <div className="text-sm text-muted-foreground">
-                Selected Week:
+                Schedule Period:
               </div>
               <div className="font-medium">
-                {format(weekRange.start, "MMM d")} -{" "}
-                {format(weekRange.end, "MMM d, yyyy")}
+                {format(scheduleRange.start, "MMM d")} -{" "}
+                {format(scheduleRange.end, "MMM d, yyyy")}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {numberOfWeeks} week{numberOfWeeks > 1 ? "s" : ""} &middot; {numberOfWeeks * 7} days
               </div>
             </div>
           )}
