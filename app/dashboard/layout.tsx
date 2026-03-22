@@ -37,6 +37,7 @@ import {
   BarChart3,
   Settings,
   HelpCircle,
+  MessageCircle,
   Search,
   MoreHorizontal,
   CreditCard,
@@ -212,6 +213,10 @@ const navMain = [
             title: "Voids & Refunds",
             url: "/dashboard/reports/voids",
           },
+          {
+            title: "Online Ordering",
+            url: "/dashboard/reports/online-ordering",
+          },
         ],
       },
     ],
@@ -223,6 +228,11 @@ const navMain = [
         title: "Transactions",
         url: "/dashboard/transactions",
         icon: Receipt,
+      },
+      {
+        title: "Invoices",
+        url: "/dashboard/invoices",
+        icon: FileText,
       },
       {
         title: "Payments",
@@ -246,8 +256,8 @@ const navFooter = [
   },
   {
     title: "Get Help",
-    url: "#",
-    icon: HelpCircle,
+    url: "/dashboard/support",
+    icon: MessageCircle,
   },
 ];
 
@@ -557,9 +567,12 @@ function MerchantSidebar() {
           </SidebarMenuItem>
           {/* Get Help */}
           <SidebarMenuItem>
-            <SidebarMenuButton asChild>
-              <Link href="#">
-                <HelpCircle className="h-4 w-4" />
+            <SidebarMenuButton
+              asChild
+              isActive={pathname.startsWith("/dashboard/support")}
+            >
+              <Link href="/dashboard/support">
+                <MessageCircle className="h-4 w-4" />
                 <span>Get Help</span>
               </Link>
             </SidebarMenuButton>
@@ -843,24 +856,16 @@ export default function MerchantDashboardLayout({
       setLocations(locations);
     }
 
-    // Set primary location as default only on first load
-    // This happens when selectedLocationId is 'all' and we just initialized
+    // Set primary location as default only on first load for non-owners with a single location.
+    // Owners and users with multiple locations can remain on 'all'.
     if (
       !wasInitialized &&
       locations.length > 0 &&
-      selectedLocationId === "all"
+      selectedLocationId === "all" &&
+      !isMerchantOwner &&
+      locations.length === 1
     ) {
-      const primaryLocation = locations.find(
-        (loc: any) => loc.is_primary_location === true
-      );
-
-      if (primaryLocation) {
-        // Set primary location as default
-        setSelectedLocation(primaryLocation.id);
-      } else if (!isMerchantOwner) {
-        // For non-owners without primary, select first location
-        setSelectedLocation(locations[0].id);
-      }
+      setSelectedLocation(locations[0].id);
     }
   }, [
     clerkOrgId,
@@ -876,19 +881,15 @@ export default function MerchantDashboardLayout({
     isMerchantOwner,
   ]);
 
-  // Handle non-owner case: ensure they can't stay on "all"
+  // Handle non-owner case: if user only has access to a single location, force them to it
   useEffect(() => {
     if (
       !isMerchantOwner &&
       locations &&
-      locations.length > 0 &&
+      locations.length === 1 &&
       selectedLocationId === "all"
     ) {
-      // Find primary location first, otherwise use first available
-      const primaryLocation = locations.find(
-        (loc: any) => loc.is_primary_location === true
-      );
-      setSelectedLocation(primaryLocation?.id || locations[0].id);
+      setSelectedLocation(locations[0].id);
     }
   }, [isMerchantOwner, locations, selectedLocationId, setSelectedLocation]);
 

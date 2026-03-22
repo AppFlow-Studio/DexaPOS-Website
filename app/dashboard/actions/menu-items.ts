@@ -577,6 +577,7 @@ export async function UpdateMenuItem(
         resourceId: itemId,
         resourceName: updatedItem?.name,
         locationId: locationId,
+        severity: overrideData.custom_price !== undefined ? "warning" : "info",
         changes: { after: overrideData as Record<string, unknown> },
       });
 
@@ -717,6 +718,7 @@ export async function UpdateMenuItem(
       resourceId: itemId,
       resourceName: item.name,
       locationId: locationId,
+      severity: data.price !== undefined ? "warning" : "info",
       changes: { after: data as Record<string, unknown> },
     });
 
@@ -731,6 +733,7 @@ export async function UpdateMenuItem(
     resourceType: "menu_item",
     resourceId: itemId,
     resourceName: item.name,
+    severity: data.price !== undefined ? "warning" : "info",
     changes: { after: data as Record<string, unknown> },
   });
 
@@ -815,7 +818,7 @@ export async function DeleteMenuItem(
       resourceId: itemId,
       resourceName: item.name,
       locationId: locationId,
-      severity: "info",
+      severity: "warning",
     });
   }
 

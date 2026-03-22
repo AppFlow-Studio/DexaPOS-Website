@@ -33,6 +33,7 @@ import {
     FileText,
     Settings,
     HelpCircle,
+    MessageSquare,
     Search,
     Plus,
     MoreHorizontal,
@@ -136,6 +137,12 @@ const navMain: NavGroup[] = [
                 title: 'Audit Logs',
                 url: '/manage/audit-logs',
                 icon: History,
+                requiredPermission: 'audit.view',
+            },
+            {
+                title: 'Support',
+                url: '/manage/support',
+                icon: MessageSquare,
                 requiredPermission: 'audit.view',
             }
         ]

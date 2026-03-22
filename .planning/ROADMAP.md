@@ -13,6 +13,7 @@ This roadmap transforms the HQ admin portal into a comprehensive merchant manage
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Menu Management (Admin)** - Full menu, category, item, and modifier management ✓
+- [ ] **Phase 1.1: Support Ticketing UI/UX Overhaul** *(INSERTED)* - Comprehensive redesign of merchant and admin support ticket UI: message bubbles, date separators, drag-and-drop attachments, internal notes, KPI inbox cards, admin filter bar, and mobile sidebar
 - [ ] **Phase 2: Location & Floor Plan Management** - Location CRUD and table/floor plan administration
 - [ ] **Phase 3: Staff Management (Admin)** - Staff CRUD, roles, PINs, and location assignments
 - [ ] **Phase 4: Settings & Online Store** - Merchant settings and storefront configuration
@@ -42,6 +43,28 @@ Plans:
 - [x] PLAN-03: Audit Information Display (wave 3) - Completed 2026-01-25
 - [x] PLAN-04: Modifier Group Assignment to Items (wave 3) - Completed 2026-01-25
 - [x] PLAN-05: Admin Menu Detail Page (wave 4) - Completed 2026-01-25
+
+### Phase 1.1: Support Ticketing UI/UX Overhaul *(INSERTED)*
+**Goal**: Both merchant and admin views of the support ticketing system are polished, intuitive, and visually consistent with the design system
+**Depends on**: Phase 1
+**Requirements**: User-provided spec (2026-03-19)
+**Success Criteria** (what must be TRUE):
+  1. Merchant ticket detail has role-differentiated bubbles (merchant=right indigo, admin=left grey), proper avatars, sender name + formatted timestamp on every message
+  2. Date separators appear between messages from different days
+  3. Ticket header has xl subject, pill badges with correct colors per status, metadata spaced below
+  4. File upload zone is a dashed drag-and-drop area with thumbnail previews and ✕ remove
+  5. Reply box has short placeholder, disabled send when empty, keyboard hint below
+  6. Admin internal notes render as full-width amber cards with "🔒 Staff only" badge; textarea turns amber when internal mode is on
+  7. Admin inbox has KPI cards (open, unassigned, avg response, avg resolution), filter bar (status tabs, priority, assignee, search), and clickable table rows with unread accent
+  8. Admin sidebar shows rich merchant info (name, location, plan, submitted by, metadata context)
+  9. Loading skeletons shown while data fetches; toast notifications for all actions
+**Plans**: 4 plans
+
+Plans:
+- [ ] 01.1-01-PLAN.md — Drag-and-drop file upload zone + merchant empty state
+- [ ] 01.1-02-PLAN.md — Admin inbox status tab bar + unread row accents
+- [ ] 01.1-03-PLAN.md — Merchant ticket detail overhaul (bubbles, dates, header, reply)
+- [ ] 01.1-04-PLAN.md — Admin ticket detail overhaul (internal notes, sidebar, merchant info)
 
 ### Phase 2: Location & Floor Plan Management
 **Goal**: Admin can manage merchant locations and their physical layouts
@@ -144,11 +167,12 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
+Phases execute in numeric order: 1 → 1.1 → 2 → 3 → 4 → 5 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Menu Management (Admin) | 5/5 | Complete ✓ | 2026-01-25 |
+| 1.1. Support Ticketing UI/UX Overhaul | 0/4 | Not started | - |
 | 2. Location & Floor Plan Management | 0/TBD | Not started | - |
 | 3. Staff Management (Admin) | 0/TBD | Not started | - |
 | 4. Settings & Online Store | 0/TBD | Not started | - |

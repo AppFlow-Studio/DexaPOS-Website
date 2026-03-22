@@ -135,22 +135,16 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
     }
   }, [schedule?.startDate, setCurrentViewDate]);
 
-  // Navigation Guards
-  const isWeekly = schedule?.type === "weekly";
-
+  // Navigation Guards — allow week-by-week navigation within the schedule's date range
   const canGoPrev = useMemo(() => {
     if (!scheduleStart) return true;
-    // If weekly, strictly lock to the start date (cannot go before)
-    if (isWeekly) return false;
     return isAfter(weekStart, scheduleStart);
-  }, [scheduleStart, weekStart, isWeekly]);
+  }, [scheduleStart, weekStart]);
 
   const canGoNext = useMemo(() => {
     if (!scheduleEnd) return true;
-    // If weekly, strictly lock to the end date (cannot go after)
-    if (isWeekly) return false;
     return isBefore(weekEnd, scheduleEnd);
-  }, [scheduleEnd, weekEnd, isWeekly]);
+  }, [scheduleEnd, weekEnd]);
 
   const handlePrevWeek = () => {
     if (canGoPrev) setCurrentViewDate(subWeeks(currentDate, 1));
@@ -288,31 +282,27 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
       <div className="flex items-center justify-between p-4 bg-background border rounded-lg shadow-sm">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1 bg-muted p-1 rounded-md">
-            {!isWeekly && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handlePrevWeek}
-                disabled={!canGoPrev}
-                className="h-7 w-7 p-0"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handlePrevWeek}
+              disabled={!canGoPrev}
+              className="h-7 w-7 p-0"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
             <span className="text-sm font-medium px-2 min-w-[200px] text-center">
               {format(weekStart, "MMM d")} - {format(weekEnd, "MMM d, yyyy")}
             </span>
-            {!isWeekly && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleNextWeek}
-                disabled={!canGoNext}
-                className="h-7 w-7 p-0"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleNextWeek}
+              disabled={!canGoNext}
+              className="h-7 w-7 p-0"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
           </div>
 
           {/* Compact Labor Cost Badge */}

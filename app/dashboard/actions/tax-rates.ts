@@ -185,6 +185,7 @@ export async function upsertTaxRate(
         resourceId: data.id,
         resourceName: name,
         locationId: locationId,
+        severity: "warning",
         metadata: {
           location_name: location.name,
           tax_category: taxCategory,
@@ -256,6 +257,7 @@ export async function deactivateTaxRate(taxRateId: string) {
         resourceId: taxRateId,
         resourceName: taxRate.name,
         locationId: taxRate.location_id,
+        severity: "warning",
         metadata: {
           location_name: locationName,
           tax_category: taxRate.tax_category,
@@ -321,6 +323,7 @@ export async function deleteTaxRate(taxRateId: string) {
         resourceId: taxRateId,
         resourceName: taxRate.name,
         locationId: taxRate.location_id,
+        severity: "warning",
         metadata: {
           location_name: locationName,
           tax_category: taxRate.tax_category,

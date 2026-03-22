@@ -186,7 +186,7 @@ export async function createPrepStation(
       return { success: false, error: error.message, data: null };
     }
 
-    LogAuditEvent({
+    await LogAuditEvent({
       merchantId,
       locationId: input.locationId,
       action: `Created Prep Station: ${input.name.trim()}`,
@@ -258,7 +258,7 @@ export async function updatePrepStation(
       return { success: false, error: error.message, data: null };
     }
 
-    LogAuditEvent({
+    await LogAuditEvent({
       merchantId: before.merchant_id,
       locationId: before.location_id,
       action: `Updated Prep Station: ${data.name}`,
@@ -316,7 +316,7 @@ export async function deletePrepStation(stationId: string) {
       return { success: false, error: error.message };
     }
 
-    LogAuditEvent({
+    await LogAuditEvent({
       merchantId: before.merchant_id,
       locationId: before.location_id,
       action: `Deleted Prep Station: ${before.name}`,
@@ -466,7 +466,7 @@ export async function setCategoryPrepDefault(
       return { success: false, error: error.message, data: null };
     }
 
-    LogAuditEvent({
+    await LogAuditEvent({
       merchantId,
       locationId,
       action: `Set Category Prep Default: ${(data as any).categories?.name || categoryId} → ${(data as any).prep_stations?.name || prepStationId}`,
@@ -529,7 +529,7 @@ export async function removeCategoryPrepDefault(
     }
 
     if (before) {
-      LogAuditEvent({
+      await LogAuditEvent({
         merchantId: before.merchant_id,
         locationId,
         action: `Removed Category Prep Default: ${(before as any).categories?.name || categoryId}`,
