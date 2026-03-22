@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { MultiFileUpload } from '@/components/ui/multi-file-upload'
-import { createClient } from '@/utils/supabase/client'
 import { useLocationStore, useIsAllLocations, useSelectedLocation } from '@/stores/location-store'
 import { MapPin, Loader2, Trash2, Eye, EyeOff, Save, Info } from 'lucide-react'
 import { toast } from 'sonner'
@@ -23,6 +22,13 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useAuth } from '@clerk/nextjs'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import {
+    deleteCdnAsset,
+    extractStoragePathFromCdnUrl,
+    fileToBase64,
+    generateCdnFileName,
+    uploadCdnAsset,
+} from '@/lib/cdn/client'
 
 // Types
 interface CfdImage {
@@ -38,7 +44,7 @@ export default function CustomerDisplaySettingsPage() {
     const isAllLocations = useIsAllLocations()
     const selectedLocation = useSelectedLocation()
     const { selectedLocationId } = useLocationStore()
-    const { getToken, userId } = useAuth()
+    const { getToken } = useAuth()
     
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
@@ -92,7 +98,7 @@ export default function CustomerDisplaySettingsPage() {
 
     // Handle Upload
     const handleUpload = async () => {
-        if (selectedFiles.length === 0 || !selectedLocationId) return
+        if (selectedFiles.length === 0 || !selectedLocationId || !selectedLocation?.merchant_id) return
 
         try {
             setUploading(true)
@@ -111,36 +117,29 @@ export default function CustomerDisplaySettingsPage() {
                 : 0
 
             let successCount = 0;
-            let errors = [];
+            let errors: string[] = [];
 
             // Process files
             for (const file of selectedFiles) {
                 try {
-                    // 1. Upload file to Supabase Storage
                     const fileExt = file.name.split('.').pop()
-                    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
-                    const filePath = `${selectedLocationId}/${fileName}`
+                    const fileName = generateCdnFileName('carousel', fileExt ?? 'webp')
+                    const fileBase64 = await fileToBase64(file)
+                    const uploadResult = await uploadCdnAsset(supabase, {
+                        scope: 'merchant',
+                        merchantId: selectedLocation.merchant_id,
+                        category: 'cfd-images',
+                        fileName,
+                        fileBase64,
+                        contentType: file.type,
+                    })
 
-                    const { error: uploadError } = await supabase.storage
-                        .from('cfd-images')
-                        .upload(filePath, file)
-
-                    if (uploadError) throw uploadError
-
-                    // 2. Get Public URL
-                    const { data: publicUrlData } = supabase.storage
-                        .from('cfd-images')
-                        .getPublicUrl(filePath)
-                    
-                    const publicUrl = publicUrlData.publicUrl
-
-                    // 3. Insert into DB
                     currentMaxOrder++; // Increment for next item
                     const { error: dbError } = await supabase
                         .from('cfd_carousel_images')
                         .insert({
                             location_id: selectedLocationId,
-                            image_url: publicUrl,
+                            image_url: uploadResult.cdnUrl,
                             display_order: currentMaxOrder,
                             is_active: true
                         })
@@ -208,7 +207,7 @@ export default function CustomerDisplaySettingsPage() {
         if (!deleteId) return
 
         const imageToDelete = images.find(img => img.id === deleteId)
-        if (!imageToDelete) return
+        if (!imageToDelete || !selectedLocation?.merchant_id) return
 
         try {
             const token = await getToken({ template: 'supabase' }).catch(() => null) || await getToken()
@@ -216,24 +215,38 @@ export default function CustomerDisplaySettingsPage() {
                 global: { headers: token ? { Authorization: `Bearer ${token}` } : {} }
             })
 
-            // 1. Delete from Storage (Backend Cleanup)
+            // 1. Delete from Bunny CDN when the image is already migrated.
+            // 2. Fall back to legacy Supabase storage cleanup for pre-migration URLs.
             try {
                 const url = new URL(imageToDelete.image_url)
-                const pathParts = url.pathname.split('/cfd-images/')
-                
-                if (pathParts.length > 1) {
-                    const storagePath = decodeURIComponent(pathParts[1])
-                    const { error: storageError } = await supabase.storage
-                        .from('cfd-images')
-                        .remove([storagePath])
 
-                    if (storageError) {
-                        console.error('Storage delete error:', storageError)
-                        toast.warning('Could not delete file from storage, but removing record.')
+                if (
+                    url.pathname.startsWith('/merchants/') ||
+                    url.pathname.startsWith('/organizations/')
+                ) {
+                    const storagePath = extractStoragePathFromCdnUrl(imageToDelete.image_url)
+                    await deleteCdnAsset(supabase, {
+                        scope: 'merchant',
+                        merchantId: selectedLocation.merchant_id,
+                        storagePath,
+                    })
+                } else {
+                    const pathParts = url.pathname.split('/cfd-images/')
+
+                    if (pathParts.length > 1) {
+                        const storagePath = decodeURIComponent(pathParts[1])
+                        const { error: storageError } = await supabase.storage
+                            .from('cfd-images')
+                            .remove([storagePath])
+
+                        if (storageError) {
+                            console.error('Storage delete error:', storageError)
+                            toast.warning('Could not delete file from storage, but removing record.')
+                        }
                     }
                 }
             } catch (e) {
-                console.warn('Error parsing storage URL during delete:', e)
+                console.warn('Error deleting backing file during CFD image delete:', e)
             }
 
             // 2. Delete from DB
