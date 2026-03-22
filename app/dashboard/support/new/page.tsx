@@ -42,16 +42,16 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-const CATEGORIES: { key: TicketCategory; label: string; emoji: string }[] = [
-  { key: "general", label: "General", emoji: "💬" },
-  { key: "pos_app", label: "POS App", emoji: "📱" },
-  { key: "hardware", label: "Hardware", emoji: "🖨️" },
-  { key: "payments", label: "Payments", emoji: "💳" },
-  { key: "menu", label: "Menu", emoji: "🍽️" },
-  { key: "kitchen", label: "Kitchen Display", emoji: "🔥" },
-  { key: "billing", label: "Billing", emoji: "💰" },
-  { key: "feature_request", label: "Feature Request", emoji: "💡" },
-  { key: "onboarding", label: "Setup & Onboarding", emoji: "🚀" },
+const CATEGORIES: { key: TicketCategory; label: string }[] = [
+  { key: "general", label: "General" },
+  { key: "pos_app", label: "POS App" },
+  { key: "hardware", label: "Hardware" },
+  { key: "payments", label: "Payments" },
+  { key: "menu", label: "Menu" },
+  { key: "kitchen", label: "Kitchen Display" },
+  { key: "billing", label: "Billing" },
+  { key: "feature_request", label: "Feature Request" },
+  { key: "onboarding", label: "Setup & Onboarding" },
 ];
 
 export default function NewTicketPage() {
@@ -143,7 +143,6 @@ export default function NewTicketPage() {
                     : "border-border text-muted-foreground"
                 )}
               >
-                <span className="text-base">{cat.emoji}</span>
                 <span className="leading-tight">{cat.label}</span>
                 {selectedCategory === cat.key && (
                   <CheckCircle2 className="h-3.5 w-3.5 ml-auto shrink-0" />
