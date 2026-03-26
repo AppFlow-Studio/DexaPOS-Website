@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { MultiFileUpload } from '@/components/ui/multi-file-upload'
 import { useLocationStore, useIsAllLocations, useSelectedLocation } from '@/stores/location-store'
-import { MapPin, Loader2, Trash2, Eye, EyeOff, Save, Info } from 'lucide-react'
+import { MapPin, Loader2, Trash2, Save, Info } from 'lucide-react'
 import { toast } from 'sonner'
 import Image from 'next/image'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -22,11 +22,13 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useAuth } from '@clerk/nextjs'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import type { Accept, FileRejection } from 'react-dropzone'
 import {
     deleteCdnAsset,
     extractStoragePathFromCdnUrl,
     fileToBase64,
     generateCdnFileName,
+    optimizeImageForCdn,
     uploadCdnAsset,
 } from '@/lib/cdn/client'
 
@@ -38,6 +40,46 @@ interface CfdImage {
     display_order: number
     is_active: boolean
     created_at: string
+}
+
+const CFD_UPLOAD_ACCEPT = {
+    'image/jpeg': ['.jpg', '.jpeg'],
+    'image/png': ['.png'],
+    'image/webp': ['.webp'],
+} satisfies Accept
+
+const CFD_MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
+const CFD_TARGET_FILE_SIZE_BYTES = 500 * 1024
+
+function formatBytes(bytes: number) {
+    if (bytes >= 1024 * 1024) {
+        return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+    }
+
+    if (bytes >= 1024) {
+        return `${Math.round(bytes / 1024)} KB`
+    }
+
+    return `${bytes} B`
+}
+
+function buildRejectedFilesMessage(rejections: FileRejection[]) {
+    const rejectedNames = rejections.map(({ file }) => file.name).join(', ')
+    const reasons = new Set<string>()
+
+    for (const rejection of rejections) {
+        for (const error of rejection.errors) {
+            if (error.code === 'file-invalid-type') {
+                reasons.add('Only JPG, PNG, and WEBP images are allowed')
+            } else if (error.code === 'file-too-large') {
+                reasons.add(`Each image must be ${formatBytes(CFD_MAX_FILE_SIZE_BYTES)} or smaller`)
+            } else {
+                reasons.add(error.message)
+            }
+        }
+    }
+
+    return `${Array.from(reasons).join('. ')}. Rejected: ${rejectedNames}`
 }
 
 export default function CustomerDisplaySettingsPage() {
@@ -96,6 +138,11 @@ export default function CustomerDisplaySettingsPage() {
         setSelectedFiles(files)
     }
 
+    const handleRejectedFiles = (rejections: FileRejection[]) => {
+        if (rejections.length === 0) return
+        toast.error(buildRejectedFilesMessage(rejections))
+    }
+
     // Handle Upload
     const handleUpload = async () => {
         if (selectedFiles.length === 0 || !selectedLocationId || !selectedLocation?.merchant_id) return
@@ -118,20 +165,33 @@ export default function CustomerDisplaySettingsPage() {
 
             let successCount = 0;
             let errors: string[] = [];
+            let optimizedCount = 0;
+            let totalBytesSaved = 0;
 
             // Process files
             for (const file of selectedFiles) {
                 try {
-                    const fileExt = file.name.split('.').pop()
-                    const fileName = generateCdnFileName('carousel', fileExt ?? 'webp')
-                    const fileBase64 = await fileToBase64(file)
+                    const optimizedFile = await optimizeImageForCdn(file, {
+                        targetBytes: CFD_TARGET_FILE_SIZE_BYTES,
+                    })
+
+                    if (optimizedFile.wasOptimized) {
+                        optimizedCount++
+                        totalBytesSaved += Math.max(
+                            0,
+                            optimizedFile.originalSize - optimizedFile.optimizedSize,
+                        )
+                    }
+
+                    const fileName = generateCdnFileName('carousel', optimizedFile.extension)
+                    const fileBase64 = await fileToBase64(optimizedFile.file)
                     const uploadResult = await uploadCdnAsset(supabase, {
                         scope: 'merchant',
                         merchantId: selectedLocation.merchant_id,
                         category: 'cfd-images',
                         fileName,
                         fileBase64,
-                        contentType: file.type,
+                        contentType: optimizedFile.contentType,
                     })
 
                     currentMaxOrder++; // Increment for next item
@@ -144,7 +204,19 @@ export default function CustomerDisplaySettingsPage() {
                             is_active: true
                         })
 
-                    if (dbError) throw dbError
+                    if (dbError) {
+                        try {
+                            await deleteCdnAsset(supabase, {
+                                scope: 'merchant',
+                                merchantId: selectedLocation.merchant_id,
+                                storagePath: uploadResult.storagePath,
+                            })
+                        } catch (cleanupError) {
+                            console.warn('Failed to clean up Bunny asset after CFD DB insert failure:', cleanupError)
+                        }
+
+                        throw dbError
+                    }
                     successCount++;
 
                 } catch (err: any) {
@@ -154,7 +226,11 @@ export default function CustomerDisplaySettingsPage() {
             }
 
             if (successCount > 0) {
-                toast.success(`${successCount} image(s) uploaded successfully`)
+                const optimizationMessage = optimizedCount > 0
+                    ? ` Optimized ${optimizedCount} image(s) and saved ${formatBytes(totalBytesSaved)} before upload.`
+                    : ''
+
+                toast.success(`${successCount} image(s) uploaded successfully.${optimizationMessage}`)
                 setSelectedFiles([]) // Clear selection on success
                 fetchImages()
             }
@@ -312,14 +388,21 @@ export default function CustomerDisplaySettingsPage() {
                 <CardHeader>
                     <CardTitle>Upload New Images</CardTitle>
                     <CardDescription>
-                        Upload high-quality images (JPG, PNG, WEBP). Recommended resolution: 1920x1080.
+                        Upload JPG, PNG, or WEBP images. Large images are resized and converted to WEBP before upload, targeting about 500 KB when possible.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <MultiFileUpload 
                         onChange={handleFileChange} 
                         value={selectedFiles}
+                        accept={CFD_UPLOAD_ACCEPT}
+                        maxSize={CFD_MAX_FILE_SIZE_BYTES}
+                        onRejected={handleRejectedFiles}
                     />
+
+                    <p className="text-xs text-muted-foreground">
+                        Max file size: {formatBytes(CFD_MAX_FILE_SIZE_BYTES)} per image. Unsupported file types are rejected before upload.
+                    </p>
                     
                     {selectedFiles.length > 0 && (
                         <div className="flex items-center justify-end gap-2">
@@ -330,7 +413,7 @@ export default function CustomerDisplaySettingsPage() {
                                 {uploading ? (
                                     <>
                                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Uploading {selectedFiles.length} file(s)...
+                                        Optimizing and uploading {selectedFiles.length} file(s)...
                                     </>
                                 ) : (
                                     <>

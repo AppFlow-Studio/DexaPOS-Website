@@ -183,6 +183,11 @@ export default function OnlineOrderingPage() {
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!selectedLocationId || isAllLocations || !selectedLocation?.merchant_id) {
+      toast.error("Select a specific location before uploading store assets");
+      e.target.value = "";
+      return;
+    }
     if (!file.type.startsWith("image/")) {
       toast.error("Please upload an image file");
       return;
@@ -196,18 +201,14 @@ export default function OnlineOrderingPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const folder =
-        type === "logo"
-          ? "logos"
-          : type === "hero"
-            ? "banners"
-            : type === "og"
-              ? "og-images"
-              : "favicons";
 
       const result = await uploadStoreImage(
         formData,
-        `${selectedLocationId}/${folder}`
+        {
+          merchantId: selectedLocation.merchant_id,
+          locationId: selectedLocationId,
+          assetType: type,
+        }
       );
       if (!result.success || !result.url) {
         toast.error(result.error || "Upload failed");
@@ -232,6 +233,11 @@ export default function OnlineOrderingPage() {
   };
 
   const removeImage = async (type: "logo" | "hero" | "favicon" | "og") => {
+    if (!selectedLocation?.merchant_id) {
+      toast.error("Missing merchant context for image removal");
+      return;
+    }
+
     const keyMap = {
       logo: "logoUrl",
       hero: "heroImageUrl",
@@ -240,8 +246,10 @@ export default function OnlineOrderingPage() {
     } as const;
     const currentUrl = currentSettings?.[keyMap[type]] || null;
     handleUpdate({ [keyMap[type]]: null });
-    if (currentUrl && currentUrl.includes("supabase")) {
-      deleteStoreImage(currentUrl).catch(console.error);
+    if (currentUrl) {
+      deleteStoreImage(currentUrl, selectedLocation.merchant_id).catch(
+        console.error
+      );
     }
     await saveSettings(selectedLocationId);
     toast.success("Image removed");
@@ -426,7 +434,7 @@ export default function OnlineOrderingPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* ─── Store Info ─── */}
+        {/* â”€â”€â”€ Store Info â”€â”€â”€ */}
         <TabsContent value="store" className="space-y-6">
           <Card>
             <CardHeader>
@@ -573,7 +581,7 @@ export default function OnlineOrderingPage() {
                           <span className="text-sm">Open 24 hours</span>
                         ) : (
                           <span className="text-sm">
-                            {formatTimeDisplay(schedule.from)} –{" "}
+                            {formatTimeDisplay(schedule.from)} â€“{" "}
                             {formatTimeDisplay(schedule.to)}
                           </span>
                         )
@@ -610,7 +618,7 @@ export default function OnlineOrderingPage() {
                     onChange={(e) =>
                       handleUpdate({ metaTitle: e.target.value })
                     }
-                    placeholder="Your Store — Order Online"
+                    placeholder="Your Store â€” Order Online"
                   />
                 </div>
                 <div className="space-y-2">
@@ -662,7 +670,7 @@ export default function OnlineOrderingPage() {
           </Card>
         </TabsContent>
 
-        {/* ─── Branding & Template ─── */}
+        {/* â”€â”€â”€ Branding & Template â”€â”€â”€ */}
         <TabsContent value="branding" className="space-y-6">
           {/* Template Picker */}
           <Card>
@@ -937,7 +945,7 @@ export default function OnlineOrderingPage() {
             <CardContent className="space-y-6">
               <ImageUploadRow
                 label="Logo"
-                hint="200×200px, PNG or JPG"
+                hint="200x200px, PNG, JPG, WEBP, SVG, or GIF"
                 url={currentSettings.logoUrl}
                 inputRef={logoInputRef}
                 isUploading={isUploading}
@@ -948,7 +956,7 @@ export default function OnlineOrderingPage() {
               <Separator />
               <ImageUploadRow
                 label="Hero Banner"
-                hint="1200×400px, PNG or JPG"
+                hint="1200x400px, PNG, JPG, WEBP, SVG, or GIF"
                 url={currentSettings.heroImageUrl}
                 inputRef={heroInputRef}
                 isUploading={isUploading}
@@ -961,7 +969,7 @@ export default function OnlineOrderingPage() {
               <div className="grid gap-6 sm:grid-cols-2">
                 <ImageUploadRow
                   label="Favicon"
-                  hint="32×32px, PNG"
+                  hint="32x32px, PNG, WEBP, or SVG"
                   url={currentSettings.faviconUrl}
                   inputRef={faviconInputRef}
                   isUploading={isUploading}
@@ -971,7 +979,7 @@ export default function OnlineOrderingPage() {
                 />
                 <ImageUploadRow
                   label="OG Image"
-                  hint="1200×630px, social sharing"
+                  hint="1200x630px, social sharing image"
                   url={currentSettings.ogImageUrl}
                   inputRef={ogInputRef}
                   isUploading={isUploading}
@@ -984,7 +992,7 @@ export default function OnlineOrderingPage() {
           </Card>
         </TabsContent>
 
-        {/* ─── Ordering ─── */}
+        {/* â”€â”€â”€ Ordering â”€â”€â”€ */}
         <TabsContent value="ordering" className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
@@ -1183,7 +1191,7 @@ export default function OnlineOrderingPage() {
           </Card>
         </TabsContent>
 
-        {/* ─── Payment & Tips ─── */}
+        {/* â”€â”€â”€ Payment & Tips â”€â”€â”€ */}
         <TabsContent value="payment" className="space-y-6">
           <Card>
             <CardHeader>
@@ -1270,7 +1278,7 @@ export default function OnlineOrderingPage() {
           </Card>
         </TabsContent>
 
-        {/* ─── OrderOut ─── */}
+        {/* â”€â”€â”€ OrderOut â”€â”€â”€ */}
         <TabsContent value="orderout" className="space-y-6">
           <OrderOutTab
             clerkOrgId={clerkOrgId || ""}
@@ -1304,7 +1312,7 @@ export default function OnlineOrderingPage() {
   );
 }
 
-// ─── Sub-components ──────────────────────────────────────────────────
+// â”€â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function ColorInput({
   label,
@@ -1396,7 +1404,7 @@ function ImageUploadRow({
         <input
           ref={inputRef}
           type="file"
-          accept="image/*"
+          accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
           className="hidden"
           onChange={onUpload}
         />

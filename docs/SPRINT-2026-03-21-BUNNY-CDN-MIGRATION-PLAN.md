@@ -10,9 +10,11 @@ Current implementation stop point:
 1. `supabase/functions/cdn-upload/index.ts` added
 2. Shared Bunny CDN helper added at `lib/cdn/client.ts`
 3. CFD upload/delete flow migrated off direct browser storage writes
-4. Legacy CFD delete fallback preserved for historical Supabase-hosted URLs
-5. Online ordering migration is still pending
-6. HQ organization-logo migration is still pending
+4. CFD uploader now restricts selection to JPG/PNG/WEBP and optimizes large images client-side before upload
+5. Legacy CFD delete fallback preserved for historical Supabase-hosted URLs
+6. Online ordering store-image uploads/deletes now route through Bunny instead of Supabase Storage
+7. Legacy online-ordering delete fallback is preserved for historical `store-assets` URLs
+8. HQ organization-logo migration is still pending
 
 ## Summary
 
@@ -308,15 +310,17 @@ If deletion reliability becomes a concern, add explicit `cdn_storage_path` colum
 4. New asset URLs written into the DB are Bunny Pull Zone URLs
 5. Existing legacy Supabase-hosted URLs still render without regression
 6. Delete flows handle Bunny URLs correctly and fail safely for legacy URLs
+7. CFD uploader only accepts supported image formats and optimizes large images before upload
 
 ## Current Acceptance State
 
 1. `1`: satisfied by design in the current slice
 2. `2`: implemented in the current slice
-3. `3`: not implemented yet
+3. `3`: implemented in the current slice
 4. `4`: implemented for CFD in the current slice
-5. `5`: preserved in the current slice
-6. `6`: implemented for CFD in the current slice
+5. `5`: preserved in the current slice for both CFD and online ordering
+6. `6`: implemented for CFD and online ordering in the current slice
+7. `7`: implemented in the current slice
 
 ## Review Items Before Implementation
 
@@ -339,10 +343,10 @@ That gets the biggest security win first and avoids overloading the first implem
 
 ## Actual Stop Point Reached
 
-We are currently stopped after step `2`.
+We are currently stopped after step `4`.
 
 Next recommended action:
 
-1. Configure Bunny secrets in Supabase
-2. Verify CFD upload/delete against Bunny
-3. Then migrate online ordering as the next slice
+1. Verify online-ordering upload/delete against Bunny
+2. Verify legacy online-ordering `store-assets` delete fallback still works
+3. Then migrate HQ organization-logo flows as the next slice

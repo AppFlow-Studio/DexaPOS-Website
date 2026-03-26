@@ -1,3 +1,4 @@
+import { verifyToken } from "npm:@clerk/backend";
 import { createClient } from "npm:@supabase/supabase-js";
 
 type MerchantAssetCategory =
@@ -47,6 +48,7 @@ type CdnResponse = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const CLERK_SECRET_KEY = Deno.env.get("CLERK_SECRET_KEY")!;
 
 const STORAGE_ZONE = Deno.env.get("BUNNY_STORAGE_ZONE_NAME")!;
 const API_KEY = Deno.env.get("BUNNY_STORAGE_API_KEY")!;
@@ -135,17 +137,26 @@ function getExpectedDeletePrefix(body: DeleteRequest): string {
 
 async function requireAuthenticatedUser(token: string) {
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-  const { data, error } = await admin.auth.getUser(token);
 
-  if (error || !data.user) {
+  try {
+    const verifiedToken = await verifyToken(token, {
+      secretKey: CLERK_SECRET_KEY,
+    });
+
+    const userId = verifiedToken.sub;
+    if (!userId) {
+      return { ok: false as const, error: "Unauthorized" };
+    }
+
+    return {
+      ok: true as const,
+      userId,
+      admin,
+    };
+  } catch (error) {
+    console.error("[cdn-upload] Clerk token verification failed", error);
     return { ok: false as const, error: "Unauthorized" };
   }
-
-  return {
-    ok: true as const,
-    userId: data.user.id,
-    admin,
-  };
 }
 
 async function isDexaHqAdmin(
@@ -155,8 +166,7 @@ async function isDexaHqAdmin(
   const { data: memberRows, error: membersError } = await admin
     .from("members")
     .select("role")
-    .eq("user_id", userId)
-    .eq("is_active", true);
+    .eq("user_id", userId);
 
   if (membersError || !memberRows?.length) {
     return false;
@@ -207,7 +217,6 @@ async function verifyMerchantAccess(
     .select("organization_id")
     .eq("user_id", userId)
     .eq("organization_id", merchant.clerk_org_id)
-    .eq("is_active", true)
     .limit(1)
     .maybeSingle();
 
