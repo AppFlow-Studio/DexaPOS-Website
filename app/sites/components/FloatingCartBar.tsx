@@ -2,7 +2,7 @@
 
 import { useCart } from "../hooks/useCart";
 import { ArrowRight } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 
 export function FloatingCartBar() {
   const { items, setOpen, getSubtotal, getTotalItems } = useCart();

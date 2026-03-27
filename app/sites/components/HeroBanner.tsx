@@ -1,7 +1,7 @@
 "use client";
 
 import { Site } from "@/types/site";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { Clock, MapPin, Star } from "lucide-react";
 

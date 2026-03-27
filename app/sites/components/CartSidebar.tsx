@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { Minus, Plus, X, Leaf, ShoppingBag } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { OnlineOrderingConfig } from "@/types/site";
 import { useStorefrontPath } from "../lib/use-storefront-path";
 
@@ -322,7 +322,7 @@ export function CartSidebar({ config, storeConfigId, slug }: CartSidebarProps) {
                     disabled={items.length === 0}
                     onClick={handleCheckout}
                   >
-                    Checkout · ${total.toFixed(2)}
+                    Checkout Â· ${total.toFixed(2)}
                   </button>
                 </div>
               </div>

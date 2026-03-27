@@ -15,7 +15,7 @@ import { StoreInfoBar } from "./StoreInfoBar";
 import { AccountDrawer } from "./AccountDrawer";
 import { useCart } from "../hooks/useCart";
 import { useSessionInit } from "../hooks/useSessionInit";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 
 interface StorefrontLayoutProps {
   site: Site | null;
