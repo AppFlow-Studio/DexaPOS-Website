@@ -62,6 +62,9 @@ import {
   Monitor,
   MonitorPlay,
   Flame,
+  Mail,
+  Gift,
+  DollarSign,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -172,6 +175,11 @@ const navMain = [
         icon: Package,
       },
       {
+        title: "Devices",
+        url: "/dashboard/devices",
+        icon: Monitor,
+      },
+      {
         title: "Audit Logs",
         url: "/dashboard/audit-logs",
         icon: GitCompare,
@@ -230,6 +238,11 @@ const navMain = [
         title: "Payments",
         url: "/dashboard/payments",
         icon: CreditCard,
+      },
+      {
+        title: "Tips",
+        url: "/dashboard/tips",
+        icon: DollarSign,
       },
     ],
   },
@@ -534,6 +547,17 @@ function MerchantSidebar() {
                       <Link href="/dashboard/settings/pricing">
                         <CreditCard className="h-3 w-3" />
                         <span>Pricing</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={pathname.startsWith("/dashboard/settings/tips")}
+                    >
+                      <Link href="/dashboard/settings/tips">
+                        <DollarSign className="h-3 w-3" />
+                        <span>Tip Configuration</span>
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>

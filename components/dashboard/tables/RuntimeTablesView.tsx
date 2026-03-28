@@ -80,8 +80,20 @@ export function RuntimeTablesView({ locationId, onBack }: RuntimeTablesViewProps
 
     const activeFloorPlan = floorPlans?.find((fp) => fp.id === activeFloorPlanId) || null
 
-    // These tables contain the 'session' data needed for status colors
-    const tables = floorPlanStatus?.tables || []
+    // Get all floor plan objects (including walls, plants, etc)
+    // For seating display, we also need to merge in session data from floorPlanStatus
+    const baseObjects = activeFloorPlan?.objects || []
+    const tablesSessions = floorPlanStatus?.tables || []
+
+    // Merge session data into the objects
+    const tables = baseObjects.map(obj => {
+        // Find matching session data if this is a table
+        const session = tablesSessions.find(t => t.id === obj.id)?.session
+        return {
+            ...obj,
+            session: session || null
+        }
+    })
 
     const handleEditLayout = () => {
         setIsDesignMode(true)
@@ -104,7 +116,7 @@ export function RuntimeTablesView({ locationId, onBack }: RuntimeTablesViewProps
 
     // 1. SWITCH TO EDIT MODE
     if (isDesignMode) {
-        return <FloorPlanCanvasView locationId={locationId} onBack={handleBackFromDesign} refetchFloorPlanStatus={refetchFloorPlanStatus} />
+        return <FloorPlanCanvasView locationId={locationId} initialFloorPlanId={activeFloorPlanId} onBack={handleBackFromDesign} refetchFloorPlanStatus={refetchFloorPlanStatus} />
     }
 
     if (isLoadingFloorPlans || isLoadingStatus) {
@@ -193,6 +205,7 @@ export function RuntimeTablesView({ locationId, onBack }: RuntimeTablesViewProps
                             selectedTableId={selectedTableId}
                             isDesignMode={false} // <--- Explicitly disable editing
                             onTableClick={setSelectedTableId}
+                            onClearSelection={() => setSelectedTableId(undefined)}
                         />
                     </div>
                 </div>

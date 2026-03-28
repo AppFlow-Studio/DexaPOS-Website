@@ -12,7 +12,9 @@ import { OrdersSheet } from "./OrdersSheet";
 import { StorefrontHeader } from "./StorefrontHeader";
 import { HeroBanner } from "./HeroBanner";
 import { StoreInfoBar } from "./StoreInfoBar";
+import { AccountDrawer } from "./AccountDrawer";
 import { useCart } from "../hooks/useCart";
+import { useSessionInit } from "../hooks/useSessionInit";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface StorefrontLayoutProps {
@@ -27,18 +29,25 @@ interface StorefrontLayoutProps {
     phone: string | null;
     email: string | null;
     business_hours: any;
+    latitude?: number | null;
+    longitude?: number | null;
   };
   menus: StorefrontMenu[];
+  slug: string;
 }
 
 export function StorefrontLayout({
   site,
   location,
   menus,
+  slug,
 }: StorefrontLayoutProps) {
+  useSessionInit(site?.id);
+
   const [activeTab, setActiveTab] = useState<TabType>("menu");
   const [isInfoSheetOpen, setIsInfoSheetOpen] = useState(false);
   const [isOrdersSheetOpen, setIsOrdersSheetOpen] = useState(false);
+  const [isAccountOpen, setIsAccountOpen] = useState(false);
   const { setOpen } = useCart();
 
   const storeName = site?.title || location.name || "Store";
@@ -59,7 +68,7 @@ export function StorefrontLayout({
       case "info":
         return <InfoPanel site={site} location={location} />;
       case "orders":
-        return <OrdersPanel />;
+        return <OrdersPanel slug={slug} />;
       default:
         return <MenuBrowser menus={menus} />;
     }
@@ -71,8 +80,10 @@ export function StorefrontLayout({
       <StorefrontHeader
         site={site}
         location={location}
+        storeConfigId={site?.id}
         onInfoClick={() => setIsInfoSheetOpen(true)}
         onOrdersClick={() => setIsOrdersSheetOpen(true)}
+        onAccountClick={() => setIsAccountOpen(true)}
       />
 
       {/* Hero Banner - Only show on Menu tab */}
@@ -85,7 +96,11 @@ export function StorefrontLayout({
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <HeroBanner site={site} storeName={storeName} />
+            <HeroBanner
+              site={site}
+              storeName={storeName}
+              locationAddress={`${location.address_line1}, ${location.city}`}
+            />
             {/* Store Info Bar - below hero */}
             <StoreInfoBar site={site} location={location} />
           </motion.div>
@@ -120,6 +135,12 @@ export function StorefrontLayout({
       <OrdersSheet
         isOpen={isOrdersSheetOpen}
         onOpenChange={setIsOrdersSheetOpen}
+        slug={slug}
+      />
+      <AccountDrawer
+        isOpen={isAccountOpen}
+        onOpenChange={setIsAccountOpen}
+        storeConfigId={site?.id ?? ""}
       />
     </>
   );

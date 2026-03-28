@@ -14,11 +14,15 @@ import { IconTargetArrow } from '@tabler/icons-react'
 interface RuntimeFloorPlanViewProps {
     floorPlan: FloorPlan | null
     tables: FloorPlanObject[]
-    selectedTableId?: string
+    selectedTableId?: string  // deprecated, use selectedTableIds
+    selectedTableIds?: string[]  // new: support multi-select
     isDesignMode?: boolean
-    onTableClick?: (tableId: string) => void
+    onTableClick?: (tableId: string, e?: React.MouseEvent<HTMLDivElement>) => void
+    onClearSelection?: () => void
     onUpdateTablePosition?: (id: string, x: number, y: number) => void
+    onBatchUpdateTablePositions?: (updates: Array<{ id: string; x: number; y: number }>) => void
     onUpdateTableName?: (id: string, name: string) => void
+    onUpdateTableSize?: (id: string, width: number, height: number) => void
     onUpdateTableRotation?: (id: string, rotation: number) => void
     onRotateEnd?: (id: string, rotation: number) => void
     onRemoveTable?: (id: string) => void
@@ -40,7 +44,7 @@ const getTableStatusColor = (status: string | undefined): string | undefined => 
         case 'served': return '#f97316'
         case 'paid': return '#eab308'
         case 'cleaning': return '#ef4444'
-        default: return '#22c55e'
+        default: return undefined
     }
 }
 
@@ -48,10 +52,14 @@ export const RuntimeFloorPlanView = forwardRef<RuntimeFloorPlanViewRef, RuntimeF
     floorPlan,
     tables: initialTables,
     selectedTableId,
+    selectedTableIds: propSelectedTableIds,
     onTableClick,
+    onClearSelection,
     isDesignMode = false,
     onUpdateTablePosition,
+    onBatchUpdateTablePositions,
     onUpdateTableName,
+    onUpdateTableSize,
     onUpdateTableRotation,
     onRotateEnd,
     onRemoveTable,
@@ -59,6 +67,8 @@ export const RuntimeFloorPlanView = forwardRef<RuntimeFloorPlanViewRef, RuntimeF
     onTableDragStart,
     onTableDragEnd
 }, ref) => {
+    // Support both single and multi-select
+    const selectedTableIds = propSelectedTableIds || (selectedTableId ? [selectedTableId] : [])
     const containerRef = useRef<HTMLDivElement>(null)
     const contentRef = useRef<HTMLDivElement>(null)
     const transformRef = useRef({ x: 0, y: 0, scale: 1 })
@@ -289,16 +299,19 @@ export const RuntimeFloorPlanView = forwardRef<RuntimeFloorPlanViewRef, RuntimeF
                 </Button>
             </div>
 
-            {/* Background - POINTER EVENTS NONE ensures drops pass through to container */}
-            <div 
+            {/* Background Grid - POINTER EVENTS NONE ensures drops pass through to container */}
+            <div
                 style={{
-                    backgroundImage: 'radial-gradient(var(--floor-bg-dot-color, #6b7280) 1px, transparent 1px)',
-                    backgroundSize: '20px 20px'
+                    backgroundImage: `
+                        linear-gradient(0deg, rgba(107, 114, 128, 0.15) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(107, 114, 128, 0.15) 1px, transparent 1px)
+                    `,
+                    backgroundSize: `${floorPlan?.grid_size || 20}px ${floorPlan?.grid_size || 20}px`
                 }}
                 className={cn(
-                    "absolute inset-0 pointer-events-none opacity-[0.4]",
-                    "dark:bg-[--floor-bg-dot-color:var(--background)]",
-                    "" 
+                    "absolute inset-0 pointer-events-none",
+                    "dark:bg-slate-700/10",
+                    "bg-slate-400/5"
                 )}
             />
 
@@ -308,21 +321,50 @@ export const RuntimeFloorPlanView = forwardRef<RuntimeFloorPlanViewRef, RuntimeF
                 className={cn("w-full h-full touch-none", interactionMode === 'pan' ? "cursor-grab active:cursor-grabbing" : "cursor-default")}
                 onDragOver={handleDragOver} // Must be present
                 onDrop={handleDrop}         // Must be present
+                onClick={(e) => {
+                    // Deselect if clicking on empty canvas (not on a table)
+                    if (e.target === containerRef.current) {
+                        onClearSelection?.()
+                    }
+                }}
             >
                 <div ref={contentRef} className="absolute top-0 left-0 w-0 h-0 origin-top-left will-change-transform">
+                    {/* Canvas Boundary */}
+                    {(floorPlan?.canvas_width || floorPlan?.canvas_height) && (
+                        <div
+                            style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: floorPlan.canvas_width || 1200,
+                                height: floorPlan.canvas_height || 800,
+                                border: '2px dashed rgba(99,102,241,0.45)',
+                                borderRadius: 4,
+                                backgroundColor: 'rgba(255,255,255,0.35)',
+                                pointerEvents: 'none',
+                            }}
+                        />
+                    )}
                     {initialTables.map(table => {
                         const session = (table as any).session
+                        if (!table.shape_id) {
+                            console.warn(`[RuntimeFloorPlanView] Table ${table.id} has no shape_id`)
+                        }
                         return (
                             <div key={table.id} data-table-node>
                                 <TableNode
                                     table={table}
+                                    allTables={initialTables}
                                     scaleRef={scaleRef}
-                                    isSelected={selectedTableId === table.id}
+                                    isSelected={selectedTableIds.includes(table.id)}
+                                    selectedTableIds={selectedTableIds}
                                     isDesignMode={isDesignMode}
-                                    onSelect={() => onTableClick?.(table.id)}
+                                    onSelect={(e) => onTableClick?.(table.id, e)}
 
                                     onUpdatePosition={onUpdateTablePosition || (() => { })}
+                                    onBatchUpdatePositions={onBatchUpdateTablePositions}
                                     onUpdateName={onUpdateTableName || (() => { })}
+                                    onUpdateSize={onUpdateTableSize}
                                     onUpdateRotation={onUpdateTableRotation}
                                     onRotateEnd={onRotateEnd}
 

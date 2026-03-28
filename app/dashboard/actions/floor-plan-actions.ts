@@ -1,6 +1,7 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { currentUser } from "@clerk/nextjs/server";
 import {
   FloorPlan,
   FloorPlanObject,
@@ -57,33 +58,77 @@ export async function CreateFloorPlanAction(
   description?: string,
 ) {
   const supabase = createServerSupabaseClient();
+  const user = await currentUser();
 
-  const { data, error } = await supabase.rpc("create_floor_plan", {
-    p_location_id: locationId,
-    p_name: name,
-    p_description: description,
+  console.log('[CreateFloorPlanAction] Creating floor plan:', {
+    locationId,
+    name,
+    description,
   });
 
-  if (error) throw error;
+  // Get the location to find merchant_id
+  const { data: location, error: locationError } = await supabase
+    .from('locations')
+    .select('merchant_id')
+    .eq('id', locationId)
+    .single();
+
+  if (locationError || !location) {
+    throw new Error('Location not found');
+  }
+
+  // Get current user's staff profile ID
+  let createdBy: string | null = null;
+  if (user?.id) {
+    const { data: staffProfile } = await supabase
+      .from('staff_profiles')
+      .select('id')
+      .eq('user_id', user.id)
+      .single();
+    createdBy = staffProfile?.id || null;
+  }
+
+  // Create floor plan directly
+  const { data: floorPlan, error } = await supabase
+    .from('floor_plans')
+    .insert({
+      merchant_id: location.merchant_id,
+      location_id: locationId,
+      name,
+      description,
+      canvas_width: 1200,
+      canvas_height: 800,
+      created_by: createdBy,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('[CreateFloorPlanAction] Insert Error:', error);
+    throw error;
+  }
 
   // Reload floor plans
-  const { data: floorPlans } = await supabase.rpc("get_location_floor_plans", {
-    p_location_id: locationId,
-  });
+  const { data: floorPlans } = await supabase
+    .from('floor_plans')
+    .select('*')
+    .eq('location_id', locationId)
+    .order('display_order', { ascending: true })
+    .order('created_at', { ascending: true });
 
   // Log Audit Event
   await LogAuditEvent({
     action: `Created Floor Plan: ${name}`,
     actionCategory: "settings",
     resourceType: "floor_plan",
-    resourceId: data.floor_plan_id,
+    resourceId: floorPlan.id,
     resourceName: name,
     locationId: locationId,
     changes: { after: { name, description } },
   });
 
   return {
-    floorPlanId: data.floor_plan_id,
+    floorPlanId: floorPlan.id,
     floorPlans: (floorPlans || []) as FloorPlan[],
   };
 }
@@ -314,6 +359,138 @@ export async function UpdateTableNameAction(tableId: string, name: string) {
       changes: {
         before: { name: table.name },
         after: { name },
+      },
+    });
+  }
+}
+
+export async function UpdateFloorPlanAction(
+  floorPlanId: string,
+  updates: { name?: string; description?: string; is_default?: boolean; canvas_width?: number; canvas_height?: number },
+) {
+  const supabase = createServerSupabaseClient();
+
+  const { data: fp } = await supabase
+    .from("floor_plans")
+    .select("name, location_id")
+    .eq("id", floorPlanId)
+    .single();
+
+  // If setting as default, unset all others for this location first
+  if (updates.is_default && fp?.location_id) {
+    await supabase
+      .from("floor_plans")
+      .update({ is_default: false })
+      .eq("location_id", fp.location_id);
+  }
+
+  const { error } = await supabase
+    .from("floor_plans")
+    .update(updates)
+    .eq("id", floorPlanId);
+
+  if (error) throw error;
+
+  if (fp) {
+    await LogAuditEvent({
+      action: `Updated Floor Plan: ${fp.name}`,
+      actionCategory: "settings",
+      resourceType: "floor_plan",
+      resourceId: floorPlanId,
+      resourceName: updates.name || fp.name,
+      locationId: fp.location_id,
+      changes: { after: updates },
+    });
+  }
+}
+
+export async function DeleteFloorPlanAction(floorPlanId: string) {
+  const supabase = createServerSupabaseClient();
+
+  const { data: fp } = await supabase
+    .from("floor_plans")
+    .select("name, location_id, is_default")
+    .eq("id", floorPlanId)
+    .single();
+
+  if (fp?.is_default) throw new Error("Cannot delete the default floor plan.");
+
+  const { error } = await supabase
+    .from("floor_plans")
+    .delete()
+    .eq("id", floorPlanId);
+
+  if (error) throw error;
+
+  if (fp) {
+    await LogAuditEvent({
+      action: `Deleted Floor Plan: ${fp.name}`,
+      actionCategory: "settings",
+      resourceType: "floor_plan",
+      resourceId: floorPlanId,
+      resourceName: fp.name,
+      locationId: fp.location_id,
+      changes: { before: { name: fp.name } },
+    });
+  }
+}
+
+export async function UpdateTablePropertiesAction(
+  tableId: string,
+  properties: {
+    name?: string;
+    capacity?: number | null;
+    min_capacity?: number | null;
+    is_reservable?: boolean;
+    is_combinable?: boolean;
+    default_turn_time?: number | null;
+    section_id?: string | null;
+    zone_name?: string | null;
+    label_override?: string | null;
+    color_override?: string | null;
+  },
+) {
+  const supabase = createServerSupabaseClient();
+
+  // Fetch context before update
+  const { data: table } = await supabase
+    .from("floor_plan_objects")
+    .select("*, floor_plan:floor_plans(location_id, merchant_id)")
+    .eq("id", tableId)
+    .single();
+
+  // Build update object, only including defined fields
+  const updateData: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(properties)) {
+    if (value !== undefined) {
+      updateData[key] = value;
+    }
+  }
+
+  if (Object.keys(updateData).length === 0) return;
+
+  const { error } = await supabase
+    .from("floor_plan_objects")
+    .update(updateData)
+    .eq("id", tableId);
+
+  if (error) throw error;
+
+  if (table) {
+    const fp = (table as any).floor_plan;
+    await LogAuditEvent({
+      merchantId: fp?.merchant_id,
+      action: `Updated Table Properties: ${table.name}`,
+      actionCategory: "settings",
+      resourceType: "table",
+      resourceId: tableId,
+      resourceName: table.name,
+      locationId: fp?.location_id,
+      changes: {
+        before: Object.fromEntries(
+          Object.keys(updateData).map((k) => [k, (table as any)[k]]),
+        ),
+        after: updateData,
       },
     });
   }

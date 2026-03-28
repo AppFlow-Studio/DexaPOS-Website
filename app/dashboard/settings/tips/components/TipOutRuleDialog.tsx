@@ -1,0 +1,293 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
+import type { TipOutRule, Role } from "@/app/dashboard/actions/tips";
+
+interface TipOutRuleDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  rule?: TipOutRule | null;
+  roles: Role[];
+  isLoading?: boolean;
+  onSubmit: (data: TipOutRuleFormData) => void;
+}
+
+export interface TipOutRuleFormData {
+  from_role_code: string;
+  to_role_code: string;
+  tip_out_type: "percentage_of_tips" | "percentage_of_sales" | "flat_amount";
+  tip_out_value: number;
+  is_active: boolean;
+  effective_date: string;
+}
+
+const defaultFormData: TipOutRuleFormData = {
+  from_role_code: "",
+  to_role_code: "",
+  tip_out_type: "percentage_of_sales",
+  tip_out_value: 0,
+  is_active: true,
+  effective_date: new Date().toISOString().split("T")[0],
+};
+
+export function TipOutRuleDialog({
+  open,
+  onOpenChange,
+  rule,
+  roles,
+  isLoading,
+  onSubmit,
+}: TipOutRuleDialogProps) {
+  const [formData, setFormData] = useState<TipOutRuleFormData>({ ...defaultFormData });
+
+  // Reset form when dialog opens/closes or rule changes
+  useEffect(() => {
+    if (!open) return;
+
+    if (rule) {
+      setFormData({
+        from_role_code: rule.from_role_code,
+        to_role_code: rule.to_role_code,
+        tip_out_type: rule.tip_out_type,
+        tip_out_value: rule.tip_out_value,
+        is_active: rule.is_active,
+        effective_date: rule.effective_date,
+      });
+    } else {
+      setFormData({
+        ...defaultFormData,
+        effective_date: new Date().toISOString().split("T")[0],
+      });
+    }
+  }, [rule, open]);
+
+  const isValid = () => {
+    if (!formData.from_role_code || !formData.to_role_code) return false;
+    if (formData.from_role_code === formData.to_role_code) return false;
+    if (formData.tip_out_value <= 0) return false;
+    if (
+      formData.tip_out_type !== "flat_amount" &&
+      formData.tip_out_value > 100
+    )
+      return false;
+    return true;
+  };
+
+  const handleChange = (field: string, value: any) => {
+    setFormData({ ...formData, [field]: value });
+  };
+
+  const handleSubmit = () => {
+    if (isValid()) {
+      onSubmit(formData);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            {rule ? "Edit Tip-Out Rule" : "Create Tip-Out Rule"}
+          </DialogTitle>
+          <DialogDescription>
+            Define how tips are distributed between roles
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          <div>
+            <Label htmlFor="from-role">From Role *</Label>
+            <Select
+              value={formData.from_role_code}
+              onValueChange={(value) =>
+                handleChange("from_role_code", value)
+              }
+            >
+              <SelectTrigger id="from-role" className="mt-1">
+                <SelectValue placeholder="Select role" />
+              </SelectTrigger>
+              <SelectContent>
+                {roles.map((role) => (
+                  <SelectItem
+                    key={role.code}
+                    value={role.code}
+                    disabled={role.code === formData.to_role_code}
+                  >
+                    <span className="font-semibold">{role.code}</span>
+                    <span className="text-muted-foreground ml-2">- {role.name}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="to-role">To Role *</Label>
+            <Select
+              value={formData.to_role_code}
+              onValueChange={(value) =>
+                handleChange("to_role_code", value)
+              }
+            >
+              <SelectTrigger id="to-role" className="mt-1">
+                <SelectValue placeholder="Select role" />
+              </SelectTrigger>
+              <SelectContent>
+                {roles.map((role) => (
+                  <SelectItem
+                    key={role.code}
+                    value={role.code}
+                    disabled={role.code === formData.from_role_code}
+                  >
+                    <span className="font-semibold">{role.code}</span>
+                    <span className="text-muted-foreground ml-2">- {role.name}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {formData.from_role_code === formData.to_role_code &&
+            formData.from_role_code && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  From and To roles must be different
+                </AlertDescription>
+              </Alert>
+            )}
+
+          <div>
+            <Label>Tip-Out Type *</Label>
+            <RadioGroup
+              value={formData.tip_out_type}
+              onValueChange={(value) =>
+                handleChange("tip_out_type", value)
+              }
+              className="mt-2 space-y-2"
+            >
+              <div className="flex items-center gap-2">
+                <RadioGroupItem
+                  value="percentage_of_tips"
+                  id="type-tips"
+                />
+                <Label htmlFor="type-tips" className="font-normal">
+                  Percentage of Tips — % of each giver's total tips
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem
+                  value="percentage_of_sales"
+                  id="type-sales"
+                />
+                <Label htmlFor="type-sales" className="font-normal">
+                  Percentage of Sales — % of each giver's gross sales
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem
+                  value="flat_amount"
+                  id="type-flat"
+                />
+                <Label htmlFor="type-flat" className="font-normal">
+                  Flat Amount — Fixed $ amount per giver per shift
+                </Label>
+              </div>
+            </RadioGroup>
+          </div>
+
+          <div>
+            <Label htmlFor="value">
+              Value {formData.tip_out_type === "flat_amount" ? "($)" : "(%)"}
+              {" "}*
+            </Label>
+            <Input
+              id="value"
+              type="number"
+              min="0"
+              max={formData.tip_out_type === "flat_amount" ? undefined : 100}
+              step="0.01"
+              value={formData.tip_out_value || ""}
+              onChange={(e) =>
+                handleChange("tip_out_value", parseFloat(e.target.value) || 0)
+              }
+              placeholder={formData.tip_out_type === "flat_amount" ? "0.00" : "0"}
+              className="mt-1"
+            />
+            {formData.tip_out_type !== "flat_amount" && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Must be between 0 and 100
+              </p>
+            )}
+            {formData.tip_out_type === "flat_amount" && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Amount in dollars (e.g., 5.00 = $5 per giver per shift)
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Label htmlFor="effective-date">Effective Date</Label>
+            <Input
+              id="effective-date"
+              type="date"
+              value={formData.effective_date}
+              onChange={(e) =>
+                handleChange("effective_date", e.target.value)
+              }
+              className="mt-1"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="active"
+              checked={formData.is_active}
+              onCheckedChange={(checked) =>
+                handleChange("is_active", checked)
+              }
+            />
+            <Label htmlFor="active" className="font-normal">
+              Active
+            </Label>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={!isValid() || isLoading}
+          >
+            {isLoading ? "Saving..." : rule ? "Update Rule" : "Create Rule"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

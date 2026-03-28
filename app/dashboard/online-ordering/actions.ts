@@ -1,7 +1,6 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { Site, SiteThemeConfig } from "@/types/site";
 import {
   OnlineOrderingSettings,
   WeeklySchedule,
@@ -9,43 +8,82 @@ import {
 import { revalidatePath } from "next/cache";
 import { LogAuditEvent } from "../actions/audit-logs";
 
-const dayOrder = [
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-  "saturday",
-  "sunday",
-];
-
-// Helper to map DB Site to Frontend Settings partial
-function mapSiteToSettings(site: Site): Partial<OnlineOrderingSettings> {
+function mapConfigToSettings(
+  config: any,
+  location: any
+): Partial<OnlineOrderingSettings> {
   return {
-    enabled: site.is_active ?? false,
-    storeName: site.title ?? "",
-    storeSlug: site.subdomain ?? "",
-    logoUrl: site.logo_url,
-    bannerText: site.banner_text,
-    // Extract theme config
-    primaryColor: site.theme_config?.primaryColor ?? "#3b82f6",
-    secondaryColor: site.theme_config?.secondaryColor ?? "#10b981",
-    heroImageUrl: site.theme_config?.heroImageUrl,
-    faviconUrl: site.theme_config?.faviconUrl,
+    id: config.id,
+    locationId: config.location_id,
+    enabled: config.is_active ?? false,
+    storeName: config.store_name ?? location.name,
+    storeSlug: config.slug ?? "",
+    description: config.description ?? "",
+    phone: config.phone ?? location.phone ?? "",
+    email: config.email ?? location.email ?? "",
+    address: location
+      ? `${location.address_line1 ?? ""}, ${location.city ?? ""}, ${location.state ?? ""} ${location.postal_code ?? ""}`
+      : "",
+
+    templateId: config.template_id ?? "classic",
+    primaryColor: config.primary_color ?? "#2DD4BF",
+    secondaryColor: config.secondary_color ?? "#10b981",
+    accentColor: config.accent_color ?? null,
+    backgroundColor: config.background_color ?? "#FFFFFF",
+    textColor: config.text_color ?? "#111827",
+    fontFamily: config.font_family ?? "DM Sans",
+
+    logoUrl: config.logo_url,
+    heroImageUrl: config.hero_image_url,
+    faviconUrl: config.favicon_url,
+    ogImageUrl: config.og_image_url,
+
+    operatingHours: config.operating_hours as WeeklySchedule,
+
+    pickupEnabled: config.accepts_pickup ?? true,
+    deliveryEnabled: config.accepts_delivery ?? false,
+    minimumOrderAmount: config.min_order_cents
+      ? config.min_order_cents / 100
+      : 0,
+    preparationLeadTime: config.estimated_prep_minutes ?? 20,
+    futureOrderMaxDays: config.max_future_order_days ?? 0,
+
+    baseDeliveryFee: config.delivery_fee_cents
+      ? config.delivery_fee_cents / 100
+      : 0,
+    freeDeliveryThreshold: config.free_delivery_threshold_cents
+      ? config.free_delivery_threshold_cents / 100
+      : 0,
+    deliveryRadiusMiles: config.delivery_radius_miles
+      ? Number(config.delivery_radius_miles)
+      : null,
+
+    tippingEnabled: config.tip_enabled ?? true,
+    tipPresets: Array.isArray(config.tip_presets)
+      ? config.tip_presets
+      : [15, 18, 20, 25],
+
+    ipospaysTpn: config.ipospays_tpn ?? "",
+
+    headerStyle: config.header_style ?? "filled",
+    headerTextColor: config.header_text_color ?? null,
+
+    metaTitle: config.meta_title ?? "",
+    metaDescription: config.meta_description ?? "",
+    googleAnalyticsId: config.google_analytics_id ?? "",
+    facebookPixelId: config.facebook_pixel_id ?? "",
   };
 }
 
-// Fetch all settings for a location by combining Location + Site data
 export async function getOnlineOrderingSettings(
-  locationId: string,
+  locationId: string
 ): Promise<Partial<OnlineOrderingSettings> | null> {
   const supabase = createServerSupabaseClient();
 
-  // 1. Fetch Location Data (Hours, Contact)
   const { data: location, error: locError } = await supabase
     .from("locations")
     .select(
-      "name, phone, email, address_line1, city, state, postal_code, business_hours",
+      "name, phone, email, address_line1, city, state, postal_code, business_hours"
     )
     .eq("id", locationId)
     .single();
@@ -55,83 +93,36 @@ export async function getOnlineOrderingSettings(
     return null;
   }
 
-  // 2. Fetch Site Data (Branding, Enabled)
-  // 2. Fetch Site Data (Branding, Config)
-  const { data: site, error: siteError } = await supabase
-    .from("sites")
+  const { data: config, error: configError } = await supabase
+    .from("online_store_config")
     .select("*")
     .eq("location_id", locationId)
     .single();
 
-  // It's possible a site doesn't exist yet, which is fine.
-  if (siteError && siteError.code !== "PGRST116") {
-    console.error("Error fetching site:", siteError);
+  if (configError && configError.code !== "PGRST116") {
+    console.error("Error fetching store config:", configError);
   }
 
-  // 3. Construct the settings object
-  const settings: Partial<OnlineOrderingSettings> = {
+  if (config) {
+    return mapConfigToSettings(config, location);
+  }
+
+  return {
     locationId,
-    // Location-derived fields
-    storeName: location.name, // Default to location name, but Site title overrides if present
+    storeName: location.name,
     phone: location.phone ?? "",
     email: location.email ?? "",
     address: `${location.address_line1}, ${location.city}, ${location.state} ${location.postal_code}`,
-    operatingHours: location.business_hours as WeeklySchedule, // Default fallback
+    operatingHours: location.business_hours as WeeklySchedule,
   };
-
-  // Merge Site data if it exists
-  if (site) {
-    const siteSettings = mapSiteToSettings(site);
-
-    // Merge online_ordering_config fields if present
-    if (site.online_ordering_config) {
-      const config: any = site.online_ordering_config;
-
-      // Prioritize config hours if they exist and are valid
-      if (config.operatingHours) {
-        settings.operatingHours = config.operatingHours;
-      }
-
-      // Merge other config fields
-      Object.assign(settings, {
-        useCustomDeliveryHours: config.useCustomDeliveryHours,
-        deliveryHours: config.deliveryHours,
-        pickupEnabled: config.pickupEnabled,
-        deliveryEnabled: config.deliveryEnabled,
-        preparationLeadTime: config.preparationLeadTime,
-        acceptFutureOrdersOnly: config.acceptFutureOrdersOnly,
-        futureOrderMinDays: config.futureOrderMinDays,
-        futureOrderMaxDays: config.futureOrderMaxDays,
-        minimumOrderAmount: config.minimumOrderAmount,
-        tippingEnabled: config.tippingEnabled,
-        tipConfig: config.tipConfig,
-        baseDeliveryFee: config.baseDeliveryFee,
-        freeDeliveryThreshold: config.freeDeliveryThreshold,
-        deliveryZones: config.deliveryZones,
-        acceptOnlinePayments: config.acceptOnlinePayments,
-        acceptCashOnDelivery: config.acceptCashOnDelivery,
-        acceptCardOnDelivery: config.acceptCardOnDelivery,
-        sendEmailOnNewOrder: config.sendEmailOnNewOrder,
-        notificationEmail: config.notificationEmail,
-        autoAcceptOrders: config.autoAcceptOrders,
-        autoClosePaidOrders: config.autoClosePaidOrders,
-      });
-    }
-
-    Object.assign(settings, siteSettings);
-  }
-
-  return settings;
 }
 
-// Upsert settings (Split between Sites and Locations tables)
 export async function saveOnlineOrderingSettings(
   locationId: string,
-  settings: Partial<OnlineOrderingSettings>,
+  settings: Partial<OnlineOrderingSettings>
 ) {
   const supabase = createServerSupabaseClient();
 
-  // 1. Fetch Current State for Audit Diffing
   const { data: currentLocation, error: locFetchError } = await supabase
     .from("locations")
     .select("merchant_id, name, phone, email, business_hours")
@@ -142,49 +133,13 @@ export async function saveOnlineOrderingSettings(
     throw new Error("Location not found");
   }
 
-  const { data: existingSite } = await supabase
-    .from("sites")
-    .select("*")
-    .eq("location_id", locationId)
-    .single();
-
   const merchantId = currentLocation.merchant_id;
-  const auditChanges: { before: any; after: any } = { before: {}, after: {} };
-  let hasChanges = false;
 
-  // 2. Prepare Location Updates
-  const locationUpdates: any = {};
+  const locationUpdates: Record<string, unknown> = {};
   if (settings.phone !== undefined) locationUpdates.phone = settings.phone;
   if (settings.email !== undefined) locationUpdates.email = settings.email;
   if (settings.operatingHours !== undefined)
     locationUpdates.business_hours = settings.operatingHours;
-
-  // detailed diff for location
-  // detailed diff for location
-  Object.keys(locationUpdates).forEach((key) => {
-    const newVal = locationUpdates[key];
-    const oldVal = currentLocation[key as keyof typeof currentLocation];
-
-    if (JSON.stringify(newVal) !== JSON.stringify(oldVal)) {
-      if (key === "business_hours") {
-        // Flatten business hours diff to avoid huge logs
-        dayOrder.forEach((day) => {
-          // business_hours is stored as JSONB but follows WeeklySchedule structure
-          const newDay = (newVal as any)?.[day];
-          const oldDay = (oldVal as any)?.[day];
-          if (JSON.stringify(newDay) !== JSON.stringify(oldDay)) {
-            auditChanges.before[`business_hours_${day}`] = oldDay;
-            auditChanges.after[`business_hours_${day}`] = newDay;
-            hasChanges = true;
-          }
-        });
-      } else {
-        auditChanges.before[key] = oldVal;
-        auditChanges.after[key] = newVal;
-        hasChanges = true;
-      }
-    }
-  });
 
   if (Object.keys(locationUpdates).length > 0) {
     const { error: locError } = await supabase
@@ -196,231 +151,205 @@ export async function saveOnlineOrderingSettings(
       throw new Error(`Location update failed: ${locError.message}`);
   }
 
-  // 3. Prepare Site Updates
-  const currentTheme: any = existingSite?.theme_config || {};
-  const currentOnlineConfig: any = existingSite?.online_ordering_config || {};
+  const { data: existingConfig } = await supabase
+    .from("online_store_config")
+    .select("*")
+    .eq("location_id", locationId)
+    .single();
 
-  const themeConfig: SiteThemeConfig = {
-    primaryColor:
-      settings.primaryColor ?? currentTheme.primaryColor ?? "#3b82f6",
-    secondaryColor:
-      settings.secondaryColor ?? currentTheme.secondaryColor ?? "#10b981",
-    heroImageUrl: settings.heroImageUrl ?? currentTheme.heroImageUrl,
-    faviconUrl: settings.faviconUrl ?? currentTheme.faviconUrl,
-    headerStyle: settings.headerStyle ?? currentTheme.headerStyle, // Save headerStyle
-  };
+  const auditChanges: {
+    before: Record<string, unknown>;
+    after: Record<string, unknown>;
+  } = { before: {}, after: {} };
+  let hasChanges = false;
 
-  // Construct OnlineOrderingConfig
-  const onlineOrderingConfig: any = {
-    ...currentOnlineConfig,
-    // Hours
-    operatingHours:
-      settings.operatingHours ?? currentOnlineConfig.operatingHours,
-    useCustomDeliveryHours:
-      settings.useCustomDeliveryHours ??
-      currentOnlineConfig.useCustomDeliveryHours,
-    deliveryHours: settings.deliveryHours ?? currentOnlineConfig.deliveryHours,
-
-    // Pickup & Delivery
-    pickupEnabled: settings.pickupEnabled ?? currentOnlineConfig.pickupEnabled,
-    deliveryEnabled:
-      settings.deliveryEnabled ?? currentOnlineConfig.deliveryEnabled,
-    preparationLeadTime:
-      settings.preparationLeadTime ?? currentOnlineConfig.preparationLeadTime,
-    acceptFutureOrdersOnly:
-      settings.acceptFutureOrdersOnly ??
-      currentOnlineConfig.acceptFutureOrdersOnly,
-    futureOrderMinDays:
-      settings.futureOrderMinDays ?? currentOnlineConfig.futureOrderMinDays,
-    futureOrderMaxDays:
-      settings.futureOrderMaxDays ?? currentOnlineConfig.futureOrderMaxDays,
-    minimumOrderAmount:
-      settings.minimumOrderAmount ?? currentOnlineConfig.minimumOrderAmount,
-
-    // Tipping
-    tippingEnabled:
-      settings.tippingEnabled ?? currentOnlineConfig.tippingEnabled,
-    tipConfig: settings.tipConfig ?? currentOnlineConfig.tipConfig,
-
-    // Delivery Settings
-    baseDeliveryFee:
-      settings.baseDeliveryFee ?? currentOnlineConfig.baseDeliveryFee,
-    freeDeliveryThreshold:
-      settings.freeDeliveryThreshold ??
-      currentOnlineConfig.freeDeliveryThreshold,
-    deliveryZones: settings.deliveryZones ?? currentOnlineConfig.deliveryZones,
-
-    // Payment
-    acceptOnlinePayments:
-      settings.acceptOnlinePayments ?? currentOnlineConfig.acceptOnlinePayments,
-    acceptCashOnDelivery:
-      settings.acceptCashOnDelivery ?? currentOnlineConfig.acceptCashOnDelivery,
-    acceptCardOnDelivery:
-      settings.acceptCardOnDelivery ?? currentOnlineConfig.acceptCardOnDelivery,
-
-    // Notifications & Automation
-    sendEmailOnNewOrder:
-      settings.sendEmailOnNewOrder ?? currentOnlineConfig.sendEmailOnNewOrder,
-    notificationEmail:
-      settings.notificationEmail ?? currentOnlineConfig.notificationEmail,
-    autoAcceptOrders:
-      settings.autoAcceptOrders ?? currentOnlineConfig.autoAcceptOrders,
-    autoClosePaidOrders:
-      settings.autoClosePaidOrders ?? currentOnlineConfig.autoClosePaidOrders,
-  };
-
-  // Build siteData dynamically
-  const siteData: Record<string, any> = {
+  const configData: Record<string, unknown> = {
     location_id: locationId,
-    theme_config: themeConfig,
-    online_ordering_config: onlineOrderingConfig,
+    merchant_id: merchantId,
   };
 
-  // Only include fields if they have actual values
-  if (settings.storeName !== undefined) siteData.title = settings.storeName;
-  else if (existingSite?.title) siteData.title = existingSite.title;
+  // Identity
+  if (settings.storeName !== undefined)
+    configData.store_name = settings.storeName;
+  if (settings.storeSlug !== undefined && settings.storeSlug !== "")
+    configData.slug = settings.storeSlug;
+  if (settings.enabled !== undefined) configData.is_active = settings.enabled;
+  if (settings.description !== undefined)
+    configData.description = settings.description;
+  if (settings.phone !== undefined) configData.phone = settings.phone;
+  if (settings.email !== undefined) configData.email = settings.email;
 
-  if (settings.storeSlug !== undefined && settings.storeSlug !== "") {
-    siteData.subdomain = settings.storeSlug;
-  } else if (existingSite?.subdomain) {
-    siteData.subdomain = existingSite.subdomain;
-  }
+  // Template & Branding
+  if (settings.templateId !== undefined)
+    configData.template_id = settings.templateId;
+  if (settings.primaryColor !== undefined)
+    configData.primary_color = settings.primaryColor;
+  if (settings.secondaryColor !== undefined)
+    configData.secondary_color = settings.secondaryColor;
+  if (settings.accentColor !== undefined)
+    configData.accent_color = settings.accentColor;
+  if (settings.backgroundColor !== undefined)
+    configData.background_color = settings.backgroundColor;
+  if (settings.textColor !== undefined)
+    configData.text_color = settings.textColor;
+  if (settings.fontFamily !== undefined)
+    configData.font_family = settings.fontFamily;
 
-  if (settings.logoUrl !== undefined) siteData.logo_url = settings.logoUrl;
+  // Assets
+  if (settings.logoUrl !== undefined) configData.logo_url = settings.logoUrl;
+  if (settings.heroImageUrl !== undefined)
+    configData.hero_image_url = settings.heroImageUrl;
+  if (settings.faviconUrl !== undefined)
+    configData.favicon_url = settings.faviconUrl;
+  if (settings.ogImageUrl !== undefined)
+    configData.og_image_url = settings.ogImageUrl;
 
-  if (settings.bannerText !== undefined)
-    siteData.banner_text = settings.bannerText;
+  // Hours
+  if (settings.operatingHours !== undefined)
+    configData.operating_hours = settings.operatingHours;
 
-  if (settings.enabled !== undefined) siteData.is_active = settings.enabled;
-  else if (existingSite?.is_active !== undefined)
-    siteData.is_active = existingSite.is_active;
+  // Ordering
+  if (settings.pickupEnabled !== undefined)
+    configData.accepts_pickup = settings.pickupEnabled;
+  if (settings.deliveryEnabled !== undefined)
+    configData.accepts_delivery = settings.deliveryEnabled;
+  if (settings.minimumOrderAmount !== undefined)
+    configData.min_order_cents = Math.round(settings.minimumOrderAmount * 100);
+  if (settings.preparationLeadTime !== undefined)
+    configData.estimated_prep_minutes = settings.preparationLeadTime;
+  if (settings.futureOrderMaxDays !== undefined)
+    configData.max_future_order_days = settings.futureOrderMaxDays;
 
-  // 4. Update Site and Calculate Site Diffs
-  if (existingSite) {
-    // Compare Theme Config
-    // Compare Theme Config
-    Object.keys(themeConfig).forEach((key) => {
-      const k = key as keyof SiteThemeConfig;
-      const newVal = themeConfig[k];
-      const oldVal = currentTheme[k];
+  // Delivery
+  if (settings.baseDeliveryFee !== undefined)
+    configData.delivery_fee_cents = Math.round(
+      settings.baseDeliveryFee * 100
+    );
+  if (settings.freeDeliveryThreshold !== undefined)
+    configData.free_delivery_threshold_cents =
+      settings.freeDeliveryThreshold > 0
+        ? Math.round(settings.freeDeliveryThreshold * 100)
+        : null;
+  if (settings.deliveryRadiusMiles !== undefined)
+    configData.delivery_radius_miles = settings.deliveryRadiusMiles;
 
+  // Tipping
+  if (settings.tippingEnabled !== undefined)
+    configData.tip_enabled = settings.tippingEnabled;
+  if (settings.tipPresets !== undefined)
+    configData.tip_presets = settings.tipPresets;
+
+  // Payment
+  if (settings.ipospaysTpn !== undefined)
+    configData.ipospays_tpn = settings.ipospaysTpn || null;
+
+  // Header
+  if (settings.headerStyle !== undefined)
+    configData.header_style = settings.headerStyle;
+  if (settings.headerTextColor !== undefined)
+    configData.header_text_color = settings.headerTextColor || null;
+
+  // SEO
+  if (settings.metaTitle !== undefined)
+    configData.meta_title = settings.metaTitle || null;
+  if (settings.metaDescription !== undefined)
+    configData.meta_description = settings.metaDescription || null;
+
+  // Analytics
+  if (settings.googleAnalyticsId !== undefined)
+    configData.google_analytics_id = settings.googleAnalyticsId || null;
+  if (settings.facebookPixelId !== undefined)
+    configData.facebook_pixel_id = settings.facebookPixelId || null;
+
+  if (existingConfig) {
+    const compareKeys = Object.keys(configData).filter(
+      (k) => k !== "location_id" && k !== "merchant_id"
+    );
+    for (const key of compareKeys) {
+      const newVal = configData[key];
+      const oldVal = existingConfig[key as keyof typeof existingConfig];
       if (JSON.stringify(newVal) !== JSON.stringify(oldVal)) {
-        auditChanges.before[k] = oldVal;
-        auditChanges.after[k] = newVal;
-        hasChanges = true;
-      }
-    });
-
-    // Compare Online Ordering Config
-    if (
-      JSON.stringify(onlineOrderingConfig) !==
-      JSON.stringify(currentOnlineConfig)
-    ) {
-      // Find changed keys within config for cleaner logs if possible,
-      // but for now logging the whole object ensures we capture deep changes
-      // Let's try to isolate changed keys
-      const configDiffBefore: any = {};
-      const configDiffAfter: any = {};
-      let configChanged = false;
-
-      Object.keys(onlineOrderingConfig).forEach((key) => {
-        const newVal = onlineOrderingConfig[key];
-        const oldVal = currentOnlineConfig[key];
-
-        if (JSON.stringify(newVal) !== JSON.stringify(oldVal)) {
-          // Flatten hours diffs
-          if (key === "operatingHours" || key === "deliveryHours") {
-            dayOrder.forEach((day) => {
-              const newDay = newVal[day];
-              const oldDay = oldVal[day];
-              if (JSON.stringify(newDay) !== JSON.stringify(oldDay)) {
-                const logKey = `${key === "operatingHours" ? "operating_hours" : "delivery_hours"}_${day}`;
-                configDiffBefore[logKey] = oldDay;
-                configDiffAfter[logKey] = newDay;
-                configChanged = true;
-              }
-            });
-          } else {
-            configDiffBefore[key] = oldVal;
-            configDiffAfter[key] = newVal;
-            configChanged = true;
-          }
-        }
-      });
-
-      if (configChanged) {
-        auditChanges.before = {
-          ...auditChanges.before,
-          ...configDiffBefore,
-        };
-        auditChanges.after = {
-          ...auditChanges.after,
-          ...configDiffAfter,
-        };
+        auditChanges.before[key] = oldVal;
+        auditChanges.after[key] = newVal;
         hasChanges = true;
       }
     }
 
-    // Compare Root Fields
-    ["title", "subdomain", "logo_url", "banner_text", "is_active"].forEach(
-      (key) => {
-        const newVal = siteData[key];
-        const oldVal = existingSite[key as keyof typeof existingSite];
-        // Only check if newVal is defined (it might be undefined if not in siteData construction)
-        // Actually siteData has them if they were set.
-        // But careful about undefined vs null.
-        if (
-          newVal !== undefined &&
-          JSON.stringify(newVal) !== JSON.stringify(oldVal)
-        ) {
-          auditChanges.before[key] = oldVal;
-          auditChanges.after[key] = newVal;
-          hasChanges = true;
-        }
-      },
-    );
+    const { error: updateError } = await supabase
+      .from("online_store_config")
+      .update(configData)
+      .eq("id", existingConfig.id);
 
-    const { error: siteUpdateError } = await supabase
-      .from("sites")
-      .update(siteData)
-      .eq("id", existingSite.id);
-
-    if (siteUpdateError)
-      throw new Error(`Site update failed: ${siteUpdateError.message}`);
+    if (updateError)
+      throw new Error(`Store config update failed: ${updateError.message}`);
   } else {
-    // Create New Site
-    const { error: siteInsertError } = await supabase.from("sites").insert({
-      ...siteData,
-      merchant_id: merchantId,
-    });
+    if (!configData.store_name) configData.store_name = currentLocation.name;
+    if (!configData.slug)
+      configData.slug = currentLocation.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
 
-    if (siteInsertError)
-      throw new Error(`Site creation failed: ${siteInsertError.message}`);
+    const { data: newConfig, error: insertError } = await supabase
+      .from("online_store_config")
+      .insert(configData)
+      .select("id")
+      .single();
+
+    if (insertError)
+      throw new Error(`Store config creation failed: ${insertError.message}`);
+
+    if (newConfig) {
+      await supabase.from("online_store_pages").insert([
+        {
+          store_config_id: newConfig.id,
+          page_type: "home",
+          section_type: "hero",
+          title: configData.store_name as string,
+          subtitle: "Order online for pickup or delivery",
+          cta_text: "Order Now",
+          cta_link: "/menu",
+          display_order: 0,
+          is_visible: true,
+        },
+        {
+          store_config_id: newConfig.id,
+          page_type: "home",
+          section_type: "hours",
+          title: "Hours",
+          display_order: 1,
+          is_visible: true,
+        },
+        {
+          store_config_id: newConfig.id,
+          page_type: "home",
+          section_type: "location_map",
+          title: "Find Us",
+          display_order: 2,
+          is_visible: true,
+        },
+      ]);
+    }
 
     hasChanges = true;
-    auditChanges.after = {
-      ...auditChanges.after,
-      ...siteData,
-      ...locationUpdates,
-    };
+    auditChanges.after = configData;
   }
 
-  // 5. Log Audit Event
   if (hasChanges) {
     await LogAuditEvent({
-      merchantId: merchantId,
-      action: existingSite
-        ? `Updated Online Ordering Settings`
-        : `Created Online Ordering Settings`,
+      merchantId,
+      action: existingConfig
+        ? "Updated Online Store Config"
+        : "Created Online Store Config",
       actionCategory: "settings",
-      resourceType: "online_ordering",
+      resourceType: "online_store",
       resourceId: locationId,
-      resourceName: settings.storeName || currentLocation.name,
-      locationId: locationId,
+      resourceName: (settings.storeName || currentLocation.name) as string,
+      locationId,
       changes: auditChanges,
     });
   }
 
-  revalidatePath(`/dashboard/online-ordering`);
+  revalidatePath("/dashboard/online-ordering");
   return { success: true };
 }

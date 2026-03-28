@@ -308,7 +308,8 @@ export async function sendReceipt(
         await client.messages.create({
           body: plainText,
           from: fromNumber,
-          to: params.recipient,
+          // to: params.recipient,
+          to: "+18447440893"
         });
       } catch (smsError: any) {
         await supabase.from("receipt_sends").insert({

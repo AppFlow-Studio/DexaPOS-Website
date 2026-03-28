@@ -1,6 +1,8 @@
 'use server'
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { auth, clerkClient } from '@clerk/nextjs/server'
 import { LocationMemberWithDetails, LocationInviteWithDetails } from '@/types/merchant_locations'
 import { LogAuditEvent } from './audit-logs'
 
@@ -333,19 +335,52 @@ export async function CreateLocationInvite(
     data: {
         email: string
         role_code: string
-        invited_by_user_id: string
+        invited_by_user_id?: string
     }
 ) {
-    if (!locationId || !data.email || !data.role_code || !data.invited_by_user_id) {
+    if (!locationId || !data.email || !data.role_code) {
         return { error: 'All fields are required' }
     }
 
-    // Send Clerk Organization Invitation
-
     const supabase = createServerSupabaseClient()
+    const serviceRoleSupabase = createServiceRoleClient()
+    const { userId: actorUserId } = await auth()
+
+    if (!actorUserId) {
+        return { error: 'Unauthorized' }
+    }
+
+    // Enforce permission before using service-role writes.
+    const { data: hasTeamManagePermission, error: permissionError } = await supabase.rpc(
+        'user_has_location_permission',
+        {
+            p_location_id: locationId,
+            p_permission_code: 'location.team.manage',
+        }
+    )
+
+    if (permissionError) {
+        console.error('[CreateLocationInvite] Permission check error:', permissionError)
+        return { error: 'Failed to verify invite permission.' }
+    }
+
+    if (!hasTeamManagePermission) {
+        return { error: 'You do not have permission to invite users to this location.' }
+    }
+
+    const { data: location, error: locationError } = await serviceRoleSupabase
+        .from('locations')
+        .select('id, merchant_id')
+        .eq('id', locationId)
+        .single()
+
+    if (locationError || !location) {
+        console.error('[CreateLocationInvite] Location lookup error:', locationError)
+        return { error: 'Location not found.' }
+    }
 
     // Check for existing pending invite
-    const { data: existing } = await supabase
+    const { data: existing } = await serviceRoleSupabase
         .from('location_invites')
         .select('id')
         .eq('location_id', locationId)
@@ -357,13 +392,60 @@ export async function CreateLocationInvite(
         return { error: 'An invitation has already been sent to this email' }
     }
 
-    const { data: invite, error } = await supabase
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL
+    const clerk = await clerkClient()
+
+    let invitationId: string | null = null
+    try {
+        const invitation = await clerk.organizations.createOrganizationInvitation({
+            organizationId: clerkOrgId,
+            inviterUserId: actorUserId,
+            emailAddress: data.email.trim(),
+            role: 'org:member',
+            ...(appUrl && { redirectUrl: `${appUrl}/dashboard` }),
+            publicMetadata: {
+                creationType: 'invitation',
+                roleCode: data.role_code,
+                organizationId: clerkOrgId,
+                merchantId: location.merchant_id,
+                locationAssignments: [
+                    {
+                        locationId,
+                        roleCode: data.role_code,
+                        isPrimaryLocation: false,
+                    },
+                ],
+            },
+        })
+
+        invitationId = invitation.id
+    } catch (clerkError: any) {
+        console.error('[CreateLocationInvite] Clerk invitation error:', clerkError)
+        return {
+            error:
+                clerkError?.errors?.[0]?.longMessage ||
+                clerkError?.message ||
+                'Failed to send organization invitation.',
+        }
+    }
+
+    const { data: invite, error } = await serviceRoleSupabase
         .from('location_invites')
         .insert({
             location_id: locationId,
+            merchant_id: location.merchant_id,
             email: data.email,
             role_code: data.role_code,
-            invited_by_user_id: data.invited_by_user_id,
+            invited_by_user_id: actorUserId,
+            invite_type: 'clerk',
+            clerk_invite_id: invitationId,
+            location_assignments: [
+                {
+                    locationId,
+                    role_code: data.role_code,
+                    is_primary_location: false,
+                },
+            ],
             status: 'pending',
         })
         .select()
@@ -371,6 +453,16 @@ export async function CreateLocationInvite(
 
     if (error) {
         console.error('Error creating location invite:', error)
+        if (invitationId) {
+            try {
+                await clerk.organizations.revokeOrganizationInvitation({
+                    organizationId: clerkOrgId,
+                    invitationId,
+                })
+            } catch (revokeError) {
+                console.error('[CreateLocationInvite] Failed to rollback Clerk invite:', revokeError)
+            }
+        }
         return { error: error.message }
     }
 
@@ -478,8 +570,8 @@ export async function ApplyLocationManagerAssignment(params: {
     }
 
     if (normalizedType === 'invite_new') {
-        if (!params.invitedByUserId || !params.managerInviteEmail) {
-            return { error: 'Missing inviter or manager email for manager invite flow.' }
+        if (!params.managerInviteEmail) {
+            return { error: 'Missing manager email for manager invite flow.' }
         }
 
         const inviteResult = await CreateLocationInvite(params.clerkOrgId, params.locationId, {
