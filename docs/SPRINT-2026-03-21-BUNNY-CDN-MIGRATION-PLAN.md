@@ -14,7 +14,9 @@ Current implementation stop point:
 5. Legacy CFD delete fallback preserved for historical Supabase-hosted URLs
 6. Online ordering store-image uploads/deletes now route through Bunny instead of Supabase Storage
 7. Legacy online-ordering delete fallback is preserved for historical `store-assets` URLs
-8. HQ organization-logo migration is still pending
+8. HQ organization-logo uploads and app-side deletes now route through Bunny instead of `Organizations-Logos`
+9. Legacy organization-logo delete fallback is preserved for historical `Organizations-Logos` URLs
+10. `supabase/functions/clerk-webhooks/index.ts` Bunny cleanup patch is prepared locally but redeploy is deferred pending senior approval
 
 ## Summary
 
@@ -39,25 +41,29 @@ No schema migration is required for the first implementation pass if we continue
 
 1. Shared Supabase Storage helper:
 - `lib/storage/actions.ts`
-- Used today by online ordering image uploads
+- Now proxies online-ordering branding uploads/deletes through `cdn-upload`
+- Preserves legacy `store-assets` delete fallback for historical Supabase URLs
 
 2. Online ordering image management:
 - `app/dashboard/online-ordering/page.tsx`
 - Uses `uploadStoreImage(...)` and `deleteStoreImage(...)`
-- Currently writes public Supabase Storage URLs into online ordering settings
+- Now writes Bunny Pull Zone URLs into online ordering settings
+- Still accepts legacy Supabase-hosted URLs during transition for delete fallback
 
 3. CFD carousel image management:
 - `app/dashboard/settings/customer-display/page.tsx`
-- Currently uploads directly from the client to Supabase Storage bucket `cfd-images`
-- Also deletes directly from that bucket on the client
-- This is the highest-risk path because it violates the new Bunny security model most directly
+- Now uploads from the client through `cdn-upload`
+- Deletes Bunny-hosted assets through `cdn-upload`
+- Preserves legacy Supabase Storage delete fallback for historical `cfd-images` URLs
 
 4. HQ organization and merchant logo uploads:
 - `app/manage/organizations/actions/clerk-create-organization.ts`
 - `app/manage/organizations/actions/create-carrier-merchant-account-admin.ts`
 - `app/manage/actions/delete-organization.ts`
 - `supabase/functions/clerk-webhooks/index.ts`
-- These currently use Supabase Storage bucket `Organizations-Logos`
+- App-side HQ create/delete flows now upload/delete Bunny-backed organization logos
+- Preserve legacy `Organizations-Logos` delete fallback for historical URLs
+- Clerk webhook cleanup patch is written but not yet redeployed by choice
 
 ### Existing URL-backed columns already compatible with CDN URLs
 
@@ -272,13 +278,18 @@ This order is intentional:
 1. `docs/SPRINT-2026-03-21-BUNNY-CDN-MIGRATION-PLAN.md`
 2. `supabase/functions/cdn-upload/index.ts`
 3. `lib/cdn/client.ts` or `services/cdn.ts`
-4. Optional shared file helpers under `lib/cdn/*`
+4. `lib/cdn/server.ts`
+5. Optional shared file helpers under `lib/cdn/*`
 
 ### Existing likely to change
 
 1. `lib/storage/actions.ts`
 2. `app/dashboard/online-ordering/page.tsx`
 3. `app/dashboard/settings/customer-display/page.tsx`
+4. `app/manage/organizations/actions/clerk-create-organization.ts`
+5. `app/manage/organizations/actions/create-carrier-merchant-account-admin.ts`
+6. `app/manage/actions/delete-organization.ts`
+7. `supabase/functions/clerk-webhooks/index.ts`
 
 ## Deletion Strategy
 
@@ -343,10 +354,11 @@ That gets the biggest security win first and avoids overloading the first implem
 
 ## Actual Stop Point Reached
 
-We are currently stopped after step `4`.
+We are currently stopped after step `5`, with the Clerk webhook redeploy intentionally deferred pending senior approval.
 
 Next recommended action:
 
-1. Verify online-ordering upload/delete against Bunny
-2. Verify legacy online-ordering `store-assets` delete fallback still works
-3. Then migrate HQ organization-logo flows as the next slice
+1. Verify HQ organization-logo upload against Bunny during carrier and merchant creation
+2. Verify HQ organization-logo delete works for Bunny-backed URLs and legacy `Organizations-Logos` URLs
+3. After senior approval, redeploy `supabase/functions/clerk-webhooks/index.ts`
+4. Then decide whether to backfill legacy asset URLs or stop this migration stream here
