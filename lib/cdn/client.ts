@@ -3,7 +3,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export type MerchantAssetCategory =
   | "logos"
   | "cfd-images"
+  | "menu-categories"
   | "menu-items"
+  | "menus"
   | "documents";
 
 export type OrganizationAssetCategory = "logos";

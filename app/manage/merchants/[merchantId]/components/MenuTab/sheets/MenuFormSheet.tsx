@@ -28,8 +28,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
+import { CdnImageUploadField } from '@/components/ui/cdn-image-upload-field'
 import { Loader2, Globe, MapPin } from 'lucide-react'
 import { toast } from 'sonner'
+import { useMerchantCdnImageUpload } from '@/lib/cdn/use-merchant-cdn-image-upload'
 
 import {
   createAdminMenu,
@@ -44,6 +46,7 @@ import {
 const menuFormSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name too long'),
   description: z.string().max(500, 'Description too long').optional().nullable(),
+  image: z.string().optional().nullable(),
   is_active: z.boolean().default(true),
   is_global: z.boolean().default(true),
 })
@@ -79,12 +82,18 @@ export function MenuFormSheet({
 }: MenuFormSheetProps) {
   const isEdit = mode === 'edit'
   const isLocationView = locationId && locationId !== 'all'
+  const imageUpload = useMerchantCdnImageUpload({
+    merchantId,
+    category: 'menus',
+    fileNamePrefix: 'menu',
+  })
 
   const form = useForm<MenuFormValues>({
     resolver: zodResolver(menuFormSchema),
     defaultValues: {
       name: '',
       description: '',
+      image: '',
       is_active: true,
       is_global: true,
     },
@@ -99,30 +108,43 @@ export function MenuFormSheet({
         form.reset({
           name: menu.name,
           description: menu.description || '',
+          image: menu.image || '',
           is_active: menu.is_active,
           is_global: menu.is_global,
         })
+        imageUpload.reset(menu.image || null)
       } else {
         form.reset({
           name: '',
           description: '',
+          image: '',
           is_active: true,
           is_global: !isLocationView, // Default to location-specific if viewing a location
         })
+        imageUpload.reset(null)
       }
     }
-  }, [open, isEdit, menu, form, isLocationView])
+  }, [form, imageUpload.reset, isEdit, isLocationView, menu, open])
 
   const onSubmit = async (values: MenuFormValues) => {
+    let uploadedAsset: { cdnUrl: string; storagePath: string } | undefined
+
     try {
+      const resolvedImage = await imageUpload.resolveImageValue()
+      uploadedAsset = resolvedImage.uploadedAsset
+
       if (isEdit && menu) {
         const result = await updateAdminMenu(merchantId, menu.id, {
           name: values.name,
           description: values.description || null,
+          image: resolvedImage.value,
           is_active: values.is_active,
         })
 
         if (result.error) {
+          if (uploadedAsset) {
+            await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error)
+          }
           toast.error('Failed to update menu', { description: result.error })
           return
         }
@@ -132,11 +154,15 @@ export function MenuFormSheet({
         const result = await createAdminMenu(merchantId, {
           name: values.name,
           description: values.description || null,
+          image: resolvedImage.value,
           is_active: values.is_active,
           location_id: values.is_global ? null : locationId,
         })
 
         if (result.error) {
+          if (uploadedAsset) {
+            await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error)
+          }
           toast.error('Failed to create menu', { description: result.error })
           return
         }
@@ -147,6 +173,9 @@ export function MenuFormSheet({
       onSuccess()
       onClose()
     } catch (error) {
+      if (uploadedAsset) {
+        await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error)
+      }
       toast.error('An unexpected error occurred')
       console.error(error)
     }
@@ -154,7 +183,7 @@ export function MenuFormSheet({
 
   return (
     <BottomSheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <BottomSheetContent height="auto">
+      <BottomSheetContent height="95">
         <BottomSheetHeader>
           <BottomSheetTitle>
             {isEdit ? 'Edit Menu' : 'Create Menu'}
@@ -167,7 +196,7 @@ export function MenuFormSheet({
         </BottomSheetHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex h-full flex-col">
             <BottomSheetBody className="space-y-6">
               {/* Basic Info Section */}
               <BottomSheetSection title="Basic Information">
@@ -204,6 +233,32 @@ export function MenuFormSheet({
                       </FormControl>
                       <FormDescription>
                         Optional description shown to staff
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="image"
+                  render={() => (
+                    <FormItem>
+                      <FormLabel>Menu Image</FormLabel>
+                      <FormControl>
+                        <CdnImageUploadField
+                          disabled={isSubmitting}
+                          helperText="Uploads to Bunny CDN when you save the menu."
+                          onClear={imageUpload.clear}
+                          onFileSelect={imageUpload.selectFile}
+                          previewUrl={imageUpload.previewUrl}
+                          selectedFileName={imageUpload.selectedFileName}
+                          uploadLabel="Upload menu image"
+                          uploading={imageUpload.isUploading}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Optional image for this menu
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

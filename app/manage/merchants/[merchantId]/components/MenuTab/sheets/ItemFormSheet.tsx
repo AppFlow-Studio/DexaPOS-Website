@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { CdnImageUploadField } from '@/components/ui/cdn-image-upload-field'
 import {
   Select,
   SelectContent,
@@ -40,7 +41,6 @@ import {
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Loader2,
-  ImageIcon,
   DollarSign,
   RotateCcw,
   AlertCircle,
@@ -63,6 +63,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
+import { useMerchantCdnImageUpload } from '@/lib/cdn/use-merchant-cdn-image-upload'
 
 import {
   createAdminMenuItem,
@@ -166,6 +167,11 @@ export function ItemFormSheet({
   const [newModifierIds, setNewModifierIds] = useState<string[]>([]) // For create mode
   const hasLocationOverride = isEdit && item?.has_location_override
   const queryClient = useQueryClient()
+  const itemImageUpload = useMerchantCdnImageUpload({
+    merchantId,
+    category: 'menu-items',
+    fileNamePrefix: 'item',
+  })
 
   // Fetch merchant details for location names
   const { data: merchantDetails } = useMerchantDetails(merchantId)
@@ -216,6 +222,7 @@ export function ItemFormSheet({
           override_cash_price: item.location_override?.custom_cash_price,
           override_availability: item.location_override?.is_available ?? item.base_availability,
         })
+        itemImageUpload.reset(item.image || null)
       } else {
         form.reset({
           name: '',
@@ -233,14 +240,23 @@ export function ItemFormSheet({
           override_availability: true,
           modifier_group_ids: [],
         })
+        itemImageUpload.reset(null)
         setNewModifierIds([])
       }
     }
-  }, [open, isEdit, item, form])
+  }, [form, isEdit, item, itemImageUpload.reset, open])
 
   // Handlers
   const onSubmit = async (values: ItemFormValues) => {
+    let uploadedAsset: { cdnUrl: string; storagePath: string } | undefined
+
     try {
+      const canEditBaseFields = !isLocationView || !isEdit
+      const resolvedImage = canEditBaseFields
+        ? await itemImageUpload.resolveImageValue()
+        : { value: item?.image || null }
+      uploadedAsset = resolvedImage.uploadedAsset
+
       if (isEdit && item) {
         if (isLocationView && locationId) {
           const overrideResult = await upsertAdminLocationItemOverride(
@@ -262,7 +278,7 @@ export function ItemFormSheet({
           const result = await updateAdminMenuItem(merchantId, item.id, {
             name: values.name,
             description: values.description || null,
-            image: values.image || null,
+            image: resolvedImage.value,
             price: values.price,
             cash_price: values.cash_price,
             availability: values.availability,
@@ -272,6 +288,9 @@ export function ItemFormSheet({
             available_channels: values.available_channels,
           })
           if (result.error) {
+            if (uploadedAsset) {
+              await itemImageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error)
+            }
             toast.error('Failed to update item', { description: result.error })
             return
           }
@@ -281,7 +300,7 @@ export function ItemFormSheet({
         const result = await createAdminMenuItem(merchantId, {
           name: values.name,
           description: values.description || null,
-          image: values.image || null,
+          image: resolvedImage.value,
           price: values.price,
           cash_price: values.cash_price,
           availability: values.availability,
@@ -291,7 +310,10 @@ export function ItemFormSheet({
           available_channels: values.available_channels,
           modifier_group_ids: newModifierIds, // Pass the local state
         })
-      if (result.error || !result.data) {
+        if (result.error || !result.data) {
+          if (uploadedAsset) {
+            await itemImageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error)
+          }
           toast.error('Failed to create item', { description: result.error })
           return
         }
@@ -311,6 +333,9 @@ export function ItemFormSheet({
       onSuccess()
       onClose()
     } catch (error) {
+      if (uploadedAsset) {
+        await itemImageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error)
+      }
       toast.error('An unexpected error occurred')
       console.error(error)
     }
@@ -459,14 +484,20 @@ export function ItemFormSheet({
                                     <FormField
                                         control={form.control}
                                         name="image"
-                                        render={({ field }) => (
+                                        render={() => (
                                             <FormItem>
-                                                <FormLabel>Image URL</FormLabel>
+                                                <FormLabel>Item Image</FormLabel>
                                                 <FormControl>
-                                                    <div className="relative">
-                                                        <ImageIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                                        <Input placeholder="https://..." className="pl-9" {...field} value={field.value || ''} />
-                                                    </div>
+                                                    <CdnImageUploadField
+                                                        disabled={form.formState.isSubmitting}
+                                                        helperText="Uploads to Bunny CDN when you save the item."
+                                                        onClear={itemImageUpload.clear}
+                                                        onFileSelect={itemImageUpload.selectFile}
+                                                        previewUrl={itemImageUpload.previewUrl}
+                                                        selectedFileName={itemImageUpload.selectedFileName}
+                                                        uploadLabel="Upload item image"
+                                                        uploading={itemImageUpload.isUploading}
+                                                    />
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>
@@ -748,7 +779,7 @@ export function ItemFormSheet({
                             description={watchedValues.description || ''}
                             price={isLocationView && isEdit ? (watchedValues.override_price ?? watchedValues.price) : watchedValues.price}
                             cashPrice={(isLocationView && isEdit ? (watchedValues.override_cash_price ?? watchedValues.cash_price) : watchedValues.cash_price) ?? undefined}
-                            image={watchedValues.image || undefined}
+                            image={itemImageUpload.previewUrl || undefined}
                             availability={isLocationView && isEdit ? (watchedValues.override_availability ?? true) : watchedValues.availability}
                             categories={item?.categories?.map(c => c.name)}
                         />

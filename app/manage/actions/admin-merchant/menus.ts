@@ -24,6 +24,7 @@ export interface AdminMenu {
   id: string
   name: string
   description: string | null
+  image: string | null
   is_active: boolean
   is_global: boolean
   location_id: string | null
@@ -243,6 +244,7 @@ export async function getAdminMenus(
       id,
       name,
       description,
+      image,
       is_active,
       location_id,
       created_at,
@@ -285,6 +287,7 @@ export async function getAdminMenus(
       id: menu.id,
       name: menu.name,
       description: menu.description,
+      image: menu.image,
       is_active: menu.is_active,
       is_global: !menu.location_id,
       location_id: menu.location_id,
@@ -854,8 +857,17 @@ export async function getAdminMenuWithCategories(
     return null
   }
 
+  const { data: menuRow } = await supabase
+    .from('menus')
+    .select('image')
+    .eq('id', menuId)
+    .maybeSingle()
+
   // Transform RPC response to AdminMenuWithCategories format
-  return transformToAdminMenuWithCategories(data)
+  return transformToAdminMenuWithCategories({
+    ...data,
+    image: menuRow?.image || null,
+  })
 }
 
 /**
@@ -886,6 +898,7 @@ function transformToAdminMenuWithCategories(data: any): AdminMenuWithCategories 
     id: data.id,
     name: data.name,
     description: data.description,
+    image: data.image || null,
     is_active: data.is_active,
     is_global: data.is_global ?? !data.location_id,
     location_id: data.location_id,
@@ -975,6 +988,7 @@ function transformMenuItem(item: any, categoryId: string): AdminMenuCategoryItem
 export interface CreateMenuData {
   name: string
   description?: string | null
+  image?: string | null
   location_id?: string | null
   is_active?: boolean
   display_order?: number
@@ -994,12 +1008,13 @@ export async function createAdminMenu(
       merchant_id: merchantId,
       name: data.name,
       description: data.description || null,
+      image: data.image || null,
       location_id: data.location_id || null,
       is_active: data.is_active ?? true,
       display_order: data.display_order || 0,
     })
     .select(`
-      id, name, description, is_active, location_id, created_at, updated_at,
+      id, name, description, image, is_active, location_id, created_at, updated_at,
       locations(name)
     `)
     .single()
@@ -1030,6 +1045,7 @@ export async function createAdminMenu(
       id: menu.id,
       name: menu.name,
       description: menu.description,
+      image: menu.image,
       is_active: menu.is_active,
       is_global: !menu.location_id,
       location_id: menu.location_id,
@@ -1047,6 +1063,7 @@ export async function createAdminMenu(
 export interface UpdateMenuData {
   name?: string
   description?: string | null
+  image?: string | null
   is_active?: boolean
   display_order?: number
 }
@@ -1064,6 +1081,7 @@ export async function updateAdminMenu(
   const updateData: any = {}
   if (data.name !== undefined) updateData.name = data.name
   if (data.description !== undefined) updateData.description = data.description
+  if (data.image !== undefined) updateData.image = data.image
   if (data.is_active !== undefined) updateData.is_active = data.is_active
   if (data.display_order !== undefined) updateData.display_order = data.display_order
 
@@ -1073,7 +1091,7 @@ export async function updateAdminMenu(
     .eq('id', menuId)
     .eq('merchant_id', merchantId)
     .select(`
-      id, name, description, is_active, location_id, created_at, updated_at,
+      id, name, description, image, is_active, location_id, created_at, updated_at,
       locations(name),
       menu_categories(category_id)
     `)
@@ -1104,6 +1122,7 @@ export async function updateAdminMenu(
       id: menu.id,
       name: menu.name,
       description: menu.description,
+      image: menu.image,
       is_active: menu.is_active,
       is_global: !menu.location_id,
       location_id: menu.location_id,

@@ -65,7 +65,17 @@ export async function GetMenuWithCategories(
     return null;
   }
 
-  return data as MenuWithCategories;
+  const menuData = data as MenuWithCategories;
+  const { data: menuRow } = await supabase
+    .from("menus")
+    .select("image")
+    .eq("id", menuId)
+    .maybeSingle();
+
+  return {
+    ...menuData,
+    image: menuRow?.image || null,
+  };
 }
 
 /**
@@ -349,6 +359,7 @@ export async function CreateMenu(
   data: {
     name: string;
     description?: string;
+    image?: string | null;
     location_id?: string | null;
     is_active?: boolean;
     display_order?: number;
@@ -393,6 +404,7 @@ export async function CreateMenu(
       merchant_id: merchant.id,
       name: data.name,
       description: data.description || null,
+      image: data.image || null,
       location_id: data.location_id || null,
       is_active: data.is_active ?? true,
       display_order: data.display_order || null,
@@ -447,6 +459,7 @@ export async function UpdateMenu(
   data: {
     name?: string;
     description?: string;
+    image?: string | null;
     location_id?: string | null;
     is_active?: boolean;
     display_order?: number;
@@ -474,6 +487,7 @@ export async function UpdateMenu(
   const updateData: Record<string, unknown> = {};
   if (data.name !== undefined) updateData.name = data.name;
   if (data.description !== undefined) updateData.description = data.description;
+  if (data.image !== undefined) updateData.image = data.image;
   if (data.location_id !== undefined)
     updateData.location_id = data.location_id || null;
   if (data.is_active !== undefined) updateData.is_active = data.is_active;

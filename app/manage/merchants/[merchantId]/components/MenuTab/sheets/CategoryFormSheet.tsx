@@ -28,16 +28,17 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
+import { CdnImageUploadField } from '@/components/ui/cdn-image-upload-field'
 import { Separator } from '@/components/ui/separator'
 import {
   Loader2,
   Globe,
   MapPin,
-  ImageIcon,
   RotateCcw,
   AlertCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useMerchantCdnImageUpload } from '@/lib/cdn/use-merchant-cdn-image-upload'
 
 import {
   createAdminCategory,
@@ -96,6 +97,11 @@ export function CategoryFormSheet({
   const isLocationView = locationId && locationId !== 'all'
   const [hasLocationOverride, setHasLocationOverride] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
+  const imageUpload = useMerchantCdnImageUpload({
+    merchantId,
+    category: 'menu-categories',
+    fileNamePrefix: 'category',
+  })
 
   const form = useForm<CategoryFormValues>({
     resolver: zodResolver(categoryFormSchema),
@@ -123,6 +129,7 @@ export function CategoryFormSheet({
           is_global: category.is_global,
           display_order: category.display_order || 0,
         })
+        imageUpload.reset(category.image || null)
         // Check if category has a location override (this would come from extended data)
         setHasLocationOverride(false) // Will be set based on actual override data
       } else {
@@ -134,13 +141,19 @@ export function CategoryFormSheet({
           is_global: !isLocationView,
           display_order: 0,
         })
+        imageUpload.reset(null)
         setHasLocationOverride(false)
       }
     }
-  }, [open, isEdit, category, form, isLocationView])
+  }, [category, form, imageUpload.reset, isEdit, isLocationView, open])
 
   const onSubmit = async (values: CategoryFormValues) => {
+    let uploadedAsset: { cdnUrl: string; storagePath: string } | undefined
+
     try {
+      const resolvedImage = await imageUpload.resolveImageValue()
+      uploadedAsset = resolvedImage.uploadedAsset
+
       if (isEdit && category) {
         // If we're in location view and editing a global category,
         // create/update a location override instead of updating the global category
@@ -167,12 +180,15 @@ export function CategoryFormSheet({
           const result = await updateAdminCategory(merchantId, category.id, {
             name: values.name,
             description: values.description || null,
-            image: values.image || null,
+            image: resolvedImage.value,
             is_active: values.is_active,
             display_order: values.display_order,
           })
 
           if (result.error) {
+            if (uploadedAsset) {
+              await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error)
+            }
             toast.error('Failed to update category', { description: result.error })
             return
           }
@@ -184,13 +200,16 @@ export function CategoryFormSheet({
         const result = await createAdminCategory(merchantId, {
           name: values.name,
           description: values.description || null,
-          image: values.image || null,
+          image: resolvedImage.value,
           is_active: values.is_active,
           location_id: values.is_global ? null : locationId,
           display_order: values.display_order,
         })
 
         if (result.error || !result.data) {
+          if (uploadedAsset) {
+            await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error)
+          }
           toast.error('Failed to create category', { description: result.error })
           return
         }
@@ -211,6 +230,9 @@ export function CategoryFormSheet({
       onSuccess()
       onClose()
     } catch (error) {
+      if (uploadedAsset) {
+        await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error)
+      }
       toast.error('An unexpected error occurred')
       console.error(error)
     }
@@ -242,7 +264,7 @@ export function CategoryFormSheet({
 
   return (
     <BottomSheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <BottomSheetContent height="auto">
+      <BottomSheetContent height="95">
         <BottomSheetHeader>
           <BottomSheetTitle>
             {isEdit ? 'Edit Category' : 'Create Category'}
@@ -257,7 +279,7 @@ export function CategoryFormSheet({
         </BottomSheetHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex h-full flex-col">
             <BottomSheetBody className="space-y-6">
               {/* Location Override Warning */}
               {isEdit && isLocationView && category?.is_global && (
@@ -334,21 +356,20 @@ export function CategoryFormSheet({
                 <FormField
                   control={form.control}
                   name="image"
-                  render={({ field }) => (
+                  render={() => (
                     <FormItem>
-                      <FormLabel>Image URL</FormLabel>
+                      <FormLabel>Category Image</FormLabel>
                       <FormControl>
-                        <div className="flex gap-2">
-                          <div className="relative flex-1">
-                            <ImageIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input
-                              placeholder="https://example.com/image.jpg"
-                              className="pl-9"
-                              {...field}
-                              value={field.value || ''}
-                            />
-                          </div>
-                        </div>
+                        <CdnImageUploadField
+                          disabled={isSubmitting}
+                          helperText="Uploads to Bunny CDN when you save the category."
+                          onClear={imageUpload.clear}
+                          onFileSelect={imageUpload.selectFile}
+                          previewUrl={imageUpload.previewUrl}
+                          selectedFileName={imageUpload.selectedFileName}
+                          uploadLabel="Upload category image"
+                          uploading={imageUpload.isUploading}
+                        />
                       </FormControl>
                       <FormDescription>
                         Optional image for this category

@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CdnImageUploadField } from "@/components/ui/cdn-image-upload-field";
 import {
   Utensils,
   Plus,
@@ -64,6 +65,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { useLocations } from "../hooks/useLocations";
+import { useMerchantCdnImageUpload } from "@/lib/cdn/use-merchant-cdn-image-upload";
 const menuSchema = z.object({
   name: z
     .string()
@@ -73,6 +75,7 @@ const menuSchema = z.object({
     .string()
     .max(500, "Description must be less than 500 characters")
     .optional(),
+  image: z.string().optional().nullable(),
   is_active: z.boolean().default(true),
   menu_type: z.enum(["global", "location"]).default("global"),
 });
@@ -82,12 +85,19 @@ type MenuFormValues = z.infer<typeof menuSchema>;
 export default function MenuPage() {
   const { data: userInfo } = useUserInfo();
   const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
+  const merchantId =
+    userInfo?.members?.[0]?.organizations?.merchants?.id || "";
   const queryClient = useQueryClient();
 
   const selectedLocation = useSelectedLocation();
   console.log("selectedLocation", selectedLocation);
   const selectedLocationId = selectedLocation?.id || null;
   const isAllLocations = selectedLocationId === "all" || !selectedLocationId;
+  const imageUpload = useMerchantCdnImageUpload({
+    merchantId,
+    category: "menus",
+    fileNamePrefix: "menu",
+  });
 
   const { data: locations } = useLocations(
     clerkOrgId || "",
@@ -139,6 +149,7 @@ export default function MenuPage() {
     defaultValues: {
       name: "",
       description: "",
+      image: "",
       is_active: true,
       menu_type: isAllLocations ? "global" : "location",
     },
@@ -149,15 +160,29 @@ export default function MenuPage() {
     form.reset({
       name: "",
       description: "",
+      image: "",
       is_active: true,
       menu_type: isAllLocations ? "global" : "location",
     });
-  }, [isAllLocations, form]);
+    imageUpload.reset(null);
+  }, [form, imageUpload.reset, isAllLocations]);
 
   const menuType = form.watch("menu_type");
 
   const onSubmit = async (values: MenuFormValues) => {
+    let uploadedAsset: { cdnUrl: string; storagePath: string } | undefined;
+
     try {
+      if (imageUpload.hasPendingChange && !merchantId) {
+        toast.error("Merchant Not Found", {
+          description: "Please reload and try the upload again.",
+        });
+        return;
+      }
+
+      const resolvedImage = await imageUpload.resolveImageValue();
+      uploadedAsset = resolvedImage.uploadedAsset;
+
       // Determine location_id based on menu type selection and location scope
       // When scoped to a location, always create location-specific menu
       const locationId =
@@ -170,12 +195,16 @@ export default function MenuPage() {
       const result = await CreateMenu(clerkOrgId || "", {
         name: values.name,
         description: values.description,
+        image: resolvedImage.value ?? undefined,
         location_id: locationId,
         is_active: values.is_active,
         created_by: userInfo?.first_name + " " + userInfo?.last_name,
       });
 
       if (result.error) {
+        if (uploadedAsset) {
+          await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error);
+        }
         toast.error("Creation Failed", {
           description: result.error,
         });
@@ -194,6 +223,9 @@ export default function MenuPage() {
       queryClient.invalidateQueries({ queryKey: ["menus"] });
       refetch();
     } catch (error) {
+      if (uploadedAsset) {
+        await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error);
+      }
       toast.error("Creation Failed", {
         description: "Unable to create the menu. Please try again.",
       });
@@ -257,9 +289,11 @@ export default function MenuPage() {
     form.reset({
       name: "",
       description: "",
+      image: "",
       is_active: true,
       menu_type: isAllLocations ? "global" : "location",
     });
+    imageUpload.reset(null);
   };
 
   const handleDuplicate = async (
@@ -278,6 +312,7 @@ export default function MenuPage() {
     const result = await CreateMenu(clerkOrgId || "", {
       name: menu.name,
       description: menu.description || "",
+      image: menu.image || undefined,
       location_id: targetLocationId,
       is_active: menu.is_active,
       created_by: userInfo?.first_name + " " + userInfo?.last_name,
@@ -397,9 +432,11 @@ export default function MenuPage() {
               form.reset({
                 name: "",
                 description: "",
+                image: "",
                 is_active: true,
                 menu_type: isAllLocations ? "global" : "location",
               });
+              imageUpload.reset(null);
             } else {
               // When opening, ensure menu_type matches location scope
               form.setValue(
@@ -547,6 +584,31 @@ export default function MenuPage() {
                           {...field}
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                    )}
+                  />
+                <FormField
+                  control={form.control}
+                  name="image"
+                  render={() => (
+                    <FormItem>
+                      <FormLabel>Menu Image</FormLabel>
+                      <FormControl>
+                        <CdnImageUploadField
+                          disabled={form.formState.isSubmitting}
+                          helperText="Uploads to Bunny CDN when you create the menu."
+                          onClear={imageUpload.clear}
+                          onFileSelect={imageUpload.selectFile}
+                          previewUrl={imageUpload.previewUrl}
+                          selectedFileName={imageUpload.selectedFileName}
+                          uploadLabel="Upload menu image"
+                          uploading={imageUpload.isUploading}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Optional image for this menu
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

@@ -4,7 +4,9 @@ import { createClient } from "npm:@supabase/supabase-js";
 type MerchantAssetCategory =
   | "logos"
   | "cfd-images"
+  | "menu-categories"
   | "menu-items"
+  | "menus"
   | "documents";
 
 type OrganizationAssetCategory = "logos";
