@@ -246,8 +246,13 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo, canManageStatus
 
     return (
         <>
-            <Tabs defaultValue="taxes" className="space-y-6">
+            <Tabs defaultValue="general" className="space-y-6">
                 <TabsList>
+                    <TabsTrigger value="general" className="gap-2">
+                        <Settings className="h-4 w-4" />
+                        General
+                    </TabsTrigger>
+
                     <TabsTrigger value="taxes" className="gap-2">
                         <DollarSign className="h-4 w-4" />
                         Tax Settings
@@ -256,11 +261,6 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo, canManageStatus
                     <TabsTrigger value="pricing" className="gap-2">
                          <CreditCard className="h-4 w-4" />
                          Pricing
-                    </TabsTrigger>
-
-                    <TabsTrigger value="general" className="gap-2">
-                        <Settings className="h-4 w-4" />
-                        General
                     </TabsTrigger>
                 </TabsList>
 
