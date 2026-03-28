@@ -1880,7 +1880,8 @@ export async function addItemToCategory(
     .select('id')
     .eq('category_id', categoryId)
     .eq('menu_item_id', itemId)
-    .single()
+    .eq('merchant_id', merchantId)
+    .maybeSingle()
 
   if (existing) {
     return { success: true, error: null }
@@ -1889,6 +1890,7 @@ export async function addItemToCategory(
   const { error } = await supabase
     .from('category_items')
     .insert({
+      merchant_id: merchantId,
       category_id: categoryId,
       menu_item_id: itemId,
       display_order: displayOrder || 0,
