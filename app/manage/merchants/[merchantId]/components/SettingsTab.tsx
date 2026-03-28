@@ -9,6 +9,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -31,7 +33,7 @@ import {
     Loader2 as LoaderIcon
 } from 'lucide-react'
 import { DeleteOrganizationDialog } from '../../../organizations/[organizationId]/components/DeleteOrganizationDialog'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useTransition } from 'react'
 import { MerchantInfoModel } from '@/types/db-modles'
 import { useQuery } from '@tanstack/react-query'
 import { GetLocations, UpdateLocation } from '../../../../dashboard/actions/locations'
@@ -40,7 +42,7 @@ import {
     useAdminUpsertTaxRate,
     useAdminDeactivateTaxRate,
 } from '@/lib/queries/use-admin-tax-rates'
-import { useAdminUpdateMerchant } from '@/lib/queries/use-admin-merchant'
+import { useAdminUpdateMerchant, useAdminUpdateMerchantStatus } from '@/lib/queries/use-admin-merchant'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -59,11 +61,43 @@ import { MerchantDetails } from '@/types/merchant'
 interface SettingsTabProps {
     merchantInfo: MerchantDetails
     refetchMerchantInfo: () => void
+    canManageStatus?: boolean
 }
 
-export function SettingsTab({ merchantInfo, refetchMerchantInfo }: SettingsTabProps) {
+export function SettingsTab({ merchantInfo, refetchMerchantInfo, canManageStatus }: SettingsTabProps) {
     const { isSuperAdmin } = useAdminPermissions()
     const [openDeleteOrganizationDialog, setOpenDeleteOrganizationDialog] = useState(false)
+    const [suspendDialogOpen, setSuspendDialogOpen] = useState(false)
+    const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+    const [suspendReason, setSuspendReason] = useState('')
+    const [isStatusPending, startStatusTransition] = useTransition()
+    const statusMutation = useAdminUpdateMerchantStatus()
+
+    const merchantStatus = merchantInfo.onboarding_status || 'onboarding'
+    const statusActionDisabled = isStatusPending || statusMutation.isPending
+
+    const runStatusUpdate = (newStatus: 'active' | 'suspended' | 'cancelled', reason?: string) => {
+        startStatusTransition(async () => {
+            const result = await statusMutation.mutateAsync({
+                merchantId: merchantInfo.id,
+                newStatus,
+                reason,
+            })
+            if (!result.success) {
+                toast.error(result.error || 'Failed to update merchant status.')
+                return
+            }
+            const message = newStatus === 'active' ? 'Merchant activated.' : newStatus === 'suspended' ? 'Merchant suspended.' : 'Merchant cancelled.'
+            toast.success(message)
+        })
+    }
+
+    const handleSuspend = () => {
+        const reason = suspendReason.trim()
+        if (!reason) { toast.error('Suspend reason is required.'); return }
+        setSuspendDialogOpen(false)
+        runStatusUpdate('suspended', reason)
+    }
     const [selectedLocationId, setSelectedLocationId] = useState<string>('all')
     const [editDialogOpen, setEditDialogOpen] = useState(false)
     const [editing, setEditing] = useState<{
@@ -858,6 +892,81 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo }: SettingsTabPr
                         </CardContent>
                     </Card>
 
+                    {/* Account Status */}
+                    {canManageStatus && (
+                        <Card className="border-orange-200">
+                            <CardHeader>
+                                <CardTitle className="text-orange-700 flex items-center gap-2">
+                                    <AlertTriangle className="h-5 w-5" />
+                                    Account Status
+                                </CardTitle>
+                                <CardDescription>
+                                    Manage this merchant's account standing. These actions are logged in the audit trail.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-4">
+                                    {merchantStatus !== 'active' && merchantStatus !== 'cancelled' && (
+                                        <div className="flex items-center justify-between p-4 border rounded-lg">
+                                            <div className="space-y-1">
+                                                <h4 className="font-medium">Manually Activate</h4>
+                                                <p className="text-sm text-muted-foreground">
+                                                    Mark this merchant as active and allow them to process payments.
+                                                </p>
+                                            </div>
+                                            <Button
+                                                variant="default"
+                                                disabled={statusActionDisabled}
+                                                onClick={() => runStatusUpdate('active')}
+                                                className="ml-4"
+                                            >
+                                                Activate Merchant
+                                            </Button>
+                                        </div>
+                                    )}
+
+                                    {merchantStatus !== 'suspended' && merchantStatus !== 'cancelled' && (
+                                        <div className="flex items-center justify-between p-4 border border-orange-200 rounded-lg bg-orange-50">
+                                            <div className="space-y-1">
+                                                <h4 className="font-medium text-orange-700">Suspend Account</h4>
+                                                <p className="text-sm text-muted-foreground">
+                                                    Temporarily suspend access. The merchant can be reactivated later.
+                                                </p>
+                                            </div>
+                                            <Button
+                                                variant="outline"
+                                                disabled={statusActionDisabled}
+                                                onClick={() => setSuspendDialogOpen(true)}
+                                                className="ml-4 border-orange-300 text-orange-700 hover:bg-orange-100"
+                                            >
+                                                Suspend
+                                            </Button>
+                                        </div>
+                                    )}
+
+                                    {merchantStatus !== 'cancelled' && (
+                                        <div className="flex items-center justify-between p-4 border border-destructive/20 rounded-lg bg-destructive/5">
+                                            <div className="space-y-1">
+                                                <h4 className="font-medium text-destructive">Cancel Account</h4>
+                                                <p className="text-sm text-muted-foreground">
+                                                    Permanently cancel this merchant account. This action is final.
+                                                </p>
+                                            </div>
+                                            <Button
+                                                variant="destructive"
+                                                disabled={statusActionDisabled}
+                                                onClick={() => setCancelDialogOpen(true)}
+                                                className="ml-4"
+                                            >
+                                                Cancel Account
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
                     {/* Danger Zone */}
                     {isSuperAdmin && (
                         <Card className="border-destructive">
@@ -994,6 +1103,57 @@ export function SettingsTab({ merchantInfo, refetchMerchantInfo }: SettingsTabPr
                 setOpen={setOpenDeleteOrganizationDialog}
                 onSuccess={() => refetchMerchantInfo()}
             />
+
+            <Dialog open={suspendDialogOpen} onOpenChange={setSuspendDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Suspend Merchant</DialogTitle>
+                        <DialogDescription>
+                            Provide a reason. This is included in the audit log.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-2">
+                        <Label htmlFor="suspend-reason">Reason</Label>
+                        <Textarea
+                            id="suspend-reason"
+                            placeholder="Non-payment, compliance hold, or other reason"
+                            value={suspendReason}
+                            onChange={(e) => setSuspendReason(e.target.value)}
+                            rows={4}
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setSuspendDialogOpen(false)}>Cancel</Button>
+                        <Button variant="destructive" onClick={handleSuspend} disabled={statusActionDisabled}>
+                            Suspend Merchant
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4 text-destructive" />
+                            Cancel Merchant Account
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This marks the merchant as cancelled and logs the action. Continue only if this is final.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={statusActionDisabled}>Back</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => runStatusUpdate('cancelled')}
+                            disabled={statusActionDisabled}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            Confirm Cancel
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </>
     )
 }

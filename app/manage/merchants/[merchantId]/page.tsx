@@ -9,9 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
     Store,
-    Settings,
-    AlertTriangle,
-    MessageSquare
+    AlertTriangle
 } from 'lucide-react'
 import { useAdminMerchantDetails } from '@/lib/queries/use-admin-merchant'
 import { MerchantDetails } from '@/types/merchant'
@@ -109,14 +107,6 @@ export default function MerchantDetailsPage() {
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
-                            <Button variant="outline" size="sm" asChild>
-                                <Link href={`/manage/merchants/${merchantId as string}/billing`}>Billing</Link>
-                            </Button>
-                            {canViewSettings && (
-                                <Button variant="outline" size="sm">
-                                    <Settings className="h-4 w-4 mr-2" /> Settings
-                                </Button>
-                            )}
                              {/* Export Data Button */}
                         </div>
                     </div>
@@ -125,29 +115,34 @@ export default function MerchantDetailsPage() {
                     <div className="mb-6">
                         <OnboardingStatusCard
                             merchant={merchantDetails}
-                            canManageStatus={canManageMerchantStatus}
                         />
                     </div>
 
                     {/* Tabs */}
                     <Tabs defaultValue="overview" className="w-full">
                         <TabsList className="w-full justify-start overflow-x-auto overflow-y-hidden flex-nowrap bg-muted/50 p-1 h-auto gap-1">
+                            {/* Identity */}
                             <TabsTrigger value="overview" className="flex-none">Overview</TabsTrigger>
                             <TabsTrigger value="business-info" className="flex-none">Business Info</TabsTrigger>
-                            <TabsTrigger value="staff" className="flex-none">Staff</TabsTrigger>
-                            <TabsTrigger value="customers" className="flex-none">Customers</TabsTrigger>
-                            <TabsTrigger value="products" className="flex-none">Products</TabsTrigger>
-                            <TabsTrigger value="menu" className="flex-none">Menu</TabsTrigger>
-                            <TabsTrigger value="schedules" className="flex-none">Schedules</TabsTrigger>
-                            <TabsTrigger value="discounts" className="flex-none">Discounts</TabsTrigger>
-                            <TabsTrigger value="online-store" className="flex-none">Online Store</TabsTrigger>
-                            {canManageDevices && <TabsTrigger value="devices" className="flex-none">Devices</TabsTrigger>}
+                            {/* Operations & Money */}
                             <TabsTrigger value="orders" className="flex-none">Orders</TabsTrigger>
                             <TabsTrigger value="transactions" className="flex-none">Transactions</TabsTrigger>
-                            <TabsTrigger value="notes" className="flex-none">
-                                <MessageSquare className="mr-1 h-4 w-4" />
-                                Notes
+                            <TabsTrigger value="billing" className="flex-none" asChild>
+                                <Link href={`/manage/merchants/${merchantId as string}/billing`}>Billing</Link>
                             </TabsTrigger>
+                            {/* People */}
+                            <TabsTrigger value="staff" className="flex-none">Staff</TabsTrigger>
+                            <TabsTrigger value="customers" className="flex-none">Customers</TabsTrigger>
+                            {/* Catalog */}
+                            <TabsTrigger value="menu" className="flex-none">Menu</TabsTrigger>
+                            <TabsTrigger value="products" className="flex-none">Products</TabsTrigger>
+                            <TabsTrigger value="discounts" className="flex-none">Discounts</TabsTrigger>
+                            {/* Presence & Infrastructure */}
+                            <TabsTrigger value="online-store" className="flex-none">Online Store</TabsTrigger>
+                            <TabsTrigger value="schedules" className="flex-none">Schedules</TabsTrigger>
+                            {canManageDevices && <TabsTrigger value="devices" className="flex-none">Devices</TabsTrigger>}
+                            {/* Admin */}
+                            <TabsTrigger value="notes" className="flex-none">Notes</TabsTrigger>
                             <TabsTrigger value="audit" className="flex-none">Audit Logs</TabsTrigger>
                             {canViewSettings && <TabsTrigger value="settings" className="flex-none">Settings</TabsTrigger>}
                         </TabsList>
@@ -226,7 +221,7 @@ export default function MerchantDetailsPage() {
 
                         {canViewSettings && (
                             <TabsContent value="settings" className="mt-6">
-                                <SettingsTab merchantInfo={merchantDetails} refetchMerchantInfo={refetch} />
+                                <SettingsTab merchantInfo={merchantDetails} refetchMerchantInfo={refetch} canManageStatus={canManageMerchantStatus} />
                             </TabsContent>
                         )}
                     </Tabs>
