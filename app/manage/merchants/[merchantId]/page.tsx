@@ -31,6 +31,7 @@ import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
 import { NotesTab } from './components/NotesTab'
 import { OrdersTab } from './components/OrdersTab'
 import { OnboardingStatusCard } from './components/OnboardingStatusCard'
+import { BillingTab } from './components/BillingTab'
 
 export default function MerchantDetailsPage() {
     const { merchantId } = useParams()
@@ -127,9 +128,7 @@ export default function MerchantDetailsPage() {
                             {/* Operations & Money */}
                             <TabsTrigger value="orders" className="flex-none">Orders</TabsTrigger>
                             <TabsTrigger value="transactions" className="flex-none">Transactions</TabsTrigger>
-                            <TabsTrigger value="billing" className="flex-none" asChild>
-                                <Link href={`/manage/merchants/${merchantId as string}/billing`}>Billing</Link>
-                            </TabsTrigger>
+                            <TabsTrigger value="billing" className="flex-none">Billing</TabsTrigger>
                             {/* People */}
                             <TabsTrigger value="staff" className="flex-none">Staff</TabsTrigger>
                             <TabsTrigger value="customers" className="flex-none">Customers</TabsTrigger>
@@ -185,6 +184,14 @@ export default function MerchantDetailsPage() {
                         <TabsContent value="transactions" className="mt-6">
                              {/* TransactionsTab likely expects MerchantInfoModel or ID */}
                             <TransactionsTab merchantInfo={merchantDetails as unknown as MerchantInfoModel} />
+                        </TabsContent>
+
+                        <TabsContent value="billing" className="mt-6">
+                            <BillingTab
+                                merchantId={merchantDetails.id}
+                                merchantName={merchantDetails.name}
+                                canEdit={canManageMerchantStatus}
+                            />
                         </TabsContent>
 
                         <TabsContent value="notes" className="mt-6">
