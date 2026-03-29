@@ -224,88 +224,84 @@ export default function MerchantDetailsPage() {
 
                         {/* ── Content Panes ── */}
                         <div className="flex-1 min-w-0 border-l pl-6">
-                            <div className={activeTab === 'overview' ? '' : 'hidden'}>
+                            {activeTab === 'overview' && (
                                 <OverviewTab merchantInfo={merchantDetails} />
-                            </div>
+                            )}
 
-                            <div className={activeTab === 'business-info' ? '' : 'hidden'}>
+                            {activeTab === 'business-info' && (
                                 <BusinessInfoTab merchantInfo={merchantDetails} />
-                            </div>
+                            )}
 
-                            <div className={activeTab === 'orders' ? '' : 'hidden'}>
+                            {activeTab === 'orders' && (
                                 <OrdersTab merchantInfo={merchantDetails} />
-                            </div>
+                            )}
 
-                            <div className={activeTab === 'transactions' ? '' : 'hidden'}>
+                            {activeTab === 'transactions' && (
                                 <TransactionsTab merchantInfo={merchantDetails as unknown as MerchantInfoModel} />
-                            </div>
+                            )}
 
-                            <div className={activeTab === 'billing' ? '' : 'hidden'}>
+                            {activeTab === 'billing' && (
                                 <BillingTab
                                     merchantId={merchantDetails.id}
                                     merchantName={merchantDetails.name}
                                     canEdit={canManageMerchantStatus}
                                 />
-                            </div>
+                            )}
 
-                            <div className={activeTab === 'staff' ? '' : 'hidden'}>
+                            {activeTab === 'staff' && (
                                 <StaffTab
                                     merchantInfo={merchantDetails as unknown as MerchantInfoModel}
                                     merchantDetails={merchantDetails}
                                     refetchMerchantInfo={refetch}
                                 />
-                            </div>
+                            )}
 
-                            <div className={activeTab === 'customers' ? '' : 'hidden'}>
+                            {activeTab === 'customers' && (
                                 <CustomersTab merchantInfo={merchantDetails} />
-                            </div>
+                            )}
 
-                            <div className={activeTab === 'menu' ? '' : 'hidden'}>
+                            {activeTab === 'menu' && (
                                 <MenuTab merchantDetails={merchantDetails} clerkOrgId={merchantDetails.clerk_org_id} />
-                            </div>
+                            )}
 
-                            <div className={activeTab === 'products' ? '' : 'hidden'}>
+                            {activeTab === 'products' && (
                                 <ProductsTab merchantInfo={merchantDetails} />
-                            </div>
+                            )}
 
-                            <div className={activeTab === 'discounts' ? '' : 'hidden'}>
+                            {activeTab === 'discounts' && (
                                 <DiscountsTab merchantId={merchantDetails.id} />
-                            </div>
+                            )}
 
-                            <div className={activeTab === 'online-store' ? '' : 'hidden'}>
+                            {activeTab === 'online-store' && (
                                 <OnlineStoreTab
                                     merchantId={merchantDetails.id}
                                     merchantName={merchantDetails.name}
                                     locations={merchantDetails.locations as any[]}
                                     locationsLoading={false}
                                 />
-                            </div>
+                            )}
 
-                            <div className={activeTab === 'schedules' ? '' : 'hidden'}>
+                            {activeTab === 'schedules' && (
                                 <SchedulesTab
                                     merchantId={merchantDetails.id}
                                     locations={merchantDetails.locations as any[]}
                                 />
-                            </div>
-
-                            {canManageDevices && (
-                                <div className={activeTab === 'devices' ? '' : 'hidden'}>
-                                    <DevicesTab merchantId={merchantDetails.id} merchantInfo={merchantDetails} />
-                                </div>
                             )}
 
-                            <div className={activeTab === 'notes' ? '' : 'hidden'}>
+                            {canManageDevices && activeTab === 'devices' && (
+                                <DevicesTab merchantId={merchantDetails.id} merchantInfo={merchantDetails} />
+                            )}
+
+                            {activeTab === 'notes' && (
                                 <NotesTab merchantId={merchantDetails.id} />
-                            </div>
+                            )}
 
-                            <div className={activeTab === 'audit' ? '' : 'hidden'}>
+                            {activeTab === 'audit' && (
                                 <AuditLogsTab merchantInfo={merchantDetails as unknown as MerchantInfoModel} />
-                            </div>
+                            )}
 
-                            {canViewSettings && (
-                                <div className={activeTab === 'settings' ? '' : 'hidden'}>
-                                    <SettingsTab merchantInfo={merchantDetails} refetchMerchantInfo={refetch} canManageStatus={canManageMerchantStatus} />
-                                </div>
+                            {canViewSettings && activeTab === 'settings' && (
+                                <SettingsTab merchantInfo={merchantDetails} refetchMerchantInfo={refetch} canManageStatus={canManageMerchantStatus} />
                             )}
                         </div>
 
