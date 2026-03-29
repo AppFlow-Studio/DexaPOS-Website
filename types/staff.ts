@@ -293,3 +293,30 @@ export interface AdminCreateStaffResult {
   pin?: string;
   error?: string;
 }
+
+/**
+ * Data for creating a Clerk dashboard user via admin interface
+ */
+export interface AdminCreateClerkStaffData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  locationId: string;
+  roleCode: string;
+  hourlyRate?: number;
+  employmentType: EmploymentType;
+  autoGeneratePin?: boolean;
+  pin?: string;
+}
+
+/**
+ * Admin create Clerk staff result
+ */
+export interface AdminCreateClerkStaffResult {
+  success: boolean;
+  staffProfileId?: string;
+  tempPassword?: string;
+  generatedPin?: string;
+  error?: string;
+}
