@@ -5,15 +5,16 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
-  BottomSheet,
-  BottomSheetContent,
-  BottomSheetHeader,
-  BottomSheetBody,
-  BottomSheetFooter,
-  BottomSheetTitle,
-  BottomSheetDescription,
   BottomSheetSection,
 } from '@/components/ui/bottom-sheet'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Form,
   FormControl,
@@ -29,7 +30,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { CdnImageUploadField } from '@/components/ui/cdn-image-upload-field'
-import { Loader2, Globe, MapPin } from 'lucide-react'
+import { Loader2, Globe, MapPin, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { useMerchantCdnImageUpload } from '@/lib/cdn/use-merchant-cdn-image-upload'
 
@@ -100,6 +101,7 @@ export function MenuFormSheet({
   })
 
   const { isSubmitting } = form.formState
+  const watchedValues = form.watch()
 
   // Reset form when menu changes or sheet opens
   useEffect(() => {
@@ -182,183 +184,246 @@ export function MenuFormSheet({
   }
 
   return (
-    <BottomSheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <BottomSheetContent height="95">
-        <BottomSheetHeader>
-          <BottomSheetTitle>
-            {isEdit ? 'Edit Menu' : 'Create Menu'}
-          </BottomSheetTitle>
-          <BottomSheetDescription>
-            {isEdit
-              ? 'Update the menu details below.'
-              : 'Create a new menu to organize your categories and items.'}
-          </BottomSheetDescription>
-        </BottomSheetHeader>
-
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent
+        overlayClassName="bg-slate-950/40 backdrop-blur-md"
+        className="w-full max-w-[calc(100vw-1.5rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-4xl"
+      >
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex h-full flex-col">
-            <BottomSheetBody className="space-y-6">
-              {/* Basic Info Section */}
-              <BottomSheetSection title="Basic Information">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Menu Name *</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="e.g., Lunch Menu, Dinner Specials"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex max-h-[min(90vh,860px)] flex-col">
+            <DialogHeader className="gap-2 border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
+              <DialogTitle className="text-[1.625rem] font-semibold tracking-tight">
+                {isEdit ? 'Edit Menu' : 'Create Menu'}
+              </DialogTitle>
+              <DialogDescription className="max-w-[52ch] text-sm leading-6">
+                {isEdit
+                  ? 'Update the menu details below.'
+                  : 'Create a new menu to organize your categories and items.'}
+              </DialogDescription>
+            </DialogHeader>
 
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Brief description of this menu..."
-                          rows={3}
-                          {...field}
-                          value={field.value || ''}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Optional description shown to staff
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                <div className="space-y-6">
+                  <BottomSheetSection
+                    title="Basic Information"
+                    className="rounded-2xl border border-border/70 bg-background/80 p-5 shadow-sm"
+                  >
+                    <FormField
+                      control={form.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Menu Name *</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="e.g., Lunch Menu, Dinner Specials"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                <FormField
-                  control={form.control}
-                  name="image"
-                  render={() => (
-                    <FormItem>
-                      <FormLabel>Menu Image</FormLabel>
-                      <FormControl>
-                        <CdnImageUploadField
-                          disabled={isSubmitting}
-                          helperText="Uploads to Bunny CDN when you save the menu."
-                          onClear={imageUpload.clear}
-                          onFileSelect={imageUpload.selectFile}
-                          previewUrl={imageUpload.previewUrl}
-                          selectedFileName={imageUpload.selectedFileName}
-                          uploadLabel="Upload menu image"
-                          uploading={imageUpload.isUploading}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Optional image for this menu
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </BottomSheetSection>
+                    <FormField
+                      control={form.control}
+                      name="description"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Description</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              placeholder="Brief description of this menu..."
+                              rows={3}
+                              {...field}
+                              value={field.value || ''}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Optional description shown to staff
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-              {/* Settings Section */}
-              <BottomSheetSection title="Settings">
-                <FormField
-                  control={form.control}
-                  name="is_active"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                      <div className="space-y-0.5">
-                        <FormLabel className="text-base">Active</FormLabel>
-                        <FormDescription>
-                          Menu is visible and usable in POS
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+                    <FormField
+                      control={form.control}
+                      name="image"
+                      render={() => (
+                        <FormItem>
+                          <FormLabel>Menu Image</FormLabel>
+                          <FormControl>
+                            <CdnImageUploadField
+                              disabled={isSubmitting}
+                              helperText="Uploads to Bunny CDN when you save the menu."
+                              onClear={imageUpload.clear}
+                              onFileSelect={imageUpload.selectFile}
+                              previewUrl={imageUpload.previewUrl}
+                              selectedFileName={imageUpload.selectedFileName}
+                              uploadLabel="Upload menu image"
+                              uploading={imageUpload.isUploading}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Optional image for this menu
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </BottomSheetSection>
 
-                {/* Scope - only show on create and when in location view */}
-                {!isEdit && isLocationView && (
-                  <FormField
-                    control={form.control}
-                    name="is_global"
-                    render={({ field }) => (
-                      <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base flex items-center gap-2">
-                            {field.value ? (
+                  <BottomSheetSection
+                    title="Settings"
+                    className="rounded-2xl border border-border/70 bg-background/80 p-5 shadow-sm"
+                  >
+                    <FormField
+                      control={form.control}
+                      name="is_active"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center justify-between rounded-xl border p-4">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-base">Active</FormLabel>
+                            <FormDescription>
+                              Menu is visible and usable in POS
+                            </FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+
+                    {!isEdit && isLocationView && (
+                      <FormField
+                        control={form.control}
+                        name="is_global"
+                        render={({ field }) => (
+                          <FormItem className="flex items-center justify-between rounded-xl border p-4">
+                            <div className="space-y-0.5">
+                              <FormLabel className="text-base flex items-center gap-2">
+                                {field.value ? (
+                                  <>
+                                    <Globe className="h-4 w-4" />
+                                    Global Menu
+                                  </>
+                                ) : (
+                                  <>
+                                    <MapPin className="h-4 w-4" />
+                                    Location Menu
+                                  </>
+                                )}
+                              </FormLabel>
+                              <FormDescription>
+                                {field.value
+                                  ? 'Available across all locations'
+                                  : 'Only available at the selected location'}
+                              </FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    )}
+
+                    {isEdit && menu && (
+                      <div className="rounded-xl border p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <p className="text-sm font-medium">Scope</p>
+                            <p className="text-sm text-muted-foreground">
+                              {menu.is_global
+                                ? 'This menu is available across all locations'
+                                : `This menu is specific to ${menu.location_name || 'a location'}`}
+                            </p>
+                          </div>
+                          <Badge variant="outline" className={menu.is_global ? 'bg-slate-50' : 'bg-blue-50 text-blue-700'}>
+                            {menu.is_global ? (
                               <>
-                                <Globe className="h-4 w-4" />
-                                Global Menu
+                                <Globe className="h-3 w-3 mr-1" />
+                                Global
                               </>
                             ) : (
                               <>
-                                <MapPin className="h-4 w-4" />
-                                Location Menu
+                                <MapPin className="h-3 w-3 mr-1" />
+                                Location
                               </>
                             )}
-                          </FormLabel>
-                          <FormDescription>
-                            {field.value
-                              ? 'Available across all locations'
-                              : 'Only available at the selected location'}
-                          </FormDescription>
+                          </Badge>
                         </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
+                      </div>
                     )}
-                  />
-                )}
+                  </BottomSheetSection>
+                </div>
+              </div>
 
-                {/* Show current scope badge in edit mode */}
-                {isEdit && menu && (
-                  <div className="rounded-lg border p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-medium">Scope</p>
-                        <p className="text-sm text-muted-foreground">
-                          {menu.is_global
-                            ? 'This menu is available across all locations'
-                            : `This menu is specific to ${menu.location_name || 'a location'}`}
+              <div className="hidden min-h-0 w-[320px] shrink-0 overflow-y-auto border-l border-border/70 bg-muted/10 px-6 py-5 lg:block">
+                <div className="space-y-5 pb-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <Sparkles className="h-4 w-4" />
+                    Menu Preview
+                  </div>
+
+                  <div className="overflow-hidden rounded-[24px] border border-border/70 bg-background shadow-sm">
+                    {imageUpload.previewUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={imageUpload.previewUrl}
+                        alt="Menu preview"
+                        className="aspect-[4/3] w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex aspect-[4/3] items-center justify-center bg-muted/40 text-5xl font-semibold text-muted-foreground/40">
+                        {watchedValues.name?.trim()?.charAt(0)?.toUpperCase() || 'M'}
+                      </div>
+                    )}
+
+                    <div className="space-y-3 p-5">
+                      <div>
+                        <h3 className="text-lg font-semibold">
+                          {watchedValues.name?.trim() || 'New Menu'}
+                        </h3>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                          {watchedValues.description?.trim() || 'Menu description preview will appear here.'}
                         </p>
                       </div>
-                      <Badge variant="outline" className={menu.is_global ? 'bg-slate-50' : 'bg-blue-50 text-blue-700'}>
-                        {menu.is_global ? (
-                          <>
-                            <Globe className="h-3 w-3 mr-1" />
-                            Global
-                          </>
-                        ) : (
-                          <>
-                            <MapPin className="h-3 w-3 mr-1" />
-                            Location
-                          </>
-                        )}
-                      </Badge>
+
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant={watchedValues.is_active ? 'default' : 'secondary'}>
+                          {watchedValues.is_active ? 'Active' : 'Inactive'}
+                        </Badge>
+                        <Badge variant="outline" className="bg-slate-50">
+                          {(!isEdit && watchedValues.is_global) || (isEdit && menu?.is_global) ? (
+                            <>
+                              <Globe className="mr-1 h-3 w-3" />
+                              Global
+                            </>
+                          ) : (
+                            <>
+                              <MapPin className="mr-1 h-3 w-3" />
+                              Location
+                            </>
+                          )}
+                        </Badge>
+                      </div>
                     </div>
                   </div>
-                )}
-              </BottomSheetSection>
-            </BottomSheetBody>
+                </div>
+              </div>
+            </div>
 
-            <BottomSheetFooter>
+            <DialogFooter className="shrink-0 border-t border-border/70 bg-background/95 px-6 py-4 sm:justify-end">
               <Button
                 type="button"
                 variant="outline"
@@ -371,10 +436,10 @@ export function MenuFormSheet({
                 {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 {isEdit ? 'Save Changes' : 'Create Menu'}
               </Button>
-            </BottomSheetFooter>
+            </DialogFooter>
           </form>
         </Form>
-      </BottomSheetContent>
-    </BottomSheet>
+      </DialogContent>
+    </Dialog>
   )
 }
