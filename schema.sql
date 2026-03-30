@@ -649,6 +649,7 @@ CREATE TABLE public.location_item_overrides (
   is_tax_exempt boolean,
   available_channels jsonb,
   prep_station_id uuid,
+  is_popular boolean NOT NULL DEFAULT false,
   CONSTRAINT location_item_overrides_pkey PRIMARY KEY (id),
   CONSTRAINT location_item_overrides_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT location_item_overrides_menu_item_id_fkey FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(id),

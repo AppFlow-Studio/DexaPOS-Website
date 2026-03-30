@@ -2,6 +2,38 @@
 
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
+/** Shared tax rate lookup by location_id. Prefers 'standard'/'default' category,
+ *  falls back to any active rate (handles custom category names set in dashboard).
+ *  Returns a decimal multiplier, e.g. 0.08875 for 8.875%. */
+async function getTaxRateForLocation(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  locationId: string
+): Promise<number> {
+  let { data: taxRate } = await supabase
+    .from("tax_rates")
+    .select("percentage")
+    .eq("location_id", locationId)
+    .eq("is_active", true)
+    .in("tax_category", ["standard", "default"])
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .single();
+
+  if (!taxRate) {
+    const { data: fallbackRate } = await supabase
+      .from("tax_rates")
+      .select("percentage")
+      .eq("location_id", locationId)
+      .eq("is_active", true)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .single();
+    taxRate = fallbackRate;
+  }
+
+  return taxRate?.percentage ? taxRate.percentage / 100 : 0;
+}
+
 export async function getStoreTaxRate(storeConfigId: string): Promise<number> {
   const supabase = createServiceRoleClient();
 
@@ -12,18 +44,15 @@ export async function getStoreTaxRate(storeConfigId: string): Promise<number> {
     .single();
 
   if (!config?.location_id) return 0;
+  return getTaxRateForLocation(supabase, config.location_id);
+}
 
-  const { data: taxRate } = await supabase
-    .from("tax_rates")
-    .select("percentage")
-    .eq("location_id", config.location_id)
-    .eq("is_active", true)
-    .eq("tax_category", "standard")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .single();
-
-  return taxRate?.percentage ? taxRate.percentage / 100 : 0;
+/** Fetch tax rate directly from a location UUID — used by order tracking
+ *  so it doesn't depend on site.id being available. */
+export async function getStoreTaxRateByLocationId(locationId: string): Promise<number> {
+  if (!locationId) return 0;
+  const supabase = createServiceRoleClient();
+  return getTaxRateForLocation(supabase, locationId);
 }
 
 export interface PlaceOrderItem {
@@ -125,16 +154,28 @@ export async function placeOrder(
     };
   });
 
-  // Fetch tax rate for this location
-  const { data: taxRate } = await supabase
+  // Fetch tax rate for this location — prefer standard/default, fall back to any active rate
+  let { data: taxRate } = await supabase
     .from("tax_rates")
     .select("percentage")
     .eq("location_id", locationId)
     .eq("is_active", true)
-    .eq("tax_category", "standard")
+    .in("tax_category", ["standard", "default"])
     .order("created_at", { ascending: true })
     .limit(1)
     .single();
+
+  if (!taxRate) {
+    const { data: fallbackRate } = await supabase
+      .from("tax_rates")
+      .select("percentage")
+      .eq("location_id", locationId)
+      .eq("is_active", true)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .single();
+    taxRate = fallbackRate;
+  }
 
   const taxPercent = taxRate?.percentage ?? 0;
   const tax = Math.round(subtotal * (taxPercent / 100) * 100) / 100;
@@ -227,6 +268,7 @@ export async function placeOrder(
 
 export interface OrderTrackingData {
   orderId: string;
+  locationId: string;
   orderNumber: string;
   displayNumber: string;
   status: string;
@@ -238,9 +280,11 @@ export interface OrderTrackingData {
   readyAt: string | null;
   completedAt: string | null;
   cancelledAt: string | null;
+  cancellationReason: string | null;
   estimatedPrepMinutes: number;
   subtotal: number;
   tax: number;
+  taxRatePercent: number | null; // stored rate from order_items.tax_rate (e.g. 8.875)
   tip: number;
   total: number;
   specialInstructions: string | null;
@@ -264,10 +308,10 @@ export async function getOrderTracking(
       `
       id, order_number, display_number, status, order_type,
       customer_name, created_at, sent_to_kitchen_at, started_preparing_at,
-      ready_at, completed_at, cancelled_at,
+      ready_at, completed_at, cancelled_at, cancellation_reason,
       subtotal, tax_amount, tip_amount, total_amount,
       special_instructions, location_id,
-      order_items (item_name, quantity, unit_price, subtotal, special_instructions)
+      order_items (item_name, quantity, unit_price, subtotal, special_instructions, tax_rate)
     `
     )
     .eq("id", orderId)
@@ -289,6 +333,7 @@ export async function getOrderTracking(
   return {
     data: {
       orderId: o.id,
+      locationId: o.location_id,
       orderNumber: o.order_number,
       displayNumber: o.display_number,
       status: o.status,
@@ -300,9 +345,16 @@ export async function getOrderTracking(
       readyAt: o.ready_at,
       completedAt: o.completed_at,
       cancelledAt: o.cancelled_at,
+      cancellationReason: o.cancellation_reason ?? null,
       estimatedPrepMinutes: config?.estimated_prep_minutes ?? 20,
       subtotal: Number(o.subtotal) || 0,
       tax: Number(o.tax_amount) || 0,
+      taxRatePercent: (() => {
+        const rates = (o.order_items ?? [])
+          .map((i: any) => Number(i.tax_rate))
+          .filter((r: number) => r > 0);
+        return rates.length > 0 ? rates[0] : null;
+      })(),
       tip: Number(o.tip_amount) || 0,
       total: Number(o.total_amount) || 0,
       specialInstructions: o.special_instructions,

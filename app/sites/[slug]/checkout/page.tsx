@@ -1,7 +1,9 @@
 import { getStorefrontData } from "../../actions";
+import { getStoreTaxRate } from "../../order-actions";
 import { notFound } from "next/navigation";
 import { TEMPLATE_DEFAULTS, buildThemeVars } from "../../lib/theme-utils";
 import { CheckoutPage } from "../../components/checkout/CheckoutPage";
+import { StorefrontRoot } from "../../components/StorefrontRoot";
 import { CartRecovery } from "../../components/CartRecovery";
 import { getRecoverySession } from "../../recovery-actions";
 
@@ -23,31 +25,33 @@ export default async function CheckoutRoute({ params, searchParams }: PageProps)
     notFound();
   }
 
+  const taxRate = site?.id ? await getStoreTaxRate(site.id) : 0;
+
   // Fetch recovery data if token present
   let recoveryData: { cartData: any[] | null; sessionToken: string | null; notificationId: string | null } | null = null;
   if (recover) {
     recoveryData = await getRecoverySession(recover);
   }
 
+  const storeConfigId = site?.id || "";
+
   const theme = site?.theme_config;
   const templateId = theme?.templateId || "classic";
   const defaults = TEMPLATE_DEFAULTS[templateId];
   const themeStyle = buildThemeVars(theme);
-  const storeConfigId = site?.id || "";
-
-  return (
+  const bgColor = (themeStyle as Record<string, string>)["--bg"] ?? defaults.bg;
+  const textColor = (themeStyle as Record<string, string>)["--text"] ?? defaults.text;
+  const rootVarsCss = `:root { ${Object.entries(themeStyle).map(([k, v]) => `${k}: ${v}`).join("; ")} }`;
     <>
+      <style dangerouslySetInnerHTML={{ __html: rootVarsCss }} />
       {/* eslint-disable-next-line @next/next/no-page-custom-font */}
       <link rel="stylesheet" href={defaults.fontUrl} />
-      <div
+      <StorefrontRoot
+        themeStyle={themeStyle}
+        templateId={templateId}
+        baseBgColor={bgColor}
+        baseTextColor={textColor}
         className="min-h-screen"
-        style={{
-          ...themeStyle,
-          backgroundColor: "var(--bg)",
-          color: "var(--text)",
-          fontFamily: "var(--font)",
-        }}
-        data-template={templateId}
       >
         {recoveryData?.cartData && recoveryData.sessionToken && recoveryData.notificationId && (
           <CartRecovery
@@ -63,8 +67,9 @@ export default async function CheckoutRoute({ params, searchParams }: PageProps)
           config={site?.online_ordering_config}
           storeConfigId={storeConfigId}
           slug={slug}
+          taxRate={taxRate}
         />
-      </div>
+      </StorefrontRoot>
     </>
   );
 }

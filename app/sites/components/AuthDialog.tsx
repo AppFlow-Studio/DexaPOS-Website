@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Phone, ArrowLeft, Loader2, User, Mail } from "lucide-react";
+import { toast } from "sonner";
 import { sendOtp, verifyOtp } from "../auth-actions";
 import { updateCustomerProfile } from "../customer-actions";
 import { useSession } from "../hooks/useSession";
@@ -20,6 +21,7 @@ interface AuthDialogProps {
   onOpenChange: (open: boolean) => void;
   storeConfigId: string;
   onSuccess?: () => void;
+  defaultMode?: "signin" | "signup";
 }
 
 export function AuthDialog({
@@ -27,7 +29,9 @@ export function AuthDialog({
   onOpenChange,
   storeConfigId,
   onSuccess,
+  defaultMode = "signin",
 }: AuthDialogProps) {
+  const [mode, setMode] = useState<"signin" | "signup">(defaultMode);
   const [step, setStep] = useState<"phone" | "otp" | "complete-profile">("phone");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
@@ -40,6 +44,11 @@ export function AuthDialog({
   } | null>(null);
   const [profileName, setProfileName] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
+
+  // Sign-up pre-collected fields
+  const [signupFirstName, setSignupFirstName] = useState("");
+  const [signupLastName, setSignupLastName] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
 
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
   const { login, setStoreConfigId } = useSession();
@@ -57,6 +66,7 @@ export function AuthDialog({
   // Reset state when dialog opens
   useEffect(() => {
     if (isOpen) {
+      setMode(defaultMode);
       setStep("phone");
       setOtp(["", "", "", "", "", ""]);
       setError("");
@@ -64,8 +74,11 @@ export function AuthDialog({
       setPendingAuth(null);
       setProfileName("");
       setProfileEmail("");
+      setSignupFirstName("");
+      setSignupLastName("");
+      setSignupEmail("");
     }
-  }, [isOpen]);
+  }, [isOpen, defaultMode]);
 
   const formatPhone = (value: string) => {
     const digits = value.replace(/\D/g, "").slice(0, 10);
@@ -85,6 +98,17 @@ export function AuthDialog({
     if (rawPhone.length < 10) {
       setError("Please enter a valid phone number");
       return;
+    }
+
+    if (mode === "signup") {
+      if (!signupFirstName.trim()) {
+        setError("Please enter your first name");
+        return;
+      }
+      if (!signupLastName.trim()) {
+        setError("Please enter your last name");
+        return;
+      }
     }
 
     setLoading(true);
@@ -170,6 +194,28 @@ export function AuthDialog({
       return;
     }
 
+    // Sign-up mode: auto-save the pre-collected profile info
+    if (mode === "signup" && signupFirstName.trim()) {
+      const fullName = [signupFirstName.trim(), signupLastName.trim()].filter(Boolean).join(" ");
+      setLoading(true);
+      const profileResult = await updateCustomerProfile(result.sessionToken, {
+        name: fullName,
+        email: signupEmail.trim() || undefined,
+      });
+      setLoading(false);
+
+      login(result.sessionToken, {
+        id: result.customer.id,
+        name: profileResult.success ? fullName : result.customer.name,
+        phone: result.customer.phone,
+        email: profileResult.success && signupEmail.trim() ? signupEmail.trim() : result.customer.email,
+      });
+      toast.success(`Welcome, ${signupFirstName.trim()}!`);
+      onOpenChange(false);
+      onSuccess?.();
+      return;
+    }
+
     if (!result.customer.name) {
       // New customer — show profile completion step
       setPendingAuth({
@@ -245,6 +291,23 @@ export function AuthDialog({
     onSuccess?.();
   };
 
+  const inputStyle = {
+    borderColor: "var(--border, #e5e7eb)",
+    backgroundColor: "var(--bg, #fff)",
+  };
+
+  const primaryButtonStyle = {
+    backgroundColor: "var(--primary, #2DD4BF)",
+    color: "#fff",
+    borderRadius: "var(--radius, 12px)",
+  };
+
+  const getTitle = () => {
+    if (step === "otp") return "Enter Code";
+    if (step === "complete-profile") return "Welcome! Complete Your Profile";
+    return mode === "signup" ? "Create Account" : "Sign In";
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent
@@ -268,27 +331,110 @@ export function AuthDialog({
               <ArrowLeft className="h-4 w-4" />
             </button>
           )}
-          <DialogTitle className="text-center">
-            {step === "phone"
-              ? "Sign In"
-              : step === "otp"
-                ? "Enter Code"
-                : "Welcome! Complete Your Profile"}
-          </DialogTitle>
+          <DialogTitle className="text-center">{getTitle()}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
+          {/* Mode tabs — only show on the phone entry step */}
+          {step === "phone" && (
+            <div
+              className="flex rounded-lg overflow-hidden border"
+              style={{ borderColor: "var(--border, #e5e7eb)" }}
+            >
+              {(["signin", "signup"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => {
+                    setMode(m);
+                    setError("");
+                  }}
+                  className="flex-1 py-2 text-sm font-medium transition-colors"
+                  style={{
+                    backgroundColor:
+                      mode === m ? "var(--primary, #2DD4BF)" : "transparent",
+                    color: mode === m ? "#fff" : "var(--text-secondary, #6b7280)",
+                  }}
+                >
+                  {m === "signin" ? "Sign In" : "Create Account"}
+                </button>
+              ))}
+            </div>
+          )}
+
           {step === "phone" ? (
             <>
               <p
                 className="text-sm text-center"
                 style={{ color: "var(--text-secondary, #6b7280)" }}
               >
-                Enter your phone number to continue
+                {mode === "signup"
+                  ? "Create your account to track orders and save addresses"
+                  : "Enter your phone number to continue"}
               </p>
 
+              {/* Sign-up extra fields */}
+              {mode === "signup" && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="signup-firstname">First Name <span className="text-red-500">*</span></Label>
+                      <div className="relative">
+                        <User
+                          className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4"
+                          style={{ color: "var(--text-secondary, #6b7280)" }}
+                        />
+                        <Input
+                          id="signup-firstname"
+                          type="text"
+                          value={signupFirstName}
+                          onChange={(e) => { setSignupFirstName(e.target.value); setError(""); }}
+                          placeholder="First name"
+                          className="pl-10"
+                          style={inputStyle}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="signup-lastname">Last Name <span className="text-red-500">*</span></Label>
+                      <Input
+                        id="signup-lastname"
+                        type="text"
+                        value={signupLastName}
+                        onChange={(e) => { setSignupLastName(e.target.value); setError(""); }}
+                        placeholder="Last name"
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="signup-email">
+                      Email{" "}
+                      <span className="text-xs font-normal" style={{ color: "var(--text-secondary, #6b7280)" }}>
+                        (optional)
+                      </span>
+                    </Label>
+                    <div className="relative">
+                      <Mail
+                        className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4"
+                        style={{ color: "var(--text-secondary, #6b7280)" }}
+                      />
+                      <Input
+                        id="signup-email"
+                        type="email"
+                        value={signupEmail}
+                        onChange={(e) => { setSignupEmail(e.target.value); setError(""); }}
+                        placeholder="email@example.com"
+                        className="pl-10"
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
-                <Label htmlFor="auth-phone">Phone Number</Label>
+                <Label htmlFor="auth-phone">Phone Number <span className="text-red-500">*</span></Label>
                 <div className="relative">
                   <Phone
                     className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4"
@@ -302,11 +448,8 @@ export function AuthDialog({
                     placeholder="(555) 123-4567"
                     className="pl-10"
                     onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
-                    autoFocus
-                    style={{
-                      borderColor: "var(--border, #e5e7eb)",
-                      backgroundColor: "var(--bg, #fff)",
-                    }}
+                    autoFocus={mode === "signin"}
+                    style={inputStyle}
                   />
                 </div>
               </div>
@@ -319,16 +462,12 @@ export function AuthDialog({
                 onClick={handleSendOtp}
                 disabled={loading || rawPhone.length < 10}
                 className="w-full"
-                style={{
-                  backgroundColor: "var(--primary, #2DD4BF)",
-                  color: "#fff",
-                  borderRadius: "var(--radius, 12px)",
-                }}
+                style={primaryButtonStyle}
               >
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 ) : null}
-                {loading ? "Sending..." : "Send Code"}
+                {loading ? "Sending..." : "Send Verification Code"}
               </Button>
             </>
           ) : step === "otp" ? (
@@ -374,11 +513,7 @@ export function AuthDialog({
                 onClick={() => handleVerify()}
                 disabled={loading || otp.some((d) => !d)}
                 className="w-full"
-                style={{
-                  backgroundColor: "var(--primary, #2DD4BF)",
-                  color: "#fff",
-                  borderRadius: "var(--radius, 12px)",
-                }}
+                style={primaryButtonStyle}
               >
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -433,10 +568,7 @@ export function AuthDialog({
                       className="pl-10"
                       onKeyDown={(e) => e.key === "Enter" && handleCompleteProfile()}
                       autoFocus
-                      style={{
-                        borderColor: "var(--border, #e5e7eb)",
-                        backgroundColor: "var(--bg, #fff)",
-                      }}
+                      style={inputStyle}
                     />
                   </div>
                 </div>
@@ -467,10 +599,7 @@ export function AuthDialog({
                       placeholder="email@example.com"
                       className="pl-10"
                       onKeyDown={(e) => e.key === "Enter" && handleCompleteProfile()}
-                      style={{
-                        borderColor: "var(--border, #e5e7eb)",
-                        backgroundColor: "var(--bg, #fff)",
-                      }}
+                      style={inputStyle}
                     />
                   </div>
                 </div>
@@ -484,11 +613,7 @@ export function AuthDialog({
                 onClick={handleCompleteProfile}
                 disabled={loading || !profileName.trim()}
                 className="w-full"
-                style={{
-                  backgroundColor: "var(--primary, #2DD4BF)",
-                  color: "#fff",
-                  borderRadius: "var(--radius, 12px)",
-                }}
+                style={primaryButtonStyle}
               >
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />

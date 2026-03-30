@@ -7,6 +7,8 @@ export interface SiteThemeConfig {
   fontFamily?: string;
   templateId?: "classic" | "bold" | "minimal";
   heroImageUrl?: string | null;
+  /** Optional ambient video for hero (e.g. steam, latte pour). Supports mp4, webm. */
+  heroVideoUrl?: string | null;
   faviconUrl?: string | null;
   headerStyle?: "filled" | "transparent" | "outlined";
   headerTextColor?: string | null;
@@ -79,6 +81,8 @@ export interface OnlineOrderingConfig {
 
   // UI Options
   goGreenOptionEnabled?: boolean;
+  /** Menu item card layout: cards (image on top), sidebyside (image on right), no-images */
+  menuLayout?: "cards" | "sidebyside" | "no-images";
 
   // Visibility
   hideFromLocationPicker?: boolean;
@@ -123,6 +127,13 @@ export interface Site {
   is_active: boolean | null;
   created_at: string | null;
   updated_at: string | null;
+  /** SEO: used for page title and meta description (from dashboard SEO & Analytics). */
+  meta_title?: string | null;
+  meta_description?: string | null;
+  google_analytics_id?: string | null;
+  facebook_pixel_id?: string | null;
+  /** Social sharing: image for Open Graph / Twitter (from dashboard). */
+  og_image_url?: string | null;
 }
 
 // ── online_store_config ──────────────────────────────────────────────

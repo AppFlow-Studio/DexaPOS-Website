@@ -82,6 +82,9 @@ export interface OnlineOrderingSettings {
   headerStyle: "filled" | "transparent" | "outlined";
   headerTextColor: string | null;
 
+  // Menu layout: cards | sidebyside | no-images
+  menuLayout: "cards" | "sidebyside" | "no-images";
+
   // Analytics
   googleAnalyticsId: string;
   facebookPixelId: string;
@@ -176,6 +179,8 @@ const createDefaultSettings = (
 
   headerStyle: "filled",
   headerTextColor: null,
+
+  menuLayout: "cards",
 
   metaTitle: "",
   metaDescription: "",

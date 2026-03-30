@@ -36,7 +36,10 @@ export function InfoSheet({
 }: InfoSheetProps) {
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-md flex flex-col p-0">
+      <SheetContent
+        className="w-full sm:max-w-md flex flex-col p-0 !bg-white"
+        style={{ backgroundColor: "#ffffff" }}
+      >
         <SheetHeader className="p-6 border-b bg-gradient-to-r from-blue-500/10 to-violet-500/10">
           <SheetTitle className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-violet-500 text-white shadow-lg">

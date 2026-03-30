@@ -3883,6 +3883,7 @@ export type Database = {
           custom_price: number | null
           id: string
           is_available: boolean | null
+          is_popular: boolean
           is_tax_exempt: boolean | null
           location_id: string
           low_stock_threshold: number | null
@@ -3903,6 +3904,7 @@ export type Database = {
           custom_price?: number | null
           id?: string
           is_available?: boolean | null
+          is_popular?: boolean
           is_tax_exempt?: boolean | null
           location_id: string
           low_stock_threshold?: number | null
@@ -3923,6 +3925,7 @@ export type Database = {
           custom_price?: number | null
           id?: string
           is_available?: boolean | null
+          is_popular?: boolean
           is_tax_exempt?: boolean | null
           location_id?: string
           low_stock_threshold?: number | null

@@ -24,6 +24,14 @@ export interface StorefrontItem {
   image: string | null;
   availability: boolean;
   modifier_groups?: StorefrontModifierGroup[];
+  /** For dietary filters: Vegan, Gluten-Free, etc. */
+  dietary_tags?: string[];
+  /** Allergens list for display/filtering */
+  allergens?: string[];
+  /** Merchant-flagged popular item */
+  is_popular?: boolean;
+  /** Newly added item */
+  is_new?: boolean;
 }
 
 export interface StorefrontCategory {

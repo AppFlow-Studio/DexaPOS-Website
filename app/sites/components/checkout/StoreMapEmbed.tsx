@@ -12,12 +12,12 @@ export function StoreMapEmbed({ lat, lng, address }: StoreMapEmbedProps) {
   if (!lat || !lng) {
     return (
       <div
-        className="rounded-lg p-4 flex items-center gap-3"
-        style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
+        className="rounded-lg p-4 flex items-center gap-3 !bg-white"
+        style={{ backgroundColor: "#ffffff", border: "1px solid #e5e7eb" }}
       >
         <MapPin className="h-5 w-5 shrink-0" style={{ color: "var(--primary)" }} />
         <div>
-          <p className="text-sm font-medium" style={{ color: "var(--text)" }}>
+          <p className="text-sm font-medium" style={{ color: "#111827" }}>
             {address}
           </p>
           <a
@@ -52,7 +52,7 @@ export function StoreMapEmbed({ lat, lng, address }: StoreMapEmbedProps) {
       </div>
       <div className="flex items-center gap-2 px-1">
         <MapPin className="h-4 w-4 shrink-0" style={{ color: "var(--primary)" }} />
-        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+        <p className="text-sm" style={{ color: "#374151" }}>
           {address}
         </p>
       </div>

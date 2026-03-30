@@ -3,13 +3,23 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Receipt, Clock, Package, CheckCircle2, XCircle } from "lucide-react";
+import {
+  Receipt,
+  Clock,
+  Package,
+  CheckCircle2,
+  XCircle,
+  LogIn,
+  UtensilsCrossed,
+} from "lucide-react";
 import { useSession } from "../hooks/useSession";
 import { getOrderHistory, type OrderHistoryEntry } from "../order-actions";
 import { useStorefrontPath } from "../lib/use-storefront-path";
+import { AuthDialog } from "./AuthDialog";
 
 interface OrdersPanelProps {
   slug: string;
+  storeConfigId?: string;
 }
 
 const STATUS_CONFIG: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
@@ -25,11 +35,12 @@ const STATUS_CONFIG: Record<string, { icon: React.ReactNode; color: string; labe
 
 const ACTIVE_STATUSES = ["pending", "accepted", "sent_to_kitchen", "preparing", "ready"];
 
-export function OrdersPanel({ slug }: OrdersPanelProps) {
+export function OrdersPanel({ slug, storeConfigId }: OrdersPanelProps) {
   const { isAuthenticated } = useSession();
   const [orders, setOrders] = useState<OrderHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAuth, setShowAuth] = useState(false);
   const storePath = useStorefrontPath(slug);
 
   useEffect(() => {
@@ -48,20 +59,42 @@ export function OrdersPanel({ slug }: OrdersPanelProps) {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[40vh] px-6 text-center">
-        <div
-          className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
-          style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
-        >
-          <Receipt className="h-8 w-8" style={{ color: "var(--text-secondary)" }} />
+      <>
+        <div className="flex flex-col items-center justify-center min-h-[50vh] px-6 text-center">
+          <div
+            className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
+            style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
+          >
+            <Receipt className="h-8 w-8" style={{ color: "var(--text-secondary)" }} />
+          </div>
+          <h2 className="text-lg font-bold mb-2" style={{ color: "var(--text)" }}>
+            View your order history
+          </h2>
+          <p className="text-sm mb-6 max-w-[260px]" style={{ color: "var(--text-secondary)" }}>
+            Sign in or create an account to track past orders and reorder your favorites.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowAuth(true)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold transition-all hover:opacity-90 active:scale-95"
+            style={{
+              backgroundColor: "var(--primary)",
+              color: "var(--primary-text)",
+              minHeight: "44px",
+            }}
+          >
+            <LogIn className="h-4 w-4" />
+            Sign In / Sign Up
+          </button>
         </div>
-        <h2 className="text-lg font-bold mb-1" style={{ color: "var(--text)" }}>
-          Sign in to view orders
-        </h2>
-        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-          Your order history will appear here after signing in.
-        </p>
-      </div>
+        {storeConfigId && (
+          <AuthDialog
+            isOpen={showAuth}
+            onOpenChange={setShowAuth}
+            storeConfigId={storeConfigId}
+          />
+        )}
+      </>
     );
   }
 
@@ -81,24 +114,39 @@ export function OrdersPanel({ slug }: OrdersPanelProps) {
 
   if (orders.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[40vh] px-6 text-center">
+      <div className="flex flex-col items-center justify-center min-h-[50vh] px-6 text-center">
         <div
           className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
           style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
         >
-          <Receipt className="h-8 w-8" style={{ color: "var(--text-secondary)" }} />
+          <UtensilsCrossed className="h-8 w-8" style={{ color: "var(--text-secondary)" }} />
         </div>
-        <h2 className="text-lg font-bold mb-1" style={{ color: "var(--text)" }}>
+        <h2 className="text-lg font-bold mb-2" style={{ color: "var(--text)" }}>
           No orders yet
         </h2>
-        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-          Your orders will appear here once you place one.
+        <p className="text-sm mb-6 max-w-[260px]" style={{ color: "var(--text-secondary)" }}>
+          Once you place an order it'll show up here. Ready to dig in?
         </p>
+        <button
+          type="button"
+          onClick={() =>
+            document.getElementById("storefront-menu")?.scrollIntoView({ behavior: "smooth", block: "start" })
+          }
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold transition-all hover:opacity-90 active:scale-95"
+          style={{
+            backgroundColor: "var(--primary)",
+            color: "var(--primary-text)",
+            minHeight: "44px",
+          }}
+        >
+          <UtensilsCrossed className="h-4 w-4" />
+          Browse Menu
+        </button>
       </div>
     );
   }
 
-  // Active orders first
+  // Active orders first, then past orders sorted newest-first
   const activeOrders = orders.filter((o) => ACTIVE_STATUSES.includes(o.status));
   const pastOrders = orders.filter((o) => !ACTIVE_STATUSES.includes(o.status));
 
@@ -110,7 +158,7 @@ export function OrdersPanel({ slug }: OrdersPanelProps) {
             Active Orders
           </h3>
           {activeOrders.map((order) => (
-            <OrderCard key={order.id} order={order} slug={slug} storePath={storePath} isActive />
+            <OrderCard key={order.id} order={order} storePath={storePath} isActive />
           ))}
         </div>
       )}
@@ -121,7 +169,7 @@ export function OrdersPanel({ slug }: OrdersPanelProps) {
             Past Orders
           </h3>
           {pastOrders.map((order) => (
-            <OrderCard key={order.id} order={order} slug={slug} storePath={storePath} />
+            <OrderCard key={order.id} order={order} storePath={storePath} />
           ))}
         </div>
       )}
@@ -131,12 +179,10 @@ export function OrdersPanel({ slug }: OrdersPanelProps) {
 
 function OrderCard({
   order,
-  slug,
   storePath,
   isActive,
 }: {
   order: OrderHistoryEntry;
-  slug: string;
   storePath: (path?: string) => string;
   isActive?: boolean;
 }) {

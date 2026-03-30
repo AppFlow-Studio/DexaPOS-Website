@@ -68,6 +68,8 @@ function mapConfigToSettings(
     headerStyle: config.header_style ?? "filled",
     headerTextColor: config.header_text_color ?? null,
 
+    menuLayout: config.menu_layout ?? "cards",
+
     metaTitle: config.meta_title ?? "",
     metaDescription: config.meta_description ?? "",
     googleAnalyticsId: config.google_analytics_id ?? "",
@@ -171,8 +173,21 @@ export async function saveOnlineOrderingSettings(
   // Identity
   if (settings.storeName !== undefined)
     configData.store_name = settings.storeName;
-  if (settings.storeSlug !== undefined && settings.storeSlug !== "")
+  if (settings.storeSlug !== undefined && settings.storeSlug !== "") {
+    // Check slug uniqueness across all merchants (excluding this location's own config)
+    const { data: slugConflict } = await supabase
+      .from("online_store_config")
+      .select("id, location_id")
+      .eq("slug", settings.storeSlug)
+      .neq("location_id", locationId)
+      .maybeSingle();
+    if (slugConflict) {
+      throw new Error(
+        `The URL slug "${settings.storeSlug}" is already taken. Please choose a different one.`
+      );
+    }
     configData.slug = settings.storeSlug;
+  }
   if (settings.enabled !== undefined) configData.is_active = settings.enabled;
   if (settings.description !== undefined)
     configData.description = settings.description;
@@ -236,8 +251,16 @@ export async function saveOnlineOrderingSettings(
   // Tipping
   if (settings.tippingEnabled !== undefined)
     configData.tip_enabled = settings.tippingEnabled;
-  if (settings.tipPresets !== undefined)
+  if (settings.tipPresets !== undefined) {
+    if (settings.tipPresets.length > 6) {
+      throw new Error("Tip presets cannot exceed 6 options.");
+    }
+    const invalid = settings.tipPresets.find((p) => p < 0 || p > 100 || !Number.isInteger(p));
+    if (invalid !== undefined) {
+      throw new Error("Each tip preset must be a whole number between 0 and 100.");
+    }
     configData.tip_presets = settings.tipPresets;
+  }
 
   // Payment
   if (settings.ipospaysTpn !== undefined)
@@ -248,6 +271,10 @@ export async function saveOnlineOrderingSettings(
     configData.header_style = settings.headerStyle;
   if (settings.headerTextColor !== undefined)
     configData.header_text_color = settings.headerTextColor || null;
+
+  // Menu layout
+  if (settings.menuLayout !== undefined)
+    configData.menu_layout = settings.menuLayout;
 
   // SEO
   if (settings.metaTitle !== undefined)
@@ -296,39 +323,13 @@ export async function saveOnlineOrderingSettings(
       .select("id")
       .single();
 
-    if (insertError)
+    if (insertError) {
+      if (insertError.code === "23505" && insertError.message.includes("slug")) {
+        throw new Error(
+          `The URL slug "${configData.slug}" is already taken. Please choose a different one.`
+        );
+      }
       throw new Error(`Store config creation failed: ${insertError.message}`);
-
-    if (newConfig) {
-      await supabase.from("online_store_pages").insert([
-        {
-          store_config_id: newConfig.id,
-          page_type: "home",
-          section_type: "hero",
-          title: configData.store_name as string,
-          subtitle: "Order online for pickup or delivery",
-          cta_text: "Order Now",
-          cta_link: "/menu",
-          display_order: 0,
-          is_visible: true,
-        },
-        {
-          store_config_id: newConfig.id,
-          page_type: "home",
-          section_type: "hours",
-          title: "Hours",
-          display_order: 1,
-          is_visible: true,
-        },
-        {
-          store_config_id: newConfig.id,
-          page_type: "home",
-          section_type: "location_map",
-          title: "Find Us",
-          display_order: 2,
-          is_visible: true,
-        },
-      ]);
     }
 
     hasChanges = true;

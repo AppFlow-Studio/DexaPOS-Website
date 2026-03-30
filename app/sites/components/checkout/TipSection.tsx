@@ -25,9 +25,12 @@ export function TipSection({
 }: TipSectionProps) {
   return (
     <section className="space-y-3">
-      <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-display)", color: "var(--text)" }}>
-        Add a Tip
-      </h2>
+      <div className="flex items-baseline gap-2">
+        <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-display)", color: "var(--text)" }}>
+          Add a Tip
+        </h2>
+        <span className="text-xs" style={{ color: "var(--text-secondary)" }}>on subtotal</span>
+      </div>
 
       <div className="flex flex-wrap gap-2">
         <button
@@ -46,7 +49,7 @@ export function TipSection({
           const amount = Math.round(subtotal * (pct / 100) * 100) / 100;
           return (
             <button
-              key={pct}
+              key={`${pct}-${i}`}
               onClick={() => onSelectPreset(i)}
               className="flex-1 min-w-[70px] py-2.5 text-center rounded-lg border transition-colors"
               style={{
@@ -78,9 +81,14 @@ export function TipSection({
       {selectedTipIndex === null && (
         <Input
           type="number"
+          min="0"
+          step="0.01"
           placeholder="Enter tip amount"
           value={customTip}
-          onChange={(e) => onCustomTipChange(e.target.value)}
+          onChange={(e) => {
+            const val = e.target.value;
+            if (val === "" || Number(val) >= 0) onCustomTipChange(val);
+          }}
           className="animate-in fade-in slide-in-from-top-2"
           style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)" }}
         />
