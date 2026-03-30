@@ -6,13 +6,28 @@ import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
     Store,
-    Settings,
     AlertTriangle,
-    MessageSquare
+    LayoutDashboard,
+    Building2,
+    ShoppingCart,
+    CreditCard,
+    Receipt,
+    Users,
+    UserRound,
+    UtensilsCrossed,
+    Package,
+    Tag,
+    Globe,
+    CalendarDays,
+    Monitor,
+    StickyNote,
+    History,
+    Settings,
+    type LucideIcon,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { useAdminMerchantDetails } from '@/lib/queries/use-admin-merchant'
 import { MerchantDetails } from '@/types/merchant'
 import { MerchantInfoModel } from '@/types/db-modles'
@@ -33,6 +48,51 @@ import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
 import { NotesTab } from './components/NotesTab'
 import { OrdersTab } from './components/OrdersTab'
 import { OnboardingStatusCard } from './components/OnboardingStatusCard'
+import { BillingTab } from './components/BillingTab'
+
+// ─── Sidebar nav primitives ──────────────────────────────────────────────────
+
+function NavGroup({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <div className="space-y-0.5">
+            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                {label}
+            </p>
+            {children}
+        </div>
+    )
+}
+
+function NavItem({
+    value,
+    icon: Icon,
+    active,
+    onClick,
+    children,
+}: {
+    value: string
+    icon: LucideIcon
+    active: boolean
+    onClick: (v: string) => void
+    children: React.ReactNode
+}) {
+    return (
+        <button
+            onClick={() => onClick(value)}
+            className={cn(
+                'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors',
+                active
+                    ? 'bg-primary/10 font-medium text-primary'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            )}
+        >
+            <Icon className="h-4 w-4 shrink-0" />
+            {children}
+        </button>
+    )
+}
+
+// ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function MerchantDetailsPage() {
     const { merchantId } = useParams()
@@ -41,6 +101,8 @@ export default function MerchantDetailsPage() {
     const canManageDevices = hasPermission('users.manage')
     const canViewSettings = hasPermission('users.manage')
     const canManageMerchantStatus = hasPermission('hq.merchant.update')
+
+    const [activeTab, setActiveTab] = useState('overview')
 
     if (isLoading) {
         return (
@@ -79,7 +141,7 @@ export default function MerchantDetailsPage() {
             <div className="text-sm text-muted-foreground flex items-center gap-2">
                 <Link href="/manage/merchants" className="hover:underline">Merchants</Link>
                 <span className="mx-2">/</span>
-                <div className="hover:underline text-foreground">Merchant Details</div>
+                <span className="text-foreground">Merchant Details</span>
             </div>
 
             {/* Header */}
@@ -108,128 +170,142 @@ export default function MerchantDetailsPage() {
                                 </div>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <Button variant="outline" size="sm" asChild>
-                                <Link href={`/manage/merchants/${merchantId as string}/billing`}>Billing</Link>
-                            </Button>
-                            {canViewSettings && (
-                                <Button variant="outline" size="sm">
-                                    <Settings className="h-4 w-4 mr-2" /> Settings
-                                </Button>
-                            )}
-                             {/* Export Data Button */}
-                        </div>
                     </div>
                 </CardHeader>
+
                 <CardContent>
                     <div className="mb-6">
-                        <OnboardingStatusCard
-                            merchant={merchantDetails}
-                            canManageStatus={canManageMerchantStatus}
-                        />
+                        <OnboardingStatusCard merchant={merchantDetails} />
                     </div>
 
-                    {/* Tabs */}
-                    <Tabs defaultValue="overview" className="w-full">
-                        <TabsList className="w-full justify-start overflow-x-auto overflow-y-hidden flex-nowrap bg-muted/50 p-1 h-auto gap-1">
-                            <TabsTrigger value="overview" className="flex-none">Overview</TabsTrigger>
-                            <TabsTrigger value="business-info" className="flex-none">Business Info</TabsTrigger>
-                            <TabsTrigger value="staff" className="flex-none">Staff</TabsTrigger>
-                            <TabsTrigger value="customers" className="flex-none">Customers</TabsTrigger>
-                            <TabsTrigger value="products" className="flex-none">Products</TabsTrigger>
-                            <TabsTrigger value="menu" className="flex-none">Menu</TabsTrigger>
-                            <TabsTrigger value="schedules" className="flex-none">Schedules</TabsTrigger>
-                            <TabsTrigger value="discounts" className="flex-none">Discounts</TabsTrigger>
-                            <TabsTrigger value="online-store" className="flex-none">Online Store</TabsTrigger>
-                            {canManageDevices && <TabsTrigger value="devices" className="flex-none">Devices</TabsTrigger>}
-                            <TabsTrigger value="orders" className="flex-none">Orders</TabsTrigger>
-                            <TabsTrigger value="transactions" className="flex-none">Transactions</TabsTrigger>
-                            <TabsTrigger value="notes" className="flex-none">
-                                <MessageSquare className="mr-1 h-4 w-4" />
-                                Notes
-                            </TabsTrigger>
-                            <TabsTrigger value="audit" className="flex-none">Audit Logs</TabsTrigger>
-                            {canViewSettings && <TabsTrigger value="settings" className="flex-none">Settings</TabsTrigger>}
-                        </TabsList>
+                    {/* Vertical nav + content */}
+                    <div className="flex gap-6 border-t pt-6">
 
-                        {/* Tab Contents */}
-                        <TabsContent value="overview" className="mt-6">
-                            <OverviewTab merchantInfo={merchantDetails} />
-                        </TabsContent>
+                        {/* ── Left Sidebar ── */}
+                        <nav className="w-44 shrink-0 space-y-4">
+                            <NavGroup label="Overview">
+                                <NavItem value="overview" icon={LayoutDashboard} active={activeTab === 'overview'} onClick={setActiveTab}>Overview</NavItem>
+                                <NavItem value="business-info" icon={Building2} active={activeTab === 'business-info'} onClick={setActiveTab}>Business Info</NavItem>
+                            </NavGroup>
 
-                        <TabsContent value="business-info" className="mt-6">
-                            <BusinessInfoTab merchantInfo={merchantDetails} />
-                        </TabsContent>
+                            <NavGroup label="Operations">
+                                <NavItem value="orders" icon={ShoppingCart} active={activeTab === 'orders'} onClick={setActiveTab}>Orders</NavItem>
+                                <NavItem value="transactions" icon={CreditCard} active={activeTab === 'transactions'} onClick={setActiveTab}>Transactions</NavItem>
+                                <NavItem value="billing" icon={Receipt} active={activeTab === 'billing'} onClick={setActiveTab}>Billing</NavItem>
+                            </NavGroup>
 
-                        <TabsContent value="staff" className="mt-6">
-                            <StaffTab 
-                                merchantInfo={merchantDetails as unknown as MerchantInfoModel} 
-                                merchantDetails={merchantDetails}
-                                refetchMerchantInfo={refetch} 
-                            />
-                        </TabsContent>
+                            <NavGroup label="People">
+                                <NavItem value="staff" icon={Users} active={activeTab === 'staff'} onClick={setActiveTab}>Staff</NavItem>
+                                <NavItem value="customers" icon={UserRound} active={activeTab === 'customers'} onClick={setActiveTab}>Customers</NavItem>
+                            </NavGroup>
 
-                        <TabsContent value="customers" className="mt-6">
-                            <CustomersTab merchantInfo={merchantDetails} />
-                        </TabsContent>
+                            <NavGroup label="Catalog">
+                                <NavItem value="menu" icon={UtensilsCrossed} active={activeTab === 'menu'} onClick={setActiveTab}>Menu</NavItem>
+                                <NavItem value="products" icon={Package} active={activeTab === 'products'} onClick={setActiveTab}>Products</NavItem>
+                                <NavItem value="discounts" icon={Tag} active={activeTab === 'discounts'} onClick={setActiveTab}>Discounts</NavItem>
+                            </NavGroup>
 
-                        <TabsContent value="products" className="mt-6">
-                            <ProductsTab merchantInfo={merchantDetails} />
-                        </TabsContent>
+                            <NavGroup label="Store">
+                                <NavItem value="online-store" icon={Globe} active={activeTab === 'online-store'} onClick={setActiveTab}>Online Store</NavItem>
+                                <NavItem value="schedules" icon={CalendarDays} active={activeTab === 'schedules'} onClick={setActiveTab}>Schedules</NavItem>
+                                {canManageDevices && (
+                                    <NavItem value="devices" icon={Monitor} active={activeTab === 'devices'} onClick={setActiveTab}>Devices</NavItem>
+                                )}
+                            </NavGroup>
 
-                        {canManageDevices && (
-                            <TabsContent value="devices" className="mt-6">
+                            <NavGroup label="Admin">
+                                <NavItem value="notes" icon={StickyNote} active={activeTab === 'notes'} onClick={setActiveTab}>Notes</NavItem>
+                                <NavItem value="audit" icon={History} active={activeTab === 'audit'} onClick={setActiveTab}>Audit Logs</NavItem>
+                                {canViewSettings && (
+                                    <NavItem value="settings" icon={Settings} active={activeTab === 'settings'} onClick={setActiveTab}>Settings</NavItem>
+                                )}
+                            </NavGroup>
+                        </nav>
+
+                        {/* ── Content Panes ── */}
+                        <div className="flex-1 min-w-0 border-l pl-6">
+                            {activeTab === 'overview' && (
+                                <OverviewTab merchantInfo={merchantDetails} />
+                            )}
+
+                            {activeTab === 'business-info' && (
+                                <BusinessInfoTab merchantInfo={merchantDetails} />
+                            )}
+
+                            {activeTab === 'orders' && (
+                                <OrdersTab merchantInfo={merchantDetails} />
+                            )}
+
+                            {activeTab === 'transactions' && (
+                                <TransactionsTab merchantInfo={merchantDetails as unknown as MerchantInfoModel} />
+                            )}
+
+                            {activeTab === 'billing' && (
+                                <BillingTab
+                                    merchantId={merchantDetails.id}
+                                    merchantName={merchantDetails.name}
+                                    canEdit={canManageMerchantStatus}
+                                />
+                            )}
+
+                            {activeTab === 'staff' && (
+                                <StaffTab
+                                    merchantInfo={merchantDetails as unknown as MerchantInfoModel}
+                                    merchantDetails={merchantDetails}
+                                    refetchMerchantInfo={refetch}
+                                />
+                            )}
+
+                            {activeTab === 'customers' && (
+                                <CustomersTab merchantInfo={merchantDetails} />
+                            )}
+
+                            {activeTab === 'menu' && (
+                                <MenuTab merchantDetails={merchantDetails} clerkOrgId={merchantDetails.clerk_org_id} />
+                            )}
+
+                            {activeTab === 'products' && (
+                                <ProductsTab merchantInfo={merchantDetails} />
+                            )}
+
+                            {activeTab === 'discounts' && (
+                                <DiscountsTab merchantId={merchantDetails.id} />
+                            )}
+
+                            {activeTab === 'online-store' && (
+                                <OnlineStoreTab
+                                    merchantId={merchantDetails.id}
+                                    merchantName={merchantDetails.name}
+                                    locations={merchantDetails.locations as any[]}
+                                    locationsLoading={false}
+                                />
+                            )}
+
+                            {activeTab === 'schedules' && (
+                                <SchedulesTab
+                                    merchantId={merchantDetails.id}
+                                    locations={merchantDetails.locations as any[]}
+                                />
+                            )}
+
+                            {canManageDevices && activeTab === 'devices' && (
                                 <DevicesTab merchantId={merchantDetails.id} merchantInfo={merchantDetails} />
-                            </TabsContent>
-                        )}
+                            )}
 
-                        <TabsContent value="orders" className="mt-6">
-                            <OrdersTab merchantInfo={merchantDetails} />
-                        </TabsContent>
+                            {activeTab === 'notes' && (
+                                <NotesTab merchantId={merchantDetails.id} />
+                            )}
 
-                        <TabsContent value="transactions" className="mt-6">
-                             {/* TransactionsTab likely expects MerchantInfoModel or ID */}
-                            <TransactionsTab merchantInfo={merchantDetails as unknown as MerchantInfoModel} />
-                        </TabsContent>
+                            {activeTab === 'audit' && (
+                                <AuditLogsTab merchantInfo={merchantDetails as unknown as MerchantInfoModel} />
+                            )}
 
-                        <TabsContent value="notes" className="mt-6">
-                            <NotesTab merchantId={merchantDetails.id} />
-                        </TabsContent>
+                            {canViewSettings && activeTab === 'settings' && (
+                                <SettingsTab merchantInfo={merchantDetails} refetchMerchantInfo={refetch} canManageStatus={canManageMerchantStatus} />
+                            )}
+                        </div>
 
-                        <TabsContent value="menu" className="mt-6">
-                            <MenuTab merchantDetails={merchantDetails} clerkOrgId={merchantDetails.clerk_org_id} />
-                        </TabsContent>
-
-                        <TabsContent value="discounts" className="mt-6">
-                            <DiscountsTab merchantId={merchantDetails.id} />
-                        </TabsContent>
-
-                        <TabsContent value="schedules" className="mt-6">
-                            <SchedulesTab 
-                                merchantId={merchantDetails.id} 
-                                locations={merchantDetails.locations as any[]} 
-                            />
-                        </TabsContent>
-
-                        <TabsContent value="online-store" className="mt-6">
-                            <OnlineStoreTab
-                                merchantId={merchantDetails.id}
-                                merchantName={merchantDetails.name}
-                                locations={merchantDetails.locations as any[]}
-                                locationsLoading={false}
-                            />
-                        </TabsContent>
-
-                        <TabsContent value="audit" className="mt-6">
-                            <AuditLogsTab merchantInfo={merchantDetails as unknown as MerchantInfoModel} />
-                        </TabsContent>
-
-                        {canViewSettings && (
-                            <TabsContent value="settings" className="mt-6">
-                                <SettingsTab merchantInfo={merchantDetails} refetchMerchantInfo={refetch} />
-                            </TabsContent>
-                        )}
-                    </Tabs>
+                    </div>
                 </CardContent>
             </Card>
         </div>

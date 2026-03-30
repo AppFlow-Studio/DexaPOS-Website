@@ -1263,6 +1263,73 @@ export type Database = {
           },
         ]
       }
+      customer_saved_addresses: {
+        Row: {
+          address_line1: string
+          address_line2: string | null
+          city: string
+          created_at: string
+          customer_id: string
+          delivery_notes: string | null
+          id: string
+          is_default: boolean
+          label: string
+          postal_code: string
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          address_line1: string
+          address_line2?: string | null
+          city: string
+          created_at?: string
+          customer_id: string
+          delivery_notes?: string | null
+          id?: string
+          is_default?: boolean
+          label?: string
+          postal_code: string
+          state: string
+          updated_at?: string
+        }
+        Update: {
+          address_line1?: string
+          address_line2?: string | null
+          city?: string
+          created_at?: string
+          customer_id?: string
+          delivery_notes?: string | null
+          id?: string
+          is_default?: boolean
+          label?: string
+          postal_code?: string
+          state?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_saved_addresses_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "active_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_saved_addresses_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profile_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_saved_addresses_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           address: string | null
@@ -1426,59 +1493,64 @@ export type Database = {
           },
         ]
       }
-      device_catalog: {
+      delivery_zones: {
         Row: {
-          id: string
-          device_category: string
-          manufacturer: string
-          model_name: string
-          model_sku: string | null
-          hardware_revision: string | null
-          specs: Record<string, unknown>
-          unit_cost_cents: number | null
-          monthly_fee_cents: number | null
-          is_active: boolean
-          discontinued_at: string | null
-          image_url: string | null
-          notes: string | null
           created_at: string
+          delivery_fee_cents: number
+          display_order: number
+          estimated_minutes: number | null
+          free_delivery_threshold_cents: number | null
+          id: string
+          is_active: boolean
+          min_order_cents: number | null
+          polygon_coordinates: Json | null
+          radius_miles: number | null
+          store_config_id: string
           updated_at: string
+          zone_name: string
+          zone_type: string
         }
         Insert: {
-          id?: string
-          device_category: string
-          manufacturer: string
-          model_name: string
-          model_sku?: string | null
-          hardware_revision?: string | null
-          specs?: Record<string, unknown>
-          unit_cost_cents?: number | null
-          monthly_fee_cents?: number | null
-          is_active?: boolean
-          discontinued_at?: string | null
-          image_url?: string | null
-          notes?: string | null
           created_at?: string
+          delivery_fee_cents?: number
+          display_order?: number
+          estimated_minutes?: number | null
+          free_delivery_threshold_cents?: number | null
+          id?: string
+          is_active?: boolean
+          min_order_cents?: number | null
+          polygon_coordinates?: Json | null
+          radius_miles?: number | null
+          store_config_id: string
           updated_at?: string
+          zone_name: string
+          zone_type: string
         }
         Update: {
-          id?: string
-          device_category?: string
-          manufacturer?: string
-          model_name?: string
-          model_sku?: string | null
-          hardware_revision?: string | null
-          specs?: Record<string, unknown>
-          unit_cost_cents?: number | null
-          monthly_fee_cents?: number | null
-          is_active?: boolean
-          discontinued_at?: string | null
-          image_url?: string | null
-          notes?: string | null
           created_at?: string
+          delivery_fee_cents?: number
+          display_order?: number
+          estimated_minutes?: number | null
+          free_delivery_threshold_cents?: number | null
+          id?: string
+          is_active?: boolean
+          min_order_cents?: number | null
+          polygon_coordinates?: Json | null
+          radius_miles?: number | null
+          store_config_id?: string
           updated_at?: string
+          zone_name?: string
+          zone_type?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "delivery_zones_store_config_id_fkey"
+            columns: ["store_config_id"]
+            isOneToOne: false
+            referencedRelation: "online_store_config"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       device_alerts: {
         Row: {
@@ -2505,6 +2577,211 @@ export type Database = {
           },
           {
             foreignKeyName: "inventory_items_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoice_items: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          invoice_id: string
+          menu_item_id: string | null
+          name: string
+          quantity: number
+          sort_order: number
+          total_price: number
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          invoice_id: string
+          menu_item_id?: string | null
+          name: string
+          quantity?: number
+          sort_order?: number
+          total_price?: number
+          unit_price?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          invoice_id?: string
+          menu_item_id?: string | null
+          name?: string
+          quantity?: number
+          sort_order?: number
+          total_price?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_items_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_items_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_items_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_location_menu_items"
+            referencedColumns: ["menu_item_id"]
+          },
+        ]
+      }
+      invoice_number_sequences: {
+        Row: {
+          last_number: number
+          merchant_id: string
+        }
+        Insert: {
+          last_number?: number
+          merchant_id: string
+        }
+        Update: {
+          last_number?: number
+          merchant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_number_sequences_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: true
+            referencedRelation: "admin_merchant_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_number_sequences_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: true
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          created_at: string
+          customer_id: string | null
+          discount_amount: number
+          due_date: string | null
+          id: string
+          invoice_number: string
+          location_id: string | null
+          merchant_id: string
+          note: string | null
+          payment_due_type: string
+          status: string
+          subtotal: number
+          tax_amount: number
+          tax_rate: number
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id?: string | null
+          discount_amount?: number
+          due_date?: string | null
+          id?: string
+          invoice_number: string
+          location_id?: string | null
+          merchant_id: string
+          note?: string | null
+          payment_due_type?: string
+          status?: string
+          subtotal?: number
+          tax_amount?: number
+          tax_rate?: number
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string | null
+          discount_amount?: number
+          due_date?: string | null
+          id?: string
+          invoice_number?: string
+          location_id?: string | null
+          merchant_id?: string
+          note?: string | null
+          payment_due_type?: string
+          status?: string
+          subtotal?: number
+          tax_amount?: number
+          tax_rate?: number
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "active_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profile_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "location_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_location_menu_items"
+            referencedColumns: ["location_id"]
+          },
+          {
+            foreignKeyName: "invoices_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "admin_merchant_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_merchant_id_fkey"
             columns: ["merchant_id"]
             isOneToOne: false
             referencedRelation: "merchants"
@@ -6465,6 +6742,253 @@ export type Database = {
           },
         ]
       }
+      online_order_payment_intents: {
+        Row: {
+          amount_cents: number
+          card_last4: string | null
+          card_token: string | null
+          card_type: string | null
+          created_at: string
+          delivery_fee_cents: number
+          expires_at: string
+          id: string
+          ipospays_tpn: string
+          location_id: string
+          merchant_id: string
+          order_data: Json
+          order_id: string | null
+          payment_method: string | null
+          payment_response: Json | null
+          session_id: string
+          status: string
+          store_config_id: string
+          subtotal_cents: number
+          tax_cents: number
+          tip_cents: number
+          transaction_reference_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          card_last4?: string | null
+          card_token?: string | null
+          card_type?: string | null
+          created_at?: string
+          delivery_fee_cents?: number
+          expires_at?: string
+          id?: string
+          ipospays_tpn: string
+          location_id: string
+          merchant_id: string
+          order_data: Json
+          order_id?: string | null
+          payment_method?: string | null
+          payment_response?: Json | null
+          session_id: string
+          status?: string
+          store_config_id: string
+          subtotal_cents: number
+          tax_cents: number
+          tip_cents?: number
+          transaction_reference_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          card_last4?: string | null
+          card_token?: string | null
+          card_type?: string | null
+          created_at?: string
+          delivery_fee_cents?: number
+          expires_at?: string
+          id?: string
+          ipospays_tpn?: string
+          location_id?: string
+          merchant_id?: string
+          order_data?: Json
+          order_id?: string | null
+          payment_method?: string | null
+          payment_response?: Json | null
+          session_id?: string
+          status?: string
+          store_config_id?: string
+          subtotal_cents?: number
+          tax_cents?: number
+          tip_cents?: number
+          transaction_reference_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "online_order_payment_intents_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "location_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "online_order_payment_intents_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "online_order_payment_intents_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_location_menu_items"
+            referencedColumns: ["location_id"]
+          },
+          {
+            foreignKeyName: "online_order_payment_intents_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "admin_merchant_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "online_order_payment_intents_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "online_order_payment_intents_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "online_order_payment_intents_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "online_order_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "online_order_payment_intents_store_config_id_fkey"
+            columns: ["store_config_id"]
+            isOneToOne: false
+            referencedRelation: "online_store_config"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      online_order_sessions: {
+        Row: {
+          cart_data: Json | null
+          created_at: string
+          customer_email: string | null
+          customer_id: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          delivery_address: Json | null
+          delivery_zone_id: string | null
+          expires_at: string | null
+          id: string
+          is_authenticated: boolean
+          loyalty_points_balance: number | null
+          loyalty_points_to_apply: number | null
+          order_id: string | null
+          order_type: string | null
+          requested_time: string | null
+          session_token: string | null
+          store_config_id: string
+          supabase_auth_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          cart_data?: Json | null
+          created_at?: string
+          customer_email?: string | null
+          customer_id?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          delivery_address?: Json | null
+          delivery_zone_id?: string | null
+          expires_at?: string | null
+          id?: string
+          is_authenticated?: boolean
+          loyalty_points_balance?: number | null
+          loyalty_points_to_apply?: number | null
+          order_id?: string | null
+          order_type?: string | null
+          requested_time?: string | null
+          session_token?: string | null
+          store_config_id: string
+          supabase_auth_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cart_data?: Json | null
+          created_at?: string
+          customer_email?: string | null
+          customer_id?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          delivery_address?: Json | null
+          delivery_zone_id?: string | null
+          expires_at?: string | null
+          id?: string
+          is_authenticated?: boolean
+          loyalty_points_balance?: number | null
+          loyalty_points_to_apply?: number | null
+          order_id?: string | null
+          order_type?: string | null
+          requested_time?: string | null
+          session_token?: string | null
+          store_config_id?: string
+          supabase_auth_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "online_order_sessions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "active_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "online_order_sessions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profile_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "online_order_sessions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "online_order_sessions_delivery_zone_id_fkey"
+            columns: ["delivery_zone_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_zones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "online_order_sessions_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "online_order_sessions_store_config_id_fkey"
+            columns: ["store_config_id"]
+            isOneToOne: false
+            referencedRelation: "online_store_config"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       online_orders: {
         Row: {
           created_at: string
@@ -6577,343 +7101,148 @@ export type Database = {
           },
         ]
       }
-      phone_verifications: {
-        Row: {
-          id: string
-          phone: string
-          code: string
-          merchant_id: string
-          attempts: number
-          max_attempts: number
-          expires_at: string
-          verified_at: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          phone: string
-          code: string
-          merchant_id: string
-          attempts?: number
-          max_attempts?: number
-          expires_at?: string
-          verified_at?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          phone?: string
-          code?: string
-          merchant_id?: string
-          attempts?: number
-          max_attempts?: number
-          expires_at?: string
-          verified_at?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "phone_verifications_merchant_id_fkey"
-            columns: ["merchant_id"]
-            isOneToOne: false
-            referencedRelation: "merchants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      customer_saved_addresses: {
-        Row: {
-          id: string
-          customer_id: string
-          label: string
-          address_line1: string
-          address_line2: string | null
-          city: string
-          state: string
-          postal_code: string
-          delivery_notes: string | null
-          is_default: boolean
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          customer_id: string
-          label?: string
-          address_line1: string
-          address_line2?: string | null
-          city: string
-          state: string
-          postal_code: string
-          delivery_notes?: string | null
-          is_default?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          customer_id?: string
-          label?: string
-          address_line1?: string
-          address_line2?: string | null
-          city?: string
-          state?: string
-          postal_code?: string
-          delivery_notes?: string | null
-          is_default?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "customer_saved_addresses_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      online_order_sessions: {
-        Row: {
-          id: string
-          store_config_id: string
-          session_token: string | null
-          customer_id: string | null
-          customer_phone: string | null
-          customer_name: string | null
-          customer_email: string | null
-          supabase_auth_id: string | null
-          is_authenticated: boolean
-          order_type: string | null
-          delivery_address: Json | null
-          delivery_zone_id: string | null
-          cart_data: Json | null
-          loyalty_points_balance: number | null
-          loyalty_points_to_apply: number | null
-          order_id: string | null
-          requested_time: string | null
-          created_at: string
-          updated_at: string
-          expires_at: string | null
-        }
-        Insert: {
-          id?: string
-          store_config_id: string
-          session_token?: string | null
-          customer_id?: string | null
-          customer_phone?: string | null
-          customer_name?: string | null
-          customer_email?: string | null
-          supabase_auth_id?: string | null
-          is_authenticated?: boolean
-          order_type?: string | null
-          delivery_address?: Json | null
-          delivery_zone_id?: string | null
-          cart_data?: Json | null
-          loyalty_points_balance?: number | null
-          loyalty_points_to_apply?: number | null
-          order_id?: string | null
-          requested_time?: string | null
-          created_at?: string
-          updated_at?: string
-          expires_at?: string | null
-        }
-        Update: {
-          id?: string
-          store_config_id?: string
-          session_token?: string | null
-          customer_id?: string | null
-          customer_phone?: string | null
-          customer_name?: string | null
-          customer_email?: string | null
-          supabase_auth_id?: string | null
-          is_authenticated?: boolean
-          order_type?: string | null
-          delivery_address?: Json | null
-          delivery_zone_id?: string | null
-          cart_data?: Json | null
-          loyalty_points_balance?: number | null
-          loyalty_points_to_apply?: number | null
-          order_id?: string | null
-          requested_time?: string | null
-          created_at?: string
-          updated_at?: string
-          expires_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "online_order_sessions_store_config_id_fkey"
-            columns: ["store_config_id"]
-            isOneToOne: false
-            referencedRelation: "online_store_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "online_order_sessions_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "online_order_sessions_delivery_zone_id_fkey"
-            columns: ["delivery_zone_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_zones"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "online_order_sessions_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "orders"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       online_store_config: {
         Row: {
-          id: string
-          merchant_id: string
-          location_id: string
-          slug: string
-          custom_domain: string | null
-          store_name: string
-          template_id: string
-          primary_color: string
-          secondary_color: string | null
           accent_color: string | null
-          background_color: string
-          text_color: string
-          font_family: string | null
-          logo_url: string | null
-          hero_image_url: string | null
-          favicon_url: string | null
-          og_image_url: string | null
-          description: string | null
-          phone: string | null
-          email: string | null
-          address: Json | null
-          operating_hours: Json
-          is_active: boolean
-          accepts_pickup: boolean
           accepts_delivery: boolean
-          min_order_cents: number | null
-          estimated_prep_minutes: number | null
-          max_future_order_days: number | null
+          accepts_pickup: boolean
+          address: Json | null
+          background_color: string
+          created_at: string
+          custom_domain: string | null
           delivery_fee_cents: number | null
-          free_delivery_threshold_cents: number | null
           delivery_radius_miles: number | null
-          tip_enabled: boolean
-          tip_presets: Json | null
-          ipospays_tpn: string | null
-          meta_title: string | null
-          meta_description: string | null
-          google_analytics_id: string | null
+          description: string | null
+          email: string | null
+          estimated_prep_minutes: number | null
           facebook_pixel_id: string | null
+          favicon_url: string | null
+          font_family: string | null
+          free_delivery_threshold_cents: number | null
+          google_analytics_id: string | null
           header_style: string
           header_text_color: string | null
+          hero_image_url: string | null
+          id: string
+          ipospays_tpn: string | null
+          is_active: boolean
+          location_id: string
+          logo_url: string | null
+          max_future_order_days: number | null
+          merchant_id: string
+          meta_description: string | null
+          meta_title: string | null
+          min_order_cents: number | null
+          og_image_url: string | null
+          operating_hours: Json
+          phone: string | null
+          primary_color: string
           published_at: string | null
-          created_at: string
+          secondary_color: string | null
+          slug: string
+          store_name: string
+          template_id: string
+          text_color: string
+          tip_enabled: boolean
+          tip_presets: Json | null
           updated_at: string
         }
         Insert: {
-          id?: string
-          merchant_id: string
-          location_id: string
-          slug: string
-          custom_domain?: string | null
-          store_name: string
-          template_id?: string
-          primary_color?: string
-          secondary_color?: string | null
           accent_color?: string | null
-          background_color?: string
-          text_color?: string
-          font_family?: string | null
-          logo_url?: string | null
-          hero_image_url?: string | null
-          favicon_url?: string | null
-          og_image_url?: string | null
-          description?: string | null
-          phone?: string | null
-          email?: string | null
-          address?: Json | null
-          operating_hours?: Json
-          is_active?: boolean
-          accepts_pickup?: boolean
           accepts_delivery?: boolean
-          min_order_cents?: number | null
-          estimated_prep_minutes?: number | null
-          max_future_order_days?: number | null
+          accepts_pickup?: boolean
+          address?: Json | null
+          background_color?: string
+          created_at?: string
+          custom_domain?: string | null
           delivery_fee_cents?: number | null
-          free_delivery_threshold_cents?: number | null
           delivery_radius_miles?: number | null
-          tip_enabled?: boolean
-          tip_presets?: Json | null
-          ipospays_tpn?: string | null
-          meta_title?: string | null
-          meta_description?: string | null
-          google_analytics_id?: string | null
+          description?: string | null
+          email?: string | null
+          estimated_prep_minutes?: number | null
           facebook_pixel_id?: string | null
+          favicon_url?: string | null
+          font_family?: string | null
+          free_delivery_threshold_cents?: number | null
+          google_analytics_id?: string | null
           header_style?: string
           header_text_color?: string | null
+          hero_image_url?: string | null
+          id?: string
+          ipospays_tpn?: string | null
+          is_active?: boolean
+          location_id: string
+          logo_url?: string | null
+          max_future_order_days?: number | null
+          merchant_id: string
+          meta_description?: string | null
+          meta_title?: string | null
+          min_order_cents?: number | null
+          og_image_url?: string | null
+          operating_hours?: Json
+          phone?: string | null
+          primary_color?: string
           published_at?: string | null
-          created_at?: string
+          secondary_color?: string | null
+          slug: string
+          store_name: string
+          template_id?: string
+          text_color?: string
+          tip_enabled?: boolean
+          tip_presets?: Json | null
           updated_at?: string
         }
         Update: {
-          id?: string
-          merchant_id?: string
-          location_id?: string
-          slug?: string
-          custom_domain?: string | null
-          store_name?: string
-          template_id?: string
-          primary_color?: string
-          secondary_color?: string | null
           accent_color?: string | null
-          background_color?: string
-          text_color?: string
-          font_family?: string | null
-          logo_url?: string | null
-          hero_image_url?: string | null
-          favicon_url?: string | null
-          og_image_url?: string | null
-          description?: string | null
-          phone?: string | null
-          email?: string | null
-          address?: Json | null
-          operating_hours?: Json
-          is_active?: boolean
-          accepts_pickup?: boolean
           accepts_delivery?: boolean
-          min_order_cents?: number | null
-          estimated_prep_minutes?: number | null
-          max_future_order_days?: number | null
+          accepts_pickup?: boolean
+          address?: Json | null
+          background_color?: string
+          created_at?: string
+          custom_domain?: string | null
           delivery_fee_cents?: number | null
-          free_delivery_threshold_cents?: number | null
           delivery_radius_miles?: number | null
-          tip_enabled?: boolean
-          tip_presets?: Json | null
-          ipospays_tpn?: string | null
-          meta_title?: string | null
-          meta_description?: string | null
-          google_analytics_id?: string | null
+          description?: string | null
+          email?: string | null
+          estimated_prep_minutes?: number | null
           facebook_pixel_id?: string | null
+          favicon_url?: string | null
+          font_family?: string | null
+          free_delivery_threshold_cents?: number | null
+          google_analytics_id?: string | null
           header_style?: string
           header_text_color?: string | null
+          hero_image_url?: string | null
+          id?: string
+          ipospays_tpn?: string | null
+          is_active?: boolean
+          location_id?: string
+          logo_url?: string | null
+          max_future_order_days?: number | null
+          merchant_id?: string
+          meta_description?: string | null
+          meta_title?: string | null
+          min_order_cents?: number | null
+          og_image_url?: string | null
+          operating_hours?: Json
+          phone?: string | null
+          primary_color?: string
           published_at?: string | null
-          created_at?: string
+          secondary_color?: string | null
+          slug?: string
+          store_name?: string
+          template_id?: string
+          text_color?: string
+          tip_enabled?: boolean
+          tip_presets?: Json | null
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "online_store_config_merchant_id_fkey"
-            columns: ["merchant_id"]
+            foreignKeyName: "online_store_config_location_id_fkey"
+            columns: ["location_id"]
             isOneToOne: false
-            referencedRelation: "merchants"
+            referencedRelation: "location_summary"
             referencedColumns: ["id"]
           },
           {
@@ -6923,125 +7252,87 @@ export type Database = {
             referencedRelation: "locations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "online_store_config_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_location_menu_items"
+            referencedColumns: ["location_id"]
+          },
+          {
+            foreignKeyName: "online_store_config_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "admin_merchant_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "online_store_config_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
         ]
       }
       online_store_pages: {
         Row: {
-          id: string
-          store_config_id: string
-          page_type: string
-          section_type: string
-          title: string | null
-          subtitle: string | null
           body_text: string | null
+          created_at: string
+          cta_link: string | null
+          cta_text: string | null
+          display_order: number
+          id: string
           image_url: string | null
           images: Json | null
-          cta_text: string | null
-          cta_link: string | null
-          display_order: number
           is_visible: boolean
+          page_type: string
+          section_type: string
+          store_config_id: string
           style_overrides: Json | null
-          created_at: string
+          subtitle: string | null
+          title: string | null
           updated_at: string
         }
         Insert: {
-          id?: string
-          store_config_id: string
-          page_type?: string
-          section_type: string
-          title?: string | null
-          subtitle?: string | null
           body_text?: string | null
+          created_at?: string
+          cta_link?: string | null
+          cta_text?: string | null
+          display_order?: number
+          id?: string
           image_url?: string | null
           images?: Json | null
-          cta_text?: string | null
-          cta_link?: string | null
-          display_order?: number
           is_visible?: boolean
+          page_type?: string
+          section_type: string
+          store_config_id: string
           style_overrides?: Json | null
-          created_at?: string
+          subtitle?: string | null
+          title?: string | null
           updated_at?: string
         }
         Update: {
-          id?: string
-          store_config_id?: string
-          page_type?: string
-          section_type?: string
-          title?: string | null
-          subtitle?: string | null
           body_text?: string | null
+          created_at?: string
+          cta_link?: string | null
+          cta_text?: string | null
+          display_order?: number
+          id?: string
           image_url?: string | null
           images?: Json | null
-          cta_text?: string | null
-          cta_link?: string | null
-          display_order?: number
           is_visible?: boolean
+          page_type?: string
+          section_type?: string
+          store_config_id?: string
           style_overrides?: Json | null
-          created_at?: string
+          subtitle?: string | null
+          title?: string | null
           updated_at?: string
         }
         Relationships: [
           {
             foreignKeyName: "online_store_pages_store_config_id_fkey"
-            columns: ["store_config_id"]
-            isOneToOne: false
-            referencedRelation: "online_store_config"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      delivery_zones: {
-        Row: {
-          id: string
-          store_config_id: string
-          zone_name: string
-          zone_type: string
-          radius_miles: number | null
-          polygon_coordinates: Json | null
-          delivery_fee_cents: number
-          min_order_cents: number | null
-          free_delivery_threshold_cents: number | null
-          estimated_minutes: number | null
-          is_active: boolean
-          display_order: number
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          store_config_id: string
-          zone_name: string
-          zone_type: string
-          radius_miles?: number | null
-          polygon_coordinates?: Json | null
-          delivery_fee_cents?: number
-          min_order_cents?: number | null
-          free_delivery_threshold_cents?: number | null
-          estimated_minutes?: number | null
-          is_active?: boolean
-          display_order?: number
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          store_config_id?: string
-          zone_name?: string
-          zone_type?: string
-          radius_miles?: number | null
-          polygon_coordinates?: Json | null
-          delivery_fee_cents?: number
-          min_order_cents?: number | null
-          free_delivery_threshold_cents?: number | null
-          estimated_minutes?: number | null
-          is_active?: boolean
-          display_order?: number
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_zones_store_config_id_fkey"
             columns: ["store_config_id"]
             isOneToOne: false
             referencedRelation: "online_store_config"
@@ -7299,6 +7590,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          metadata: Json | null
           modifier_group_id: string | null
           modifier_group_name: string
           modifier_item_id: string | null
@@ -7311,6 +7603,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          metadata?: Json | null
           modifier_group_id?: string | null
           modifier_group_name: string
           modifier_item_id?: string | null
@@ -7323,6 +7616,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          metadata?: Json | null
           modifier_group_id?: string | null
           modifier_group_name?: string
           modifier_item_id?: string | null
@@ -9465,6 +9759,57 @@ export type Database = {
         }
         Relationships: []
       }
+      phone_verifications: {
+        Row: {
+          attempts: number
+          code: string
+          created_at: string
+          expires_at: string
+          id: string
+          max_attempts: number
+          merchant_id: string
+          phone: string
+          verified_at: string | null
+        }
+        Insert: {
+          attempts?: number
+          code: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          max_attempts?: number
+          merchant_id: string
+          phone: string
+          verified_at?: string | null
+        }
+        Update: {
+          attempts?: number
+          code?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          max_attempts?: number
+          merchant_id?: string
+          phone?: string
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phone_verifications_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "admin_merchant_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phone_verifications_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       prep_stations: {
         Row: {
           color: string
@@ -9537,6 +9882,41 @@ export type Database = {
           },
         ]
       }
+      printer_routing_rules: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_enabled: boolean
+          printer_id: string
+          rule_type: string
+          rule_value: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_enabled?: boolean
+          printer_id: string
+          rule_type: string
+          rule_value: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_enabled?: boolean
+          printer_id?: string
+          rule_type?: string
+          rule_value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "printer_routing_rules_printer_id_fkey"
+            columns: ["printer_id"]
+            isOneToOne: false
+            referencedRelation: "printers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       printers: {
         Row: {
           auto_print_receipt: boolean | null
@@ -9562,6 +9942,7 @@ export type Database = {
           paper_width: number
           print_density: number | null
           print_logo: boolean | null
+          print_modifiers: boolean
           print_order_tickets: boolean | null
           printer_model: string | null
           printer_name: string
@@ -9569,6 +9950,7 @@ export type Database = {
           printer_type: string
           receipt_footer: string | null
           receipt_header: string | null
+          routing_mode: string
           serial_number: string | null
           station_id: string | null
           supports_auto_cut: boolean | null
@@ -9603,6 +9985,7 @@ export type Database = {
           paper_width?: number
           print_density?: number | null
           print_logo?: boolean | null
+          print_modifiers?: boolean
           print_order_tickets?: boolean | null
           printer_model?: string | null
           printer_name: string
@@ -9610,6 +9993,7 @@ export type Database = {
           printer_type: string
           receipt_footer?: string | null
           receipt_header?: string | null
+          routing_mode?: string
           serial_number?: string | null
           station_id?: string | null
           supports_auto_cut?: boolean | null
@@ -9644,6 +10028,7 @@ export type Database = {
           paper_width?: number
           print_density?: number | null
           print_logo?: boolean | null
+          print_modifiers?: boolean
           print_order_tickets?: boolean | null
           printer_model?: string | null
           printer_name?: string
@@ -9651,6 +10036,7 @@ export type Database = {
           printer_type?: string
           receipt_footer?: string | null
           receipt_header?: string | null
+          routing_mode?: string
           serial_number?: string | null
           station_id?: string | null
           supports_auto_cut?: boolean | null
@@ -14741,6 +15127,10 @@ export type Database = {
             }
             Returns: Json
           }
+      generate_invoice_number: {
+        Args: { p_merchant_id: string }
+        Returns: string
+      }
       generate_order_number: {
         Args: { p_location_id: string }
         Returns: string
@@ -16001,6 +16391,22 @@ export type Database = {
         }
         Returns: Json
       }
+      process_payment_v7: {
+        Args: {
+          p_amount: number
+          p_amount_tendered?: number
+          p_force_card_pricing?: boolean
+          p_item_allocations?: Json
+          p_order_id: string
+          p_payment_method: string
+          p_split_count?: number
+          p_split_portion_index?: number
+          p_staff_id?: string
+          p_terminal_response?: Json
+          p_tip_amount?: number
+        }
+        Returns: Json
+      }
       process_split_payment: {
         Args: {
           p_amount: number
@@ -16033,6 +16439,19 @@ export type Database = {
         }
         Returns: Json
       }
+      record_waitlist_sms_result:
+        | {
+            Args: { p_success: boolean; p_waitlist_id: string }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_notification_type?: string
+              p_success: boolean
+              p_waitlist_id: string
+            }
+            Returns: undefined
+          }
       redistribute_order_discount: {
         Args: { p_order_id: string }
         Returns: undefined
@@ -16081,6 +16500,10 @@ export type Database = {
       }
       replace_order_item_modifiers_v2: {
         Args: { p_modifiers: Json; p_order_item_id: string }
+        Returns: Json
+      }
+      resend_waitlist_notification: {
+        Args: { p_notification_type?: string; p_waitlist_id: string }
         Returns: Json
       }
       reset_castles_txn_counter: {

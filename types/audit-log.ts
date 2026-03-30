@@ -161,8 +161,10 @@ export interface AuditLogFilters {
   action_category?: AuditCategory;
   severity?: AuditSeverity;
   resource_type?: string;
+  /** Filter by multiple resource types (used by merchant category tabs) */
+  resource_types?: string[];
   actor_user_id?: string;
-  staff_profile_id?: string; // NEW FILTER
+  staff_profile_id?: string;
   date_from?: string;
   date_to?: string;
   search?: string;

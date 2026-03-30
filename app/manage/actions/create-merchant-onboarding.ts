@@ -3,6 +3,7 @@
 import { createClerkClient } from '@clerk/backend'
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
 import { revalidatePath } from 'next/cache'
 
@@ -78,6 +79,7 @@ export async function createMerchantOnboarding(
 
   const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
   const supabase = createServerSupabaseClient()
+  const serviceRoleSupabase = createServiceRoleClient()
 
   let organizationId: string | null = null
 
@@ -101,6 +103,23 @@ export async function createMerchantOnboarding(
     })
 
     organizationId = organization.id
+
+    // Guard against webhook timing/race conditions:
+    // ensure the organizations parent row exists before inserting merchants.
+    const { error: organizationSyncError } = await serviceRoleSupabase
+      .from('organizations')
+      .upsert(
+        {
+          id: organization.id,
+          name: organization.name || businessLegalName,
+          public_metadata: organization.publicMetadata || {},
+        },
+        { onConflict: 'id' }
+      )
+
+    if (organizationSyncError) {
+      throw new Error(`Failed to sync organization record: ${organizationSyncError.message}`)
+    }
 
     const merchantName = normalizeValue(params.dbaName) || businessLegalName
 

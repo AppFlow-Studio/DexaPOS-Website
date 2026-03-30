@@ -7,6 +7,7 @@ import { ShoppingBag } from "lucide-react";
 import { useCart } from "../../hooks/useCart";
 import { useSession } from "../../hooks/useSession";
 import { useSessionInit } from "../../hooks/useSessionInit";
+import { useCartSync } from "../../hooks/useCartSync";
 import { useStorefrontPath } from "../../lib/use-storefront-path";
 import { AuthDialog } from "../AuthDialog";
 import { CheckoutHeader } from "./CheckoutHeader";
@@ -23,6 +24,7 @@ import {
   type PlaceOrderItem,
 } from "../../order-actions";
 import { isStoreOpenNow } from "../StoreInfoBar";
+import { sendOrderConfirmationEmail } from "../../recovery-actions";
 import { getSavedAddresses, addSavedAddress, type SavedAddress } from "../../customer-actions";
 import type { Site, OnlineOrderingConfig } from "@/types/site";
 
@@ -81,6 +83,7 @@ export function CheckoutPage({
   taxRate = 0,
 }: CheckoutPageProps) {
   useSessionInit(storeConfigId);
+  useCartSync();
 
   const { items, clearCart, updateQuantity, removeItem, getSubtotal } = useCart();
   const { isAuthenticated, customer } = useSession();
@@ -137,7 +140,7 @@ export function CheckoutPage({
   const tipPresets = (config?.tipConfig?.presetPercentages as number[]) ?? [15, 18, 20, 25];
   const [selectedTipIndex, setSelectedTipIndex] = useState<number | null>(1);
   const [customTip, setCustomTip] = useState("");
-  const tipPercent = selectedTipIndex !== null ? tipPresets[selectedTipIndex] : 0;
+  const tipPercent = selectedTipIndex !== null && selectedTipIndex >= 0 ? tipPresets[selectedTipIndex] : 0;
 
   // Special instructions
   const [specialInstructions, setSpecialInstructions] = useState("");
@@ -152,9 +155,11 @@ export function CheckoutPage({
   // Calculated values
   const subtotal = getSubtotal();
   const tipAmount =
-    selectedTipIndex !== null
-      ? Math.round(subtotal * (tipPercent / 100) * 100) / 100
-      : Number(customTip) || 0;
+    selectedTipIndex === -1
+      ? 0
+      : selectedTipIndex !== null
+        ? Math.round(subtotal * (tipPercent / 100) * 100) / 100
+        : Number(customTip) || 0;
   const tax = Math.round(subtotal * taxRate * 100) / 100;
   const deliveryFee =
     orderType === "delivery"
@@ -384,6 +389,11 @@ export function CheckoutPage({
         }
         setStep("confirmation");
         clearCart();
+
+        // Fire-and-forget order confirmation email
+        if (result.order_id && email) {
+          sendOrderConfirmationEmail(result.order_id, email).catch(() => {});
+        }
       } else if (result.success && result.requires_redirect && result.payment_url) {
         // HPP fallback (shouldn't happen with FTD, but handle gracefully)
         window.location.href = result.payment_url;
@@ -519,9 +529,62 @@ export function CheckoutPage({
                 color: "var(--primary)",
                 borderRadius: "9999px",
               }}
+<<<<<<< HEAD
             >
               Back to menu
             </Link>
+=======
+              onSelectCustom={() => setSelectedTipIndex(null)}
+              onSelectNoTip={() => {
+                setSelectedTipIndex(-1);
+                setCustomTip("");
+              }}
+              onCustomTipChange={setCustomTip}
+            />
+            <div style={{ borderTop: "1px solid var(--border)" }} />
+          </>
+        )}
+
+        {/* Promo Code */}
+        <PromoCodeSection />
+
+        <div style={{ borderTop: "1px solid var(--border)" }} />
+
+        {/* Order Summary */}
+        <OrderSummarySection
+          subtotal={subtotal}
+          tax={tax}
+          deliveryFee={deliveryFee}
+          tipAmount={tipAmount}
+          total={total}
+          itemCount={items.length}
+          showDeliveryFee={orderType === "delivery"}
+        />
+
+        {/* Payment */}
+        {securityKey && (
+          <>
+            <div style={{ borderTop: "1px solid var(--border)" }} />
+            <PaymentCardForm
+              ref={paymentFormRef}
+              securityKey={securityKey}
+              onError={setPaymentError}
+              disabled={loading}
+            />
+          </>
+        )}
+
+        {paymentError && (
+          <div
+            className="p-3 rounded-lg text-sm"
+            style={{
+              backgroundColor: "color-mix(in srgb, #ef4444 10%, var(--bg))",
+              color: "#ef4444",
+              borderRadius: "var(--radius)",
+            }}
+          >
+            {paymentError}
+>>>>>>> origin/Temur-Dev
           </div>
 
           {/* Store closed banner */}
