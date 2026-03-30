@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { format } from "date-fns";
 import { ShoppingBag } from "lucide-react";
 import { useCart } from "../../hooks/useCart";
 import { useSession } from "../../hooks/useSession";
@@ -13,16 +14,16 @@ import { ContactSection } from "./ContactSection";
 import { OrderTypeSection } from "./OrderTypeSection";
 import { OrderDetailsSection } from "./OrderDetailsSection";
 import { TipSection } from "./TipSection";
-import { PromoCodeSection } from "./PromoCodeSection";
 import { OrderSummarySection } from "./OrderSummarySection";
+import { PromoCodeSection } from "./PromoCodeSection";
 import { PlaceOrderButton } from "./PlaceOrderButton";
 import { OrderConfirmation } from "./OrderConfirmation";
 import { PaymentCardForm, type PaymentCardFormHandle } from "./PaymentCardForm";
 import {
-  getStoreTaxRate,
   type PlaceOrderItem,
 } from "../../order-actions";
-import { getSavedAddresses, type SavedAddress } from "../../customer-actions";
+import { isStoreOpenNow } from "../StoreInfoBar";
+import { getSavedAddresses, addSavedAddress, type SavedAddress } from "../../customer-actions";
 import type { Site, OnlineOrderingConfig } from "@/types/site";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -45,6 +46,30 @@ interface CheckoutPageProps {
   config?: Partial<OnlineOrderingConfig> | null;
   storeConfigId: string;
   slug: string;
+  taxRate?: number; // decimal (e.g. 0.08875) — fetched server-side
+}
+
+function formatCheckoutSummaryLine(
+  orderType: "pickup" | "delivery",
+  pickupTime: "asap" | "scheduled",
+  scheduledDate: Date | undefined,
+  scheduledTime: string,
+  prepTime: number,
+  storeAddress: string
+): string {
+  if (pickupTime === "scheduled" && scheduledDate && scheduledTime) {
+    const parts = scheduledTime.split(":").map(Number);
+    const h = parts[0] ?? 0;
+    const m = parts[1] ?? 0;
+    const dt = new Date(scheduledDate);
+    dt.setHours(h, m, 0, 0);
+    const label = orderType === "pickup" ? "Pickup" : "Delivery";
+    return `${label} · ${format(dt, "EEE, MMM d · h:mm a")}`;
+  }
+  if (orderType === "pickup") {
+    return `Pickup · ASAP (~${prepTime} min) · ${storeAddress}`;
+  }
+  return `Delivery · ASAP`;
 }
 
 export function CheckoutPage({
@@ -53,6 +78,7 @@ export function CheckoutPage({
   config,
   storeConfigId,
   slug,
+  taxRate = 0,
 }: CheckoutPageProps) {
   useSessionInit(storeConfigId);
 
@@ -73,11 +99,13 @@ export function CheckoutPage({
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
 
   // Contact
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
 
   // Order type
   const pickupEnabled = config?.pickupEnabled ?? true;
@@ -103,6 +131,7 @@ export function CheckoutPage({
     zip: "",
     notes: "",
   });
+  const [saveNewAddress, setSaveNewAddress] = useState(false);
 
   // Tip
   const tipPresets = (config?.tipConfig?.presetPercentages as number[]) ?? [15, 18, 20, 25];
@@ -113,8 +142,7 @@ export function CheckoutPage({
   // Special instructions
   const [specialInstructions, setSpecialInstructions] = useState("");
 
-  // Tax rate (fetched from server)
-  const [taxRate, setTaxRate] = useState(0.08);
+  // taxRate is passed as a prop from the server route — no client-side fetch needed
 
   // Payment
   const paymentFormRef = useRef<PaymentCardFormHandle>(null);
@@ -147,15 +175,6 @@ export function CheckoutPage({
     }
     if (customer?.email) setEmail(customer.email);
   }, [customer]);
-
-  // Fetch tax rate on mount
-  useEffect(() => {
-    if (storeConfigId) {
-      getStoreTaxRate(storeConfigId).then((rate) => {
-        if (rate > 0) setTaxRate(rate);
-      });
-    }
-  }, [storeConfigId]);
 
   // COMMENTED OUT FOR TESTING — payment bypass mode
   // useEffect(() => {
@@ -298,7 +317,7 @@ export function CheckoutPage({
       id: item.id,
       name: item.name,
       price: item.price,
-      quantity: item.quantity,
+      quantity: Math.max(1, Math.round(Number(item.quantity) || 1)),
       notes: item.notes,
       modifiers: item.selectedModifiers?.map((m) => ({
         id: m.id,
@@ -320,10 +339,9 @@ export function CheckoutPage({
             Authorization: `Bearer ${ANON_KEY}`,
           },
           body: JSON.stringify({
-            // Session token if logged in, store_config_id for guests
-            ...(sessionToken
-              ? { session_token: sessionToken }
-              : { store_config_id: storeConfigId }),
+            // Always send store_config_id so the edge function can resolve the store even if session is invalid/expired.
+            store_config_id: storeConfigId,
+            ...(sessionToken ? { session_token: sessionToken } : {}),
             items: orderItems,
             order_type: orderType,
             delivery_address: deliveryAddress,
@@ -333,7 +351,7 @@ export function CheckoutPage({
             ...(paymentTokenId ? { payment_token_id: paymentTokenId } : {}),
             // Contact info (always sent — edge function uses session data if available)
             customer_name: `${firstName} ${lastName}`.trim() || undefined,
-            customer_phone: customer?.phone || undefined,
+            customer_phone: customer?.phone || phone.trim() || undefined,
             customer_email: email || undefined,
           }),
         }
@@ -348,17 +366,41 @@ export function CheckoutPage({
           estimatedTime: result.estimated_time,
           orderId: result.order_id,
         });
+        // Save delivery address if requested
+        if (saveNewAddress && isAuthenticated && orderType === "delivery" && selectedAddressId === "new" && newAddress.street) {
+          const { sessionToken } = useSession.getState();
+          if (sessionToken) {
+            addSavedAddress(sessionToken, {
+              label: newAddress.street,
+              addressLine1: newAddress.street,
+              addressLine2: null,
+              city: newAddress.city,
+              state: newAddress.state,
+              postalCode: newAddress.zip,
+              deliveryNotes: newAddress.notes || null,
+              isDefault: savedAddresses.length === 0,
+            });
+          }
+        }
         setStep("confirmation");
         clearCart();
       } else if (result.success && result.requires_redirect && result.payment_url) {
         // HPP fallback (shouldn't happen with FTD, but handle gracefully)
         window.location.href = result.payment_url;
       } else {
-        setPaymentError(result.error || "Failed to process payment.");
+        const detail =
+          typeof result.details === "object" && result.details !== null && "error" in result.details
+            ? String((result.details as { error?: string }).error)
+            : typeof result.details === "object" && result.details !== null && "rpc" in result.details
+              ? String((result.details as { rpc?: { error?: string } }).rpc?.error)
+              : "";
+        setPaymentError(
+          detail || result.error || result.code || "Failed to place your order."
+        );
       }
     } catch {
       setLoading(false);
-      setPaymentError("Network error. Please try again.");
+      setPaymentError("Network error. Please check your connection and try again.");
     }
   };
 
@@ -367,7 +409,7 @@ export function CheckoutPage({
     return (
       <div className="min-h-screen" style={{ backgroundColor: "var(--bg)" }}>
         <CheckoutHeader slug={slug} storeName={site?.title || location.name} logoUrl={site?.logo_url} />
-        <div className="max-w-2xl mx-auto p-4 space-y-6">
+        <div className="max-w-6xl mx-auto p-4 space-y-6">
           {[1, 2, 3].map((i) => (
             <div
               key={i}
@@ -429,167 +471,285 @@ export function CheckoutPage({
     );
   }
 
-  const canPlaceOrder = firstName.trim().length > 0 && items.length > 0;
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const phoneValid = !!(customer?.phone) || phone.trim().length >= 7;
+  const deliveryAddressValid =
+    orderType !== "delivery" ||
+    (selectedAddressId !== "new"
+      ? !!savedAddresses.find((a) => a.id === selectedAddressId)
+      : newAddress.street.trim().length > 0 && newAddress.city.trim().length > 0);
+  const minOrder = config?.minimumOrderAmount ?? 0;
+  const meetsMinOrder = subtotal >= minOrder;
+  // null = no hours configured → allow ordering; false = closed; true = open
+  const storeOpen = isStoreOpenNow(config?.operatingHours ?? (location as any).business_hours);
+  const storeIsClosed = storeOpen === false;
+  const canPlaceOrder =
+    firstName.trim().length > 0 &&
+    emailValid &&
+    phoneValid &&
+    deliveryAddressValid &&
+    meetsMinOrder &&
+    !storeIsClosed &&
+    items.length > 0;
+
+  const prepTimeMins = config?.preparationLeadTime ?? 20;
+  const summaryLine = formatCheckoutSummaryLine(
+    orderType,
+    pickupTime,
+    scheduledDate,
+    scheduledTime,
+    prepTimeMins,
+    storeAddress
+  );
+  const displayStoreName = site?.title || location.name;
+
   return (
     <>
-      <CheckoutHeader slug={slug} storeName={site?.title || location.name} logoUrl={site?.logo_url} />
+      <CheckoutHeader slug={slug} storeName={displayStoreName} logoUrl={site?.logo_url} />
 
-      <main className="max-w-2xl mx-auto p-4 pb-32 space-y-6">
-        {/* Contact */}
-        <ContactSection
-          isAuthenticated={isAuthenticated}
-          customerPhone={customer?.phone}
-          firstName={firstName}
-          lastName={lastName}
-          email={email}
-          onFirstNameChange={setFirstName}
-          onLastNameChange={setLastName}
-          onEmailChange={setEmail}
-          onSignInClick={() => setShowAuth(true)}
-        />
-
-        <div style={{ borderTop: "1px solid var(--border)" }} />
-
-        {/* Order Type + Scheduling */}
-        <OrderTypeSection
-          orderType={orderType}
-          onOrderTypeChange={setOrderType}
-          pickupEnabled={pickupEnabled}
-          deliveryEnabled={deliveryEnabled}
-          pickupTime={pickupTime}
-          onPickupTimeChange={setPickupTime}
-          scheduledDate={scheduledDate}
-          onScheduledDateChange={setScheduledDate}
-          scheduledTime={scheduledTime}
-          onScheduledTimeChange={setScheduledTime}
-          maxFutureDays={config?.futureOrderMaxDays ?? 30}
-          prepTime={config?.preparationLeadTime ?? 20}
-          curbside={curbside}
-          onCurbsideChange={setCurbside}
-          storeAddress={storeAddress}
-          storeLat={storeLat}
-          storeLng={storeLng}
-          savedAddresses={savedAddresses}
-          selectedAddressId={selectedAddressId}
-          onSelectedAddressChange={setSelectedAddressId}
-          newAddress={newAddress}
-          onNewAddressChange={setNewAddress}
-        />
-
-        <div style={{ borderTop: "1px solid var(--border)" }} />
-
-        {/* Order Details */}
-        <OrderDetailsSection
-          items={items}
-          slug={slug}
-          onUpdateQuantity={updateQuantity}
-          onRemoveItem={removeItem}
-        />
-
-        <div style={{ borderTop: "1px solid var(--border)" }} />
-
-        {/* Tip */}
-        {config?.tippingEnabled !== false && (
-          <>
-            <TipSection
-              subtotal={subtotal}
-              tipPresets={tipPresets}
-              selectedTipIndex={selectedTipIndex}
-              customTip={customTip}
-              onSelectPreset={(i) => {
-                setSelectedTipIndex(i);
-                setCustomTip("");
+      <main className="max-w-6xl mx-auto p-4 pb-32 lg:pb-10">
+        <div className="space-y-6">
+          {/* Quick link back to the menu at the very top */}
+          <div className="flex justify-end">
+            <Link
+              href={storePath()}
+              className="inline-flex items-center justify-center px-4 py-2 text-xs font-semibold border rounded-full transition-colors"
+              style={{
+                borderColor: "var(--primary)",
+                color: "var(--primary)",
+                borderRadius: "9999px",
               }}
-              onSelectCustom={() => setSelectedTipIndex(null)}
-              onCustomTipChange={setCustomTip}
-            />
-            <div style={{ borderTop: "1px solid var(--border)" }} />
-          </>
-        )}
-
-        {/* Promo Code */}
-        <PromoCodeSection />
-
-        <div style={{ borderTop: "1px solid var(--border)" }} />
-
-        {/* Order Summary */}
-        <OrderSummarySection
-          subtotal={subtotal}
-          tax={tax}
-          deliveryFee={deliveryFee}
-          tipAmount={tipAmount}
-          total={total}
-          itemCount={items.length}
-          showDeliveryFee={orderType === "delivery"}
-        />
-
-        {/* Payment */}
-        {securityKey && (
-          <>
-            <div style={{ borderTop: "1px solid var(--border)" }} />
-            <PaymentCardForm
-              ref={paymentFormRef}
-              securityKey={securityKey}
-              onError={setPaymentError}
-              disabled={loading}
-            />
-          </>
-        )}
-
-        {paymentError && (
-          <div
-            className="p-3 rounded-lg text-sm"
-            style={{
-              backgroundColor: "color-mix(in srgb, #ef4444 10%, var(--bg))",
-              color: "#ef4444",
-              borderRadius: "var(--radius)",
-            }}
-          >
-            {paymentError}
+            >
+              Back to menu
+            </Link>
           </div>
-        )}
 
-        {/* Special Instructions */}
-        <div className="space-y-2">
-          <label
-            htmlFor="special-instructions"
-            className="text-sm font-semibold"
-            style={{ color: "var(--text)" }}
+          {/* Store closed banner */}
+          {storeIsClosed && (
+            <div
+              className="p-4 rounded-lg text-sm font-medium text-center"
+              style={{
+                backgroundColor: "color-mix(in srgb, #ef4444 10%, var(--bg))",
+                color: "#ef4444",
+                border: "1px solid color-mix(in srgb, #ef4444 40%, transparent)",
+                borderRadius: "var(--radius)",
+              }}
+            >
+              This store is currently closed and not accepting orders.
+            </div>
+          )}
+        </div>
+
+        {/* items-start + self-start on sidebar: required so sticky sidebar works in CSS Grid (Square-style checkout) */}
+        <div className="mt-6 flex flex-col lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:gap-8 lg:items-start">
+          {/* Left: express → contact → order type → payment → notes */}
+          <div className="min-w-0 space-y-6 lg:pr-8 lg:border-r lg:border-[var(--border)] order-1">
+            <ContactSection
+              isAuthenticated={isAuthenticated}
+              customerPhone={customer?.phone}
+              firstName={firstName}
+              lastName={lastName}
+              email={email}
+              phone={phone}
+              onFirstNameChange={setFirstName}
+              onLastNameChange={setLastName}
+              onEmailChange={setEmail}
+              onPhoneChange={setPhone}
+              onSignInClick={() => { setAuthMode("signin"); setShowAuth(true); }}
+              onSignUpClick={() => { setAuthMode("signup"); setShowAuth(true); }}
+            />
+
+            <div style={{ borderTop: "1px solid var(--border)" }} />
+
+            <OrderTypeSection
+              orderType={orderType}
+              onOrderTypeChange={setOrderType}
+              pickupEnabled={pickupEnabled}
+              deliveryEnabled={deliveryEnabled}
+              pickupTime={pickupTime}
+              onPickupTimeChange={setPickupTime}
+              scheduledDate={scheduledDate}
+              onScheduledDateChange={setScheduledDate}
+              scheduledTime={scheduledTime}
+              onScheduledTimeChange={setScheduledTime}
+              maxFutureDays={config?.futureOrderMaxDays ?? 30}
+              prepTime={prepTimeMins}
+              operatingHours={config?.operatingHours}
+              curbside={curbside}
+              onCurbsideChange={setCurbside}
+              storeAddress={storeAddress}
+              storeLat={storeLat}
+              storeLng={storeLng}
+              savedAddresses={savedAddresses}
+              selectedAddressId={selectedAddressId}
+              onSelectedAddressChange={setSelectedAddressId}
+              newAddress={newAddress}
+              onNewAddressChange={setNewAddress}
+              isAuthenticated={isAuthenticated}
+              saveNewAddress={saveNewAddress}
+              onSaveNewAddressChange={setSaveNewAddress}
+            />
+
+            <div style={{ borderTop: "1px solid var(--border)" }} />
+
+            {config?.acceptOnlinePayments && (
+              <>
+                <PaymentCardForm
+                  ref={paymentFormRef}
+                  securityKey={securityKey}
+                  onError={setPaymentError}
+                  disabled={loading}
+                />
+              </>
+            )}
+
+            {paymentError && (
+              <div
+                className="p-3 rounded-lg text-sm"
+                style={{
+                  backgroundColor: "color-mix(in srgb, #ef4444 10%, var(--bg))",
+                  color: "#ef4444",
+                  borderRadius: "var(--radius)",
+                }}
+              >
+                {paymentError}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label
+                htmlFor="special-instructions"
+                className="text-sm font-semibold"
+                style={{ color: "var(--text)" }}
+              >
+                Special Instructions
+              </label>
+              <textarea
+                id="special-instructions"
+                value={specialInstructions}
+                onChange={(e) => setSpecialInstructions(e.target.value)}
+                placeholder="Any notes for the restaurant..."
+                rows={2}
+                className="w-full px-3 py-2 text-sm rounded-lg resize-none"
+                style={{
+                  borderColor: "var(--border)",
+                  backgroundColor: "var(--bg)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text)",
+                  borderRadius: "var(--radius)",
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Right: one sticky sidebar — follows scroll like Square / Butter Smashburgers (single page scrollbar) */}
+          <aside
+            className="min-w-0 mt-10 space-y-6 rounded-xl border p-5 shadow-sm lg:mt-0 lg:sticky lg:top-20 lg:z-10 lg:self-start order-2"
+            style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}
+            aria-label="Order summary"
           >
-            Special Instructions
-          </label>
-          <textarea
-            id="special-instructions"
-            value={specialInstructions}
-            onChange={(e) => setSpecialInstructions(e.target.value)}
-            placeholder="Any notes for the restaurant..."
-            rows={2}
-            className="w-full px-3 py-2 text-sm rounded-lg resize-none"
-            style={{
-              borderColor: "var(--border)",
-              backgroundColor: "var(--bg)",
-              border: "1px solid var(--border)",
-              color: "var(--text)",
-              borderRadius: "var(--radius)",
-            }}
-          />
+            <div className="lg:-mx-1">
+              <p
+                className="text-xs font-semibold uppercase tracking-wide"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                {orderType === "pickup" ? "Pickup at" : "Delivery"}
+              </p>
+              <h2
+                className="mt-1 font-bold text-base"
+                style={{ fontFamily: "var(--font-display)", color: "var(--text)" }}
+              >
+                {displayStoreName}
+              </h2>
+              <p className="text-sm mt-1 leading-snug" style={{ color: "var(--text-secondary)" }}>
+                {summaryLine}
+              </p>
+            </div>
+
+            <div className="border-t pt-4" style={{ borderColor: "var(--border)" }}>
+              <OrderDetailsSection
+                items={items}
+                slug={slug}
+                onUpdateQuantity={updateQuantity}
+                onRemoveItem={removeItem}
+              />
+            </div>
+
+            <PromoCodeSection />
+
+            {config?.tippingEnabled !== false && (
+              <TipSection
+                subtotal={subtotal}
+                tipPresets={tipPresets}
+                selectedTipIndex={selectedTipIndex}
+                customTip={customTip}
+                onSelectPreset={(i) => {
+                  setSelectedTipIndex(i);
+                  setCustomTip("");
+                }}
+                onSelectCustom={() => setSelectedTipIndex(null)}
+                onCustomTipChange={setCustomTip}
+              />
+            )}
+
+            {minOrder > 0 && !meetsMinOrder && (
+              <div
+                className="p-3 rounded-lg text-sm"
+                style={{
+                  backgroundColor: "color-mix(in srgb, #f59e0b 12%, var(--bg))",
+                  color: "#b45309",
+                  border: "1px solid #fcd34d",
+                  borderRadius: "var(--radius)",
+                }}
+              >
+                Minimum order is ${minOrder.toFixed(2)}. Add ${(minOrder - subtotal).toFixed(2)} more to continue.
+              </div>
+            )}
+
+            <div className="border-t pt-4 space-y-4" style={{ borderColor: "var(--border)" }}>
+              <OrderSummarySection
+                subtotal={subtotal}
+                tax={tax}
+                deliveryFee={deliveryFee}
+                tipAmount={tipAmount}
+                total={total}
+                itemCount={items.length}
+                showDeliveryFee={orderType === "delivery"}
+                taxRate={taxRate}
+              />
+              <div className="hidden lg:block">
+                <PlaceOrderButton
+                  layout="inline"
+                  total={total}
+                  loading={loading}
+                  disabled={!canPlaceOrder}
+                  onClick={handleCheckout}
+                  isTestMode={!securityKey}
+                />
+              </div>
+            </div>
+          </aside>
         </div>
       </main>
 
-      {/* Place Order Button */}
-      <PlaceOrderButton
-        total={total}
-        loading={loading}
-        disabled={!canPlaceOrder}
-        onClick={handleCheckout}
-        isTestMode={!securityKey}
-      />
+      {/* Mobile: full-width fixed bar; desktop uses sidebar button above */}
+      <div className="lg:hidden">
+        <PlaceOrderButton
+          total={total}
+          loading={loading}
+          disabled={!canPlaceOrder}
+          onClick={handleCheckout}
+          isTestMode={!securityKey}
+          layout="fixed"
+        />
+      </div>
 
       {/* Auth Dialog */}
       <AuthDialog
         isOpen={showAuth}
         onOpenChange={setShowAuth}
         storeConfigId={storeConfigId}
+        defaultMode={authMode}
         onSuccess={() => setShowAuth(false)}
       />
     </>

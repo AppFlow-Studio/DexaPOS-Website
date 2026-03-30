@@ -14,7 +14,7 @@ interface OrderConfirmationProps {
 export function OrderConfirmation({ displayNumber, estimatedTime, orderId, slug }: OrderConfirmationProps) {
   const storePath = useStorefrontPath(slug);
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-6 space-y-6">
+    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] text-center px-6 space-y-6">
       <div
         className="w-20 h-20 rounded-full flex items-center justify-center"
         style={{ backgroundColor: "var(--primary)" }}
@@ -31,20 +31,20 @@ export function OrderConfirmation({ displayNumber, estimatedTime, orderId, slug 
         </h1>
         {displayNumber && (
           <p className="text-lg" style={{ color: "var(--text-secondary)" }}>
-            Order #{displayNumber}
+            Order {displayNumber}
           </p>
         )}
       </div>
 
       {estimatedTime && (
         <div
-          className="px-6 py-4 rounded-xl"
-          style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
+          className="px-6 py-4 rounded-xl !bg-white"
+          style={{ backgroundColor: "#ffffff", border: "1px solid #e5e7eb" }}
         >
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-sm" style={{ color: "#6b7280" }}>
             Estimated ready in
           </p>
-          <p className="text-2xl font-bold" style={{ color: "var(--text)" }}>
+          <p className="text-2xl font-bold" style={{ color: "#111827" }}>
             {estimatedTime} min
           </p>
         </div>

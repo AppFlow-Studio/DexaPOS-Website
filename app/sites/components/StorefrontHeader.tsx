@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { Site } from "@/types/site";
-import { ShoppingBag, Info, ClipboardList, User } from "lucide-react";
+import { ShoppingBag, Info, ClipboardList, User, MapPin, Clock, Sun, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCart } from "../hooks/useCart";
 import { useSession } from "../hooks/useSession";
+import { useDarkMode } from "../contexts/DarkModeContext";
 import {
   Tooltip,
   TooltipContent,
@@ -22,6 +23,8 @@ interface StorefrontHeaderProps {
     city: string;
   };
   storeConfigId?: string;
+  todayHours?: string | null;
+  forceFilledHeader?: boolean;
   onInfoClick?: () => void;
   onOrdersClick?: () => void;
   onAccountClick?: () => void;
@@ -31,19 +34,34 @@ export function StorefrontHeader({
   site,
   location,
   storeConfigId,
+  todayHours,
+  forceFilledHeader,
   onInfoClick,
   onOrdersClick,
   onAccountClick,
 }: StorefrontHeaderProps) {
   const { toggleCart, getTotalItems } = useCart();
   const { isAuthenticated, customer } = useSession();
+  const { isDark, toggle: toggleDark } = useDarkMode();
   const [showAuth, setShowAuth] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const itemCount = getTotalItems();
+  // Defer cart count to client so SSR and first client render match (cart is from localStorage).
+  const displayCount = mounted ? itemCount : 0;
   const storeName = site?.title || location.name;
-  const headerStyle = site?.theme_config?.headerStyle || "filled";
+
+  // Respect site-configured header style, but avoid fully transparent
+  // headers in the minimal template where the background is already light.
+  const templateId = site?.theme_config?.templateId || "classic";
+  const isMinimalTemplate = templateId === "minimal";
+  const configuredHeaderStyle = site?.theme_config?.headerStyle || "filled";
+  const forceOutlined = isMinimalTemplate && configuredHeaderStyle === "transparent";
+  const forceNonTransparent = forceOutlined || !!forceFilledHeader;
+  const headerStyle = forceOutlined ? "outlined" : forceFilledHeader ? "filled" : configuredHeaderStyle;
   const isTransparent = headerStyle === "transparent";
 
+  useEffect(() => setMounted(true), []);
   useEffect(() => {
     if (!isTransparent) return;
     const onScroll = () => setScrolled(window.scrollY > 60);
@@ -68,17 +86,21 @@ export function StorefrontHeader({
     }
   };
 
-  const positionClass = isTransparent ? "absolute" : "sticky";
+  const positionClass = isTransparent ? "fixed" : "sticky";
 
   const headerBg =
     isTransparent && scrolled
       ? "var(--primary)"
-      : "var(--header-bg)";
+      : headerStyle === "outlined"
+        ? "var(--bg)"
+        : "var(--header-bg)";
 
   const headerText =
-    isTransparent && scrolled
-      ? "var(--primary-text)"
-      : "var(--header-text)";
+    headerStyle === "outlined"
+      ? "var(--text)"
+      : isTransparent && scrolled
+        ? "var(--primary-text)"
+        : "var(--header-text)";
 
   const shadow =
     isTransparent && !scrolled
@@ -100,6 +122,7 @@ export function StorefrontHeader({
   return (
     <>
       <header
+        id="storefront-header"
         className={`${positionClass} top-0 z-50 w-full transition-all duration-300`}
         style={{
           backgroundColor: headerBg,
@@ -114,7 +137,7 @@ export function StorefrontHeader({
             isTransparent && scrolled ? "blur(16px)" : undefined,
         }}
       >
-        <div className="container mx-auto flex items-center justify-between px-4 py-3">
+        <div className="container mx-auto flex items-center justify-between px-4 py-4">
           <div className="flex items-center gap-3">
             {site?.logo_url && (
               <img
@@ -129,26 +152,71 @@ export function StorefrontHeader({
                 }}
               />
             )}
-            <div>
+            <div className="min-w-0">
               <h1
-                className="text-lg font-bold leading-tight tracking-tight"
-                style={{ color: headerText }}
+                className="text-lg font-bold leading-tight tracking-tight truncate"
+                style={{ color: headerText, fontFamily: "var(--font-display)" }}
               >
                 {storeName}
               </h1>
-              <p
-                className="text-xs leading-tight"
-                style={{
-                  color: headerText,
-                  opacity: 0.7,
-                }}
-              >
-                {location.address_line1}, {location.city}
-              </p>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                <span className="inline-flex items-center gap-1.5 truncate" style={{ color: headerText, opacity: 0.8 }}>
+                  <MapPin className="h-3 w-3" />
+                  <span className="truncate">
+                    {location.address_line1}, {location.city}
+                  </span>
+                </span>
+                {todayHours && (
+                  <span className="inline-flex items-center gap-1.5" style={{ color: headerText, opacity: 0.8 }}>
+                    <Clock className="h-3 w-3" />
+                    <span>{todayHours}</span>
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
-          <TooltipProvider delayDuration={100}>
+          <div className="flex items-center gap-1">
+            {/* Mobile-only: dark toggle + cart */}
+            <div className="flex lg:hidden items-center gap-0.5">
+              <Button
+                onClick={toggleDark}
+                variant="ghost"
+                size="icon"
+                className="rounded-full transition-colors"
+                style={{ color: headerText }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = hoverBg)}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              </Button>
+              <Button
+                onClick={toggleCart}
+                variant="ghost"
+                size="icon"
+                className="relative rounded-full transition-colors"
+                style={{ color: headerText }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = hoverBg)}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+              >
+                <ShoppingBag className="h-5 w-5" />
+                {displayCount > 0 && (
+                  <span
+                    className="absolute -top-1 -right-1 text-[10px] font-bold h-5 w-5 flex items-center justify-center rounded-full border-2 animate-in zoom-in duration-200"
+                    style={{
+                      backgroundColor: "var(--accent)",
+                      color: "var(--primary-text)",
+                      borderColor: headerBg === "transparent" ? "transparent" : headerBg,
+                    }}
+                  >
+                    {displayCount}
+                  </span>
+                )}
+              </Button>
+            </div>
+
+            <TooltipProvider delayDuration={100}>
             <nav className="hidden lg:flex items-center gap-0.5">
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -173,7 +241,7 @@ export function StorefrontHeader({
                     <Info className="h-5 w-5" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">
+                <TooltipContent side="bottom" style={{ backgroundColor: "var(--primary)", color: "var(--primary-text)", border: "none" }}>
                   <p>Store Info</p>
                 </TooltipContent>
               </Tooltip>
@@ -196,8 +264,8 @@ export function StorefrontHeader({
                     <ClipboardList className="h-5 w-5" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  <p>Your Orders</p>
+                <TooltipContent side="bottom" style={{ backgroundColor: "var(--primary)", color: "var(--primary-text)", border: "none" }}>
+                  <p>Order History</p>
                 </TooltipContent>
               </Tooltip>
 
@@ -228,8 +296,32 @@ export function StorefrontHeader({
                     )}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">
+                <TooltipContent side="bottom" style={{ backgroundColor: "var(--primary)", color: "var(--primary-text)", border: "none" }}>
                   <p>{isAuthenticated ? "Account" : "Sign In"}</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={toggleDark}
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-full transition-colors"
+                    style={{ color: headerText }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.backgroundColor = hoverBg)
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.backgroundColor = "transparent")
+                    }
+                    aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+                  >
+                    {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" style={{ backgroundColor: "var(--primary)", color: "var(--primary-text)", border: "none" }}>
+                  <p>{isDark ? "Light Mode" : "Dark Mode"}</p>
                 </TooltipContent>
               </Tooltip>
 
@@ -249,7 +341,7 @@ export function StorefrontHeader({
                     }
                   >
                     <ShoppingBag className="h-5 w-5" />
-                    {itemCount > 0 && (
+                    {displayCount > 0 && (
                       <span
                         className="absolute -top-1 -right-1 text-[10px] font-bold h-5 w-5 flex items-center justify-center rounded-full border-2 animate-in zoom-in duration-200"
                         style={{
@@ -260,17 +352,18 @@ export function StorefrontHeader({
                             : headerBg,
                         }}
                       >
-                        {itemCount}
+                        {displayCount}
                       </span>
                     )}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  <p>Your Cart {itemCount > 0 && `(${itemCount})`}</p>
+                <TooltipContent side="bottom" style={{ backgroundColor: "var(--primary)", color: "var(--primary-text)", border: "none" }}>
+                  <p>Your Cart {displayCount > 0 ? `(${displayCount})` : ""}</p>
                 </TooltipContent>
               </Tooltip>
             </nav>
-          </TooltipProvider>
+            </TooltipProvider>
+          </div>
         </div>
       </header>
 

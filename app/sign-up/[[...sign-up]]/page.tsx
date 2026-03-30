@@ -49,7 +49,7 @@ export default function SignUpPage() {
                                         alertText: 'text-destructive',
                                         formHeaderTitle: 'text-foreground',
                                         formHeaderSubtitle: 'text-muted-foreground',
-                                        
+
                                         formButton: 'w-full',
                                         identityPreview: 'bg-muted/50 border-border',
                                         formFieldWarningText: 'text-yellow-600',

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   useOnlineOrderingSettings,
@@ -22,6 +22,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
@@ -61,6 +67,9 @@ import {
   Type,
   Layout,
   PanelTop,
+  Grid3X3,
+  LayoutList,
+  ImageOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -129,7 +138,9 @@ export default function OnlineOrderingPage() {
   } = useOnlineOrderingSettings();
   const [mounted, setMounted] = useState(false);
   const [isHoursModalOpen, setIsHoursModalOpen] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
+  const [uploadingType, setUploadingType] = useState<
+    "logo" | "hero" | "favicon" | "og" | null
+  >(null);
 
   const { selectedLocationId } = useLocationStore();
   const selectedLocation = useSelectedLocation();
@@ -192,7 +203,7 @@ export default function OnlineOrderingPage() {
       return;
     }
 
-    setIsUploading(true);
+    setUploadingType(type);
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -226,7 +237,7 @@ export default function OnlineOrderingPage() {
     } catch {
       toast.error("Failed to upload image");
     } finally {
-      setIsUploading(false);
+      setUploadingType(null);
       e.target.value = "";
     }
   };
@@ -704,6 +715,68 @@ export default function OnlineOrderingPage() {
             </CardContent>
           </Card>
 
+          {/* Menu Layout */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Grid3X3 className="h-4 w-4" />
+                Menu Layout
+              </CardTitle>
+              <CardDescription>
+                How menu items are displayed on the ordering page
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 sm:grid-cols-3">
+                {(
+                  [
+                    {
+                      id: "cards" as const,
+                      name: "Cards",
+                      desc: "Image on top, compact cards",
+                      Icon: Grid3X3,
+                    },
+                    {
+                      id: "sidebyside" as const,
+                      name: "Side by Side",
+                      desc: "Image on right, content on left",
+                      Icon: LayoutList,
+                    },
+                    {
+                      id: "no-images" as const,
+                      name: "No Images",
+                      desc: "List layout, text only",
+                      Icon: ImageOff,
+                    },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => handleUpdate({ menuLayout: opt.id })}
+                    className={cn(
+                      "relative rounded-xl border-2 p-4 text-left transition-all hover:shadow-md",
+                      (currentSettings.menuLayout ?? "cards") === opt.id
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "border-muted hover:border-muted-foreground/30"
+                    )}
+                  >
+                    {(currentSettings.menuLayout ?? "cards") === opt.id && (
+                      <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-primary flex items-center justify-center">
+                        <Check className="h-3 w-3 text-primary-foreground" />
+                      </div>
+                    )}
+                    <opt.Icon className="h-5 w-5 mb-2 text-muted-foreground" />
+                    <p className="font-semibold text-sm">{opt.name}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {opt.desc}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Header Style */}
           <Card>
             <CardHeader>
@@ -735,13 +808,20 @@ export default function OnlineOrderingPage() {
                       desc: "Light background with border",
                     },
                   ] as const
-                ).map((style) => (
+                ).map((style) => {
+                  const isMinimal = currentSettings.templateId === "minimal";
+                  const disabledByTemplate = style.id === "transparent" && isMinimal;
+                  const btn = (
                   <button
                     key={style.id}
                     type="button"
-                    onClick={() => handleUpdate({ headerStyle: style.id })}
+                    disabled={disabledByTemplate}
+                    onClick={() => !disabledByTemplate && handleUpdate({ headerStyle: style.id })}
                     className={cn(
-                      "relative rounded-xl border-2 p-4 text-left transition-all hover:shadow-md",
+                      "relative w-full rounded-xl border-2 p-4 text-left transition-all",
+                      disabledByTemplate
+                        ? "opacity-40 cursor-not-allowed"
+                        : "hover:shadow-md",
                       currentSettings.headerStyle === style.id
                         ? "border-primary bg-primary/5 shadow-sm"
                         : "border-muted hover:border-muted-foreground/30"
@@ -770,11 +850,24 @@ export default function OnlineOrderingPage() {
                       }}
                     />
                     <p className="font-semibold text-sm">{style.name}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {style.desc}
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">{style.desc}</p>
                   </button>
-                ))}
+                  );
+                  return disabledByTemplate ? (
+                    <TooltipProvider key={style.id} delayDuration={200}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="block w-full">{btn}</span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          Transparent header is not supported on the Minimal template
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : (
+                    <React.Fragment key={style.id}>{btn}</React.Fragment>
+                  );
+                })}
               </div>
               <div className="space-y-2 max-w-xs">
                 <Label>
@@ -936,22 +1029,24 @@ export default function OnlineOrderingPage() {
             </CardHeader>
             <CardContent className="space-y-6">
               <ImageUploadRow
+                type="logo"
                 label="Logo"
                 hint="200×200px, PNG or JPG"
                 url={currentSettings.logoUrl}
                 inputRef={logoInputRef}
-                isUploading={isUploading}
+                uploadingType={uploadingType}
                 onUpload={(e) => handleFileUpload(e, "logo")}
                 onRemove={() => removeImage("logo")}
                 previewClass="h-16 w-16 rounded-lg"
               />
               <Separator />
               <ImageUploadRow
+                type="hero"
                 label="Hero Banner"
                 hint="1200×400px, PNG or JPG"
                 url={currentSettings.heroImageUrl}
                 inputRef={heroInputRef}
-                isUploading={isUploading}
+                uploadingType={uploadingType}
                 onUpload={(e) => handleFileUpload(e, "hero")}
                 onRemove={() => removeImage("hero")}
                 previewClass="h-24 w-full rounded-lg"
@@ -960,21 +1055,23 @@ export default function OnlineOrderingPage() {
               <Separator />
               <div className="grid gap-6 sm:grid-cols-2">
                 <ImageUploadRow
+                  type="favicon"
                   label="Favicon"
                   hint="32×32px, PNG"
                   url={currentSettings.faviconUrl}
                   inputRef={faviconInputRef}
-                  isUploading={isUploading}
+                  uploadingType={uploadingType}
                   onUpload={(e) => handleFileUpload(e, "favicon")}
                   onRemove={() => removeImage("favicon")}
                   previewClass="h-10 w-10 rounded"
                 />
                 <ImageUploadRow
+                  type="og"
                   label="OG Image"
                   hint="1200×630px, social sharing"
                   url={currentSettings.ogImageUrl}
                   inputRef={ogInputRef}
-                  isUploading={isUploading}
+                  uploadingType={uploadingType}
                   onUpload={(e) => handleFileUpload(e, "og")}
                   onRemove={() => removeImage("og")}
                   previewClass="h-16 w-28 rounded"
@@ -1235,34 +1332,53 @@ export default function OnlineOrderingPage() {
                   <Label>Tip Preset Percentages</Label>
                   <div className="flex gap-2 flex-wrap">
                     {currentSettings.tipPresets.map((pct, i) => (
-                      <div key={i} className="relative">
-                        <Input
-                          type="number"
-                          value={pct}
-                          onChange={(e) => {
-                            const updated = [...currentSettings.tipPresets];
-                            updated[i] = parseInt(e.target.value) || 0;
+                      <div key={i} className="relative flex items-center gap-1">
+                        <div className="relative">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={pct}
+                            onChange={(e) => {
+                              const raw = parseInt(e.target.value);
+                              const clamped = isNaN(raw) ? 0 : Math.min(100, Math.max(0, raw));
+                              const updated = [...currentSettings.tipPresets];
+                              updated[i] = clamped;
+                              handleUpdate({ tipPresets: updated });
+                            }}
+                            className="w-20 pr-6"
+                          />
+                          <Percent className="absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => {
+                            const updated = currentSettings.tipPresets.filter((_, idx) => idx !== i);
                             handleUpdate({ tipPresets: updated });
                           }}
-                          className="w-20 pr-6"
-                        />
-                        <Percent className="absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     ))}
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() =>
-                        handleUpdate({
-                          tipPresets: [...currentSettings.tipPresets, 25],
-                        })
-                      }
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
+                    {currentSettings.tipPresets.length < 6 && (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() =>
+                          handleUpdate({
+                            tipPresets: [...currentSettings.tipPresets, 15],
+                          })
+                        }
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    These percentages appear as quick-select buttons at checkout
+                    Each value must be 0–100%. Maximum 6 presets.
                   </p>
                 </div>
               </CardContent>
@@ -1348,27 +1464,30 @@ function ColorInput({
   );
 }
 
-function ImageUploadRow({
+const ImageUploadRow = React.memo(function ImageUploadRow({
+  type,
   label,
   hint,
   url,
   inputRef,
-  isUploading,
+  uploadingType,
   onUpload,
   onRemove,
   previewClass,
   wide,
 }: {
+  type: "logo" | "hero" | "favicon" | "og";
   label: string;
   hint: string;
   url: string | null;
   inputRef: React.RefObject<HTMLInputElement | null>;
-  isUploading: boolean;
+  uploadingType: "logo" | "hero" | "favicon" | "og" | null;
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onRemove: () => void;
   previewClass: string;
   wide?: boolean;
 }) {
+  const isUploading = uploadingType === type;
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
@@ -1376,6 +1495,7 @@ function ImageUploadRow({
         {url ? (
           <div className={cn("overflow-hidden border rounded", previewClass)}>
             <img
+              key={url}
               src={url}
               alt={label}
               className="h-full w-full object-cover"
@@ -1427,4 +1547,4 @@ function ImageUploadRow({
       </div>
     </div>
   );
-}
+});

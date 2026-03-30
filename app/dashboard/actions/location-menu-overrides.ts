@@ -373,3 +373,112 @@ export async function GetEffectiveMenuItemPrices(
     return result
 }
 
+// ============================================================================
+// ITEM NEW FLAG (location_item_overrides.is_new)
+// ============================================================================
+
+/**
+ * Get the manual is_new flag for an item at a specific location.
+ */
+export async function GetItemIsNew(
+    menuItemId: string,
+    locationId: string
+): Promise<boolean> {
+    if (!menuItemId || !locationId) return false
+
+    const supabase = createServerSupabaseClient()
+    const { data, error } = await supabase
+        .from('location_item_overrides')
+        .select('is_new')
+        .eq('menu_item_id', menuItemId)
+        .eq('location_id', locationId)
+        .single()
+
+    if (error) return false
+    return data?.is_new ?? false
+}
+
+/**
+ * Set the manual is_new flag for an item at a specific location.
+ * Upserts location_item_overrides; only touches is_new — leaves all other fields unchanged.
+ */
+export async function SetItemNew(
+    menuItemId: string,
+    locationId: string,
+    isNew: boolean
+): Promise<{ success: boolean; error?: string }> {
+    if (!menuItemId || !locationId) {
+        return { success: false, error: 'Missing menuItemId or locationId' }
+    }
+
+    const supabase = createServerSupabaseClient()
+    const { error } = await supabase
+        .from('location_item_overrides')
+        .upsert(
+            { menu_item_id: menuItemId, location_id: locationId, is_new: isNew },
+            { onConflict: 'menu_item_id,location_id', ignoreDuplicates: false }
+        )
+
+    if (error) {
+        console.error('Error setting item new:', error)
+        return { success: false, error: error.message }
+    }
+
+    return { success: true }
+}
+
+// ============================================================================
+// ITEM POPULAR FLAG (location_item_overrides.is_popular)
+// ============================================================================
+
+/**
+ * Get the manual is_popular flag for an item at a specific location.
+ * Reads from location_item_overrides (L2), NOT location_menu_item_overrides (L5).
+ */
+export async function GetItemIsPopular(
+    menuItemId: string,
+    locationId: string
+): Promise<boolean> {
+    if (!menuItemId || !locationId) return false
+
+    const supabase = createServerSupabaseClient()
+    const { data, error } = await supabase
+        .from('location_item_overrides')
+        .select('is_popular')
+        .eq('menu_item_id', menuItemId)
+        .eq('location_id', locationId)
+        .single()
+
+    if (error) return false
+    return data?.is_popular ?? false
+}
+
+/**
+ * Set the manual is_popular flag for an item at a specific location.
+ * Upserts location_item_overrides; only touches is_popular — leaves all other fields unchanged.
+ */
+export async function SetItemPopular(
+    menuItemId: string,
+    locationId: string,
+    isPopular: boolean
+): Promise<{ success: boolean; error?: string }> {
+    if (!menuItemId || !locationId) {
+        return { success: false, error: 'Missing menuItemId or locationId' }
+    }
+
+    const supabase = createServerSupabaseClient()
+    const { error } = await supabase
+        .from('location_item_overrides')
+        .upsert(
+            { menu_item_id: menuItemId, location_id: locationId, is_popular: isPopular },
+            { onConflict: 'menu_item_id,location_id', ignoreDuplicates: false }
+        )
+
+    if (error) {
+        console.error('Error setting item popular:', error)
+        return { success: false, error: error.message }
+    }
+
+    return { success: true }
+}
+

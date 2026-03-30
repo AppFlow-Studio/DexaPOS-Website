@@ -10,6 +10,8 @@ import {
   CircleCheck,
   AlertTriangle,
   ArrowLeft,
+  Phone,
+  Loader2,
 } from "lucide-react";
 import { useStorefrontPath } from "../lib/use-storefront-path";
 import { getOrderTracking, type OrderTrackingData } from "../order-actions";
@@ -20,6 +22,8 @@ interface OrderTrackingPageProps {
   slug: string;
   storeName: string;
   logoUrl?: string;
+  storePhone?: string | null;
+  taxRate?: number; // decimal e.g. 0.08875 — same value used by checkout
 }
 
 const TERMINAL_STATUSES = ["completed", "cancelled", "void"];
@@ -96,17 +100,25 @@ function buildTimeline(order: OrderTrackingData): TimelineStep[] {
   return steps;
 }
 
+function formatSecondsAgo(seconds: number): string {
+  if (seconds < 5) return "just now";
+  if (seconds < 60) return `${seconds}s ago`;
+  const mins = Math.floor(seconds / 60);
+  return `${mins}m ago`;
+}
+
 function formatTime(isoString: string | null): string {
   if (!isoString) return "";
   const date = new Date(isoString);
-  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
 function getEstimatedReadyTime(order: OrderTrackingData): string | null {
   if (order.readyAt || order.completedAt || order.cancelledAt) return null;
 
-  const createdAt = new Date(order.createdAt);
-  const readyAt = new Date(createdAt.getTime() + order.estimatedPrepMinutes * 60 * 1000);
+  // Use sentToKitchenAt (when prep actually started) as the anchor; fall back to createdAt
+  const anchor = order.sentToKitchenAt ?? order.createdAt;
+  const readyAt = new Date(new Date(anchor).getTime() + order.estimatedPrepMinutes * 60 * 1000);
   const now = new Date();
   const diffMs = readyAt.getTime() - now.getTime();
   const diffMin = Math.max(0, Math.ceil(diffMs / 60000));
@@ -121,26 +133,58 @@ export function OrderTrackingPage({
   slug,
   storeName,
   logoUrl,
+  storePhone,
+  taxRate = 0,
 }: OrderTrackingPageProps) {
   const [order, setOrder] = useState<OrderTrackingData>(initialOrder);
+  const [lastUpdated, setLastUpdated] = useState<Date>(() => new Date());
+  const [isFetching, setIsFetching] = useState(false);
+  const [secondsAgo, setSecondsAgo] = useState(0);
   const storePath = useStorefrontPath(slug);
+
+  // Tick relative timestamp every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSecondsAgo(Math.floor((Date.now() - lastUpdated.getTime()) / 1000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [lastUpdated]);
 
   // Poll for updates every 10s
   useEffect(() => {
     if (TERMINAL_STATUSES.includes(order.status)) return;
 
     const interval = setInterval(async () => {
+      setIsFetching(true);
       const { data } = await getOrderTracking(orderId);
-      if (data) setOrder(data);
+      if (data) {
+        setOrder(data);
+        setLastUpdated(new Date());
+        setSecondsAgo(0);
+      }
+      setIsFetching(false);
     }, 10000);
 
     return () => clearInterval(interval);
   }, [orderId, order.status]);
 
+  const isTerminal = TERMINAL_STATUSES.includes(order.status);
   const isCancelled = order.status === "cancelled" || order.status === "void";
   const timeline = buildTimeline(order);
+  // Index of the last completed step (used to pulse the active dot)
+  const lastDoneIndex = timeline.reduce((acc, step, i) => (step.isDone ? i : acc), -1);
   const estimatedTime = getEstimatedReadyTime(order);
   const statusColor = STATUS_COLORS[order.status] ?? STATUS_COLORS.pending;
+
+  // Use the stored tax_amount (actual amount charged at time of order).
+  // Fall back to recomputing from the live rate only for old orders that stored $0 tax
+  // due to the prior tax_category SQL bug.
+  const storedRate = order.taxRatePercent != null ? order.taxRatePercent / 100 : null;
+  const effectiveRate = storedRate ?? taxRate;
+  const displayedTax = order.tax > 0
+    ? order.tax
+    : effectiveRate > 0 ? Math.round(order.subtotal * effectiveRate * 100) / 100 : 0;
+  const displayedTotal = order.subtotal + displayedTax + order.tip;
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "var(--bg)" }}>
@@ -176,7 +220,7 @@ export function OrderTrackingPage({
             className="text-4xl font-bold"
             style={{ fontFamily: "var(--font-display)", color: "var(--text)" }}
           >
-            #{order.displayNumber}
+            {order.displayNumber}
           </h1>
           <span
             className="inline-block px-3 py-1 rounded-full text-sm font-semibold"
@@ -187,6 +231,26 @@ export function OrderTrackingPage({
           >
             {STATUS_LABELS[order.status] ?? order.status}
           </span>
+
+          {/* Live indicator */}
+          {!TERMINAL_STATUSES.includes(order.status) && (
+            <div className="flex items-center justify-center gap-1.5 mt-1">
+              {isFetching ? (
+                <Loader2
+                  className="h-3 w-3 animate-spin"
+                  style={{ color: "var(--text-secondary)" }}
+                />
+              ) : (
+                <span
+                  className="inline-block h-2 w-2 rounded-full animate-pulse"
+                  style={{ backgroundColor: "var(--primary)" }}
+                />
+              )}
+              <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                {isFetching ? "Updating…" : `Last updated ${formatSecondsAgo(secondsAgo)}`}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Estimated time card */}
@@ -202,10 +266,7 @@ export function OrderTrackingPage({
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
               Estimated ready in
             </p>
-            <p
-              className="text-2xl font-bold"
-              style={{ color: "var(--text)" }}
-            >
+            <p className="text-2xl font-bold" style={{ color: "var(--text)" }}>
               {estimatedTime}
             </p>
           </div>
@@ -214,22 +275,35 @@ export function OrderTrackingPage({
         {/* Cancelled banner */}
         {isCancelled && (
           <div
-            className="flex items-center gap-3 px-4 py-3 rounded-xl"
+            className="flex items-start gap-3 px-4 py-3 rounded-xl"
             style={{
               backgroundColor: "color-mix(in srgb, #ef4444 10%, var(--bg))",
               border: "1px solid #ef4444",
               borderRadius: "var(--radius)",
             }}
           >
-            <AlertTriangle className="h-5 w-5 flex-shrink-0" style={{ color: "#ef4444" }} />
-            <div>
+            <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: "#ef4444" }} />
+            <div className="flex-1 min-w-0">
               <p className="font-semibold text-sm" style={{ color: "#ef4444" }}>
                 Order {order.status === "void" ? "Voided" : "Cancelled"}
+                {order.cancelledAt && (
+                  <span className="font-normal ml-2 opacity-75">{formatTime(order.cancelledAt)}</span>
+                )}
               </p>
-              {order.cancelledAt && (
-                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                  {formatTime(order.cancelledAt)}
+              {order.cancellationReason && (
+                <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
+                  Reason: {order.cancellationReason}
                 </p>
+              )}
+              {storePhone && (
+                <a
+                  href={`tel:${storePhone}`}
+                  className="inline-flex items-center gap-1.5 mt-2 text-sm font-medium"
+                  style={{ color: "#ef4444" }}
+                >
+                  <Phone className="h-4 w-4" />
+                  Call {storeName}
+                </a>
               )}
             </div>
           </div>
@@ -247,7 +321,7 @@ export function OrderTrackingPage({
           >
             <h2
               className="text-sm font-semibold mb-4"
-              style={{ color: "var(--text-secondary)" }}
+              style={{ color: "var(--text)" }}
             >
               Order Progress
             </h2>
@@ -259,12 +333,12 @@ export function OrderTrackingPage({
                     {/* Icon + line */}
                     <div className="flex flex-col items-center">
                       <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                        className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0${!isTerminal && i === lastDoneIndex ? " animate-pulse" : ""}`}
                         style={{
                           backgroundColor: step.isDone
                             ? "var(--primary)"
                             : "var(--bg)",
-                          color: step.isDone ? "#FFFFFF" : "var(--text-secondary)",
+                          color: step.isDone ? "#FFFFFF" : "var(--text)",
                           border: step.isDone
                             ? "none"
                             : "2px solid var(--border)",
@@ -288,15 +362,15 @@ export function OrderTrackingPage({
                       <p
                         className="text-sm font-medium"
                         style={{
-                          color: step.isDone ? "var(--text)" : "var(--text-secondary)",
+                          color: "var(--text)",
                         }}
                       >
                         {step.label}
                       </p>
                       {step.timestamp && (
                         <p
-                          className="text-xs mt-0.5"
-                          style={{ color: "var(--text-secondary)" }}
+                          className="text-xs mt-0.5 opacity-80"
+                          style={{ color: "var(--text)" }}
                         >
                           {formatTime(step.timestamp)}
                         </p>
@@ -320,7 +394,7 @@ export function OrderTrackingPage({
         >
           <h2
             className="text-sm font-semibold mb-3"
-            style={{ color: "var(--text-secondary)" }}
+            style={{ color: "var(--text)" }}
           >
             Order Summary
           </h2>
@@ -347,22 +421,22 @@ export function OrderTrackingPage({
           >
             <div
               className="flex justify-between text-sm"
-              style={{ color: "var(--text-secondary)" }}
+              style={{ color: "var(--text)" }}
             >
               <span>Subtotal</span>
               <span>${order.subtotal.toFixed(2)}</span>
             </div>
             <div
               className="flex justify-between text-sm"
-              style={{ color: "var(--text-secondary)" }}
+              style={{ color: "var(--text)" }}
             >
-              <span>Tax</span>
-              <span>${order.tax.toFixed(2)}</span>
+              <span>Tax{effectiveRate > 0 ? ` (${parseFloat((effectiveRate * 100).toFixed(2))}%)` : ""}</span>
+              <span>${displayedTax.toFixed(2)}</span>
             </div>
             {order.tip > 0 && (
               <div
                 className="flex justify-between text-sm"
-                style={{ color: "var(--text-secondary)" }}
+                style={{ color: "var(--text)" }}
               >
                 <span>Tip</span>
                 <span>${order.tip.toFixed(2)}</span>
@@ -376,20 +450,30 @@ export function OrderTrackingPage({
               }}
             >
               <span>Total</span>
-              <span>${order.total.toFixed(2)}</span>
+              <span>${displayedTotal.toFixed(2)}</span>
             </div>
           </div>
         </div>
 
-        {/* Continue shopping */}
-        <div className="text-center pb-8">
+        {/* Continue shopping + contact */}
+        <div className="text-center pb-8 space-y-3">
           <Link
             href={storePath()}
-            className="text-sm font-medium"
+            className="text-sm font-medium block"
             style={{ color: "var(--primary)" }}
           >
             Continue Shopping
           </Link>
+          {storePhone && (
+            <a
+              href={`tel:${storePhone}`}
+              className="inline-flex items-center gap-1.5 text-sm"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              <Phone className="h-4 w-4" />
+              {storePhone}
+            </a>
+          )}
         </div>
       </main>
     </div>

@@ -75,6 +75,7 @@ export interface LocationItemOverride {
   is_available: boolean;
   stock_tracking_mode: StockTrackingMode;
   current_stock: number | null;
+  is_popular: boolean;
 }
 
 export interface LocationCategoryOverride {
