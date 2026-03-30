@@ -42,6 +42,8 @@ function mapStoreConfigToSite(config: any): Site {
     faviconUrl: config.favicon_url,
     headerStyle: config.header_style,
     headerTextColor: config.header_text_color,
+    borderColor: config.border_color ?? null,
+    cardColor: config.card_color ?? null,
   };
 
   const onlineOrderingConfig: OnlineOrderingConfig = {

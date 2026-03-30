@@ -38,7 +38,7 @@ const DIETARY_OPTIONS = ["Vegan", "Vegetarian", "Gluten-Free", "Dairy-Free", "Ke
 
 const CATEGORY_ICON_MAP: { keywords: string[]; icon: LucideIcon }[] = [
   { keywords: ["espresso", "coffee", "drip", "latte", "cappuccino", "americano"], icon: Coffee },
-  { keywords: ["bakery", "pastry", "croissant", "bread", "muffin", "donut"], icon: Croissant },
+  { keywords: ["bakery", "pastry", "croissant", "bread", "muffin", "donut", "cake"], icon: Croissant },
   { keywords: ["sandwich", "breakfast", "burger", "wrap", "panini"], icon: Sandwich },
   { keywords: ["merchandise", "shop", "retail", "gift", "swag"], icon: ShoppingBag },
   { keywords: ["uptown happy hour", "uptown"], icon: Smile },

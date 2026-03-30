@@ -529,62 +529,9 @@ export function CheckoutPage({
                 color: "var(--primary)",
                 borderRadius: "9999px",
               }}
-<<<<<<< HEAD
             >
               Back to menu
             </Link>
-=======
-              onSelectCustom={() => setSelectedTipIndex(null)}
-              onSelectNoTip={() => {
-                setSelectedTipIndex(-1);
-                setCustomTip("");
-              }}
-              onCustomTipChange={setCustomTip}
-            />
-            <div style={{ borderTop: "1px solid var(--border)" }} />
-          </>
-        )}
-
-        {/* Promo Code */}
-        <PromoCodeSection />
-
-        <div style={{ borderTop: "1px solid var(--border)" }} />
-
-        {/* Order Summary */}
-        <OrderSummarySection
-          subtotal={subtotal}
-          tax={tax}
-          deliveryFee={deliveryFee}
-          tipAmount={tipAmount}
-          total={total}
-          itemCount={items.length}
-          showDeliveryFee={orderType === "delivery"}
-        />
-
-        {/* Payment */}
-        {securityKey && (
-          <>
-            <div style={{ borderTop: "1px solid var(--border)" }} />
-            <PaymentCardForm
-              ref={paymentFormRef}
-              securityKey={securityKey}
-              onError={setPaymentError}
-              disabled={loading}
-            />
-          </>
-        )}
-
-        {paymentError && (
-          <div
-            className="p-3 rounded-lg text-sm"
-            style={{
-              backgroundColor: "color-mix(in srgb, #ef4444 10%, var(--bg))",
-              color: "#ef4444",
-              borderRadius: "var(--radius)",
-            }}
-          >
-            {paymentError}
->>>>>>> origin/Temur-Dev
           </div>
 
           {/* Store closed banner */}

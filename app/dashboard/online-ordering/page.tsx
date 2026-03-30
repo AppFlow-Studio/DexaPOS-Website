@@ -976,6 +976,16 @@ export default function OnlineOrderingPage() {
                   value={currentSettings.textColor}
                   onChange={(v) => handleUpdate({ textColor: v })}
                 />
+                <ColorInput
+                  label="Border"
+                  value={currentSettings.borderColor || ""}
+                  onChange={(v) => handleUpdate({ borderColor: v || null })}
+                />
+                <ColorInput
+                  label="Card"
+                  value={currentSettings.cardColor || ""}
+                  onChange={(v) => handleUpdate({ cardColor: v || null })}
+                />
               </div>
               <div className="p-4 rounded-lg border bg-background">
                 <p className="text-sm text-muted-foreground mb-3">Preview</p>

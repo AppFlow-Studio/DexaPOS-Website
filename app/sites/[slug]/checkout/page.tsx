@@ -42,6 +42,7 @@ export default async function CheckoutRoute({ params, searchParams }: PageProps)
   const bgColor = (themeStyle as Record<string, string>)["--bg"] ?? defaults.bg;
   const textColor = (themeStyle as Record<string, string>)["--text"] ?? defaults.text;
   const rootVarsCss = `:root { ${Object.entries(themeStyle).map(([k, v]) => `${k}: ${v}`).join("; ")} }`;
+  return (
     <>
       <style dangerouslySetInnerHTML={{ __html: rootVarsCss }} />
       {/* eslint-disable-next-line @next/next/no-page-custom-font */}

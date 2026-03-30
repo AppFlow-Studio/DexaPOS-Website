@@ -12,6 +12,8 @@ export interface SiteThemeConfig {
   faviconUrl?: string | null;
   headerStyle?: "filled" | "transparent" | "outlined";
   headerTextColor?: string | null;
+  borderColor?: string | null;
+  cardColor?: string | null;
 }
 
 // Schedule Types
@@ -153,6 +155,8 @@ export interface OnlineStoreConfig {
   accent_color: string | null;
   background_color: string;
   text_color: string;
+  border_color?: string | null;
+  card_color?: string | null;
   font_family: string | null;
 
   logo_url: string | null;

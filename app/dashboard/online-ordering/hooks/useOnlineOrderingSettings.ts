@@ -81,6 +81,8 @@ export interface OnlineOrderingSettings {
   // Header
   headerStyle: "filled" | "transparent" | "outlined";
   headerTextColor: string | null;
+  borderColor: string | null;
+  cardColor: string | null;
 
   // Menu layout: cards | sidebyside | no-images
   menuLayout: "cards" | "sidebyside" | "no-images";
@@ -179,6 +181,8 @@ const createDefaultSettings = (
 
   headerStyle: "filled",
   headerTextColor: null,
+  borderColor: null,
+  cardColor: null,
 
   menuLayout: "cards",
 

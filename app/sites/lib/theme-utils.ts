@@ -181,7 +181,7 @@ export function buildThemeVars(theme: SiteThemeConfig | null | undefined) {
   }
 
   // Surface colors for inputs/panels - ensure contrast even when user customizes
-  const card = defaults.card;
+  const card = theme?.cardColor || defaults.card;
   const text = theme?.textColor || defaults.text;
   const isCardDark = getContrastTextColor(card) === "#FFFFFF";
   const surface = isCardDark ? "#FFFFFF" : card;
@@ -205,7 +205,7 @@ export function buildThemeVars(theme: SiteThemeConfig | null | undefined) {
     "--surface-text": surfaceText,
     "--card-text": cardText,
     "--text-secondary": defaults.textSecondary,
-    "--border": defaults.border,
+    "--border": theme?.borderColor || defaults.border,
     "--radius": defaults.radius,
     "--font": font,
     "--font-display": defaults.fontDisplay,
@@ -225,7 +225,7 @@ export function buildThemeVars(theme: SiteThemeConfig | null | undefined) {
     "--popover": card,
     "--popover-foreground": cardText,
     "--primary-foreground": primaryText,
-    "--input": defaults.border,
+    "--input": theme?.borderColor || defaults.border,
     "--ring": primary,
   } as React.CSSProperties;
 }
