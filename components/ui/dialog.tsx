@@ -60,15 +60,17 @@ function DialogContent({
   children,
   showCloseButton = true,
   elevation = "default",
+  overlayClassName,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
   /** Use "high" when opening from inside a BottomSheet so the dialog appears above it */
   elevation?: "default" | "high"
+  overlayClassName?: string
 }) {
   return (
     <DialogPortal data-slot="dialog-portal">
-      <DialogOverlay elevation={elevation} />
+      <DialogOverlay className={overlayClassName} elevation={elevation} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
