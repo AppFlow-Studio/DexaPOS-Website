@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createClerkClient } from '@clerk/backend'
 import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
+import { deleteOrganizationLogo } from '@/lib/cdn/server'
 
 export async function DeleteOrganization(organizationId: string) {
     try {
@@ -13,6 +14,9 @@ export async function DeleteOrganization(organizationId: string) {
         const clerkOrg = await clerkClient.organizations.getOrganization({ organizationId })
         const orgName = clerkOrg.name
         const orgType = clerkOrg.publicMetadata?.org_type as string | undefined
+        const orgImageUrl = typeof clerkOrg.publicMetadata?.imageURL === 'string'
+            ? clerkOrg.publicMetadata.imageURL
+            : null
 
         const { data: merchant } = await supabase
             .from('merchants')
@@ -38,8 +42,10 @@ export async function DeleteOrganization(organizationId: string) {
         const organization = await clerkClient.organizations.deleteOrganization(organizationId)
 
         if (organization) {
-            // Delete Image from Supabase Storage and all pending invites
-            const { data, error } = await supabase.storage.from('Organizations-Logos').remove([organizationId.toString() + '.png'])
+            const deleteLogoResult = await deleteOrganizationLogo(orgImageUrl, organizationId)
+            if (!deleteLogoResult.success) {
+                console.warn('Failed to delete organization logo during organization removal:', deleteLogoResult.error)
+            }
 
             if (orgType === 'merchant') {
                 await logAdminAction('MERCHANT_DEACTIVATED', {

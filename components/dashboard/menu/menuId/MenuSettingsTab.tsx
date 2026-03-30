@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { CdnImageUploadField } from '@/components/ui/cdn-image-upload-field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
@@ -16,9 +17,14 @@ interface MenuSettingsTabProps {
     editedName: string
     editedDescription: string
     hasSettingsChanges: boolean
+    imagePreviewUrl: string | null
+    isImageUploading: boolean
     isTogglingActive: boolean
     isSavingSettings: boolean
+    selectedImageFileName?: string | null
     selectedLocationId: string | null
+    onClearImage: () => void
+    onImageSelect: (file: File | null) => void
     onNameChange: (name: string) => void
     onDescriptionChange: (description: string) => void
     onToggleActive: () => void
@@ -34,9 +40,14 @@ export function MenuSettingsTab({
     editedName,
     editedDescription,
     hasSettingsChanges,
+    imagePreviewUrl,
+    isImageUploading,
     isTogglingActive,
     isSavingSettings,
+    selectedImageFileName,
     selectedLocationId,
+    onClearImage,
+    onImageSelect,
     onNameChange,
     onDescriptionChange,
     onToggleActive,
@@ -144,6 +155,19 @@ export function MenuSettingsTab({
                             onChange={(e) => onDescriptionChange(e.target.value)}
                             placeholder="Enter menu description (optional)"
                             className="max-w-md"
+                        />
+                    </div>
+                    <div className="space-y-2 max-w-md">
+                        <Label>Menu Image</Label>
+                        <CdnImageUploadField
+                            disabled={isSavingSettings}
+                            helperText="Uploads to Bunny CDN when you save the menu."
+                            onClear={onClearImage}
+                            onFileSelect={onImageSelect}
+                            previewUrl={imagePreviewUrl}
+                            selectedFileName={selectedImageFileName}
+                            uploadLabel="Upload menu image"
+                            uploading={isImageUploading}
                         />
                     </div>
 

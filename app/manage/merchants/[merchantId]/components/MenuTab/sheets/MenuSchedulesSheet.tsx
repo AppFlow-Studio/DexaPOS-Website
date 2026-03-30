@@ -5,14 +5,16 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
-  BottomSheet,
-  BottomSheetContent,
-  BottomSheetHeader,
-  BottomSheetBody,
-  BottomSheetFooter,
-  BottomSheetTitle,
   BottomSheetSection,
 } from '@/components/ui/bottom-sheet'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
 import {
   Form,
   FormControl,
@@ -262,262 +264,274 @@ export function MenuSchedulesSheet({
   }
 
   return (
-    <BottomSheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <BottomSheetContent>
-        <BottomSheetHeader>
-          <BottomSheetTitle>Schedules for {menuName}</BottomSheetTitle>
-        </BottomSheetHeader>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent
+        overlayClassName="bg-slate-950/40 backdrop-blur-md"
+        className="w-full max-w-[calc(100vw-1.5rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-4xl"
+      >
+        <div className="flex max-h-[min(90vh,860px)] flex-col">
+          <DialogHeader className="gap-2 border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
+            <DialogTitle className="text-[1.625rem] font-semibold tracking-tight">
+              Schedules for {menuName}
+            </DialogTitle>
+            <DialogDescription className="max-w-[60ch] text-sm leading-6">
+              Assign existing schedules or create a new schedule for this menu.
+            </DialogDescription>
+          </DialogHeader>
 
-        <BottomSheetBody>
-          <ScrollArea className="h-[600px]">
-            {/* Assigned Schedules */}
-            <BottomSheetSection title="Assigned Schedules">
-              {menuSchedulesLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : assignedSchedules.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4">No schedules assigned to this menu</p>
-              ) : (
-                <div className="space-y-2">
-                  {assignedSchedules.map((schedule) => (
-                    <div
-                      key={schedule.id}
-                      className="flex items-start justify-between gap-4 p-3 border rounded-lg"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="font-medium text-sm">{schedule.name}</p>
-                          {schedule.is_active ? (
-                            <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-300 border-0 text-xs">
-                              <CheckCircle2 className="h-3 w-3 mr-1" />
-                              Active
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="bg-red-50 text-red-700 dark:bg-red-900 dark:text-red-300 border-0 text-xs">
-                              <XCircle className="h-3 w-3 mr-1" />
-                              Inactive
-                            </Badge>
-                          )}
-                        </div>
-                        {schedule.description && (
-                          <p className="text-xs text-muted-foreground mb-2">{schedule.description}</p>
-                        )}
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          {formatTimeSlots(schedule)}
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => handleRemoveSchedule(schedule.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+          <div className="min-h-0 flex-1 overflow-hidden px-6 py-5">
+            <ScrollArea className="h-full pr-4">
+              <div className="space-y-6">
+                {/* Assigned Schedules */}
+                <BottomSheetSection title="Assigned Schedules">
+                  {menuSchedulesLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                     </div>
-                  ))}
-                </div>
-              )}
-            </BottomSheetSection>
-
-            <Separator className="my-6" />
-
-            {/* Add Existing Schedule */}
-            <BottomSheetSection title="Add Existing Schedule">
-              {schedulesLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : availableSchedules.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4">No available schedules</p>
-              ) : (
-                <div className="flex gap-2">
-                  <Select
-                    value={selectedScheduleId || ''}
-                    onValueChange={setSelectedScheduleId}
-                  >
-                    <SelectTrigger className="flex-1">
-                      <SelectValue placeholder="Select a schedule" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableSchedules.map((schedule) => (
-                        <SelectItem key={schedule.id} value={schedule.id}>
-                          {schedule.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    onClick={handleAssignSchedule}
-                    disabled={!selectedScheduleId || isAssigning}
-                  >
-                    {isAssigning ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      'Assign'
-                    )}
-                  </Button>
-                </div>
-              )}
-            </BottomSheetSection>
-
-            <Separator className="my-6" />
-
-            {/* Create New Schedule */}
-            <Collapsible open={isCreating} onOpenChange={setIsCreating}>
-              <CollapsibleTrigger asChild>
-                <Button variant="outline" className="w-full justify-between">
-                  <span className="flex items-center gap-2">
-                    <Plus className="h-4 w-4" />
-                    Create New Schedule
-                  </span>
-                  {isCreating ? (
-                    <ChevronDown className="h-4 w-4" />
+                  ) : assignedSchedules.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-4">No schedules assigned to this menu</p>
                   ) : (
-                    <ChevronRight className="h-4 w-4" />
-                  )}
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-4">
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Schedule Name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="e.g., Breakfast Hours" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Description (Optional)</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              placeholder="Brief description of when this schedule applies"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="selectedDays"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Days</FormLabel>
-                          <FormControl>
-                            <div className="grid grid-cols-7 gap-2">
-                              {DAYS.map((day) => (
-                                <div key={day.value} className="flex items-center justify-center">
-                                  <Checkbox
-                                    checked={field.value.includes(day.value)}
-                                    onCheckedChange={(checked) => {
-                                      const newValue = checked
-                                        ? [...field.value, day.value]
-                                        : field.value.filter((v) => v !== day.value)
-                                      field.onChange(newValue)
-                                    }}
-                                    id={`day-${day.value}`}
-                                  />
-                                  <label
-                                    htmlFor={`day-${day.value}`}
-                                    className="ml-1 text-xs cursor-pointer"
-                                  >
-                                    {day.short}
-                                  </label>
-                                </div>
-                              ))}
+                    <div className="space-y-2">
+                      {assignedSchedules.map((schedule) => (
+                        <div
+                          key={schedule.id}
+                          className="flex items-start justify-between gap-4 rounded-lg border p-3"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="mb-1 flex items-center gap-2">
+                              <p className="font-medium text-sm">{schedule.name}</p>
+                              {schedule.is_active ? (
+                                <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-300 border-0 text-xs">
+                                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                                  Active
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-red-50 text-red-700 dark:bg-red-900 dark:text-red-300 border-0 text-xs">
+                                  <XCircle className="h-3 w-3 mr-1" />
+                                  Inactive
+                                </Badge>
+                              )}
                             </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="startTime"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Start Time</FormLabel>
-                            <FormControl>
-                              <Input type="time" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="endTime"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>End Time</FormLabel>
-                            <FormControl>
-                              <Input type="time" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                            {schedule.description && (
+                              <p className="mb-2 text-xs text-muted-foreground">{schedule.description}</p>
+                            )}
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Clock className="h-3 w-3" />
+                              {formatTimeSlots(schedule)}
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => handleRemoveSchedule(schedule.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
                     </div>
+                  )}
+                </BottomSheetSection>
 
-                    <div className="flex gap-2 pt-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          form.reset()
-                          setIsCreating(false)
-                        }}
-                        disabled={isSubmitting}
+                <Separator />
+
+                {/* Add Existing Schedule */}
+                <BottomSheetSection title="Add Existing Schedule">
+                  {schedulesLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : availableSchedules.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-4">No available schedules</p>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Select
+                        value={selectedScheduleId || ''}
+                        onValueChange={setSelectedScheduleId}
                       >
-                        Cancel
-                      </Button>
-                      <Button type="submit" disabled={isSubmitting}>
-                        {isSubmitting ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Creating...
-                          </>
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="Select a schedule" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableSchedules.map((schedule) => (
+                            <SelectItem key={schedule.id} value={schedule.id}>
+                              {schedule.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        onClick={handleAssignSchedule}
+                        disabled={!selectedScheduleId || isAssigning}
+                      >
+                        {isAssigning ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          <>
-                            <Plus className="h-4 w-4 mr-2" />
-                            Create & Assign
-                          </>
+                          'Assign'
                         )}
                       </Button>
                     </div>
-                  </form>
-                </Form>
-              </CollapsibleContent>
-            </Collapsible>
-          </ScrollArea>
-        </BottomSheetBody>
+                  )}
+                </BottomSheetSection>
 
-        <BottomSheetFooter>
-          <Button variant="outline" onClick={onClose}>
-            Close
-          </Button>
-        </BottomSheetFooter>
-      </BottomSheetContent>
-    </BottomSheet>
+                <Separator />
+
+                {/* Create New Schedule */}
+                <Collapsible open={isCreating} onOpenChange={setIsCreating}>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="outline" className="w-full justify-between">
+                      <span className="flex items-center gap-2">
+                        <Plus className="h-4 w-4" />
+                        Create New Schedule
+                      </span>
+                      {isCreating ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-4">
+                    <Form {...form}>
+                      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                        <FormField
+                          control={form.control}
+                          name="name"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Schedule Name</FormLabel>
+                              <FormControl>
+                                <Input placeholder="e.g., Breakfast Hours" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="description"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Description (Optional)</FormLabel>
+                              <FormControl>
+                                <Textarea
+                                  placeholder="Brief description of when this schedule applies"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="selectedDays"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Days</FormLabel>
+                              <FormControl>
+                                <div className="grid grid-cols-7 gap-2">
+                                  {DAYS.map((day) => (
+                                    <div key={day.value} className="flex items-center justify-center">
+                                      <Checkbox
+                                        checked={field.value.includes(day.value)}
+                                        onCheckedChange={(checked) => {
+                                          const newValue = checked
+                                            ? [...field.value, day.value]
+                                            : field.value.filter((v) => v !== day.value)
+                                          field.onChange(newValue)
+                                        }}
+                                        id={`day-${day.value}`}
+                                      />
+                                      <label
+                                        htmlFor={`day-${day.value}`}
+                                        className="ml-1 text-xs cursor-pointer"
+                                      >
+                                        {day.short}
+                                      </label>
+                                    </div>
+                                  ))}
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <FormField
+                            control={form.control}
+                            name="startTime"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Start Time</FormLabel>
+                                <FormControl>
+                                  <Input type="time" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name="endTime"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>End Time</FormLabel>
+                                <FormControl>
+                                  <Input type="time" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              form.reset()
+                              setIsCreating(false)
+                            }}
+                            disabled={isSubmitting}
+                          >
+                            Cancel
+                          </Button>
+                          <Button type="submit" disabled={isSubmitting}>
+                            {isSubmitting ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Creating...
+                              </>
+                            ) : (
+                              <>
+                                <Plus className="h-4 w-4 mr-2" />
+                                Create & Assign
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </form>
+                    </Form>
+                  </CollapsibleContent>
+                </Collapsible>
+              </div>
+            </ScrollArea>
+          </div>
+
+          <DialogFooter className="shrink-0 border-t border-border/70 bg-background/95 px-6 py-4 sm:justify-end">
+            <Button variant="outline" onClick={onClose}>
+              Close
+            </Button>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

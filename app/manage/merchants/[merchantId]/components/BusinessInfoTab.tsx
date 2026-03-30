@@ -97,7 +97,8 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                 status: businessInfo.status || ''
             })
         }
-    }, [isEditDialogOpen, businessInfo])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isEditDialogOpen])
 
     const handleSave = async () => {
         try {

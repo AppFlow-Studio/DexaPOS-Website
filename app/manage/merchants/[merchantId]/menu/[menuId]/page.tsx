@@ -81,6 +81,7 @@ import {
   Calendar,
   ImageOff,
   RefreshCw,
+  Plus,
 } from 'lucide-react'
 
 // Admin hooks and actions
@@ -102,6 +103,8 @@ import { getAdminMenuSchedules } from '@/app/manage/actions/admin-merchant/menus
 
 // Form Sheets (reuse from MenuTab)
 import { MenuFormSheet } from '../../components/MenuTab/sheets/MenuFormSheet'
+import { CategoryFormSheet } from '../../components/MenuTab/sheets/CategoryFormSheet'
+import { AdminAddCategoryToMenuSheet } from '../../components/MenuTab/sheets/AdminAddCategoryToMenuSheet'
 import { ItemFormSheet } from '../../components/MenuTab/sheets/ItemFormSheet'
 
 // OrderOut
@@ -204,7 +207,10 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
 
   // Sheets state
   const [menuFormOpen, setMenuFormOpen] = useState(false)
+  const [categoryFormOpen, setCategoryFormOpen] = useState(false)
+  const [addExistingCategoryOpen, setAddExistingCategoryOpen] = useState(false)
   const [itemFormOpen, setItemFormOpen] = useState(false)
+  const [itemFormMode, setItemFormMode] = useState<'create' | 'edit'>('edit')
   const [editingItem, setEditingItem] = useState<AdminMenuItem | null>(null)
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
   const [deleteMenuOpen, setDeleteMenuOpen] = useState(false)
@@ -396,6 +402,21 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
     }
   }
 
+  const handleCreateCategory = () => {
+    setCategoryFormOpen(true)
+  }
+
+  const handleLinkExistingCategory = () => {
+    setAddExistingCategoryOpen(true)
+  }
+
+  const handleAddItem = (categoryId: string) => {
+    setItemFormMode('create')
+    setEditingItem(null)
+    setEditingCategoryId(categoryId)
+    setItemFormOpen(true)
+  }
+
   // Item editing
   const handleEditItem = (item: any, categoryId: string) => {
     // Transform to AdminMenuItem format
@@ -429,6 +450,7 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
       created_at: '',
       updated_at: '',
     }
+    setItemFormMode('edit')
     setEditingItem(adminItem)
     setEditingCategoryId(categoryId)
     setItemFormOpen(true)
@@ -484,9 +506,9 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
 
   // Invalidation helpers
   const invalidateMenu = () => {
-    if (!merchantId) return
+    if (!clerkOrgId) return
     queryClient.invalidateQueries({
-      queryKey: adminKeys.merchantMenuWithCategories(merchantId, menuId, locationId),
+      queryKey: adminKeys.merchantMenuWithCategories(clerkOrgId, menuId, locationId),
     })
   }
 
@@ -714,7 +736,7 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
 
         {/* Categories & Items Tab */}
         <TabsContent value="categories" className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={expandAll}>
                 Expand All
@@ -723,8 +745,18 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
                 Collapse All
               </Button>
             </div>
-            {hasCategoryOrderChanges && (
-              <div className="flex items-center gap-2">
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleLinkExistingCategory}>
+                Link Existing Category
+              </Button>
+              <Button size="sm" onClick={handleCreateCategory}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Category
+              </Button>
+
+              {hasCategoryOrderChanges && (
+                <>
                 <Button variant="outline" size="sm" onClick={handleResetCategoryOrder}>
                   Reset Order
                 </Button>
@@ -741,8 +773,9 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
                     </>
                   )}
                 </Button>
-              </div>
-            )}
+                </>
+              )}
+            </div>
           </div>
 
           {displayCategories.length === 0 ? (
@@ -750,6 +783,15 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <FolderOpen className="h-12 w-12 text-muted-foreground/50 mb-4" />
                 <p className="text-muted-foreground">No categories in this menu</p>
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                  <Button size="sm" onClick={handleCreateCategory}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Category
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleLinkExistingCategory}>
+                    Link Existing Category
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ) : (
@@ -767,6 +809,7 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
                   }
                   onMoveUp={() => moveCategoryUp(index)}
                   onMoveDown={() => moveCategoryDown(index)}
+                  onAddItem={() => handleAddItem(category.category_id)}
                   onEditItem={(item) => handleEditItem(item, category.category_id)}
                 />
               ))}
@@ -949,6 +992,44 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
 
       {/* Item Form Sheet - only render when merchantId is available */}
       {merchantId && (
+        <CategoryFormSheet
+          open={categoryFormOpen}
+          onClose={() => setCategoryFormOpen(false)}
+          merchantId={merchantId}
+          locationId={locationId}
+          mode="create"
+          category={null}
+          menuId={menuId}
+          onSuccess={() => {
+            invalidateMenu()
+            invalidateMenuList()
+            setCategoryFormOpen(false)
+          }}
+        />
+      )}
+
+      {merchantId && menu && (
+        <AdminAddCategoryToMenuSheet
+          open={addExistingCategoryOpen}
+          onClose={() => setAddExistingCategoryOpen(false)}
+          merchantId={merchantId}
+          locationId={locationId}
+          menu={{
+            id: menu.id,
+            name: menu.name,
+            categories: menu.categories.map((category) => ({
+              category_id: category.category_id,
+            })),
+          }}
+          onSuccess={() => {
+            invalidateMenu()
+            invalidateMenuList()
+            setAddExistingCategoryOpen(false)
+          }}
+        />
+      )}
+
+      {merchantId && (
         <ItemFormSheet
           open={itemFormOpen}
           onClose={() => {
@@ -958,11 +1039,12 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
           }}
           merchantId={merchantId}
           locationId={locationId}
-          mode="edit"
+          mode={itemFormMode}
           item={editingItem}
           categoryId={editingCategoryId}
           onSuccess={() => {
             invalidateMenu()
+            invalidateMenuList()
             setItemFormOpen(false)
             setEditingItem(null)
             setEditingCategoryId(null)
@@ -1012,6 +1094,7 @@ interface CategoryRowProps {
   onToggleVisibility: (isActive: boolean) => void
   onMoveUp: () => void
   onMoveDown: () => void
+  onAddItem: () => void
   onEditItem: (item: any) => void
 }
 
@@ -1024,6 +1107,7 @@ function CategoryRow({
   onToggleVisibility,
   onMoveUp,
   onMoveDown,
+  onAddItem,
   onEditItem,
 }: CategoryRowProps) {
   return (
@@ -1132,6 +1216,19 @@ function CategoryRow({
 
         <CollapsibleContent>
           <div className="border-t">
+            <div className="flex items-center justify-end border-b bg-muted/10 px-4 py-3">
+              <Button
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onAddItem()
+                }}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Item
+              </Button>
+            </div>
+
             {category.items.length > 0 ? (
               <Table>
                 <TableHeader>

@@ -396,6 +396,7 @@ export interface MenuWithCategories {
 
   name: string;
   description: string | null;
+  image: string | null;
 
   is_active: boolean;
   is_global: boolean; // location_id IS NULL

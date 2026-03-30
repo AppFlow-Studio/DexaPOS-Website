@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { Site } from "@/types/site";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { Volume2, VolumeX } from "lucide-react";
 

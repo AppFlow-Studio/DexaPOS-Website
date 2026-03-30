@@ -48,6 +48,17 @@ Single index for active ticket streams and their source trackers.
 3. Continuation state:
 - `.planning/.continue-here.md`
 
+## Stream E: Bunny CDN Migration
+
+1. Internal execution tracker:
+- `.planning/SPRINT-2026-03-21-BUNNY-CDN-MIGRATION-TRACKER.md`
+
+2. Plan:
+- `docs/SPRINT-2026-03-21-BUNNY-CDN-MIGRATION-PLAN.md`
+
+3. Continuation state:
+- `.planning/.continue-here.md`
+
 ## Notes
 
 1. Keep this file updated whenever a new ticket stream starts.

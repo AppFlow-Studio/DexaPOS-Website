@@ -326,6 +326,25 @@ export const adminKeys = {
       'schedules',
     ] as const,
 
+  merchantPrepStations: (merchantId: string, locationId?: string | null) =>
+    [
+      ...adminKeys.merchants(),
+      merchantId,
+      'prep-stations',
+      locationId ?? 'all',
+    ] as const,
+
+  merchantCategoryPrepDefaults: (
+    merchantId: string,
+    locationId?: string | null
+  ) =>
+    [
+      ...adminKeys.merchants(),
+      merchantId,
+      'category-prep-defaults',
+      locationId ?? 'all',
+    ] as const,
+
   // Timesheets
   merchantTimesheets: (merchantId: string, filters: any) =>
     [...adminKeys.merchants(), merchantId, 'timesheets', filters] as const,

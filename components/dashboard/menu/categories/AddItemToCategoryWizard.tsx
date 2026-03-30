@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { CdnImageUploadField } from "@/components/ui/cdn-image-upload-field";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -38,11 +39,11 @@ import {
   Loader2,
   Plus,
   DollarSign,
-  Image as ImageIcon,
   Tag,
   Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useMerchantCdnImageUpload } from "@/lib/cdn/use-merchant-cdn-image-upload";
 import { MenuItemsModel } from "@/types/db-modles";
 import { AddItemToCategory } from "@/app/dashboard/actions/item-assignments";
 import { CreateItemInCategory } from "@/app/dashboard/actions/item-assignments";
@@ -102,6 +103,11 @@ export function AddItemToCategoryWizard({
   const merchantId = propMerchantId || userInfo?.members?.[0]?.organizations?.merchants?.id || "";
   const selectedLocationId = propLocationId !== undefined ? propLocationId : locationStore.selectedLocationId;
   const isAllLocations = propIsAllLocations !== undefined ? propIsAllLocations : dashboardIsAllLocations;
+  const imageUpload = useMerchantCdnImageUpload({
+    merchantId,
+    category: "menu-items",
+    fileNamePrefix: "item",
+  });
 
   // State
   const [activeTab, setActiveTab] = React.useState<"existing" | "create">(
@@ -173,8 +179,9 @@ export function AddItemToCategoryWizard({
       setSearchQuery("");
       setActiveTab("existing");
       form.reset();
+      imageUpload.reset(null);
     }
-  }, [open, form]);
+  }, [form, imageUpload.reset, open]);
 
   // Toggle item selection
   const handleToggleItem = (itemId: string) => {
@@ -265,14 +272,23 @@ export function AddItemToCategoryWizard({
 
   // Create new item and add to category
   const handleCreateItem = async (values: ItemFormValues) => {
+    let uploadedAsset: { cdnUrl: string; storagePath: string } | undefined;
+
     if (!clerkOrgId) {
       toast.error("Organization not found");
+      return;
+    }
+
+    if (imageUpload.hasPendingChange && !merchantId) {
+      toast.error("Merchant not found");
       return;
     }
 
     setIsSaving(true);
 
     try {
+      const resolvedImage = await imageUpload.resolveImageValue();
+      uploadedAsset = resolvedImage.uploadedAsset;
       const result = await CreateItemInCategory(
         clerkOrgId || "", // Pass empty string if undefined
         categoryId,
@@ -281,7 +297,7 @@ export function AddItemToCategoryWizard({
           description: values.description,
           price: values.price,
           cashPrice: values.cash_price ?? undefined,
-          image: values.image,
+          image: resolvedImage.value ?? undefined,
         },
         {
           locationId: isAllLocations ? null : selectedLocationId,
@@ -290,6 +306,9 @@ export function AddItemToCategoryWizard({
       );
 
       if (result.error) {
+        if (uploadedAsset) {
+          await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error);
+        }
         toast.error("Failed to create item", { description: result.error });
         return;
       }
@@ -305,6 +324,9 @@ export function AddItemToCategoryWizard({
       onSuccess?.();
       onOpenChange(false);
     } catch (error) {
+      if (uploadedAsset) {
+        await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error);
+      }
       console.error("Error creating item:", error);
       toast.error("Failed to create item");
     } finally {
@@ -611,18 +633,24 @@ export function AddItemToCategoryWizard({
                     />
                   </div>
 
-                  {/* Image URL */}
+                  {/* Item Image */}
                   <FormField
                     control={form.control}
                     name="image"
-                    render={({ field }) => (
+                    render={() => (
                       <FormItem>
-                        <FormLabel className="flex items-center gap-1">
-                          <ImageIcon className="h-3 w-3" />
-                          Image URL
-                        </FormLabel>
+                        <FormLabel>Item Image</FormLabel>
                         <FormControl>
-                          <Input placeholder="https://..." {...field} />
+                          <CdnImageUploadField
+                            disabled={isSaving}
+                            helperText="Uploads to Bunny CDN when you create the item."
+                            onClear={imageUpload.clear}
+                            onFileSelect={imageUpload.selectFile}
+                            previewUrl={imageUpload.previewUrl}
+                            selectedFileName={imageUpload.selectedFileName}
+                            uploadLabel="Upload item image"
+                            uploading={imageUpload.isUploading}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -637,9 +665,9 @@ export function AddItemToCategoryWizard({
                       </Label>
                       <div className="flex items-center gap-3">
                         <div className="w-12 h-12 rounded-lg overflow-hidden bg-muted shrink-0">
-                          {form.watch("image") ? (
+                          {imageUpload.previewUrl ? (
                             <img
-                              src={form.watch("image")}
+                              src={imageUpload.previewUrl}
                               alt="Preview"
                               className="w-full h-full object-cover"
                               onError={(e) => {
