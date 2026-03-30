@@ -55,6 +55,7 @@ export async function GetLocations(clerkOrgId: string, user_id: string) {
   // Check for owner or admin roles to grant full access
   const isOwnerOrAdmin =
     userRole?.role === "merchant.owner" ||
+    userRole?.role === "merchant.admin" ||
     userRole?.role === "org:admin" ||
     userRole?.role === "admin";
 

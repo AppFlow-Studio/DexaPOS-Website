@@ -8,11 +8,13 @@ import {
   adminBulkResetPins,
   adminToggleStaffStatus,
   adminCreateStaff,
+  adminCreateClerkStaff,
   getMerchantLocationsForStaff,
   getMerchantStaffRoles,
   getAdminMerchantStaffStats,
+  adminBulkDeactivateStaff,
 } from '@/app/manage/actions/admin-merchant/staff'
-import type { AdminCreateStaffData } from '@/types/staff'
+import type { AdminCreateStaffData, AdminCreateClerkStaffData } from '@/types/staff'
 
 // ============================================================================
 // QUERY HOOKS
@@ -136,6 +138,50 @@ export function useAdminToggleStaffStatus() {
       newStatus: boolean
     }) => adminToggleStaffStatus(merchantId, staffProfileId, locationId, newStatus),
     onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: adminKeys.merchantStaff(variables.merchantId),
+      })
+    },
+  })
+}
+
+/**
+ * Create a Clerk dashboard user for a merchant (admin)
+ */
+export function useAdminCreateClerkStaff() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      merchantId,
+      data,
+    }: {
+      merchantId: string
+      data: AdminCreateClerkStaffData
+    }) => adminCreateClerkStaff(merchantId, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: adminKeys.merchantStaff(variables.merchantId),
+      })
+    },
+  })
+}
+
+/**
+ * Bulk deactivate staff members by staff_profile_ids
+ */
+export function useAdminBulkDeactivateStaff() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      merchantId,
+      staffProfileIds,
+    }: {
+      merchantId: string
+      staffProfileIds: string[]
+    }) => adminBulkDeactivateStaff(merchantId, staffProfileIds),
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({
         queryKey: adminKeys.merchantStaff(variables.merchantId),
       })

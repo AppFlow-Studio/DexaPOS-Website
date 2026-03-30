@@ -55,6 +55,11 @@ import {
   Building2,
   Receipt,
   Lock,
+  Upload,
+  Trash2,
+  Palette,
+  Truck,
+  Utensils,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
@@ -68,6 +73,9 @@ import {
   deleteAdminLocationItemOverride,
   assignModifierGroupToItem,
   removeModifierGroupFromItem,
+  createAdminModifierGroup,
+  createAdminModifierItem,
+  createAdminCategory,
   type AdminMenuItem,
   type AdminMenuItemModifierGroup,
 } from '@/app/manage/actions/admin-merchant/menus'
@@ -81,6 +89,7 @@ import { useMerchantDetails } from '@/lib/queries/use-merchants'
 import { AdminPriceBreakdown } from '../components/AdminPriceBreakdown'
 import { RecipeManager } from '@/app/dashboard/menu/components/RecipeManager'
 import { ItemPreviewCard } from '@/components/dashboard/menu/ItemPreviewCard'
+import { uploadStoreImage, deleteStoreImage } from '@/lib/storage/actions'
 import { cn } from '@/lib/utils'
 
 // ============================================================================
@@ -106,6 +115,15 @@ const STOCK_MODES = [
   { value: 'quantity', label: 'Track Quantity' },
 ] as const
 
+const ALLERGENS = [
+  'Dairy', 'Eggs', 'Fish', 'Shellfish', 'Tree Nuts',
+  'Peanuts', 'Wheat', 'Soy', 'Sesame',
+] as const
+
+const MEAL_TYPES = [
+  'Breakfast', 'Lunch', 'Dinner', 'Snack', 'Dessert', 'Beverage',
+] as const
+
 // ============================================================================
 // SCHEMA
 // ============================================================================
@@ -116,6 +134,11 @@ const itemFormSchema = z.object({
   image: z.string().url('Must be a valid URL').optional().nullable().or(z.literal('')),
   price: z.coerce.number().min(0, 'Price must be positive'),
   cash_price: z.coerce.number().min(0, 'Cash price must be positive').optional().nullable(),
+  delivery_price: z.coerce.number().min(0, 'Delivery price must be positive').optional().nullable(),
+  use_delivery_price: z.boolean().default(false),
+  allergens: z.array(z.string()).default([]),
+  meal_types: z.array(z.string()).default([]),
+  card_bg_color: z.string().optional().nullable().or(z.literal('')),
   availability: z.boolean().default(true),
   tax_category: z.string().default('standard'),
   is_tax_exempt: z.boolean().default(false),
@@ -124,6 +147,7 @@ const itemFormSchema = z.object({
   // Location override fields
   override_price: z.coerce.number().min(0).optional().nullable(),
   override_cash_price: z.coerce.number().min(0).optional().nullable(),
+  override_delivery_price: z.coerce.number().min(0).optional().nullable(),
   override_availability: z.boolean().optional(),
   // New Local State
   modifier_group_ids: z.array(z.string()).optional(),
@@ -160,6 +184,7 @@ export function ItemFormSheet({
   const isLocationView = locationId && locationId !== 'all'
   const [isResetting, setIsResetting] = useState(false)
   const [newModifierIds, setNewModifierIds] = useState<string[]>([]) // For create mode
+  const [isUploading, setIsUploading] = useState(false)
   const hasLocationOverride = isEdit && item?.has_location_override
   const queryClient = useQueryClient()
   const itemImageUpload = useMerchantCdnImageUpload({
@@ -183,6 +208,11 @@ export function ItemFormSheet({
       image: '',
       price: 0,
       cash_price: null,
+      delivery_price: null,
+      use_delivery_price: false,
+      allergens: [],
+      meal_types: [],
+      card_bg_color: '',
       availability: true,
       tax_category: 'standard',
       is_tax_exempt: false,
@@ -190,6 +220,7 @@ export function ItemFormSheet({
       available_channels: ['pos', 'online', 'kiosk'],
       override_price: null,
       override_cash_price: null,
+      override_delivery_price: null,
       override_availability: true,
     },
   })
@@ -208,6 +239,11 @@ export function ItemFormSheet({
           image: item.image || '',
           price: item.base_price,
           cash_price: item.base_cash_price,
+          delivery_price: item.base_delivery_price,
+          use_delivery_price: item.use_delivery_price ?? false,
+          allergens: item.allergens || [],
+          meal_types: item.meal_types || [],
+          card_bg_color: item.card_bg_color || '',
           availability: item.base_availability,
           tax_category: item.tax_category || 'standard',
           is_tax_exempt: item.is_tax_exempt,
@@ -215,6 +251,7 @@ export function ItemFormSheet({
           available_channels: item.available_channels || ['pos', 'online', 'kiosk'],
           override_price: item.location_override?.custom_price,
           override_cash_price: item.location_override?.custom_cash_price,
+          override_delivery_price: (item.location_override as any)?.custom_delivery_price,
           override_availability: item.location_override?.is_available ?? item.base_availability,
         })
         itemImageUpload.reset(item.image || null)
@@ -225,6 +262,11 @@ export function ItemFormSheet({
           image: '',
           price: 0,
           cash_price: null,
+          delivery_price: null,
+          use_delivery_price: false,
+          allergens: [],
+          meal_types: [],
+          card_bg_color: '',
           availability: true,
           tax_category: 'standard',
           is_tax_exempt: false,
@@ -232,6 +274,7 @@ export function ItemFormSheet({
           available_channels: ['pos', 'online', 'kiosk'],
           override_price: null,
           override_cash_price: null,
+          override_delivery_price: null,
           override_availability: true,
           modifier_group_ids: [],
         })
@@ -261,6 +304,7 @@ export function ItemFormSheet({
             {
               custom_price: values.override_price,
               custom_cash_price: values.override_cash_price,
+              custom_delivery_price: values.override_delivery_price,
               is_available: values.override_availability,
             }
           )
@@ -276,6 +320,11 @@ export function ItemFormSheet({
             image: resolvedImage.value,
             price: values.price,
             cash_price: values.cash_price,
+            delivery_price: values.delivery_price,
+            use_delivery_price: values.use_delivery_price,
+            allergens: values.allergens,
+            meal_types: values.meal_types,
+            card_bg_color: values.card_bg_color || null,
             availability: values.availability,
             tax_category: values.tax_category,
             is_tax_exempt: values.is_tax_exempt,
@@ -298,6 +347,11 @@ export function ItemFormSheet({
           image: resolvedImage.value,
           price: values.price,
           cash_price: values.cash_price,
+          delivery_price: values.delivery_price,
+          use_delivery_price: values.use_delivery_price,
+          allergens: values.allergens,
+          meal_types: values.meal_types,
+          card_bg_color: values.card_bg_color || null,
           availability: values.availability,
           tax_category: values.tax_category,
           is_tax_exempt: values.is_tax_exempt,
@@ -476,24 +530,163 @@ export function ItemFormSheet({
                                             </FormItem>
                                         )}
                                     />
+
+                                    {/* Image Upload */}
                                     <FormField
                                         control={form.control}
                                         name="image"
                                         render={() => (
                                             <FormItem>
-                                                <FormLabel>Item Image</FormLabel>
+                                                <FormLabel>Image</FormLabel>
                                                 <FormControl>
-                                                    <CdnImageUploadField
-                                                        disabled={form.formState.isSubmitting}
-                                                        helperText="Uploads to Bunny CDN when you save the item."
-                                                        onClear={itemImageUpload.clear}
-                                                        onFileSelect={itemImageUpload.selectFile}
-                                                        previewUrl={itemImageUpload.previewUrl}
-                                                        selectedFileName={itemImageUpload.selectedFileName}
-                                                        uploadLabel="Upload item image"
-                                                        uploading={itemImageUpload.isUploading}
-                                                    />
+                                                    <div className="space-y-3">
+                                                        {field.value ? (
+                                                            <div className="relative group w-full h-40 rounded-lg overflow-hidden border bg-muted">
+                                                                <img src={field.value} alt="Item" className="w-full h-full object-cover" />
+                                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                                                    <Button type="button" size="sm" variant="destructive" onClick={() => field.onChange('')}>
+                                                                        <Trash2 className="h-3 w-3 mr-1" /> Remove
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
+                                                                <input
+                                                                    type="file"
+                                                                    accept="image/png,image/jpeg,image/gif,image/webp"
+                                                                    className="hidden"
+                                                                    onChange={async (e) => {
+                                                                        const file = e.target.files?.[0]
+                                                                        if (!file) return
+                                                                        setIsUploading(true)
+                                                                        try {
+                                                                            const formData = new FormData()
+                                                                            formData.append('file', file)
+                                                                            const result = await uploadStoreImage(formData, 'menu-items')
+                                                                            if (result.success && result.url) {
+                                                                                field.onChange(result.url)
+                                                                                toast.success('Image uploaded')
+                                                                            } else {
+                                                                                toast.error('Upload failed', { description: result.error })
+                                                                            }
+                                                                        } catch {
+                                                                            toast.error('Upload failed')
+                                                                        } finally {
+                                                                            setIsUploading(false)
+                                                                        }
+                                                                    }}
+                                                                />
+                                                                {isUploading ? (
+                                                                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                                                                ) : (
+                                                                    <>
+                                                                        <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                                                                        <p className="text-sm text-muted-foreground">Click to upload image</p>
+                                                                        <p className="text-xs text-muted-foreground">PNG, JPG, GIF, WebP (max 5MB)</p>
+                                                                    </>
+                                                                )}
+                                                            </label>
+                                                        )}
+                                                        <div className="relative">
+                                                            <ImageIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                                            <Input placeholder="Or paste image URL..." className="pl-9 text-xs" {...field} value={field.value || ''} />
+                                                        </div>
+                                                    </div>
                                                 </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+
+                                    {/* Card Background Color */}
+                                    <FormField
+                                        control={form.control}
+                                        name="card_bg_color"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="flex items-center gap-2">
+                                                    <Palette className="h-4 w-4" /> Card Background Color
+                                                </FormLabel>
+                                                <FormControl>
+                                                    <div className="flex items-center gap-3">
+                                                        <input type="color" value={field.value || '#ffffff'} onChange={e => field.onChange(e.target.value)} className="h-9 w-12 rounded border cursor-pointer" />
+                                                        <Input placeholder="#ffffff" className="flex-1" {...field} value={field.value || ''} />
+                                                        {field.value && <Button type="button" size="sm" variant="ghost" onClick={() => field.onChange('')}><X className="h-3 w-3" /></Button>}
+                                                    </div>
+                                                </FormControl>
+                                                <FormDescription>Custom background color for the POS menu card</FormDescription>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+
+                                    <Separator className="my-4" />
+
+                                    {/* Allergens */}
+                                    <FormField
+                                        control={form.control}
+                                        name="allergens"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="flex items-center gap-2">
+                                                    <AlertCircle className="h-4 w-4" /> Allergens
+                                                </FormLabel>
+                                                <FormControl>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {ALLERGENS.map(allergen => {
+                                                            const isSelected = field.value?.includes(allergen)
+                                                            return (
+                                                                <Badge
+                                                                    key={allergen}
+                                                                    variant={isSelected ? 'default' : 'outline'}
+                                                                    className={cn('cursor-pointer transition-colors', isSelected ? 'bg-red-600 hover:bg-red-700' : 'hover:bg-muted')}
+                                                                    onClick={() => {
+                                                                        const current = field.value || []
+                                                                        field.onChange(isSelected ? current.filter(a => a !== allergen) : [...current, allergen])
+                                                                    }}
+                                                                >
+                                                                    {allergen}
+                                                                </Badge>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                </FormControl>
+                                                <FormDescription>Select all allergens present in this item</FormDescription>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+
+                                    {/* Meal Types */}
+                                    <FormField
+                                        control={form.control}
+                                        name="meal_types"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="flex items-center gap-2">
+                                                    <Utensils className="h-4 w-4" /> Meal Types
+                                                </FormLabel>
+                                                <FormControl>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {MEAL_TYPES.map(mealType => {
+                                                            const isSelected = field.value?.includes(mealType)
+                                                            return (
+                                                                <Badge
+                                                                    key={mealType}
+                                                                    variant={isSelected ? 'default' : 'outline'}
+                                                                    className={cn('cursor-pointer transition-colors', isSelected ? '' : 'hover:bg-muted')}
+                                                                    onClick={() => {
+                                                                        const current = field.value || []
+                                                                        field.onChange(isSelected ? current.filter(m => m !== mealType) : [...current, mealType])
+                                                                    }}
+                                                                >
+                                                                    {mealType}
+                                                                </Badge>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                </FormControl>
+                                                <FormDescription>Categorize when this item is typically served</FormDescription>
                                                 <FormMessage />
                                             </FormItem>
                                         )}
@@ -550,6 +743,25 @@ export function ItemFormSheet({
                                                 </FormItem>
                                             )}
                                         />
+                                        <FormField
+                                            control={form.control}
+                                            name="override_delivery_price"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel className="flex items-center gap-2">
+                                                        <Truck className="h-3 w-3" /> Location Delivery Price
+                                                    </FormLabel>
+                                                    <FormControl>
+                                                        <div className="relative">
+                                                            <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                                            <Input type="number" step="0.01" min="0" placeholder="Inherit" className="pl-9" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value ? parseFloat(e.target.value) : null)} />
+                                                        </div>
+                                                    </FormControl>
+                                                    <FormDescription>Override delivery price at this location</FormDescription>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
                                     </div>
                                 </div>
                             ) : (
@@ -588,6 +800,43 @@ export function ItemFormSheet({
                                                 </FormItem>
                                             )}
                                         />
+                                    </div>
+                                    <Separator />
+                                    <div className="space-y-4">
+                                        <FormField
+                                            control={form.control}
+                                            name="use_delivery_price"
+                                            render={({ field }) => (
+                                                <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                                                    <div className="space-y-0.5">
+                                                        <FormLabel className="text-base flex items-center gap-2">
+                                                            <Truck className="h-4 w-4" /> Use Delivery Price
+                                                        </FormLabel>
+                                                        <FormDescription>Enable a separate price for delivery orders</FormDescription>
+                                                    </div>
+                                                    <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                                                </FormItem>
+                                            )}
+                                        />
+                                        {form.watch('use_delivery_price') && (
+                                            <FormField
+                                                control={form.control}
+                                                name="delivery_price"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Delivery Price</FormLabel>
+                                                        <FormControl>
+                                                            <div className="relative">
+                                                                <Truck className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                                                <Input type="number" step="0.01" min="0" className="pl-9" placeholder="e.g. 12.99" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value ? parseFloat(e.target.value) : null)} />
+                                                            </div>
+                                                        </FormControl>
+                                                        <FormDescription>Price charged when item is ordered for delivery</FormDescription>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        )}
                                     </div>
                                 </div>
                             )}
@@ -784,12 +1033,32 @@ export function ItemFormSheet({
                                 <Tag className="h-4 w-4" /> Allergens
                             </div>
                             <div className="flex flex-wrap gap-1">
-                                {['Eggs', 'Dairy', 'Wheat'].map(a => (
-                                    <Badge key={a} variant="outline" className="opacity-50">{a}</Badge>
+                                {(watchedValues.allergens?.length ? watchedValues.allergens : []).map(a => (
+                                    <Badge key={a} variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">{a}</Badge>
                                 ))}
+                                {!watchedValues.allergens?.length && <p className="text-xs text-muted-foreground italic">No allergens selected</p>}
                             </div>
-                            <p className="text-xs text-muted-foreground mt-2">Allergens are managed in global settings.</p>
                         </div>
+                        {watchedValues.meal_types?.length > 0 && (
+                            <div className="mt-4">
+                                <div className="flex items-center gap-2 mb-2 text-sm font-medium text-muted-foreground">
+                                    <Utensils className="h-4 w-4" /> Meal Types
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                    {watchedValues.meal_types.map(m => (
+                                        <Badge key={m} variant="outline" className="text-xs">{m}</Badge>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {watchedValues.use_delivery_price && watchedValues.delivery_price != null && (
+                            <div className="mt-4">
+                                <div className="flex items-center gap-2 mb-2 text-sm font-medium text-muted-foreground">
+                                    <Truck className="h-4 w-4" /> Delivery Price
+                                </div>
+                                <p className="text-lg font-semibold">${watchedValues.delivery_price.toFixed(2)}</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -825,6 +1094,7 @@ function ModifierGroupManager({
     onToggle?: (ids: string[]) => void
 }) {
     const [searchQuery, setSearchQuery] = useState('')
+    const [showQuickCreate, setShowQuickCreate] = useState(false)
     const queryClient = useQueryClient()
     const { data: allGroups } = useAdminModifierGroups(merchantId, locationId)
     // If no item, we use empty array for itemGroups query result, and rely on selectedIds
@@ -918,13 +1188,17 @@ function ModifierGroupManager({
             <div className="space-y-3">
                 <div className="flex items-center justify-between">
                     <h4 className="text-sm font-medium text-muted-foreground">Available Groups</h4>
-                    <div className="relative w-[200px]">
-                        <Search className="absolute left-2 top-2 h-3 w-3 text-muted-foreground" />
-                        <Input 
-                            placeholder="Search..." 
-                            className="h-8 pl-7 text-xs" 
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
+                    <div className="flex items-center gap-2">
+                        <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowQuickCreate(true)}>
+                            <Plus className="h-3 w-3 mr-1" /> New Group
+                        </Button>
+                        <div className="relative w-[200px]">
+                            <Search className="absolute left-2 top-2 h-3 w-3 text-muted-foreground" />
+                            <Input 
+                                placeholder="Search..." 
+                                className="h-8 pl-7 text-xs" 
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
                         />
                     </div>
                 </div>
@@ -953,6 +1227,190 @@ function ModifierGroupManager({
                     ))}
                     {!availableGroups.length && <p className="text-xs text-muted-foreground text-center py-4">No other modifier groups available.</p>}
                 </div>
+            </div>
+                </div>
+
+            {/* Quick Create Modifier Group Dialog */}
+            {showQuickCreate && (
+                <QuickCreateModifierDialog
+                    merchantId={merchantId}
+                    onClose={() => setShowQuickCreate(false)}
+                    onCreated={(groupId) => {
+                        setShowQuickCreate(false)
+                        queryClient.invalidateQueries({ queryKey: adminKeys.merchantModifiers(merchantId, locationId) })
+                        handleAssign(groupId)
+                    }}
+                />
+            )}
+        </div>
+    )
+}
+
+// ============================================================================
+// QUICK CREATE MODIFIER GROUP (Inline Dialog)
+// ============================================================================
+
+function QuickCreateModifierDialog({
+    merchantId,
+    onClose,
+    onCreated,
+}: {
+    merchantId: string
+    onClose: () => void
+    onCreated: (groupId: string) => void
+}) {
+    const [name, setName] = useState('')
+    const [isRequired, setIsRequired] = useState(false)
+    const [minSelections, setMinSelections] = useState(0)
+    const [maxSelections, setMaxSelections] = useState<number | null>(null)
+    const [options, setOptions] = useState<{ name: string; price_modifier: number }[]>([{ name: '', price_modifier: 0 }])
+    const [isSaving, setIsSaving] = useState(false)
+
+    const addOption = () => setOptions([...options, { name: '', price_modifier: 0 }])
+    const removeOption = (index: number) => setOptions(options.filter((_, i) => i !== index))
+    const updateOption = (index: number, field: 'name' | 'price_modifier', value: string | number) => {
+        const updated = [...options]
+        updated[index] = { ...updated[index], [field]: value }
+        setOptions(updated)
+    }
+
+    const handleSave = async () => {
+        if (!name.trim()) { toast.error('Group name is required'); return }
+        const validOptions = options.filter(o => o.name.trim())
+        if (validOptions.length === 0) { toast.error('At least one option is required'); return }
+
+        setIsSaving(true)
+        try {
+            const result = await createAdminModifierGroup(merchantId, {
+                name: name.trim(),
+                is_required: isRequired,
+                min_selections: minSelections,
+                max_selections: maxSelections,
+                is_active: true,
+            })
+            if (result.error || !result.data) {
+                toast.error('Failed to create modifier group', { description: result.error })
+                return
+            }
+            // Create options
+            for (const opt of validOptions) {
+                await createAdminModifierItem(merchantId, result.data.id, {
+                    name: opt.name.trim(),
+                    price_modifier: opt.price_modifier,
+                    is_active: true,
+                    is_default: false,
+                    display_order: 0,
+                })
+            }
+            toast.success(`Modifier group "${name}" created`)
+            onCreated(result.data.id)
+        } catch {
+            toast.error('Failed to create modifier group')
+        } finally {
+            setIsSaving(false)
+        }
+    }
+
+    return (
+        <div className="rounded-lg border bg-background p-4 space-y-4 shadow-sm">
+            <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold">Quick Create Modifier Group</h4>
+                <Button type="button" size="icon" variant="ghost" className="h-6 w-6" onClick={onClose}><X className="h-3 w-3" /></Button>
+            </div>
+            <Input placeholder="Group name (e.g. Size, Toppings)" value={name} onChange={e => setName(e.target.value)} />
+            <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 text-sm">
+                    <Checkbox checked={isRequired} onCheckedChange={(c) => setIsRequired(!!c)} /> Required
+                </label>
+                <div className="flex items-center gap-2 text-sm">
+                    <span>Min:</span>
+                    <Input type="number" className="w-16 h-7 text-xs" min={0} value={minSelections} onChange={e => setMinSelections(parseInt(e.target.value) || 0)} />
+                    <span>Max:</span>
+                    <Input type="number" className="w-16 h-7 text-xs" min={1} placeholder="∞" value={maxSelections ?? ''} onChange={e => setMaxSelections(e.target.value ? parseInt(e.target.value) : null)} />
+                </div>
+            </div>
+            <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground">Options</span>
+                    <Button type="button" size="sm" variant="ghost" className="h-6 text-xs" onClick={addOption}><Plus className="h-3 w-3 mr-1" /> Add</Button>
+                </div>
+                {options.map((opt, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                        <Input placeholder="Option name" className="flex-1 h-8 text-xs" value={opt.name} onChange={e => updateOption(i, 'name', e.target.value)} />
+                        <div className="relative w-24">
+                            <DollarSign className="absolute left-2 top-1.5 h-3 w-3 text-muted-foreground" />
+                            <Input type="number" step="0.01" className="h-8 text-xs pl-6" placeholder="0.00" value={opt.price_modifier || ''} onChange={e => updateOption(i, 'price_modifier', parseFloat(e.target.value) || 0)} />
+                        </div>
+                        {options.length > 1 && (
+                            <Button type="button" size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => removeOption(i)}>
+                                <X className="h-3 w-3" />
+                            </Button>
+                        )}
+                    </div>
+                ))}
+            </div>
+            <div className="flex justify-end gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={onClose}>Cancel</Button>
+                <Button type="button" size="sm" onClick={handleSave} disabled={isSaving}>
+                    {isSaving && <Loader2 className="h-3 w-3 animate-spin mr-1" />} Create & Add
+                </Button>
+            </div>
+        </div>
+    )
+}
+
+// ============================================================================
+// QUICK CREATE CATEGORY (Inline Dialog)
+// ============================================================================
+
+export function QuickCreateCategoryDialog({
+    merchantId,
+    onClose,
+    onCreated,
+}: {
+    merchantId: string
+    onClose: () => void
+    onCreated: (categoryId: string, categoryName: string) => void
+}) {
+    const [name, setName] = useState('')
+    const [description, setDescription] = useState('')
+    const [isSaving, setIsSaving] = useState(false)
+
+    const handleSave = async () => {
+        if (!name.trim()) { toast.error('Category name is required'); return }
+        setIsSaving(true)
+        try {
+            const result = await createAdminCategory(merchantId, {
+                name: name.trim(),
+                description: description.trim() || null,
+                is_active: true,
+            })
+            if (result.error || !result.data) {
+                toast.error('Failed to create category', { description: result.error })
+                return
+            }
+            toast.success(`Category "${name}" created`)
+            onCreated(result.data.id, result.data.name)
+        } catch {
+            toast.error('Failed to create category')
+        } finally {
+            setIsSaving(false)
+        }
+    }
+
+    return (
+        <div className="rounded-lg border bg-background p-4 space-y-4 shadow-sm">
+            <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold">Quick Create Category</h4>
+                <Button type="button" size="icon" variant="ghost" className="h-6 w-6" onClick={onClose}><X className="h-3 w-3" /></Button>
+            </div>
+            <Input placeholder="Category name (e.g. Hot Drinks, Appetizers)" value={name} onChange={e => setName(e.target.value)} />
+            <Textarea placeholder="Description (optional)" rows={2} value={description} onChange={e => setDescription(e.target.value)} />
+            <div className="flex justify-end gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={onClose}>Cancel</Button>
+                <Button type="button" size="sm" onClick={handleSave} disabled={isSaving}>
+                    {isSaving && <Loader2 className="h-3 w-3 animate-spin mr-1" />} Create Category
+                </Button>
             </div>
         </div>
     )
