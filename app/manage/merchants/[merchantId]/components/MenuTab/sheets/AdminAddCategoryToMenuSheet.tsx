@@ -3,14 +3,13 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { toast } from 'sonner'
 import {
-  BottomSheet,
-  BottomSheetContent,
-  BottomSheetHeader,
-  BottomSheetBody,
-  BottomSheetFooter,
-  BottomSheetTitle,
-  BottomSheetDescription,
-} from '@/components/ui/bottom-sheet'
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -164,22 +163,25 @@ export function AdminAddCategoryToMenuSheet({
   const locationCategories = filteredCategories.filter((c) => !c.is_global)
 
   return (
-    <BottomSheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <BottomSheetContent className="!h-[85vh]">
-        <BottomSheetHeader>
-          <BottomSheetTitle className="flex items-center gap-2">
-            <Tag className="h-5 w-5 text-primary" />
-            Add Existing Categories
-          </BottomSheetTitle>
-          <BottomSheetDescription>
-            Select existing categories to link to <strong>{menu?.name}</strong>.
-          </BottomSheetDescription>
-        </BottomSheetHeader>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent
+        overlayClassName="bg-slate-950/40 backdrop-blur-md"
+        className="w-full max-w-[calc(100vw-1.5rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-4xl"
+      >
+        <div className="flex max-h-[min(88vh,820px)] flex-col">
+          <DialogHeader className="gap-2 border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
+            <DialogTitle className="flex items-center gap-2 text-[1.625rem] font-semibold tracking-tight">
+              <Tag className="h-5 w-5 text-primary" />
+              Add Existing Categories
+            </DialogTitle>
+            <DialogDescription className="max-w-[60ch] text-sm leading-6">
+              Select existing categories to link to <strong>{menu?.name}</strong>.
+            </DialogDescription>
+          </DialogHeader>
 
-        <BottomSheetBody className="px-0">
-          <div className="flex flex-col h-full">
+          <div className="min-h-0 flex flex-1 flex-col overflow-hidden">
             {/* Search Bar */}
-            <div className="px-6 pb-4 border-b">
+            <div className="border-b border-border/70 px-6 py-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -209,7 +211,8 @@ export function AdminAddCategoryToMenuSheet({
             </div>
 
             {/* List */}
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              <div className="space-y-6">
               {isLoading ? (
                 <div className="flex items-center justify-center h-32 text-muted-foreground gap-2">
                   <Loader2 className="h-5 w-5 animate-spin" />
@@ -365,11 +368,11 @@ export function AdminAddCategoryToMenuSheet({
                   )}
                 </>
               )}
+              </div>
             </div>
           </div>
-        </BottomSheetBody>
 
-        <BottomSheetFooter>
+          <DialogFooter className="shrink-0 border-t border-border/70 bg-background/95 px-6 py-4 sm:justify-end">
            <Button variant="outline" onClick={onClose} disabled={isSaving}>
             Cancel
           </Button>
@@ -383,8 +386,9 @@ export function AdminAddCategoryToMenuSheet({
               `Add ${selectedCategories.size} Categories`
             )}
           </Button>
-        </BottomSheetFooter>
-      </BottomSheetContent>
-    </BottomSheet>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

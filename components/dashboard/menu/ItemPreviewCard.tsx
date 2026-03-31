@@ -14,6 +14,7 @@ interface ItemPreviewCardProps {
     image?: string
     categories?: string[]
     availability?: boolean
+    expandDescription?: boolean
     className?: string
 }
 
@@ -25,6 +26,7 @@ export function ItemPreviewCard({
     image,
     categories = [],
     availability = true,
+    expandDescription = false,
     className,
 }: ItemPreviewCardProps) {
     const safePrice = Number(price) || 0
@@ -88,7 +90,9 @@ export function ItemPreviewCard({
 
                 {/* Description */}
                 <p className={cn(
-                    "text-sm line-clamp-3 min-h-[3.75rem]",
+                    expandDescription
+                        ? "text-sm whitespace-pre-wrap break-words"
+                        : "text-sm line-clamp-3 min-h-[3.75rem]",
                     description ? "text-muted-foreground" : "text-muted-foreground/30 italic"
                 )}>
                     {description || 'Add a description...'}

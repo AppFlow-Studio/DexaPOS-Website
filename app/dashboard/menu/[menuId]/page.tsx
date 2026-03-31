@@ -67,6 +67,7 @@ import { MenuSettingsTab } from "@/components/dashboard/menu/menuId/MenuSettings
 import { MenuPreviewModal } from "@/components/dashboard/menu/menuId/MenuPreviewModal";
 import { MenuOrderOutTab } from "@/components/dashboard/menu/menuId/MenuOrderOutTab";
 import { useClerkOrgId } from "../../hooks/useLocationScoped";
+import { useMerchantCdnImageUpload } from "@/lib/cdn/use-merchant-cdn-image-upload";
 import { useOrderOutStatus } from "../../online-ordering/hooks/useOrderOutStatus";
 import {
   useOrderOutMenuSync,
@@ -87,7 +88,14 @@ export default function MenuDetailPage() {
   console.log("menu", menu);
   const { selectedLocationId } = useLocationStore();
   const { data: userInfo } = useUserInfo();
+  const merchantId =
+    userInfo?.members?.[0]?.organizations?.merchants?.id || "";
   const isAllLocations = !selectedLocationId || selectedLocationId === "all";
+  const imageUpload = useMerchantCdnImageUpload({
+    merchantId,
+    category: "menus",
+    fileNamePrefix: "menu",
+  });
   // Categories for wizard selections
   const { data: categoriesWithItems } = useCategoriesWithItems(
     clerkOrgId || "",
@@ -192,20 +200,22 @@ export default function MenuDetailPage() {
     if (menu) {
       setEditedName(menu.name);
       setEditedDescription(menu.description || "");
+      imageUpload.reset(menu.image || null);
       setHasSettingsChanges(false);
       // Categories start collapsed for easier drag-and-drop reordering
     }
-  }, [menu]);
+  }, [imageUpload.reset, menu]);
 
   // Check for settings changes
   useEffect(() => {
     if (menu) {
       const hasChanges =
         editedName !== menu.name ||
-        editedDescription !== (menu.description || "");
+        editedDescription !== (menu.description || "") ||
+        imageUpload.hasPendingChange;
       setHasSettingsChanges(hasChanges);
     }
-  }, [editedName, editedDescription, menu]);
+  }, [editedDescription, editedName, imageUpload.hasPendingChange, menu]);
 
   const allCategories = menu?.categories || [];
 
@@ -450,20 +460,34 @@ export default function MenuDetailPage() {
   };
 
   const handleSaveSettings = async () => {
+    let uploadedAsset: { cdnUrl: string; storagePath: string } | undefined;
+
     if (!hasSettingsChanges) return;
+    if (imageUpload.hasPendingChange && !merchantId) {
+      toast.error("Merchant Not Found", {
+        description: "Please reload and try the upload again.",
+      });
+      return;
+    }
 
     setIsSavingSettings(true);
     try {
+      const resolvedImage = await imageUpload.resolveImageValue();
+      uploadedAsset = resolvedImage.uploadedAsset;
       const result = await UpdateMenu(
         menuId,
         {
           name: editedName.trim(),
           description: editedDescription.trim() || undefined,
+          image: resolvedImage.value ?? undefined,
         },
         selectedLocationId || undefined,
       );
 
       if (result.error) {
+        if (uploadedAsset) {
+          await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error);
+        }
         toast.error("Save Failed", { description: result.error });
         return;
       }
@@ -477,6 +501,9 @@ export default function MenuDetailPage() {
       refetchMenu();
       setHasSettingsChanges(false);
     } catch {
+      if (uploadedAsset) {
+        await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error);
+      }
       toast.error("Save Failed", {
         description: "Unable to save settings. Please try again.",
       });
@@ -1096,9 +1123,14 @@ export default function MenuDetailPage() {
             editedName={editedName}
             editedDescription={editedDescription}
             hasSettingsChanges={hasSettingsChanges}
+            imagePreviewUrl={imageUpload.previewUrl}
+            isImageUploading={imageUpload.isUploading}
             isTogglingActive={isTogglingActive}
             isSavingSettings={isSavingSettings}
+            selectedImageFileName={imageUpload.selectedFileName}
             selectedLocationId={selectedLocationId}
+            onClearImage={imageUpload.clear}
+            onImageSelect={imageUpload.selectFile}
             onNameChange={setEditedName}
             onDescriptionChange={setEditedDescription}
             onToggleActive={handleToggleMenuActive}
@@ -1106,6 +1138,8 @@ export default function MenuDetailPage() {
             onCancelSettings={() => {
               setEditedName(menu.name);
               setEditedDescription(menu.description || "");
+              imageUpload.reset(menu.image || null);
+              setHasSettingsChanges(false);
             }}
             onDeleteMenu={() => setIsDeleteDialogOpen(true)}
           />

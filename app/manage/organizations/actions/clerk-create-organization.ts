@@ -1,6 +1,7 @@
 'use server'
 import { createClerkClient } from '@clerk/backend'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { uploadOrganizationLogo, deleteOrganizationLogo } from '@/lib/cdn/server'
+import { DeleteOrganization } from '../../actions/delete-organization'
 // TODO: Add more info here refer to the Notion 11-17-2025
 // TODO: Save public_metadata to supabase for organizations
 export async function ClerkCreateOrganization({
@@ -22,8 +23,6 @@ export async function ClerkCreateOrganization({
         if (!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
             throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set')
         }
-
-
         const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
         // Create Internal Office Organization With the proper public metadata - will auto sync to supabase with clerk webhooks
         const CreateOrganizationResponse = await clerkClient.organizations.createOrganization({
@@ -36,43 +35,42 @@ export async function ClerkCreateOrganization({
             },
             maxAllowedMemberships: 0, // No limit on the number of members
         })
-
-        const supabase = await createServerSupabaseClient()
-        // Insert Image into Supabase Storage Bucket
-        const filepath = CreateOrganizationResponse.id.toString() + '.png';
+        let uploadedLogoUrl: string | null = null
 
         if (organizationImage && CreateOrganizationResponse.id) {
-            const { data, error } = await supabase.storage.from('Organizations-Logos').upload(filepath, organizationImage)
-            if (error) {
+            const uploadResult = await uploadOrganizationLogo(
+                organizationImage,
+                CreateOrganizationResponse.id,
+            )
+
+            if (!uploadResult.success || !uploadResult.cdnUrl) {
+                await DeleteOrganization(CreateOrganizationResponse.id)
                 return {
                     success: false,
-                    message: 'Error uploading organization image: ' + error.message,
-                    // error: error,
+                    message: 'Error uploading organization image: ' + (uploadResult.error || 'Unknown error'),
                 }
             }
+
+            uploadedLogoUrl = uploadResult.cdnUrl
         }
 
-        if (CreateOrganizationResponse.id) {
-            const { data } = supabase.storage.from('Organizations-Logos').getPublicUrl(filepath)
-            // Update the organization image URL in supabase
-            // const { data, error } = await supabase.from('organizations').update({
-            //     imageURL: publicUrl.publicUrl,
-            // }).eq('id', CreateOrganizationResponse.id).select().single()
-            // if (error) {
-            //     console.error('Error updating organization image:', error)
-            //     return {
-            //         success: false,
-            //         message: 'Error updating organization image: ' + error.message,
-            //         // error: error,
-            //     }
-            // }
-            const UpdateClerkOrganizationResponse = await clerkClient.organizations.updateOrganizationMetadata(
-                CreateOrganizationResponse.id,
-                {
-                    publicMetadata: {
-                        imageURL: data.publicUrl,
-                    },
-                })
+        if (CreateOrganizationResponse.id && uploadedLogoUrl) {
+            try {
+                await clerkClient.organizations.updateOrganizationMetadata(
+                    CreateOrganizationResponse.id,
+                    {
+                        publicMetadata: {
+                            imageURL: uploadedLogoUrl,
+                        },
+                    })
+            } catch (error) {
+                await deleteOrganizationLogo(uploadedLogoUrl, CreateOrganizationResponse.id)
+                await DeleteOrganization(CreateOrganizationResponse.id)
+                return {
+                    success: false,
+                    message: 'Error updating organization image metadata: ' + ((error as Error)?.message || 'Unknown error'),
+                }
+            }
         }
 
         return {

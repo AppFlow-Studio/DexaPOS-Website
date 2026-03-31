@@ -67,6 +67,8 @@ function mapConfigToSettings(
 
     headerStyle: config.header_style ?? "filled",
     headerTextColor: config.header_text_color ?? null,
+    borderColor: config.border_color ?? null,
+    cardColor: config.card_color ?? null,
 
     menuLayout: config.menu_layout ?? "cards",
 
@@ -271,6 +273,10 @@ export async function saveOnlineOrderingSettings(
     configData.header_style = settings.headerStyle;
   if (settings.headerTextColor !== undefined)
     configData.header_text_color = settings.headerTextColor || null;
+  if (settings.borderColor !== undefined)
+    configData.border_color = settings.borderColor;
+  if (settings.cardColor !== undefined)
+    configData.card_color = settings.cardColor;
 
   // Menu layout
   if (settings.menuLayout !== undefined)

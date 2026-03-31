@@ -5,15 +5,13 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
-  BottomSheet,
-  BottomSheetContent,
-  BottomSheetHeader,
-  BottomSheetBody,
-  BottomSheetFooter,
-  BottomSheetTitle,
-  BottomSheetDescription,
-  BottomSheetSection,
-} from '@/components/ui/bottom-sheet'
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
 import {
   Form,
@@ -30,6 +28,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { CdnImageUploadField } from '@/components/ui/cdn-image-upload-field'
 import {
   Select,
   SelectContent,
@@ -40,7 +39,6 @@ import {
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Loader2,
-  ImageIcon,
   DollarSign,
   RotateCcw,
   AlertCircle,
@@ -54,11 +52,8 @@ import {
   Search,
   Layers,
   MapPin,
-  Info,
   Building2,
-  ChefHat,
   Receipt,
-  Calendar,
   Lock,
   Upload,
   Trash2,
@@ -68,6 +63,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
+import { useMerchantCdnImageUpload } from '@/lib/cdn/use-merchant-cdn-image-upload'
 
 import {
   createAdminMenuItem,
@@ -191,6 +187,11 @@ export function ItemFormSheet({
   const [isUploading, setIsUploading] = useState(false)
   const hasLocationOverride = isEdit && item?.has_location_override
   const queryClient = useQueryClient()
+  const itemImageUpload = useMerchantCdnImageUpload({
+    merchantId,
+    category: 'menu-items',
+    fileNamePrefix: 'item',
+  })
 
   // Fetch merchant details for location names
   const { data: merchantDetails } = useMerchantDetails(merchantId)
@@ -253,6 +254,7 @@ export function ItemFormSheet({
           override_delivery_price: (item.location_override as any)?.custom_delivery_price,
           override_availability: item.location_override?.is_available ?? item.base_availability,
         })
+        itemImageUpload.reset(item.image || null)
       } else {
         form.reset({
           name: '',
@@ -276,14 +278,23 @@ export function ItemFormSheet({
           override_availability: true,
           modifier_group_ids: [],
         })
+        itemImageUpload.reset(null)
         setNewModifierIds([])
       }
     }
-  }, [open, isEdit, item, form])
+  }, [form, isEdit, item, itemImageUpload.reset, open])
 
   // Handlers
   const onSubmit = async (values: ItemFormValues) => {
+    let uploadedAsset: { cdnUrl: string; storagePath: string } | undefined
+
     try {
+      const canEditBaseFields = !isLocationView || !isEdit
+      const resolvedImage = canEditBaseFields
+        ? await itemImageUpload.resolveImageValue()
+        : { value: item?.image || null }
+      uploadedAsset = resolvedImage.uploadedAsset
+
       if (isEdit && item) {
         if (isLocationView && locationId) {
           const overrideResult = await upsertAdminLocationItemOverride(
@@ -306,7 +317,7 @@ export function ItemFormSheet({
           const result = await updateAdminMenuItem(merchantId, item.id, {
             name: values.name,
             description: values.description || null,
-            image: values.image || null,
+            image: resolvedImage.value,
             price: values.price,
             cash_price: values.cash_price,
             delivery_price: values.delivery_price,
@@ -321,6 +332,9 @@ export function ItemFormSheet({
             available_channels: values.available_channels,
           })
           if (result.error) {
+            if (uploadedAsset) {
+              await itemImageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error)
+            }
             toast.error('Failed to update item', { description: result.error })
             return
           }
@@ -330,7 +344,7 @@ export function ItemFormSheet({
         const result = await createAdminMenuItem(merchantId, {
           name: values.name,
           description: values.description || null,
-          image: values.image || null,
+          image: resolvedImage.value,
           price: values.price,
           cash_price: values.cash_price,
           delivery_price: values.delivery_price,
@@ -345,7 +359,10 @@ export function ItemFormSheet({
           available_channels: values.available_channels,
           modifier_group_ids: newModifierIds, // Pass the local state
         })
-      if (result.error || !result.data) {
+        if (result.error || !result.data) {
+          if (uploadedAsset) {
+            await itemImageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error)
+          }
           toast.error('Failed to create item', { description: result.error })
           return
         }
@@ -365,6 +382,9 @@ export function ItemFormSheet({
       onSuccess()
       onClose()
     } catch (error) {
+      if (uploadedAsset) {
+        await itemImageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error)
+      }
       toast.error('An unexpected error occurred')
       console.error(error)
     }
@@ -391,35 +411,35 @@ export function ItemFormSheet({
   }
 
   return (
-    <BottomSheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <BottomSheetContent height="95">
-        <BottomSheetHeader className="border-b pb-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <BottomSheetTitle className="flex items-center gap-2">
-                {isEdit ? 'Edit Menu Item' : 'New Menu Item'}
-                {isLocationView && (
-                    <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-50">
-                        <MapPin className="h-3 w-3 mr-1" />
-                        {currentLocationName} Override
-                    </Badge>
-                )}
-              </BottomSheetTitle>
-              <BottomSheetDescription>
-                {isLocationView 
-                    ? "Editing location pricing. This price applies to ALL menus at this location."
-                    : "Configure item details, pricing, and availability."
-                }
-              </BottomSheetDescription>
-            </div>
-          </div>
-        </BottomSheetHeader>
-
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent
+        overlayClassName="bg-slate-950/40 backdrop-blur-md"
+        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-6xl xl:max-w-7xl"
+      >
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="contents">
-            <div className="flex h-full flex-col md:flex-row overflow-hidden">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex max-h-[min(92vh,960px)] flex-col">
+            <DialogHeader className="border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
+              <div className="space-y-2">
+                <DialogTitle className="flex items-center gap-2 text-[1.625rem] font-semibold tracking-tight">
+                  {isEdit ? 'Edit Menu Item' : 'New Menu Item'}
+                  {isLocationView && (
+                    <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-50">
+                      <MapPin className="h-3 w-3 mr-1" />
+                      {currentLocationName} Override
+                    </Badge>
+                  )}
+                </DialogTitle>
+                <DialogDescription className="max-w-[60ch] text-sm leading-6">
+                  {isLocationView
+                    ? 'Editing location pricing. This price applies to all menus at this location.'
+                    : 'Configure item details, pricing, and availability.'}
+                </DialogDescription>
+              </div>
+            </DialogHeader>
+
+            <div className="min-h-0 flex flex-1 flex-col overflow-hidden lg:flex-row">
                 {/* LEFT COLUMN - FORM */}
-                <div className="flex-1 overflow-y-auto p-6">
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
                     {/* Location Warning Banner */}
                     {isEdit && isLocationView && (
                         <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/50">
@@ -515,7 +535,7 @@ export function ItemFormSheet({
                                     <FormField
                                         control={form.control}
                                         name="image"
-                                        render={({ field }) => (
+                                        render={() => (
                                             <FormItem>
                                                 <FormLabel>Image</FormLabel>
                                                 <FormControl>
@@ -993,8 +1013,8 @@ export function ItemFormSheet({
                 </div>
 
                 {/* RIGHT COLUMN - PREVIEW */}
-                <div className="hidden lg:block w-[350px] border-l bg-muted/10 p-6 overflow-y-auto">
-                    <div className="sticky top-0">
+                <div className="hidden min-h-0 w-[360px] shrink-0 overflow-y-auto border-l border-border/70 bg-muted/10 px-6 py-5 lg:block">
+                    <div className="space-y-8 pb-4">
                         <div className="flex items-center gap-2 mb-4 text-sm font-medium text-muted-foreground">
                             <Monitor className="h-4 w-4" /> POS Preview
                         </div>
@@ -1003,11 +1023,12 @@ export function ItemFormSheet({
                             description={watchedValues.description || ''}
                             price={isLocationView && isEdit ? (watchedValues.override_price ?? watchedValues.price) : watchedValues.price}
                             cashPrice={(isLocationView && isEdit ? (watchedValues.override_cash_price ?? watchedValues.cash_price) : watchedValues.cash_price) ?? undefined}
-                            image={watchedValues.image || undefined}
+                            image={itemImageUpload.previewUrl || undefined}
                             availability={isLocationView && isEdit ? (watchedValues.override_availability ?? true) : watchedValues.availability}
                             categories={item?.categories?.map(c => c.name)}
+                            expandDescription
                         />
-                         <div className="mt-8">
+                         <div>
                             <div className="flex items-center gap-2 mb-2 text-sm font-medium text-muted-foreground">
                                 <Tag className="h-4 w-4" /> Allergens
                             </div>
@@ -1042,7 +1063,7 @@ export function ItemFormSheet({
                 </div>
             </div>
 
-            <BottomSheetFooter className="border-t pt-4 mt-auto z-10 bg-background">
+            <DialogFooter className="shrink-0 border-t border-border/70 bg-background/95 px-6 py-4 sm:justify-end">
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
               </Button>
@@ -1050,11 +1071,11 @@ export function ItemFormSheet({
                 {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isEdit ? 'Save Changes' : 'Create Item'}
               </Button>
-            </BottomSheetFooter>
+            </DialogFooter>
           </form>
         </Form>
-      </BottomSheetContent>
-    </BottomSheet>
+      </DialogContent>
+    </Dialog>
   )
 }
 

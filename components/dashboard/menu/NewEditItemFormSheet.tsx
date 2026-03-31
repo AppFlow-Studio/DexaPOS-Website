@@ -20,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { CdnImageUploadField } from "@/components/ui/cdn-image-upload-field";
 import {
   Collapsible,
   CollapsibleContent,
@@ -50,7 +51,6 @@ import {
   ChevronDown,
   ChevronRight,
   DollarSign,
-  Image as ImageIcon,
   Tag,
   Layers,
   Settings2,
@@ -71,6 +71,7 @@ import {
   Flame,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useMerchantCdnImageUpload } from "@/lib/cdn/use-merchant-cdn-image-upload";
 import {
   UpdateMenuItem,
   CreateMenuItem,
@@ -116,6 +117,7 @@ import {
   usePrepStations,
   useCategoryPrepDefaults,
 } from "@/app/dashboard/hooks/usePrepStations";
+import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 
 // ============================================================================
 // TYPES
@@ -756,6 +758,9 @@ export function NewEditItemFormSheet({
   isMenuLocationOwned = false,
 }: NewEditItemFormSheetProps) {
   const queryClient = useQueryClient();
+  const { data: userInfo } = useUserInfo();
+  const merchantId =
+    userInfo?.members?.[0]?.organizations?.merchants?.id || "";
   const { selectedLocationId, locations } = useLocationStore();
   const isAllLocations = useIsAllLocations();
   const { pricingStrategy: effectivePricingStrategy, dualPricingPercentage: effectiveDualPercentage } = useEffectivePricing();
@@ -794,6 +799,11 @@ export function NewEditItemFormSheet({
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isResetting, setIsResetting] = React.useState(false);
   const [showAddModifier, setShowAddModifier] = React.useState(false);
+  const imageUpload = useMerchantCdnImageUpload({
+    merchantId,
+    category: "menu-items",
+    fileNamePrefix: "item",
+  });
   const locationIdForEdits = isAllLocations ? null : selectedLocationId;
 
   const isItemLocationOwned =
@@ -961,6 +971,7 @@ export function NewEditItemFormSheet({
         // Prep Station (migration 022)
         prep_station_id: editItem.prep_station_id ?? null,
       });
+      imageUpload.reset(editItem.image || editItem.image_url || "");
 
       // Support both old menu_item_categories and new category_items
       const categoryData =
@@ -999,10 +1010,11 @@ export function NewEditItemFormSheet({
         stock_tracking_mode: "in_stock",
         prep_station_id: null,
       });
+      imageUpload.reset(null);
       setSelectedCategories([]);
       setSelectedModifiers([]);
     }
-  }, [editItem, form, getPriceForContext]);
+  }, [editItem, form, getPriceForContext, imageUpload.reset]);
 
   const watchedValues = form.watch();
 
@@ -1096,6 +1108,8 @@ export function NewEditItemFormSheet({
   // ========================================================================
 
   const onSubmit = async (values: ItemFormValues) => {
+    let uploadedAsset: { cdnUrl: string; storagePath: string } | undefined;
+
     if (!clerkOrgId) {
       toast.error("Organization Not Found", {
         description: "Please ensure you are logged into an organization.",
@@ -1103,8 +1117,21 @@ export function NewEditItemFormSheet({
       return;
     }
 
+    const canEditBaseImage = !editItem || editingContext.canEditBaseFields;
+
+    if (canEditBaseImage && imageUpload.hasPendingChange && !merchantId) {
+      toast.error("Merchant Not Found", {
+        description: "Please reload and try the upload again.",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
+      const resolvedImage = canEditBaseImage
+        ? await imageUpload.resolveImageValue()
+        : { value: editItem?.image || editItem?.image_url || null };
+      uploadedAsset = resolvedImage.uploadedAsset;
       let result;
 
       if (editItem) {
@@ -1126,7 +1153,7 @@ export function NewEditItemFormSheet({
           updateParams.name = values.name;
           // Convert empty strings → undefined so the DB column stays null rather than ""
           updateParams.description = values.description?.trim() || undefined;
-          updateParams.image = values.image_url?.trim() || undefined;
+          updateParams.image = resolvedImage.value ?? undefined;
           updateParams.allergens = values.allergens;
           updateParams.cardBgColor = values.card_bg_color ?? undefined;
           updateParams.stockTrackingMode = values.stock_tracking_mode;
@@ -1158,7 +1185,7 @@ export function NewEditItemFormSheet({
             price: values.price,
             cash_price: values.cash_price ?? undefined,
             delivery_price: values.delivery_price ?? null,
-            image: values.image_url?.trim() || undefined,
+            image: resolvedImage.value ?? undefined,
             availability: values.availability,
             allergens: values.allergens,
             card_bg_color: values.card_bg_color ?? undefined,
@@ -1174,6 +1201,9 @@ export function NewEditItemFormSheet({
       }
 
       if (result.error) {
+        if (uploadedAsset) {
+          await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error);
+        }
         toast.error("Operation Failed", { description: result.error });
         return;
       }
@@ -1205,6 +1235,9 @@ export function NewEditItemFormSheet({
       onOpenChange(false);
       onSuccess?.();
     } catch (error) {
+      if (uploadedAsset) {
+        await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error);
+      }
       toast.error(editItem ? "Update Failed" : "Creation Failed", {
         description: "Unable to save the menu item. Please try again.",
       });
@@ -1517,23 +1550,24 @@ export function NewEditItemFormSheet({
                       <FormField
                         control={form.control}
                         name="image_url"
-                        render={({ field }: { field: any }) => (
+                        render={() => (
                           <FormItem>
-                            <FormLabel>Image URL</FormLabel>
+                            <FormLabel>Item Image</FormLabel>
                             <FormControl>
-                              <div className="relative">
-                                <ImageIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                  className="pl-10"
-                                  placeholder="https://example.com/image.jpg"
-                                  disabled={
-                                    !editingContext.canEditBaseFields &&
-                                    !!editItem
-                                  }
-                                  {...field}
-                                  value={field.value || ""}
-                                />
-                              </div>
+                              <CdnImageUploadField
+                                disabled={
+                                  isSubmitting ||
+                                  (!editingContext.canEditBaseFields &&
+                                    !!editItem)
+                                }
+                                helperText="Uploads to Bunny CDN when you save the item."
+                                onClear={imageUpload.clear}
+                                onFileSelect={imageUpload.selectFile}
+                                previewUrl={imageUpload.previewUrl}
+                                selectedFileName={imageUpload.selectedFileName}
+                                uploadLabel="Upload item image"
+                                uploading={imageUpload.isUploading}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -2704,7 +2738,7 @@ export function NewEditItemFormSheet({
                   description={watchedValues.description}
                   price={watchedValues.price || 0}
                   cashPrice={watchedValues.cash_price ?? undefined}
-                  image={watchedValues.image_url ?? undefined}
+                            image={imageUpload.previewUrl ?? undefined}
                   categories={selectedCategories
                     .map(
                       (id) => categories.find((c) => c.id === id)?.name || "",

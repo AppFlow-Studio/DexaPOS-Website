@@ -373,3 +373,8 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/orderout-orders-webhook/deno.json"
 entrypoint = "./functions/orderout-orders-webhook/index.ts"
+
+[functions.cdn-upload]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/cdn-upload/index.ts"

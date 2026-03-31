@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 
 interface StationCardProps {
   station: StationWithHeartbeat;

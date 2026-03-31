@@ -10,6 +10,7 @@ function isValidImageSrc(src?: string | null): boolean {
 import { ArrowRight, ShoppingBag } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
+
 interface FloatingCartBarProps {
   freeDeliveryThreshold?: number | null;
   baseDeliveryFee?: number | null;
