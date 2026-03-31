@@ -1,20 +1,28 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import React, { useState, useMemo } from "react";
+import { format, subDays, startOfDay, endOfDay, formatDistanceToNow } from "date-fns";
 import Papa from "papaparse";
 import {
   DollarSign,
   AlertTriangle,
-  ShoppingBag,
+  AlertOctagon,
   Clock,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Download,
+  Printer,
   TrendingUp,
   TrendingDown,
   Minus,
   CheckCircle2,
+  RefreshCw,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  InboxIcon,
+  ChevronRight as BreadcrumbSep,
 } from "lucide-react";
 import {
   LineChart,
@@ -46,6 +54,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   DateRangePicker,
   DatePreset,
 } from "@/components/dashboard/orders/DateRangePicker";
@@ -56,19 +71,15 @@ import {
   useCashDrawerSummaryStats,
   useVarianceTrend,
 } from "../../hooks/useCashDrawerAnalytics";
-import type {
-  CashDrawerSession,
-  CashDrawerOperation,
-  VarianceTrendPoint,
-} from "../../actions/cash-drawer-analytics";
+import type { CashDrawerSession } from "../../actions/cash-drawer-analytics";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const VARIANCE_WARNING = 5;
 const VARIANCE_ALERT = 20;
 const NO_SALE_THRESHOLD = 5;
+const ITEMS_PER_PAGE = 15;
 
-// Distinct colors for up to 8 drawers in the trend chart
 const DRAWER_COLORS = [
   "#2563eb", "#16a34a", "#dc2626", "#d97706",
   "#7c3aed", "#0891b2", "#be185d", "#65a30d",
@@ -95,36 +106,104 @@ function varianceClass(v: number | null | undefined): string {
   return "text-red-600 dark:text-red-400 font-medium";
 }
 
-function deltaPercent(current: number, prev: number): number | null {
-  if (prev === 0) return null;
-  return ((current - prev) / Math.abs(prev)) * 100;
-}
+// ─── Delta Badge ──────────────────────────────────────────────────────────────
+// inverse=true: decreasing is good (variance, no-sale count)
+// Shows consistent sign + color: green=improvement, red=regression
 
-function DeltaBadge({ current, prev, inverse = false }: { current: number; prev: number; inverse?: boolean }) {
-  const pct = deltaPercent(current, prev);
-  if (pct === null) return <span className="text-xs text-muted-foreground">No prior data</span>;
+function DeltaBadge({
+  current,
+  prev,
+  inverse = false,
+}: {
+  current: number;
+  prev: number;
+  inverse?: boolean;
+}) {
+  if (prev === 0) return <span className="text-xs text-muted-foreground">No prior data</span>;
 
-  const positive = inverse ? pct < 0 : pct > 0;
-  const neutral = Math.abs(pct) < 0.5;
+  const pct = ((current - prev) / Math.abs(prev)) * 100;
+  const absPct = Math.abs(pct);
+  const isDecrease = pct < 0;
+  const isGood = inverse ? isDecrease : !isDecrease;
+  const neutral = absPct < 0.5;
 
   if (neutral)
     return (
       <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground">
-        <Minus className="h-3 w-3" /> No change
+        <Minus className="h-3 w-3" /> No change vs prev period
       </span>
     );
 
   return (
     <span
       className={`inline-flex items-center gap-0.5 text-xs font-medium ${
-        positive ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"
+        isGood ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"
       }`}
     >
-      {positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-      {positive ? "+" : ""}{pct.toFixed(1)}% vs prev period
+      {isDecrease ? <TrendingDown className="h-3 w-3" /> : <TrendingUp className="h-3 w-3" />}
+      {isDecrease ? "-" : "+"}{absPct.toFixed(1)}% vs prev period
     </span>
   );
 }
+
+// ─── Sort Icon ────────────────────────────────────────────────────────────────
+// Defined outside any component to prevent re-creation on every render
+
+function SortIcon({ active, asc }: { active: boolean; asc: boolean }) {
+  if (!active) return <ArrowUpDown className="inline ml-1 h-3 w-3 text-muted-foreground/40" />;
+  return asc
+    ? <ArrowUp className="inline ml-1 h-3 w-3" />
+    : <ArrowDown className="inline ml-1 h-3 w-3" />;
+}
+
+// ─── Empty State ──────────────────────────────────────────────────────────────
+
+function EmptyState({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+      <div className="rounded-full bg-muted p-4">
+        <InboxIcon className="h-8 w-8 text-muted-foreground/50" />
+      </div>
+      <div>
+        <p className="text-sm font-medium text-foreground">{title}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Last Refreshed ───────────────────────────────────────────────────────────
+
+function LastRefreshed({
+  updatedAt,
+  onRefresh,
+  isLoading,
+}: {
+  updatedAt: number;
+  onRefresh: () => void;
+  isLoading: boolean;
+}) {
+  const label = updatedAt
+    ? `Updated ${formatDistanceToNow(new Date(updatedAt), { addSuffix: true })}`
+    : "Not yet loaded";
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <span>{label}</span>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-6 w-6"
+        onClick={onRefresh}
+        disabled={isLoading}
+        title="Refresh"
+      >
+        <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} />
+      </Button>
+    </div>
+  );
+}
+
+// ─── Badges ───────────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: string | null }) {
   switch (status?.toLowerCase()) {
@@ -158,6 +237,8 @@ function OperationTypeBadge({ type }: { type: string }) {
 function SummaryCards({
   stats,
   isLoading,
+  updatedAt,
+  onRefresh,
 }: {
   stats: {
     totalCashSales: number;
@@ -170,6 +251,8 @@ function SummaryCards({
     prevPeriodSessionsCount: number;
   } | undefined;
   isLoading: boolean;
+  updatedAt: number;
+  onRefresh: () => void;
 }) {
   const cards = [
     {
@@ -185,7 +268,7 @@ function SummaryCards({
       title: "Total Variance",
       value: fmtVariance(stats?.totalVariance),
       icon:
-        (stats?.totalVariance ?? 0) < -VARIANCE_ALERT ? (
+        Math.abs(stats?.totalVariance ?? 0) > VARIANCE_ALERT ? (
           <AlertTriangle className="h-4 w-4 text-red-500" />
         ) : (stats?.totalVariance ?? 0) === 0 ? (
           <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -193,7 +276,11 @@ function SummaryCards({
           <AlertTriangle className="h-4 w-4 text-yellow-500" />
         ),
       delta: stats ? (
-        <DeltaBadge current={Math.abs(stats.totalVariance)} prev={Math.abs(stats.prevPeriodTotalVariance)} inverse />
+        <DeltaBadge
+          current={Math.abs(stats.totalVariance)}
+          prev={Math.abs(stats.prevPeriodTotalVariance)}
+          inverse
+        />
       ) : null,
       valueClass: varianceClass(stats?.totalVariance),
       accent: "border-l-4 border-l-yellow-400",
@@ -201,11 +288,15 @@ function SummaryCards({
     {
       title: "No Sale Events",
       value: stats?.noSaleCount?.toString() ?? "—",
-      icon: <ShoppingBag className="h-4 w-4 text-amber-500" />,
+      icon: <AlertOctagon className="h-4 w-4 text-amber-500" />,
       delta: stats ? (
         <DeltaBadge current={stats.noSaleCount} prev={stats.prevPeriodNoSaleCount} inverse />
       ) : null,
       accent: "border-l-4 border-l-amber-400",
+      subtitle:
+        stats && stats.noSaleCount > NO_SALE_THRESHOLD
+          ? `⚠ Above threshold (${NO_SALE_THRESHOLD})`
+          : undefined,
     },
     {
       title: "Sessions",
@@ -219,32 +310,42 @@ function SummaryCards({
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      {cards.map((card) => (
-        <Card key={card.title} className={card.accent}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              {card.title}
-            </CardTitle>
-            {card.icon}
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <>
-                <Skeleton className="h-7 w-28 mb-1" />
-                <Skeleton className="h-4 w-36" />
-              </>
-            ) : (
-              <>
-                <div className={`text-2xl font-bold tracking-tight ${card.valueClass ?? ""}`}>
-                  {card.value}
-                </div>
-                <div className="mt-1">{card.delta}</div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      ))}
+    <div className="space-y-2">
+      <div className="flex justify-end">
+        <LastRefreshed updatedAt={updatedAt} onRefresh={onRefresh} isLoading={isLoading} />
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {cards.map((card) => (
+          <Card key={card.title} className={card.accent}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                {card.title}
+              </CardTitle>
+              {card.icon}
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <>
+                  <Skeleton className="h-7 w-24 mb-2" />
+                  <Skeleton className="h-3.5 w-32" />
+                </>
+              ) : (
+                <>
+                  <div className={`text-2xl font-bold tracking-tight ${card.valueClass ?? ""}`}>
+                    {card.value}
+                  </div>
+                  {card.subtitle && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 font-medium mt-0.5">
+                      {card.subtitle}
+                    </p>
+                  )}
+                  <div className="mt-1">{card.delta}</div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }
@@ -256,6 +357,7 @@ type SortKey = keyof Pick<
   | "business_date"
   | "drawer_name"
   | "opened_by_name"
+  | "closed_by_name"
   | "opening_amount"
   | "closing_amount"
   | "expected_cash"
@@ -263,18 +365,25 @@ type SortKey = keyof Pick<
   | "status"
 >;
 
-function SessionsTab({
-  dateFrom,
-  dateTo,
-}: {
-  dateFrom: Date;
-  dateTo: Date;
-}) {
-  const { data: sessions = [], isLoading } = useCashDrawerSessions(dateFrom, dateTo);
+const SESSION_COLUMNS: [SortKey, string][] = [
+  ["business_date", "Date"],
+  ["drawer_name", "Drawer"],
+  ["opened_by_name", "Opened By"],
+  ["closed_by_name", "Closed By"],
+  ["opening_amount", "Opening $"],
+  ["closing_amount", "Closing $"],
+  ["expected_cash", "Expected $"],
+  ["variance", "Variance $"],
+  ["status", "Status"],
+];
+
+function SessionsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
+  const { data: sessions = [], isLoading, refetch, dataUpdatedAt } = useCashDrawerSessions(dateFrom, dateTo);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("business_date");
   const [sortAsc, setSortAsc] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => {
     let rows = sessions;
@@ -287,15 +396,17 @@ function SessionsTab({
     });
   }, [sessions, sortKey, sortAsc, statusFilter]);
 
-  function handleSort(key: SortKey) {
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+  const paginated = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+
+  // Reset to page 1 when filter/sort changes
+  const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc((p) => !p);
     else { setSortKey(key); setSortAsc(false); }
-  }
+    setPage(1);
+  };
 
-  function SortIcon({ k }: { k: SortKey }) {
-    if (sortKey !== k) return <span className="ml-1 text-muted-foreground/40">↕</span>;
-    return <span className="ml-1">{sortAsc ? "↑" : "↓"}</span>;
-  }
+  const handleStatusFilter = (v: string) => { setStatusFilter(v); setPage(1); };
 
   function exportCSV() {
     const rows = filtered.map((s) => ({
@@ -319,59 +430,62 @@ function SessionsTab({
     URL.revokeObjectURL(url);
   }
 
-  const skeletonRows = Array.from({ length: 6 });
+  function printTable() {
+    window.print();
+  }
+
+  const skeletonRows = Array.from({ length: 8 });
 
   return (
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm text-muted-foreground">Status:</span>
-          {["all", "open", "closed", "reconciled"].map((s) => (
-            <button
+          {(["all", "open", "closed", "reconciled"] as const).map((s) => (
+            <Button
               key={s}
-              onClick={() => setStatusFilter(s)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                statusFilter === s
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80"
-              }`}
+              size="sm"
+              variant={statusFilter === s ? "default" : "outline"}
+              className="rounded-full h-7 px-3 text-xs"
+              onClick={() => handleStatusFilter(s)}
             >
               {s.charAt(0).toUpperCase() + s.slice(1)}
-            </button>
+            </Button>
           ))}
         </div>
-        <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5">
-          <Download className="h-3.5 w-3.5" />
-          Export CSV
-        </Button>
+        <div className="flex items-center gap-2">
+          <LastRefreshed
+            updatedAt={dataUpdatedAt}
+            onRefresh={refetch}
+            isLoading={isLoading}
+          />
+          <Button variant="outline" size="sm" onClick={printTable} className="gap-1.5">
+            <Printer className="h-3.5 w-3.5" />
+            Print
+          </Button>
+          <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5">
+            <Download className="h-3.5 w-3.5" />
+            Export CSV
+          </Button>
+        </div>
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border overflow-hidden">
+      <div className="rounded-lg border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
+              {/* Expand toggle col */}
               <TableHead className="w-8" />
-              {(
-                [
-                  ["business_date", "Date"],
-                  ["drawer_name", "Drawer"],
-                  ["opened_by_name", "Opened By"],
-                  ["opening_amount", "Opening $"],
-                  ["closing_amount", "Closing $"],
-                  ["expected_cash", "Expected $"],
-                  ["variance", "Variance $"],
-                  ["status", "Status"],
-                ] as [SortKey, string][]
-              ).map(([key, label]) => (
+              {SESSION_COLUMNS.map(([key, label]) => (
                 <TableHead
                   key={key}
                   className="cursor-pointer select-none whitespace-nowrap hover:text-foreground"
                   onClick={() => handleSort(key)}
                 >
                   {label}
-                  <SortIcon k={key} />
+                  <SortIcon active={sortKey === key} asc={sortAsc} />
                 </TableHead>
               ))}
             </TableRow>
@@ -380,74 +494,111 @@ function SessionsTab({
             {isLoading
               ? skeletonRows.map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 9 }).map((__, j) => (
-                      <TableCell key={j}>
-                        <Skeleton className="h-4 w-full" />
-                      </TableCell>
-                    ))}
+                    <TableCell><Skeleton className="h-4 w-4" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-14" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
                   </TableRow>
                 ))
-              : filtered.length === 0
+              : paginated.length === 0
               ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center h-24 text-muted-foreground">
-                    No sessions found for the selected filters
+                  <TableCell colSpan={10} className="p-0">
+                    <EmptyState
+                      title="No sessions found"
+                      description="Try adjusting the date range or status filter"
+                    />
                   </TableCell>
                 </TableRow>
               )
-              : filtered.map((session) => (
-                <>
-                  <TableRow
-                    key={session.id}
-                    className="cursor-pointer hover:bg-muted/40 transition-colors"
-                    onClick={() =>
-                      setExpandedId(expandedId === session.id ? null : session.id)
-                    }
-                  >
-                    <TableCell>
-                      {expandedId === session.id ? (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {format(new Date(session.business_date), "MMM d, yyyy")}
-                    </TableCell>
-                    <TableCell>{session.drawer_name}</TableCell>
-                    <TableCell>{session.opened_by_name}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {fmt$(session.opening_amount)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {fmt$(session.closing_amount)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {fmt$(session.expected_cash)}
-                    </TableCell>
-                    <TableCell>
-                      <span className={varianceClass(session.variance)}>
-                        {fmtVariance(session.variance)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={session.status} />
-                    </TableCell>
-                  </TableRow>
-                  {expandedId === session.id && (
-                    <TableRow key={`${session.id}-expanded`} className="bg-muted/20">
-                      <TableCell colSpan={9} className="p-0">
-                        <ExpandedOperations sessionId={session.id} />
+              : paginated.map((session) => (
+                  <React.Fragment key={session.id}>
+                    <TableRow
+                      className="cursor-pointer hover:bg-muted/40 transition-colors"
+                      onClick={() =>
+                        setExpandedId(expandedId === session.id ? null : session.id)
+                      }
+                      aria-expanded={expandedId === session.id}
+                    >
+                      <TableCell>
+                        {expandedId === session.id ? (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium whitespace-nowrap">
+                        {format(new Date(session.business_date), "MMM d, yyyy")}
+                      </TableCell>
+                      <TableCell>{session.drawer_name}</TableCell>
+                      <TableCell>{session.opened_by_name}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {session.closed_by_name ?? <span className="text-muted-foreground/50 italic text-xs">Still open</span>}
+                      </TableCell>
+                      <TableCell className="tabular-nums">{fmt$(session.opening_amount)}</TableCell>
+                      <TableCell className="tabular-nums">{fmt$(session.closing_amount)}</TableCell>
+                      <TableCell className="tabular-nums">{fmt$(session.expected_cash)}</TableCell>
+                      <TableCell className="tabular-nums">
+                        <span className={varianceClass(session.variance)}>
+                          {fmtVariance(session.variance)}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={session.status} />
                       </TableCell>
                     </TableRow>
-                  )}
-                </>
-              ))}
+                    {expandedId === session.id && (
+                      <TableRow className="bg-muted/10 hover:bg-muted/10">
+                        <TableCell colSpan={10} className="p-0">
+                          <ExpandedOperations sessionId={session.id} />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
+                ))}
           </TableBody>
         </Table>
       </div>
+
+      {/* Footer: count + pagination */}
       {!isLoading && filtered.length > 0 && (
-        <p className="text-sm text-muted-foreground">{filtered.length} session{filtered.length !== 1 ? "s" : ""}</p>
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>
+            {filtered.length} session{filtered.length !== 1 ? "s" : ""}
+            {statusFilter !== "all" && ` · filtered by "${statusFilter}"`}
+          </span>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-7 w-7"
+                disabled={page === 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-xs">
+                Page {page} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-7 w-7"
+                disabled={page === totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -458,9 +609,9 @@ function ExpandedOperations({ sessionId }: { sessionId: string }) {
 
   if (isLoading) {
     return (
-      <div className="px-8 py-4 space-y-2">
+      <div className="ml-8 mr-4 my-3 space-y-2 border-l-2 border-muted pl-4">
         {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-4 w-full" />
+          <Skeleton key={i} className={`h-4 ${i === 0 ? "w-3/4" : i === 1 ? "w-1/2" : "w-2/3"}`} />
         ))}
       </div>
     );
@@ -468,51 +619,53 @@ function ExpandedOperations({ sessionId }: { sessionId: string }) {
 
   if (ops.length === 0) {
     return (
-      <div className="px-8 py-4 text-sm text-muted-foreground">No operations recorded</div>
+      <div className="ml-8 my-3 border-l-2 border-muted pl-4 text-xs text-muted-foreground italic">
+        No operations recorded for this session
+      </div>
     );
   }
 
   return (
-    <div className="px-6 py-4">
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-        Session Operations
-      </p>
-      <Table>
-        <TableHeader>
-          <TableRow className="border-none">
-            <TableHead className="text-xs h-7">Time</TableHead>
-            <TableHead className="text-xs h-7">Type</TableHead>
-            <TableHead className="text-xs h-7">Amount</TableHead>
-            <TableHead className="text-xs h-7">Balance After</TableHead>
-            <TableHead className="text-xs h-7">Employee</TableHead>
-            <TableHead className="text-xs h-7">Reason</TableHead>
-            <TableHead className="text-xs h-7">Approved By</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {ops.map((op) => (
-            <TableRow key={op.id} className="border-none hover:bg-transparent">
-              <TableCell className="text-xs py-1.5">
-                {format(new Date(op.performed_at), "h:mm a")}
-              </TableCell>
-              <TableCell className="py-1.5">
-                <OperationTypeBadge type={op.operation_type} />
-              </TableCell>
-              <TableCell className="text-xs py-1.5 font-medium">{fmt$(op.amount)}</TableCell>
-              <TableCell className="text-xs py-1.5 text-muted-foreground">
-                {fmt$(op.balance_after)}
-              </TableCell>
-              <TableCell className="text-xs py-1.5">{op.performed_by_name}</TableCell>
-              <TableCell className="text-xs py-1.5 text-muted-foreground">
-                {op.reason ?? "—"}
-              </TableCell>
-              <TableCell className="text-xs py-1.5 text-muted-foreground">
-                {op.approved_by_name ?? "—"}
-              </TableCell>
+    <div className="ml-2 mr-2 my-2 border-l-4 border-primary/20 bg-muted/20 rounded-r-lg">
+      <div className="px-4 pt-3 pb-1">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Session Operations · {ops.length} event{ops.length !== 1 ? "s" : ""}
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow className="border-muted/50">
+              <TableHead className="text-xs h-7 pl-4">Time</TableHead>
+              <TableHead className="text-xs h-7">Type</TableHead>
+              <TableHead className="text-xs h-7">Amount</TableHead>
+              <TableHead className="text-xs h-7">Balance After</TableHead>
+              <TableHead className="text-xs h-7">Employee</TableHead>
+              <TableHead className="text-xs h-7">Reason</TableHead>
+              <TableHead className="text-xs h-7 pr-4">Approved By</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {ops.map((op) => (
+              <TableRow key={op.id} className="border-muted/30 hover:bg-muted/30">
+                <TableCell className="text-xs py-2 pl-4 text-muted-foreground whitespace-nowrap">
+                  {format(new Date(op.performed_at), "h:mm a")}
+                </TableCell>
+                <TableCell className="py-2">
+                  <OperationTypeBadge type={op.operation_type} />
+                </TableCell>
+                <TableCell className="text-xs py-2 font-medium tabular-nums">{fmt$(op.amount)}</TableCell>
+                <TableCell className="text-xs py-2 tabular-nums text-muted-foreground">
+                  {fmt$(op.balance_after)}
+                </TableCell>
+                <TableCell className="text-xs py-2">{op.performed_by_name}</TableCell>
+                <TableCell className="text-xs py-2 text-muted-foreground">{op.reason ?? "—"}</TableCell>
+                <TableCell className="text-xs py-2 text-muted-foreground pr-4">{op.approved_by_name ?? "—"}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
@@ -520,9 +673,29 @@ function ExpandedOperations({ sessionId }: { sessionId: string }) {
 // ─── No Sale Audit Tab ────────────────────────────────────────────────────────
 
 function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
-  const { data: ops = [], isLoading } = useNoSaleOperations(dateFrom, dateTo);
+  const { data: ops = [], isLoading, refetch, dataUpdatedAt } = useNoSaleOperations(dateFrom, dateTo);
+  const [employeeFilter, setEmployeeFilter] = useState("all");
+  const [drawerFilter, setDrawerFilter] = useState("all");
 
-  // Aggregate per employee
+  const employees = useMemo(() => {
+    const set = new Set(ops.map((op) => op.performed_by_name));
+    return Array.from(set).sort();
+  }, [ops]);
+
+  const drawers = useMemo(() => {
+    const set = new Set(ops.map((op) => op.drawer_name ?? ""));
+    return Array.from(set).filter(Boolean).sort();
+  }, [ops]);
+
+  const filteredOps = useMemo(() => {
+    return ops.filter((op) => {
+      if (employeeFilter !== "all" && op.performed_by_name !== employeeFilter) return false;
+      if (drawerFilter !== "all" && op.drawer_name !== drawerFilter) return false;
+      return true;
+    });
+  }, [ops, employeeFilter, drawerFilter]);
+
+  // Aggregate per employee for chart (use full ops, not filtered — shows true comparison)
   const byEmployee = useMemo(() => {
     const map = new Map<string, number>();
     ops.forEach((op) => {
@@ -533,19 +706,21 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
       .sort((a, b) => b.count - a.count);
   }, [ops]);
 
-  // Daily trend last 7 days
+  // Weekly trend anchored to dateTo (not today) — FIX
   const weeklyTrend = useMemo(() => {
     const days: { date: string; count: number }[] = [];
     for (let i = 6; i >= 0; i--) {
-      const d = format(subDays(new Date(), i), "yyyy-MM-dd");
+      const d = format(subDays(dateTo, i), "yyyy-MM-dd");
       const count = ops.filter((op) => op.performed_at.startsWith(d)).length;
-      days.push({ date: format(subDays(new Date(), i), "MMM d"), count });
+      days.push({ date: format(subDays(dateTo, i), "MMM d"), count });
     }
     return days;
-  }, [ops]);
+  }, [ops, dateTo]);
+
+  const flaggedEmployees = new Set(byEmployee.filter((e) => e.count > NO_SALE_THRESHOLD).map((e) => e.name));
 
   function exportCSV() {
-    const rows = ops.map((op) => ({
+    const rows = filteredOps.map((op) => ({
       "Date/Time": format(new Date(op.performed_at), "MMM d, yyyy h:mm a"),
       Employee: op.performed_by_name,
       Drawer: op.drawer_name ?? "",
@@ -571,30 +746,36 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
         {/* Employee bar chart */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">No Sales by Employee</CardTitle>
+            <CardTitle className="text-base font-semibold">No Sales by Employee</CardTitle>
+            {flaggedEmployees.size > 0 && (
+              <p className="text-xs text-red-500 dark:text-red-400 flex items-center gap-1 mt-1">
+                <AlertTriangle className="h-3 w-3" />
+                {flaggedEmployees.size} employee{flaggedEmployees.size !== 1 ? "s" : ""} above threshold ({NO_SALE_THRESHOLD})
+              </p>
+            )}
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {Array.from({ length: 4 }).map((_, i) => (
-                  <Skeleton key={i} className="h-6 w-full" />
+                  <Skeleton key={i} className={`h-6 ${i === 0 ? "w-full" : i === 1 ? "w-4/5" : i === 2 ? "w-3/5" : "w-2/5"}`} />
                 ))}
               </div>
             ) : byEmployee.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">No data</p>
+              <EmptyState title="No events" description="No No Sale events in this period" />
             ) : (
-              <ResponsiveContainer width="100%" height={Math.max(160, byEmployee.length * 40)}>
+              <ResponsiveContainer width="100%" height={Math.max(160, byEmployee.length * 44)}>
                 <BarChart
                   data={byEmployee}
                   layout="vertical"
                   margin={{ top: 0, right: 24, left: 8, bottom: 0 }}
                 >
                   <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
                   <YAxis
                     type="category"
                     dataKey="name"
-                    width={90}
+                    width={100}
                     tick={{ fontSize: 11 }}
                     tickLine={false}
                     axisLine={false}
@@ -607,28 +788,19 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
                       borderRadius: 8,
                       fontSize: 12,
                     }}
-                    formatter={(v: number) => [v, "No Sales"]}
+                    formatter={(v: number) => [v, "No Sale events"]}
                   />
-                  <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={24}>
+                  <ReferenceLine x={NO_SALE_THRESHOLD} stroke="#ef4444" strokeDasharray="4 2" strokeWidth={1.5} />
+                  <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={26}>
                     {byEmployee.map((entry) => (
                       <Cell
                         key={entry.name}
-                        fill={
-                          entry.count > NO_SALE_THRESHOLD
-                            ? "#ef4444"
-                            : "#f59e0b"
-                        }
+                        fill={entry.count > NO_SALE_THRESHOLD ? "#ef4444" : "#f59e0b"}
                       />
                     ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
-            )}
-            {!isLoading && byEmployee.some((e) => e.count > NO_SALE_THRESHOLD) && (
-              <p className="mt-2 text-xs text-red-500 dark:text-red-400 flex items-center gap-1">
-                <AlertTriangle className="h-3 w-3" />
-                Employees exceeding threshold of {NO_SALE_THRESHOLD} per period are flagged in red
-              </p>
             )}
           </CardContent>
         </Card>
@@ -636,13 +808,16 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
         {/* Weekly trend */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Weekly Trend (Last 7 Days)</CardTitle>
+            <CardTitle className="text-base font-semibold">7-Day Trend</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              {format(subDays(dateTo, 6), "MMM d")} — {format(dateTo, "MMM d, yyyy")}
+            </p>
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <Skeleton className="h-40 w-full" />
             ) : (
-              <ResponsiveContainer width="100%" height={160}>
+              <ResponsiveContainer width="100%" height={168}>
                 <BarChart data={weeklyTrend} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
@@ -654,7 +829,7 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
                       borderRadius: 8,
                       fontSize: 12,
                     }}
-                    formatter={(v: number) => [v, "No Sales"]}
+                    formatter={(v: number) => [v, "No Sale events"]}
                   />
                   <Bar dataKey="count" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={32} />
                 </BarChart>
@@ -665,75 +840,117 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
       </div>
 
       {/* Audit table */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold">Audit Log</h3>
-        <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5">
-          <Download className="h-3.5 w-3.5" />
-          Export CSV
-        </Button>
-      </div>
-      <div className="rounded-lg border overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/50">
-              <TableHead>Date / Time</TableHead>
-              <TableHead>Employee</TableHead>
-              <TableHead>Drawer</TableHead>
-              <TableHead>Reason</TableHead>
-              <TableHead>Approved By</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading
-              ? skeletonRows.map((_, i) => (
-                  <TableRow key={i}>
-                    {Array.from({ length: 5 }).map((__, j) => (
-                      <TableCell key={j}>
-                        <Skeleton className="h-4 w-full" />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              : ops.length === 0
-              ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">
-                    No No Sale events for this period
-                  </TableCell>
-                </TableRow>
-              )
-              : ops.map((op) => (
-                  <TableRow key={op.id}>
-                    <TableCell className="font-medium whitespace-nowrap">
-                      {format(new Date(op.performed_at), "MMM d, h:mm a")}
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={
-                          byEmployee.find((e) => e.name === op.performed_by_name)?.count ?? 0 >
-                          NO_SALE_THRESHOLD
-                            ? "text-red-600 dark:text-red-400 font-medium"
-                            : ""
-                        }
-                      >
-                        {op.performed_by_name}
-                        {(byEmployee.find((e) => e.name === op.performed_by_name)?.count ?? 0) >
-                          NO_SALE_THRESHOLD && (
-                          <AlertTriangle className="inline ml-1 h-3 w-3 text-red-500" />
-                        )}
-                      </span>
-                    </TableCell>
-                    <TableCell>{op.drawer_name ?? "—"}</TableCell>
-                    <TableCell className="text-muted-foreground">{op.reason ?? "—"}</TableCell>
-                    <TableCell className="text-muted-foreground">{op.approved_by_name ?? "—"}</TableCell>
-                  </TableRow>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-sm font-semibold">No Sale Audit Log</h3>
+            {filteredOps.length !== ops.length && (
+              <Badge variant="secondary" className="text-xs">{filteredOps.length} of {ops.length}</Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Employee filter */}
+            <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
+              <SelectTrigger className="h-8 text-xs w-40">
+                <SelectValue placeholder="All employees" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All employees</SelectItem>
+                {employees.map((e) => (
+                  <SelectItem key={e} value={e}>{e}</SelectItem>
                 ))}
-          </TableBody>
-        </Table>
+              </SelectContent>
+            </Select>
+            {/* Drawer filter */}
+            <Select value={drawerFilter} onValueChange={setDrawerFilter}>
+              <SelectTrigger className="h-8 text-xs w-36">
+                <SelectValue placeholder="All drawers" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All drawers</SelectItem>
+                {drawers.map((d) => (
+                  <SelectItem key={d} value={d}>{d}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <LastRefreshed updatedAt={dataUpdatedAt} onRefresh={refetch} isLoading={isLoading} />
+            <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5">
+              <Download className="h-3.5 w-3.5" />
+              Export CSV
+            </Button>
+          </div>
+        </div>
+
+        <div className="rounded-lg border overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead>Date / Time</TableHead>
+                <TableHead>Employee</TableHead>
+                <TableHead>Drawer</TableHead>
+                <TableHead>Reason</TableHead>
+                <TableHead>Approved By</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading
+                ? skeletonRows.map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                    </TableRow>
+                  ))
+                : filteredOps.length === 0
+                ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="p-0">
+                      <EmptyState
+                        title="No events found"
+                        description={
+                          ops.length > 0
+                            ? "Try clearing the employee or drawer filter"
+                            : "No drawer openings without sale in this period"
+                        }
+                      />
+                    </TableCell>
+                  </TableRow>
+                )
+                : filteredOps.map((op) => (
+                    <TableRow key={op.id}>
+                      <TableCell className="font-medium whitespace-nowrap">
+                        {format(new Date(op.performed_at), "MMM d, h:mm a")}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={
+                            flaggedEmployees.has(op.performed_by_name)
+                              ? "text-red-600 dark:text-red-400 font-medium inline-flex items-center gap-1"
+                              : ""
+                          }
+                        >
+                          {op.performed_by_name}
+                          {flaggedEmployees.has(op.performed_by_name) && (
+                            <AlertTriangle className="h-3 w-3 text-red-500" />
+                          )}
+                        </span>
+                      </TableCell>
+                      <TableCell>{op.drawer_name ?? "—"}</TableCell>
+                      <TableCell className="text-muted-foreground">{op.reason ?? "—"}</TableCell>
+                      <TableCell className="text-muted-foreground">{op.approved_by_name ?? "—"}</TableCell>
+                    </TableRow>
+                  ))}
+            </TableBody>
+          </Table>
+        </div>
+        {!isLoading && filteredOps.length > 0 && (
+          <p className="text-sm text-muted-foreground">
+            {filteredOps.length} event{filteredOps.length !== 1 ? "s" : ""}
+          </p>
+        )}
       </div>
-      {!isLoading && ops.length > 0 && (
-        <p className="text-sm text-muted-foreground">{ops.length} event{ops.length !== 1 ? "s" : ""}</p>
-      )}
     </div>
   );
 }
@@ -741,15 +958,13 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
 // ─── Variance Trends Tab ──────────────────────────────────────────────────────
 
 function VarianceTrendsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
-  const { data: trend = [], isLoading } = useVarianceTrend(dateFrom, dateTo);
+  const { data: trend = [], isLoading, refetch, dataUpdatedAt } = useVarianceTrend(dateFrom, dateTo);
 
-  // Unique drawers
   const drawerKeys = useMemo(() => {
     const set = new Set(trend.map((t) => t.drawer_name));
     return Array.from(set);
   }, [trend]);
 
-  // Transform to wide format for Recharts multi-line
   const chartData = useMemo(() => {
     const byDate = new Map<string, Record<string, number | null>>();
     trend.forEach((t) => {
@@ -761,20 +976,20 @@ function VarianceTrendsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date 
     );
   }, [trend]);
 
-  // Summary stats per drawer
+  // Compute actual data range for ReferenceArea bounds — FIX: no magic numbers
+  const dataAbsMax = useMemo(() => {
+    const allVariances = trend.map((t) => Math.abs(t.variance ?? 0));
+    return Math.max(...allVariances, VARIANCE_ALERT + 10);
+  }, [trend]);
+
   const drawerStats = useMemo(() => {
     return drawerKeys.map((drawer) => {
       const points = trend.filter((t) => t.drawer_name === drawer && t.variance != null);
-      if (points.length === 0)
-        return { drawer, avg: 0, worst: null, best: null, total: 0 };
+      if (points.length === 0) return { drawer, avg: 0, worst: null as typeof points[0] | null, best: null as typeof points[0] | null, total: 0 };
       const variances = points.map((p) => p.variance!);
       const avg = variances.reduce((s, v) => s + v, 0) / variances.length;
-      const worst = points.reduce((a, b) =>
-        Math.abs(b.variance!) > Math.abs(a.variance!) ? b : a
-      );
-      const best = points.reduce((a, b) =>
-        Math.abs(b.variance!) < Math.abs(a.variance!) ? b : a
-      );
+      const worst = points.reduce((a, b) => Math.abs(b.variance!) > Math.abs(a.variance!) ? b : a);
+      const best = points.reduce((a, b) => Math.abs(b.variance!) < Math.abs(a.variance!) ? b : a);
       const total = variances.reduce((s, v) => s + v, 0);
       return { drawer, avg, worst, best, total };
     });
@@ -782,24 +997,31 @@ function VarianceTrendsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date 
 
   return (
     <div className="space-y-6">
-      {/* Line chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-medium">Daily Variance Trend</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Yellow band = ±${VARIANCE_WARNING} warning · Red band = ±${VARIANCE_ALERT} alert
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-semibold">Daily Variance Trend</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                <span className="inline-block w-2 h-2 rounded-sm bg-green-500/30 mr-1" />±${VARIANCE_WARNING} balanced ·{" "}
+                <span className="inline-block w-2 h-2 rounded-sm bg-yellow-500/30 mr-1" />±${VARIANCE_ALERT} warning ·{" "}
+                <span className="inline-block w-2 h-2 rounded-sm bg-red-500/30 mr-1" />beyond alert
+              </p>
+            </div>
+            <LastRefreshed updatedAt={dataUpdatedAt} onRefresh={refetch} isLoading={isLoading} />
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <Skeleton className="h-72 w-full" />
           ) : chartData.length === 0 ? (
-            <div className="h-72 flex items-center justify-center text-muted-foreground">
-              No session data for this period
-            </div>
+            <EmptyState
+              title="No variance data"
+              description="No closed sessions found for the selected date range"
+            />
           ) : (
-            <ResponsiveContainer width="100%" height={288}>
-              <LineChart data={chartData} margin={{ top: 8, right: 24, left: 0, bottom: 0 }}>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={chartData} margin={{ top: 8, right: 24, left: 4, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis
                   dataKey="date"
@@ -824,51 +1046,25 @@ function VarianceTrendsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date 
                     fontSize: 12,
                   }}
                   formatter={(v: number, name: string) => [
-                    `${v > 0 ? "+" : ""}$${v?.toFixed(2) ?? "—"}`,
+                    `${v > 0 ? "+" : ""}$${Number(v).toFixed(2)}`,
                     name,
                   ]}
                   labelFormatter={(label) => {
-                    try { return format(new Date(label), "EEEE, MMM d"); } catch { return label; }
+                    try { return format(new Date(label), "EEEE, MMM d yyyy"); } catch { return label; }
                   }}
                 />
-                {drawerKeys.length > 1 && <Legend />}
+                {drawerKeys.length > 1 && <Legend wrapperStyle={{ fontSize: 12 }} />}
 
-                {/* Threshold bands */}
-                <ReferenceArea
-                  y1={-VARIANCE_WARNING}
-                  y2={VARIANCE_WARNING}
-                  fill="#22c55e"
-                  fillOpacity={0.06}
-                />
-                <ReferenceArea
-                  y1={VARIANCE_WARNING}
-                  y2={VARIANCE_ALERT}
-                  fill="#f59e0b"
-                  fillOpacity={0.08}
-                />
-                <ReferenceArea
-                  y1={-VARIANCE_ALERT}
-                  y2={-VARIANCE_WARNING}
-                  fill="#f59e0b"
-                  fillOpacity={0.08}
-                />
-                <ReferenceArea
-                  y1={VARIANCE_ALERT}
-                  y2={999}
-                  fill="#ef4444"
-                  fillOpacity={0.08}
-                />
-                <ReferenceArea
-                  y1={-999}
-                  y2={-VARIANCE_ALERT}
-                  fill="#ef4444"
-                  fillOpacity={0.08}
-                />
+                {/* Threshold bands using actual data range */}
+                <ReferenceArea y1={-VARIANCE_WARNING} y2={VARIANCE_WARNING} fill="#22c55e" fillOpacity={0.07} />
+                <ReferenceArea y1={VARIANCE_WARNING} y2={VARIANCE_ALERT} fill="#f59e0b" fillOpacity={0.09} />
+                <ReferenceArea y1={-VARIANCE_ALERT} y2={-VARIANCE_WARNING} fill="#f59e0b" fillOpacity={0.09} />
+                <ReferenceArea y1={VARIANCE_ALERT} y2={dataAbsMax} fill="#ef4444" fillOpacity={0.09} />
+                <ReferenceArea y1={-dataAbsMax} y2={-VARIANCE_ALERT} fill="#ef4444" fillOpacity={0.09} />
 
                 {/* Zero line */}
                 <ReferenceLine y={0} stroke="hsl(var(--border))" strokeWidth={1.5} />
 
-                {/* Per-drawer lines */}
                 {drawerKeys.map((drawer, idx) => (
                   <Line
                     key={drawer}
@@ -876,8 +1072,8 @@ function VarianceTrendsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date 
                     dataKey={drawer}
                     stroke={DRAWER_COLORS[idx % DRAWER_COLORS.length]}
                     strokeWidth={2}
-                    dot={{ r: 3, strokeWidth: 0 }}
-                    activeDot={{ r: 5 }}
+                    dot={{ r: 3, strokeWidth: 0, fill: DRAWER_COLORS[idx % DRAWER_COLORS.length] }}
+                    activeDot={{ r: 5, strokeWidth: 0 }}
                     connectNulls
                   />
                 ))}
@@ -887,11 +1083,10 @@ function VarianceTrendsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date 
         </CardContent>
       </Card>
 
-      {/* Per-drawer summary table */}
       {!isLoading && drawerStats.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Drawer Summary</CardTitle>
+            <CardTitle className="text-base font-semibold">Drawer Summary</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
@@ -908,25 +1103,31 @@ function VarianceTrendsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date 
                 {drawerStats.map((ds) => (
                   <TableRow key={ds.drawer}>
                     <TableCell className="font-medium">{ds.drawer}</TableCell>
-                    <TableCell>
-                      <span className={varianceClass(ds.avg)}>
-                        {fmtVariance(ds.avg)}
-                      </span>
+                    <TableCell className="tabular-nums">
+                      <span className={varianceClass(ds.avg)}>{fmtVariance(ds.avg)}</span>
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {ds.best
-                        ? `${format(new Date(ds.best.business_date), "MMM d")} (${fmtVariance(ds.best.variance)})`
-                        : "—"}
+                    <TableCell className="text-sm text-muted-foreground">
+                      {ds.best ? (
+                        <span>
+                          {format(new Date(ds.best.business_date), "MMM d")}{" "}
+                          <span className={varianceClass(ds.best.variance)}>
+                            {fmtVariance(ds.best.variance)}
+                          </span>
+                        </span>
+                      ) : "—"}
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {ds.worst
-                        ? `${format(new Date(ds.worst.business_date), "MMM d")} (${fmtVariance(ds.worst.variance)})`
-                        : "—"}
+                    <TableCell className="text-sm text-muted-foreground">
+                      {ds.worst ? (
+                        <span>
+                          {format(new Date(ds.worst.business_date), "MMM d")}{" "}
+                          <span className={varianceClass(ds.worst.variance)}>
+                            {fmtVariance(ds.worst.variance)}
+                          </span>
+                        </span>
+                      ) : "—"}
                     </TableCell>
-                    <TableCell>
-                      <span className={varianceClass(ds.total)}>
-                        {fmtVariance(ds.total)}
-                      </span>
+                    <TableCell className="tabular-nums">
+                      <span className={varianceClass(ds.total)}>{fmtVariance(ds.total)}</span>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -949,10 +1150,8 @@ export default function CashDrawerReportsPage() {
   const [preset, setPreset] = useState<DatePreset>("today");
   const [activeTab, setActiveTab] = useState("sessions");
 
-  const { data: stats, isLoading: statsLoading } = useCashDrawerSummaryStats(
-    dateRange.from,
-    dateRange.to
-  );
+  const { data: stats, isLoading: statsLoading, refetch: refetchStats, dataUpdatedAt } =
+    useCashDrawerSummaryStats(dateRange.from, dateRange.to);
 
   function handleDateRangeChange(from: Date | null, to: Date | null) {
     if (from && to) setDateRange({ from, to });
@@ -960,6 +1159,13 @@ export default function CashDrawerReportsPage() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <span>Reports</span>
+        <BreadcrumbSep className="h-3.5 w-3.5 text-muted-foreground/50" />
+        <span className="text-foreground font-medium">Cash Drawers</span>
+      </nav>
+
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -978,7 +1184,12 @@ export default function CashDrawerReportsPage() {
       </div>
 
       {/* Summary cards */}
-      <SummaryCards stats={stats} isLoading={statsLoading} />
+      <SummaryCards
+        stats={stats}
+        isLoading={statsLoading}
+        updatedAt={dataUpdatedAt}
+        onRefresh={refetchStats}
+      />
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -991,11 +1202,9 @@ export default function CashDrawerReportsPage() {
         <TabsContent value="sessions" className="mt-6">
           <SessionsTab dateFrom={dateRange.from} dateTo={dateRange.to} />
         </TabsContent>
-
         <TabsContent value="no-sale" className="mt-6">
           <NoSaleTab dateFrom={dateRange.from} dateTo={dateRange.to} />
         </TabsContent>
-
         <TabsContent value="variance" className="mt-6">
           <VarianceTrendsTab dateFrom={dateRange.from} dateTo={dateRange.to} />
         </TabsContent>
