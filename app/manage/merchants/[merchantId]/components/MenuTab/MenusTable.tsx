@@ -368,6 +368,7 @@ export function MenusTable({
       id: menu.id,
       name: menu.name,
       description: menu.description,
+      image: menu.image,
       is_active: menu.is_active,
       is_global: menu.is_global,
       location_id: menu.location_id,

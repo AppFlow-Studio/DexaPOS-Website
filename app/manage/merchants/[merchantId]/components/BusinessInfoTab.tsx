@@ -16,8 +16,6 @@ import {
     Loader2
 } from 'lucide-react'
 import { MerchantDetails } from '@/types/merchant'
-import { useQuery } from '@tanstack/react-query'
-import { GetLocations } from '../../../../dashboard/actions/get-locations'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
@@ -42,6 +40,7 @@ import {
 } from '@/components/ui/select'
 import { useAdminUpdateMerchant } from '@/lib/queries/use-admin-merchant'
 import { toast } from 'sonner'
+import Link from 'next/link'
 
 interface BusinessInfoTabProps {
     merchantInfo: MerchantDetails
@@ -98,7 +97,8 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                 status: businessInfo.status || ''
             })
         }
-    }, [isEditDialogOpen, businessInfo])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isEditDialogOpen])
 
     const handleSave = async () => {
         try {
@@ -272,9 +272,11 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                 <CardTitle className="text-lg">Business Locations</CardTitle>
                                 <CardDescription>All locations associated with this merchant</CardDescription>
                             </div>
-                            <Button variant="outline" size="sm">
-                                <MapPin className="h-4 w-4 mr-2" />
-                                Add Location
+                            <Button variant="outline" size="sm" asChild>
+                                <Link href={`/manage/merchants/${merchantInfo.id}/locations/new`}>
+                                    <MapPin className="h-4 w-4 mr-2" />
+                                    Add Location
+                                </Link>
                             </Button>
                         </div>
                     </CardHeader>
@@ -297,9 +299,11 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                     </EmptyDescription>
                                 </EmptyHeader>
                                 <EmptyContent>
-                                    <Button>
-                                        <MapPin className="h-4 w-4 mr-2" />
-                                        Add Location
+                                    <Button asChild>
+                                        <Link href={`/manage/merchants/${merchantInfo.id}/locations/new`}>
+                                            <MapPin className="h-4 w-4 mr-2" />
+                                            Add Location
+                                        </Link>
                                     </Button>
                                 </EmptyContent>
                             </Empty>
@@ -506,6 +510,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
         </Tabs>
     )
 }

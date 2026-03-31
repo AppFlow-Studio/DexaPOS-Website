@@ -1,7 +1,7 @@
 "use client";
 
 import { Site } from "@/types/site";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import {
   MapPin,
   Phone,
@@ -9,6 +9,10 @@ import {
   Clock,
   ExternalLink,
   ChevronRight,
+  ShoppingBag,
+  Truck,
+  Timer,
+  BadgeDollarSign,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OpenClosedIndicator } from "./OpenClosedIndicator";
@@ -74,11 +78,10 @@ function parseBusinessHours(
     return dayOrder
       .map((day) => {
         const value =
-          parsed[day] || parsed[day.charAt(0).toUpperCase() + day.slice(1)]; // check lowercase and Titlecase
+          parsed[day] || parsed[day.charAt(0).toUpperCase() + day.slice(1)];
 
         if (!value) return null;
 
-        // Check for WeeklySchedule format { enabled: boolean, from: string, to: string, ... }
         if (typeof value === "object" && "enabled" in value) {
           if (!value.enabled)
             return { day: capitalizeDay(day), hours: "Closed" };
@@ -90,7 +93,6 @@ function parseBusinessHours(
           };
         }
 
-        // Legacy format
         return {
           day: capitalizeDay(day),
           hours: value?.closed
@@ -108,12 +110,10 @@ function parseBusinessHours(
   return [];
 }
 
-// Helper to capitalize day name
 function capitalizeDay(day: string): string {
   return day.charAt(0).toUpperCase() + day.slice(1);
 }
 
-// Helper to format time range in 12-hour format
 function formatTimeRange(from: string, to: string): string {
   const formatTime = (time: string): string => {
     if (!time) return "";
@@ -141,35 +141,68 @@ const itemVariants = {
   visible: { opacity: 1, y: 0 },
 };
 
+const cardStyle: React.CSSProperties = {
+  backgroundColor: "var(--card)",
+  borderColor: "var(--border)",
+  color: "var(--text)",
+};
+
+const iconBoxStyle: React.CSSProperties = {
+  backgroundColor: "color-mix(in srgb, var(--text) 8%, var(--card))",
+  color: "var(--text-secondary)",
+};
+
+const labelStyle: React.CSSProperties = {
+  color: "var(--text-secondary)",
+};
+
+const mutedTextStyle: React.CSSProperties = {
+  color: "var(--text-secondary)",
+};
+
 export function InfoPanel({ site, location }: InfoPanelProps) {
   const storeName = site?.title || location.name;
   const description = site?.description;
 
-  // Prefer Online Ordering Hours, fallback to Location Hours
   const rawBusinessHours =
     site?.online_ordering_config?.operatingHours || location.business_hours;
   const businessHours = parseBusinessHours(rawBusinessHours);
 
   const fullAddress = `${location.address_line1}, ${location.city}, ${location.state} ${location.postal_code}`;
-  const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(
-    fullAddress
-  )}`;
+  const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(fullAddress)}`;
+
+  const config = site?.online_ordering_config;
+  const pickupEnabled = config?.pickupEnabled !== false;
+  const deliveryEnabled = config?.deliveryEnabled === true;
+  const prepTime = config?.preparationLeadTime;
+  const minOrder = config?.minimumOrderAmount;
+  const deliveryFee = config?.baseDeliveryFee;
+  const freeDeliveryThreshold = config?.freeDeliveryThreshold;
+  const showOrderingOptions =
+    pickupEnabled ||
+    deliveryEnabled ||
+    (prepTime && prepTime > 0) ||
+    (minOrder && minOrder > 0);
 
   return (
     <motion.div
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="space-y-4 pb-8 overflow-hidden max-w-2xl mx-auto"
+      className="pb-8 overflow-hidden max-w-4xl mx-auto space-y-4"
     >
       {/* Store Header Card */}
       <motion.div
         variants={itemVariants}
-        className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm"
+        className="rounded-xl border p-5 shadow-sm"
+        style={cardStyle}
       >
         <div className="flex items-start gap-4">
           {site?.logo_url ? (
-            <div className="h-16 w-16 rounded-xl overflow-hidden shadow-sm border border-gray-100 shrink-0">
+            <div
+              className="h-16 w-16 rounded-xl overflow-hidden shadow-sm border shrink-0"
+              style={{ borderColor: "var(--border)" }}
+            >
               <img
                 src={site.logo_url}
                 alt={storeName}
@@ -186,17 +219,15 @@ export function InfoPanel({ site, location }: InfoPanelProps) {
               {storeName.charAt(0).toUpperCase()}
             </div>
           )}
-
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold text-gray-900 truncate">
+            <h1 className="text-xl font-bold truncate" style={{ color: "var(--text)" }}>
               {storeName}
             </h1>
             {description && (
-              <p className="mt-1 text-sm text-gray-600 line-clamp-2">
+              <p className="mt-1 text-sm line-clamp-2" style={mutedTextStyle}>
                 {description}
               </p>
             )}
-            {/* Open/Closed Status */}
             <div className="mt-3">
               <OpenClosedIndicator
                 businessHours={rawBusinessHours}
@@ -207,160 +238,256 @@ export function InfoPanel({ site, location }: InfoPanelProps) {
         </div>
       </motion.div>
 
-      {/* Contact Information */}
-      <div className="space-y-2">
-        {/* Address */}
-        <motion.a
-          variants={itemVariants}
-          href={mapsUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="group flex items-center gap-4 bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:border-gray-300 hover:shadow-md transition-all duration-200"
-        >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">
-            <MapPin className="h-5 w-5" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-              Address
-            </p>
-            <p className="text-sm text-gray-900 font-medium truncate mt-0.5">
-              {location.address_line1}
-            </p>
-            <p className="text-sm text-gray-600 truncate">
-              {location.city}, {location.state} {location.postal_code}
-            </p>
-          </div>
-          <div className="flex items-center gap-1 text-sm text-gray-400 group-hover:text-gray-600 transition-colors">
-            <ExternalLink className="h-4 w-4" />
-          </div>
-        </motion.a>
+      {/* Two-column grid on md+, single column on mobile */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
 
-        {/* Phone */}
-        {location.phone && (
+        {/* LEFT: Contact info + Ordering Options */}
+        <div className="space-y-2">
+          {/* Address */}
           <motion.a
             variants={itemVariants}
-            href={`tel:${location.phone}`}
-            className="group flex items-center gap-4 bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:border-gray-300 hover:shadow-md transition-all duration-200"
+            href={mapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group flex items-center gap-4 rounded-xl border p-4 shadow-sm transition-all duration-200"
+            style={cardStyle}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.boxShadow = "";
+            }}
           >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">
-              <Phone className="h-5 w-5" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" style={iconBoxStyle}>
+              <MapPin className="h-5 w-5" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                Phone
+              <p className="text-xs font-medium uppercase tracking-wide" style={labelStyle}>
+                Address
               </p>
-              <p className="text-sm text-gray-900 font-medium truncate mt-0.5">
-                {location.phone}
+              <p className="text-sm font-medium truncate mt-0.5" style={{ color: "var(--text)" }}>
+                {location.address_line1}
+              </p>
+              <p className="text-sm truncate" style={mutedTextStyle}>
+                {location.city}, {location.state} {location.postal_code}
               </p>
             </div>
-            <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-gray-600 transition-colors" />
+            <ExternalLink className="h-4 w-4 shrink-0 transition-colors" style={mutedTextStyle} />
           </motion.a>
-        )}
 
-        {/* Email */}
-        {location.email && (
-          <motion.a
-            variants={itemVariants}
-            href={`mailto:${location.email}`}
-            className="group flex items-center gap-4 bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:border-gray-300 hover:shadow-md transition-all duration-200"
-          >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">
-              <Mail className="h-5 w-5" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                Email
-              </p>
-              <p className="text-sm text-gray-900 font-medium truncate mt-0.5">
-                {location.email}
-              </p>
-            </div>
-            <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-gray-600 transition-colors" />
-          </motion.a>
-        )}
-      </div>
+          {/* Phone */}
+          {location.phone && (
+            <motion.a
+              variants={itemVariants}
+              href={`tel:${location.phone}`}
+              className="group flex items-center gap-4 rounded-xl border p-4 shadow-sm transition-all duration-200"
+              style={cardStyle}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.boxShadow = "";
+              }}
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" style={iconBoxStyle}>
+                <Phone className="h-5 w-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium uppercase tracking-wide" style={labelStyle}>
+                  Phone
+                </p>
+                <p className="text-sm font-medium truncate mt-0.5" style={{ color: "var(--text)" }}>
+                  {location.phone}
+                </p>
+              </div>
+              <ChevronRight className="h-5 w-5 shrink-0 transition-colors" style={mutedTextStyle} />
+            </motion.a>
+          )}
 
-      {/* Business Hours */}
-      {businessHours.length > 0 && (
-        <motion.div
-          variants={itemVariants}
-          className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm"
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-600">
-              <Clock className="h-5 w-5" />
-            </div>
-            <h3 className="text-base font-bold text-gray-900">Store Hours</h3>
-          </div>
+          {/* Email */}
+          {location.email && (
+            <motion.a
+              variants={itemVariants}
+              href={`mailto:${location.email}`}
+              className="group flex items-center gap-4 rounded-xl border p-4 shadow-sm transition-all duration-200"
+              style={cardStyle}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.boxShadow = "";
+              }}
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" style={iconBoxStyle}>
+                <Mail className="h-5 w-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium uppercase tracking-wide" style={labelStyle}>
+                  Email
+                </p>
+                <p className="text-sm font-medium truncate mt-0.5" style={{ color: "var(--text)" }}>
+                  {location.email}
+                </p>
+              </div>
+              <ChevronRight className="h-5 w-5 shrink-0 transition-colors" style={mutedTextStyle} />
+            </motion.a>
+          )}
 
-          <div className="space-y-0">
-            {businessHours.map((item, index) => {
-              const isToday =
-                new Date()
-                  .toLocaleDateString("en-US", { weekday: "long" })
-                  .toLowerCase() === item.day.toLowerCase();
-              const isClosed = item.hours.toLowerCase() === "closed";
+          {/* Ordering Options */}
+          {showOrderingOptions && (
+            <motion.div
+              variants={itemVariants}
+              className="rounded-xl border p-5 shadow-sm"
+              style={cardStyle}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={iconBoxStyle}>
+                  <ShoppingBag className="h-5 w-5" />
+                </div>
+                <h3 className="text-base font-bold" style={{ color: "var(--text)" }}>Ordering Options</h3>
+              </div>
 
-              return (
-                <div
-                  key={index}
-                  className={cn(
-                    "flex items-center justify-between py-2.5 px-3 rounded-lg transition-colors",
-                    isToday
-                      ? "bg-gray-50 border border-gray-200"
-                      : "hover:bg-gray-50"
-                  )}
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={cn(
-                        "text-sm font-medium",
-                        isToday ? "text-gray-900" : "text-gray-700"
-                      )}
-                    >
-                      {item.day}
-                    </span>
-                    {isToday && (
-                      <span className="text-[10px] font-semibold bg-gray-900 text-white px-1.5 py-0.5 rounded">
-                        TODAY
-                      </span>
-                    )}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm" style={mutedTextStyle}>
+                    <ShoppingBag className="h-4 w-4" style={{ opacity: 0.6 }} />
+                    <span>Pickup</span>
                   </div>
-                  <span
-                    className={cn(
-                      "text-sm",
-                      isClosed
-                        ? "text-gray-400"
-                        : isToday
-                        ? "text-gray-900 font-medium"
-                        : "text-gray-600"
-                    )}
-                  >
-                    {item.hours}
+                  <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", pickupEnabled ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400")}>
+                    {pickupEnabled ? "Available" : "Unavailable"}
                   </span>
                 </div>
-              );
-            })}
-          </div>
-        </motion.div>
-      )}
 
-      {/* No Hours Available */}
-      {businessHours.length === 0 && (
-        <motion.div
-          variants={itemVariants}
-          className="bg-white rounded-xl border border-gray-200 p-6 text-center shadow-sm"
-        >
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100 text-gray-400 mx-auto mb-3">
-            <Clock className="h-6 w-6" />
-          </div>
-          <p className="text-gray-900 font-medium">Hours not available</p>
-          <p className="text-sm text-gray-500 mt-1">
-            Contact the store for operating hours
-          </p>
-        </motion.div>
-      )}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm" style={mutedTextStyle}>
+                    <Truck className="h-4 w-4" style={{ opacity: 0.6 }} />
+                    <span>Delivery</span>
+                  </div>
+                  <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", deliveryEnabled ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400")}>
+                    {deliveryEnabled ? "Available" : "Unavailable"}
+                  </span>
+                </div>
+
+                {deliveryEnabled && deliveryFee != null && (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm" style={mutedTextStyle}>
+                      <BadgeDollarSign className="h-4 w-4" style={{ opacity: 0.6 }} />
+                      <span>Delivery Fee</span>
+                    </div>
+                    <span className="text-sm font-medium" style={{ color: "var(--text)" }}>
+                      {deliveryFee === 0 ? "Free" : `$${deliveryFee.toFixed(2)}`}
+                      {freeDeliveryThreshold && freeDeliveryThreshold > 0 && (
+                        <span className="ml-1 text-xs" style={mutedTextStyle}>(free over ${freeDeliveryThreshold.toFixed(0)})</span>
+                      )}
+                    </span>
+                  </div>
+                )}
+
+                {minOrder != null && minOrder > 0 && (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm" style={mutedTextStyle}>
+                      <BadgeDollarSign className="h-4 w-4" style={{ opacity: 0.6 }} />
+                      <span>Minimum Order</span>
+                    </div>
+                    <span className="text-sm font-medium" style={{ color: "var(--text)" }}>${minOrder.toFixed(2)}</span>
+                  </div>
+                )}
+
+                {prepTime != null && prepTime > 0 && (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm" style={mutedTextStyle}>
+                      <Timer className="h-4 w-4" style={{ opacity: 0.6 }} />
+                      <span>Prep Time</span>
+                    </div>
+                    <span className="text-sm font-medium" style={{ color: "var(--text)" }}>{prepTime} min</span>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </div>
+
+        {/* RIGHT: Hours */}
+        <div className="space-y-4">
+          <motion.div
+            variants={itemVariants}
+            className="rounded-xl border p-5 shadow-sm"
+            style={cardStyle}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={iconBoxStyle}>
+                <Clock className="h-5 w-5" />
+              </div>
+              <h3 className="text-base font-bold" style={{ color: "var(--text)" }}>Store Hours</h3>
+            </div>
+
+            {businessHours.length > 0 ? (
+              <div className="space-y-0">
+                {businessHours.map((item, index) => {
+                  const isToday =
+                    new Date()
+                      .toLocaleDateString("en-US", { weekday: "long" })
+                      .toLowerCase() === item.day.toLowerCase();
+                  const isClosed = item.hours.toLowerCase() === "closed";
+                  return (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between py-2.5 px-3 rounded-lg transition-colors"
+                      style={
+                        isToday
+                          ? {
+                              backgroundColor: "color-mix(in srgb, var(--text) 6%, var(--card))",
+                              border: "1px solid var(--border)",
+                            }
+                          : undefined
+                      }
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="text-sm font-medium"
+                          style={{ color: "var(--text)" }}
+                        >
+                          {item.day}
+                        </span>
+                        {isToday && (
+                          <span
+                            className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                            style={{
+                              backgroundColor: "var(--text)",
+                              color: "var(--card)",
+                            }}
+                          >
+                            TODAY
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        className="text-sm"
+                        style={{
+                          color: isClosed
+                            ? "var(--text-secondary)"
+                            : isToday
+                            ? "var(--primary)"
+                            : "var(--text-secondary)",
+                          fontWeight: isToday ? 500 : undefined,
+                        }}
+                      >
+                        {item.hours}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <p className="font-medium" style={{ color: "var(--text)" }}>Hours not available</p>
+                <p className="text-sm mt-1" style={mutedTextStyle}>Contact the store for operating hours</p>
+              </div>
+            )}
+          </motion.div>
+        </div>
+
+      </div>
     </motion.div>
   );
 }

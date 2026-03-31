@@ -8,8 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CdnImageUploadField } from "@/components/ui/cdn-image-upload-field";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { useMerchantCdnImageUpload } from "@/lib/cdn/use-merchant-cdn-image-upload";
 import {
   BottomSheet,
   BottomSheetContent,
@@ -56,6 +58,11 @@ export function CreateItemWizard({
     dualPricingPercentage,
   } = useEffectivePricing();
   const isDualPricing = pricingStrategy === "dual";
+  const imageUpload = useMerchantCdnImageUpload({
+    merchantId,
+    category: "menu-items",
+    fileNamePrefix: "item",
+  });
 
 
   // Form state
@@ -63,7 +70,6 @@ export function CreateItemWizard({
   const [description, setDescription] = React.useState("");
   const [price, setPrice] = React.useState<number>(0);
   const [cashPrice, setCashPrice] = React.useState<number | null>(null);
-  const [image, setImage] = React.useState("");
   const [selectedCategories, setSelectedCategories] = React.useState<
     Set<string>
   >(new Set());
@@ -84,11 +90,11 @@ export function CreateItemWizard({
       setDescription("");
       setPrice(0);
       setCashPrice(null);
-      setImage("");
+      imageUpload.reset(null);
       setSelectedCategories(new Set());
       setErrors({});
     }
-  }, [open]);
+  }, [imageUpload.reset, open]);
 
   // Validation
   const validate = () => {
@@ -130,6 +136,8 @@ export function CreateItemWizard({
   }, []);
 
   const handleCreateItem = async () => {
+    let uploadedAsset: { cdnUrl: string; storagePath: string } | undefined;
+
     if (!validate()) {
       toast.error("Please fix the errors in the form");
       return;
@@ -140,9 +148,16 @@ export function CreateItemWizard({
       return;
     }
 
+    if (imageUpload.hasPendingChange && !merchantId) {
+      toast.error("Merchant not found");
+      return;
+    }
+
     setIsSaving(true);
 
     try {
+      const resolvedImage = await imageUpload.resolveImageValue();
+      uploadedAsset = resolvedImage.uploadedAsset;
       const categoryIds = Array.from(selectedCategories);
       let successCount = 0;
       let errorCount = 0;
@@ -159,7 +174,7 @@ export function CreateItemWizard({
             description: description.trim() || undefined,
             price,
             cashPrice: cashPrice ?? undefined,
-            image: image.trim() || undefined,
+            image: resolvedImage.value || undefined,
           },
           {
             locationId: isAllLocations ? null : selectedLocationId,
@@ -213,6 +228,9 @@ export function CreateItemWizard({
           },
         );
       } else {
+        if (uploadedAsset) {
+          await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error);
+        }
         toast.error("Failed to create item", {
           description: "Please try again",
         });
@@ -226,6 +244,9 @@ export function CreateItemWizard({
       onSuccess?.();
       onOpenChange(false);
     } catch (error) {
+      if (uploadedAsset) {
+        await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error);
+      }
       console.error("Error creating item:", error);
       toast.error("Failed to create item");
     } finally {
@@ -325,13 +346,18 @@ export function CreateItemWizard({
               </div>
             </div>
 
-            {/* Image URL */}
+            {/* Item Image */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Image URL</label>
-              <Input
-                placeholder="https://..."
-                value={image}
-                onChange={(e) => setImage(e.target.value)}
+              <label className="text-sm font-medium">Item Image</label>
+              <CdnImageUploadField
+                disabled={isSaving}
+                helperText="Uploads to Bunny CDN when you create the item."
+                onClear={imageUpload.clear}
+                onFileSelect={imageUpload.selectFile}
+                previewUrl={imageUpload.previewUrl}
+                selectedFileName={imageUpload.selectedFileName}
+                uploadLabel="Upload item image"
+                uploading={imageUpload.isUploading}
               />
             </div>
 

@@ -18,6 +18,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { CdnImageUploadField } from '@/components/ui/cdn-image-upload-field'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form'
 import { ItemPreviewCard } from './ItemPreviewCard'
@@ -25,7 +26,6 @@ import {
     ChevronDown,
     ChevronRight,
     DollarSign,
-    Image as ImageIcon,
     Tag,
     Layers,
     Settings2,
@@ -36,9 +36,11 @@ import {
     Info,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useMerchantCdnImageUpload } from '@/lib/cdn/use-merchant-cdn-image-upload'
 import { CreateMenuItem, UpdateMenuItem, ResetMenuItemToGlobal } from '@/app/dashboard/actions/menu-items'
 import { CategoriesModel, ModifierGroupsModel, ModifierGroupItemsModel } from '@/types/db-modles'
 import { useLocationStore, useIsAllLocations } from '@/stores/location-store'
+import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
 
 // Form schema
 const itemSchema = z.object({
@@ -109,6 +111,8 @@ export function ItemFormSheet({
     editItem,
 }: ItemFormSheetProps) {
     const queryClient = useQueryClient()
+    const { data: userInfo } = useUserInfo()
+    const merchantId = userInfo?.members?.[0]?.organizations?.merchants?.id || ''
     const { selectedLocationId, locations } = useLocationStore()
     const isAllLocations = useIsAllLocations()
     const [selectedCategories, setSelectedCategories] = React.useState<string[]>([])
@@ -122,6 +126,11 @@ export function ItemFormSheet({
     })
     const [isSubmitting, setIsSubmitting] = React.useState(false)
     const [isResetting, setIsResetting] = React.useState(false)
+    const imageUpload = useMerchantCdnImageUpload({
+        merchantId,
+        category: 'menu-items',
+        fileNamePrefix: 'item',
+    })
 
     // Get current location name for display
     const currentLocationName = React.useMemo(() => {
@@ -173,6 +182,7 @@ export function ItemFormSheet({
                 card_bg_color: editItem.card_bg_color || '',
                 stock_tracking_mode: (editItem.stock_tracking_mode as 'in_stock' | 'out_of_stock' | 'quantity') || 'in_stock',
             })
+            imageUpload.reset(editItem.image || editItem.image_url || '')
             // Set selected categories from editItem (support both old and new naming)
             const categoryData = editItem.category_items || editItem.menu_item_categories
             if (categoryData) {
@@ -194,10 +204,11 @@ export function ItemFormSheet({
                 card_bg_color: '',
                 stock_tracking_mode: 'in_stock',
             })
+            imageUpload.reset(null)
             setSelectedCategories([])
             setSelectedModifiers([])
         }
-    }, [editItem, form, isLocationScoped])
+    }, [editItem, form, imageUpload.reset, isLocationScoped])
 
     const watchedValues = form.watch()
 
@@ -260,6 +271,8 @@ export function ItemFormSheet({
     }
 
     const onSubmit = async (values: ItemFormValues) => {
+        let uploadedAsset: { cdnUrl: string; storagePath: string } | undefined
+
         if (!clerkOrgId) {
             toast.error('Organization Not Found', {
                 description: 'Please ensure you are logged into an organization.'
@@ -267,8 +280,17 @@ export function ItemFormSheet({
             return
         }
 
+        if (imageUpload.hasPendingChange && !merchantId) {
+            toast.error('Merchant Not Found', {
+                description: 'Please reload and try the upload again.'
+            })
+            return
+        }
+
         setIsSubmitting(true)
         try {
+            const resolvedImage = await imageUpload.resolveImageValue()
+            uploadedAsset = resolvedImage.uploadedAsset
             let result
 
             if (editItem) {
@@ -279,7 +301,7 @@ export function ItemFormSheet({
                     description: values.description,
                     price: values.price,
                     cash_price: values.cash_price ?? undefined,
-                    image: values.image_url ?? undefined,
+                    image: resolvedImage.value ?? undefined,
                     availability: values.availability,
                     allergens: values.allergens,
                     card_bg_color: values.card_bg_color ?? undefined,
@@ -292,7 +314,7 @@ export function ItemFormSheet({
                     description: values.description,
                     price: values.price,
                     cash_price: values.cash_price ?? undefined,
-                    image: values.image_url ?? undefined,
+                    image: resolvedImage.value ?? undefined,
                     availability: values.availability,
                     allergens: values.allergens,
                     card_bg_color: values.card_bg_color ?? undefined,
@@ -301,6 +323,9 @@ export function ItemFormSheet({
             }
 
             if (result.error) {
+                if (uploadedAsset) {
+                    await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error)
+                }
                 toast.error('Operation Failed', {
                     description: result.error
                 })
@@ -326,6 +351,9 @@ export function ItemFormSheet({
             onOpenChange(false)
             onSuccess?.()
         } catch (error) {
+            if (uploadedAsset) {
+                await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error)
+            }
             toast.error(editItem ? 'Update Failed' : 'Creation Failed', {
                 description: editItem
                     ? 'Unable to update the menu item. Please try again.'
@@ -434,21 +462,22 @@ export function ItemFormSheet({
                                         <FormField
                                             control={form.control}
                                             name="image_url"
-                                            render={({ field }) => (
+                                            render={() => (
                                                 <FormItem>
-                                                    <FormLabel>Image URL</FormLabel>
+                                                    <FormLabel>Item Image</FormLabel>
                                                     <FormControl>
-                                                        <div className="relative">
-                                                            <ImageIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                                                            <Input
-                                                                className="pl-10"
-                                                                placeholder="https://example.com/image.jpg"
-                                                                {...field}
-                                                                value={field.value || ''}
-                                                            />
-                                                        </div>
+                                                        <CdnImageUploadField
+                                                            disabled={isSubmitting}
+                                                            helperText="Uploads to Bunny CDN when you save the item."
+                                                            onClear={imageUpload.clear}
+                                                            onFileSelect={imageUpload.selectFile}
+                                                            previewUrl={imageUpload.previewUrl}
+                                                            selectedFileName={imageUpload.selectedFileName}
+                                                            uploadLabel="Upload item image"
+                                                            uploading={imageUpload.isUploading}
+                                                        />
                                                     </FormControl>
-                                                    <FormDescription>Enter a URL for the item image</FormDescription>
+                                                    <FormDescription>Optional image shown in POS and ordering surfaces</FormDescription>
                                                     <FormMessage />
                                                 </FormItem>
                                             )}
@@ -859,7 +888,7 @@ export function ItemFormSheet({
                                     description={watchedValues.description}
                                     price={watchedValues.price || 0}
                                     cashPrice={watchedValues.cash_price ?? undefined}
-                                    image={watchedValues.image_url ?? undefined}
+                                    image={imageUpload.previewUrl ?? undefined}
                                     categories={selectedCategories.map(id =>
                                         categories.find(c => c.id === id)?.name || ''
                                     ).filter(Boolean)}

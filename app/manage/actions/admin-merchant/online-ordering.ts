@@ -161,6 +161,9 @@ export async function getAdminOnlineOrderingSettings(
       settings.freeDeliveryThreshold = config.free_delivery_threshold_cents
         ? config.free_delivery_threshold_cents / 100
         : 0
+      settings.acceptOnlinePayments = config.accepts_online_payments ?? true
+      settings.acceptCashOnDelivery = config.accepts_cash_on_delivery ?? false
+      settings.acceptCardOnDelivery = config.accepts_card_on_delivery ?? false
     }
 
     return { success: true, data: settings, error: null }
@@ -305,6 +308,12 @@ export async function adminSaveOnlineOrderingSettings(
     if (settings.tippingEnabled !== undefined) configData.tip_enabled = settings.tippingEnabled
     if (settings.tipConfig?.presetPercentages !== undefined)
       configData.tip_presets = settings.tipConfig.presetPercentages
+    if (settings.acceptOnlinePayments !== undefined)
+      configData.accepts_online_payments = settings.acceptOnlinePayments
+    if (settings.acceptCashOnDelivery !== undefined)
+      configData.accepts_cash_on_delivery = settings.acceptCashOnDelivery
+    if (settings.acceptCardOnDelivery !== undefined)
+      configData.accepts_card_on_delivery = settings.acceptCardOnDelivery
 
     if (existingConfig) {
       const { error: updateError } = await supabase

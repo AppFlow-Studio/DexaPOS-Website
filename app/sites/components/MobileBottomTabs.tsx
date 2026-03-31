@@ -1,16 +1,17 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   UtensilsCrossed,
   Info,
   ClipboardList,
-  ShoppingCart,
+  User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCart } from "../hooks/useCart";
 
-export type TabType = "menu" | "info" | "orders" | "cart";
+export type TabType = "menu" | "info" | "orders" | "cart" | "account";
 
 interface MobileBottomTabsProps {
   activeTab: TabType;
@@ -24,8 +25,8 @@ const tabs: {
 }[] = [
   { id: "menu", label: "Menu", icon: UtensilsCrossed },
   { id: "info", label: "Info", icon: Info },
-  { id: "orders", label: "Orders", icon: ClipboardList },
-  { id: "cart", label: "Cart", icon: ShoppingCart },
+  { id: "orders", label: "Order History", icon: ClipboardList },
+  { id: "account", label: "Account", icon: User },
 ];
 
 export function MobileBottomTabs({
@@ -33,10 +34,13 @@ export function MobileBottomTabs({
   onTabChange,
 }: MobileBottomTabsProps) {
   const { getTotalItems } = useCart();
+  const [mounted, setMounted] = useState(false);
   const itemCount = getTotalItems();
+  useEffect(() => setMounted(true), []);
+  const displayCount = mounted ? itemCount : 0;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden">
+    <nav id="mobile-bottom-tabs" className="fixed bottom-0 left-0 right-0 z-40 lg:hidden">
       <div
         className="absolute inset-0 backdrop-blur-xl"
         style={{
@@ -51,7 +55,7 @@ export function MobileBottomTabs({
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
-          const showBadge = tab.id === "cart" && itemCount > 0;
+          const showBadge = tab.id === "cart" && displayCount > 0;
 
           return (
             <button
@@ -97,12 +101,12 @@ export function MobileBottomTabs({
                 {/* Cart badge */}
                 {showBadge && (
                   <motion.span
-                    key={itemCount}
+                    key={displayCount}
                     initial={{ scale: 0.5, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     className="absolute -top-2 -right-2 flex items-center justify-center h-5 w-5 text-[10px] font-bold text-white bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)] rounded-full shadow-lg shadow-[var(--primary)]/30"
                   >
-                    {itemCount > 9 ? "9+" : itemCount}
+                    {displayCount > 9 ? "9+" : displayCount}
                   </motion.span>
                 )}
               </div>

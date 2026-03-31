@@ -222,6 +222,7 @@ export interface MenusModel {
     location_id: string | null // FK to locations table, null = merchant-level
     name: string
     description: string | null
+    image: string | null
     is_active: boolean
     display_order: number | null
     created_at: string

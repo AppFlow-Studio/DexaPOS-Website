@@ -75,6 +75,7 @@ export interface LocationItemOverride {
   is_available: boolean;
   stock_tracking_mode: StockTrackingMode;
   current_stock: number | null;
+  is_popular: boolean;
 }
 
 export interface LocationCategoryOverride {
@@ -395,6 +396,7 @@ export interface MenuWithCategories {
 
   name: string;
   description: string | null;
+  image: string | null;
 
   is_active: boolean;
   is_global: boolean; // location_id IS NULL

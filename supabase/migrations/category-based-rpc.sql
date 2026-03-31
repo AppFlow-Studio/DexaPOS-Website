@@ -126,6 +126,26 @@ BEGIN
                                     AND COALESCE(lcio.is_available, true) = true
                                 ),
 
+                                -- Item badges (location-specific)
+                                -- is_new: stored per-branch in location_item_overrides
+                                'is_new', COALESCE(lio.is_new, false),
+                                'is_popular', (
+                                    COALESCE(lio.is_popular, false)
+                                    OR (
+                                        p_location_id IS NOT NULL
+                                        AND (
+                                            SELECT COUNT(*) >= 10
+                                            FROM order_items oi
+                                            JOIN orders o ON o.id = oi.order_id
+                                            WHERE oi.menu_item_id = mi.id
+                                              AND o.location_id = p_location_id
+                                              AND o.status = 'completed'
+                                              AND o.completed_at > NOW() - INTERVAL '30 days'
+                                              AND oi.is_voided = false
+                                        )
+                                    )
+                                ),
+
                                 -- Price source
                                 'price_source', CASE
                                     WHEN lcio.custom_price IS NOT NULL THEN 'location_category'
@@ -143,33 +163,33 @@ BEGIN
                     ), '[]'::json)
                     FROM category_items ci
                     JOIN menu_items mi ON mi.id = ci.menu_item_id
-                    LEFT JOIN location_item_overrides lio 
-                        ON lio.menu_item_id = mi.id 
+                    LEFT JOIN location_item_overrides lio
+                        ON lio.menu_item_id = mi.id
                         AND lio.location_id = p_location_id
-                    LEFT JOIN location_category_item_overrides lcio 
-                        ON lcio.menu_item_id = mi.id 
+                    LEFT JOIN location_category_item_overrides lcio
+                        ON lcio.menu_item_id = mi.id
                         AND lcio.category_id = c.id
                         AND lcio.location_id = p_location_id
                     WHERE ci.category_id = c.id
                 ),
-                
+
                 -- Item count
                 'item_count', (
                     SELECT COUNT(*) FROM category_items ci WHERE ci.category_id = c.id
                 ),
-                
+
                 -- Menu count (how many menus use this category)
                 'menu_count', (
                     SELECT COUNT(*) FROM menu_categories mc WHERE mc.category_id = c.id
                 ),
-                
+
                 'created_at', c.created_at,
                 'updated_at', c.updated_at
             ) ORDER BY COALESCE(lco.display_order, c.display_order)
         ), '[]'::json)
         FROM categories c
-        LEFT JOIN location_category_overrides lco 
-            ON lco.category_id = c.id 
+        LEFT JOIN location_category_overrides lco
+            ON lco.category_id = c.id
             AND lco.location_id = p_location_id
         WHERE c.merchant_id = p_merchant_id
     );
@@ -335,7 +355,27 @@ BEGIN
                                         AND COALESCE(lcio.is_available, true) = true     -- L4
                                         AND COALESCE(lmio.is_available, true) = true     -- L5
                                     ),
-                                    
+
+                                    -- Item badges (location-specific)
+                                    -- is_new: stored per-branch in location_item_overrides
+                                    'is_new', COALESCE(lio.is_new, false),
+                                    'is_popular', (
+                                    COALESCE(lio.is_popular, false)
+                                    OR (
+                                        p_location_id IS NOT NULL
+                                        AND (
+                                            SELECT COUNT(*) >= 10
+                                            FROM order_items oi
+                                            JOIN orders o ON o.id = oi.order_id
+                                            WHERE oi.menu_item_id = mi.id
+                                              AND o.location_id = p_location_id
+                                              AND o.status = 'completed'
+                                              AND o.completed_at > NOW() - INTERVAL '30 days'
+                                              AND oi.is_voided = false
+                                        )
+                                    )
+                                ),
+
                                     -- Price source indicator for UI
                                     'price_source', CASE
                                         WHEN lmio.custom_price IS NOT NULL THEN 'location_menu'
@@ -1109,6 +1149,26 @@ BEGIN
                                     AND COALESCE(lio.is_available, true) = true
                                     AND COALESCE(ci.is_available, true) = true
                                     AND COALESCE(lcio.is_available, true) = true
+                                ),
+
+                                -- Item badges (location-specific)
+                                -- is_new: stored per-branch in location_item_overrides
+                                'is_new', COALESCE(lio.is_new, false),
+                                'is_popular', (
+                                    COALESCE(lio.is_popular, false)
+                                    OR (
+                                        p_location_id IS NOT NULL
+                                        AND (
+                                            SELECT COUNT(*) >= 10
+                                            FROM order_items oi
+                                            JOIN orders o ON o.id = oi.order_id
+                                            WHERE oi.menu_item_id = mi.id
+                                              AND o.location_id = p_location_id
+                                              AND o.status = 'completed'
+                                              AND o.completed_at > NOW() - INTERVAL '30 days'
+                                              AND oi.is_voided = false
+                                        )
+                                    )
                                 ),
 
                                 -- Price source

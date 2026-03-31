@@ -21,8 +21,61 @@ import {
 import { CalendarIcon, MapPin, Plus } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
 import { StoreMapEmbed } from "./StoreMapEmbed";
 import type { SavedAddress } from "../../customer-actions";
+import type { WeeklySchedule } from "@/types/site";
+
+// Generates 30-min time slots within the store's operating hours for the selected day.
+// Falls back to 8 AM–9 PM if no hours configured.
+// Filters out past slots when the selected date is today.
+function getTimeSlots(
+  scheduledDate: Date | undefined,
+  operatingHours: WeeklySchedule | undefined,
+  prepTime: number
+): string[] {
+  const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
+  const date = scheduledDate ?? new Date();
+  const dayName = DAY_NAMES[date.getDay()];
+  const daySchedule = operatingHours?.[dayName];
+
+  let startHour = 8, startMin = 0;
+  let endHour = 21, endMin = 0;
+
+  if (daySchedule) {
+    if (!daySchedule.enabled) return []; // store closed this day
+    if (daySchedule.is24Hours) {
+      startHour = 0; startMin = 0; endHour = 23; endMin = 30;
+    } else {
+      const [fH, fM] = daySchedule.from.split(":").map(Number);
+      const [tH, tM] = daySchedule.to.split(":").map(Number);
+      startHour = fH; startMin = fM; endHour = tH; endMin = tM;
+    }
+  }
+
+  const endTotalMins = endHour * 60 + endMin;
+  const startTotalMins = startHour * 60 + startMin + prepTime;
+
+  // Filter past slots if the chosen date is today
+  const now = new Date();
+  const isToday = scheduledDate
+    ? scheduledDate.toDateString() === now.toDateString()
+    : true;
+  const nowMinsPlusPrepTime = isToday ? now.getHours() * 60 + now.getMinutes() + prepTime : 0;
+
+  const slots: string[] = [];
+  // Round up to the next 30-min boundary from open+prep
+  let cursor = Math.ceil(startTotalMins / 30) * 30;
+  while (cursor < endTotalMins) {
+    if (!isToday || cursor > nowMinsPlusPrepTime) {
+      const h = Math.floor(cursor / 60);
+      const m = cursor % 60;
+      slots.push(`${h}:${m.toString().padStart(2, "0")}`);
+    }
+    cursor += 30;
+  }
+  return slots;
+}
 
 interface OrderTypeSectionProps {
   orderType: "pickup" | "delivery";
@@ -37,6 +90,7 @@ interface OrderTypeSectionProps {
   onScheduledTimeChange: (v: string) => void;
   maxFutureDays: number;
   prepTime: number;
+  operatingHours?: WeeklySchedule;
   curbside: boolean;
   onCurbsideChange: (v: boolean) => void;
   // Store info
@@ -49,6 +103,9 @@ interface OrderTypeSectionProps {
   onSelectedAddressChange: (id: string) => void;
   newAddress: { street: string; city: string; state: string; zip: string; notes: string };
   onNewAddressChange: (a: { street: string; city: string; state: string; zip: string; notes: string }) => void;
+  isAuthenticated?: boolean;
+  saveNewAddress?: boolean;
+  onSaveNewAddressChange?: (v: boolean) => void;
 }
 
 export function OrderTypeSection({
@@ -64,6 +121,7 @@ export function OrderTypeSection({
   onScheduledTimeChange,
   maxFutureDays,
   prepTime,
+  operatingHours,
   curbside,
   onCurbsideChange,
   storeAddress,
@@ -74,6 +132,9 @@ export function OrderTypeSection({
   onSelectedAddressChange,
   newAddress,
   onNewAddressChange,
+  isAuthenticated,
+  saveNewAddress,
+  onSaveNewAddressChange,
 }: OrderTypeSectionProps) {
   return (
     <section className="space-y-4">
@@ -132,13 +193,13 @@ export function OrderTypeSection({
                   style={{
                     borderColor: selectedAddressId === addr.id ? "var(--primary)" : "var(--border)",
                     backgroundColor: selectedAddressId === addr.id
-                      ? "color-mix(in srgb, var(--primary) 10%, transparent)"
-                      : "var(--bg)",
+                      ? "color-mix(in srgb, var(--primary) 10%, var(--bg))"
+                      : "var(--card)",
                   }}
                 >
                   <MapPin className="h-4 w-4 mt-0.5 shrink-0" style={{ color: "var(--primary)" }} />
                   <div>
-                    <p className="text-sm font-medium">{addr.label}</p>
+                    <p className="text-sm font-medium" style={{ color: "var(--text)" }}>{addr.label}</p>
                     <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
                       {addr.addressLine1}, {addr.city}, {addr.state} {addr.postalCode}
                     </p>
@@ -151,6 +212,7 @@ export function OrderTypeSection({
                 style={{
                   borderColor: selectedAddressId === "new" ? "var(--primary)" : "var(--border)",
                   borderStyle: selectedAddressId === "new" ? "solid" : "dashed",
+                  backgroundColor: "var(--card)",
                   color: "var(--text-secondary)",
                 }}
               >
@@ -166,34 +228,55 @@ export function OrderTypeSection({
                 value={newAddress.street}
                 onChange={(e) => onNewAddressChange({ ...newAddress, street: e.target.value })}
                 placeholder="Street address"
-                style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)" }}
+                autoComplete="street-address"
+                style={{ borderColor: "var(--border)", backgroundColor: "var(--card)", color: "var(--text)" }}
               />
               <div className="grid grid-cols-3 gap-2">
                 <Input
                   value={newAddress.city}
                   onChange={(e) => onNewAddressChange({ ...newAddress, city: e.target.value })}
                   placeholder="City"
-                  style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)" }}
+                  autoComplete="address-level2"
+                  style={{ borderColor: "var(--border)", backgroundColor: "var(--card)", color: "var(--text)" }}
                 />
                 <Input
                   value={newAddress.state}
                   onChange={(e) => onNewAddressChange({ ...newAddress, state: e.target.value })}
                   placeholder="State"
-                  style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)" }}
+                  autoComplete="address-level1"
+                  style={{ borderColor: "var(--border)", backgroundColor: "var(--card)", color: "var(--text)" }}
                 />
                 <Input
                   value={newAddress.zip}
                   onChange={(e) => onNewAddressChange({ ...newAddress, zip: e.target.value })}
                   placeholder="ZIP"
-                  style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)" }}
+                  autoComplete="postal-code"
+                  style={{ borderColor: "var(--border)", backgroundColor: "var(--card)", color: "var(--text)" }}
                 />
               </div>
               <Input
                 value={newAddress.notes}
                 onChange={(e) => onNewAddressChange({ ...newAddress, notes: e.target.value })}
                 placeholder="Delivery notes (apt #, gate code...)"
-                style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)" }}
+                autoComplete="off"
+                style={{ borderColor: "var(--border)", backgroundColor: "var(--card)", color: "var(--text)" }}
               />
+              {isAuthenticated && onSaveNewAddressChange && (
+                <div className="flex items-center gap-2 pt-1">
+                  <Checkbox
+                    id="save-address"
+                    checked={saveNewAddress ?? false}
+                    onCheckedChange={(checked) => onSaveNewAddressChange(!!checked)}
+                  />
+                  <label
+                    htmlFor="save-address"
+                    className="text-sm cursor-pointer select-none"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    Save this address
+                  </label>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -271,18 +354,26 @@ export function OrderTypeSection({
                   <SelectValue placeholder="Select time" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Array.from({ length: 28 }, (_, i) => {
-                    const hour = Math.floor(i / 2) + 8;
-                    const min = i % 2 === 0 ? "00" : "30";
-                    if (hour > 21) return null;
-                    const ampm = hour >= 12 ? "PM" : "AM";
-                    const displayHour = hour > 12 ? hour - 12 : hour;
-                    return (
-                      <SelectItem key={i} value={`${hour}:${min}`}>
-                        {displayHour}:{min} {ampm}
-                      </SelectItem>
-                    );
-                  })}
+                  {(() => {
+                    const slots = getTimeSlots(scheduledDate, operatingHours, prepTime);
+                    if (slots.length === 0) {
+                      return (
+                        <div className="p-3 text-sm text-center" style={{ color: "var(--text-secondary)" }}>
+                          Store is closed on this day
+                        </div>
+                      );
+                    }
+                    return slots.map((slot) => {
+                      const [h, m] = slot.split(":").map(Number);
+                      const ampm = h >= 12 ? "PM" : "AM";
+                      const displayHour = h % 12 || 12;
+                      return (
+                        <SelectItem key={slot} value={slot}>
+                          {displayHour}:{m.toString().padStart(2, "0")} {ampm}
+                        </SelectItem>
+                      );
+                    });
+                  })()}
                 </SelectContent>
               </Select>
             </div>

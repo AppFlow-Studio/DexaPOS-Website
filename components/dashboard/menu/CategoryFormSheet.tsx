@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { CdnImageUploadField } from "@/components/ui/cdn-image-upload-field";
 import {
   Collapsible,
   CollapsibleContent,
@@ -36,7 +37,6 @@ import {
   Tag,
   ChevronDown,
   ChevronRight,
-  Image as ImageIcon,
   Calendar,
   Sparkles,
   Palette,
@@ -46,6 +46,7 @@ import {
   Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useMerchantCdnImageUpload } from "@/lib/cdn/use-merchant-cdn-image-upload";
 import {
   CreateCategory,
   UpdateCategory,
@@ -75,6 +76,7 @@ import {
   useSetCategoryPrepDefault,
   useRemoveCategoryPrepDefault,
 } from "@/app/dashboard/hooks/usePrepStations";
+import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 
 // Form schema
 const categorySchema = z.object({
@@ -113,6 +115,9 @@ export function CategoryFormSheet({
   editCategory,
 }: CategoryFormSheetProps) {
   const queryClient = useQueryClient();
+  const { data: userInfo } = useUserInfo();
+  const merchantId =
+    userInfo?.members?.[0]?.organizations?.merchants?.id || "";
   const [selectedMenu, setSelectedMenu] = React.useState<string | null>(null);
   const [selectedSchedules, setSelectedSchedules] = React.useState<string[]>(
     [],
@@ -138,6 +143,11 @@ export function CategoryFormSheet({
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [scheduleOverrideDialog, setScheduleOverrideDialog] =
     React.useState<any>(null);
+  const imageUpload = useMerchantCdnImageUpload({
+    merchantId,
+    category: "menu-categories",
+    fileNamePrefix: "category",
+  });
 
   // Fetch location-scoped schedules
   const { data: locationSchedules } = useLocationScopedSchedules();
@@ -168,6 +178,7 @@ export function CategoryFormSheet({
         display_order: editCategory.display_order || null,
         is_active: editCategory.is_active ?? true,
       });
+      imageUpload.reset(editCategory.image || null);
       // Set selected menu from editCategory
       if (editCategory.menu_id) {
         setSelectedMenu(editCategory.menu_id);
@@ -182,10 +193,11 @@ export function CategoryFormSheet({
         display_order: null,
         is_active: true,
       });
+      imageUpload.reset(null);
       setSelectedMenu(null);
       setSelectedSchedules([]);
     }
-  }, [editCategory, form]);
+  }, [editCategory, form, imageUpload.reset]);
 
   // Load category schedules when editing
   React.useEffect(() => {
@@ -240,9 +252,18 @@ export function CategoryFormSheet({
   };
 
   const onSubmit = async (values: CategoryFormValues) => {
+    let uploadedAsset: { cdnUrl: string; storagePath: string } | undefined;
+
     if (!clerkOrgId) {
       toast.error("Organization Not Found", {
         description: "Please ensure you are logged into an organization.",
+      });
+      return;
+    }
+
+    if (imageUpload.hasPendingChange && !merchantId) {
+      toast.error("Merchant Not Found", {
+        description: "Please reload and try the upload again.",
       });
       return;
     }
@@ -251,6 +272,8 @@ export function CategoryFormSheet({
 
     setIsSubmitting(true);
     try {
+      const resolvedImage = await imageUpload.resolveImageValue();
+      uploadedAsset = resolvedImage.uploadedAsset;
       let result;
 
       if (editCategory) {
@@ -260,7 +283,7 @@ export function CategoryFormSheet({
           {
             name: values.name,
             description: values.description,
-            image: values.image ?? undefined,
+            image: resolvedImage.value ?? undefined,
             display_order: values.display_order ?? undefined,
             is_active: values.is_active,
           },
@@ -274,7 +297,7 @@ export function CategoryFormSheet({
           {
             name: values.name,
             description: values.description,
-            image: values.image ?? undefined,
+            image: resolvedImage.value ?? undefined,
             display_order: values.display_order ?? undefined,
             is_active: values.is_active,
             menu_id: selectedMenu || undefined,
@@ -283,6 +306,9 @@ export function CategoryFormSheet({
       }
 
       if (result.error) {
+        if (uploadedAsset) {
+          await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error);
+        }
         toast.error("Operation Failed", {
           description: result.error,
         });
@@ -301,6 +327,9 @@ export function CategoryFormSheet({
       onOpenChange(false);
       onSuccess?.();
     } catch (error) {
+      if (uploadedAsset) {
+        await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error);
+      }
       toast.error(editCategory ? "Update Failed" : "Creation Failed", {
         description: editCategory
           ? "Unable to update the category. Please try again."
@@ -454,19 +483,20 @@ export function CategoryFormSheet({
                       <FormField
                         control={form.control}
                         name="image"
-                        render={({ field }) => (
+                        render={() => (
                           <FormItem>
-                            <FormLabel>Category Image URL</FormLabel>
+                            <FormLabel>Category Image</FormLabel>
                             <FormControl>
-                              <div className="relative">
-                                <ImageIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                  className="pl-10"
-                                  placeholder="https://example.com/image.jpg"
-                                  {...field}
-                                  value={field.value || ""}
-                                />
-                              </div>
+                              <CdnImageUploadField
+                                disabled={isSubmitting}
+                                helperText="Uploads to Bunny CDN when you save the category."
+                                onClear={imageUpload.clear}
+                                onFileSelect={imageUpload.selectFile}
+                                previewUrl={imageUpload.previewUrl}
+                                selectedFileName={imageUpload.selectedFileName}
+                                uploadLabel="Upload category image"
+                                uploading={imageUpload.isUploading}
+                              />
                             </FormControl>
                             <FormDescription>
                               Optional image to represent this category
@@ -797,10 +827,10 @@ export function CategoryFormSheet({
 
               {/* Category Preview Card */}
               <div className="bg-card rounded-xl border-2 border-border/50 p-4 shadow-lg transition-all duration-300 hover:shadow-xl">
-                {watchedValues.image ? (
+                {imageUpload.previewUrl ? (
                   <div className="aspect-video rounded-lg bg-muted mb-3 overflow-hidden">
                     <img
-                      src={watchedValues.image}
+                      src={imageUpload.previewUrl}
                       alt="Category preview"
                       className="w-full h-full object-cover"
                       onError={(e) => {

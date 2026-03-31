@@ -5,6 +5,7 @@ import { createClerkClient } from '@clerk/backend'
 import { createInvitationAdmin } from './clerk-create-invitation-admin'
 import { DeleteOrganization } from '../../actions/delete-organization'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
+import { uploadOrganizationLogo, deleteOrganizationLogo } from '@/lib/cdn/server'
 export async function createCarrierMerchantAccountAdmin({
     userId,
     carrierId,
@@ -50,30 +51,42 @@ export async function createCarrierMerchantAccountAdmin({
         })
 
         const supabase = await createServerSupabaseClient()
-        // Insert Image into Supabase Storage Bucket
-        const filepath = CreateMerchantResponse.id.toString() + '.png';
+        let uploadedLogoUrl: string | null = null
 
         if (merchantImage && CreateMerchantResponse.id) {
-            const { data, error } = await supabase.storage.from('Organizations-Logos').upload(filepath, merchantImage)
-            if (error) {
-                const deleteOrganizationResponse = await DeleteOrganization(CreateMerchantResponse.id)
+            const uploadResult = await uploadOrganizationLogo(
+                merchantImage,
+                CreateMerchantResponse.id,
+            )
+
+            if (!uploadResult.success || !uploadResult.cdnUrl) {
+                await DeleteOrganization(CreateMerchantResponse.id)
                 return {
                     success: false,
-                    message: 'Error uploading organization image: ' + error.message,
-                    // error: error,
+                    message: 'Error uploading organization image: ' + (uploadResult.error || 'Unknown error'),
                 }
             }
+
+            uploadedLogoUrl = uploadResult.cdnUrl
         }
 
-        if (CreateMerchantResponse.id && merchantImage) {
-            const { data } = supabase.storage.from('Organizations-Logos').getPublicUrl(filepath)
-            const UpdateClerkOrganizationResponse = await clerkClient.organizations.updateOrganizationMetadata(
-                CreateMerchantResponse.id,
-                {
-                    publicMetadata: {
-                        imageURL: data.publicUrl,
-                    },
-                })
+        if (CreateMerchantResponse.id && uploadedLogoUrl) {
+            try {
+                await clerkClient.organizations.updateOrganizationMetadata(
+                    CreateMerchantResponse.id,
+                    {
+                        publicMetadata: {
+                            imageURL: uploadedLogoUrl,
+                        },
+                    })
+            } catch (error) {
+                await deleteOrganizationLogo(uploadedLogoUrl, CreateMerchantResponse.id)
+                await DeleteOrganization(CreateMerchantResponse.id)
+                return {
+                    success: false,
+                    message: 'Error updating organization image metadata: ' + ((error as Error)?.message || 'Unknown error'),
+                }
+            }
 
             const createInvitationResponse = await createInvitationAdmin({organizationId: CreateMerchantResponse.id, email: ownerEmail, role: 'merchant.owner', level_type: 'org:manager', org_type: 'merchant'})
 

@@ -8,17 +8,20 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { Minus, Plus, X, Leaf, ShoppingBag } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { OnlineOrderingConfig } from "@/types/site";
+import { StorefrontItem } from "@/types/storefront";
 import { useStorefrontPath } from "../lib/use-storefront-path";
 
 interface CartSidebarProps {
   config?: Partial<OnlineOrderingConfig>;
   storeConfigId?: string;
   slug: string;
+  taxRate?: number; // decimal (e.g. 0.08875 for 8.875%) — fetched server-side
+  allItems?: StorefrontItem[];
 }
 
-export function CartSidebar({ config, storeConfigId, slug }: CartSidebarProps) {
+export function CartSidebar({ config, storeConfigId, slug, taxRate = 0, allItems }: CartSidebarProps) {
   const router = useRouter();
   const storePath = useStorefrontPath(slug);
   const {
@@ -30,12 +33,18 @@ export function CartSidebar({ config, storeConfigId, slug }: CartSidebarProps) {
     getSubtotal,
     goGreen,
     setGoGreen,
+    requestOpenModal,
   } = useCart();
 
   const subtotal = getSubtotal();
-  const taxRate = 0.08;
-  const tax = subtotal * taxRate;
+  const tax = Math.round(subtotal * taxRate * 100) / 100;
   const total = subtotal + tax;
+
+  const cartItemIds = new Set(items.map((i) => i.id));
+  const upsellItems = (allItems ?? [])
+    .filter((i) => !cartItemIds.has(i.id) && i.availability !== false)
+    .sort((a, b) => (b.is_popular ? 1 : 0) - (a.is_popular ? 1 : 0))
+    .slice(0, 4);
 
   const handleCheckout = () => {
     setOpen(false);
@@ -248,6 +257,78 @@ export function CartSidebar({ config, storeConfigId, slug }: CartSidebarProps) {
                       </div>
                     </div>
                   ))}
+
+                  {/* Customers also ordered */}
+                  {upsellItems.length > 0 && (
+                    <div
+                      className="px-6 py-4"
+                      style={{ borderTop: "1px solid var(--border)" }}
+                    >
+                      <p
+                        className="mb-3 text-sm font-semibold"
+                        style={{ color: "var(--text)" }}
+                      >
+                        Customers also ordered
+                      </p>
+                      <div
+                        className="flex gap-3 overflow-x-auto pb-1"
+                        style={{ scrollbarWidth: "none" } as React.CSSProperties}
+                      >
+                        {upsellItems.map((upsellItem) => (
+                          <button
+                            key={upsellItem.id}
+                            type="button"
+                            onClick={() => {
+                              requestOpenModal(upsellItem);
+                              setOpen(false);
+                            }}
+                            className="shrink-0 w-24 rounded-xl overflow-hidden text-left transition-all hover:scale-[1.02] active:scale-[0.98] touch-manipulation"
+                            style={{
+                              backgroundColor: "var(--card)",
+                              border: "1px solid var(--border)",
+                            }}
+                          >
+                            <div
+                              className="h-16 w-full overflow-hidden flex items-center justify-center"
+                              style={{
+                                backgroundColor: "color-mix(in srgb, var(--primary) 10%, var(--bg))",
+                              }}
+                            >
+                              {upsellItem.image ? (
+                                <img
+                                  src={upsellItem.image}
+                                  alt=""
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <span
+                                  className="text-xl font-bold opacity-40"
+                                  style={{ color: "var(--primary)" }}
+                                  aria-hidden
+                                >
+                                  {upsellItem.name.charAt(0).toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                            <div className="p-2 space-y-0.5">
+                              <p
+                                className="text-xs font-semibold leading-tight line-clamp-2"
+                                style={{ color: "var(--text)" }}
+                              >
+                                {upsellItem.name}
+                              </p>
+                              <p
+                                className="text-xs font-medium"
+                                style={{ color: "var(--primary)" }}
+                              >
+                                ${upsellItem.price.toFixed(2)}
+                              </p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </ScrollArea>
@@ -292,7 +373,7 @@ export function CartSidebar({ config, storeConfigId, slug }: CartSidebarProps) {
                     <span>${subtotal.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between" style={{ color: "var(--text-secondary)" }}>
-                    <span>Tax (8%)</span>
+                    <span>Tax{taxRate > 0 ? ` (${(taxRate * 100).toFixed(taxRate * 100 % 1 === 0 ? 0 : 2)}%)` : ""}</span>
                     <span>${tax.toFixed(2)}</span>
                   </div>
                   <div
@@ -322,7 +403,7 @@ export function CartSidebar({ config, storeConfigId, slug }: CartSidebarProps) {
                     disabled={items.length === 0}
                     onClick={handleCheckout}
                   >
-                    Checkout · ${total.toFixed(2)}
+                    Checkout Â· ${total.toFixed(2)}
                   </button>
                 </div>
               </div>

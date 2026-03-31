@@ -7,6 +7,11 @@ import { createClerkClient, ClerkClient } from 'npm:@clerk/backend'
 // ============================================================================
 
 const DEXA_HQ_ORG_ID = Deno.env.get('DEXA_HQ_ORG_ID') || 'org_33z36QibAMZy6kc2xZNYmDl5duh'
+const LEGACY_ORG_LOGO_BUCKET = 'Organizations-Logos'
+const BUNNY_STORAGE_ZONE = Deno.env.get('BUNNY_STORAGE_ZONE_NAME') || ''
+const BUNNY_STORAGE_API_KEY = Deno.env.get('BUNNY_STORAGE_API_KEY') || ''
+const BUNNY_STORAGE_REGION = Deno.env.get('BUNNY_STORAGE_REGION') || ''
+const BUNNY_STORAGE_BASE = `https://${BUNNY_STORAGE_REGION ? `${BUNNY_STORAGE_REGION}.` : ''}storage.bunnycdn.com/${BUNNY_STORAGE_ZONE}`
 
 // ============================================================================
 // TYPES
@@ -55,6 +60,79 @@ function logEvent(eventType: string, message: string, data?: any): void {
 function logError(eventType: string, message: string, error: any): void {
   const timestamp = new Date().toISOString()
   console.error(`[${timestamp}] [${eventType}] ERROR: ${message}`, error)
+}
+
+function extractStoragePathFromUrl(url: string): string {
+  const parsedUrl = new URL(url)
+  return parsedUrl.pathname.replace(/^\/+/, '')
+}
+
+function extractLegacyOrganizationLogoPath(url: string): string | null {
+  const urlParts = url.split(`${LEGACY_ORG_LOGO_BUCKET}/`)
+  return urlParts.length < 2 ? null : urlParts[1]
+}
+
+async function deleteOrganizationLogoAsset(
+  supabase: SupabaseClient,
+  organizationId: string,
+  imageUrl?: string | null,
+): Promise<void> {
+  if (imageUrl) {
+    const storagePath = extractStoragePathFromUrl(imageUrl)
+
+    if (
+      storagePath.startsWith(`organizations/${organizationId}/`) &&
+      BUNNY_STORAGE_ZONE &&
+      BUNNY_STORAGE_API_KEY
+    ) {
+      const deleteRes = await fetch(`${BUNNY_STORAGE_BASE}/${storagePath}`, {
+        method: 'DELETE',
+        headers: {
+          AccessKey: BUNNY_STORAGE_API_KEY,
+        },
+      })
+
+      if (!deleteRes.ok) {
+        const errorText = await deleteRes.text()
+        logError(
+          'organization.deleted',
+          'Failed to delete Bunny organization logo',
+          { organizationId, status: deleteRes.status, errorText },
+        )
+      }
+
+      return
+    }
+
+    const legacyPath = extractLegacyOrganizationLogoPath(imageUrl)
+    if (legacyPath) {
+      const { error } = await supabase.storage
+        .from(LEGACY_ORG_LOGO_BUCKET)
+        .remove([legacyPath])
+
+      if (error) {
+        logError(
+          'organization.deleted',
+          'Failed to delete legacy organization logo from Supabase Storage',
+          { organizationId, error: error.message },
+        )
+      }
+
+      return
+    }
+  }
+
+  const { error } = await supabase.storage
+    .from(LEGACY_ORG_LOGO_BUCKET)
+    .remove([`${organizationId}.png`])
+
+  if (error) {
+    logError(
+      'organization.deleted',
+      'Failed to delete default legacy organization logo from Supabase Storage',
+      { organizationId, error: error.message },
+    )
+  }
 }
 
 // ============================================================================
@@ -491,10 +569,11 @@ async function handleOrganizationDeleted(ctx: WebhookContext): Promise<Response>
     return errorResponse(error.message, 500)
   }
 
-  // Delete logo from storage if exists
-  await supabase.storage
-    .from('Organizations-Logos')
-    .remove([`${event.data.id}.png`])
+  await deleteOrganizationLogoAsset(
+    supabase,
+    event.data.id,
+    event.data.public_metadata?.imageURL,
+  )
 
   logEvent(eventType, 'Organization deleted successfully', { orgId: event.data.id })
   return successResponse({ data }, 'Organization deleted successfully')

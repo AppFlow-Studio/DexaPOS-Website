@@ -6,6 +6,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
 import { revalidatePath } from 'next/cache'
 import bcrypt from 'bcryptjs'
+import { clerkClient } from '@clerk/nextjs/server'
 import type {
   AdminStaffMember,
   BulkPinResetResult,
@@ -13,6 +14,8 @@ import type {
   AdminPinResetResult,
   AdminToggleStatusResult,
   AdminCreateStaffResult,
+  AdminCreateClerkStaffData,
+  AdminCreateClerkStaffResult,
 } from '@/types/staff'
 
 // ============================================================================
@@ -392,6 +395,255 @@ export async function getMerchantStaffRoles(): Promise<
 // ============================================================================
 // GET STAFF STATS
 // ============================================================================
+// ============================================================================
+// BULK DEACTIVATE STAFF
+// ============================================================================
+/**
+ * Bulk deactivate multiple staff members by their staff_profile_ids
+ * Deactivates all location_members rows for each staff profile
+ */
+export async function adminBulkDeactivateStaff(
+  merchantId: string,
+  staffProfileIds: string[]
+): Promise<{ success: boolean; deactivated: number; errors: string[] }> {
+  await assertHQPermission('hq.merchant.manage_team')
+
+  const supabase = createServiceRoleClient()
+
+  let deactivated = 0
+  const errors: string[] = []
+
+  for (const staffProfileId of staffProfileIds) {
+    const { error } = await supabase
+      .from('location_members')
+      .update({ is_active: false })
+      .eq('staff_profile_id', staffProfileId)
+      .eq('merchant_id', merchantId)
+
+    if (error) {
+      console.error('[adminBulkDeactivateStaff] Error deactivating:', staffProfileId, error)
+      errors.push(staffProfileId)
+    } else {
+      deactivated++
+    }
+  }
+
+  if (deactivated > 0) {
+    await logAdminAction('MERCHANT_STAFF_DEACTIVATED', {
+      merchantId,
+      resourceType: 'staff_member',
+      resourceName: `bulk_deactivate_${new Date().toISOString()}`,
+      metadata: {
+        deactivated,
+        staff_profile_ids: staffProfileIds,
+        source: 'adminBulkDeactivateStaff',
+      },
+    })
+  }
+
+  revalidatePath(`/manage/merchants/${merchantId}`)
+  return { success: true, deactivated, errors }
+}
+
+// ============================================================================
+// CREATE CLERK (DASHBOARD) STAFF
+// ============================================================================
+/**
+ * Create a Clerk dashboard user for a merchant, as an HQ admin.
+ * Looks up the merchant's clerk_org_id, creates a Clerk user with a temp
+ * password, adds them to the org, and provisions the DB records.
+ */
+export async function adminCreateClerkStaff(
+  merchantId: string,
+  data: AdminCreateClerkStaffData
+): Promise<AdminCreateClerkStaffResult> {
+  const { userId: adminUserId } = await assertHQPermission('hq.merchant.manage_team')
+
+  const supabase = createServerSupabaseClient()
+  const srClient = createServiceRoleClient()
+
+  // 1. Look up merchant to get clerk_org_id
+  const { data: merchant, error: merchantError } = await srClient
+    .from('merchants')
+    .select('id, clerk_org_id')
+    .eq('id', merchantId)
+    .single()
+
+  if (merchantError || !merchant?.clerk_org_id) {
+    console.error('[adminCreateClerkStaff] Merchant lookup failed:', merchantError)
+    return { success: false, error: 'Merchant not found or missing Clerk org' }
+  }
+
+  const clerkOrgId = merchant.clerk_org_id
+
+  // 2. Generate temp password
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*'
+  const tempPassword = Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+
+  // 3. Optionally generate PIN
+  let hashedPin: string | null = null
+  let generatedPin: string | undefined
+
+  if (data.autoGeneratePin) {
+    generatedPin = Math.floor(1000 + Math.random() * 9000).toString()
+    hashedPin = await bcrypt.hash(generatedPin, 10)
+  } else if (data.pin) {
+    if (!/^\d{4,6}$/.test(data.pin)) {
+      return { success: false, error: 'PIN must be 4-6 digits' }
+    }
+    hashedPin = await bcrypt.hash(data.pin, 10)
+  }
+
+  // 4. Create Clerk user
+  const clerk = await clerkClient()
+  let clerkUser: Awaited<ReturnType<typeof clerk.users.createUser>>
+  try {
+    clerkUser = await clerk.users.createUser({
+      emailAddress: [data.email],
+      password: tempPassword,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      phoneNumber: data.phone ? [data.phone] : undefined,
+      publicMetadata: {
+        creationType: 'admin_direct',
+        organizationId: clerkOrgId,
+        merchantId,
+        roleCode: data.roleCode,
+      },
+      skipPasswordRequirement: false,
+      skipPasswordChecks: false,
+    })
+  } catch (err: unknown) {
+    console.error('[adminCreateClerkStaff] Clerk user creation failed:', err)
+    const msg = err instanceof Error ? err.message : 'Failed to create Clerk user'
+    return { success: false, error: msg }
+  }
+
+  // 5. Add user to merchant's Clerk org
+  let membership: Awaited<ReturnType<typeof clerk.organizations.createOrganizationMembership>>
+  try {
+    membership = await clerk.organizations.createOrganizationMembership({
+      organizationId: clerkOrgId,
+      userId: clerkUser.id,
+      role: 'org:member',
+    })
+  } catch (err: unknown) {
+    console.error('[adminCreateClerkStaff] Org membership failed:', err)
+    await clerk.users.deleteUser(clerkUser.id)
+    return { success: false, error: 'Failed to add user to merchant organization' }
+  }
+
+  // 6. Eagerly create users row (webhook may not have fired yet)
+  await srClient.from('users').upsert(
+    {
+      id: clerkUser.id,
+      first_name: data.firstName,
+      last_name: data.lastName,
+      email: data.email,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'id', ignoreDuplicates: true }
+  )
+
+  // 7. Create staff_profile
+  const { data: staffProfile, error: profileError } = await srClient
+    .from('staff_profiles')
+    .insert({
+      merchant_id: merchantId,
+      user_id: clerkUser.id,
+      first_name: data.firstName,
+      last_name: data.lastName,
+      email: data.email,
+      phone: data.phone || null,
+      account_type: 'clerk',
+      is_active: true,
+    })
+    .select()
+    .single()
+
+  if (profileError || !staffProfile) {
+    console.error('[adminCreateClerkStaff] Staff profile creation failed:', profileError)
+    await clerk.users.deleteUser(clerkUser.id)
+    return { success: false, error: 'Failed to create staff profile' }
+  }
+
+  // 8. Create member record
+  const { data: member, error: memberError } = await srClient
+    .from('members')
+    .insert({
+      id: membership.id,
+      user_id: clerkUser.id,
+      staff_profile_id: staffProfile.id,
+      organization_id: clerkOrgId,
+      role: data.roleCode,
+    })
+    .select()
+    .single()
+
+  if (memberError || !member) {
+    console.error('[adminCreateClerkStaff] Member creation failed:', memberError)
+    await srClient.from('staff_profiles').delete().eq('id', staffProfile.id)
+    await clerk.users.deleteUser(clerkUser.id)
+    return { success: false, error: 'Failed to create member record' }
+  }
+
+  // 9. Create location_members record
+  const { error: locationError } = await srClient.from('location_members').insert({
+    location_id: data.locationId,
+    merchant_id: merchantId,
+    user_id: clerkUser.id,
+    staff_profile_id: staffProfile.id,
+    role_code: data.roleCode,
+    is_primary_location: true,
+    is_active: true,
+    pin_code: hashedPin,
+    hourly_rate: data.hourlyRate || 0,
+    employment_type: data.employmentType,
+    assigned_at: new Date().toISOString(),
+  })
+
+  if (locationError) {
+    console.error('[adminCreateClerkStaff] Location members creation failed:', locationError)
+    await srClient.from('members').delete().eq('id', member.id)
+    await srClient.from('staff_profiles').delete().eq('id', staffProfile.id)
+    await clerk.users.deleteUser(clerkUser.id)
+    return { success: false, error: 'Failed to create location assignment' }
+  }
+
+  // 10. Audit log
+  await logAdminAction('MERCHANT_STAFF_CREATED', {
+    merchantId,
+    locationId: data.locationId,
+    resourceType: 'staff_member',
+    resourceId: staffProfile.id,
+    resourceName: `${data.firstName} ${data.lastName}`,
+    changes: {
+      after: {
+        first_name: data.firstName,
+        last_name: data.lastName,
+        email: data.email,
+        role: data.roleCode,
+        account_type: 'clerk',
+        is_active: true,
+      },
+    },
+    metadata: {
+      admin_created: true,
+      hq_admin_id: adminUserId,
+      source: 'adminCreateClerkStaff',
+    },
+  })
+
+  revalidatePath(`/manage/merchants/${merchantId}`)
+
+  return {
+    success: true,
+    staffProfileId: staffProfile.id,
+    tempPassword,
+    generatedPin,
+  }
+}
+
 /**
  * Get staff statistics for a merchant
  */
