@@ -529,11 +529,6 @@ export function CheckoutPage({
                 color: "var(--primary)",
                 borderRadius: "9999px",
               }}
-<<<<<<< HEAD
-            >
-              Back to menu
-            </Link>
-=======
               onSelectCustom={() => setSelectedTipIndex(null)}
               onSelectNoTip={() => {
                 setSelectedTipIndex(-1);
@@ -542,8 +537,8 @@ export function CheckoutPage({
               onCustomTipChange={setCustomTip}
             />
             <div style={{ borderTop: "1px solid var(--border)" }} />
-          </>
-        )}
+          <div/>
+        <div/>
 
         {/* Promo Code */}
         <PromoCodeSection />
@@ -584,8 +579,8 @@ export function CheckoutPage({
             }}
           >
             {paymentError}
->>>>>>> origin/Temur-Dev
           </div>
+        )}
 
           {/* Store closed banner */}
           {storeIsClosed && (
