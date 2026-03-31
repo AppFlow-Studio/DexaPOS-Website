@@ -15,14 +15,10 @@ import { StoreInfoBar, getTodayHoursString, isStoreOpenNow } from "./StoreInfoBa
 import { AccountDrawer } from "./AccountDrawer";
 import { useCart } from "../hooks/useCart";
 import { useSessionInit } from "../hooks/useSessionInit";
-<<<<<<< .merge_file_is9wWb
 import { useStorefrontPath } from "../lib/use-storefront-path";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronUp } from "lucide-react";
 import { SiteThemeConfig } from "@/types/site";
-=======
-import { motion, AnimatePresence } from "motion/react";
->>>>>>> .merge_file_kAO8uK
 
 interface StorefrontLayoutProps {
   site: Site | null;
