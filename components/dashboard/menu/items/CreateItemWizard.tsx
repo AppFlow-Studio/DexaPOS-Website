@@ -13,14 +13,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useMerchantCdnImageUpload } from "@/lib/cdn/use-merchant-cdn-image-upload";
 import {
-  BottomSheet,
-  BottomSheetContent,
-  BottomSheetHeader,
-  BottomSheetBody,
-  BottomSheetFooter,
-  BottomSheetTitle,
-  BottomSheetDescription,
-} from "@/components/ui/bottom-sheet";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { CategoryWithItems } from "@/types/menu";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import {
@@ -29,6 +28,7 @@ import {
 } from "@/app/dashboard/actions/item-assignments";
 import { PriceInputGroup } from "@/components/dashboard/locations/PriceInputGroup";
 import { useEffectivePricing } from "@/app/dashboard/hooks/useEffectivePricing";
+import { ItemPreviewCard } from "@/components/dashboard/menu/ItemPreviewCard";
 
 interface CreateItemWizardProps {
   open: boolean;
@@ -82,6 +82,13 @@ export function CreateItemWizard({
       isAllLocations ? c.is_global : c.location_id === selectedLocationId,
     );
   }, [categoriesList, isAllLocations, selectedLocationId]);
+  const selectedCategoryNames = React.useMemo(
+    () =>
+      accessibleCategories
+        .filter((category) => selectedCategories.has(category.id))
+        .map((category) => category.name),
+    [accessibleCategories, selectedCategories],
+  );
 
   // Reset on close
   React.useEffect(() => {
@@ -257,19 +264,24 @@ export function CreateItemWizard({
   const isFormValid = name.trim().length >= 2 && selectedCategories.size > 0;
 
   return (
-    <BottomSheet open={open} onOpenChange={onOpenChange}>
-      <BottomSheetContent className="h-[85vh]">
-        <BottomSheetHeader>
-          <BottomSheetTitle className="flex items-center gap-2">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        overlayClassName="bg-slate-950/40 backdrop-blur-md"
+        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-6xl"
+      >
+        <div className="flex max-h-[min(92vh,920px)] flex-col">
+        <DialogHeader className="border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
+          <DialogTitle className="flex items-center gap-2 text-[1.625rem] font-semibold tracking-tight">
             <Plus className="h-5 w-5 text-primary" />
             Create New Item
-          </BottomSheetTitle>
-          <BottomSheetDescription>
+          </DialogTitle>
+          <DialogDescription className="max-w-[60ch] text-sm leading-6">
             Create a new menu item and assign it to categories
-          </BottomSheetDescription>
-        </BottomSheetHeader>
+          </DialogDescription>
+        </DialogHeader>
 
-        <BottomSheetBody className="flex-1 overflow-y-auto">
+        <div className="min-h-0 flex flex-1 flex-col overflow-hidden lg:flex-row">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           {/* Context Banner */}
           <div className="mb-4 p-3 rounded-lg bg-primary/5 border border-primary/20">
             <div className="flex items-center gap-2 text-sm">
@@ -438,10 +450,45 @@ export function CreateItemWizard({
               )}
             </div>
           </div>
-        </BottomSheetBody>
+        </div>
 
-        <BottomSheetFooter className="border-t pt-4">
-          <div className="flex items-center justify-between w-full">
+        <div className="hidden min-h-0 w-[360px] shrink-0 overflow-y-auto border-l border-border/70 bg-muted/10 px-6 py-5 lg:block">
+          <div className="space-y-6 pb-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <Plus className="h-4 w-4" />
+              Item Preview
+            </div>
+
+            <ItemPreviewCard
+              name={name || "New Item"}
+              description={description || ""}
+              price={price || 0}
+              cashPrice={cashPrice ?? undefined}
+              image={imageUpload.previewUrl ?? undefined}
+              categories={selectedCategoryNames}
+              availability
+              expandDescription
+            />
+
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Tag className="h-4 w-4" />
+                {selectedCategoryNames.length > 0
+                  ? `${selectedCategoryNames.length} categor${selectedCategoryNames.length === 1 ? "y" : "ies"} selected`
+                  : "No categories selected yet"}
+              </div>
+              {!isAllLocations && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <MapPin className="h-4 w-4" />
+                  Location-scoped item
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        </div>
+
+        <DialogFooter className="shrink-0 border-t border-border/70 bg-background/95 px-6 py-4 sm:justify-end">
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
@@ -453,7 +500,7 @@ export function CreateItemWizard({
             <Button
               onClick={handleCreateItem}
               disabled={isSaving || !isFormValid}
-              className="gap-2"
+              className="gap-2 min-w-[150px]"
             >
               {isSaving ? (
                 <>
@@ -467,9 +514,9 @@ export function CreateItemWizard({
                 </>
               )}
             </Button>
-          </div>
-        </BottomSheetFooter>
-      </BottomSheetContent>
-    </BottomSheet>
+        </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -9,14 +9,13 @@ import * as z from "zod";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  BottomSheet,
-  BottomSheetContent,
-  BottomSheetHeader,
-  BottomSheetBody,
-  BottomSheetFooter,
-  BottomSheetTitle,
-  BottomSheetDescription,
-} from "@/components/ui/bottom-sheet";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -1373,14 +1372,23 @@ export function NewEditItemFormSheet({
   // ========================================================================
 
   return (
-    <BottomSheet open={open} onOpenChange={handleClose}>
-      <BottomSheetContent className="!h-[95vh]">
-        <BottomSheetHeader>
-          <BottomSheetTitle className="flex items-center gap-2">
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
+      <DialogContent
+        overlayClassName="bg-slate-950/40 backdrop-blur-md"
+        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-6xl xl:max-w-7xl"
+      >
+        <Form {...form}>
+          <form
+            id="item-form"
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="flex max-h-[min(92vh,960px)] flex-col"
+          >
+        <DialogHeader className="border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
+          <DialogTitle className="flex items-center gap-2 text-[1.625rem] font-semibold tracking-tight">
             <Sparkles className="h-5 w-5 text-primary animate-pulse" />
             {editItem ? "Edit Menu Item" : "Create New Menu Item"}
-          </BottomSheetTitle>
-          <BottomSheetDescription className="space-y-2">
+          </DialogTitle>
+          <DialogDescription className="space-y-2 max-w-[80ch] text-sm leading-6">
             <span>{editingContext.description}</span>
 
             {/* Context Badges */}
@@ -1452,13 +1460,12 @@ export function NewEditItemFormSheet({
                   )}
               </div>
             )}
-          </BottomSheetDescription>
-        </BottomSheetHeader>
+          </DialogDescription>
+        </DialogHeader>
 
-        <BottomSheetBody className="px-0">
-          <div className="flex flex-col lg:flex-row h-full">
+          <div className="min-h-0 flex flex-1 flex-col overflow-hidden lg:flex-row">
             {/* Form Section */}
-            <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-4">
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5 space-y-4">
               {/* Editing Context Banner - Shows which level user is editing */}
               {editItem && editingContext.level > 1 && (
                 <EditingContextBanner
@@ -1476,12 +1483,7 @@ export function NewEditItemFormSheet({
                 />
               )}
 
-              <Form {...form}>
-                <form
-                  id="item-form"
-                  onSubmit={form.handleSubmit(onSubmit)}
-                  className="space-y-4"
-                >
+              <div className="space-y-4">
                   <div className="space-y-0">
 
                     {/* SECTION 1: GENERAL */}
@@ -2722,17 +2724,16 @@ export function NewEditItemFormSheet({
                     </Collapsible>
                     )}
                   </div>
-                </form>
-              </Form>
+              </div>
             </div>
 
             {/* Preview Section */}
-            <div className="w-full lg:w-1/3 bg-muted/30 p-6 border-t lg:border-t-0 lg:border-l flex flex-col items-center">
+            <div className="hidden min-h-0 w-[360px] shrink-0 overflow-y-auto border-l border-border/70 bg-muted/10 px-6 py-5 lg:block">
               {/* <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
                                 <Sparkles className="h-4 w-4" />
                                 Live Preview
                             </h3> */}
-              <div className="sticky w-[80%] top-4">
+              <div className="space-y-6 pb-4">
                 <ItemPreviewCard
                   name={watchedValues.name}
                   description={watchedValues.description}
@@ -2771,14 +2772,11 @@ export function NewEditItemFormSheet({
               </div>
             </div>
           </div>
-        </BottomSheetBody>
-
-        <BottomSheetFooter>
+        <DialogFooter className="shrink-0 border-t border-border/70 bg-background/95 px-6 py-4 sm:justify-end">
           <Button
             type="button"
             variant="outline"
             onClick={handleClose}
-            className="flex-1 lg:flex-none"
           >
             Cancel
           </Button>
@@ -2786,7 +2784,7 @@ export function NewEditItemFormSheet({
             type="submit"
             form="item-form"
             disabled={isSubmitting}
-            className="flex-1 lg:flex-none lg:min-w-[150px]"
+            className="min-w-[150px]"
           >
             {isSubmitting ? (
               <>
@@ -2827,9 +2825,11 @@ export function NewEditItemFormSheet({
               "Create Item"
             )}
           </Button>
-        </BottomSheetFooter>
-      </BottomSheetContent>
-    </BottomSheet>
+        </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

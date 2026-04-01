@@ -55,8 +55,6 @@ import {
   Building2,
   Receipt,
   Lock,
-  Upload,
-  Trash2,
   Palette,
   Truck,
   Utensils,
@@ -83,13 +81,13 @@ import {
 import {
   useAdminModifierGroups,
   useAdminItemModifierGroups,
+  useAdminCategories,
 } from '@/lib/queries/use-admin-merchant'
 import { adminKeys } from '@/lib/queries/admin-keys'
 import { useMerchantDetails } from '@/lib/queries/use-merchants'
 import { AdminPriceBreakdown } from '../components/AdminPriceBreakdown'
 import { RecipeManager } from '@/app/dashboard/menu/components/RecipeManager'
 import { ItemPreviewCard } from '@/components/dashboard/menu/ItemPreviewCard'
-import { uploadStoreImage, deleteStoreImage } from '@/lib/storage/actions'
 import { cn } from '@/lib/utils'
 
 // ============================================================================
@@ -184,7 +182,9 @@ export function ItemFormSheet({
   const isLocationView = locationId && locationId !== 'all'
   const [isResetting, setIsResetting] = useState(false)
   const [newModifierIds, setNewModifierIds] = useState<string[]>([]) // For create mode
-  const [isUploading, setIsUploading] = useState(false)
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [showQuickCreateCategory, setShowQuickCreateCategory] = useState(false)
+  const [createdCategoryNames, setCreatedCategoryNames] = useState<Record<string, string>>({})
   const hasLocationOverride = isEdit && item?.has_location_override
   const queryClient = useQueryClient()
   const itemImageUpload = useMerchantCdnImageUpload({
@@ -195,9 +195,40 @@ export function ItemFormSheet({
 
   // Fetch merchant details for location names
   const { data: merchantDetails } = useMerchantDetails(merchantId)
+  const { data: categoryOptions = [], isLoading: isLoadingCategories } = useAdminCategories(merchantId, locationId)
   const currentLocationName = isLocationView 
     ? merchantDetails?.locations.find((l) => l.id === locationId)?.name || 'This Location'
     : 'All Locations'
+  const accessibleCategories = useMemo(
+    () =>
+      categoryOptions.filter((category) =>
+        isLocationView
+          ? category.is_global || category.location_id === locationId
+          : category.is_global,
+      ),
+    [categoryOptions, isLocationView, locationId],
+  )
+  const selectedCategoryNames = useMemo(() => {
+    if (selectedCategories.length > 0) {
+      return selectedCategories
+        .map((selectedCategoryId) => {
+          const matchedCategory = accessibleCategories.find(
+            (category) => category.id === selectedCategoryId,
+          )
+
+          if (matchedCategory) return matchedCategory.name
+
+          const existingItemCategory = item?.categories?.find(
+            (category) => category.id === selectedCategoryId,
+          )
+
+          return existingItemCategory?.name || createdCategoryNames[selectedCategoryId]
+        })
+        .filter((categoryName): categoryName is string => Boolean(categoryName))
+    }
+
+    return item?.categories?.map((category) => category.name) || []
+  }, [accessibleCategories, createdCategoryNames, item?.categories, selectedCategories])
 
   // Form definition
   const form = useForm<ItemFormValues>({
@@ -255,6 +286,9 @@ export function ItemFormSheet({
           override_availability: item.location_override?.is_available ?? item.base_availability,
         })
         itemImageUpload.reset(item.image || null)
+        setSelectedCategories(item.categories?.map((category) => category.id) || [])
+        setCreatedCategoryNames({})
+        setShowQuickCreateCategory(false)
       } else {
         form.reset({
           name: '',
@@ -280,15 +314,34 @@ export function ItemFormSheet({
         })
         itemImageUpload.reset(null)
         setNewModifierIds([])
+        setSelectedCategories(categoryId ? [categoryId] : [])
+        setCreatedCategoryNames({})
+        setShowQuickCreateCategory(false)
       }
     }
-  }, [form, isEdit, item, itemImageUpload.reset, open])
+  }, [categoryId, form, isEdit, item, itemImageUpload.reset, open])
+
+  const toggleCategory = (categoryValue: string) => {
+    setSelectedCategories((prev) =>
+      prev.includes(categoryValue)
+        ? prev.filter((id) => id !== categoryValue)
+        : [...prev, categoryValue],
+    )
+  }
 
   // Handlers
   const onSubmit = async (values: ItemFormValues) => {
     let uploadedAsset: { cdnUrl: string; storagePath: string } | undefined
+    const categoryIdsToAssign = Array.from(
+      new Set(categoryId ? [categoryId, ...selectedCategories] : selectedCategories),
+    )
 
     try {
+      if (!isEdit && categoryIdsToAssign.length === 0) {
+        toast.error('Please select at least one category')
+        return
+      }
+
       const canEditBaseFields = !isLocationView || !isEdit
       const resolvedImage = canEditBaseFields
         ? await itemImageUpload.resolveImageValue()
@@ -366,19 +419,29 @@ export function ItemFormSheet({
           toast.error('Failed to create item', { description: result.error })
           return
         }
-        if (categoryId) {
-          await addItemToCategory(merchantId, categoryId, result.data.id)
+
+        const assignmentResults = await Promise.all(
+          categoryIdsToAssign.map((selectedCategoryId) =>
+            addItemToCategory(merchantId, selectedCategoryId, result.data.id),
+          ),
+        )
+
+        if (assignmentResults.some((assignmentResult) => assignmentResult.error)) {
+          toast.warning('Item created but some category assignments failed')
         }
         toast.success('Item created successfully')
       }
       // Force refresh of the items list
       queryClient.invalidateQueries({ queryKey: adminKeys.merchantMenuItems(merchantId, locationId).slice(0, -1) })
       // If we added to a category, might need to invalidate categories too
-      if (categoryId) {
+      if (categoryIdsToAssign.length > 0) {
            queryClient.invalidateQueries({ queryKey: adminKeys.merchantCategories(merchantId, locationId) })
-           // Also specific category details if needed
-           queryClient.invalidateQueries({ queryKey: ['admin', 'merchant', 'category', categoryId] })
+           categoryIdsToAssign.forEach((selectedCategoryId) => {
+             queryClient.invalidateQueries({ queryKey: ['admin', 'merchant', 'category', selectedCategoryId] })
+           })
       }
+      setShowQuickCreateCategory(false)
+      setCreatedCategoryNames({})
       onSuccess()
       onClose()
     } catch (error) {
@@ -539,60 +602,22 @@ export function ItemFormSheet({
                                             <FormItem>
                                                 <FormLabel>Image</FormLabel>
                                                 <FormControl>
-                                                    <div className="space-y-3">
-                                                        {field.value ? (
-                                                            <div className="relative group w-full h-40 rounded-lg overflow-hidden border bg-muted">
-                                                                <img src={field.value} alt="Item" className="w-full h-full object-cover" />
-                                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                                                    <Button type="button" size="sm" variant="destructive" onClick={() => field.onChange('')}>
-                                                                        <Trash2 className="h-3 w-3 mr-1" /> Remove
-                                                                    </Button>
-                                                                </div>
-                                                            </div>
-                                                        ) : (
-                                                            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
-                                                                <input
-                                                                    type="file"
-                                                                    accept="image/png,image/jpeg,image/gif,image/webp"
-                                                                    className="hidden"
-                                                                    onChange={async (e) => {
-                                                                        const file = e.target.files?.[0]
-                                                                        if (!file) return
-                                                                        setIsUploading(true)
-                                                                        try {
-                                                                            const formData = new FormData()
-                                                                            formData.append('file', file)
-                                                                            const result = await uploadStoreImage(formData, 'menu-items')
-                                                                            if (result.success && result.url) {
-                                                                                field.onChange(result.url)
-                                                                                toast.success('Image uploaded')
-                                                                            } else {
-                                                                                toast.error('Upload failed', { description: result.error })
-                                                                            }
-                                                                        } catch {
-                                                                            toast.error('Upload failed')
-                                                                        } finally {
-                                                                            setIsUploading(false)
-                                                                        }
-                                                                    }}
-                                                                />
-                                                                {isUploading ? (
-                                                                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                                                                ) : (
-                                                                    <>
-                                                                        <Upload className="h-8 w-8 text-muted-foreground mb-2" />
-                                                                        <p className="text-sm text-muted-foreground">Click to upload image</p>
-                                                                        <p className="text-xs text-muted-foreground">PNG, JPG, GIF, WebP (max 5MB)</p>
-                                                                    </>
-                                                                )}
-                                                            </label>
-                                                        )}
-                                                        <div className="relative">
-                                                            <ImageIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                                            <Input placeholder="Or paste image URL..." className="pl-9 text-xs" {...field} value={field.value || ''} />
-                                                        </div>
-                                                    </div>
+                                                    <CdnImageUploadField
+                                                        disabled={form.formState.isSubmitting || (isLocationView && isEdit)}
+                                                        helperText="Uploads to Bunny CDN when you save the item."
+                                                        onClear={itemImageUpload.clear}
+                                                        onFileSelect={itemImageUpload.selectFile}
+                                                        previewUrl={itemImageUpload.previewUrl}
+                                                        selectedFileName={itemImageUpload.selectedFileName}
+                                                        uploadLabel="Upload item image"
+                                                        uploading={itemImageUpload.isUploading}
+                                                    />
                                                 </FormControl>
+                                                {isLocationView && isEdit && (
+                                                    <FormDescription className="text-amber-600">
+                                                        Switch to &quot;All Locations&quot; to edit item details
+                                                    </FormDescription>
+                                                )}
                                                 <FormMessage />
                                             </FormItem>
                                         )}
@@ -1006,6 +1031,148 @@ export function ItemFormSheet({
                                         </FormItem>
                                     )}
                                 />
+
+                                <div className="space-y-4 rounded-xl border border-border/70 bg-background p-4">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2">
+                                            <Tag className="h-4 w-4 text-blue-500" />
+                                            <div className="flex items-center gap-2">
+                                                <FormLabel className="mb-0">Categories</FormLabel>
+                                                {selectedCategories.length > 0 && (
+                                                    <Badge variant="secondary" className="text-xs">
+                                                        {selectedCategories.length}
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {!isEdit && (
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => setShowQuickCreateCategory((prev) => !prev)}
+                                            >
+                                                {showQuickCreateCategory ? (
+                                                    <>
+                                                        <X className="mr-1 h-3.5 w-3.5" />
+                                                        Close
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Plus className="mr-1 h-3.5 w-3.5" />
+                                                        New Category
+                                                    </>
+                                                )}
+                                            </Button>
+                                        )}
+                                    </div>
+
+                                    {isEdit ? (
+                                        <div className="space-y-3">
+                                            {selectedCategoryNames.length > 0 ? (
+                                                <div className="flex flex-wrap gap-2">
+                                                    {selectedCategoryNames.map((categoryName) => (
+                                                        <Badge key={categoryName} variant="outline">
+                                                            {categoryName}
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm italic text-muted-foreground">
+                                                    This item is currently uncategorized.
+                                                </p>
+                                            )}
+                                            <FormDescription>
+                                                Category reassignment is handled from category and menu management views.
+                                            </FormDescription>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {selectedCategories.length === 0 && accessibleCategories.length > 0 && (
+                                                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
+                                                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                                                    <div className="space-y-1">
+                                                        <p className="font-medium text-amber-800">Select at least one category</p>
+                                                        <p className="text-xs text-amber-700">
+                                                            HQ item creation should follow the merchant flow here. New items need a category before save.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {isLoadingCategories ? (
+                                                <div className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+                                                    <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin opacity-60" />
+                                                    <p>Loading categories...</p>
+                                                </div>
+                                            ) : accessibleCategories.length === 0 ? (
+                                                <div className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+                                                    <Tag className="mx-auto mb-2 h-8 w-8 opacity-50" />
+                                                    <p>No categories available in this scope.</p>
+                                                    <p className="mt-1 text-xs">
+                                                        Create one here before saving the item.
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-3">
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {accessibleCategories.map((category) => {
+                                                            const isSelected = selectedCategories.includes(category.id)
+
+                                                            return (
+                                                                <button
+                                                                    key={category.id}
+                                                                    type="button"
+                                                                    onClick={() => toggleCategory(category.id)}
+                                                                    className={cn(
+                                                                        'rounded-full border px-3 py-1.5 text-sm font-medium transition-all hover:scale-[1.02] active:scale-[0.99]',
+                                                                        isSelected
+                                                                            ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                                                                            : 'border-border bg-background hover:border-primary/40 hover:bg-muted/40',
+                                                                    )}
+                                                                >
+                                                                    {category.name}
+                                                                </button>
+                                                            )
+                                                        })}
+                                                    </div>
+
+                                                    {selectedCategories.length > 0 && (
+                                                        <button
+                                                            type="button"
+                                                            className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                                                            onClick={() => setSelectedCategories(categoryId ? [categoryId] : [])}
+                                                        >
+                                                            <X className="h-3 w-3" />
+                                                            Clear extra category selections
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {showQuickCreateCategory && (
+                                                <QuickCreateCategoryDialog
+                                                    merchantId={merchantId}
+                                                    locationId={isLocationView ? locationId : null}
+                                                    onClose={() => setShowQuickCreateCategory(false)}
+                                                    onCreated={async (newCategoryId, newCategoryName) => {
+                                                        setCreatedCategoryNames((prev) => ({
+                                                            ...prev,
+                                                            [newCategoryId]: newCategoryName,
+                                                        }))
+                                                        setSelectedCategories((prev) =>
+                                                            prev.includes(newCategoryId) ? prev : [...prev, newCategoryId],
+                                                        )
+                                                        setShowQuickCreateCategory(false)
+                                                        await queryClient.invalidateQueries({
+                                                            queryKey: adminKeys.merchantCategories(merchantId, locationId),
+                                                        })
+                                                    }}
+                                                />
+                                            )}
+                                        </>
+                                    )}
+                                </div>
                                </>
                            )}
                         </TabsContent>
@@ -1025,7 +1192,7 @@ export function ItemFormSheet({
                             cashPrice={(isLocationView && isEdit ? (watchedValues.override_cash_price ?? watchedValues.cash_price) : watchedValues.cash_price) ?? undefined}
                             image={itemImageUpload.previewUrl || undefined}
                             availability={isLocationView && isEdit ? (watchedValues.override_availability ?? true) : watchedValues.availability}
-                            categories={item?.categories?.map(c => c.name)}
+                            categories={selectedCategoryNames}
                             expandDescription
                         />
                          <div>
@@ -1365,10 +1532,12 @@ function QuickCreateModifierDialog({
 
 export function QuickCreateCategoryDialog({
     merchantId,
+    locationId,
     onClose,
     onCreated,
 }: {
     merchantId: string
+    locationId?: string | null
     onClose: () => void
     onCreated: (categoryId: string, categoryName: string) => void
 }) {
@@ -1383,6 +1552,7 @@ export function QuickCreateCategoryDialog({
             const result = await createAdminCategory(merchantId, {
                 name: name.trim(),
                 description: description.trim() || null,
+                location_id: locationId || null,
                 is_active: true,
             })
             if (result.error || !result.data) {
