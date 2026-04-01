@@ -121,6 +121,12 @@ const navMain: NavGroup[] = [
                 url: '/manage/cash-drawers',
                 icon: Archive,
                 requiredPermission: 'analytics.view',
+            },
+            {
+                title: 'Tax Report',
+                url: '/manage/reports/tax',
+                icon: FileText,
+                requiredPermission: 'analytics.view',
             }
         ]
     },
