@@ -18,10 +18,10 @@ function extractStoreSlug(hostname: string): string | null {
     return null;
   }
 
-  // Production: order.{slug}.dexapos.com
-  if (hostWithoutPort.endsWith('.dexapos.com')) {
+  // Production: order.{slug}.dexaposai.com
+  if (hostWithoutPort.endsWith('.dexaposai.com')) {
     const parts = hostWithoutPort.split('.');
-    // order.pizzapalace.dexapos.com → ['order', 'pizzapalace', 'dexapos', 'com']
+    // order.pizzapalace.dexapos.com → ['order', 'pizzapalace', 'dexaposai', 'com']
     return parts.length >= 4 ? parts[1] : null;
   }
 
@@ -34,7 +34,7 @@ async function lookupCustomDomain(hostname: string): Promise<string | null> {
   if (
     hostWithoutPort === 'localhost' ||
     hostWithoutPort.endsWith('.localhost') ||
-    hostWithoutPort.endsWith('.dexapos.com')
+    hostWithoutPort.endsWith('.dexaposai.com')
   ) {
     return null;
   }
