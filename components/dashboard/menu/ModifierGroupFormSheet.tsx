@@ -7,14 +7,13 @@ import * as z from "zod";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  BottomSheet,
-  BottomSheetContent,
-  BottomSheetHeader,
-  BottomSheetBody,
-  BottomSheetFooter,
-  BottomSheetTitle,
-  BottomSheetDescription,
-} from "@/components/ui/bottom-sheet";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -36,7 +35,6 @@ import {
 import {
   Layers,
   Plus,
-  X,
   ChevronDown,
   ChevronRight,
   GripVertical,
@@ -507,10 +505,14 @@ export function ModifierGroupFormSheet({
 
   return (
     <>
-      <BottomSheet open={open} onOpenChange={handleClose}>
-        <BottomSheetContent className="!h-[95vh]">
-          <BottomSheetHeader>
-            <BottomSheetTitle className="flex items-center gap-2">
+      <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
+        <DialogContent
+          overlayClassName="bg-slate-950/40 backdrop-blur-md"
+          className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-5xl xl:max-w-6xl"
+        >
+          <div className="flex max-h-[min(92vh,960px)] flex-col">
+          <DialogHeader className="border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
+            <DialogTitle className="flex items-center gap-2 text-[1.625rem] font-semibold tracking-tight">
               <Layers className="h-5 w-5 text-purple-500" />
               {!canEditStructure ? (
                 <>Customize Global Group at Location</>
@@ -519,8 +521,8 @@ export function ModifierGroupFormSheet({
               ) : (
                 "Create Modifier Group"
               )}
-            </BottomSheetTitle>
-            <BottomSheetDescription>
+            </DialogTitle>
+            <DialogDescription className="max-w-[60ch] text-sm leading-6">
               {!canEditStructure ? (
                 <>
                   Customize pricing, visibility, ordering, and stock for options
@@ -532,13 +534,12 @@ export function ModifierGroupFormSheet({
               ) : (
                 "Modifier groups let customers customize their orders (e.g., size, toppings, sauces)."
               )}
-            </BottomSheetDescription>
-          </BottomSheetHeader>
+            </DialogDescription>
+          </DialogHeader>
 
-          <BottomSheetBody>
-            <div className="flex flex-col lg:flex-row h-full gap-6 ">
+            <div className="min-h-0 flex flex-1 flex-col overflow-hidden gap-6 px-6 py-5 lg:flex-row">
               {/* Form Section */}
-              <div className="w-full h-full overflow-y-auto space-y-4 px-4">
+              <div className="min-h-0 w-full flex-1 overflow-y-auto space-y-4 pr-2">
                 {editGroup && !canEditStructure && (
                   <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 animate-in fade-in slide-in-from-left-4">
                     <div className="flex items-center justify-between">
@@ -973,7 +974,7 @@ export function ModifierGroupFormSheet({
               </div>
 
               {/* Preview Section */}
-              <div className="w-full lg:w-1/3 bg-muted/30 rounded-lg p-6 flex flex-col">
+              <div className="min-h-0 w-full overflow-y-auto rounded-lg bg-muted/30 p-6 lg:w-[340px] xl:w-[380px]">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
                   <Sparkles className="h-4 w-4" />
                   Preview
@@ -1072,60 +1073,61 @@ export function ModifierGroupFormSheet({
                 </div>
               </div>
             </div>
-          </BottomSheetBody>
-
-          <BottomSheetFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleClose}
-              className="flex-1 lg:flex-none"
-            >
-              {canEditStructure ? "Cancel" : "Close"}
-            </Button>
-            {canEditStructure && (
+          <DialogFooter className="border-t border-border/70 bg-background/95 px-6 py-4">
+            <div className="flex w-full flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
               <Button
-                type="submit"
-                form="modifier-group-form"
-                disabled={isSubmitting}
-                className="flex-1 lg:flex-none lg:min-w-[150px]"
+                type="button"
+                variant="outline"
+                onClick={handleClose}
+                className="sm:min-w-[140px]"
               >
-                {isSubmitting ? (
-                  <>
-                    <svg
-                      className="animate-spin -ml-1 mr-2 h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    Saving...
-                  </>
-                ) : editGroup ? (
-                  "Save Changes"
-                ) : (
-                  "Create Group"
-                )}
+                {canEditStructure ? "Cancel" : "Close"}
               </Button>
-            )}
-          </BottomSheetFooter>
-        </BottomSheetContent>
-      </BottomSheet>
+              {canEditStructure && (
+                <Button
+                  type="submit"
+                  form="modifier-group-form"
+                  disabled={isSubmitting}
+                  className="sm:min-w-[180px]"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <svg
+                        className="animate-spin -ml-1 mr-2 h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                      </svg>
+                      Saving...
+                    </>
+                  ) : editGroup ? (
+                    "Save Changes"
+                  ) : (
+                    "Create Group"
+                  )}
+                </Button>
+              )}
+            </div>
+          </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Nested Sheet for Adding/Editing Options */}
-      <BottomSheet
+      <Dialog
         open={isAddOptionSheetOpen}
         onOpenChange={(open) => {
           if (!open) {
@@ -1135,20 +1137,25 @@ export function ModifierGroupFormSheet({
           setIsAddOptionSheetOpen(open);
         }}
       >
-        <BottomSheetContent height="auto" className="!rounded-t-[24px]">
-          <BottomSheetHeader>
-            <BottomSheetTitle className="flex items-center gap-2">
+        <DialogContent
+          elevation="high"
+          overlayClassName="bg-slate-950/30 backdrop-blur-sm"
+          className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-2xl"
+        >
+          <div className="flex max-h-[min(88vh,860px)] flex-col">
+          <DialogHeader className="border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
+            <DialogTitle className="flex items-center gap-2 text-[1.625rem] font-semibold tracking-tight">
               <Plus className="h-5 w-5 text-green-500" />
               {editingOption ? "Edit Option" : "Add Option"}
-            </BottomSheetTitle>
-            <BottomSheetDescription>
+            </DialogTitle>
+            <DialogDescription className="max-w-[60ch] text-sm leading-6">
               {editingOption
                 ? "Update this modifier option"
                 : "Add a new option to this modifier group"}
-            </BottomSheetDescription>
-          </BottomSheetHeader>
+            </DialogDescription>
+          </DialogHeader>
 
-          <BottomSheetBody className="">
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
             <Form {...optionForm}>
               <form
                 id="option-form"
@@ -1327,27 +1334,30 @@ export function ModifierGroupFormSheet({
                 </div>
               )}
             </div>
-          </BottomSheetBody>
+          </div>
 
-          <BottomSheetFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setIsAddOptionSheetOpen(false);
-                setEditingOption(null);
-                optionForm.reset();
-              }}
-              className="flex-1"
-            >
-              Cancel
-            </Button>
-            <Button type="submit" form="option-form" className="flex-1">
-              {editingOption ? "Update Option" : "Add Option"}
-            </Button>
-          </BottomSheetFooter>
-        </BottomSheetContent>
-      </BottomSheet>
+          <DialogFooter className="border-t border-border/70 bg-background/95 px-6 py-4">
+            <div className="flex w-full flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsAddOptionSheetOpen(false);
+                  setEditingOption(null);
+                  optionForm.reset();
+                }}
+                className="sm:min-w-[140px]"
+              >
+                Cancel
+              </Button>
+              <Button type="submit" form="option-form" className="sm:min-w-[180px]">
+                {editingOption ? "Update Option" : "Add Option"}
+              </Button>
+            </div>
+          </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Override Dialog for Location-Level Customization */}
       {selectedItemForOverride && selectedLocation && (

@@ -4,14 +4,13 @@ import * as React from 'react'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import {
-    BottomSheet,
-    BottomSheetContent,
-    BottomSheetHeader,
-    BottomSheetBody,
-    BottomSheetFooter,
-    BottomSheetTitle,
-    BottomSheetDescription,
-} from '@/components/ui/bottom-sheet'
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -23,7 +22,6 @@ import {
     MapPin,
     Search,
     CheckCircle2,
-    X,
     Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -332,22 +330,25 @@ export function AddCategoryToMenuWizard({
     }
 
     return (
-        <BottomSheet open={open} onOpenChange={onOpenChange}>
-            <BottomSheetContent className="!h-[95vh]">
-                <BottomSheetHeader>
-                    <BottomSheetTitle className="flex items-center gap-2">
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent
+                overlayClassName="bg-slate-950/40 backdrop-blur-md"
+                className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-4xl"
+            >
+                <div className="flex max-h-[min(92vh,920px)] flex-col">
+                <DialogHeader className="border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
+                    <DialogTitle className="flex items-center gap-2 text-[1.625rem] font-semibold tracking-tight">
                         <Tag className="h-5 w-5 text-primary" />
                         Add Categories to Menu
-                    </BottomSheetTitle>
-                    <BottomSheetDescription>
+                    </DialogTitle>
+                    <DialogDescription className="max-w-[60ch] text-sm leading-6">
                         Select categories to add to &quot;{menuName || 'this menu'}&quot;. You can customize each category after adding.
-                    </BottomSheetDescription>
-                </BottomSheetHeader>
+                    </DialogDescription>
+                </DialogHeader>
 
-                <BottomSheetBody className="px-0">
-                    <div className="flex flex-col h-full">
+                    <div className="min-h-0 flex flex-1 flex-col overflow-hidden">
                         {/* Search */}
-                        <div className="px-6 pb-4 border-b">
+                        <div className="border-b border-border/70 px-6 pb-4 pt-4">
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
@@ -382,7 +383,7 @@ export function AddCategoryToMenuWizard({
                         </div>
 
                         {/* Categories List */}
-                        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+                        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5 space-y-6">
                             {/* Global Categories */}
                             {globalCategories.length > 0 && (
                                 <div className="space-y-3">
@@ -689,37 +690,39 @@ export function AddCategoryToMenuWizard({
                             )}
                         </div>
                     </div>
-                </BottomSheetBody>
 
-                <BottomSheetFooter>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => onOpenChange(false)}
-                        className="flex-1 lg:flex-none"
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        onClick={handleSave}
-                        disabled={isSaving || selectedCategories.size === 0}
-                        className="flex-1 lg:flex-none lg:min-w-[150px]"
-                    >
-                        {isSaving ? (
-                            <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Adding...
-                            </>
-                        ) : (
-                            <>
-                                <Tag className="h-4 w-4 mr-2" />
-                                Add {selectedCategories.size > 0 ? `${selectedCategories.size} ` : ''}Categor{selectedCategories.size !== 1 ? 'ies' : 'y'}
-                            </>
-                        )}
-                    </Button>
-                </BottomSheetFooter>
-            </BottomSheetContent>
-        </BottomSheet>
+                <DialogFooter className="border-t border-border/70 bg-background/95 px-6 py-4">
+                    <div className="flex w-full flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => onOpenChange(false)}
+                            className="sm:min-w-[140px]"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleSave}
+                            disabled={isSaving || selectedCategories.size === 0}
+                            className="sm:min-w-[180px]"
+                        >
+                            {isSaving ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Adding...
+                                </>
+                            ) : (
+                                <>
+                                    <Tag className="mr-2 h-4 w-4" />
+                                    Add {selectedCategories.size > 0 ? `${selectedCategories.size} ` : ''}Categor{selectedCategories.size !== 1 ? 'ies' : 'y'}
+                                </>
+                            )}
+                        </Button>
+                    </div>
+                </DialogFooter>
+                </div>
+            </DialogContent>
+        </Dialog>
     )
 }
 

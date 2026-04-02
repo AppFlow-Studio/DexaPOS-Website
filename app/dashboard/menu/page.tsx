@@ -455,7 +455,7 @@ export default function MenuPage() {
           </DialogTrigger>
           <DialogContent
             overlayClassName="bg-slate-950/40 backdrop-blur-md"
-            className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-5xl"
+            className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-4xl"
           >
             <Form {...form}>
               <form
