@@ -47,6 +47,41 @@ export async function adminGetMerchantLocations(merchantId: string) {
 }
 
 /**
+ * Get a single location for a merchant (admin access)
+ */
+export async function adminGetMerchantLocationById(
+  merchantId: string,
+  locationId: string
+) {
+  try {
+    await assertHQPermission('hq.merchant.view')
+
+    const supabase = createServerSupabaseClient()
+
+    const { data, error } = await supabase
+      .from('locations')
+      .select('*')
+      .eq('merchant_id', merchantId)
+      .eq('id', locationId)
+      .single()
+
+    if (error) {
+      console.error('[adminGetMerchantLocationById] Error:', error)
+      return { success: false, error: error.message, data: null }
+    }
+
+    return { success: true, error: null, data: data as Location }
+  } catch (err) {
+    console.error('[adminGetMerchantLocationById] Error:', err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to fetch location',
+      data: null,
+    }
+  }
+}
+
+/**
  * Get the clerk_org_id for a merchant (admin access)
  */
 export async function adminGetMerchantClerkOrgId(merchantId: string) {

@@ -1190,7 +1190,12 @@ export function ItemFormSheet({
                             description={watchedValues.description || ''}
                             price={isLocationView && isEdit ? (watchedValues.override_price ?? watchedValues.price) : watchedValues.price}
                             cashPrice={(isLocationView && isEdit ? (watchedValues.override_cash_price ?? watchedValues.cash_price) : watchedValues.cash_price) ?? undefined}
-                            image={itemImageUpload.previewUrl || undefined}
+                            image={
+                                itemImageUpload.previewUrl ||
+                                watchedValues.image ||
+                                item?.image ||
+                                undefined
+                            }
                             availability={isLocationView && isEdit ? (watchedValues.override_availability ?? true) : watchedValues.availability}
                             categories={selectedCategoryNames}
                             expandDescription

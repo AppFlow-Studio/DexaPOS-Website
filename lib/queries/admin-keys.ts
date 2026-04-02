@@ -21,6 +21,9 @@ export const adminKeys = {
   merchantDetail: (id: string) =>
     [...adminKeys.merchants(), 'detail', id] as const,
 
+  merchantLocationDetail: (merchantId: string, locationId: string) =>
+    [...adminKeys.merchants(), merchantId, 'location-detail', locationId] as const,
+
   merchantStaff: (id: string) =>
     [...adminKeys.merchants(), id, 'staff'] as const,
 

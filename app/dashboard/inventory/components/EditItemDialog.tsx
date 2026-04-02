@@ -345,8 +345,11 @@ export function EditItemDialog({
   if (isEditingGlobalInLocation) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[450px]">
-          <DialogHeader>
+        <DialogContent
+          className="w-[calc(100%-1rem)] sm:max-w-[450px] max-h-[90vh] overflow-hidden p-0 gap-0"
+          overlayClassName="bg-black/35 backdrop-blur-md"
+        >
+          <DialogHeader className="px-6 pt-6 pb-4">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/10">
                 <Package className="h-5 w-5 text-primary" />
@@ -369,131 +372,134 @@ export function EditItemDialog({
 
           <form
             onSubmit={locationForm.handleSubmit(onLocationSubmit)}
-            className="space-y-4 mt-4"
+            className="contents"
           >
-            {/* Item Name (read-only) */}
-            <div className="space-y-2">
-              <Label className="text-muted-foreground">Item Name</Label>
-              <div className="px-3 py-2 border rounded-md bg-muted/50 text-sm">
-                {item.name}
-              </div>
-            </div>
-
-            {/* Info box */}
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
-              <Info className="h-4 w-4 text-blue-600 mt-0.5" />
-              <p className="text-xs text-blue-600">
-                This is a global item. You can only adjust stock and pricing for
-                this location. To edit item details, switch to "All Locations"
-                view.
-              </p>
-            </div>
-
-            <Separator />
-
-            {/* Location Stock Settings */}
-            <div className="space-y-4">
-              <h4 className="font-medium text-sm">Location Stock</h4>
-
-              <div className="grid grid-cols-2 gap-4">
+            <div className="overflow-y-auto px-6 py-4 max-h-[calc(90vh-150px)]">
+              <div className="space-y-4">
+                {/* Item Name (read-only) */}
                 <div className="space-y-2">
-                  <Label htmlFor="loc_current_stock">
-                    Stock Quantity ({item.unit_type})
-                  </Label>
-                  <Input
-                    id="loc_current_stock"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    {...locationForm.register("current_stock")}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="loc_reorder_override">
-                    Reorder Threshold
-                  </Label>
-                  <Input
-                    id="loc_reorder_override"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder={`${item.reorder_point} (default)`}
-                    {...locationForm.register("reorder_threshold_override")}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Leave empty to use global default
-                  </p>
-                </div>
-              </div>
-
-              {/* Reason for stock change */}
-              {locationForm.watch("current_stock") !== initialStock && (
-                <div className="col-span-2 space-y-2">
-                  <Label htmlFor="stock_update_reason">
-                    Reason for Change{" "}
-                    <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="stock_update_reason"
-                    placeholder="e.g., Inventory count adjustment, received delivery..."
-                    {...locationForm.register("stock_update_reason")}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    This will be recorded in the activity log
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <Separator />
-
-            {/* Cost Override */}
-            <div className="space-y-4">
-              <h4 className="font-medium text-sm">Pricing</h4>
-
-              <div className="p-3 rounded-lg bg-muted/50 border">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-muted-foreground">
-                    Base Cost (from global)
-                  </span>
-                  <span className="font-medium">
-                    ${item.cost_per_unit?.toFixed(2)}/{item.unit_type}
-                  </span>
-                </div>
-
-                <div className="flex items-end gap-2">
-                  <div className="flex-1 space-y-2">
-                    <Label htmlFor="cost_override">Cost Override ($)</Label>
-                    <Input
-                      id="cost_override"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="Set custom cost for this location"
-                      {...locationForm.register("cost_override")}
-                    />
+                  <Label className="text-muted-foreground">Item Name</Label>
+                  <div className="px-3 py-2 border rounded-md bg-muted/50 text-sm">
+                    {item.name}
                   </div>
-                  {(existingOverride?.custom_cost ||
-                    locationForm.watch("cost_override")) && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-10 w-10 text-destructive hover:bg-destructive/10"
-                      onClick={handleRemoveCostOverride}
-                      disabled={isSubmitting}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                </div>
+
+                {/* Info box */}
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+                  <Info className="h-4 w-4 text-blue-600 mt-0.5" />
+                  <p className="text-xs text-blue-600">
+                    This is a global item. You can only adjust stock and pricing for
+                    this location. To edit item details, switch to "All Locations"
+                    view.
+                  </p>
+                </div>
+
+                <Separator />
+
+                {/* Location Stock Settings */}
+                <div className="space-y-4">
+                  <h4 className="font-medium text-sm">Location Stock</h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="loc_current_stock">
+                        Stock Quantity ({item.unit_type})
+                      </Label>
+                      <Input
+                        id="loc_current_stock"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        {...locationForm.register("current_stock")}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="loc_reorder_override">
+                        Reorder Threshold
+                      </Label>
+                      <Input
+                        id="loc_reorder_override"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder={`${item.reorder_point} (default)`}
+                        {...locationForm.register("reorder_threshold_override")}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Leave empty to use global default
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Reason for stock change */}
+                  {locationForm.watch("current_stock") !== initialStock && (
+                    <div className="space-y-2">
+                      <Label htmlFor="stock_update_reason">
+                        Reason for Change{" "}
+                        <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="stock_update_reason"
+                        placeholder="e.g., Inventory count adjustment, received delivery..."
+                        {...locationForm.register("stock_update_reason")}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        This will be recorded in the activity log
+                      </p>
+                    </div>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Leave empty to use the base cost
-                </p>
+
+                <Separator />
+
+                {/* Cost Override */}
+                <div className="space-y-4">
+                  <h4 className="font-medium text-sm">Pricing</h4>
+
+                  <div className="p-3 rounded-lg bg-muted/50 border">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-muted-foreground">
+                        Base Cost (from global)
+                      </span>
+                      <span className="font-medium">
+                        ${item.cost_per_unit?.toFixed(2)}/{item.unit_type}
+                      </span>
+                    </div>
+
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1 space-y-2">
+                        <Label htmlFor="cost_override">Cost Override ($)</Label>
+                        <Input
+                          id="cost_override"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="Set custom cost for this location"
+                          {...locationForm.register("cost_override")}
+                        />
+                      </div>
+                      {(existingOverride?.custom_cost ||
+                        locationForm.watch("cost_override")) && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-10 w-10 text-destructive hover:bg-destructive/10"
+                          onClick={handleRemoveCostOverride}
+                          disabled={isSubmitting}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Leave empty to use the base cost
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
-
-            <DialogFooter className="pt-4">
+            <DialogFooter className="px-6 py-4 border-t flex-col-reverse sm:flex-row">
               <Button
                 type="button"
                 variant="outline"
@@ -517,8 +523,11 @@ export function EditItemDialog({
   // ============================================================================
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px]">
-        <DialogHeader>
+      <DialogContent
+        className="w-[calc(100%-1rem)] sm:max-w-[550px] max-h-[90vh] overflow-hidden p-0 gap-0"
+        overlayClassName="bg-black/35 backdrop-blur-md"
+      >
+        <DialogHeader className="px-6 pt-6 pb-4">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/10">
               <Package className="h-5 w-5 text-primary" />
@@ -548,186 +557,189 @@ export function EditItemDialog({
 
         <form
           onSubmit={globalForm.handleSubmit(onGlobalSubmit)}
-          className="space-y-4 mt-4"
+          className="contents"
         >
-          {/* Name */}
-          <div className="space-y-2">
-            <Label htmlFor="name">Item Name *</Label>
-            <Input
-              id="name"
-              placeholder="e.g., Burger Patty (4oz)"
-              {...globalForm.register("name")}
-            />
-            {globalForm.formState.errors.name && (
-              <p className="text-sm text-destructive">
-                {globalForm.formState.errors.name.message}
-              </p>
-            )}
-          </div>
-
-          {/* SKU & Category Row */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="sku">SKU</Label>
-              <Input
-                id="sku"
-                placeholder="e.g., BP-004"
-                {...globalForm.register("sku")}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
-              <Select
-                value={globalForm.watch("category")}
-                onValueChange={(value) =>
-                  globalForm.setValue("category", value)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Unit & Cost Row */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="unit_type">Unit Type *</Label>
-              <Select
-                value={globalForm.watch("unit_type")}
-                onValueChange={(value) =>
-                  globalForm.setValue("unit_type", value)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {UNIT_TYPES.map((unit) => (
-                    <SelectItem key={unit.value} value={unit.value}>
-                      {unit.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cost_per_unit">Base Cost per Unit ($)</Label>
-              <Input
-                id="cost_per_unit"
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0.00"
-                {...globalForm.register("cost_per_unit")}
-              />
-            </div>
-          </div>
-
-          {/* Stock Mode */}
-          <div className="space-y-2">
-            <Label>Stock Mode</Label>
-            <div className="grid grid-cols-3 gap-2">
-              {STOCK_MODES.map((mode) => (
-                <button
-                  key={mode.value}
-                  type="button"
-                  onClick={() => globalForm.setValue("stock_mode", mode.value)}
-                  className={cn(
-                    "p-3 rounded-lg border text-left transition-all",
-                    stockMode === mode.value
-                      ? "border-primary bg-primary/5 ring-1 ring-primary"
-                      : "border-muted hover:border-primary/50"
-                  )}
-                >
-                  <p className="font-medium text-sm">{mode.label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {mode.description}
+          <div className="overflow-y-auto px-6 py-4 max-h-[calc(90vh-150px)]">
+            <div className="space-y-4">
+              {/* Name */}
+              <div className="space-y-2">
+                <Label htmlFor="name">Item Name *</Label>
+                <Input
+                  id="name"
+                  placeholder="e.g., Burger Patty (4oz)"
+                  {...globalForm.register("name")}
+                />
+                {globalForm.formState.errors.name && (
+                  <p className="text-sm text-destructive">
+                    {globalForm.formState.errors.name.message}
                   </p>
-                </button>
-              ))}
-            </div>
-          </div>
+                )}
+              </div>
 
-          {/* Stock & Reorder Row - Only show when tracking AND in All Locations view */}
-          {stockMode === "stock_tracking" && (
-            <div className="grid grid-cols-2 gap-4 p-4 rounded-lg bg-muted/50 border">
-              {isLocationView ? (
-                // In location view, stock is managed separately
-                <div className="col-span-2 text-center text-sm text-muted-foreground py-2">
-                  <Info className="h-4 w-4 inline-block mr-2" />
-                  Stock is managed per location via the table
+              {/* SKU & Category Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="sku">SKU</Label>
+                  <Input
+                    id="sku"
+                    placeholder="e.g., BP-004"
+                    {...globalForm.register("sku")}
+                  />
                 </div>
-              ) : (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="current_stock">Default Stock</Label>
-                    <Input
-                      id="current_stock"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="0"
-                      {...globalForm.register("current_stock")}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Initial stock for new locations
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="reorder_point">Default Reorder Point</Label>
-                    <Input
-                      id="reorder_point"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="0"
-                      {...globalForm.register("reorder_point")}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Alert when stock falls below
-                    </p>
-                  </div>
-                </>
+                <div className="space-y-2">
+                  <Label htmlFor="category">Category</Label>
+                  <Select
+                    value={globalForm.watch("category")}
+                    onValueChange={(value) =>
+                      globalForm.setValue("category", value)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CATEGORIES.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Unit & Cost Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="unit_type">Unit Type *</Label>
+                  <Select
+                    value={globalForm.watch("unit_type")}
+                    onValueChange={(value) =>
+                      globalForm.setValue("unit_type", value)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {UNIT_TYPES.map((unit) => (
+                        <SelectItem key={unit.value} value={unit.value}>
+                          {unit.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="cost_per_unit">Base Cost per Unit ($)</Label>
+                  <Input
+                    id="cost_per_unit"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    {...globalForm.register("cost_per_unit")}
+                  />
+                </div>
+              </div>
+
+              {/* Stock Mode */}
+              <div className="space-y-2">
+                <Label>Stock Mode</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {STOCK_MODES.map((mode) => (
+                    <button
+                      key={mode.value}
+                      type="button"
+                      onClick={() => globalForm.setValue("stock_mode", mode.value)}
+                      className={cn(
+                        "p-3 rounded-lg border text-left transition-all",
+                        stockMode === mode.value
+                          ? "border-primary bg-primary/5 ring-1 ring-primary"
+                          : "border-muted hover:border-primary/50"
+                      )}
+                    >
+                      <p className="font-medium text-sm">{mode.label}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {mode.description}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Stock & Reorder Row - Only show when tracking AND in All Locations view */}
+              {stockMode === "stock_tracking" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-lg bg-muted/50 border">
+                  {isLocationView ? (
+                    // In location view, stock is managed separately
+                    <div className="text-center text-sm text-muted-foreground py-2 sm:col-span-2">
+                      <Info className="h-4 w-4 inline-block mr-2" />
+                      Stock is managed per location via the table
+                    </div>
+                  ) : (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="current_stock">Default Stock</Label>
+                        <Input
+                          id="current_stock"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="0"
+                          {...globalForm.register("current_stock")}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Initial stock for new locations
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="reorder_point">Default Reorder Point</Label>
+                        <Input
+                          id="reorder_point"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="0"
+                          {...globalForm.register("reorder_point")}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Alert when stock falls below
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
+
+              {/* Vendor */}
+              <div className="space-y-2">
+                <Label htmlFor="vendor_id">Default Vendor</Label>
+                <Select
+                  value={globalForm.watch("vendor_id")}
+                  onValueChange={(value) => globalForm.setValue("vendor_id", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a vendor (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No vendor</SelectItem>
+                    {vendors.map((vendor) => (
+                      <SelectItem key={vendor.id} value={vendor.id}>
+                        {vendor.name}
+                        {vendor.location_id && (
+                          <span className="text-muted-foreground ml-2">
+                            (Local)
+                          </span>
+                        )}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-          )}
-
-          {/* Vendor */}
-          <div className="space-y-2">
-            <Label htmlFor="vendor_id">Default Vendor</Label>
-            <Select
-              value={globalForm.watch("vendor_id")}
-              onValueChange={(value) => globalForm.setValue("vendor_id", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a vendor (optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No vendor</SelectItem>
-                {vendors.map((vendor) => (
-                  <SelectItem key={vendor.id} value={vendor.id}>
-                    {vendor.name}
-                    {vendor.location_id && (
-                      <span className="text-muted-foreground ml-2">
-                        (Local)
-                      </span>
-                    )}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
-
-          <DialogFooter className="pt-4">
+          <DialogFooter className="px-6 py-4 border-t flex-col-reverse sm:flex-row">
             <Button
               type="button"
               variant="outline"

@@ -13,7 +13,12 @@ import {
     Calendar,
     Store,
     Edit,
-    Loader2
+    Loader2,
+    Phone,
+    Mail,
+    Clock3,
+    Globe,
+    ShieldCheck
 } from 'lucide-react'
 import { MerchantDetails } from '@/types/merchant'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -38,7 +43,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
-import { useAdminUpdateMerchant } from '@/lib/queries/use-admin-merchant'
+import { useAdminMerchantLocationDetails, useAdminUpdateMerchant } from '@/lib/queries/use-admin-merchant'
 import { toast } from 'sonner'
 import Link from 'next/link'
 
@@ -52,6 +57,28 @@ const businessTypes = {
     'Corporation': 'Corporation',
     'Sole Proprietor': 'Sole Proprietor',
     'Partnership': 'Partnership'
+}
+
+const dayLabels = {
+    monday: 'Monday',
+    tuesday: 'Tuesday',
+    wednesday: 'Wednesday',
+    thursday: 'Thursday',
+    friday: 'Friday',
+    saturday: 'Saturday',
+    sunday: 'Sunday',
+} as const
+
+function formatDateTime(value?: string | null) {
+    if (!value) return 'Not available'
+
+    return new Date(value).toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+    })
 }
 
 export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
@@ -73,7 +100,14 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
     }
 
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+    const [isLocationDetailsOpen, setIsLocationDetailsOpen] = useState(false)
+    const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
     const updateMutation = useAdminUpdateMerchant()
+    const {
+        data: selectedLocation,
+        isLoading: isLocationDetailsLoading,
+        error: locationDetailsError,
+    } = useAdminMerchantLocationDetails(merchantInfo.id, selectedLocationId, isLocationDetailsOpen)
 
     const [formData, setFormData] = useState({
         legal_business_name: '',
@@ -119,6 +153,34 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
         } catch (error) {
             toast.error('An error occurred while updating business info')
         }
+    }
+
+    const handleViewLocationDetails = (locationId: string) => {
+        setSelectedLocationId(locationId)
+        setIsLocationDetailsOpen(true)
+    }
+
+    const renderValue = (value?: string | number | null, fallback: string = 'Not provided') => {
+        if (value === null || value === undefined || value === '') return fallback
+        return value
+    }
+
+    const renderBusinessHours = (hours: any) => {
+        const orderedDays = Object.keys(dayLabels) as Array<keyof typeof dayLabels>
+
+        return orderedDays.map((day) => {
+            const dayHours = hours?.[day]
+            const isClosed = !dayHours || dayHours.is_closed
+
+            return (
+                <div key={day} className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
+                    <span className="font-medium">{dayLabels[day]}</span>
+                    <span className="text-muted-foreground">
+                        {isClosed ? 'Closed' : `${dayHours.open} - ${dayHours.close}`}
+                    </span>
+                </div>
+            )
+        })
     }
 
     return (
@@ -346,7 +408,11 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                                 )}
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <Button variant="ghost" size="sm">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleViewLocationDetails(location.id)}
+                                                >
                                                     View Details
                                                 </Button>
                                             </TableCell>
@@ -505,6 +571,278 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                         >
                             {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Save Changes
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={isLocationDetailsOpen}
+                onOpenChange={(open) => {
+                    setIsLocationDetailsOpen(open)
+                    if (!open) {
+                        setSelectedLocationId(null)
+                    }
+                }}
+            >
+                <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-hidden">
+                    <DialogHeader>
+                        <DialogTitle>Location Details</DialogTitle>
+                        <DialogDescription>
+                            Full business, contact, tax, and operating details for this merchant location.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="max-h-[68vh] overflow-y-auto pr-1">
+                        {isLocationDetailsLoading ? (
+                            <div className="flex min-h-[240px] items-center justify-center">
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Loading location details...
+                                </div>
+                            </div>
+                        ) : locationDetailsError ? (
+                            <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
+                                {locationDetailsError instanceof Error
+                                    ? locationDetailsError.message
+                                    : 'Failed to load location details'}
+                            </div>
+                        ) : selectedLocation ? (
+                            <div className="space-y-6">
+                                <div className="rounded-xl border bg-muted/20 p-4">
+                                    <div className="flex flex-wrap items-start justify-between gap-4">
+                                        <div className="space-y-2">
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="text-xl font-semibold">{selectedLocation.name}</h3>
+                                                {selectedLocation.code && (
+                                                    <Badge variant="outline" className="font-mono">
+                                                        {selectedLocation.code}
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                <MapPin className="h-4 w-4" />
+                                                {[
+                                                    selectedLocation.address_line1,
+                                                    selectedLocation.city,
+                                                    selectedLocation.state,
+                                                    selectedLocation.postal_code,
+                                                ].filter(Boolean).join(', ')}
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            <Badge variant={selectedLocation.is_active ? 'default' : 'secondary'}>
+                                                {selectedLocation.is_active ? 'Active' : 'Inactive'}
+                                            </Badge>
+                                            <Badge
+                                                variant="outline"
+                                                className={selectedLocation.is_accepting_orders
+                                                    ? 'border-green-200 bg-green-50 text-green-700'
+                                                    : 'border-amber-200 bg-amber-50 text-amber-700'}
+                                            >
+                                                {selectedLocation.is_accepting_orders ? 'Accepting Orders' : 'Not Accepting Orders'}
+                                            </Badge>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid gap-6 lg:grid-cols-2">
+                                    <Card>
+                                        <CardHeader>
+                                            <CardTitle className="text-base">Overview</CardTitle>
+                                            <CardDescription>Core business information for this location.</CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            <div className="grid gap-4 sm:grid-cols-2">
+                                                <div className="space-y-1">
+                                                    <div className="text-sm font-medium text-muted-foreground">Description</div>
+                                                    <div className="text-sm">{renderValue(selectedLocation.description)}</div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                                                        <Globe className="h-4 w-4" />
+                                                        Timezone
+                                                    </div>
+                                                    <div className="text-sm">{renderValue(selectedLocation.timezone)}</div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <div className="text-sm font-medium text-muted-foreground">Uses Global Menu</div>
+                                                    <div className="text-sm">{selectedLocation.uses_global_menu ? 'Yes' : 'No'}</div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <div className="text-sm font-medium text-muted-foreground">Onboarding Status</div>
+                                                    <div className="text-sm">
+                                                        Step {selectedLocation.onboarding_step} {selectedLocation.onboarding_completed ? '(Complete)' : '(In Progress)'}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+
+                                    <Card>
+                                        <CardHeader>
+                                            <CardTitle className="text-base">Contact</CardTitle>
+                                            <CardDescription>Direct contact details for this location.</CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            <div className="grid gap-4 sm:grid-cols-2">
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                                                        <Phone className="h-4 w-4" />
+                                                        Phone
+                                                    </div>
+                                                    <div className="text-sm">{renderValue(selectedLocation.phone)}</div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                                                        <Mail className="h-4 w-4" />
+                                                        Email
+                                                    </div>
+                                                    <div className="break-all text-sm">{renderValue(selectedLocation.email)}</div>
+                                                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+
+                                    <Card>
+                                        <CardHeader>
+                                            <CardTitle className="text-base">Address & Geo</CardTitle>
+                                            <CardDescription>Full address and coordinate information.</CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            <div className="grid gap-4 sm:grid-cols-2">
+                                                <div className="space-y-1">
+                                                    <div className="text-sm font-medium text-muted-foreground">Address Line 1</div>
+                                                    <div className="text-sm">{renderValue(selectedLocation.address_line1)}</div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <div className="text-sm font-medium text-muted-foreground">Address Line 2</div>
+                                                    <div className="text-sm">{renderValue(selectedLocation.address_line2)}</div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <div className="text-sm font-medium text-muted-foreground">City / State</div>
+                                                    <div className="text-sm">{`${selectedLocation.city}, ${selectedLocation.state}`}</div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <div className="text-sm font-medium text-muted-foreground">Postal Code / Country</div>
+                                                    <div className="text-sm">{`${selectedLocation.postal_code} / ${selectedLocation.country}`}</div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <div className="text-sm font-medium text-muted-foreground">Latitude</div>
+                                                    <div className="text-sm">{renderValue(selectedLocation.latitude)}</div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <div className="text-sm font-medium text-muted-foreground">Longitude</div>
+                                                    <div className="text-sm">{renderValue(selectedLocation.longitude)}</div>
+                                                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+
+                                    <Card>
+                                        <CardHeader>
+                                            <CardTitle className="text-base">Pricing & Tax</CardTitle>
+                                            <CardDescription>Pricing strategy and compliance values for this location.</CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            <div className="grid gap-4 sm:grid-cols-2">
+                                                <div className="space-y-1">
+                                                    <div className="text-sm font-medium text-muted-foreground">Pricing Strategy</div>
+                                                    <div className="text-sm capitalize">{renderValue(selectedLocation.pricing_strategy)}</div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <div className="text-sm font-medium text-muted-foreground">Dual Pricing %</div>
+                                                    <div className="text-sm">
+                                                        {selectedLocation.dual_pricing_percentage != null
+                                                            ? `${selectedLocation.dual_pricing_percentage}%`
+                                                            : 'Not provided'}
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <div className="text-sm font-medium text-muted-foreground">Use Merchant Pricing Defaults</div>
+                                                    <div className="text-sm">{selectedLocation.use_merchant_pricing_defaults ? 'Yes' : 'No'}</div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <div className="text-sm font-medium text-muted-foreground">Sales Tax Rate</div>
+                                                    <div className="text-sm">
+                                                        {selectedLocation.sales_tax_rate != null
+                                                            ? `${selectedLocation.sales_tax_rate}%`
+                                                            : 'Not provided'}
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                                                        <ShieldCheck className="h-4 w-4" />
+                                                        Tax Registration Status
+                                                    </div>
+                                                    <div className="text-sm capitalize">{renderValue(selectedLocation.tax_registration_status)}</div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <div className="text-sm font-medium text-muted-foreground">Tax ID</div>
+                                                    <div className="font-mono text-sm">{renderValue(selectedLocation.tax_id)}</div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <div className="text-sm font-medium text-muted-foreground">EIN</div>
+                                                    <div className="font-mono text-sm">
+                                                        {renderValue(selectedLocation.ein || selectedLocation.ein_last_four)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                </div>
+
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle className="text-base">Business Hours</CardTitle>
+                                        <CardDescription>Operating schedule for each day of the week.</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="grid gap-3 md:grid-cols-2">
+                                        {renderBusinessHours(selectedLocation.business_hours)}
+                                    </CardContent>
+                                </Card>
+
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle className="text-base">System Information</CardTitle>
+                                        <CardDescription>Identifiers and audit timestamps for this location.</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="grid gap-4 sm:grid-cols-2">
+                                        <div className="space-y-1">
+                                            <div className="text-sm font-medium text-muted-foreground">Location ID</div>
+                                            <div className="break-all font-mono text-sm">{selectedLocation.id}</div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <div className="text-sm font-medium text-muted-foreground">Merchant ID</div>
+                                            <div className="break-all font-mono text-sm">{selectedLocation.merchant_id}</div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                                                <Clock3 className="h-4 w-4" />
+                                                Created At
+                                            </div>
+                                            <div className="text-sm">{formatDateTime(selectedLocation.created_at)}</div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                                                <Clock3 className="h-4 w-4" />
+                                                Updated At
+                                            </div>
+                                            <div className="text-sm">{formatDateTime(selectedLocation.updated_at)}</div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </div>
+                        ) : (
+                            <div className="rounded-lg border border-border/60 p-4 text-sm text-muted-foreground">
+                                No location details found.
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsLocationDetailsOpen(false)}>
+                            Close
                         </Button>
                     </DialogFooter>
                 </DialogContent>
