@@ -42,10 +42,13 @@ function mapStoreConfigToSite(config: any): Site {
     faviconUrl: config.favicon_url,
     headerStyle: config.header_style,
     headerTextColor: config.header_text_color,
+    borderColor: config.border_color ?? null,
+    cardColor: config.card_color ?? null,
   };
 
   const onlineOrderingConfig: OnlineOrderingConfig = {
     operatingHours: config.operating_hours,
+    menuLayout: config.menu_layout || "cards",
     pickupEnabled: config.accepts_pickup,
     deliveryEnabled: config.accepts_delivery,
     minimumOrderAmount: config.min_order_cents ? config.min_order_cents / 100 : 0,
@@ -61,6 +64,9 @@ function mapStoreConfigToSite(config: any): Site {
     freeDeliveryThreshold: config.free_delivery_threshold_cents
       ? config.free_delivery_threshold_cents / 100
       : undefined,
+    acceptOnlinePayments: config.accepts_online_payments ?? true,
+    acceptCashOnDelivery: config.accepts_cash_on_delivery ?? false,
+    acceptCardOnDelivery: config.accepts_card_on_delivery ?? false,
   };
 
   return {
@@ -79,6 +85,11 @@ function mapStoreConfigToSite(config: any): Site {
     is_active: config.is_active,
     created_at: config.created_at,
     updated_at: config.updated_at,
+    meta_title: config.meta_title ?? null,
+    meta_description: config.meta_description ?? null,
+    google_analytics_id: config.google_analytics_id ?? null,
+    facebook_pixel_id: config.facebook_pixel_id ?? null,
+    og_image_url: config.og_image_url ?? null,
   };
 }
 
@@ -211,14 +222,12 @@ function mapRpcMenuToStorefront(rpcMenu: any): StorefrontMenu | null {
 
       const rpcItems = mc.items || [];
       const items: StorefrontItem[] = rpcItems
-        .filter((ci: any) => ci.menu_item?.effective_availability !== false)
         .map((ci: any) => {
           const mi = ci.menu_item;
           const cardPrice = Number(mi.effective_price) || 0;
           const deliveryPrice = mi.effective_delivery_price != null
             ? Number(mi.effective_delivery_price)
             : null;
-          const displayPrice = deliveryPrice ?? cardPrice;
 
           const modifierGroups = (mi.modifier_groups || [])
             .filter((mg: any) => mg.is_active !== false)
@@ -239,15 +248,25 @@ function mapRpcMenuToStorefront(rpcMenu: any): StorefrontMenu | null {
                 })),
             }));
 
+          const allergens = Array.isArray(mi.allergens) ? mi.allergens : [];
+          const mealTypes = Array.isArray(mi.meal_types) ? mi.meal_types : [];
+          const dietaryTags = mealTypes.filter((t: string) =>
+            /vegan|vegetarian|gluten.?free|dairy.?free|keto|halal|kosher|organic|high.?protein/i.test(String(t))
+          );
+
           return {
             id: mi.id,
             name: mi.name,
             description: mi.description,
-            price: displayPrice,
-            delivery_price: displayPrice,
+            price: cardPrice,
+            delivery_price: deliveryPrice ?? cardPrice,
             image: mi.image,
             availability: mi.effective_availability !== false,
             modifier_groups: modifierGroups,
+            allergens: allergens.length ? allergens : undefined,
+            dietary_tags: dietaryTags.length ? dietaryTags : undefined,
+            is_new: mi.is_new === true,
+            is_popular: mi.is_popular === true,
           } satisfies StorefrontItem;
         });
 

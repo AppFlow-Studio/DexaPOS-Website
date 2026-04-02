@@ -336,6 +336,24 @@
   }
 }
 
+/* Storefront pages: override body background with the theme's --bg value.
+   This rule is outside @layer so it beats @layer base { body { bg-background } }.
+   --bg is injected into :root by the storefront page server components. */
+html:has([data-template]) body {
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+/* Utility to hide horizontal scrollbars while keeping content scrollable */
+.no-scrollbar {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation: none;

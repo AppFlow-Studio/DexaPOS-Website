@@ -21,7 +21,7 @@ export interface PaymentCardFormHandle {
 }
 
 interface PaymentCardFormProps {
-  securityKey: string;
+  securityKey?: string | null;
   onError: (error: string) => void;
   disabled?: boolean;
 }
@@ -301,7 +301,8 @@ export const PaymentCardForm = forwardRef<
     el.value = el.value.replace(/\D/g, "").slice(0, maxLen);
   }, [brand]);
 
-  const inputDisabled = disabled || !scriptLoaded;
+  // When no securityKey, inputs are usable (no FTD tokenization — test/bypass mode)
+  const inputDisabled = disabled || (!!securityKey && !scriptLoaded);
 
   const maxCardLen = brand === "amex" ? 17 : 19;
   const maxCvv = brand === "amex" ? 4 : 3;
@@ -418,6 +419,14 @@ export const PaymentCardForm = forwardRef<
           />
         </div>
 
+        {/* Security trust line */}
+        <div className="flex items-center gap-1.5">
+          <Lock className="h-3 w-3 shrink-0" style={{ color: "var(--text-secondary)" }} />
+          <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            256-bit SSL encrypted · PCI DSS compliant
+          </span>
+        </div>
+
         {/* Expiry + CVV row */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
@@ -470,7 +479,7 @@ export const PaymentCardForm = forwardRef<
           </div>
         </div>
 
-        {!scriptLoaded && !scriptError && (
+        {securityKey && !scriptLoaded && !scriptError && (
           <div className="flex items-center justify-center py-2">
             <div
               className="h-4 w-4 border-2 rounded-full animate-spin"

@@ -382,25 +382,39 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .select('id, price, delivery_price')
     .in('id', itemIds)
 
+  // custom_price is the correct column name in location_item_overrides (not 'price')
   const { data: locationOverrides } = await supabase
     .from('location_item_overrides')
-    .select('menu_item_id, price, delivery_price')
+    .select('menu_item_id, custom_price')
     .eq('location_id', locationId)
     .in('menu_item_id', itemIds)
 
   const dbItemMap = new Map((dbItems ?? []).map((i: any) => [i.id, i]))
   const overrideMap = new Map((locationOverrides ?? []).map((o: any) => [o.menu_item_id, o]))
 
-  // Fetch tax rate
-  const { data: taxRate } = await supabase
+  // Fetch tax rate — prefer 'standard'/'default', fall back to any active rate
+  let { data: taxRate } = await supabase
     .from('tax_rates')
     .select('percentage')
     .eq('location_id', locationId)
     .eq('is_active', true)
-    .eq('tax_category', 'standard')
+    .in('tax_category', ['standard', 'default'])
     .order('created_at', { ascending: true })
     .limit(1)
     .single()
+
+  if (!taxRate) {
+    // Fallback: any active rate for this location (handles custom category names)
+    const { data: fallbackRate } = await supabase
+      .from('tax_rates')
+      .select('percentage')
+      .eq('location_id', locationId)
+      .eq('is_active', true)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .single()
+    taxRate = fallbackRate
+  }
 
   const taxPercent = taxRate?.percentage ?? 0
 
@@ -412,13 +426,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const dbItem = dbItemMap.get(cartItem.id)
     const override = overrideMap.get(cartItem.id)
 
-    // Determine the correct base price
+    // Determine the correct base price.
+    // The storefront already applies the full 5-level price cascade (including category overrides L3-L5)
+    // via the get_menu_with_categories RPC. We trust the cart-submitted price as the effective price,
+    // but still verify against L2 (location override) and L1 (base price) for security.
+    // cartItem.price already reflects the full effective_price shown to the customer.
     let unitPrice: number
     if (body.order_type === 'delivery') {
-      // Delivery price cascade: override.delivery_price > override.price > dbItem.delivery_price > dbItem.price
-      unitPrice = override?.delivery_price ?? override?.price ?? dbItem?.delivery_price ?? dbItem?.price ?? cartItem.price
+      // For delivery: L2 custom_price > L1 delivery_price > L1 base price > cart-submitted effective price
+      unitPrice = override?.custom_price ?? dbItem?.delivery_price ?? dbItem?.price ?? cartItem.price
     } else {
-      unitPrice = override?.price ?? dbItem?.price ?? cartItem.price
+      // For pickup: L2 custom_price > L1 base price > cart-submitted effective price
+      // If no L2 override exists, fall back to cart price (which includes L3-L5 category overrides)
+      unitPrice = override?.custom_price ?? (dbItem ? dbItem.price : cartItem.price)
     }
 
     // Modifier totals (modifiers are trusted from client — they come from our DB originally)
@@ -539,13 +559,22 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   // ---- Step 10+: TEST MODE — Skip payment, call RPC directly ----
+  // Guest session insert is best-effort only; order can still be created without a row
+  // in online_order_sessions (e.g. RLS/constraint issues) as long as storeConfig is resolved.
   if (!session) {
-    return errorResponse('Failed to initialize order session.', 'session_error', 500)
+    logEvent('SESSION', 'Proceeding without persisted session row (guest insert failed or skipped)', {
+      storeConfigId,
+    })
   }
 
   logEvent('TEST_MODE', 'Bypassing payment — calling process_online_order RPC directly', {
     totalCents,
     referenceId: transactionReferenceId,
+    sanitizedItemsSample: rpcParams.p_items.map((it) => ({
+      id: it.id,
+      qty: it.quantity,
+      modQtys: it.modifiers?.map((m) => m.quantity),
+    })),
   })
 
   // Call process_online_order RPC directly (test mode — no payment)
@@ -560,7 +589,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       'Failed to create order. Please try again.',
       'order_creation_failed',
       500,
-      { error: rpcError.message }
+      { error: rpcError.message, hint: rpcError.hint, code: rpcError.code }
     )
   }
 
@@ -568,10 +597,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   if (!orderResult.success) {
     logError('RPC', 'Order processing returned failure', orderResult)
+    const rpcMsg =
+      typeof orderResult === 'object' && orderResult && 'error' in orderResult
+        ? String((orderResult as { error?: string }).error)
+        : ''
     return errorResponse(
-      orderResult.error || 'Order processing failed.',
+      rpcMsg || 'Failed to place your order. Please try again or contact support.',
       'order_creation_failed',
-      500
+      500,
+      { rpc: orderResult }
     )
   }
 

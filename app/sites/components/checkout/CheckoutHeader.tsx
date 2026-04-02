@@ -12,6 +12,7 @@ interface CheckoutHeaderProps {
 
 export function CheckoutHeader({ slug, storeName, logoUrl }: CheckoutHeaderProps) {
   const storePath = useStorefrontPath(slug);
+  const backHref = storePath();
 
   return (
     <header
@@ -22,7 +23,7 @@ export function CheckoutHeader({ slug, storeName, logoUrl }: CheckoutHeaderProps
       }}
     >
       <Link
-        href={storePath()}
+        href={backHref}
         className="p-2 rounded-full transition-colors hover:opacity-80"
         style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
       >

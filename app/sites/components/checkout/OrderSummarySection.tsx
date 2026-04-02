@@ -8,6 +8,7 @@ interface OrderSummarySectionProps {
   total: number;
   itemCount: number;
   showDeliveryFee: boolean;
+  taxRate?: number; // decimal e.g. 0.08875
 }
 
 export function OrderSummarySection({
@@ -18,6 +19,7 @@ export function OrderSummarySection({
   total,
   itemCount,
   showDeliveryFee,
+  taxRate,
 }: OrderSummarySectionProps) {
   return (
     <section>
@@ -30,7 +32,7 @@ export function OrderSummarySection({
           <span>${subtotal.toFixed(2)}</span>
         </div>
         <div className="flex justify-between text-sm" style={{ color: "var(--text-secondary)" }}>
-          <span>Tax</span>
+          <span>Tax{taxRate ? ` (${parseFloat((taxRate * 100).toFixed(2))}%)` : ""}</span>
           <span>${tax.toFixed(2)}</span>
         </div>
         {showDeliveryFee && (

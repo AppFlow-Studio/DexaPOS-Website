@@ -110,20 +110,30 @@ export function buildDeliveryAddress(
   }
 }
 
+/** Safely parse any value as a positive integer, returning defaultVal on failure */
+function safeInt(val: unknown, defaultVal: number = 1): number {
+  const n = Number(val)
+  if (!Number.isFinite(n) || Number.isNaN(n)) return defaultVal
+  const rounded = Math.round(n)
+  return rounded > 0 ? rounded : defaultVal
+}
+
 export function sanitizeItems(items: Partial<OnlineOrderItem>[]): OnlineOrderItem[] {
   return items.map((item, index) => ({
     id: item.id ?? `item_${index}`,
     name: item.name ?? 'Unknown Item',
     note: item.note ?? null,
-    price: item.price ?? 0,
-    total: item.total ?? (item.price ?? 0) * (item.quantity ?? 1),
-    quantity: item.quantity ?? 1,
+    price: typeof item.price === 'number' && Number.isFinite(item.price) ? item.price : 0,
+    total: typeof item.total === 'number' && Number.isFinite(item.total)
+      ? item.total
+      : (item.price ?? 0) * safeInt(item.quantity),
+    quantity: safeInt(item.quantity),
     external_id: item.external_id ?? '',
     modifiers: (item.modifiers ?? []).map((mod) => ({
       id: mod.id ?? null,
       name: mod.name ?? 'Unknown Modifier',
-      price: mod.price ?? 0,
-      quantity: mod.quantity ?? 1,
+      price: typeof mod.price === 'number' && Number.isFinite(mod.price) ? mod.price : 0,
+      quantity: safeInt(mod.quantity),
       group_name: mod.group_name ?? null,
     })),
   }))

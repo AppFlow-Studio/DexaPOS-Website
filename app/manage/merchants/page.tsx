@@ -434,7 +434,7 @@ function MerchantListView({
                     >
                         <TableCell>
                             <div className="flex items-center gap-2">
-                                <Image src={merchant.logo_url || ''} alt={merchant.name} width={40} height={40} className="rounded-md object-cover " />
+                                {merchant.logo_url && <Image src={merchant.logo_url} alt={merchant.name} width={40} height={40} className="rounded-md object-cover" />}
                                 <div className='flex flex-col'>
                                     <div className="font-semibold">{merchant.name}</div>
                                     {merchant.type && (

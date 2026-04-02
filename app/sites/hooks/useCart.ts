@@ -15,6 +15,7 @@ interface CartStore {
   items: CartItem[];
   isOpen: boolean;
   goGreen: boolean;
+  pendingModalItem: StorefrontItem | null;
 
   // Actions
   addItem: (
@@ -29,6 +30,8 @@ interface CartStore {
   toggleCart: () => void;
   setOpen: (isOpen: boolean) => void;
   setGoGreen: (goGreen: boolean) => void;
+  requestOpenModal: (item: StorefrontItem) => void;
+  clearPendingModalItem: () => void;
 
   // Getters
   getSubtotal: () => number;
@@ -41,6 +44,7 @@ export const useCart = create<CartStore>()(
       items: [],
       isOpen: false,
       goGreen: false,
+      pendingModalItem: null,
 
       addItem: (item, quantity = 1, modifiers = [], notes = "") => {
         set((state) => {
@@ -129,6 +133,9 @@ export const useCart = create<CartStore>()(
         set({ goGreen });
       },
 
+      requestOpenModal: (item) => set({ pendingModalItem: item }),
+      clearPendingModalItem: () => set({ pendingModalItem: null }),
+
       getSubtotal: () => {
         const { items } = get();
         return items.reduce(
@@ -144,6 +151,7 @@ export const useCart = create<CartStore>()(
     }),
     {
       name: "storefront-cart-storage",
+      partialize: (state) => ({ items: state.items, isOpen: state.isOpen, goGreen: state.goGreen }),
     }
   )
 );

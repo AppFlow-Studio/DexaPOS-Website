@@ -60,7 +60,7 @@ import {
 import { DeleteMenuItem } from "../../../actions/menu-items";
 import { toast } from "sonner";
 import { RecipeManager } from "../../components/RecipeManager";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import {
   Dialog,
@@ -78,6 +78,9 @@ import {
 } from "@/components/ui/tooltip";
 import { useLocationStore, useIsAllLocations } from "@/stores/location-store";
 import { LocationLibraryItem } from "@/types/menu";
+import { Switch } from "@/components/ui/switch";
+import { GetItemIsPopular, SetItemPopular, GetItemIsNew, SetItemNew } from "../../../actions/location-menu-overrides";
+import { Flame } from "lucide-react";
 
 // ============================================================================
 // TYPES & HELPERS
@@ -490,6 +493,46 @@ export default function MenuItemDetailPage() {
   const [unlinkingModifier, setUnlinkingModifier] = React.useState<any>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
+
+  // Popular flag — per-location, only fetched when a specific location is selected
+  const { data: isPopular = false } = useQuery({
+    queryKey: ["item-popular", itemId, selectedLocationId],
+    queryFn: () => GetItemIsPopular(itemId, selectedLocationId!),
+    enabled: !!itemId && !isAllLocations && !!selectedLocationId,
+  });
+
+  const popularMutation = useMutation({
+    mutationFn: (value: boolean) =>
+      SetItemPopular(itemId, selectedLocationId!, value),
+    onSuccess: (_, value) => {
+      queryClient.setQueryData(
+        ["item-popular", itemId, selectedLocationId],
+        value
+      );
+      toast.success(value ? "Marked as Popular" : "Removed Popular badge");
+    },
+    onError: () => toast.error("Failed to update popular flag"),
+  });
+
+  // New flag — per-location, only fetched when a specific location is selected
+  const { data: isNew = false } = useQuery({
+    queryKey: ["item-new", itemId, selectedLocationId],
+    queryFn: () => GetItemIsNew(itemId, selectedLocationId!),
+    enabled: !!itemId && !isAllLocations && !!selectedLocationId,
+  });
+
+  const newMutation = useMutation({
+    mutationFn: (value: boolean) =>
+      SetItemNew(itemId, selectedLocationId!, value),
+    onSuccess: (_, value) => {
+      queryClient.setQueryData(
+        ["item-new", itemId, selectedLocationId],
+        value
+      );
+      toast.success(value ? "Marked as New" : "Removed New badge");
+    },
+    onError: () => toast.error("Failed to update new flag"),
+  });
 
   const toggleModifierExpand = (modifierId: string) => {
     setExpandedModifiers((prev) => ({
@@ -1221,6 +1264,78 @@ export default function MenuItemDetailPage() {
             isAllLocations={isAllLocations}
             currentLocationName={currentLocationName}
           />
+
+          {/* Location Badges */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Flame className="h-4 w-4 text-orange-500" />
+                Location Badges
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Badges shown on the storefront for {currentLocationName}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          🔥 Popular
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {isAllLocations
+                            ? "Select a location to manage"
+                            : "Auto-detected or manually set"}
+                        </p>
+                      </div>
+                      <Switch
+                        checked={isPopular}
+                        onCheckedChange={(v) => popularMutation.mutate(v)}
+                        disabled={isAllLocations || popularMutation.isPending}
+                      />
+                    </div>
+                  </TooltipTrigger>
+                  {isAllLocations && (
+                    <TooltipContent>
+                      Select a specific location to manage this badge
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
+
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          ✨ New
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {isAllLocations
+                            ? "Select a location to manage"
+                            : "Mark as new at this branch"}
+                        </p>
+                      </div>
+                      <Switch
+                        checked={isNew}
+                        onCheckedChange={(v) => newMutation.mutate(v)}
+                        disabled={isAllLocations || newMutation.isPending}
+                      />
+                    </div>
+                  </TooltipTrigger>
+                  {isAllLocations && (
+                    <TooltipContent>
+                      Select a specific location to manage this badge
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
+            </CardContent>
+          </Card>
 
           {/* POS Preview */}
           <Card className="sticky top-6">

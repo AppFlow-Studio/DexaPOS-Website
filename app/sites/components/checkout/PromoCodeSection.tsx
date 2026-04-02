@@ -26,8 +26,8 @@ export function PromoCodeSection() {
             value={code}
             onChange={(e) => setCode(e.target.value.toUpperCase())}
             placeholder="Enter promo code"
-            className="flex-1"
-            style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)" }}
+            className="flex-1 !bg-white !text-gray-900"
+            style={{ borderColor: "#e5e7eb", backgroundColor: "#ffffff" }}
           />
           <Button
             variant="outline"
