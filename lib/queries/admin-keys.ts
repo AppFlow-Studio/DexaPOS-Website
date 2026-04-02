@@ -456,6 +456,35 @@ export const adminKeys = {
     [...adminKeys.auditLogs(), 'list', filters] as const,
 
   // ============================================================================
+  // PLATFORM CASH DRAWERS (HQ Cross-Merchant View)
+  // ============================================================================
+
+  platformCashDrawers: () => [...adminKeys.all, 'platform-cash-drawers'] as const,
+
+  platformCashDrawerSessions: (
+    filters: { merchantIds?: string[]; locationIds?: string[] },
+    dateRange: { from: string; to: string }
+  ) => [...adminKeys.platformCashDrawers(), 'sessions', filters, dateRange] as const,
+
+  platformCashDrawerOperations: (sessionId: string) =>
+    [...adminKeys.platformCashDrawers(), 'operations', sessionId] as const,
+
+  platformCashDrawerNoSales: (
+    filters: { merchantIds?: string[]; locationIds?: string[] },
+    dateRange: { from: string; to: string }
+  ) => [...adminKeys.platformCashDrawers(), 'no-sales', filters, dateRange] as const,
+
+  platformCashDrawerStats: (
+    filters: { merchantIds?: string[]; locationIds?: string[] },
+    dateRange: { from: string; to: string }
+  ) => [...adminKeys.platformCashDrawers(), 'stats', filters, dateRange] as const,
+
+  platformCashDrawerVarianceTrend: (
+    filters: { merchantIds?: string[]; locationIds?: string[] },
+    dateRange: { from: string; to: string }
+  ) => [...adminKeys.platformCashDrawers(), 'variance-trend', filters, dateRange] as const,
+
+  // ============================================================================
   // MERCHANT ORDEROUT (Admin View)
   // ============================================================================
 

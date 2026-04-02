@@ -217,6 +217,14 @@ const navMain = [
             title: "Online Ordering",
             url: "/dashboard/reports/online-ordering",
           },
+          {
+            title: "Cash Drawers",
+            url: "/dashboard/reports/cash-drawers",
+          },
+          {
+            title: "Tax Report",
+            url: "/dashboard/reports/tax",
+          },
         ],
       },
     ],
