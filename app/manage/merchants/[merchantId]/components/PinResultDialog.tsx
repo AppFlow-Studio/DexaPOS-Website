@@ -86,8 +86,8 @@ export function PinResultDialog({
           <Alert>
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              This PIN will only be displayed once. Make sure to save it or share
-              it with the staff member before closing this dialog.
+              Save or share this PIN securely with the staff member before
+              closing this dialog.
             </AlertDescription>
           </Alert>
         </div>

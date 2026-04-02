@@ -150,7 +150,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
     }
   }, [bulkRoleDialogOpen, availableRoles.length]);
 
-  // ── Bulk handlers ──
+  // â”€â”€ Bulk handlers â”€â”€
   const handleBulkDeactivate = () => {
     bulkDeactivate.mutate(selectedMemberIds, {
       onSuccess: () => {
@@ -341,7 +341,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
         );
 
         if (!primaryAssignment) {
-          return <span className="text-muted-foreground text-sm">—</span>;
+          return <span className="text-muted-foreground text-sm">â€”</span>;
         }
 
         return (
@@ -534,7 +534,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                   </DropdownMenuItem>
                 </>
               )}
-              {/* Upgrade to Dashboard User — only for POS-only staff */}
+              {/* Upgrade to Dashboard User â€” only for POS-only staff */}
               {!staff.is_clerk_user && !staff.user_id && (
                 <>
                   <DropdownMenuSeparator />
@@ -546,7 +546,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                   </DropdownMenuItem>
                 </>
               )}
-              {/* Demote to POS-Only — only for Clerk staff */}
+              {/* Demote to POS-Only â€” only for Clerk staff */}
               {staff.is_clerk_user && staff.user_id && (
                 <>
                   <DropdownMenuSeparator />
@@ -918,7 +918,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
             <DialogTitle>PIN Reset Results</DialogTitle>
             <DialogDescription>
               New PINs have been generated for {bulkPinResults.length} staff
-              member(s). Save these securely — they cannot be retrieved later.
+              member(s). Save or share them securely with your staff.
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[300px] overflow-y-auto">

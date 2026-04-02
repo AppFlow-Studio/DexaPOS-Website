@@ -28,15 +28,14 @@ import { cn } from "@/lib/utils";
 import {
   MapPin,
   KeyRound,
-  Lock,
   CheckCircle2,
   DollarSign,
   Loader2,
   Save,
   X,
   ArrowLeft,
-  AlertCircle,
 } from "lucide-react";
+import { StaffPinField } from "./StaffPinField";
 import {
   useResetStaffPIN,
   useUpdateStaffAssignment,
@@ -135,22 +134,10 @@ export function LocationAssignmentSheet({
   ]);
 
   const handleResetPIN = () => {
-    resetPIN.mutate(
-      {
-        memberId: memberId,
-        locationId: assignment.location_id,
-      },
-      {
-        onSuccess: (result) => {
-          if (result.data?.pin) {
-            toast.success(`PIN Reset Successful`, {
-              description: `New PIN for ${assignment.location_name}: ${result.data.pin}`,
-              duration: 10000,
-            });
-          }
-        },
-      }
-    );
+    resetPIN.mutate({
+      memberId: memberId,
+      locationId: assignment.location_id,
+    });
   };
 
   const handleSaveChanges = async () => {
@@ -417,40 +404,17 @@ export function LocationAssignmentSheet({
               </Badge>
             </div>
 
-            <p className="text-xs text-muted-foreground">
-              Reset the PIN for this staff member at{" "}
-              <span className="font-medium">{assignment.location_name}</span>
-            </p>
-
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full gap-1"
-              onClick={handleResetPIN}
+            <StaffPinField
+              pin={assignment.pin_code}
+              hasPin={assignment.has_pin}
+              onGenerate={handleResetPIN}
+              isGenerating={resetPIN.isPending}
               disabled={isPending}
-            >
-              {resetPIN.isPending ? (
-                <>
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Resetting...
-                </>
-              ) : (
-                <>
-                  <KeyRound className="h-3 w-3" />
-                  Reset PIN for this Location
-                </>
-              )}
-            </Button>
-
-            {!assignment.has_pin && (
-              <div className="flex items-start gap-2 p-2 rounded-md bg-amber-500/10 border border-amber-500/20">
-                <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-700">
-                  This staff member doesn't have a PIN for this location. Reset
-                  PIN to generate one.
-                </p>
-              </div>
-            )}
+              buttonLabel={
+                assignment.has_pin ? "Generate New PIN" : "Generate PIN"
+              }
+              visibleDescription={`Location PIN for ${assignment.location_name}`}
+            />
           </div>
         </div>
 

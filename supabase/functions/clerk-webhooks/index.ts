@@ -838,6 +838,8 @@ async function handleMerchantMembershipCreated(
       is_active: true,
       hourly_rate: assignment.hourlyRate || null,
       employment_type: assignment.employmentType || null,
+      pin_plain: assignment.pinCode || null,
+      pin_hashed: null,
       pin_code: assignment.pinCode || null,
       assigned_at: createdAt,
       updated_at: updatedAt,
