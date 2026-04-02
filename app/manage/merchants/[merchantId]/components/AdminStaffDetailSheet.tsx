@@ -1,0 +1,381 @@
+"use client";
+
+import * as React from "react";
+import {
+  BottomSheet,
+  BottomSheetBody,
+  BottomSheetContent,
+  BottomSheetDescription,
+  BottomSheetFooter,
+  BottomSheetHeader,
+  BottomSheetTitle,
+} from "@/components/ui/bottom-sheet";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import { StaffPinField } from "@/components/dashboard/staff/StaffPinField";
+import { cn } from "@/lib/utils";
+import { useAdminResetStaffPin, useAdminToggleStaffStatus } from "@/lib/queries/use-admin-staff";
+import type { AdminStaffMember } from "@/types/staff";
+import {
+  Activity,
+  CheckCircle2,
+  Mail,
+  MapPin,
+  Phone,
+  Shield,
+  Tablet,
+} from "lucide-react";
+import { toast } from "sonner";
+
+interface AdminStaffDetailSheetProps {
+  merchantId: string;
+  staff: AdminStaffMember | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  canManage: boolean;
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "-";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return date.toLocaleString();
+}
+
+export function AdminStaffDetailSheet({
+  merchantId,
+  staff,
+  open,
+  onOpenChange,
+  canManage,
+}: AdminStaffDetailSheetProps) {
+  const resetPinMutation = useAdminResetStaffPin();
+  const toggleStatusMutation = useAdminToggleStaffStatus();
+  const [generatedPin, setGeneratedPin] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    setGeneratedPin(null);
+  }, [staff?.member_id, staff?.last_updated_at]);
+
+  if (!staff) return null;
+
+  const initials = `${staff.first_name?.[0] || ""}${staff.last_name?.[0] || ""}`.toUpperCase();
+  const primaryLocation =
+    staff.location_assignments.find((assignment) => assignment.is_primary) ||
+    staff.location_assignments[0] ||
+    null;
+  const pinAssignment =
+    staff.location_assignments.find(
+      (assignment) => assignment.location_id === primaryLocation?.location_id && assignment.has_pin
+    ) ||
+    staff.location_assignments.find((assignment) => assignment.has_pin) ||
+    primaryLocation;
+  const hasPin = staff.location_assignments.some((assignment) => assignment.has_pin);
+  const effectivePin = generatedPin ?? pinAssignment?.pin_code ?? null;
+
+  const handleGeneratePin = () => {
+    if (!canManage) return;
+    if (!primaryLocation || !staff.staff_profile_id) {
+      toast.error("Cannot reset PIN: missing required info");
+      return;
+    }
+
+    resetPinMutation.mutate(
+      {
+        merchantId,
+        staffProfileId: staff.staff_profile_id,
+        locationId: primaryLocation.location_id,
+      },
+      {
+        onSuccess: (result) => {
+          if (!result.success || !result.pin) {
+            toast.error(result.error || "Failed to reset PIN");
+            return;
+          }
+
+          setGeneratedPin(result.pin);
+          toast.success("PIN updated");
+        },
+      }
+    );
+  };
+
+  const handleToggleStatus = () => {
+    if (!canManage) return;
+    if (!primaryLocation || !staff.staff_profile_id) {
+      toast.error("Cannot update status: missing required info");
+      return;
+    }
+
+    toggleStatusMutation.mutate(
+      {
+        merchantId,
+        staffProfileId: staff.staff_profile_id,
+        locationId: primaryLocation.location_id,
+        newStatus: !staff.overall_is_active,
+      },
+      {
+        onSuccess: (result) => {
+          if (!result.success) {
+            toast.error(result.error || "Failed to update status");
+            return;
+          }
+
+          toast.success(staff.overall_is_active ? "Staff deactivated" : "Staff reactivated");
+        },
+      }
+    );
+  };
+
+  return (
+    <BottomSheet open={open} onOpenChange={onOpenChange}>
+      <BottomSheetContent className="mx-auto w-full max-w-6xl" height="95">
+        <BottomSheetHeader className="flex flex-col gap-2">
+          <BottomSheetTitle>Staff details</BottomSheetTitle>
+          <BottomSheetDescription>
+            View staff profile, location assignments, status, and POS PIN from HQ.
+          </BottomSheetDescription>
+        </BottomSheetHeader>
+
+        <BottomSheetBody className="flex-1 overflow-y-auto">
+          <div className="space-y-6 p-1">
+            <section className="rounded-2xl border bg-card p-5">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="flex items-start gap-4">
+                  <Avatar className="h-16 w-16">
+                    <AvatarImage src={staff.avatar_url || undefined} alt={staff.display_name} />
+                    <AvatarFallback>{initials}</AvatarFallback>
+                  </Avatar>
+
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-xl font-semibold">
+                        {staff.first_name} {staff.last_name}
+                      </h2>
+                      {staff.account_type === "clerk" ? (
+                        <Badge variant="secondary" className="gap-1">
+                          <Shield className="h-3 w-3" />
+                          Dashboard User
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="gap-1">
+                          <Tablet className="h-3 w-3" />
+                          POS Only
+                        </Badge>
+                      )}
+                      <Badge
+                        variant={staff.overall_is_active ? "default" : "secondary"}
+                        className={cn(
+                          staff.overall_is_active
+                            ? "bg-green-600 text-white hover:bg-green-600"
+                            : ""
+                        )}
+                      >
+                        {staff.overall_is_active ? "Active" : "Inactive"}
+                      </Badge>
+                    </div>
+
+                    <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <Mail className="h-4 w-4" />
+                        <span>{staff.email || "No email"}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-4 w-4" />
+                        <span>{staff.phone || "No phone"}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4" />
+                        <span>{staff.total_locations} assigned location(s)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 rounded-xl border px-4 py-3">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Status</p>
+                    <p className="text-xs text-muted-foreground">
+                      Toggle staff access for the primary location.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={staff.overall_is_active}
+                    onCheckedChange={handleToggleStatus}
+                    disabled={!canManage || !primaryLocation || toggleStatusMutation.isPending}
+                  />
+                </div>
+              </div>
+            </section>
+
+            <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+              <section className="rounded-2xl border bg-card p-5">
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Profile
+                  </h3>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <InfoRow label="Member ID" value={staff.member_id} mono />
+                  <InfoRow label="Staff Profile ID" value={staff.staff_profile_id || "-"} mono />
+                  <InfoRow label="Created" value={formatDate(staff.member_created_at)} />
+                  <InfoRow label="Last Updated" value={formatDate(staff.last_updated_at)} />
+                  <InfoRow label="Primary Location" value={staff.primary_location_name || "-"} />
+                  <InfoRow label="Account Type" value={staff.account_type === "clerk" ? "Dashboard user" : "POS only"} />
+                </div>
+              </section>
+
+              <section className="rounded-2xl border bg-card p-5">
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    POS Access
+                  </h3>
+                </div>
+                <div className="space-y-4">
+                  <StaffPinField
+                    pin={effectivePin}
+                    hasPin={hasPin || !!generatedPin}
+                    onGenerate={handleGeneratePin}
+                    isGenerating={resetPinMutation.isPending}
+                    disabled={!canManage || !primaryLocation || !staff.staff_profile_id}
+                    visibleDescription={
+                      pinAssignment?.location_name
+                        ? `Use the eye icon to reveal the PIN for ${pinAssignment.location_name}.`
+                        : undefined
+                    }
+                  />
+
+                  <Separator />
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <StatusPill
+                      label="PIN Status"
+                      active={hasPin || !!generatedPin}
+                      activeLabel="PIN set"
+                      inactiveLabel="No PIN"
+                    />
+                    <StatusPill
+                      label="Primary Assignment"
+                      active={!!primaryLocation?.is_active}
+                      activeLabel="Active"
+                      inactiveLabel="Inactive"
+                    />
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <section className="rounded-2xl border bg-card p-5">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Location Assignments
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    The same staff details visible to merchant owners are now available from HQ.
+                  </p>
+                </div>
+                <Badge variant="outline">{staff.location_assignments.length} total</Badge>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                {staff.location_assignments.map((assignment) => (
+                  <div
+                    key={`${assignment.location_id}-${assignment.role_code}`}
+                    className="rounded-xl border bg-background/60 p-4"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">{assignment.location_name}</p>
+                          {assignment.is_primary && <Badge>Primary</Badge>}
+                        </div>
+                        <p className="mt-1 text-sm text-muted-foreground">{assignment.role_name}</p>
+                      </div>
+                      <Badge variant={assignment.is_active ? "default" : "secondary"}>
+                        {assignment.is_active ? "Active" : "Inactive"}
+                      </Badge>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <InfoRow label="Role Code" value={assignment.role_code} mono />
+                      <InfoRow
+                        label="POS PIN"
+                        value={assignment.has_pin ? "Available" : "Not set"}
+                      />
+                      <InfoRow
+                        label="Employment Type"
+                        value={assignment.employment_type || "-"}
+                      />
+                      <InfoRow
+                        label="Hourly Rate"
+                        value={
+                          assignment.hourly_rate !== null && assignment.hourly_rate !== undefined
+                            ? `$${Number(assignment.hourly_rate).toFixed(2)}`
+                            : "-"
+                        }
+                      />
+                      <InfoRow label="Assigned At" value={formatDate(assignment.assigned_at)} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        </BottomSheetBody>
+
+        <BottomSheetFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+        </BottomSheetFooter>
+      </BottomSheetContent>
+    </BottomSheet>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border bg-background/50 p-3">
+      <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+      <p className={cn("mt-1 text-sm font-medium", mono && "font-mono text-xs")}>{value}</p>
+    </div>
+  );
+}
+
+function StatusPill({
+  label,
+  active,
+  activeLabel,
+  inactiveLabel,
+}: {
+  label: string;
+  active: boolean;
+  activeLabel: string;
+  inactiveLabel: string;
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-xl border bg-background/50 px-4 py-3">
+      <div>
+        <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+        <p className="mt-1 text-sm font-medium">{active ? activeLabel : inactiveLabel}</p>
+      </div>
+      <div className={cn("flex h-9 w-9 items-center justify-center rounded-full", active ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground")}>
+        {active ? <CheckCircle2 className="h-4 w-4" /> : <Activity className="h-4 w-4" />}
+      </div>
+    </div>
+  );
+}

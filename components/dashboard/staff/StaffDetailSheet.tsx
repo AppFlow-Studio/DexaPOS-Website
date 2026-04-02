@@ -42,13 +42,11 @@ import {
   X,
   DollarSign,
   ArrowUpCircle,
-  Info,
   Loader2,
   ChevronRight,
   Shield,
 } from "lucide-react";
 import { LocationAssignmentSheet } from "./LocationAssignmentSheet";
-import { LocationAssignment } from "@/types/staff";
 import {
   useDeactivateStaff,
   useReactivateStaff,
@@ -79,7 +77,7 @@ export function StaffDetailSheet({
   open,
   onOpenChange,
 }: StaffDetailSheetProps) {
-  // â”€â”€ All hooks MUST be called before any conditional return â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ All hooks MUST be called before any conditional return Ã¢â€â‚¬Ã¢â€â‚¬
   const deactivateStaff = useDeactivateStaff();
   const reactivateStaff = useReactivateStaff();
   const resetPIN = useResetStaffPIN();
@@ -188,7 +186,7 @@ export function StaffDetailSheet({
     setShowAddLocation(false);
   }, [staff?.member_id]);
 
-  // â”€â”€ Location management derived values â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Location management derived values Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   const assignedLocationIds = (displayStaff?.location_assignments ?? [])
     .filter((a) => a.is_active)
     .map((a) => a.location_id);
@@ -200,7 +198,7 @@ export function StaffDetailSheet({
   // Early return AFTER all hooks (React Rules of Hooks)
   if (!staff || !displayStaff) return null;
 
-  // â”€â”€ Handler functions (safe to use after early return) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Handler functions (safe to use after early return) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
   const handleStatusToggle = () => {
     if (!primaryLocation) {
@@ -319,7 +317,7 @@ export function StaffDetailSheet({
     setUpgradeEmail("");
   };
 
-  // â”€â”€ Profile edit handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Profile edit handlers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   const handleSaveProfile = () => {
     const updates: Record<string, string | null> = {};
     if (editedFirstName !== staff.first_name)
@@ -384,347 +382,105 @@ export function StaffDetailSheet({
     });
   };
 
+
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange}>
-      <BottomSheetContent className="w-full max-w-7xl mx-auto" height="95">
+      <BottomSheetContent className="mx-auto w-full max-w-6xl" height="95">
         <BottomSheetHeader className="flex flex-col gap-2">
           <BottomSheetTitle>Staff details</BottomSheetTitle>
           <BottomSheetDescription>
-            View and manage this team memberâ€™s access, locations, and POS
+            View and manage this team member's access, locations, and POS
             settings.
           </BottomSheetDescription>
         </BottomSheetHeader>
         <BottomSheetBody className="flex-1 overflow-y-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr_1fr] gap-6">
-            {/* Profile column */}
-            <div className="space-y-4">
-              {/* Avatar + name header row */}
-              <div className="flex items-center gap-3">
-                <Avatar className="h-12 w-12 shrink-0">
-                  <AvatarImage
-                    src={staff.avatar_url || undefined}
-                    alt={staff.display_name}
-                  />
-                  <AvatarFallback>{initials}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0 space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-base truncate">
-                      {displayStaff.first_name} {displayStaff.last_name}
-                    </span>
-                    {!staff.is_clerk_user && (
+          <div className="space-y-6 p-1">
+            <section className="rounded-2xl border bg-card p-5">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="flex items-start gap-4">
+                  <Avatar className="h-16 w-16">
+                    <AvatarImage
+                      src={displayStaff.avatar_url || undefined}
+                      alt={displayStaff.display_name}
+                    />
+                    <AvatarFallback>{initials}</AvatarFallback>
+                  </Avatar>
+
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-xl font-semibold">
+                        {displayStaff.first_name} {displayStaff.last_name}
+                      </h2>
+                      {staff.is_clerk_user ? (
+                        <Badge variant="secondary" className="gap-1">
+                          <Shield className="h-3 w-3" />
+                          Dashboard User
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="gap-1">
+                          <Lock className="h-3 w-3" />
+                          POS Only
+                        </Badge>
+                      )}
                       <Badge
-                        variant="outline"
-                        className="gap-1 text-xs shrink-0"
+                        variant={staff.overall_is_active ? "default" : "secondary"}
+                        className={cn(
+                          staff.overall_is_active
+                            ? "bg-green-600 text-white hover:bg-green-600"
+                            : ""
+                        )}
                       >
-                        <Lock className="h-3 w-3" />
-                        POS only
+                        {staff.overall_is_active ? "Active" : "Inactive"}
                       </Badge>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-6 p-0 ml-auto shrink-0"
-                      onClick={() => setIsProfileEditMode(true)}
-                    >
-                      <Edit className="h-3 w-3" />
-                    </Button>
-                  </div>
-                  {displayStaff.email && (
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground truncate">
-                      <Mail className="h-3 w-3 shrink-0" />
-                      <span className="truncate">{displayStaff.email}</span>
                     </div>
-                  )}
-                  {displayStaff.phone && (
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Phone className="h-3 w-3 shrink-0" />
-                      {displayStaff.phone}
-                    </div>
-                  )}
-                </div>
-              </div>
 
-              {/* Profile edit form â€” expanded below avatar, not crammed beside it */}
-              {isProfileEditMode && (
-                <div className="rounded-lg border bg-muted/20 p-4 space-y-3">
-                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Edit profile
+                    <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <Mail className="h-4 w-4" />
+                        <span>{displayStaff.email || "No email"}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-4 w-4" />
+                        <span>{displayStaff.phone || "No phone"}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4" />
+                        <span>{displayStaff.total_locations} assigned location(s)</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                </div>
+
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <Button
+                    variant={isProfileEditMode ? "secondary" : "outline"}
+                    className="gap-2"
+                    onClick={() =>
+                      isProfileEditMode
+                        ? handleCancelProfileEdit()
+                        : setIsProfileEditMode(true)
+                    }
+                  >
+                    {isProfileEditMode ? (
+                      <>
+                        <X className="h-4 w-4" />
+                        Cancel Editing
+                      </>
+                    ) : (
+                      <>
+                        <Edit className="h-4 w-4" />
+                        Edit Profile
+                      </>
+                    )}
+                  </Button>
+
+                  <div className="flex items-center gap-3 rounded-xl border px-4 py-3">
                     <div className="space-y-1">
-                      <Label className="text-xs">First Name</Label>
-                      <Input
-                        value={editedFirstName}
-                        onChange={(e) => setEditedFirstName(e.target.value)}
-                        className="h-9"
-                      />
+                      <p className="text-sm font-medium">Status</p>
+                      <p className="text-xs text-muted-foreground">
+                        Toggle staff access for the primary location.
+                      </p>
                     </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Last Name</Label>
-                      <Input
-                        value={editedLastName}
-                        onChange={(e) => setEditedLastName(e.target.value)}
-                        className="h-9"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Email</Label>
-                    <Input
-                      type="email"
-                      value={editedEmail}
-                      onChange={(e) => setEditedEmail(e.target.value)}
-                      className="h-9"
-                      placeholder="user@example.com"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Phone</Label>
-                    <Input
-                      type="tel"
-                      value={editedPhone}
-                      onChange={(e) => setEditedPhone(e.target.value)}
-                      className="h-9"
-                      placeholder="+1234567890"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2 pt-1">
-                    <Button
-                      variant="default"
-                      size="sm"
-                      className="flex-1 gap-1"
-                      onClick={handleSaveProfile}
-                      disabled={updateProfile.isPending}
-                    >
-                      {updateProfile.isPending ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <Save className="h-3 w-3" />
-                      )}
-                      Save
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 gap-1"
-                      onClick={handleCancelProfileEdit}
-                      disabled={updateProfile.isPending}
-                    >
-                      <X className="h-3 w-3" />
-                      Cancel
-                    </Button>
-                  </div>
-                  {staff.is_clerk_user && (
-                    <p className="text-[10px] text-muted-foreground">
-                      Name changes will sync to the authentication provider.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              <Separator />
-
-              {/* Primary role & location */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Primary assignment
-                  </div>
-                  {!isEditMode && primaryLocation && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 gap-1"
-                      onClick={() => setIsEditMode(true)}
-                    >
-                      <Edit className="h-3 w-3" />
-                      Edit
-                    </Button>
-                  )}
-                </div>
-
-                {primaryLocation ? (
-                  <div className="space-y-3">
-                    {/* Role Selection/Display */}
-                    <div className="space-y-2">
-                      <Label className="text-xs">Role</Label>
-                      {isEditMode ? (
-                        <Select
-                          value={editedRole}
-                          onValueChange={setEditedRole}
-                        >
-                          <SelectTrigger className="h-9">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {roles
-                              .filter((r) => r.level <= currentUserLevel)
-                              .map((role) => (
-                                <SelectItem key={role.code} value={role.code}>
-                                  <div className="flex items-center gap-2">
-                                    <span>{role.name}</span>
-                                    <Badge
-                                      variant="outline"
-                                      className="text-xs"
-                                    >
-                                      {role.code}
-                                    </Badge>
-                                  </div>
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">
-                            {primaryLocation.role_name}
-                          </span>
-                          <Badge variant="outline" className="text-xs">
-                            {primaryLocation.role_code}
-                          </Badge>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Employment Type (POS-only staff) */}
-                    {!staff.is_clerk_user && (
-                      <div className="space-y-2">
-                        <Label className="text-xs">Employment Type</Label>
-                        {isEditMode ? (
-                          <Select
-                            value={editedEmploymentType || undefined}
-                            onValueChange={(value) =>
-                              setEditedEmploymentType(value as EmploymentType)
-                            }
-                          >
-                            <SelectTrigger className="h-9">
-                              <SelectValue placeholder="Select type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="full-time">
-                                Full-time
-                              </SelectItem>
-                              <SelectItem value="part-time">
-                                Part-time
-                              </SelectItem>
-                              <SelectItem value="contractor">
-                                Contractor
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <div className="text-sm">
-                            {primaryLocation.employment_type ? (
-                              <Badge variant="outline" className="capitalize">
-                                {primaryLocation.employment_type.replace(
-                                  "-",
-                                  " "
-                                )}
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground">
-                                Not set
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Hourly Rate (POS-only staff) */}
-                    {!staff.is_clerk_user && (
-                      <div className="space-y-2">
-                        <Label className="text-xs">Hourly Rate</Label>
-                        {isEditMode ? (
-                          <div className="relative">
-                            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              placeholder="0.00"
-                              value={editedHourlyRate}
-                              onChange={(e) =>
-                                setEditedHourlyRate(e.target.value)
-                              }
-                              className="h-9 pl-9"
-                            />
-                          </div>
-                        ) : (
-                          <div className="text-sm">
-                            {primaryLocation.hourly_rate ? (
-                              `$${primaryLocation.hourly_rate.toFixed(2)}/hour`
-                            ) : (
-                              <span className="text-muted-foreground">
-                                Not set
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Location */}
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <MapPin className="h-3 w-3" />
-                      {primaryLocation.location_name}
-                    </div>
-
-                    {/* Edit Mode Actions */}
-                    {isEditMode && (
-                      <div className="flex items-center gap-2 pt-2">
-                        <Button
-                          variant="default"
-                          size="sm"
-                          className="flex-1 gap-1"
-                          onClick={handleSaveChanges}
-                          disabled={updateAssignment.isPending}
-                        >
-                          {updateAssignment.isPending ? (
-                            <>
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                              Saving...
-                            </>
-                          ) : (
-                            <>
-                              <Save className="h-3 w-3" />
-                              Save Changes
-                            </>
-                          )}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex-1 gap-1"
-                          onClick={handleCancelEdit}
-                          disabled={updateAssignment.isPending}
-                        >
-                          <X className="h-3 w-3" />
-                          Cancel
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <span className="text-sm text-muted-foreground">
-                    No primary location
-                  </span>
-                )}
-              </div>
-
-              {/* Status */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      Status
-                    </div>
-                    <div className="text-sm">
-                      {staff.overall_is_active ? "Active" : "Inactive"}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
                     <Switch
                       checked={staff.overall_is_active}
                       onCheckedChange={handleStatusToggle}
@@ -737,153 +493,419 @@ export function StaffDetailSheet({
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Settings column */}
-            <div className="space-y-4 lg:col-span-1">
-              {/* POS access card */}
-              <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <KeyRound className="h-4 w-4 text-muted-foreground" />
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium">POS access</span>
-                      <span className="text-xs text-muted-foreground">
-                        PIN-based login at assigned locations
-                      </span>
-                    </div>
+              {isProfileEditMode && (
+                <div className="mt-5 rounded-2xl border bg-background/60 p-4">
+                  <div className="mb-4">
+                    <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Edit Profile
+                    </h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Update profile information without changing assignment or
+                      access details.
+                    </p>
                   </div>
-                  <Badge
-                    variant={hasPin ? "default" : "outline"}
-                    className={cn(
-                      "text-xs gap-1",
-                      hasPin ? "bg-emerald-600 text-white" : ""
-                    )}
-                  >
-                    {hasPin ? (
-                      <>
-                        <CheckCircle2 className="h-3 w-3" />
-                        PIN set
-                      </>
-                    ) : (
-                      "No PIN"
-                    )}
-                  </Badge>
-                </div>
 
-                <div className="pt-2">
-                  <StaffPinField
-                    pin={primaryPin}
-                    hasPin={Boolean(primaryLocation?.has_pin)}
-                    onGenerate={handleResetPIN}
-                    isGenerating={resetPIN.isPending}
-                    disabled={!primaryLocation}
-                    buttonLabel={
-                      primaryLocation?.has_pin ? "Generate New PIN" : "Generate PIN"
-                    }
-                    visibleDescription={
-                      primaryLocation
-                        ? `Primary location: ${primaryLocation.location_name}`
-                        : undefined
-                    }
-                  />
-                </div>
-              </div>
-
-              {/* Upgrade to Dashboard User */}
-              {!staff.is_clerk_user && (
-                <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <ArrowUpCircle className="h-4 w-4 text-muted-foreground" />
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium">
-                        Upgrade to Dashboard User
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        Grant this staff member access to the web dashboard
-                      </span>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                        First Name
+                      </Label>
+                      <Input
+                        value={editedFirstName}
+                        onChange={(e) => setEditedFirstName(e.target.value)}
+                        className="h-10"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                        Last Name
+                      </Label>
+                      <Input
+                        value={editedLastName}
+                        onChange={(e) => setEditedLastName(e.target.value)}
+                        className="h-10"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                        Email
+                      </Label>
+                      <Input
+                        type="email"
+                        value={editedEmail}
+                        onChange={(e) => setEditedEmail(e.target.value)}
+                        className="h-10"
+                        placeholder="user@example.com"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                        Phone
+                      </Label>
+                      <Input
+                        type="tel"
+                        value={editedPhone}
+                        onChange={(e) => setEditedPhone(e.target.value)}
+                        className="h-10"
+                        placeholder="+1234567890"
+                      />
                     </div>
                   </div>
 
-                  {!showUpgradeDialog ? (
-                    <div className="pt-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1 w-full"
-                        onClick={() => setShowUpgradeDialog(true)}
-                        disabled={!primaryLocation}
-                      >
-                        <ArrowUpCircle className="h-3 w-3" />
-                        Upgrade Account
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-3 pt-2">
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button
+                      className="gap-2"
+                      onClick={handleSaveProfile}
+                      disabled={updateProfile.isPending}
+                    >
+                      {updateProfile.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4" />
+                      )}
+                      Save Profile
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={handleCancelProfileEdit}
+                      disabled={updateProfile.isPending}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+
+                  {staff.is_clerk_user && (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      Name changes will sync to the authentication provider.
+                    </p>
+                  )}
+                </div>
+              )}
+            </section>
+            <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+              <section className="rounded-2xl border bg-card p-5">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Primary Assignment
+                    </h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Merchant role, employment, and primary-location settings.
+                    </p>
+                  </div>
+                  {primaryLocation && !isEditMode && (
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => setIsEditMode(true)}
+                    >
+                      <Edit className="h-4 w-4" />
+                      Edit Assignment
+                    </Button>
+                  )}
+                </div>
+
+                {primaryLocation ? (
+                  <div className="space-y-5">
+                    <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
-                        <Label htmlFor="upgrade-email" className="text-xs">
-                          Email Address
+                        <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                          Role
                         </Label>
-                        <Input
-                          id="upgrade-email"
-                          type="email"
-                          placeholder="user@example.com"
-                          value={upgradeEmail}
-                          onChange={(e) => setUpgradeEmail(e.target.value)}
-                          className="h-9"
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          A temporary password will be generated and displayed
-                        </p>
+                        {isEditMode ? (
+                          <Select value={editedRole} onValueChange={setEditedRole}>
+                            <SelectTrigger className="h-10">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {roles
+                                .filter((r) => r.level <= currentUserLevel)
+                                .map((role) => (
+                                  <SelectItem key={role.code} value={role.code}>
+                                    <div className="flex items-center gap-2">
+                                      <span>{role.name}</span>
+                                      <Badge variant="outline" className="text-[10px]">
+                                        {role.code}
+                                      </Badge>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <div className="rounded-xl border bg-background/50 px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium">
+                                {primaryLocation.role_name}
+                              </span>
+                              <Badge variant="outline">{primaryLocation.role_code}</Badge>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          className="flex-1 gap-1"
-                          onClick={handleUpgradeToClerk}
-                          disabled={
-                            upgradePOSToClerk.isPending || !upgradeEmail
-                          }
-                        >
-                          {upgradePOSToClerk.isPending && (
-                            <Loader2 className="h-3 w-3 animate-spin" />
+
+                      <div className="space-y-2">
+                        <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                          Primary Location
+                        </Label>
+                        <div className="rounded-xl border bg-background/50 px-4 py-3">
+                          <div className="flex items-center gap-2 text-sm font-medium">
+                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                            {primaryLocation.location_name}
+                          </div>
+                        </div>
+                      </div>
+
+                      {!staff.is_clerk_user && (
+                        <div className="space-y-2">
+                          <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                            Employment Type
+                          </Label>
+                          {isEditMode ? (
+                            <Select
+                              value={editedEmploymentType || undefined}
+                              onValueChange={(value) =>
+                                setEditedEmploymentType(value as EmploymentType)
+                              }
+                            >
+                              <SelectTrigger className="h-10">
+                                <SelectValue placeholder="Select type" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="full-time">Full-time</SelectItem>
+                                <SelectItem value="part-time">Part-time</SelectItem>
+                                <SelectItem value="contractor">Contractor</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <div className="rounded-xl border bg-background/50 px-4 py-3 text-sm">
+                              {primaryLocation.employment_type ? (
+                                <Badge variant="outline" className="capitalize">
+                                  {primaryLocation.employment_type.replace("-", " ")}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground">Not set</span>
+                              )}
+                            </div>
                           )}
-                          Confirm Upgrade
+                        </div>
+                      )}
+
+                      {!staff.is_clerk_user && (
+                        <div className="space-y-2">
+                          <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                            Hourly Rate
+                          </Label>
+                          {isEditMode ? (
+                            <div className="relative">
+                              <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="0.00"
+                                value={editedHourlyRate}
+                                onChange={(e) => setEditedHourlyRate(e.target.value)}
+                                className="h-10 pl-9"
+                              />
+                            </div>
+                          ) : (
+                            <div className="rounded-xl border bg-background/50 px-4 py-3 text-sm">
+                              {primaryLocation.hourly_rate !== null &&
+                              primaryLocation.hourly_rate !== undefined ? (
+                                `$${primaryLocation.hourly_rate.toFixed(2)}/hour`
+                              ) : (
+                                <span className="text-muted-foreground">Not set</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {isEditMode && (
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          className="gap-2"
+                          onClick={handleSaveChanges}
+                          disabled={updateAssignment.isPending}
+                        >
+                          {updateAssignment.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4" />
+                          )}
+                          Save Changes
                         </Button>
                         <Button
-                          size="sm"
                           variant="outline"
-                          onClick={handleCancelUpgrade}
-                          disabled={upgradePOSToClerk.isPending}
+                          onClick={handleCancelEdit}
+                          disabled={updateAssignment.isPending}
                         >
                           Cancel
                         </Button>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
 
-              {/* Demote to POS-Only â€” only for Clerk staff */}
-              {staff.is_clerk_user && staff.user_id && (
-                <div className="rounded-xl border border-orange-200 bg-orange-50/30 dark:bg-orange-950/10 p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Shield className="h-4 w-4 text-orange-500" />
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium">
-                        Demote to POS-Only
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        Revoke dashboard access. Staff will keep POS PIN
-                        access.
-                      </span>
+                    <Separator />
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <InfoRow label="Member ID" value={displayStaff.member_id} mono />
+                      <InfoRow
+                        label="Staff Profile ID"
+                        value={displayStaff.staff_profile_id || "-"}
+                        mono
+                      />
+                      <InfoRow
+                        label="Account Type"
+                        value={staff.is_clerk_user ? "Dashboard user" : "POS only"}
+                      />
+                      <InfoRow
+                        label="Primary Assignment Status"
+                        value={primaryLocation.is_active ? "Active" : "Inactive"}
+                      />
                     </div>
                   </div>
-                  <div className="pt-2">
+                ) : (
+                  <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
+                    No primary location is assigned to this staff member yet.
+                  </div>
+                )}
+              </section>
+
+              <div className="space-y-6">
+                <section className="rounded-2xl border bg-card p-5">
+                  <div className="mb-4 flex items-start gap-2">
+                    <KeyRound className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                        POS Access
+                      </h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        PIN-based login at assigned locations.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <StaffPinField
+                      pin={primaryPin}
+                      hasPin={Boolean(primaryLocation?.has_pin)}
+                      onGenerate={handleResetPIN}
+                      isGenerating={resetPIN.isPending}
+                      disabled={!primaryLocation}
+                      buttonLabel={
+                        primaryLocation?.has_pin ? "Generate New PIN" : "Generate PIN"
+                      }
+                      visibleDescription={
+                        primaryLocation
+                          ? `Primary location: ${primaryLocation.location_name}`
+                          : undefined
+                      }
+                    />
+
+                    <Separator />
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <StatusPill
+                        label="PIN Status"
+                        active={hasPin}
+                        activeLabel="PIN set"
+                        inactiveLabel="No PIN"
+                      />
+                      <StatusPill
+                        label="Overall Status"
+                        active={staff.overall_is_active}
+                        activeLabel="Active"
+                        inactiveLabel="Inactive"
+                      />
+                    </div>
+                  </div>
+                </section>
+                {!staff.is_clerk_user && (
+                  <section className="rounded-2xl border bg-card p-5">
+                    <div className="mb-4">
+                      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                        Upgrade To Dashboard User
+                      </h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Grant this staff member access to the web dashboard.
+                      </p>
+                    </div>
+
+                    {!showUpgradeDialog ? (
+                      <Button
+                        variant="outline"
+                        className="w-full gap-2"
+                        onClick={() => setShowUpgradeDialog(true)}
+                        disabled={!primaryLocation}
+                      >
+                        <ArrowUpCircle className="h-4 w-4" />
+                        Upgrade Account
+                      </Button>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label
+                            htmlFor="upgrade-email"
+                            className="text-xs uppercase tracking-[0.14em] text-muted-foreground"
+                          >
+                            Email Address
+                          </Label>
+                          <Input
+                            id="upgrade-email"
+                            type="email"
+                            placeholder="user@example.com"
+                            value={upgradeEmail}
+                            onChange={(e) => setUpgradeEmail(e.target.value)}
+                            className="h-10"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            A temporary password will be generated and displayed.
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            className="gap-2"
+                            onClick={handleUpgradeToClerk}
+                            disabled={upgradePOSToClerk.isPending || !upgradeEmail}
+                          >
+                            {upgradePOSToClerk.isPending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <ArrowUpCircle className="h-4 w-4" />
+                            )}
+                            Confirm Upgrade
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={handleCancelUpgrade}
+                            disabled={upgradePOSToClerk.isPending}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                )}
+
+                {staff.is_clerk_user && staff.user_id && (
+                  <section className="rounded-2xl border border-orange-200 bg-orange-50/40 p-5 dark:bg-orange-950/10">
+                    <div className="mb-4">
+                      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-orange-700 dark:text-orange-300">
+                        Demote To POS-Only
+                      </h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Revoke dashboard access while keeping POS PIN access.
+                      </p>
+                    </div>
+
                     <Button
                       variant="outline"
-                      size="sm"
-                      className="gap-1 w-full border-orange-300 text-orange-600 hover:bg-orange-50"
+                      className="w-full gap-2 border-orange-300 text-orange-700 hover:bg-orange-100 dark:hover:bg-orange-950/20"
                       onClick={() => {
                         if (
                           confirm(
@@ -896,104 +918,104 @@ export function StaffDetailSheet({
                       disabled={demoteClerkToPOS.isPending}
                     >
                       {demoteClerkToPOS.isPending ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
+                        <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <Shield className="h-3 w-3" />
+                        <Shield className="h-4 w-4" />
                       )}
                       Demote Account
                     </Button>
-                  </div>
-                </div>
-              )}
+                  </section>
+                )}
+              </div>
+            </div>
 
-              {/* Locations overview - Clickable */}
-              <div className="rounded-xl border bg-muted/10 p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">Locations</span>
+            <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+              <section className="rounded-2xl border bg-card p-5">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Location Assignments
+                    </h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Click a location to manage role, status, and PIN.
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs">
-                      {activeLocations.length} active
-                    </Badge>
+                    <Badge variant="outline">{activeLocations.length} active</Badge>
                     {availableLocationsToAdd.length > 0 && (
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-6 text-xs gap-1"
+                        className="gap-2"
                         onClick={() => {
                           setShowAddLocation(!showAddLocation);
-                          // Pre-select a role from primary assignment
                           if (primaryLocation) {
                             setAddLocationRole(primaryLocation.role_code);
                           }
                         }}
                       >
-                        + Add
+                        {showAddLocation ? "Hide Add Form" : "Add Location"}
                       </Button>
                     )}
                   </div>
                 </div>
 
-                {/* Add to location form */}
                 {showAddLocation && (
-                  <div className="space-y-2 rounded-lg border p-3 bg-muted/30">
-                    <Label className="text-xs">Location</Label>
-                    <Select
-                      value={addLocationId}
-                      onValueChange={setAddLocationId}
-                    >
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue placeholder="Select location" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableLocationsToAdd.map((loc) => (
-                          <SelectItem key={loc.id} value={loc.id}>
-                            {loc.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Label className="text-xs">Role</Label>
-                    <Select
-                      value={addLocationRole}
-                      onValueChange={setAddLocationRole}
-                    >
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue placeholder="Select role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {roles
-                          .filter((r) => r.level <= currentUserLevel)
-                          .map((r) => (
-                            <SelectItem key={r.code} value={r.code}>
-                              {r.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                    <div className="flex gap-2 pt-1">
+                  <div className="mb-4 rounded-2xl border bg-background/60 p-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                          Location
+                        </Label>
+                        <Select value={addLocationId} onValueChange={setAddLocationId}>
+                          <SelectTrigger className="h-10">
+                            <SelectValue placeholder="Select location" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableLocationsToAdd.map((loc) => (
+                              <SelectItem key={loc.id} value={loc.id}>
+                                {loc.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                          Role
+                        </Label>
+                        <Select value={addLocationRole} onValueChange={setAddLocationRole}>
+                          <SelectTrigger className="h-10">
+                            <SelectValue placeholder="Select role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {roles
+                              .filter((r) => r.level <= currentUserLevel)
+                              .map((r) => (
+                                <SelectItem key={r.code} value={r.code}>
+                                  {r.name}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
                       <Button
-                        size="sm"
-                        className="flex-1 h-7 text-xs"
                         onClick={handleAddToLocation}
                         disabled={
-                          addToLocation.isPending ||
-                          !addLocationId ||
-                          !addLocationRole
+                          addToLocation.isPending || !addLocationId || !addLocationRole
                         }
                       >
                         {addToLocation.isPending ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          "Add"
-                        )}
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : null}
+                        Add To Location
                       </Button>
                       <Button
                         variant="outline"
-                        size="sm"
-                        className="flex-1 h-7 text-xs"
                         onClick={() => setShowAddLocation(false)}
                       >
                         Cancel
@@ -1002,151 +1024,214 @@ export function StaffDetailSheet({
                   </div>
                 )}
 
-                <p className="text-xs text-muted-foreground">
-                  Click a location to manage role, status, and PIN
-                </p>
-                <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                <div className="space-y-3">
                   {displayStaff.location_assignments.map((assignment) => (
                     <button
                       key={assignment.location_id + assignment.role_code}
                       type="button"
                       className={cn(
-                        "w-full flex items-center justify-between text-xs py-2.5 px-3 rounded-lg",
-                        "hover:bg-muted/50 transition-colors text-left cursor-pointer",
-                        "border border-transparent hover:border-border",
-                        !assignment.is_active && "opacity-60"
+                        "w-full rounded-xl border bg-background/60 p-4 text-left transition-colors hover:bg-muted/40",
+                        !assignment.is_active && "opacity-70"
                       )}
                       onClick={() => {
-                        setSelectedAssignmentLocationId(
-                          assignment.location_id
-                        );
+                        setSelectedAssignmentLocationId(assignment.location_id);
                         setIsLocationSheetOpen(true);
                       }}
                     >
-                      <div className="flex-1 flex flex-col min-w-0">
-                        <span className="font-medium truncate">
-                          {assignment.location_name}
-                        </span>
-                        <span className="text-muted-foreground">
-                          {assignment.role_name}
-                        </span>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-medium">{assignment.location_name}</p>
+                            {assignment.is_primary && <Badge>Primary</Badge>}
+                            {!assignment.is_active && (
+                              <Badge variant="outline">Inactive</Badge>
+                            )}
+                            {assignment.has_pin && (
+                              <Badge variant="secondary" className="gap-1">
+                                <Lock className="h-3 w-3" />
+                                PIN
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {assignment.role_name}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {assignment.is_active && !assignment.is_primary && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2 text-destructive hover:text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveFromLocation(assignment.location_id);
+                              }}
+                              disabled={removeFromLocation.isPending}
+                              title="Remove from location"
+                            >
+                              <UserX className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0 ml-2">
-                        {assignment.is_primary && (
-                          <Badge variant="default" className="text-[10px]">
-                            Primary
-                          </Badge>
-                        )}
-                        {!assignment.is_active && (
-                          <Badge variant="outline" className="text-[10px]">
-                            Inactive
-                          </Badge>
-                        )}
-                        {assignment.has_pin && (
-                          <Badge
-                            variant="secondary"
-                            className="text-[10px] gap-1"
-                          >
-                            <Lock className="h-3 w-3" />
-                            PIN
-                          </Badge>
-                        )}
-                        {/* Remove from location (only non-primary, active) */}
-                        {assignment.is_active && !assignment.is_primary && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRemoveFromLocation(
-                                assignment.location_id
-                              );
-                            }}
-                            disabled={removeFromLocation.isPending}
-                            title="Remove from location"
-                          >
-                            <UserX className="h-3 w-3" />
-                          </Button>
-                        )}
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <InfoRow label="Role Code" value={assignment.role_code} mono />
+                        <InfoRow
+                          label="Employment Type"
+                          value={assignment.employment_type || "-"}
+                        />
+                        <InfoRow
+                          label="Hourly Rate"
+                          value={
+                            assignment.hourly_rate !== null &&
+                            assignment.hourly_rate !== undefined
+                              ? `$${Number(assignment.hourly_rate).toFixed(2)}`
+                              : "-"
+                          }
+                        />
+                        <InfoRow
+                          label="Assigned At"
+                          value={assignment.assigned_at || "-"}
+                        />
                       </div>
                     </button>
                   ))}
                 </div>
-              </div>
+              </section>
 
-              {/* Location Assignment Sheet */}
-              {selectedAssignment && (
-                <LocationAssignmentSheet
-                  open={isLocationSheetOpen}
-                  onOpenChange={setIsLocationSheetOpen}
-                  memberId={displayStaff.member_id}
-                  memberName={`${displayStaff.first_name} ${displayStaff.last_name}`}
-                  isClerkUser={displayStaff.is_clerk_user}
-                  assignment={selectedAssignment}
-                  currentUserRoleLevel={currentUserLevel}
-                />
-              )}
-            </div>
-
-            {/* Logs / activity column */}
-            <div className="lg:col-span-1">
-              <div className="rounded-xl border bg-card flex flex-col min-h-[400px] lg:min-h-0 lg:h-full">
-                <div className="p-4 border-b flex items-center gap-2 shrink-0">
-                  <Activity className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium">Activity log</span>
+              <section className="rounded-2xl border bg-card">
+                <div className="border-b p-5">
+                  <div className="flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                        Activity Log
+                      </h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Recent actions for this staff member.
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex-1 min-h-0 overflow-hidden bg-muted/5">
+                <div className="min-h-[420px] bg-muted/5">
                   <StaffActivityLog
                     staffProfileId={displayStaff.staff_profile_id}
                     userId={displayStaff.user_id}
                   />
                 </div>
-              </div>
+              </section>
             </div>
+
+            {selectedAssignment && (
+              <LocationAssignmentSheet
+                open={isLocationSheetOpen}
+                onOpenChange={setIsLocationSheetOpen}
+                memberId={displayStaff.member_id}
+                memberName={`${displayStaff.first_name} ${displayStaff.last_name}`}
+                isClerkUser={displayStaff.is_clerk_user}
+                assignment={selectedAssignment}
+                currentUserRoleLevel={currentUserLevel}
+              />
+            )}
           </div>
         </BottomSheetBody>
         <BottomSheetFooter>
-          <div className="flex items-center justify-between w-full">
-          <div className="text-xs text-muted-foreground">
-            Member ID: {displayStaff.member_id}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onOpenChange(false)}
-            >
-              Close
-            </Button>
-            {staff.overall_is_active ? (
-              <Button
-                variant="destructive"
-                size="sm"
-                className="gap-1"
-                onClick={handleStatusToggle}
-                disabled={!primaryLocation}
-              >
-                <UserX className="h-3 w-3" />
-                Deactivate
+          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-xs text-muted-foreground">
+              Member ID: {displayStaff.member_id}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Close
               </Button>
-            ) : (
-              <Button
-                variant="default"
-                size="sm"
-                className="gap-1"
-                onClick={handleStatusToggle}
-                disabled={!primaryLocation}
-              >
-                <UserCheck className="h-3 w-3" />
-                Reactivate
-              </Button>
-            )}
-          </div>
+              {staff.overall_is_active ? (
+                <Button
+                  variant="destructive"
+                  className="gap-2"
+                  onClick={handleStatusToggle}
+                  disabled={!primaryLocation}
+                >
+                  <UserX className="h-4 w-4" />
+                  Deactivate
+                </Button>
+              ) : (
+                <Button
+                  className="gap-2"
+                  onClick={handleStatusToggle}
+                  disabled={!primaryLocation}
+                >
+                  <UserCheck className="h-4 w-4" />
+                  Reactivate
+                </Button>
+              )}
+            </div>
           </div>
         </BottomSheetFooter>
       </BottomSheetContent>
     </BottomSheet>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border bg-background/50 p-3">
+      <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+        {label}
+      </p>
+      <p className={cn("mt-1 text-sm font-medium", mono && "font-mono text-xs")}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function StatusPill({
+  label,
+  active,
+  activeLabel,
+  inactiveLabel,
+}: {
+  label: string;
+  active: boolean;
+  activeLabel: string;
+  inactiveLabel: string;
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-xl border bg-background/50 px-4 py-3">
+      <div>
+        <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+          {label}
+        </p>
+        <p className="mt-1 text-sm font-medium">
+          {active ? activeLabel : inactiveLabel}
+        </p>
+      </div>
+      <div
+        className={cn(
+          "flex h-9 w-9 items-center justify-center rounded-full",
+          active
+            ? "bg-green-100 text-green-700"
+            : "bg-muted text-muted-foreground"
+        )}
+      >
+        {active ? (
+          <CheckCircle2 className="h-4 w-4" />
+        ) : (
+          <Activity className="h-4 w-4" />
+        )}
+      </div>
+    </div>
   );
 }
