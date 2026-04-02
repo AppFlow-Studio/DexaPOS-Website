@@ -12,6 +12,7 @@ export interface LocationAssignment {
   is_primary: boolean;
   is_active: boolean;
   has_pin: boolean;
+  pin_code?: string | null; // UI payload alias, sourced from pin_plain when available
   hourly_rate: number | null;
   employment_type: "full-time" | "part-time" | "contractor" | null;
   assigned_at: string;
@@ -167,11 +168,11 @@ export type StaffActionResponse<T = unknown> =
 
 export interface GeneratedPIN {
   pin: string;
-  hashed_pin: string;
+  stored_pin: string;
 }
 
 export interface ResetPINResult {
-  pin: string; // The unhashed PIN to display to user
+  pin: string;
 }
 
 // ============================================================================

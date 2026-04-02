@@ -65,6 +65,7 @@ import { toast } from "sonner";
 import { GetMerchantRoles } from "@/app/dashboard/actions/staff-invite";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { StaffActivityLog } from "./StaffActivityLog";
+import { StaffPinField } from "./StaffPinField";
 import { useLocationStore } from "@/stores/location-store";
 
 interface StaffDetailSheetProps {
@@ -78,7 +79,7 @@ export function StaffDetailSheet({
   open,
   onOpenChange,
 }: StaffDetailSheetProps) {
-  // ── All hooks MUST be called before any conditional return ──
+  // â”€â”€ All hooks MUST be called before any conditional return â”€â”€
   const deactivateStaff = useDeactivateStaff();
   const reactivateStaff = useReactivateStaff();
   const resetPIN = useResetStaffPIN();
@@ -146,6 +147,7 @@ export function StaffDetailSheet({
     (a) => a.is_primary
   );
   const hasPin = displayStaff?.location_assignments?.some((a) => a.has_pin) ?? false;
+  const primaryPin = primaryLocation?.pin_code || null;
 
   // Get current user's role level for filtering assignable roles
   const currentUserLevel = React.useMemo(() => {
@@ -186,7 +188,7 @@ export function StaffDetailSheet({
     setShowAddLocation(false);
   }, [staff?.member_id]);
 
-  // ── Location management derived values ──────────────────────────────────
+  // â”€â”€ Location management derived values â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const assignedLocationIds = (displayStaff?.location_assignments ?? [])
     .filter((a) => a.is_active)
     .map((a) => a.location_id);
@@ -198,7 +200,7 @@ export function StaffDetailSheet({
   // Early return AFTER all hooks (React Rules of Hooks)
   if (!staff || !displayStaff) return null;
 
-  // ── Handler functions (safe to use after early return) ──────────────────
+  // â”€â”€ Handler functions (safe to use after early return) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const handleStatusToggle = () => {
     if (!primaryLocation) {
@@ -317,7 +319,7 @@ export function StaffDetailSheet({
     setUpgradeEmail("");
   };
 
-  // ── Profile edit handlers ─────────────────────────────────────────
+  // â”€â”€ Profile edit handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleSaveProfile = () => {
     const updates: Record<string, string | null> = {};
     if (editedFirstName !== staff.first_name)
@@ -388,7 +390,7 @@ export function StaffDetailSheet({
         <BottomSheetHeader className="flex flex-col gap-2">
           <BottomSheetTitle>Staff details</BottomSheetTitle>
           <BottomSheetDescription>
-            View and manage this team member’s access, locations, and POS
+            View and manage this team memberâ€™s access, locations, and POS
             settings.
           </BottomSheetDescription>
         </BottomSheetHeader>
@@ -443,7 +445,7 @@ export function StaffDetailSheet({
                 </div>
               </div>
 
-              {/* Profile edit form — expanded below avatar, not crammed beside it */}
+              {/* Profile edit form â€” expanded below avatar, not crammed beside it */}
               {isProfileEditMode && (
                 <div className="rounded-lg border bg-muted/20 p-4 space-y-3">
                   <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -769,20 +771,22 @@ export function StaffDetailSheet({
                   </Badge>
                 </div>
 
-                <div className="flex items-center justify-between pt-2">
-                  <div className="text-xs text-muted-foreground">
-                    Reset the POS PIN for this staff member’s primary location.
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1"
-                    onClick={handleResetPIN}
-                    disabled={!primaryLocation || resetPIN.isPending}
-                  >
-                    <KeyRound className="h-3 w-3" />
-                    Reset PIN
-                  </Button>
+                <div className="pt-2">
+                  <StaffPinField
+                    pin={primaryPin}
+                    hasPin={Boolean(primaryLocation?.has_pin)}
+                    onGenerate={handleResetPIN}
+                    isGenerating={resetPIN.isPending}
+                    disabled={!primaryLocation}
+                    buttonLabel={
+                      primaryLocation?.has_pin ? "Generate New PIN" : "Generate PIN"
+                    }
+                    visibleDescription={
+                      primaryLocation
+                        ? `Primary location: ${primaryLocation.location_name}`
+                        : undefined
+                    }
+                  />
                 </div>
               </div>
 
@@ -860,7 +864,7 @@ export function StaffDetailSheet({
                 </div>
               )}
 
-              {/* Demote to POS-Only — only for Clerk staff */}
+              {/* Demote to POS-Only â€” only for Clerk staff */}
               {staff.is_clerk_user && staff.user_id && (
                 <div className="rounded-xl border border-orange-200 bg-orange-50/30 dark:bg-orange-950/10 p-4 space-y-3">
                   <div className="flex items-center gap-2">

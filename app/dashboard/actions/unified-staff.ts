@@ -12,7 +12,6 @@ import {
   BulkPinResetResult,
 } from "@/types/staff";
 import { clerkClient, auth } from "@clerk/nextjs/server";
-import bcrypt from "bcryptjs";
 import { LogAuditEvent } from "./audit-logs";
 import { revalidatePath } from "next/cache";
 
@@ -211,14 +210,14 @@ export async function CreatePOSStaff(
     }
 
     // 2. Generate PIN if needed
-    let hashedPin: string | null = null;
+    let pinCode: string | null = null;
     let generatedPin: string | undefined;
 
     if (formData.auto_generate_pin) {
       generatedPin = Math.floor(1000 + Math.random() * 9000).toString();
-      hashedPin = await bcrypt.hash(generatedPin, 10);
+      pinCode = generatedPin;
     } else if (formData.pin_code) {
-      hashedPin = await bcrypt.hash(formData.pin_code, 10);
+      pinCode = formData.pin_code;
     }
 
     // 3. Create staff_profile record (POS-only)
@@ -273,7 +272,9 @@ export async function CreatePOSStaff(
       role_code: formData.role_code,
       is_primary_location: locationId === formData.primary_location_id,
       is_active: true,
-      pin_code: hashedPin,
+      pin_plain: pinCode,
+      pin_hashed: null,
+      pin_code: pinCode,
       hourly_rate: formData.hourly_rate,
       employment_type: formData.employment_type,
     }));
@@ -396,14 +397,14 @@ export async function CreateClerkUserDirectly(
     // 1. Generate password and PIN upfront
     const tempPassword = generateSecurePassword(12);
 
-    let hashedPin: string | null = null;
+    let pinCode: string | null = null;
     let generatedPin: string | undefined;
 
     if (formData.auto_generate_pin) {
       generatedPin = Math.floor(1000 + Math.random() * 9000).toString();
-      hashedPin = await bcrypt.hash(generatedPin, 10);
+      pinCode = generatedPin;
     } else if (formData.pin_code) {
-      hashedPin = await bcrypt.hash(formData.pin_code, 10);
+      pinCode = formData.pin_code;
     }
 
     // 2. Prepare location assignments for publicMetadata (webhook fallback)
@@ -413,7 +414,7 @@ export async function CreateClerkUserDirectly(
       isPrimaryLocation: locationId === formData.primary_location_id,
       hourlyRate: formData.hourly_rate,
       employmentType: formData.employment_type,
-      pinCode: hashedPin,
+      pinCode,
     }));
 
     // 3. Create Clerk user with password
@@ -520,7 +521,9 @@ export async function CreateClerkUserDirectly(
       role_code: formData.role_code,
       is_primary_location: locationId === formData.primary_location_id,
       is_active: true,
-      pin_code: hashedPin,
+      pin_plain: pinCode,
+      pin_hashed: null,
+      pin_code: pinCode,
       hourly_rate: formData.hourly_rate,
       employment_type: formData.employment_type,
     }));
@@ -644,17 +647,17 @@ export async function InviteClerkStaff(
       employmentType: formData.employment_type,
     }));
 
-    // 2. Generate/hash PIN if needed (will be stored in location_assignments)
-    let hashedPin: string | null = null;
+    // 2. Generate or use the PIN (stored directly in location_assignments)
+    let pinCode: string | null = null;
     if (formData.auto_generate_pin) {
       const generatedPin = Math.floor(1000 + Math.random() * 9000).toString();
-      hashedPin = await bcrypt.hash(generatedPin, 10);
+      pinCode = generatedPin;
     } else if (formData.pin_code) {
-      hashedPin = await bcrypt.hash(formData.pin_code, 10);
+      pinCode = formData.pin_code;
     }
 
-    const locationAssignmentsWithPin = hashedPin
-      ? locationAssignments.map((la) => ({ ...la, pinCode: hashedPin }))
+    const locationAssignmentsWithPin = pinCode
+      ? locationAssignments.map((la) => ({ ...la, pinCode }))
       : locationAssignments;
 
     // 3. Create Clerk organization invitation
@@ -923,7 +926,9 @@ export async function ResetStaffPIN(
   try {
     // Generate or use provided PIN
     const pin = newPin || Math.floor(1000 + Math.random() * 9000).toString();
-    const hashedPin = await bcrypt.hash(pin, 10);
+    if (!/^\d{4,6}$/.test(pin)) {
+      return { error: "PIN must be 4-6 digits" };
+    }
 
     const { data: member } = await supabase
       .from("members")
@@ -937,7 +942,12 @@ export async function ResetStaffPIN(
 
     let query = supabase
       .from("location_members")
-      .update({ pin_code: hashedPin, updated_at: new Date().toISOString() })
+      .update({
+        pin_plain: pin,
+        pin_hashed: null,
+        pin_code: pin,
+        updated_at: new Date().toISOString(),
+      })
       .eq("location_id", locationId);
 
     if (member.user_id) {
@@ -991,7 +1001,7 @@ export async function ResetStaffPIN(
 
     revalidatePath("/dashboard/staff");
 
-    return { data: { pin } }; // Return unhashed PIN to show user
+    return { data: { pin } };
   } catch (error) {
     console.error("[ResetStaffPIN] Unexpected error:", error);
     return { error: "An unexpected error occurred" };
@@ -1250,7 +1260,7 @@ export async function UpgradePOSStaffToClerk(
     // 4. Get location assignment to retrieve role
     const { data: locationAssignment, error: locationError } = await supabase
       .from("location_members")
-      .select("role_code, pin_code, hourly_rate, employment_type")
+      .select("role_code, pin_plain, pin_hashed, pin_code, hourly_rate, employment_type")
       .eq("staff_profile_id", staffProfile.id)
       .eq("location_id", locationId)
       .single();
@@ -1385,20 +1395,22 @@ export async function UpgradePOSStaffToClerk(
 
     // 10. Update location_members - CRITICAL: set user_id and clear staff_profile_id
     // Database constraint requires EITHER user_id OR staff_profile_id, not both
-    // PIN PERSISTENCE: Explicitly preserve pin_code by reading current values first
+    // PIN PERSISTENCE: Explicitly preserve existing PIN columns by reading current values first
     const { data: existingLocationMembers } = await supabase
       .from("location_members")
-      .select("id, pin_code")
+      .select("id, pin_plain, pin_hashed, pin_code")
       .eq("staff_profile_id", staffProfile.id);
 
-    // Update each location_member row, explicitly re-setting pin_code to prevent nullification
+    // Update each location_member row, explicitly re-setting PIN columns to prevent nullification
     const locationUpdatePromises = (existingLocationMembers || []).map((lm) =>
       supabase
         .from("location_members")
         .update({
           user_id: clerkUser.id,
           staff_profile_id: null, // MUST clear this due to constraint
-          pin_code: lm.pin_code, // Explicitly preserve existing PIN
+          pin_plain: lm.pin_plain,
+          pin_hashed: lm.pin_hashed,
+          pin_code: lm.pin_code,
           updated_at: new Date().toISOString(),
         })
         .eq("id", lm.id)
@@ -1529,7 +1541,7 @@ export async function DemoteClerkToPOSOnly(
     // 3. Update location_members: switch from user_id to staff_profile_id, preserve PIN
     const { data: existingLocationMembers } = await supabase
       .from("location_members")
-      .select("id, pin_code")
+      .select("id, pin_plain, pin_hashed, pin_code")
       .eq("user_id", clerkUserId);
 
     const locationUpdatePromises = (existingLocationMembers || []).map((lm) =>
@@ -1538,7 +1550,9 @@ export async function DemoteClerkToPOSOnly(
         .update({
           user_id: null,
           staff_profile_id: staffProfile.id,
-          pin_code: lm.pin_code, // Preserve existing PIN
+          pin_plain: lm.pin_plain,
+          pin_hashed: lm.pin_hashed,
+          pin_code: lm.pin_code,
           updated_at: new Date().toISOString(),
         })
         .eq("id", lm.id)
@@ -1608,7 +1622,7 @@ export async function GetCurrentUserPinStatus(
   try {
     const { data, error } = await supabase
       .from("location_members")
-      .select("pin_code, location_id")
+      .select("pin_plain, pin_hashed, pin_code, location_id")
       .eq("user_id", clerkUserId)
       .eq("is_active", true);
 
@@ -1619,7 +1633,13 @@ export async function GetCurrentUserPinStatus(
 
     const locationCount = data?.length ?? 0;
     const hasPinSet =
-      locationCount > 0 && data.some((row) => row.pin_code !== null);
+      locationCount > 0 &&
+      data.some(
+        (row) =>
+          row.pin_plain !== null ||
+          row.pin_hashed !== null ||
+          row.pin_code !== null,
+      );
 
     return { hasPinSet, locationCount };
   } catch (error) {
@@ -2033,12 +2053,12 @@ export async function BulkResetPINs(
 
       // Generate one PIN, apply to all locations
       const newPin = Math.floor(1000 + Math.random() * 9000).toString();
-      const hashedPin = await bcrypt.hash(newPin, 10);
-
       const { error: updateError } = await supabase
         .from("location_members")
         .update({
-          pin_code: hashedPin,
+          pin_plain: newPin,
+          pin_hashed: null,
+          pin_code: newPin,
           updated_at: new Date().toISOString(),
         })
         .eq(matchCol, matchVal)

@@ -152,10 +152,9 @@ export function TransactionsTab({ merchantInfo }: TransactionsTabProps) {
   }
 
   return (
-    // Fixed height layout instead of vh
-    <div className="h-[800px] w-full flex overflow-hidden bg-[#F9FAFB] font-sans border rounded-xl">
-      {/* LEFT COLUMN: Header + Tabs + Content (50%) */}
-      <div className="w-1/2 h-full flex flex-col border-r border-gray-200">
+    <div className="flex w-full flex-col overflow-visible rounded-xl border bg-[#F9FAFB] font-sans min-[1440px]:h-[800px] min-[1440px]:flex-row min-[1440px]:overflow-hidden">
+      {/* LEFT COLUMN: Header + Tabs + Content */}
+      <div className="flex flex-col border-b border-gray-200 min-[1440px]:h-full min-[1440px]:w-1/2 min-[1440px]:border-b-0 min-[1440px]:border-r">
         <div className="shrink-0 p-6 pb-2 space-y-4 bg-[#F9FAFB] z-10">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-[#111827]">
@@ -166,7 +165,7 @@ export function TransactionsTab({ merchantInfo }: TransactionsTabProps) {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4">
             <DateRangePicker date={date} setDate={setDate} className="w-full" />
           </div>
 
@@ -259,7 +258,7 @@ export function TransactionsTab({ merchantInfo }: TransactionsTabProps) {
 
           {activeTab === "transactions" && (
             <div className="space-y-4 animate-in fade-in-50 duration-300">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 min-[1600px]:grid-cols-2 gap-3">
                 <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                   <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">
                     Total Orders
@@ -331,9 +330,9 @@ export function TransactionsTab({ merchantInfo }: TransactionsTabProps) {
         </div>
       </div>
 
-      {/* RIGHT COLUMN: Chart (50%) */}
-      <div className="w-1/2 h-full bg-white p-6 relative">
-        <div className="h-full w-full rounded-[32px] overflow-hidden shadow-sm bg-white border border-gray-100 relative">
+      {/* RIGHT COLUMN: Chart */}
+      <div className="border-t border-gray-200 bg-white p-6 min-[1440px]:h-full min-[1440px]:w-1/2 min-[1440px]:border-t-0 relative">
+        <div className="relative h-[360px] w-full overflow-hidden rounded-[32px] border border-gray-100 bg-white shadow-sm min-[1440px]:h-full">
           <FinancialHeroChart
             data={chartData}
             isLoading={isLoadingChartKPIs}

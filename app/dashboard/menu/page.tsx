@@ -168,6 +168,7 @@ export default function MenuPage() {
   }, [form, imageUpload.reset, isAllLocations]);
 
   const menuType = form.watch("menu_type");
+  const watchedMenuValues = form.watch();
 
   const onSubmit = async (values: MenuFormValues) => {
     let uploadedAsset: { cdnUrl: string; storagePath: string } | undefined;
@@ -452,18 +453,26 @@ export default function MenuPage() {
               Create Menu
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>Create New Menu</DialogTitle>
-              <DialogDescription>
-                Add a new menu to organize your items and categories
-              </DialogDescription>
-            </DialogHeader>
+          <DialogContent
+            overlayClassName="bg-slate-950/40 backdrop-blur-md"
+            className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-4xl"
+          >
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit(onSubmit)}
-                className="space-y-4"
+                className="flex max-h-[min(92vh,860px)] flex-col"
               >
+                <DialogHeader className="border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
+                  <DialogTitle className="text-[1.625rem] font-semibold tracking-tight">
+                    Create New Menu
+                  </DialogTitle>
+                  <DialogDescription className="max-w-[60ch] text-sm leading-6">
+                    Add a new menu to organize your items and categories
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="min-h-0 flex flex-1 flex-col overflow-hidden lg:flex-row">
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5 space-y-4">
                 {/* Menu Type Selection - Only show when viewing all locations */}
                 {isAllLocations && (
                   <FormField
@@ -613,7 +622,62 @@ export default function MenuPage() {
                     </FormItem>
                   )}
                 />
-                <DialogFooter>
+                </div>
+
+                <div className="hidden min-h-0 w-[340px] shrink-0 overflow-y-auto border-l border-border/70 bg-muted/10 px-6 py-5 lg:block">
+                  <div className="space-y-6 pb-4">
+                    <div className="text-sm font-medium text-muted-foreground">
+                      Menu Preview
+                    </div>
+
+                    <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
+                      <div className="aspect-[4/3] bg-muted/40">
+                        {imageUpload.previewUrl ? (
+                          <img
+                            src={imageUpload.previewUrl}
+                            alt="Menu preview"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center">
+                            <Utensils className="h-12 w-12 text-muted-foreground/30" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-3 p-4">
+                        <div>
+                          <h3 className="text-lg font-semibold">
+                            {watchedMenuValues.name || "Menu Name"}
+                          </h3>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {watchedMenuValues.description || "Add a short description for this menu."}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Badge variant="outline">
+                            {isAllLocations && watchedMenuValues.menu_type === "global" ? (
+                              <>
+                                <Globe className="mr-1 h-3 w-3" />
+                                Global
+                              </>
+                            ) : (
+                              <>
+                                <MapPin className="mr-1 h-3 w-3" />
+                                Location
+                              </>
+                            )}
+                          </Badge>
+                          <Badge variant={watchedMenuValues.is_active ? "default" : "secondary"}>
+                            {watchedMenuValues.is_active ? "Active" : "Inactive"}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                </div>
+
+                <DialogFooter className="shrink-0 border-t border-border/70 bg-background/95 px-6 py-4 sm:justify-end">
                   <Button
                     type="button"
                     variant="outline"
