@@ -399,8 +399,12 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
             // Reset unsaved changes flag
             setHasUnsavedChanges(false)
 
-            // Redirect to locations list
-            router.push('/dashboard/locations')
+            // Redirect to locations list and immediately open the editable details sheet
+            if (result.data?.id) {
+                router.push(`/dashboard/locations?open=${result.data.id}`)
+            } else {
+                router.push('/dashboard/locations')
+            }
         } catch (error) {
             toast.error('Creation Failed', {
                 description: 'An unexpected error occurred. Please try again.'

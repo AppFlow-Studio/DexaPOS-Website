@@ -11,11 +11,11 @@ import {
     Phone, Mail, Clock, Globe, Layers, CheckCircle,
     Settings, LayoutGrid, List, XCircle,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocations } from '../hooks/useLocations'
 import { useUserInfo } from '../../manage/hooks/useUserInfo.'
 import { toast } from 'sonner'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { DeleteLocation } from '../actions/locations'
 import { cn } from '@/lib/utils'
@@ -35,10 +35,12 @@ type ViewMode = 'grid' | 'list'
 
 export default function LocationsPage() {
     const { data: userInfo } = useUserInfo()
+    const searchParams = useSearchParams()
     const clerkOrgId = userInfo?.members?.[0]?.organizations?.id
     const { data: locations, isLoading, refetch } = useLocations(clerkOrgId || '', userInfo?.id || '')
     const router = useRouter()
     const queryClient = useQueryClient()
+    const autoOpenedLocationIdRef = useRef<string | null>(null)
 
     const userRole = userInfo?.members?.[0]?.role as string | undefined
     const canCreateLocation = userRole === 'merchant.admin' || userRole === 'merchant.owner'
@@ -53,6 +55,7 @@ export default function LocationsPage() {
     const [isSheetOpen, setIsSheetOpen] = useState(false)
 
     const locationsList = Array.isArray(locations) ? locations : []
+    const autoOpenLocationId = searchParams.get('open')
     const filteredLocations = locationsList.filter(location =>
         location.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         location.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -103,6 +106,24 @@ export default function LocationsPage() {
         setIsSheetOpen(false)
         setTimeout(() => setEditingLocation(null), 200)
     }
+
+    useEffect(() => {
+        if (!autoOpenLocationId || isLoading) return
+        if (autoOpenedLocationIdRef.current === autoOpenLocationId) return
+
+        const locationToOpen = locationsList.find((location) => location.id === autoOpenLocationId)
+        if (!locationToOpen) return
+
+        autoOpenedLocationIdRef.current = autoOpenLocationId
+        setEditingLocation(locationToOpen)
+        setIsSheetOpen(true)
+        setSelectedLocation(locationToOpen.id)
+
+        const nextParams = new URLSearchParams(searchParams.toString())
+        nextParams.delete('open')
+        const nextQuery = nextParams.toString()
+        router.replace(nextQuery ? `/dashboard/locations?${nextQuery}` : '/dashboard/locations')
+    }, [autoOpenLocationId, isLoading, locationsList, router, searchParams, setSelectedLocation])
 
     const isSelected = (id: string) => selectedLocationId === id
 

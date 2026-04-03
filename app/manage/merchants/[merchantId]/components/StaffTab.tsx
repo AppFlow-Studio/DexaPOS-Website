@@ -84,6 +84,7 @@ import type { MerchantInfoModel } from '@/types/db-modles'
 import type { MerchantDetails } from '@/types/merchant'
 import { AdminCreateStaffWizard } from './AdminCreateStaffWizard'
 import { BulkPinResetDialog } from './BulkPinResetDialog'
+import { AdminStaffDetailSheet } from './AdminStaffDetailSheet'
 
 interface StaffTabProps {
   merchantInfo: MerchantInfoModel
@@ -107,6 +108,8 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
   const [showCreateDialog, setShowCreateDialog] = React.useState(false)
   const [showBulkPinDialog, setShowBulkPinDialog] = React.useState(false)
   const [bulkConfirmOpen, setBulkConfirmOpen] = React.useState(false)
+  const [selectedStaffId, setSelectedStaffId] = React.useState<string | null>(null)
+  const [detailOpen, setDetailOpen] = React.useState(false)
 
   // Data
   const {
@@ -144,6 +147,11 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
     staffList.forEach((s) => { map[s.member_id] = s })
     return map
   }, [staffList])
+
+  const selectedStaff = React.useMemo(
+    () => (selectedStaffId ? staffByMemberId[selectedStaffId] || null : null),
+    [selectedStaffId, staffByMemberId]
+  )
 
   // Handlers
   const showCredentialToast = React.useCallback((pin?: string, password?: string) => {
@@ -239,6 +247,11 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
     refetch()
   }
 
+  const handleRowClick = React.useCallback((member: AdminStaffMember) => {
+    setSelectedStaffId(member.member_id)
+    setDetailOpen(true)
+  }, [])
+
   // Table columns
   const columns: ColumnDef<AdminStaffMember>[] = React.useMemo(() => [
     {
@@ -279,7 +292,10 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
         const member = row.original
         const initials = `${member.first_name?.[0] || ''}${member.last_name?.[0] || ''}`.toUpperCase()
         return (
-          <div className="flex items-center gap-3">
+          <div
+            className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-1 -mx-2 hover:bg-muted/60"
+            onClick={() => handleRowClick(member)}
+          >
             <Avatar className="h-9 w-9">
               <AvatarImage src={member.avatar_url || undefined} alt={member.display_name} />
               <AvatarFallback className="text-xs">{initials}</AvatarFallback>
@@ -400,6 +416,11 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => handleRowClick(member)}>
+                <Users className="mr-2 h-4 w-4" />
+                View Details
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               {member.account_type !== 'clerk' && primary && (
                 <>
                   <DropdownMenuItem
@@ -428,7 +449,7 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
         )
       },
     },
-  ], [canManageMerchantTeam, handleResetPin, handleToggleStatus, resetPinMutation.isPending, toggleStatusMutation.isPending])
+  ], [canManageMerchantTeam, handleResetPin, handleRowClick, handleToggleStatus, resetPinMutation.isPending, toggleStatusMutation.isPending])
 
   const table = useReactTable({
     data: staffList,
@@ -608,6 +629,17 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
         merchantId={merchantId}
         merchantName={merchantInfo?.name || 'Merchant'}
         locations={locations}
+      />
+
+      <AdminStaffDetailSheet
+        merchantId={merchantId}
+        staff={selectedStaff}
+        open={detailOpen && !!selectedStaff}
+        onOpenChange={(open) => {
+          setDetailOpen(open)
+          if (!open) setSelectedStaffId(null)
+        }}
+        canManage={canManageMerchantTeam}
       />
 
       {/* Bulk Deactivate Confirm */}

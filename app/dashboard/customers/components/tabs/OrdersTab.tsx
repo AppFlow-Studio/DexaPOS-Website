@@ -73,7 +73,7 @@ export function OrdersTab({ customer }: OrdersTabProps) {
   // Filter by status
   const statusFilteredOrders = useMemo(() => {
     if (statusFilter === "all") return dateFilteredOrders;
-    return dateFilteredOrders.filter((order) => order.status === statusFilter);
+    return dateFilteredOrders.filter((order) => String(order.status) === statusFilter);
   }, [dateFilteredOrders, statusFilter]);
 
   // Sort
@@ -123,9 +123,9 @@ export function OrdersTab({ customer }: OrdersTabProps) {
   // Calculate stats
   const stats = useMemo(() => {
     const total = orders.length;
-    const completed = orders.filter((o) => o.status === "completed").length;
-    const voided = orders.filter((o) => o.status === "void").length;
-    const refunded = orders.filter((o) => o.status === "refund").length;
+    const completed = orders.filter((o) => String(o.status) === "completed").length;
+    const voided = orders.filter((o) => String(o.status) === "void").length;
+    const refunded = orders.filter((o) => String(o.status) === "refund").length;
 
     return {
       total,
@@ -347,7 +347,7 @@ export function OrdersTab({ customer }: OrdersTabProps) {
                       {new Date(order.created_at).toLocaleTimeString("en-US", {
                         hour: "2-digit",
                         minute: "2-digit",
-                        meridiem: "short",
+                        hour12: true,
                       })}
                     </div>
                   </TableCell>
@@ -356,7 +356,7 @@ export function OrdersTab({ customer }: OrdersTabProps) {
                   </TableCell>
                   <TableCell className="text-sm">
                     <Badge variant="outline" className="text-xs">
-                      {order.order_type || "—"}
+                      {order.order_type || "-"}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right text-sm">
@@ -366,7 +366,7 @@ export function OrdersTab({ customer }: OrdersTabProps) {
                     ${(order.total_amount || 0).toFixed(2)}
                   </TableCell>
                   <TableCell className="text-right text-sm">
-                    {order.tip_amount ? `$${order.tip_amount.toFixed(2)}` : "—"}
+                    {order.tip_amount ? `$${order.tip_amount.toFixed(2)}` : "-"}
                   </TableCell>
                   <TableCell className="text-center flex justify-center">
                     {getPaymentIcon(order.payment_pricing_mode || "")}
@@ -383,7 +383,7 @@ export function OrdersTab({ customer }: OrdersTabProps) {
                       onClick={() => handleViewOrder(order)}
                       className="h-8 w-8 p-0"
                     >
-                      →
+                      {"->"}
                     </Button>
                   </TableCell>
                 </TableRow>
