@@ -34,9 +34,9 @@ export function FeedbackTab({ customer }: FeedbackTabProps) {
       };
     }
 
-    const overallSum = feedback.reduce((sum, f: any) => sum + (f.overall_rating || 0), 0);
-    const foodSum = feedback.reduce((sum, f: any) => sum + (f.food_rating || 0), 0);
-    const serviceSum = feedback.reduce((sum, f: any) => sum + (f.service_rating || 0), 0);
+    const overallSum = feedback.reduce((sum: number, f: any) => sum + (f.overall_rating || 0), 0);
+    const foodSum = feedback.reduce((sum: number, f: any) => sum + (f.food_rating || 0), 0);
+    const serviceSum = feedback.reduce((sum: number, f: any) => sum + (f.service_rating || 0), 0);
     const foodCount = feedback.filter((f: any) => f.food_rating).length;
     const serviceCount = feedback.filter((f: any) => f.service_rating).length;
 

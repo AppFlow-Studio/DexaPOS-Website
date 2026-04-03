@@ -779,6 +779,8 @@ export interface ProgramAnalytics {
   }>;
 }
 
+export type LoyaltyAnalytics = ProgramAnalytics;
+
 export async function GetProgramAnalytics(
   clerkOrgId: string,
   programId: string
