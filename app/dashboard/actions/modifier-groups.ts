@@ -6,6 +6,7 @@ import {
   ModifierGroupItemsModel,
 } from "@/types/db-modles";
 import { LogAuditEvent } from "./audit-logs";
+import { getCurrentUserMerchantRole } from "./role-check";
 
 // ============================================================================
 // GET OPERATIONS - MODIFIER GROUPS
@@ -170,6 +171,20 @@ export async function CreateModifierGroup(
 
   const supabase = createServerSupabaseClient();
 
+  // Role check: managers can only create location-specific modifier groups for their assigned locations
+  const roleInfo = await getCurrentUserMerchantRole();
+  if (roleInfo?.isMember) {
+    return { error: "You do not have permission to create modifier groups" };
+  }
+  if (roleInfo?.isManager) {
+    if (!data.location_id) {
+      return { error: "Managers cannot create global modifier groups" };
+    }
+    if (!roleInfo.assignedLocationIds.includes(data.location_id)) {
+      return { error: "You do not have access to this location" };
+    }
+  }
+
   // Get merchant ID
   const { data: merchant, error: merchantError } = await supabase
     .from("merchants")
@@ -285,6 +300,20 @@ export async function UpdateModifierGroup(
     .eq("id", modifierGroupId)
     .single();
 
+  // Role check: managers cannot edit global modifier groups
+  const roleInfo = await getCurrentUserMerchantRole();
+  if (roleInfo?.isMember) {
+    return { error: "You do not have permission to update modifier groups" };
+  }
+  if (roleInfo?.isManager) {
+    if (!existingGroup?.location_id) {
+      return { error: "Managers cannot edit global modifier groups" };
+    }
+    if (!roleInfo.assignedLocationIds.includes(existingGroup.location_id)) {
+      return { error: "You do not have access to this modifier group" };
+    }
+  }
+
   const updateData: any = {};
   const beforeLog: Record<string, unknown> = {};
   const afterLog: Record<string, unknown> = {};
@@ -383,6 +412,20 @@ export async function DeleteModifierGroup(
     .eq("id", modifierGroupId)
     .single();
 
+  // Role check: managers can only delete location-specific modifier groups for their assigned locations
+  const roleInfo = await getCurrentUserMerchantRole();
+  if (roleInfo?.isMember) {
+    return { error: "You do not have permission to delete modifier groups" };
+  }
+  if (roleInfo?.isManager) {
+    if (!group?.location_id) {
+      return { error: "Managers cannot delete global modifier groups" };
+    }
+    if (!roleInfo.assignedLocationIds.includes(group.location_id)) {
+      return { error: "You do not have access to this modifier group" };
+    }
+  }
+
   // If location-specific, check usage count
   if (group?.location_id) {
     const { data: usage } = await supabase
@@ -449,6 +492,28 @@ export async function CreateModifierGroupItem(
   }
 
   const supabase = createServerSupabaseClient();
+
+  // Role check: managers cannot add options to global modifier groups
+  const roleInfo = await getCurrentUserMerchantRole();
+  if (roleInfo?.isMember) {
+    return { error: "You do not have permission to create modifier options" };
+  }
+  if (roleInfo?.isManager) {
+    const { data: parentGroup } = await supabase
+      .from("modifier_groups")
+      .select("location_id")
+      .eq("id", modifierGroupId)
+      .single();
+
+    if (!parentGroup?.location_id) {
+      return {
+        error: "Managers cannot add options to global modifier groups",
+      };
+    }
+    if (!roleInfo.assignedLocationIds.includes(parentGroup.location_id)) {
+      return { error: "You do not have access to this modifier group" };
+    }
+  }
 
   // If setting as default, unset other defaults in this group
   if (data.is_default) {
@@ -537,6 +602,28 @@ export async function UpdateModifierGroupItem(
     .select("*")
     .eq("id", itemId)
     .single();
+
+  // Role check: managers cannot edit options of global modifier groups
+  const roleInfo = await getCurrentUserMerchantRole();
+  if (roleInfo?.isMember) {
+    return { error: "You do not have permission to update modifier options" };
+  }
+  if (roleInfo?.isManager && existingItem?.modifier_group_id) {
+    const { data: parentGroup } = await supabase
+      .from("modifier_groups")
+      .select("location_id")
+      .eq("id", existingItem.modifier_group_id)
+      .single();
+
+    if (!parentGroup?.location_id) {
+      return {
+        error: "Managers cannot edit options of global modifier groups",
+      };
+    }
+    if (!roleInfo.assignedLocationIds.includes(parentGroup.location_id)) {
+      return { error: "You do not have access to this modifier group" };
+    }
+  }
 
   // If setting as default, unset other defaults in this group
   if (data.is_default && existingItem?.modifier_group_id) {
@@ -720,6 +807,28 @@ export async function DeleteModifierGroupItem(
     .select("name, merchant_id, modifier_group_id")
     .eq("id", itemId)
     .single();
+
+  // Role check: managers cannot delete options of global modifier groups
+  const roleInfo = await getCurrentUserMerchantRole();
+  if (roleInfo?.isMember) {
+    return { error: "You do not have permission to delete modifier options" };
+  }
+  if (roleInfo?.isManager && itemToDelete?.modifier_group_id) {
+    const { data: parentGroup } = await supabase
+      .from("modifier_groups")
+      .select("location_id")
+      .eq("id", itemToDelete.modifier_group_id)
+      .single();
+
+    if (!parentGroup?.location_id) {
+      return {
+        error: "Managers cannot delete options of global modifier groups",
+      };
+    }
+    if (!roleInfo.assignedLocationIds.includes(parentGroup.location_id)) {
+      return { error: "You do not have access to this modifier group" };
+    }
+  }
 
   // Fetch modifier group name for context (before we lose the reference)
   let modifierGroupName: string | null = null;
