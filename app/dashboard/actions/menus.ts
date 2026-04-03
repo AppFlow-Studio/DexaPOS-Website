@@ -5,6 +5,7 @@ import { MenusModel } from "@/types/db-modles";
 import { SyncMenuToAllLocations } from "./location-menus";
 import { MenuWithCategories, MenuForLocation } from "@/types/menu";
 import { LogAuditEvent } from "./audit-logs";
+import { getCurrentUserMerchantRole } from "./role-check";
 
 // ============================================================================
 // TYPES
@@ -372,6 +373,20 @@ export async function CreateMenu(
 
   const supabase = createServerSupabaseClient();
 
+  // Role check: managers can only create location-specific menus for their assigned locations
+  const roleInfo = await getCurrentUserMerchantRole();
+  if (roleInfo?.isMember) {
+    return { error: "You do not have permission to create menus" };
+  }
+  if (roleInfo?.isManager) {
+    if (!data.location_id) {
+      return { error: "Managers cannot create global menus" };
+    }
+    if (!roleInfo.assignedLocationIds.includes(data.location_id)) {
+      return { error: "You do not have access to this location" };
+    }
+  }
+
   // Get merchant ID
   const { data: merchant, error: merchantError } = await supabase
     .from("merchants")
@@ -481,6 +496,20 @@ export async function UpdateMenu(
 
   if (!beforeMenu) {
     return { error: "Menu not found" };
+  }
+
+  // Role check: managers cannot edit global menus
+  const roleInfo = await getCurrentUserMerchantRole();
+  if (roleInfo?.isMember) {
+    return { error: "You do not have permission to update menus" };
+  }
+  if (roleInfo?.isManager) {
+    if (!beforeMenu.location_id) {
+      return { error: "Managers cannot edit global menus" };
+    }
+    if (!roleInfo.assignedLocationIds.includes(beforeMenu.location_id)) {
+      return { error: "You do not have access to this menu" };
+    }
   }
 
   // Build update object with only provided fields
@@ -813,6 +842,20 @@ export async function DeleteMenu(menuId: string, locationId?: string | null) {
     .select("name, merchant_id, location_id")
     .eq("id", menuId)
     .single();
+
+  // Role check: managers can only delete location-specific menus for their assigned locations
+  const roleInfo = await getCurrentUserMerchantRole();
+  if (roleInfo?.isMember) {
+    return { error: "You do not have permission to delete menus" };
+  }
+  if (roleInfo?.isManager) {
+    if (!menuToDelete?.location_id) {
+      return { error: "Managers cannot delete global menus" };
+    }
+    if (!roleInfo.assignedLocationIds.includes(menuToDelete.location_id)) {
+      return { error: "You do not have access to this menu" };
+    }
+  }
 
   const { error } = await supabase.from("menus").delete().eq("id", menuId);
 

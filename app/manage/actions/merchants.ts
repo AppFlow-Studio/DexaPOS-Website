@@ -242,17 +242,6 @@ export async function getMerchantDetails(
     .eq(idField, merchantId)
     .single()
 
-  // Supplement with pricing columns from merchants table (not in view)
-  let merchantPricing: { pricing_strategy: string; dual_pricing_percentage: number } | null = null
-  if (merchant) {
-    const { data: pricingData } = await supabase
-      .from('merchants')
-      .select('pricing_strategy, dual_pricing_percentage')
-      .eq('id', merchant.id)
-      .single()
-    merchantPricing = pricingData
-  }
-
   if (merchantError || !merchant) {
     console.error('[getMerchantDetails] Merchant error:', merchantError)
     return null
@@ -262,75 +251,92 @@ export async function getMerchantDetails(
     return null
   }
 
-  const { data: merchantLifecycle, error: merchantLifecycleError } = await supabase
-    .from('merchants')
-    .select(
-      `
+  // Get today's start for metrics
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  // Parallelize all independent queries that depend on merchant.id
+  const [
+    { data: merchantPricing },
+    { data: merchantLifecycle, error: merchantLifecycleError },
+    { data: locations, error: locationsError },
+    { count: billingProfileCount, error: billingProfileError },
+    { count: capturedPaymentsCount, error: capturedPaymentsError },
+  ] = await Promise.all([
+    // Pricing columns (not in view)
+    supabase
+      .from('merchants')
+      .select('pricing_strategy, dual_pricing_percentage')
+      .eq('id', merchant.id)
+      .single(),
+    // Lifecycle / onboarding fields
+    supabase
+      .from('merchants')
+      .select(
+        `
+          id,
+          business_legal_name,
+          dba_name,
+          business_type,
+          owner_first_name,
+          owner_last_name,
+          owner_email,
+          owner_phone,
+          ein_last_four,
+          onboarding_status,
+          onboarding_completed_at,
+          activated_at,
+          business_address_line1,
+          business_address_line2,
+          business_city,
+          business_state,
+          business_postal_code,
+          business_country
+        `
+      )
+      .eq('id', merchant.id)
+      .single(),
+    // Locations
+    supabase
+      .from('locations')
+      .select(`
         id,
-        business_legal_name,
-        dba_name,
-        business_type,
-        owner_first_name,
-        owner_last_name,
-        owner_email,
-        owner_phone,
-        ein_last_four,
-        onboarding_status,
-        onboarding_completed_at,
-        activated_at,
-        business_address_line1,
-        business_address_line2,
-        business_city,
-        business_state,
-        business_postal_code,
-        business_country
-      `
-    )
-    .eq('id', merchant.id)
-    .single()
+        name,
+        address_line1,
+        city,
+        state,
+        postal_code,
+        is_active,
+        is_accepting_orders,
+        timezone,
+        pricing_strategy,
+        dual_pricing_percentage,
+        use_merchant_pricing_defaults
+      `)
+      .eq('merchant_id', merchant.id)
+      .order('name'),
+    // Billing profile count
+    supabase
+      .from('merchant_billing_profiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('merchant_id', merchant.id)
+      .eq('is_active', true),
+    // Captured payment count
+    supabase
+      .from('order_payments')
+      .select('id', { count: 'exact', head: true })
+      .eq('merchant_id', merchant.id)
+      .in('status', ['captured', 'succeeded']),
+  ])
 
   if (merchantLifecycleError || !merchantLifecycle) {
     console.error('[getMerchantDetails] Merchant lifecycle error:', merchantLifecycleError)
     return null
   }
 
-  // Get locations
-  const { data: locations, error: locationsError } = await supabase
-    .from('locations')
-    .select(`
-      id,
-      name,
-      address_line1,
-      city,
-      state,
-      postal_code,
-      is_active,
-      is_accepting_orders,
-      timezone,
-      pricing_strategy,
-      dual_pricing_percentage,
-      use_merchant_pricing_defaults
-    `)
-    .eq('merchant_id', merchant.id)
-    .order('name')
-
   if (locationsError) {
     console.error('[getMerchantDetails] Locations error:', locationsError)
   }
-
-  const [{ count: billingProfileCount, error: billingProfileError }, { count: capturedPaymentsCount, error: capturedPaymentsError }] =
-    await Promise.all([
-      supabase
-        .from('merchant_billing_profiles')
-        .select('id', { count: 'exact', head: true })
-        .eq('merchant_id', merchant.id)
-        .eq('is_active', true),
-      supabase
-        .from('order_payments')
-        .select('id', { count: 'exact', head: true })
-        .eq('merchant_id', merchant.id)
-        .in('status', ['captured', 'succeeded']),
-    ])
 
   if (billingProfileError && billingProfileError.code !== '42P01') {
     console.error('[getMerchantDetails] Billing profile count error:', billingProfileError)
@@ -340,11 +346,7 @@ export async function getMerchantDetails(
     console.error('[getMerchantDetails] Captured payment count error:', capturedPaymentsError)
   }
 
-  // Get today's start for metrics
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  // Get orders for each location today
+  // Get orders for each location today (parallel per location)
   const locationsWithMetrics: LocationSummary[] = await Promise.all(
     (locations || []).map(async (location) => {
       const { data: orderData } = await supabase
