@@ -309,20 +309,9 @@ export function RecipeManager({
                 <Package className="h-6 w-6 text-muted-foreground" />
               </div>
               <p className="text-sm font-medium mb-1">No ingredients added</p>
-              <p className="text-xs text-muted-foreground mb-4">
+              <p className="text-xs text-muted-foreground">
                 Link inventory items to track ingredient costs
               </p>
-              {isEditable && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsAddDialogOpen(true)}
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add First Ingredient
-                </Button>
-              )}
             </div>
           ) : (
             <div className="space-y-3">
