@@ -548,19 +548,6 @@ function MerchantSidebar() {
                   <SidebarMenuSubItem>
                     <SidebarMenuSubButton
                       asChild
-                      isActive={pathname.startsWith(
-                        "/dashboard/settings/pricing"
-                      )}
-                    >
-                      <Link href="/dashboard/settings/pricing">
-                        <CreditCard className="h-3 w-3" />
-                        <span>Pricing</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton
-                      asChild
                       isActive={pathname.startsWith("/dashboard/settings/tips")}
                     >
                       <Link href="/dashboard/settings/tips">
