@@ -28,10 +28,12 @@ interface AddTerminalDialogProps {
     stations: Array<Station & { location_name: string }>
 }
 
+const UNASSIGNED_STATION = '__unassigned__'
+
 export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, stations }: AddTerminalDialogProps) {
     // Form state
     const [selectedLocationId, setSelectedLocationId] = useState<string>('')
-    const [selectedStationId, setSelectedStationId] = useState<string>('')
+    const [selectedStationId, setSelectedStationId] = useState<string>(UNASSIGNED_STATION)
     const [terminalName, setTerminalName] = useState('')
     const [terminalType, setTerminalType] = useState<TerminalType>('dejavoo')
     const [authKey, setAuthKey] = useState('')
@@ -52,7 +54,7 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
     useEffect(() => {
         if (!open) {
             setSelectedLocationId('')
-            setSelectedStationId('')
+            setSelectedStationId(UNASSIGNED_STATION)
             setTerminalName('')
             setTerminalType('dejavoo')
             setAuthKey('')
@@ -65,7 +67,7 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
 
     // Reset station selection when location changes
     useEffect(() => {
-        setSelectedStationId('')
+        setSelectedStationId(UNASSIGNED_STATION)
     }, [selectedLocationId])
 
     const handleSubmit = async () => {
@@ -76,7 +78,7 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
 
         const input: CreatePaymentTerminalInput = {
             location_id: selectedLocationId,
-            station_id: selectedStationId || null,
+            station_id: selectedStationId === UNASSIGNED_STATION ? null : selectedStationId,
             terminal_name: terminalName,
             terminal_type: terminalType,
             auth_key: authKey,
@@ -106,15 +108,59 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                    <DialogTitle>Add Payment Terminal</DialogTitle>
-                    <DialogDescription>
-                        Configure a new payment terminal for this merchant
-                    </DialogDescription>
+            <DialogContent className="w-[calc(100%-1rem)] sm:max-w-[560px] max-h-[92vh] overflow-hidden gap-0 p-0">
+                <DialogHeader className="border-b bg-gradient-to-br from-slate-50 via-white to-amber-50/60 px-6 pt-6 pb-4">
+                    <div className="flex items-start gap-4">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 text-amber-700">
+                            <CreditCard className="h-6 w-6" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <DialogTitle className="text-xl">Add Payment Terminal</DialogTitle>
+                            <DialogDescription className="mt-1">
+                                Connect a card terminal to a location and optionally link it to a station.
+                            </DialogDescription>
+                        </div>
+                    </div>
                 </DialogHeader>
 
-                <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+                <div className="space-y-5 overflow-y-auto px-6 py-5 max-h-[calc(92vh-176px)]">
+                    <div className="rounded-2xl border bg-slate-50/80 p-4">
+                        <div className="grid gap-1 sm:grid-cols-3 sm:gap-4">
+                            <div>
+                                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                    Scope
+                                </p>
+                                <p className="text-sm font-medium text-slate-900">
+                                    {selectedLocationId
+                                        ? locations.find((location) => location.id === selectedLocationId)?.name || 'Selected location'
+                                        : 'Choose a location'}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                    Assignment
+                                </p>
+                                <p className="text-sm font-medium text-slate-900">
+                                    {selectedStationId === UNASSIGNED_STATION
+                                        ? 'Unassigned'
+                                        : filteredStations.find((station) => station.id === selectedStationId)?.station_name || 'Linked to station'}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                    Environment
+                                </p>
+                                <p className={cn(
+                                    'text-sm font-medium',
+                                    apiEnvironment === 'production' ? 'text-amber-700' : 'text-emerald-700'
+                                )}>
+                                    {apiEnvironment === 'production' ? 'Production' : 'Sandbox'}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
                     {/* Location & Station */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
@@ -139,7 +185,7 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
                                     <SelectValue placeholder="Unassigned" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="">Unassigned</SelectItem>
+                                    <SelectItem value={UNASSIGNED_STATION}>Unassigned</SelectItem>
                                     {filteredStations.map((station) => (
                                         <SelectItem key={station.id} value={station.id}>
                                             {station.station_name}
@@ -247,8 +293,9 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
                         </div>
                     )}
                 </div>
+                </div>
 
-                <DialogFooter>
+                <DialogFooter className="border-t bg-slate-50/80 px-6 py-4">
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
                         Cancel
                     </Button>

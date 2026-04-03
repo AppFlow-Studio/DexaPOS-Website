@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,7 +20,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, ChevronLeft, ChevronRight, Check } from "lucide-react";
+import {
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  Printer,
+  CookingPot,
+  Wallet,
+  Plug,
+  Bluetooth,
+  Network,
+  Boxes,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   useCreateStationDevice,
@@ -34,38 +46,37 @@ interface AddStationDeviceDialogProps {
   stationId: string;
 }
 
-// Core POS device types
 const DEVICE_TYPES: {
   type: StationDeviceType;
   label: string;
-  icon: string;
+  icon: ReactNode;
   description: string;
 }[] = [
   {
     type: "receipt_printer",
     label: "Receipt Printer",
-    icon: "🖨️",
+    icon: <Printer className="h-8 w-8" />,
     description: "Print customer receipts",
   },
   {
     type: "kitchen_printer",
     label: "Kitchen Printer",
-    icon: "🍳",
+    icon: <CookingPot className="h-8 w-8" />,
     description: "Print kitchen tickets",
   },
   {
     type: "cash_drawer",
     label: "Cash Drawer",
-    icon: "💰",
+    icon: <Wallet className="h-8 w-8" />,
     description: "Manage cash transactions",
   },
 ];
 
-const CONNECTION_TYPES: { type: ConnectionType; label: string; icon: string }[] = [
-  { type: "usb", label: "USB", icon: "🔌" },
-  { type: "bluetooth", label: "Bluetooth", icon: "📶" },
-  { type: "network", label: "Network", icon: "🌐" },
-  { type: "integrated", label: "Integrated", icon: "📦" },
+const CONNECTION_TYPES: { type: ConnectionType; label: string; icon: ReactNode }[] = [
+  { type: "usb", label: "USB", icon: <Plug className="h-5 w-5" /> },
+  { type: "bluetooth", label: "Bluetooth", icon: <Bluetooth className="h-5 w-5" /> },
+  { type: "network", label: "Network", icon: <Network className="h-5 w-5" /> },
+  { type: "integrated", label: "Integrated", icon: <Boxes className="h-5 w-5" /> },
 ];
 
 const PRINTER_WIDTHS = [
@@ -90,16 +101,12 @@ export function AddStationDeviceDialog({
   const createMutation = useCreateStationDevice();
 
   const [step, setStep] = useState<WizardStep>("type");
-
-  // Form state
   const [deviceType, setDeviceType] = useState<StationDeviceType | null>(null);
   const [deviceName, setDeviceName] = useState("");
   const [deviceModel, setDeviceModel] = useState("");
   const [connectionType, setConnectionType] = useState<ConnectionType>("usb");
   const [connectionAddress, setConnectionAddress] = useState("");
   const [connectionPort, setConnectionPort] = useState<number | undefined>(undefined);
-
-  // Printer settings
   const [printerWidth, setPrinterWidth] = useState<number>(42);
   const [printerDpi, setPrinterDpi] = useState<number>(203);
   const [autoCut, setAutoCut] = useState(true);
@@ -128,7 +135,6 @@ export function AddStationDeviceDialog({
     if (step === "type" && deviceType) {
       setStep("connection");
     } else if (step === "connection") {
-      // Skip settings for cash drawer
       if (deviceType === "cash_drawer") {
         setStep("confirm");
       } else {
@@ -211,25 +217,60 @@ export function AddStationDeviceDialog({
   };
 
   const getTotalSteps = () => (deviceType === "cash_drawer" ? 3 : 4);
-
   const isPrinter = deviceType?.includes("printer");
+  const selectedDevice = DEVICE_TYPES.find((dt) => dt.type === deviceType);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>Add Device</DialogTitle>
-          <DialogDescription>
-            Step {getStepNumber()} of {getTotalSteps()}: {" "}
-            {step === "type" && "Select device type"}
-            {step === "connection" && "Configure connection"}
-            {step === "settings" && "Device settings"}
-            {step === "confirm" && "Confirm and add"}
-          </DialogDescription>
+    <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : handleClose())}>
+      <DialogContent className="w-[calc(100%-1rem)] sm:max-w-[620px] max-h-[92vh] overflow-hidden gap-0 p-0">
+        <DialogHeader className="border-b bg-gradient-to-br from-slate-50 via-white to-indigo-50/60 px-6 pt-6 pb-4">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-indigo-200 bg-indigo-50 text-indigo-700">
+              {selectedDevice?.icon || <Printer className="h-6 w-6" />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="text-xl">Add Device</DialogTitle>
+              <DialogDescription className="mt-1">
+                Step {getStepNumber()} of {getTotalSteps()}: {" "}
+                {step === "type" && "select the device class"}
+                {step === "connection" && "configure how the device connects"}
+                {step === "settings" && "set printer-specific behavior"}
+                {step === "confirm" && "review before saving"}
+              </DialogDescription>
+            </div>
+          </div>
+
+          <div className={cn(
+            "mt-4 grid gap-2",
+            deviceType === "cash_drawer" ? "grid-cols-3" : "grid-cols-4"
+          )}>
+            {[
+              { label: "Type", step: 1 },
+              { label: "Connection", step: 2 },
+              ...(deviceType === "cash_drawer" ? [] : [{ label: "Settings", step: 3 }]),
+              { label: "Confirm", step: getTotalSteps() },
+            ].map((item) => (
+              <div
+                key={`${item.label}-${item.step}`}
+                className={cn(
+                  "rounded-xl border px-3 py-2 text-sm",
+                  getStepNumber() === item.step
+                    ? "border-primary bg-primary/10 text-primary"
+                    : getStepNumber() > item.step
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-slate-200 bg-slate-50 text-slate-500"
+                )}
+              >
+                <div className="text-[11px] uppercase tracking-wide opacity-70">
+                  Step {item.step}
+                </div>
+                <div className="font-medium">{item.label}</div>
+              </div>
+            ))}
+          </div>
         </DialogHeader>
 
-        <div className="py-4">
-          {/* Step 1: Device Type */}
+        <div className="overflow-y-auto px-6 py-5 max-h-[calc(92vh-220px)]">
           {step === "type" && (
             <div className="grid gap-3 sm:grid-cols-2">
               {DEVICE_TYPES.map((dt) => (
@@ -241,13 +282,13 @@ export function AddStationDeviceDialog({
                     setDeviceName(dt.label);
                   }}
                   className={cn(
-                    "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center",
+                    "flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all text-center",
                     deviceType === dt.type
                       ? "border-primary bg-primary/5 shadow-sm"
                       : "border-border hover:border-primary/50 hover:bg-muted/50"
                   )}
                 >
-                  <span className="text-4xl">{dt.icon}</span>
+                  <span className="text-indigo-700">{dt.icon}</span>
                   <div>
                     <p className="font-medium">{dt.label}</p>
                     <p className="text-xs text-muted-foreground">{dt.description}</p>
@@ -257,7 +298,6 @@ export function AddStationDeviceDialog({
             </div>
           )}
 
-          {/* Step 2: Connection */}
           {step === "connection" && (
             <div className="space-y-4">
               <div className="grid gap-2">
@@ -289,13 +329,13 @@ export function AddStationDeviceDialog({
                       type="button"
                       onClick={() => setConnectionType(ct.type)}
                       className={cn(
-                        "flex items-center gap-2 p-3 rounded-lg border-2 transition-all",
+                        "flex items-center gap-3 p-3 rounded-xl border-2 transition-all",
                         connectionType === ct.type
                           ? "border-primary bg-primary/5"
                           : "border-border hover:border-primary/50"
                       )}
                     >
-                      <span className="text-xl">{ct.icon}</span>
+                      <span className="text-indigo-700">{ct.icon}</span>
                       <span className="font-medium">{ct.label}</span>
                     </button>
                   ))}
@@ -342,7 +382,6 @@ export function AddStationDeviceDialog({
             </div>
           )}
 
-          {/* Step 3: Settings (Printers only) */}
           {step === "settings" && isPrinter && (
             <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
@@ -384,14 +423,14 @@ export function AddStationDeviceDialog({
                 </div>
               </div>
 
-              <div className="space-y-4 pt-2">
-                <div className="flex items-center justify-between py-2">
+              <div className="space-y-4 rounded-2xl border bg-slate-50/80 p-4">
+                <div className="flex items-center justify-between py-1">
                   <div>
                     <Label htmlFor="autoCut" className="cursor-pointer">
                       Auto-Cut Paper
                     </Label>
                     <p className="text-sm text-muted-foreground">
-                      Automatically cut paper after printing
+                      Automatically cut paper after printing.
                     </p>
                   </div>
                   <Switch
@@ -402,13 +441,13 @@ export function AddStationDeviceDialog({
                 </div>
 
                 {deviceType === "receipt_printer" && (
-                  <div className="flex items-center justify-between py-2">
+                  <div className="flex items-center justify-between py-1">
                     <div>
                       <Label htmlFor="openCashDrawer" className="cursor-pointer">
                         Open Cash Drawer
                       </Label>
                       <p className="text-sm text-muted-foreground">
-                        Open cash drawer when printing receipts
+                        Open the drawer automatically when printing receipts.
                       </p>
                     </div>
                     <Switch
@@ -422,17 +461,16 @@ export function AddStationDeviceDialog({
             </div>
           )}
 
-          {/* Step 4: Confirm */}
           {step === "confirm" && (
             <div className="space-y-4">
-              <div className="flex items-center gap-4 p-4 rounded-lg bg-muted/50 border">
-                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-background text-3xl">
-                  {DEVICE_TYPES.find((dt) => dt.type === deviceType)?.icon}
+              <div className="flex items-center gap-4 rounded-2xl border bg-slate-50/80 p-4">
+                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-background text-indigo-700">
+                  {selectedDevice?.icon}
                 </div>
                 <div>
                   <p className="font-semibold text-lg">{deviceName}</p>
                   <p className="text-sm text-muted-foreground">
-                    {DEVICE_TYPES.find((dt) => dt.type === deviceType)?.label}
+                    {selectedDevice?.label}
                     {deviceModel && ` - ${deviceModel}`}
                   </p>
                 </div>
@@ -470,7 +508,7 @@ export function AddStationDeviceDialog({
           )}
         </div>
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 border-t bg-slate-50/80 px-6 py-4">
           {step !== "type" && (
             <Button
               type="button"
@@ -484,11 +522,7 @@ export function AddStationDeviceDialog({
           )}
           <div className="flex-1" />
           {step !== "confirm" ? (
-            <Button
-              type="button"
-              onClick={handleNext}
-              disabled={!canProceed()}
-            >
+            <Button type="button" onClick={handleNext} disabled={!canProceed()}>
               Next
               <ChevronRight className="ml-2 h-4 w-4" />
             </Button>

@@ -22,18 +22,18 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Loader2 } from "lucide-react";
+import { Loader2, Printer as PrinterIcon } from "lucide-react";
 import {
   useCreatePrinter,
   useUpdatePrinter,
-  Printer,
+  Printer as PrinterRecord,
 } from "../../hooks/usePrinters";
 
 interface AddPrinterDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   stationId: string;
-  printerToEdit?: Printer;
+  printerToEdit?: PrinterRecord;
 }
 
 const PRINTER_TYPES = [
@@ -243,19 +243,26 @@ export function AddPrinterDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {isEditing ? "Edit Printer" : "Add Printer"}
-          </DialogTitle>
-          <DialogDescription>
-            {isEditing
-              ? "Update the printer configuration."
-              : "Configure a new printer for this station."}
-          </DialogDescription>
+      <DialogContent className="w-[calc(100%-1rem)] sm:max-w-[720px] max-h-[92vh] overflow-hidden gap-0 p-0">
+        <DialogHeader className="border-b bg-gradient-to-br from-slate-50 via-white to-orange-50/60 px-6 pt-6 pb-4">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-orange-200 bg-orange-50 text-orange-700">
+              <PrinterIcon className="h-6 w-6" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="text-xl">
+                {isEditing ? "Edit Printer" : "Add Printer"}
+              </DialogTitle>
+              <DialogDescription className="mt-1">
+                {isEditing
+                  ? "Update the printer identity, connection path, and print behavior."
+                  : "Configure a new printer for this station with connection and receipt settings."}
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
+        <div className="space-y-6 overflow-y-auto px-6 py-5 max-h-[calc(92vh-176px)]">
           {/* Identity */}
           <div className="space-y-4">
             <h4 className="text-sm font-medium text-muted-foreground">
@@ -656,7 +663,7 @@ export function AddPrinterDialog({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="border-t bg-slate-50/80 px-6 py-4">
           <Button variant="outline" onClick={handleClose} disabled={isPending}>
             Cancel
           </Button>
