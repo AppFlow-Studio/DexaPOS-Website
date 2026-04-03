@@ -57,7 +57,11 @@ export function ScheduleOverrideDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-md">
+            <DialogContent
+                elevation="high"
+                overlayClassName="bg-slate-950/40 backdrop-blur-sm"
+                className="max-w-md"
+            >
                 <DialogHeader>
                     <DialogTitle>Customize "{schedule.name}"</DialogTitle>
                     <DialogDescription>

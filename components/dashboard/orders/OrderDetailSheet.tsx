@@ -13,12 +13,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Order,
   OrderItem,
   OrderPayment,
@@ -41,7 +35,6 @@ import {
   ChefHat,
   DollarSign,
   Printer,
-  X,
   RotateCcw,
   MapPin,
   Store,
@@ -49,18 +42,14 @@ import {
   CreditCard,
   Mail,
   Clock,
-  Hash,
   Receipt,
-  ChevronRight,
   MessageSquare,
   CheckCircle2,
   Flame,
   Ban,
   Tag,
   ShieldOff,
-  FileText,
   RefreshCw,
-  Wifi,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -245,7 +234,12 @@ function EnhancedPaymentsSection({
       icon={<CreditCard className="h-4 w-4" />}
       action={
         showAdjustTip && onAdjustTip ? (
-          <Button variant="outline" size="sm" onClick={onAdjustTip}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
+            onClick={onAdjustTip}
+          >
             <DollarSign className="h-3.5 w-3.5 mr-1.5" />
             Adjust Tip
           </Button>
@@ -283,20 +277,27 @@ function SectionCard({
   return (
     <div
       className={cn(
-        "rounded-xl border bg-card shadow-sm overflow-hidden",
+        "overflow-hidden rounded-2xl border border-border/60 bg-card/95 shadow-[0_16px_40px_-24px_rgba(15,23,42,0.35)] backdrop-blur-sm",
         className
       )}
     >
-      <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-gradient-to-r from-muted/70 via-background to-background px-5 py-4">
+        <div className="flex min-w-0 items-center gap-3">
           {icon && (
-            <span className="text-muted-foreground">{icon}</span>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-background/80 text-muted-foreground shadow-sm">
+              {icon}
+            </span>
           )}
-          <h3 className="text-sm font-semibold">{title}</h3>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Section
+            </p>
+            <h3 className="truncate text-sm font-semibold text-foreground">{title}</h3>
+          </div>
         </div>
-        {action}
+        {action && <div className="shrink-0">{action}</div>}
       </div>
-      <div className="p-4">{children}</div>
+      <div className="p-5">{children}</div>
     </div>
   );
 }
@@ -311,13 +312,80 @@ function MetaChip({
   value: string | React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-sm">
-      <span className="text-muted-foreground shrink-0">{icon}</span>
+    <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-background/80 px-4 py-3 text-sm shadow-sm backdrop-blur-sm">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-muted-foreground">
+        {icon}
+      </span>
       <div className="min-w-0">
-        <p className="text-[11px] text-muted-foreground leading-none mb-0.5">
+        <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground leading-none">
           {label}
         </p>
-        <div className="font-medium truncate leading-tight">{value}</div>
+        <div className="truncate font-medium leading-tight text-foreground">{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function HeroStatCard({
+  label,
+  value,
+  description,
+  icon,
+  tone = "neutral",
+}: {
+  label: string;
+  value: React.ReactNode;
+  description?: React.ReactNode;
+  icon: React.ReactNode;
+  tone?: "neutral" | "primary" | "success" | "warning";
+}) {
+  const toneStyles = {
+    neutral:
+      "border-border/60 bg-background/85 text-foreground",
+    primary:
+      "border-primary/15 bg-primary/5 text-foreground",
+    success:
+      "border-emerald-200/70 bg-emerald-50/80 text-foreground dark:border-emerald-900/40 dark:bg-emerald-950/20",
+    warning:
+      "border-amber-200/70 bg-amber-50/80 text-foreground dark:border-amber-900/40 dark:bg-amber-950/20",
+  };
+
+  const iconStyles = {
+    neutral: "border-border/60 bg-muted/70 text-muted-foreground",
+    primary: "border-primary/15 bg-primary/10 text-primary",
+    success: "border-emerald-200/70 bg-emerald-100 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/30 dark:text-emerald-400",
+    warning: "border-amber-200/70 bg-amber-100 text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/30 dark:text-amber-400",
+  };
+
+  return (
+    <div
+      className={cn(
+        "rounded-2xl border px-4 py-4 shadow-sm backdrop-blur-sm",
+        toneStyles[tone]
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            {label}
+          </p>
+          <div className="mt-2 text-lg font-semibold tracking-tight text-foreground">
+            {value}
+          </div>
+          {description && (
+            <div className="mt-1 text-xs text-muted-foreground">
+              {description}
+            </div>
+          )}
+        </div>
+        <span
+          className={cn(
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border",
+            iconStyles[tone]
+          )}
+        >
+          {icon}
+        </span>
       </div>
     </div>
   );
@@ -339,17 +407,17 @@ function PriceRow({
 }) {
   return (
     <div
-      className={cn("flex items-center justify-between", className)}
+      className={cn("flex items-center justify-between gap-4 py-1", className)}
     >
       <span
         className={cn(
-          "text-muted-foreground",
+          "text-sm text-muted-foreground",
           bold && "text-foreground font-semibold"
         )}
       >
         {label}
       </span>
-      <span className={cn(bold && "font-semibold", valueClassName)}>
+      <span className={cn("text-sm", bold && "font-semibold", valueClassName)}>
         {value}
       </span>
     </div>
@@ -938,7 +1006,91 @@ export function OrderDetailSheet({
   const notes =
     fullHistory?.order?.internal_notes ?? displayOrder.internal_notes ?? null;
 
-  const itemCount = items.reduce((sum, i) => sum + (i.is_voided ? 0 : Number(i.quantity) || 1), 0);
+  const itemCount = items.reduce(
+    (sum, i) => sum + (i.is_voided ? 0 : Number(i.quantity) || 1),
+    0
+  );
+  const voidedCount = items.filter((i) => i.is_voided).length;
+  const paymentCount = payments.length;
+  const totalAmount = Number(displayOrder.total_amount) || 0;
+  const amountDue = Number(displayOrder.amount_due) || 0;
+  const fulfillmentValue = isDineIn
+    ? tableName ?? "Dining Room"
+    : formatOrderType(displayOrder.order_type);
+  const fulfillmentDescription = isDineIn
+    ? [
+        locationName,
+        partySize != null ? `${partySize} guests` : null,
+        serverName ? `Server: ${serverName}` : null,
+      ]
+        .filter(Boolean)
+        .join(" • ")
+    : [locationName, getChannelLabel(displayOrder.order_type), stationName]
+        .filter(Boolean)
+        .join(" • ");
+  const customerSummary = customerName ?? "Walk-in / Unassigned";
+  const customerDescription =
+    customerEmail ??
+    customerPhone ??
+    (hasCustomer
+      ? "Customer attached to this order"
+      : "No customer profile attached");
+  const totalDescription =
+    amountDue > 0
+      ? `${formatCurrency(amountDue)} still due`
+      : paymentCount > 0
+        ? `${paymentCount} payment${paymentCount === 1 ? "" : "s"} recorded`
+        : "Paid in full";
+  const locationOrChannel =
+    locationName ?? getChannelLabel(displayOrder.order_type);
+
+  const metaChips: {
+    icon: React.ReactNode;
+    label: string;
+    value: string | React.ReactNode;
+  }[] = [];
+  if (createdByName) {
+    metaChips.push({
+      icon: <User className="h-3.5 w-3.5" />,
+      label: "Created by",
+      value: createdByName,
+    });
+  }
+  if (isDineIn && tableName) {
+    metaChips.push({
+      icon: <Utensils className="h-3.5 w-3.5" />,
+      label: "Table",
+      value: tableName,
+    });
+  }
+  if (isDineIn && serverName) {
+    metaChips.push({
+      icon: <User className="h-3.5 w-3.5" />,
+      label: "Server",
+      value: serverName,
+    });
+  }
+  if (isDineIn && partySize != null) {
+    metaChips.push({
+      icon: <Users className="h-3.5 w-3.5" />,
+      label: "Party",
+      value: `${partySize} guests`,
+    });
+  }
+  if (stationName) {
+    metaChips.push({
+      icon: <Store className="h-3.5 w-3.5" />,
+      label: "Station",
+      value: stationName,
+    });
+  }
+  if (pricingMode && pricingMode !== "card") {
+    metaChips.push({
+      icon: <CreditCard className="h-3.5 w-3.5" />,
+      label: "Pricing",
+      value: pricingLabel,
+    });
+  }
 
   const hasRefundablePayment = (payments as OrderPayment[]).some((p) =>
     ["captured", "paid"].includes(p.status)
@@ -967,33 +1119,51 @@ export function OrderDetailSheet({
   return (
     <>
       <BottomSheet open={open} onOpenChange={onOpenChange}>
-        <BottomSheetContent height="95">
+        <BottomSheetContent
+          height="95"
+          className="border-x-0 border-t border-border/60 bg-gradient-to-b from-background via-background to-muted/20 sm:inset-x-4 sm:bottom-4 sm:mx-auto sm:h-[calc(100vh-2rem)] sm:max-w-6xl sm:rounded-[28px] sm:border"
+        >
           {/* ─── Header ─── */}
-          <BottomSheetHeader className="shrink-0">
-            <div className="space-y-3">
-              {/* Title row */}
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <BottomSheetTitle className="text-xl font-bold tracking-tight">
-                    Order #{displayOrder.display_number || displayOrder.order_number}
-                  </BottomSheetTitle>
-                  <BottomSheetDescription className="flex items-center gap-2 text-xs">
-                    <span>{date} at {time}</span>
-                    <span className="text-muted-foreground/40">|</span>
-                    <span className="flex items-center gap-1">
-                      {getOrderTypeIcon(displayOrder.order_type)}
-                      {formatOrderType(displayOrder.order_type)}
-                    </span>
-                    {locationName && (
-                      <>
-                        <span className="text-muted-foreground/40">|</span>
-                        <span>{locationName}</span>
-                      </>
-                    )}
-                  </BottomSheetDescription>
+          <BottomSheetHeader className="shrink-0 border-b border-border/60 bg-gradient-to-b from-muted/60 via-background to-background px-6 pb-6 pt-2 sm:px-8">
+            <div className="space-y-6">
+              <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                <div className="min-w-0 space-y-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className="rounded-full border border-border/60 bg-background/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground shadow-sm hover:bg-background">
+                      Order Details
+                    </Badge>
+                    <OrderStatusBadge status={displayOrder.status} />
+                    <PaymentStatusBadge status={displayOrder.payment_status} />
+                  </div>
+
+                  <div className="space-y-2">
+                    <BottomSheetTitle className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                      Order #{displayOrder.display_number || displayOrder.order_number}
+                    </BottomSheetTitle>
+                    <BottomSheetDescription className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="h-3.5 w-3.5" />
+                        {date}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="h-3.5 w-3.5" />
+                        {time}
+                      </span>
+                      <span className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-3 py-1 text-xs font-medium text-foreground shadow-sm">
+                        {getOrderTypeIcon(displayOrder.order_type)}
+                        {formatOrderType(displayOrder.order_type)}
+                      </span>
+                      {locationOrChannel && (
+                        <span className="flex items-center gap-1.5">
+                          <MapPin className="h-3.5 w-3.5" />
+                          {locationOrChannel}
+                        </span>
+                      )}
+                    </BottomSheetDescription>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0 mr-8">
-                  <OrderStatusBadge status={displayOrder.status} />
+
+                <div className="flex flex-wrap items-center gap-2 pr-8 xl:max-w-[360px] xl:justify-end">
                   <ReprintDropdown
                     orderId={displayOrder.id}
                     locationId={displayOrder.location_id ?? null}
@@ -1002,115 +1172,89 @@ export function OrderDetailSheet({
                   <Button
                     variant="outline"
                     size="sm"
+                    className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
+                    onClick={() => setIsReceiptOpen(true)}
+                  >
+                    <Printer className="mr-1.5 h-4 w-4" />
+                    Receipt
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
                     onClick={() => setIsSendReceiptOpen(true)}
                   >
-                    <Mail className="h-4 w-4 mr-1.5" />
+                    <Mail className="mr-1.5 h-4 w-4" />
                     Send Receipt
                   </Button>
                 </div>
               </div>
 
-              {/* Quick-glance total bar */}
-              <div className="flex items-center justify-between rounded-xl bg-primary/5 border border-primary/10 px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-                    <Receipt className="h-4.5 w-4.5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      {itemCount} {itemCount === 1 ? "item" : "items"}
-                    </p>
-                    <PaymentStatusBadge
-                      status={displayOrder.payment_status}
-                    />
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold tracking-tight">
-                    {formatCurrency(displayOrder.total_amount)}
-                  </p>
-                </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <HeroStatCard
+                  label="Order Total"
+                  value={formatCurrency(totalAmount)}
+                  description={totalDescription}
+                  icon={<Receipt className="h-5 w-5" />}
+                  tone={amountDue > 0 ? "warning" : "success"}
+                />
+                <HeroStatCard
+                  label={isDineIn ? "Table" : "Fulfillment"}
+                  value={fulfillmentValue}
+                  description={
+                    fulfillmentDescription ||
+                    (isDineIn
+                      ? "Dining room service details"
+                      : "Order channel details")
+                  }
+                  icon={
+                    isDineIn ? (
+                      <Utensils className="h-5 w-5" />
+                    ) : (
+                      <span className="flex h-5 w-5 items-center justify-center">
+                        {getOrderTypeIcon(displayOrder.order_type)}
+                      </span>
+                    )
+                  }
+                  tone="primary"
+                />
+                <HeroStatCard
+                  label="Customer"
+                  value={customerSummary}
+                  description={customerDescription}
+                  icon={<User className="h-5 w-5" />}
+                />
               </div>
             </div>
           </BottomSheetHeader>
 
           {/* ─── Body ─── */}
-          <BottomSheetBody>
-            <div className="space-y-4">
-              {/* Meta chips row */}
-              {(() => {
-                const chips: { icon: React.ReactNode; label: string; value: string | React.ReactNode }[] = [];
+          <BottomSheetBody className="bg-transparent px-6 py-6 sm:px-8">
+            <div className="space-y-6">
+              {metaChips.length === 0 && isMetadataLoading ? (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  <Skeleton className="h-16 rounded-2xl" />
+                  <Skeleton className="h-16 rounded-2xl" />
+                  <Skeleton className="h-16 rounded-2xl" />
+                </div>
+              ) : metaChips.length > 0 ? (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {metaChips.map((chip, i) => (
+                    <MetaChip key={i} {...chip} />
+                  ))}
+                </div>
+              ) : null}
 
-                if (createdByName) {
-                  chips.push({
-                    icon: <User className="h-3.5 w-3.5" />,
-                    label: "Created by",
-                    value: createdByName,
-                  });
-                }
-                if (isDineIn && tableName) {
-                  chips.push({
-                    icon: <Utensils className="h-3.5 w-3.5" />,
-                    label: "Table",
-                    value: tableName,
-                  });
-                }
-                if (isDineIn && serverName) {
-                  chips.push({
-                    icon: <User className="h-3.5 w-3.5" />,
-                    label: "Server",
-                    value: serverName,
-                  });
-                }
-                if (isDineIn && partySize != null) {
-                  chips.push({
-                    icon: <Users className="h-3.5 w-3.5" />,
-                    label: "Party",
-                    value: `${partySize} guests`,
-                  });
-                }
-                if (stationName) {
-                  chips.push({
-                    icon: <Store className="h-3.5 w-3.5" />,
-                    label: "Station",
-                    value: stationName,
-                  });
-                }
-                if (pricingMode && pricingMode !== "card") {
-                  chips.push({
-                    icon: <CreditCard className="h-3.5 w-3.5" />,
-                    label: "Pricing",
-                    value: pricingLabel,
-                  });
-                }
-
-                if (chips.length === 0 && isMetadataLoading) {
-                  return (
-                    <div className="grid grid-cols-2 gap-2">
-                      <Skeleton className="h-12 rounded-lg" />
-                      <Skeleton className="h-12 rounded-lg" />
-                    </div>
-                  );
-                }
-                if (chips.length === 0) return null;
-                return (
-                  <div className="grid grid-cols-2 gap-2">
-                    {chips.map((chip, i) => (
-                      <MetaChip key={i} {...chip} />
-                    ))}
-                  </div>
-                );
-              })()}
-
-              {/* Internal notes */}
               {notes && (
-                <div className="flex items-start gap-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 px-4 py-3">
-                  <MessageSquare className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                <div className="flex items-start gap-3 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-4 shadow-sm dark:border-amber-800 dark:bg-amber-950/20">
+                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                    <MessageSquare className="h-4 w-4" />
+                  </span>
                   <div>
-                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400 mb-0.5">
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-400">
                       Internal Note
                     </p>
-                    <p className="text-sm">&ldquo;{notes}&rdquo;</p>
+                    <p className="text-sm text-foreground">&ldquo;{notes}&rdquo;</p>
                   </div>
                 </div>
               )}
@@ -1174,7 +1318,7 @@ export function OrderDetailSheet({
                           }
                         }}
                       >
-                        {removingCustomer ? "Removing…" : "Remove"}
+                        {removingCustomer ? "Removing..." : "Remove"}
                       </Button>
                     </div>
                   </div>
@@ -1200,7 +1344,7 @@ export function OrderDetailSheet({
                 reversals={fullHistory?.reversals ?? null}
                 isLoading={isLoading || isHistoryLoading}
                 itemCount={itemCount}
-                voidedCount={items.filter((i) => i.is_voided).length}
+                voidedCount={voidedCount}
               />
 
               {/* ─── Kitchen ─── */}
@@ -1575,33 +1719,33 @@ export function OrderDetailSheet({
           </BottomSheetBody>
 
           {/* ─── Footer ─── */}
-          <BottomSheetFooter>
-            <div className="flex flex-col gap-2 w-full">
+          <BottomSheetFooter className="border-t border-border/60 bg-background/90 px-6 py-5 backdrop-blur-sm sm:px-8">
+            <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <Button
-                className="w-full"
+                className="w-full rounded-xl lg:w-auto"
                 size="default"
                 onClick={handleViewMoreDetails}
               >
                 View Full Details
-                <ArrowRight className="h-4 w-4 ml-2" />
+                <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                 <Button
                   variant="outline"
-                  className="flex-1"
+                  className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
                   size="sm"
                   onClick={() => setIsReceiptOpen(true)}
                 >
-                  <Printer className="h-4 w-4 mr-1.5" />
+                  <Printer className="mr-1.5 h-4 w-4" />
                   Receipt
                 </Button>
                 <Button
                   variant="outline"
-                  className="flex-1"
+                  className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
                   size="sm"
                   onClick={() => setIsSendReceiptOpen(true)}
                 >
-                  <Mail className="h-4 w-4 mr-1.5" />
+                  <Mail className="mr-1.5 h-4 w-4" />
                   Send Receipt
                 </Button>
                 {!readOnly && (canShowRefund || canShowVoid || canShowAdjustTip) && (
@@ -1609,33 +1753,33 @@ export function OrderDetailSheet({
                     {canShowAdjustTip && (
                       <Button
                         variant="outline"
-                        className="flex-1"
+                        className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
                         size="sm"
                         onClick={() => setIsAdjustTipOpen(true)}
                       >
-                        <DollarSign className="h-4 w-4 mr-1.5" />
+                        <DollarSign className="mr-1.5 h-4 w-4" />
                         Adjust Tip
                       </Button>
                     )}
                     {canShowRefund && (
                       <Button
                         variant="outline"
-                        className="flex-1"
+                        className="rounded-xl border-border/60 bg-background/80 hover:bg-background"
                         size="sm"
                         onClick={() => setIsRefundOpen(true)}
                       >
-                        <RotateCcw className="h-4 w-4 mr-1.5" />
+                        <RotateCcw className="mr-1.5 h-4 w-4" />
                         Refund
                       </Button>
                     )}
                     {canShowVoid && (
                       <Button
                         variant="destructive"
-                        className="flex-1"
+                        className="rounded-xl"
                         size="sm"
                         onClick={() => setIsVoidOpen(true)}
                       >
-                        <Ban className="h-4 w-4 mr-1.5" />
+                        <Ban className="mr-1.5 h-4 w-4" />
                         Void Order
                       </Button>
                     )}

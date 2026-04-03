@@ -1,7 +1,7 @@
 'use client'
 
-import { useParams } from 'next/navigation'
-import { useState } from 'react'
+import { useParams, useSearchParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -96,13 +96,21 @@ function NavItem({
 
 export default function MerchantDetailsPage() {
     const { merchantId } = useParams()
+    const searchParams = useSearchParams()
     const { hasPermission } = useAdminPermissions()
     const { data: merchantDetails, isLoading, isError, refetch } = useAdminMerchantDetails(merchantId as string)
     const canManageDevices = hasPermission('users.manage')
     const canViewSettings = hasPermission('users.manage')
     const canManageMerchantStatus = hasPermission('hq.merchant.update')
 
-    const [activeTab, setActiveTab] = useState('overview')
+    const requestedTab = searchParams.get('tab')
+    const [activeTab, setActiveTab] = useState(requestedTab || 'overview')
+
+    useEffect(() => {
+        if (requestedTab) {
+            setActiveTab(requestedTab)
+        }
+    }, [requestedTab])
 
     if (isLoading) {
         return (

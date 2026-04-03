@@ -43,7 +43,7 @@ export function ItemPreviewCard({
             <div className="relative aspect-square bg-muted/30 overflow-hidden">
                 {image ? (
                     <Image
-                        src={'/file.svg'}
+                        src={image}
                         alt={name || 'Menu item'}
                         fill
                         className="object-cover transition-transform duration-500 hover:scale-105"

@@ -86,6 +86,7 @@ interface FloorPlanState {
     initializeDraft: (tables: FloorPlanObject[]) => void;
     resetDraft: () => void;
     addTableToDraft: (tableData: Partial<FloorPlanObject>) => string; // Returns temp ID
+    addTablesToDraft: (tablesData: Partial<FloorPlanObject>[]) => string[];
     updateTableInDraft: (tableId: string, updates: Partial<FloorPlanObject>) => void;
     updateTablePositionInDraft: (tableId: string, x: number, y: number) => void;
     updateTableRotationInDraft: (tableId: string, rotation: number) => void;
@@ -420,6 +421,43 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                     }));
 
                     return tempId;
+                },
+
+                addTablesToDraft: (tablesData: Partial<FloorPlanObject>[]) => {
+                    const floorPlanId = get().activeFloorPlanId;
+                    if (!floorPlanId) throw new Error('No floor plan selected');
+                    if (tablesData.length === 0) return [];
+
+                    get().saveSnapshot();
+
+                    const timestamp = Date.now();
+                    const newTables = tablesData.map((tableData, index) => {
+                        const shape = TABLE_SHAPES[tableData.shape_id as keyof typeof TABLE_SHAPES];
+                        const tempId = `temp-${timestamp}-${index}-${Math.random()}`;
+
+                        return {
+                            id: tempId,
+                            floor_plan_id: floorPlanId,
+                            name: tableData.name || `New ${shape?.label || 'Table'}`,
+                            shape_id: tableData.shape_id as keyof typeof TABLE_SHAPES,
+                            category: (shape?.category || tableData.category || 'table') as FloorPlanObject['category'],
+                            x: tableData.x || 100,
+                            y: tableData.y || 100,
+                            rotation: tableData.rotation || 0,
+                            width: tableData.width || shape?.width,
+                            height: tableData.height || shape?.height,
+                            capacity: tableData.capacity || shape?.capacity,
+                            z_index: tableData.z_index || 1,
+                            is_active: tableData.is_active !== undefined ? tableData.is_active : true,
+                            is_visible: tableData.is_visible !== undefined ? tableData.is_visible : true,
+                        } satisfies FloorPlanObject;
+                    });
+
+                    set((state) => ({
+                        draftTables: [...state.draftTables, ...newTables],
+                    }));
+
+                    return newTables.map((table) => table.id);
                 },
 
                 updateTableInDraft: (tableId: string, updates: Partial<FloorPlanObject>) => {

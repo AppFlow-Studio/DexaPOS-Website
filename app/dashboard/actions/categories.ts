@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { CategoriesModel } from "@/types/db-modles";
 import { CategoryWithItems } from "@/types/menu";
 import { LogAuditEvent } from "./audit-logs";
+import { getCurrentUserMerchantRole } from "./role-check";
 
 // ============================================================================
 // GET OPERATIONS
@@ -215,6 +216,20 @@ export async function CreateCategory(
 
   const supabase = createServerSupabaseClient();
 
+  // Role check: managers can only create location-specific categories for their assigned locations
+  const roleInfo = await getCurrentUserMerchantRole();
+  if (roleInfo?.isMember) {
+    return { error: "You do not have permission to create categories" };
+  }
+  if (roleInfo?.isManager) {
+    if (!locationId) {
+      return { error: "Managers cannot create global categories" };
+    }
+    if (!roleInfo.assignedLocationIds.includes(locationId)) {
+      return { error: "You do not have access to this location" };
+    }
+  }
+
   // Get merchant ID
   const { data: merchant, error: merchantError } = await supabase
     .from("merchants")
@@ -298,6 +313,26 @@ export async function UpdateCategory(
 
   const supabase = createServerSupabaseClient();
 
+  // Role check: managers cannot edit global categories
+  const roleInfo = await getCurrentUserMerchantRole();
+  if (roleInfo?.isMember) {
+    return { error: "You do not have permission to update categories" };
+  }
+  if (roleInfo?.isManager) {
+    const { data: categoryCheck } = await supabase
+      .from("categories")
+      .select("location_id")
+      .eq("id", categoryId)
+      .single();
+
+    if (!categoryCheck?.location_id) {
+      return { error: "Managers cannot edit global categories" };
+    }
+    if (!roleInfo.assignedLocationIds.includes(categoryCheck.location_id)) {
+      return { error: "You do not have access to this category" };
+    }
+  }
+
   // Build update object
   const updateData: Record<string, unknown> = {};
   if (data.name !== undefined) updateData.name = data.name;
@@ -370,6 +405,26 @@ export async function DeleteCategory(
   }
 
   const supabase = createServerSupabaseClient();
+
+  // Role check: managers can only delete location-specific categories for their assigned locations
+  const roleInfo = await getCurrentUserMerchantRole();
+  if (roleInfo?.isMember) {
+    return { error: "You do not have permission to delete categories" };
+  }
+  if (roleInfo?.isManager) {
+    const { data: categoryCheck } = await supabase
+      .from("categories")
+      .select("location_id")
+      .eq("id", categoryId)
+      .single();
+
+    if (!categoryCheck?.location_id) {
+      return { error: "Managers cannot delete global categories" };
+    }
+    if (!roleInfo.assignedLocationIds.includes(categoryCheck.location_id)) {
+      return { error: "You do not have access to this category" };
+    }
+  }
 
   // Fetch category first to get name for logging
   const { data: category } = await supabase

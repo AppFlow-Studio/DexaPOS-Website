@@ -324,9 +324,7 @@ export function useResetStaffPIN() {
       });
 
       toast.success("PIN reset successfully", {
-        description: result.data?.pin
-          ? `New PIN: ${result.data.pin}`
-          : "PIN updated",
+        description: "The updated PIN is now available in staff details.",
       });
 
       queryClient.invalidateQueries({ queryKey: ["unified-staff"] });

@@ -149,8 +149,11 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-137.5">
-        <DialogHeader>
+      <DialogContent
+        className="w-[calc(100%-1rem)] sm:max-w-[550px] max-h-[90vh] overflow-hidden p-0 gap-0"
+        overlayClassName="bg-black/35 backdrop-blur-md"
+      >
+        <DialogHeader className="px-6 pt-6 pb-4">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-linear-to-br from-primary/20 to-primary/5 border border-primary/10">
               <Package className="h-5 w-5 text-primary" />
@@ -179,173 +182,171 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
           </div>
         </DialogHeader>
 
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mt-4">
-          {/* Name */}
-          <div className="space-y-2">
-            <Label htmlFor="name">Item Name *</Label>
-            <Input
-              id="name"
-              placeholder="e.g., Burger Patty (4oz)"
-              {...form.register("name")}
-            />
-            {form.formState.errors.name && (
-              <p className="text-sm text-destructive">
-                {form.formState.errors.name.message}
-              </p>
-            )}
-          </div>
-
-          {/* SKU & Category Row */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="sku">SKU</Label>
-              <Input
-                id="sku"
-                placeholder="e.g., BP-004"
-                {...form.register("sku")}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
-              <Select
-                value={form.watch("category")}
-                onValueChange={(value) => form.setValue("category", value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Unit & Cost Row */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="unit_type">Unit Type *</Label>
-              <Select
-                value={form.watch("unit_type")}
-                onValueChange={(value) => form.setValue("unit_type", value)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {UNIT_TYPES.map((unit) => (
-                    <SelectItem key={unit.value} value={unit.value}>
-                      {unit.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {form.formState.errors.unit_type && (
-                <p className="text-sm text-destructive">
-                  {form.formState.errors.unit_type.message}
-                </p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cost_per_unit">Cost per Unit ($)</Label>
-              <Input
-                id="cost_per_unit"
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0.00"
-                {...form.register("cost_per_unit")}
-              />
-            </div>
-          </div>
-
-          {/* Stock Mode */}
-          <div className="space-y-2">
-            <Label>Stock Mode</Label>
-            <div className="grid grid-cols-3 gap-2">
-              {STOCK_MODES.map((mode) => (
-                <button
-                  key={mode.value}
-                  type="button"
-                  onClick={() => form.setValue("stock_mode", mode.value)}
-                  className={cn(
-                    "p-3 rounded-lg border text-left transition-all",
-                    stockMode === mode.value
-                      ? "border-primary bg-primary/5 ring-1 ring-primary"
-                      : "border-muted hover:border-primary/50"
-                  )}
-                >
-                  <p className="font-medium text-sm">{mode.label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {mode.description}
+        <form onSubmit={form.handleSubmit(onSubmit)} className="contents">
+          <div className="overflow-y-auto px-6 py-4 max-h-[calc(90vh-150px)]">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Item Name *</Label>
+                <Input
+                  id="name"
+                  placeholder="e.g., Burger Patty (4oz)"
+                  {...form.register("name")}
+                />
+                {form.formState.errors.name && (
+                  <p className="text-sm text-destructive">
+                    {form.formState.errors.name.message}
                   </p>
-                </button>
-              ))}
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="sku">SKU</Label>
+                  <Input
+                    id="sku"
+                    placeholder="e.g., BP-004"
+                    {...form.register("sku")}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="category">Category</Label>
+                  <Select
+                    value={form.watch("category")}
+                    onValueChange={(value) => form.setValue("category", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CATEGORIES.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="unit_type">Unit Type *</Label>
+                  <Select
+                    value={form.watch("unit_type")}
+                    onValueChange={(value) => form.setValue("unit_type", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {UNIT_TYPES.map((unit) => (
+                        <SelectItem key={unit.value} value={unit.value}>
+                          {unit.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {form.formState.errors.unit_type && (
+                    <p className="text-sm text-destructive">
+                      {form.formState.errors.unit_type.message}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="cost_per_unit">Cost per Unit ($)</Label>
+                  <Input
+                    id="cost_per_unit"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    {...form.register("cost_per_unit")}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Stock Mode</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {STOCK_MODES.map((mode) => (
+                    <button
+                      key={mode.value}
+                      type="button"
+                      onClick={() => form.setValue("stock_mode", mode.value)}
+                      className={cn(
+                        "p-3 rounded-lg border text-left transition-all",
+                        stockMode === mode.value
+                          ? "border-primary bg-primary/5 ring-1 ring-primary"
+                          : "border-muted hover:border-primary/50"
+                      )}
+                    >
+                      <p className="font-medium text-sm">{mode.label}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {mode.description}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {stockMode === "stock_tracking" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-lg bg-muted/50 border">
+                  <div className="space-y-2">
+                    <Label htmlFor="current_stock">Current Stock</Label>
+                    <Input
+                      id="current_stock"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0"
+                      {...form.register("current_stock")}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="reorder_point">Reorder Point</Label>
+                    <Input
+                      id="reorder_point"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0"
+                      {...form.register("reorder_point")}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Alert when stock falls below
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="vendor_id">Default Vendor</Label>
+                <Select
+                  value={form.watch("vendor_id")}
+                  onValueChange={(value) => form.setValue("vendor_id", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a vendor (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No vendor</SelectItem>
+                    {vendors.map((vendor) => (
+                      <SelectItem key={vendor.id} value={vendor.id}>
+                        {vendor.name}
+                        {vendor.location_id && (
+                          <span className="text-muted-foreground ml-2">
+                            (Local)
+                          </span>
+                        )}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
 
-          {/* Stock & Reorder Row - Only show when tracking */}
-          {stockMode === "stock_tracking" && (
-            <div className="grid grid-cols-2 gap-4 p-4 rounded-lg bg-muted/50 border">
-              <div className="space-y-2">
-                <Label htmlFor="current_stock">Current Stock</Label>
-                <Input
-                  id="current_stock"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0"
-                  {...form.register("current_stock")}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="reorder_point">Reorder Point</Label>
-                <Input
-                  id="reorder_point"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0"
-                  {...form.register("reorder_point")}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Alert when stock falls below
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Vendor */}
-          <div className="space-y-2">
-            <Label htmlFor="vendor_id">Default Vendor</Label>
-            <Select
-              value={form.watch("vendor_id")}
-              onValueChange={(value) => form.setValue("vendor_id", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a vendor (optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No vendor</SelectItem>
-                {vendors.map((vendor) => (
-                  <SelectItem key={vendor.id} value={vendor.id}>
-                    {vendor.name}
-                    {vendor.location_id && (
-                      <span className="text-muted-foreground ml-2">
-                        (Local)
-                      </span>
-                    )}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <DialogFooter className="pt-4">
+          <DialogFooter className="px-6 py-4 border-t">
             <Button
               type="button"
               variant="outline"

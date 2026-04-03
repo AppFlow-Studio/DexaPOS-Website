@@ -165,8 +165,8 @@ export function AdminEditItemDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px]">
-        <DialogHeader>
+      <DialogContent className="w-[calc(100%-1rem)] sm:max-w-[550px] max-h-[90vh] overflow-hidden p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-4">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/10">
               <Package className="h-5 w-5 text-primary" />
@@ -180,163 +180,168 @@ export function AdminEditItemDialog({
           </div>
         </DialogHeader>
 
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mt-4">
-          <div className="space-y-2">
-            <Label htmlFor="edit-name">Item Name *</Label>
-            <Input
-              id="edit-name"
-              {...form.register("name")}
-            />
-          </div>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="contents">
+          <div className="overflow-y-auto px-6 py-4 max-h-[calc(90vh-150px)]">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Item Name *</Label>
+                <Input
+                  id="edit-name"
+                  {...form.register("name")}
+                />
+              </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-sku">SKU</Label>
-              <Input
-                id="edit-sku"
-                {...form.register("sku")}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-category">Category</Label>
-              <Select
-                value={form.watch("category")}
-                onValueChange={(value) => form.setValue("category", value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
-                    </SelectItem>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-sku">SKU</Label>
+                  <Input
+                    id="edit-sku"
+                    {...form.register("sku")}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-category">Category</Label>
+                  <Select
+                    value={form.watch("category")}
+                    onValueChange={(value) => form.setValue("category", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CATEGORIES.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-unit_type">Unit Type *</Label>
+                  <Select
+                    value={form.watch("unit_type")}
+                    onValueChange={(value) => form.setValue("unit_type", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {UNIT_TYPES.map((unit) => (
+                        <SelectItem key={unit.value} value={unit.value}>
+                          {unit.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-cost_per_unit">Cost per Unit ($)</Label>
+                  <Input
+                    id="edit-cost_per_unit"
+                    type="number"
+                    step="0.01"
+                    {...form.register("cost_per_unit")}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Stock Mode</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {STOCK_MODES.map((mode) => (
+                    <button
+                      key={mode.value}
+                      type="button"
+                      onClick={() => form.setValue("stock_mode", mode.value)}
+                      className={cn(
+                        "p-3 rounded-lg border text-left transition-all",
+                        stockMode === mode.value
+                          ? "border-primary bg-primary/5 ring-1 ring-primary"
+                          : "border-muted hover:border-primary/50"
+                      )}
+                    >
+                      <p className="font-medium text-sm">{mode.label}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {mode.description}
+                      </p>
+                    </button>
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+                </div>
+              </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-unit_type">Unit Type *</Label>
-              <Select
-                value={form.watch("unit_type")}
-                onValueChange={(value) => form.setValue("unit_type", value)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {UNIT_TYPES.map((unit) => (
-                    <SelectItem key={unit.value} value={unit.value}>
-                      {unit.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-cost_per_unit">Cost per Unit ($)</Label>
-              <Input
-                id="edit-cost_per_unit"
-                type="number"
-                step="0.01"
-                {...form.register("cost_per_unit")}
-              />
-            </div>
-          </div>
+              {stockMode === "stock_tracking" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-lg bg-muted/50 border">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-current_stock">Current Stock</Label>
+                    <Input
+                      id="edit-current_stock"
+                      type="number"
+                      step="0.01"
+                      {...form.register("current_stock")}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-reorder_point">Reorder Point</Label>
+                    <Input
+                      id="edit-reorder_point"
+                      type="number"
+                      step="0.01"
+                      {...form.register("reorder_point")}
+                    />
+                  </div>
+                </div>
+              )}
 
-          <div className="space-y-2">
-            <Label>Stock Mode</Label>
-            <div className="grid grid-cols-3 gap-2">
-              {STOCK_MODES.map((mode) => (
-                <button
-                  key={mode.value}
-                  type="button"
-                  onClick={() => form.setValue("stock_mode", mode.value)}
-                  className={cn(
-                    "p-3 rounded-lg border text-left transition-all",
-                    stockMode === mode.value
-                      ? "border-primary bg-primary/5 ring-1 ring-primary"
-                      : "border-muted hover:border-primary/50"
-                  )}
+              <div className="space-y-2">
+                <Label htmlFor="edit-vendor_id">Default Vendor</Label>
+                <Select
+                  value={form.watch("vendor_id")}
+                  onValueChange={(value) => form.setValue("vendor_id", value)}
                 >
-                  <p className="font-medium text-sm">{mode.label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {mode.description}
-                  </p>
-                </button>
-              ))}
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a vendor (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No vendor</SelectItem>
+                    {vendors.map((vendor) => (
+                      <SelectItem key={vendor.id} value={vendor.id}>
+                        {vendor.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
 
-          {stockMode === "stock_tracking" && (
-            <div className="grid grid-cols-2 gap-4 p-4 rounded-lg bg-muted/50 border">
-              <div className="space-y-2">
-                <Label htmlFor="edit-current_stock">Current Stock</Label>
-                <Input
-                  id="edit-current_stock"
-                  type="number"
-                  step="0.01"
-                  {...form.register("current_stock")}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-reorder_point">Reorder Point</Label>
-                <Input
-                  id="edit-reorder_point"
-                  type="number"
-                  step="0.01"
-                  {...form.register("reorder_point")}
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="edit-vendor_id">Default Vendor</Label>
-            <Select
-              value={form.watch("vendor_id")}
-              onValueChange={(value) => form.setValue("vendor_id", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a vendor (optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No vendor</SelectItem>
-                {vendors.map((vendor) => (
-                  <SelectItem key={vendor.id} value={vendor.id}>
-                    {vendor.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <DialogFooter className="pt-4 flex justify-between gap-2">
+          <DialogFooter className="px-6 py-4 border-t flex-col-reverse sm:flex-row sm:justify-between gap-2">
             <Button
               type="button"
               variant="destructive"
-              className="gap-2"
+              className="gap-2 sm:mr-auto"
               onClick={handleDelete}
               disabled={deleteItem.isPending}
             >
               <Trash2 className="h-4 w-4" />
               {deleteItem.isPending ? "Deleting..." : "Delete"}
             </Button>
-            <div className="flex gap-2">
+            <div className="flex flex-col-reverse sm:flex-row gap-2 w-full sm:w-auto">
                 <Button
                 type="button"
                 variant="outline"
                 onClick={() => onOpenChange(false)}
+                className="w-full sm:w-auto"
                 >
                 Cancel
                 </Button>
                 <Button
                 type="submit"
                 disabled={updateItem.isPending}
-                className="gap-2"
+                className="gap-2 w-full sm:w-auto"
                 >
                 {updateItem.isPending && (
                     <Loader2 className="h-4 w-4 animate-spin" />

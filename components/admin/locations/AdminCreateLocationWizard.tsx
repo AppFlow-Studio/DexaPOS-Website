@@ -409,7 +409,11 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
             queryClient.invalidateQueries({ queryKey: ['locations'] })
 
             setHasUnsavedChanges(false)
-            router.push(backUrl)
+            if (result.data?.id) {
+                router.push(`${backUrl}?tab=business-info&openLocation=${result.data.id}`)
+            } else {
+                router.push(`${backUrl}?tab=business-info`)
+            }
         } catch (error) {
             toast.error('Creation Failed', {
                 description: 'An unexpected error occurred. Please try again.'

@@ -187,7 +187,7 @@ import React, { useState } from 'react'
 import { TABLE_SHAPES, SHAPE_OPTIONS } from '@/utils/tables/table-shapes'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, LayoutGrid, Plus } from 'lucide-react'
 
 type ShapeCategory = 'table' | 'booth' | 'functional' | 'structure' | 'decor' | 'zone'
 
@@ -205,7 +205,19 @@ const CATEGORY_CONFIG: Record<ShapeCategory, CategoryConfig> = {
   zone: { label: 'Zones', description: 'Area markers' },
 }
 
-export function FloorPlanEditorSidebar() {
+const LIBRARY_SHAPE_COLOR = '#9CA3AF'
+
+interface FloorPlanEditorSidebarProps {
+  onAddShape?: (shapeId: keyof typeof TABLE_SHAPES) => void
+  onOpenShapePicker?: () => void
+  onOpenQuickSetup?: () => void
+}
+
+export function FloorPlanEditorSidebar({
+  onAddShape,
+  onOpenShapePicker,
+  onOpenQuickSetup,
+}: FloorPlanEditorSidebarProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<ShapeCategory>>(
     new Set(['table', 'booth', 'functional'])
   )
@@ -239,7 +251,17 @@ export function FloorPlanEditorSidebar() {
     <div className="w-64 bg-background border-r h-full flex flex-col z-20 shadow-xl">
       <div className="p-4 border-b shrink-0">
         <h3 className="font-semibold text-sm">Shape Library</h3>
-        <p className="text-xs text-muted-foreground">Drag items onto canvas</p>
+        <p className="text-xs text-muted-foreground">Drag or click shapes onto the canvas</p>
+        <div className="mt-3 grid gap-2">
+          <Button variant="default" size="sm" onClick={onOpenShapePicker}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Object
+          </Button>
+          <Button variant="outline" size="sm" onClick={onOpenQuickSetup}>
+            <LayoutGrid className="mr-2 h-4 w-4" />
+            Quick Setup
+          </Button>
+        </div>
       </div>
 
       <ScrollArea className="flex-1 h-full">
@@ -279,11 +301,12 @@ export function FloorPlanEditorSidebar() {
                           key={shape.id}
                           draggable
                           onDragStart={(e) => handleDragStart(e, shape.id)}
+                          onClick={() => onAddShape?.(shape.id as keyof typeof TABLE_SHAPES)}
                           className="flex flex-col items-center gap-1.5 p-2.5 rounded border border-border bg-background hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing transition-all"
                           title={shape.label}
                         >
                           <div className="w-10 h-10 flex items-center justify-center pointer-events-none">
-                            <ShapeIcon width={32} height={32} />
+                            <ShapeIcon width={32} height={32} color={LIBRARY_SHAPE_COLOR} />
                           </div>
                           <span className="text-[9px] font-medium text-muted-foreground text-center leading-tight line-clamp-2">
                             {shape.label}

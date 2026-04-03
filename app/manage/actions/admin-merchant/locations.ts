@@ -8,7 +8,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { assertHQPermission } from '@/lib/admin/auth'
 import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
-import type { Location, CreateLocationInput } from '@/types/merchant_locations'
+import type { Location, CreateLocationInput, UpdateLocationInput } from '@/types/merchant_locations'
 import type { ManagerAssignableUser } from '@/app/dashboard/actions/location-members'
 
 // ============================================================================
@@ -41,6 +41,41 @@ export async function adminGetMerchantLocations(merchantId: string) {
     return {
       success: false,
       error: err instanceof Error ? err.message : 'Failed to fetch locations',
+      data: null,
+    }
+  }
+}
+
+/**
+ * Get a single location for a merchant (admin access)
+ */
+export async function adminGetMerchantLocationById(
+  merchantId: string,
+  locationId: string
+) {
+  try {
+    await assertHQPermission('hq.merchant.view')
+
+    const supabase = createServerSupabaseClient()
+
+    const { data, error } = await supabase
+      .from('locations')
+      .select('*')
+      .eq('merchant_id', merchantId)
+      .eq('id', locationId)
+      .single()
+
+    if (error) {
+      console.error('[adminGetMerchantLocationById] Error:', error)
+      return { success: false, error: error.message, data: null }
+    }
+
+    return { success: true, error: null, data: data as Location }
+  } catch (err) {
+    console.error('[adminGetMerchantLocationById] Error:', err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to fetch location',
       data: null,
     }
   }
@@ -236,6 +271,271 @@ export async function adminCreateLocation(
     return {
       success: false,
       error: err instanceof Error ? err.message : 'Failed to create location',
+      data: null,
+    }
+  }
+}
+
+// ============================================================================
+// UPDATE Operations
+// ============================================================================
+
+/**
+ * Update a merchant location from HQ (admin access)
+ */
+export async function adminUpdateLocation(
+  merchantId: string,
+  locationId: string,
+  input: UpdateLocationInput
+) {
+  try {
+    await assertHQPermission('hq.merchant.update')
+
+    const supabase = createServerSupabaseClient()
+
+    const { data: currentLocation, error: currentLocationError } = await supabase
+      .from('locations')
+      .select('*')
+      .eq('merchant_id', merchantId)
+      .eq('id', locationId)
+      .single()
+
+    if (currentLocationError || !currentLocation) {
+      return { success: false, error: 'Location not found', data: null }
+    }
+
+    if (input.code) {
+      const { data: existingLocation } = await supabase
+        .from('locations')
+        .select('id')
+        .eq('merchant_id', merchantId)
+        .eq('code', input.code)
+        .neq('id', locationId)
+        .single()
+
+      if (existingLocation) {
+        return {
+          success: false,
+          error: 'A location with this code already exists',
+          data: null,
+        }
+      }
+    }
+
+    const updateData: Record<string, unknown> = {}
+
+    if (input.name !== undefined) updateData.name = input.name
+    if (input.code !== undefined) updateData.code = input.code || null
+    if (input.description !== undefined) updateData.description = input.description || null
+    if (input.phone !== undefined) updateData.phone = input.phone || null
+    if (input.email !== undefined) updateData.email = input.email || null
+    if (input.address_line1 !== undefined) updateData.address_line1 = input.address_line1
+    if (input.address_line2 !== undefined) updateData.address_line2 = input.address_line2 || null
+    if (input.city !== undefined) updateData.city = input.city
+    if (input.state !== undefined) updateData.state = input.state
+    if (input.postal_code !== undefined) updateData.postal_code = input.postal_code
+    if (input.country !== undefined) updateData.country = input.country
+    if (input.latitude !== undefined) updateData.latitude = input.latitude
+    if (input.longitude !== undefined) updateData.longitude = input.longitude
+    if (input.timezone !== undefined) updateData.timezone = input.timezone
+    if (input.pricing_strategy !== undefined) updateData.pricing_strategy = input.pricing_strategy
+    if (input.dual_pricing_percentage !== undefined) {
+      updateData.dual_pricing_percentage = input.dual_pricing_percentage
+    }
+    if (input.use_merchant_pricing_defaults !== undefined) {
+      updateData.use_merchant_pricing_defaults = input.use_merchant_pricing_defaults
+    }
+    if (input.is_active !== undefined) updateData.is_active = input.is_active
+    if (input.is_accepting_orders !== undefined) {
+      updateData.is_accepting_orders = input.is_accepting_orders
+    }
+    if (input.business_hours !== undefined) updateData.business_hours = input.business_hours
+    if (input.ein !== undefined) updateData.ein = input.ein || null
+    if (input.tax_id !== undefined) updateData.tax_id = input.tax_id || null
+    if (input.sales_tax_rate !== undefined) updateData.sales_tax_rate = input.sales_tax_rate
+    if (input.tax_registration_status !== undefined) {
+      updateData.tax_registration_status = input.tax_registration_status
+    }
+    if (input.onboarding_step !== undefined) updateData.onboarding_step = input.onboarding_step
+    if (input.onboarding_completed !== undefined) {
+      updateData.onboarding_completed = input.onboarding_completed
+    }
+    if (input.uses_global_menu !== undefined) updateData.uses_global_menu = input.uses_global_menu
+    if (input.public_metadata !== undefined) updateData.public_metadata = input.public_metadata
+
+    const { data, error } = await supabase
+      .from('locations')
+      .update(updateData)
+      .eq('merchant_id', merchantId)
+      .eq('id', locationId)
+      .select('*')
+      .single()
+
+    if (error) {
+      console.error('[adminUpdateLocation] Error:', error)
+      return { success: false, error: error.message, data: null }
+    }
+
+    const changedFields: string[] = []
+    const beforeLog: Record<string, unknown> = {}
+    const afterLog: Record<string, unknown> = {}
+
+    Object.keys(updateData).forEach((key) => {
+      const nextValue = updateData[key]
+      const previousValue = currentLocation[key as keyof typeof currentLocation]
+
+      if (JSON.stringify(nextValue) !== JSON.stringify(previousValue)) {
+        changedFields.push(key)
+        beforeLog[key] = previousValue
+        afterLog[key] = nextValue
+      }
+    })
+
+    if (changedFields.length > 0) {
+      await LogAuditEvent({
+        merchantId,
+        action: `HQ Admin Updated Location: ${data.name}`,
+        actionCategory: 'settings',
+        resourceType: 'location',
+        resourceId: locationId,
+        resourceName: data.name,
+        locationId,
+        changes: { before: beforeLog, after: afterLog },
+      })
+    }
+
+    return { success: true, error: null, data: data as Location }
+  } catch (err) {
+    console.error('[adminUpdateLocation] Error:', err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to update location',
+      data: null,
+    }
+  }
+}
+
+/**
+ * Toggle location active status from HQ (admin access)
+ */
+export async function adminToggleLocationActive(
+  merchantId: string,
+  locationId: string
+) {
+  try {
+    await assertHQPermission('hq.merchant.update')
+
+    const supabase = createServerSupabaseClient()
+
+    const { data: currentLocation, error: currentLocationError } = await supabase
+      .from('locations')
+      .select('id, name, is_active')
+      .eq('merchant_id', merchantId)
+      .eq('id', locationId)
+      .single()
+
+    if (currentLocationError || !currentLocation) {
+      return { success: false, error: 'Location not found', data: null }
+    }
+
+    const nextIsActive = !currentLocation.is_active
+
+    const { data, error } = await supabase
+      .from('locations')
+      .update({ is_active: nextIsActive })
+      .eq('merchant_id', merchantId)
+      .eq('id', locationId)
+      .select('*')
+      .single()
+
+    if (error) {
+      console.error('[adminToggleLocationActive] Error:', error)
+      return { success: false, error: error.message, data: null }
+    }
+
+    await LogAuditEvent({
+      merchantId,
+      action: `HQ Admin ${nextIsActive ? 'Activated' : 'Deactivated'} Location: ${data.name}`,
+      actionCategory: 'settings',
+      resourceType: 'location',
+      resourceId: locationId,
+      resourceName: data.name,
+      locationId,
+      changes: {
+        before: { is_active: currentLocation.is_active },
+        after: { is_active: nextIsActive },
+      },
+    })
+
+    return { success: true, error: null, data: data as Location }
+  } catch (err) {
+    console.error('[adminToggleLocationActive] Error:', err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to update location status',
+      data: null,
+    }
+  }
+}
+
+/**
+ * Toggle location order acceptance from HQ (admin access)
+ */
+export async function adminToggleLocationOrders(
+  merchantId: string,
+  locationId: string
+) {
+  try {
+    await assertHQPermission('hq.merchant.update')
+
+    const supabase = createServerSupabaseClient()
+
+    const { data: currentLocation, error: currentLocationError } = await supabase
+      .from('locations')
+      .select('id, name, is_accepting_orders')
+      .eq('merchant_id', merchantId)
+      .eq('id', locationId)
+      .single()
+
+    if (currentLocationError || !currentLocation) {
+      return { success: false, error: 'Location not found', data: null }
+    }
+
+    const nextIsAcceptingOrders = !currentLocation.is_accepting_orders
+
+    const { data, error } = await supabase
+      .from('locations')
+      .update({ is_accepting_orders: nextIsAcceptingOrders })
+      .eq('merchant_id', merchantId)
+      .eq('id', locationId)
+      .select('*')
+      .single()
+
+    if (error) {
+      console.error('[adminToggleLocationOrders] Error:', error)
+      return { success: false, error: error.message, data: null }
+    }
+
+    await LogAuditEvent({
+      merchantId,
+      action: `HQ Admin ${nextIsAcceptingOrders ? 'Enabled' : 'Disabled'} Orders for Location: ${data.name}`,
+      actionCategory: 'settings',
+      resourceType: 'location',
+      resourceId: locationId,
+      resourceName: data.name,
+      locationId,
+      changes: {
+        before: { is_accepting_orders: currentLocation.is_accepting_orders },
+        after: { is_accepting_orders: nextIsAcceptingOrders },
+      },
+    })
+
+    return { success: true, error: null, data: data as Location }
+  } catch (err) {
+    console.error('[adminToggleLocationOrders] Error:', err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to update order status',
       data: null,
     }
   }

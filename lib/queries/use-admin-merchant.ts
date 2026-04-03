@@ -28,6 +28,8 @@ import type {
   UpdateMerchantResult,
   UpdateMerchantStatusResult,
 } from '@/types/merchant'
+import type { Location } from '@/types/merchant_locations'
+import { adminGetMerchantLocationById } from '@/app/manage/actions/admin-merchant/locations'
 
 // Orders actions
 import {
@@ -84,6 +86,28 @@ export function useAdminMerchantDetails(merchantId: string) {
     enabled: !!merchantId,
     // Longer stale time since merchant details don't change often
     staleTime: 10 * 60 * 1000, 
+  })
+}
+
+export function useAdminMerchantLocationDetails(
+  merchantId: string,
+  locationId: string | null,
+  enabled: boolean = true
+) {
+  return useQuery<Location | null>({
+    queryKey: adminKeys.merchantLocationDetail(merchantId, locationId || ''),
+    queryFn: async () => {
+      if (!locationId) return null
+
+      const result = await adminGetMerchantLocationById(merchantId, locationId)
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to fetch location details')
+      }
+
+      return result.data
+    },
+    enabled: enabled && !!merchantId && !!locationId,
+    staleTime: 5 * 60 * 1000,
   })
 }
 

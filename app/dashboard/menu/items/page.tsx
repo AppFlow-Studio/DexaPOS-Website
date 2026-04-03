@@ -220,11 +220,12 @@ function ItemCard({
     >
       <Card
         className={cn(
-          "overflow-hidden transition-all duration-300 h-full py-0.5",
+          "overflow-hidden transition-all duration-300 h-full py-0.5 cursor-pointer",
           "hover:shadow-lg hover:scale-[1.02] hover:border-primary/50",
           hasOverride && "ring-1 ring-amber-200",
           !item.effective_availability && "opacity-70",
         )}
+        onClick={onView}
       >
         {/* Image Section */}
         <div className="relative aspect-[4/3] bg-gradient-to-br from-muted/50 to-muted overflow-hidden">
@@ -324,17 +325,6 @@ function ItemCard({
               >
                 <Edit3 className="h-3.5 w-3.5 mr-1.5" />
                 Edit
-              </Button>
-              <Button
-                size="sm"
-                className="h-8 shadow-lg"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onView();
-                }}
-              >
-                <Eye className="h-3.5 w-3.5 mr-1.5" />
-                Details
               </Button>
             </div>
           </div>
@@ -508,11 +498,12 @@ function ItemRow({
     >
       <div
         className={cn(
-          "flex items-center gap-4 p-4 rounded-xl border bg-card transition-all duration-200",
+          "flex items-center gap-4 p-4 rounded-xl border bg-card transition-all duration-200 cursor-pointer",
           "hover:shadow-md hover:border-primary/30",
           hasOverride && "ring-1 ring-amber-200",
           !item.effective_availability && "opacity-70",
         )}
+        onClick={onView}
       >
         {/* Image */}
         <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-muted/30 shrink-0">
@@ -690,18 +681,6 @@ function ItemRow({
             <Edit3 className="h-3.5 w-3.5 mr-1.5" />
             Edit
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8"
-            onClick={(e) => {
-              e.stopPropagation();
-              onView();
-            }}
-          >
-            <Eye className="h-3.5 w-3.5 mr-1.5" />
-            Details
-          </Button>
           {canDelete && (
             <Button
               size="sm"
@@ -733,11 +712,7 @@ function ItemRow({
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={onEdit}>
               <Edit3 className="h-4 w-4 mr-2" />
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onView}>
-              <Eye className="h-4 w-4 mr-2" />
-              View Details
+              Quick Edit
             </DropdownMenuItem>
             {canDelete && (
               <DropdownMenuItem

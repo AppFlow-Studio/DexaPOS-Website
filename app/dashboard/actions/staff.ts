@@ -246,8 +246,8 @@ export async function inviteStaffMember(
 export async function quickAddStaff(params: QuickAddStaffParams) {
   const supabase = await createServerSupabaseClient();
 
-  // Hash PIN
-  const hashedPin = await bcrypt.hash(params.pin, 10);
+  // Store the PIN directly so it can be displayed in staff details
+  const storedPin = params.pin;
 
   // Generate display name
   const displayName = `${params.firstName} ${params.lastName.charAt(0)}.`;
@@ -261,7 +261,7 @@ export async function quickAddStaff(params: QuickAddStaffParams) {
         first_name: params.firstName,
         last_name: params.lastName,
         display_name: displayName,
-        pin_code: hashedPin,
+        pin_code: storedPin,
         role_code: params.roleCode,
         employment_type: params.employmentType || "part_time",
         hourly_rate: params.hourlyRate,
@@ -330,8 +330,8 @@ export async function acceptPosInvite(token: string, pin: string) {
     return { success: false, error: "Invalid or expired invite" };
   }
 
-  // Hash PIN
-  const hashedPin = await bcrypt.hash(pin, 10);
+  // Store the PIN directly so it can be displayed in staff details
+  const storedPin = pin;
   const displayName = `${invite.first_name} ${
     invite.last_name?.charAt(0) || ""
   }.`;
@@ -347,7 +347,7 @@ export async function acceptPosInvite(token: string, pin: string) {
         display_name: displayName,
         email: invite.email,
         phone: invite.phone,
-        pin_code: hashedPin,
+        pin_code: storedPin,
         role_code: invite.role_code,
         employment_type: invite.employment_type,
         hourly_rate: invite.hourly_rate,
@@ -578,7 +578,13 @@ export async function verifyStaffPin(
     // Check location-specific PIN first, then staff PIN
     const pinToCheck = sl.pin_code || staff.pin_code;
 
-    if (pinToCheck && (await bcrypt.compare(pin, pinToCheck))) {
+    const pinMatches =
+      pinToCheck === pin ||
+      (typeof pinToCheck === "string" &&
+        pinToCheck.startsWith("$2") &&
+        (await bcrypt.compare(pin, pinToCheck)));
+
+    if (pinMatches) {
       // Get effective role (location override or default)
       const effectiveRole = sl.role_code || staff.role_code;
 

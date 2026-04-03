@@ -40,6 +40,8 @@ export async function GetLocationMembers(locationId: string, merchantId: string)
             is_active,
             employment_type,
             hourly_rate,
+            pin_plain,
+            pin_hashed,
             pin_code,
             assigned_at,
             updated_at,
@@ -63,7 +65,7 @@ export async function GetLocationMembers(locationId: string, merchantId: string)
         is_active: member.is_active,
         employment_type: member.employment_type,
         hourly_rate: member.hourly_rate,
-        pin_code: member.pin_code,
+        pin_code: member.pin_plain ?? member.pin_hashed ?? member.pin_code,
         assigned_at: member.assigned_at,
         updated_at: member.updated_at,
         
@@ -173,6 +175,8 @@ export async function GetLocationMember(memberId: string) {
             is_active,
             employment_type,
             hourly_rate,
+            pin_plain,
+            pin_hashed,
             pin_code,
             assigned_at,
             updated_at,
@@ -243,6 +247,8 @@ export async function AddLocationMember(
             is_primary_location: data.is_primary_location ?? false,
             employment_type: data.employment_type || null,
             hourly_rate: data.hourly_rate || null,
+            pin_plain: data.pin_code || null,
+            pin_hashed: null,
             pin_code: data.pin_code || null,
         })
         .select()
@@ -284,7 +290,11 @@ export async function UpdateLocationMember(
     if (data.is_active !== undefined) updateData.is_active = data.is_active
     if (data.employment_type !== undefined) updateData.employment_type = data.employment_type
     if (data.hourly_rate !== undefined) updateData.hourly_rate = data.hourly_rate
-    if (data.pin_code !== undefined) updateData.pin_code = data.pin_code
+    if (data.pin_code !== undefined) {
+        updateData.pin_plain = data.pin_code
+        updateData.pin_hashed = null
+        updateData.pin_code = data.pin_code
+    }
 
     const { data: member, error } = await supabase
         .from('location_members')

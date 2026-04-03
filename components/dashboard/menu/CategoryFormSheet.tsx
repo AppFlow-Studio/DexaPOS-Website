@@ -7,14 +7,13 @@ import * as z from "zod";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  BottomSheet,
-  BottomSheetContent,
-  BottomSheetHeader,
-  BottomSheetBody,
-  BottomSheetFooter,
-  BottomSheetTitle,
-  BottomSheetDescription,
-} from "@/components/ui/bottom-sheet";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -350,28 +349,31 @@ export function CategoryFormSheet({
   const watchedValues = form.watch();
 
   return (
-    <BottomSheet open={open} onOpenChange={handleClose}>
-      <BottomSheetContent className="!h-[95vh]">
-        <BottomSheetHeader>
-          <BottomSheetTitle className="flex items-center gap-2">
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
+      <DialogContent
+        overlayClassName="bg-slate-950/40 backdrop-blur-md"
+        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-5xl xl:max-w-6xl"
+      >
+        <Form {...form}>
+          <form
+            id="category-form"
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="flex max-h-[min(92vh,960px)] flex-col"
+          >
+        <DialogHeader className="border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
+          <DialogTitle className="flex items-center gap-2 text-[1.625rem] font-semibold tracking-tight">
             <Tag className="h-5 w-5 text-primary" />
             {editCategory ? "Edit Category" : "Create New Category"}
-          </BottomSheetTitle>
-          <BottomSheetDescription>
+          </DialogTitle>
+          <DialogDescription className="max-w-[60ch] text-sm leading-6">
             Categories help organize your menu items for easy navigation.
-          </BottomSheetDescription>
-        </BottomSheetHeader>
+          </DialogDescription>
+        </DialogHeader>
 
-        <BottomSheetBody>
-          <div className="flex flex-col lg:flex-row h-full gap-6">
+          <div className="min-h-0 flex flex-1 flex-col overflow-hidden lg:flex-row">
             {/* Form Section */}
-            <div className="flex-1 overflow-y-auto space-y-4 px-2">
-              <Form {...form}>
-                <form
-                  id="category-form"
-                  onSubmit={form.handleSubmit(onSubmit)}
-                  className="space-y-4"
-                >
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                <div className="space-y-4">
                   {/* Basic Info Section */}
                   <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
                     <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
@@ -814,13 +816,13 @@ export function CategoryFormSheet({
                       />
                     </CollapsibleContent>
                   </Collapsible>
-                </form>
-              </Form>
+                </div>
             </div>
 
             {/* Preview Section */}
-            <div className="w-full lg:w-1/3 bg-muted/30 rounded-lg p-6 flex flex-col">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
+            <div className="hidden min-h-0 w-[360px] shrink-0 overflow-y-auto border-l border-border/70 bg-muted/10 px-6 py-5 lg:block">
+              <div className="space-y-6 pb-4">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                 <Sparkles className="h-4 w-4" />
                 Preview
               </h3>
@@ -880,16 +882,14 @@ export function CategoryFormSheet({
                   </div>
                 )}
               </div>
+              </div>
             </div>
           </div>
-        </BottomSheetBody>
-
-        <BottomSheetFooter>
+        <DialogFooter className="shrink-0 border-t border-border/70 bg-background/95 px-6 py-4 sm:justify-end">
           <Button
             type="button"
             variant="outline"
             onClick={handleClose}
-            className="flex-1 lg:flex-none"
           >
             Cancel
           </Button>
@@ -897,7 +897,7 @@ export function CategoryFormSheet({
             type="submit"
             form="category-form"
             disabled={isSubmitting}
-            className="flex-1 lg:flex-none lg:min-w-[150px]"
+            className="min-w-[150px]"
           >
             {isSubmitting ? (
               <>
@@ -928,8 +928,10 @@ export function CategoryFormSheet({
               "Create Category"
             )}
           </Button>
-        </BottomSheetFooter>
-      </BottomSheetContent>
+        </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
 
       {/* Schedule Override Dialog */}
       {scheduleOverrideDialog && selectedLocation && (
@@ -940,6 +942,6 @@ export function CategoryFormSheet({
           locationName={selectedLocation.name}
         />
       )}
-    </BottomSheet>
+    </Dialog>
   );
 }

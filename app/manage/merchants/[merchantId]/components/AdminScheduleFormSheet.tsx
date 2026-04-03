@@ -1,29 +1,24 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react'
 import {
-  BottomSheet,
-  BottomSheetContent,
-  BottomSheetHeader,
-  BottomSheetBody,
-  BottomSheetFooter,
-  BottomSheetTitle,
-  BottomSheetDescription,
-  BottomSheetSection,
-} from '@/components/ui/bottom-sheet'
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { TimeInput } from '@/components/ui/time-picker'
+import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import {
   Plus,
   Trash2,
   Calendar,
-  Sparkles,
   CheckCircle2,
-  Copy,
-  ArrowRight,
   Globe,
   MapPin,
   Loader2,
@@ -33,14 +28,6 @@ import {
   useAdminCreateSchedule,
   useAdminUpdateSchedule,
 } from '@/lib/queries/use-admin-schedules'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
-} from '@/components/ui/dropdown-menu'
 
 const DAYS_OF_WEEK = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 const DAYS_FULL = [
@@ -72,6 +59,23 @@ interface AdminScheduleFormSheetProps {
 // Generate unique ID
 let idCounter = 0
 const generateId = () => `slot-${++idCounter}-${Date.now()}`
+
+function ScheduleSection({
+  title,
+  children,
+}: {
+  title: string
+  children: ReactNode
+}) {
+  return (
+    <section className="space-y-4">
+      <div>
+        <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
+      </div>
+      {children}
+    </section>
+  )
+}
 
 export function AdminScheduleFormSheet({
   open,
@@ -193,29 +197,6 @@ export function AdminScheduleFormSheet({
     )
   }
 
-  const copyTimeSlotsToOtherDays = (sourceDay: number, targetDays: number[]) => {
-    const sourceSlots = timeSlots.filter((s) => s.day_of_week === sourceDay)
-    if (sourceSlots.length === 0) return
-
-    const slotsToKeep = timeSlots.filter((s) => !targetDays.includes(s.day_of_week))
-
-    const newSlots: TimeSlotInput[] = []
-    targetDays.forEach((day) => {
-      sourceSlots.forEach((sourceSlot) => {
-        newSlots.push({
-          id: generateId(),
-          day_of_week: day,
-          start_time: sourceSlot.start_time,
-          end_time: sourceSlot.end_time,
-        })
-      })
-    })
-
-    setTimeSlots([...slotsToKeep, ...newSlots])
-    setSelectedDays((prev) => [...new Set([...prev, ...targetDays])].sort((a, b) => a - b))
-    toast.success('Time slots copied!')
-  }
-
   const slotsByDay = useMemo(() => {
     const grouped: Record<number, TimeSlotInput[]> = {}
     timeSlots.forEach((slot) => {
@@ -265,10 +246,13 @@ export function AdminScheduleFormSheet({
   }
 
   return (
-    <BottomSheet open={open} onOpenChange={onOpenChange}>
-      <BottomSheetContent height="95">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="sm:max-w-3xl max-h-[90vh] overflow-hidden p-0 gap-0"
+        overlayClassName="bg-black/35 backdrop-blur-md"
+      >
         {showSuccess ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-4 animate-in zoom-in-50 fade-in duration-300">
+          <div className="flex min-h-[420px] flex-col items-center justify-center gap-4 animate-in zoom-in-50 fade-in duration-300 px-6 py-10">
             <div className="h-20 w-20 rounded-full bg-green-500/20 flex items-center justify-center">
               <CheckCircle2 className="h-10 w-10 text-green-500 animate-in zoom-in-0 duration-500" />
             </div>
@@ -281,14 +265,14 @@ export function AdminScheduleFormSheet({
           </div>
         ) : (
           <>
-            <BottomSheetHeader>
-              <BottomSheetTitle className="flex items-center gap-2">
+            <DialogHeader className="px-6 pt-6 pb-4 text-left">
+              <DialogTitle className="flex items-center gap-2">
                 <Calendar className="h-5 w-5" />
                 {mode === 'edit' ? 'Edit Schedule' : 'Create Schedule'}
-              </BottomSheetTitle>
-              <BottomSheetDescription>
+              </DialogTitle>
+              <DialogDescription>
                 Control when menus and categories are available to customers
-              </BottomSheetDescription>
+              </DialogDescription>
               
               <div
                 className={cn(
@@ -316,11 +300,13 @@ export function AdminScheduleFormSheet({
                   </>
                 )}
               </div>
-            </BottomSheetHeader>
+            </DialogHeader>
 
-            <BottomSheetBody>
-              <div className="space-y-6">
-                <BottomSheetSection title="Schedule Details">
+            <Separator />
+
+            <div className="overflow-y-auto px-6 py-5 max-h-[calc(90vh-180px)]">
+              <div className="space-y-8">
+                <ScheduleSection title="Schedule Details">
                   <div className="space-y-4">
                     <div>
                       <label className="text-sm font-medium mb-1.5 block">Schedule Name *</label>
@@ -341,9 +327,9 @@ export function AdminScheduleFormSheet({
                       />
                     </div>
                   </div>
-                </BottomSheetSection>
+                </ScheduleSection>
 
-                <BottomSheetSection title="Active Days">
+                <ScheduleSection title="Active Days">
                   <div className="grid grid-cols-7 gap-2">
                     {DAYS_OF_WEEK.map((day, index) => {
                       const isSelected = selectedDays.includes(index)
@@ -365,10 +351,10 @@ export function AdminScheduleFormSheet({
                       )
                     })}
                   </div>
-                </BottomSheetSection>
+                </ScheduleSection>
 
                 {selectedDays.length > 0 && (
-                  <BottomSheetSection title="Time Slots">
+                  <ScheduleSection title="Time Slots">
                     <div className="space-y-4">
                       {selectedDays.map((day, dayIdx) => {
                         const daySlots = slotsByDay[day] || []
@@ -426,12 +412,14 @@ export function AdminScheduleFormSheet({
                         )
                       })}
                     </div>
-                  </BottomSheetSection>
+                  </ScheduleSection>
                 )}
               </div>
-            </BottomSheetBody>
+            </div>
 
-            <BottomSheetFooter>
+            <Separator />
+
+            <DialogFooter className="px-6 py-4 border-t-0 sm:justify-end">
               <Button
                 type="button"
                 variant="outline"
@@ -454,10 +442,10 @@ export function AdminScheduleFormSheet({
                 )}
                 {mode === 'edit' ? 'Update Schedule' : 'Create Schedule'}
               </Button>
-            </BottomSheetFooter>
+            </DialogFooter>
           </>
         )}
-      </BottomSheetContent>
-    </BottomSheet>
+      </DialogContent>
+    </Dialog>
   )
 }

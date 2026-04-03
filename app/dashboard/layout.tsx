@@ -217,6 +217,14 @@ const navMain = [
             title: "Online Ordering",
             url: "/dashboard/reports/online-ordering",
           },
+          {
+            title: "Cash Drawers",
+            url: "/dashboard/reports/cash-drawers",
+          },
+          {
+            title: "Tax Report",
+            url: "/dashboard/reports/tax",
+          },
         ],
       },
     ],
@@ -534,19 +542,6 @@ function MerchantSidebar() {
                       <Link href="/dashboard/settings/receipt-templates">
                         <Receipt className="h-3 w-3" />
                         <span>Receipt Templates</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton
-                      asChild
-                      isActive={pathname.startsWith(
-                        "/dashboard/settings/pricing"
-                      )}
-                    >
-                      <Link href="/dashboard/settings/pricing">
-                        <CreditCard className="h-3 w-3" />
-                        <span>Pricing</span>
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>

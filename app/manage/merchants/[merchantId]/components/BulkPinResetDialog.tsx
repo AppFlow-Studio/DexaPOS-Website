@@ -199,8 +199,7 @@ export function BulkPinResetDialog({
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Important</AlertTitle>
                 <AlertDescription>
-                  These PINs will only be displayed once. Make sure to save or
-                  export them before closing this dialog.
+                  Save or export these PINs securely before closing this dialog.
                 </AlertDescription>
               </Alert>
 
