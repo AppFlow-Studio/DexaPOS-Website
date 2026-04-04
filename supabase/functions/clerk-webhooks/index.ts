@@ -6,7 +6,7 @@ import { createClerkClient, ClerkClient } from 'npm:@clerk/backend'
 // CONSTANTS & CONFIGURATION
 // ============================================================================
 
-const DEXA_HQ_ORG_ID = Deno.env.get('DEXA_HQ_ORG_ID') || 'org_33z36QibAMZy6kc2xZNYmDl5duh'
+const DEXA_HQ_ORG_ID = Deno.env.get('DEXA_HQ_ORG_ID')!
 const LEGACY_ORG_LOGO_BUCKET = 'Organizations-Logos'
 const BUNNY_STORAGE_ZONE = Deno.env.get('BUNNY_STORAGE_ZONE_NAME') || ''
 const BUNNY_STORAGE_API_KEY = Deno.env.get('BUNNY_STORAGE_API_KEY') || ''

@@ -3,8 +3,7 @@ import { useOrganizationList, OrganizationSwitcher } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-// Fallback to hardcoded value if env var not set
-const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID || 'org_33z36QibAMZy6kc2xZNYmDl5duh';
+const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID ?? '';
 
 export default function OrganizationSelector() {
   const router = useRouter();

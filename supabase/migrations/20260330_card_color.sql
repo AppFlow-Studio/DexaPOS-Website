@@ -1,2 +1,0 @@
-ALTER TABLE online_store_config
-  ADD COLUMN IF NOT EXISTS card_color TEXT DEFAULT NULL;

@@ -38,7 +38,11 @@ import type {
 
 function useClerkOrgId(): string {
   const { data: userInfo } = useUserInfo();
-  return userInfo?.members?.[0]?.organizations?.id || "";
+  return (
+    userInfo?.members?.[0]?.organizations?.clerk_org_id ||
+    userInfo?.members?.[0]?.organizations?.merchants?.clerk_org_id ||
+    ""
+  );
 }
 
 // =============================================================================
