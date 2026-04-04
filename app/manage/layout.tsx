@@ -30,7 +30,6 @@ import {
     LayoutDashboard,
     Users,
     BarChart3,
-    FileText,
     Settings,
     HelpCircle,
     MessageSquare,
@@ -50,7 +49,6 @@ import {
     History,
     LogOut,
     Monitor,
-    Archive,
     LucideIcon,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -116,18 +114,6 @@ const navMain: NavGroup[] = [
                 icon: BarChart3,
                 requiredPermission: 'analytics.view',
             },
-            {
-                title: 'Cash Drawers',
-                url: '/manage/cash-drawers',
-                icon: Archive,
-                requiredPermission: 'analytics.view',
-            },
-            {
-                title: 'Tax Report',
-                url: '/manage/reports/tax',
-                icon: FileText,
-                requiredPermission: 'analytics.view',
-            }
         ]
     },
     {
