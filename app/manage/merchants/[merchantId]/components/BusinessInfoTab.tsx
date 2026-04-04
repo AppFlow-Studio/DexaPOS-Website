@@ -64,13 +64,12 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
 
     const locationsLoading = false
 
-    // Get business info from public_metadata or use defaults
-    const businessInfo = (merchantInfo?.public_metadata as any) || {}
-    const legalBusinessName = businessInfo.legal_business_name || 'Not provided'
-    const dbaName = businessInfo.dba_name || 'Not provided'
-    const einTaxId = businessInfo.ein_tax_id || 'Not provided'
-    const businessType = businessInfo.business_type || 'Not specified'
-    const businessLicenseNumber = businessInfo.business_license_number || 'Not provided'
+    // Read business info from merchant columns directly
+    const legalBusinessName = merchantInfo?.business_legal_name || 'Not provided'
+    const dbaName = merchantInfo?.dba_name || merchantInfo?.name || 'Not provided'
+    const einTaxId = merchantInfo?.ein_last_four ? `****${merchantInfo.ein_last_four}` : 'Not provided'
+    const businessType = merchantInfo?.business_type || 'Not specified'
+    const businessLicenseNumber = (merchantInfo?.public_metadata as any)?.business_license_number || 'Not provided'
 
     const formatAddress = (loc: any) => {
         return [loc.address_line1, loc.city, loc.state].filter(Boolean).join(', ')
@@ -99,13 +98,13 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
     useEffect(() => {
         if (isEditDialogOpen) {
             setFormData({
-                legal_business_name: businessInfo.legal_business_name || '',
-                dba_name: businessInfo.dba_name || '',
-                ein_tax_id: businessInfo.ein_tax_id || '',
-                business_type: businessInfo.business_type || '',
-                business_license_number: businessInfo.business_license_number || '',
-                merchant_type: businessInfo.merchant_type || '',
-                status: businessInfo.status || ''
+                legal_business_name: merchantInfo?.business_legal_name || '',
+                dba_name: merchantInfo?.dba_name || '',
+                ein_tax_id: merchantInfo?.ein_last_four || '',
+                business_type: merchantInfo?.business_type || '',
+                business_license_number: (merchantInfo?.public_metadata as any)?.business_license_number || '',
+                merchant_type: merchantInfo?.business_type || '',
+                status: merchantInfo?.onboarding_status || ''
             })
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -116,9 +115,10 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
             const result = await updateMutation.mutateAsync({
                 merchantId: merchantInfo.id,
                 updates: {
-                    public_metadata: {
-                        ...formData
-                    }
+                    business_legal_name: formData.legal_business_name || null,
+                    dba_name: formData.dba_name || null,
+                    ein_last_four: formData.ein_tax_id || null,
+                    business_type: formData.business_type || null,
                 }
             })
 
@@ -292,14 +292,14 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                 </div>
                                 <div className="space-y-2">
                                     <div className="text-sm font-medium text-muted-foreground">Status</div>
-                                    <Badge variant={businessInfo.status === 'active' ? 'default' : 'secondary'}>
-                                        {businessInfo.status || 'Unknown'}
+                                    <Badge variant={merchantInfo?.onboarding_status === 'active' ? 'default' : 'secondary'}>
+                                        {merchantInfo?.onboarding_status || 'Unknown'}
                                     </Badge>
                                 </div>
                                 <div className="space-y-2">
                                     <div className="text-sm font-medium text-muted-foreground">Business Type (Category)</div>
                                     <Badge variant="outline">
-                                        {businessInfo.merchant_type || 'Not specified'}
+                                        {merchantInfo?.business_type || 'Not specified'}
                                     </Badge>
                                 </div>
                             </div>

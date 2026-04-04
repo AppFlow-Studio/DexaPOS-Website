@@ -85,6 +85,7 @@ import {
 } from '@/lib/queries/use-admin-merchant'
 import { adminKeys } from '@/lib/queries/admin-keys'
 import { useMerchantDetails } from '@/lib/queries/use-merchants'
+import { PriceInputGroup } from '@/components/dashboard/locations/PriceInputGroup'
 import { AdminPriceBreakdown } from '../components/AdminPriceBreakdown'
 import { RecipeManager } from '@/app/dashboard/menu/components/RecipeManager'
 import { ItemPreviewCard } from '@/components/dashboard/menu/ItemPreviewCard'
@@ -791,41 +792,15 @@ export function ItemFormSheet({
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-6">
-                                        <FormField
-                                            control={form.control}
-                                            name="price"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Base Price *</FormLabel>
-                                                    <FormControl>
-                                                        <div className="relative">
-                                                            <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                                            <Input type="number" step="0.01" min="0" className="pl-9" {...field} />
-                                                        </div>
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
-                                        <FormField
-                                            control={form.control}
-                                            name="cash_price"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Cash Price</FormLabel>
-                                                    <FormControl>
-                                                        <div className="relative">
-                                                            <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                                            <Input type="number" step="0.01" min="0" className="pl-9" placeholder="Optional" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value ? parseFloat(e.target.value) : null)} />
-                                                        </div>
-                                                    </FormControl>
-                                                    <FormDescription>Discounted price for cash payments</FormDescription>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
-                                    </div>
+                                    <PriceInputGroup
+                                        price={form.watch("price") || 0}
+                                        cashPrice={form.watch("cash_price") ?? null}
+                                        onPriceChange={(val) => form.setValue("price", val, { shouldValidate: true })}
+                                        onCashPriceChange={(val) => form.setValue("cash_price", val, { shouldValidate: true })}
+                                        label="Base Price"
+                                        pricingStrategy={merchantDetails?.pricing_strategy ?? "manual"}
+                                        dualPricingPercentage={merchantDetails?.dual_pricing_percentage ?? 4.0}
+                                    />
                                     <Separator />
                                     <div className="space-y-4">
                                         <FormField
@@ -1435,15 +1410,21 @@ function QuickCreateModifierDialog({
     const [isRequired, setIsRequired] = useState(false)
     const [minSelections, setMinSelections] = useState(0)
     const [maxSelections, setMaxSelections] = useState<number | null>(null)
-    const [options, setOptions] = useState<{ name: string; price_modifier: number }[]>([{ name: '', price_modifier: 0 }])
+    const [options, setOptions] = useState<{ name: string; price_modifier: number; is_default: boolean }[]>([{ name: '', price_modifier: 0, is_default: false }])
     const [isSaving, setIsSaving] = useState(false)
 
-    const addOption = () => setOptions([...options, { name: '', price_modifier: 0 }])
-    const removeOption = (index: number) => setOptions(options.filter((_, i) => i !== index))
+    const addOption = () => setOptions([...options, { name: '', price_modifier: 0, is_default: false }])
+    const removeOption = (index: number) => {
+        const updated = options.filter((_, i) => i !== index)
+        setOptions(updated)
+    }
     const updateOption = (index: number, field: 'name' | 'price_modifier', value: string | number) => {
         const updated = [...options]
         updated[index] = { ...updated[index], [field]: value }
         setOptions(updated)
+    }
+    const setDefaultOption = (index: number) => {
+        setOptions(options.map((opt, i) => ({ ...opt, is_default: i === index })))
     }
 
     const handleSave = async () => {
@@ -1465,13 +1446,14 @@ function QuickCreateModifierDialog({
                 return
             }
             // Create options
-            for (const opt of validOptions) {
+            for (let i = 0; i < validOptions.length; i++) {
+                const opt = validOptions[i]
                 await createAdminModifierItem(merchantId, result.data.id, {
                     name: opt.name.trim(),
                     price_modifier: opt.price_modifier,
                     is_active: true,
-                    is_default: false,
-                    display_order: 0,
+                    is_default: opt.is_default,
+                    display_order: i,
                 })
             }
             toast.success(`Modifier group "${name}" created`)
@@ -1508,6 +1490,19 @@ function QuickCreateModifierDialog({
                 </div>
                 {options.map((opt, i) => (
                     <div key={i} className="flex items-center gap-2">
+                        {isRequired && (
+                            <button
+                                type="button"
+                                onClick={() => setDefaultOption(i)}
+                                className={cn(
+                                    "shrink-0 h-4 w-4 rounded-full border-2 flex items-center justify-center transition-colors",
+                                    opt.is_default ? "border-primary bg-primary" : "border-muted-foreground/40 hover:border-primary/60"
+                                )}
+                                title="Set as default"
+                            >
+                                {opt.is_default && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                            </button>
+                        )}
                         <Input placeholder="Option name" className="flex-1 h-8 text-xs" value={opt.name} onChange={e => updateOption(i, 'name', e.target.value)} />
                         <div className="relative w-24">
                             <DollarSign className="absolute left-2 top-1.5 h-3 w-3 text-muted-foreground" />
@@ -1520,6 +1515,7 @@ function QuickCreateModifierDialog({
                         )}
                     </div>
                 ))}
+                {isRequired && <p className="text-[11px] text-muted-foreground">Select a default option for required groups</p>}
             </div>
             <div className="flex justify-end gap-2">
                 <Button type="button" size="sm" variant="outline" onClick={onClose}>Cancel</Button>

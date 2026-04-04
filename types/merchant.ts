@@ -123,6 +123,10 @@ export interface MerchantSettingsUpdate {
   public_metadata?: Record<string, unknown>
   pricing_strategy?: 'manual' | 'dual'
   dual_pricing_percentage?: number
+  business_legal_name?: string | null
+  dba_name?: string | null
+  business_type?: string | null
+  ein_last_four?: string | null
 }
 
 export interface ToggleLocationResult {

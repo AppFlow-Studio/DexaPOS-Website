@@ -1689,7 +1689,6 @@ export function NewEditItemFormSheet({
                               onPriceChange={(val) => form.setValue("price", val, { shouldValidate: true })}
                               onCashPriceChange={(val) => form.setValue("cash_price", val, { shouldValidate: true })}
                               label={editingContext.priceLabel}
-                              disabled={!editItem}
                               pricingStrategy={effectivePricingStrategy}
                               dualPricingPercentage={effectiveDualPercentage}
                           />
