@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
-    Store,
     AlertTriangle,
     LayoutDashboard,
     Building2,
@@ -53,6 +52,7 @@ import { OnboardingStatusCard } from './components/OnboardingStatusCard'
 import { BillingTab } from './components/BillingTab'
 import { CashDrawersTab } from './components/CashDrawersTab'
 import { TaxReportTab } from './components/TaxReportTab'
+import { MerchantLogoUpload } from './components/MerchantLogoUpload'
 
 // ─── Sidebar nav primitives ──────────────────────────────────────────────────
 
@@ -161,14 +161,11 @@ export default function MerchantDetailsPage() {
                 <CardHeader className="pb-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                            <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
-                                {merchantDetails.logo_url ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={merchantDetails.logo_url} alt={merchantDetails.name} className="h-full w-full object-cover" />
-                                ) : (
-                                    <Store className="h-6 w-6 text-primary" />
-                                )}
-                            </div>
+                            <MerchantLogoUpload
+                                merchantId={merchantDetails.id}
+                                merchantName={merchantDetails.name}
+                                logoUrl={merchantDetails.logo_url}
+                            />
                             <div>
                                 <CardTitle className="text-2xl font-semibold">{merchantDetails.name}</CardTitle>
                                 <div className="flex items-center gap-2 mt-1">
