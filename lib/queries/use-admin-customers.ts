@@ -1,71 +1,68 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CustomerListItem, CustomerActivity } from '@/types/customer'
+'use client'
+
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { CustomerListItem, CustomerProfile } from '@/types/customer'
+import {
+  adminAddCustomerTag,
+  adminUpdateCustomerNotes,
+  getAdminCustomerProfile,
+  getAdminMerchantCustomers,
+} from '@/app/manage/actions/admin-merchant/customers'
 
 export function useAdminCustomers(clerkOrgId: string) {
-    return useQuery<CustomerListItem[]>({
-        queryKey: ['admin', 'customers', clerkOrgId],
-        queryFn: async () => {
-             // Placeholder: Replace with actual server action call
-             return []
-        },
-        enabled: !!clerkOrgId,
-    })
-}
-
-interface AdminCustomerProfileData {
-    customer: CustomerListItem & {
-        tags?: string[];
-        notes?: string | null;
-        last_order_date?: string;
-        lifetime_spend?: number;
-        avg_spend?: number;
-        avg_tip_percent?: number;
-        total_orders?: number;
-        visits?: number;
-    };
-    order_channels?: any[];
-    most_ordered_items?: { item_id: string; item_name: string; total_quantity: number }[];
-    recent_activity?: CustomerActivity[];
+  return useQuery<CustomerListItem[]>({
+    queryKey: ['admin', 'customers', clerkOrgId],
+    queryFn: () => getAdminMerchantCustomers(clerkOrgId),
+    enabled: !!clerkOrgId,
+    staleTime: 30 * 1000,
+  })
 }
 
 export function useAdminCustomerProfile(customerId: string | null) {
-    return useQuery<AdminCustomerProfileData | null>({
-        queryKey: ['admin', 'customer', 'profile', customerId],
-        queryFn: async () => {
-             // Placeholder: Replace with actual server action call
-             if (!customerId) return null;
-             return null
-        },
-        enabled: !!customerId,
-    })
+  return useQuery<CustomerProfile | null>({
+    queryKey: ['admin', 'customer', 'profile', customerId],
+    queryFn: () => (customerId ? getAdminCustomerProfile(customerId) : null),
+    enabled: !!customerId,
+    staleTime: 15 * 1000,
+  })
 }
 
 export function useAdminAddCustomerTag() {
-    const queryClient = useQueryClient()
-    return useMutation({
-        mutationFn: async ({ customerId, tag }: { customerId: string; tag: string }) => {
-            // Placeholder
-            return { success: true }
-        },
-        onSuccess: (_, { customerId }) => {
-            queryClient.invalidateQueries({
-                queryKey: ['admin', 'customer', 'profile', customerId]
-            })
-        }
-    })
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      customerId,
+      tag,
+    }: {
+      customerId: string
+      tag: string
+    }) => adminAddCustomerTag(customerId, tag),
+    onSuccess: (_, { customerId }) => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'customers'] })
+      queryClient.invalidateQueries({
+        queryKey: ['admin', 'customer', 'profile', customerId],
+      })
+    },
+  })
 }
 
 export function useAdminUpdateCustomerNotes() {
-    const queryClient = useQueryClient()
-    return useMutation({
-        mutationFn: async ({ customerId, notes }: { customerId: string; notes: string }) => {
-            // Placeholder
-            return { success: true }
-        },
-        onSuccess: (_, { customerId }) => {
-            queryClient.invalidateQueries({
-                queryKey: ['admin', 'customer', 'profile', customerId]
-            })
-        }
-    })
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      customerId,
+      notes,
+    }: {
+      customerId: string
+      notes: string
+    }) => adminUpdateCustomerNotes(customerId, notes),
+    onSuccess: (_, { customerId }) => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'customers'] })
+      queryClient.invalidateQueries({
+        queryKey: ['admin', 'customer', 'profile', customerId],
+      })
+    },
+  })
 }

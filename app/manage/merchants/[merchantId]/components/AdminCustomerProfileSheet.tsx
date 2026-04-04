@@ -51,9 +51,16 @@ import {
     DialogTitle,
     DialogFooter,
 } from '@/components/ui/dialog'
+import { OrdersTab } from '@/app/dashboard/customers/components/tabs/OrdersTab'
+import { BookingsTab } from '@/app/dashboard/customers/components/tabs/BookingsTab'
+import { FeedbackTab } from '@/app/dashboard/customers/components/tabs/FeedbackTab'
+import { LoyaltyTab } from '@/app/dashboard/customers/components/tabs/LoyaltyTab'
+import { MarketingTab } from '@/app/dashboard/customers/components/tabs/MarketingTab'
+import { DetailsTab } from '@/app/dashboard/customers/components/tabs/DetailsTab'
 
 interface AdminCustomerProfileSheetProps {
     customer: CustomerListItem | null
+    merchantId: string | null
     open: boolean
     onOpenChange: (open: boolean) => void
 }
@@ -64,6 +71,7 @@ function ActivityIcon({ type }: { type: CustomerActivityType }) {
 
     const icons: Record<CustomerActivityType, React.ReactNode> = {
         order: <Receipt className={iconClass} />,
+        order_linked: <Receipt className={iconClass} />,
         refund: <RotateCcw className={iconClass} />,
         visit: <MapPin className={iconClass} />,
         loyalty: <Gift className={iconClass} />,
@@ -346,6 +354,7 @@ function AddNoteDialog({
 
 export function AdminCustomerProfileSheet({
     customer,
+    merchantId,
     open,
     onOpenChange,
 }: AdminCustomerProfileSheetProps) {
@@ -652,22 +661,47 @@ export function AdminCustomerProfileSheet({
                                     </div>
                                 </TabsContent>
 
-                                {[
-                                    'orders',
-                                    'bookings',
-                                    'feedback',
-                                    'loyalty',
-                                    'marketing',
-                                    'details',
-                                ].map((tab) => (
-                                    <TabsContent
-                                        key={tab}
-                                        value={tab}
-                                        className="h-64 flex items-center justify-center text-muted-foreground bg-white dark:bg-card rounded-lg border-2 border-dashed"
-                                    >
-                                        {tab.charAt(0).toUpperCase() + tab.slice(1)} view coming soon
-                                    </TabsContent>
-                                ))}
+                                <TabsContent
+                                    value="orders"
+                                    className="space-y-8 animate-in fade-in-50 duration-300"
+                                >
+                                    <OrdersTab customer={customer} />
+                                </TabsContent>
+
+                                <TabsContent
+                                    value="bookings"
+                                    className="space-y-8 animate-in fade-in-50 duration-300"
+                                >
+                                    <BookingsTab customer={customer} />
+                                </TabsContent>
+
+                                <TabsContent
+                                    value="feedback"
+                                    className="space-y-8 animate-in fade-in-50 duration-300"
+                                >
+                                    <FeedbackTab customer={customer} />
+                                </TabsContent>
+
+                                <TabsContent
+                                    value="loyalty"
+                                    className="space-y-8 animate-in fade-in-50 duration-300"
+                                >
+                                    <LoyaltyTab customer={customer} merchantId={merchantId} />
+                                </TabsContent>
+
+                                <TabsContent
+                                    value="marketing"
+                                    className="space-y-8 animate-in fade-in-50 duration-300"
+                                >
+                                    <MarketingTab customer={customer} merchantId={merchantId} />
+                                </TabsContent>
+
+                                <TabsContent
+                                    value="details"
+                                    className="space-y-8 animate-in fade-in-50 duration-300"
+                                >
+                                    <DetailsTab customer={customer} merchantId={merchantId} />
+                                </TabsContent>
                             </div>
                         </Tabs>
                     </div>
