@@ -25,6 +25,8 @@ import {
     StickyNote,
     History,
     Settings,
+    Archive,
+    FileText,
     type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -49,6 +51,8 @@ import { NotesTab } from './components/NotesTab'
 import { OrdersTab } from './components/OrdersTab'
 import { OnboardingStatusCard } from './components/OnboardingStatusCard'
 import { BillingTab } from './components/BillingTab'
+import { CashDrawersTab } from './components/CashDrawersTab'
+import { TaxReportTab } from './components/TaxReportTab'
 
 // ─── Sidebar nav primitives ──────────────────────────────────────────────────
 
@@ -221,6 +225,11 @@ export default function MerchantDetailsPage() {
                                 )}
                             </NavGroup>
 
+                            <NavGroup label="Analytics">
+                                <NavItem value="cash-drawers" icon={Archive} active={activeTab === 'cash-drawers'} onClick={setActiveTab}>Cash Drawers</NavItem>
+                                <NavItem value="tax-report" icon={FileText} active={activeTab === 'tax-report'} onClick={setActiveTab}>Tax Report</NavItem>
+                            </NavGroup>
+
                             <NavGroup label="Admin">
                                 <NavItem value="notes" icon={StickyNote} active={activeTab === 'notes'} onClick={setActiveTab}>Notes</NavItem>
                                 <NavItem value="audit" icon={History} active={activeTab === 'audit'} onClick={setActiveTab}>Audit Logs</NavItem>
@@ -298,6 +307,14 @@ export default function MerchantDetailsPage() {
 
                             {canManageDevices && activeTab === 'devices' && (
                                 <DevicesTab merchantId={merchantDetails.id} merchantInfo={merchantDetails} />
+                            )}
+
+                            {activeTab === 'cash-drawers' && (
+                                <CashDrawersTab merchantId={merchantDetails.id} />
+                            )}
+
+                            {activeTab === 'tax-report' && (
+                                <TaxReportTab merchantId={merchantDetails.id} />
                             )}
 
                             {activeTab === 'notes' && (
