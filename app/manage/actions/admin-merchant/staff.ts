@@ -32,7 +32,7 @@ export async function getAdminMerchantStaff(
 
   const supabase = createServerSupabaseClient()
 
-  const { data, error } = await supabase.rpc('get_unified_staff_view', {
+  const { data, error } = await supabase.rpc('admin_get_unified_staff_view', {
     p_merchant_id: merchantId,
     p_location_id: locationId || null,
   })

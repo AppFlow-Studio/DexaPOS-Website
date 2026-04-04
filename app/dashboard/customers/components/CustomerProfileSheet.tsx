@@ -370,7 +370,10 @@ export function CustomerProfileSheet({
   const [isOrderDetailOpen, setIsOrderDetailOpen] = useState(false);
 
   const { data: userInfo } = useUserInfo();
-  const clerkOrgId = userInfo?.members?.[0]?.organizations?.id || null;
+  const clerkOrgId =
+    userInfo?.members?.[0]?.organizations?.clerk_org_id ||
+    userInfo?.members?.[0]?.organizations?.merchants?.clerk_org_id ||
+    null;
   const merchantId = userInfo?.members?.[0]?.organizations?.merchants?.id || null;
   const { selectedLocationId } = useLocationStore();
   const isLocationFiltered = selectedLocationId && selectedLocationId !== "all";
