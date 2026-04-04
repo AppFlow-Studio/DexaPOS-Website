@@ -24,7 +24,7 @@ export interface CreateMerchantOnboardingParams {
     postalCode: string
     country?: string
   }
-  carrierId: string
+  carrierId?: string
 }
 
 export interface CreateMerchantOnboardingResult {
@@ -63,9 +63,9 @@ export async function createMerchantOnboarding(
   const ownerEmail = normalizeEmail(params.ownerEmail || '')
   const ownerPhone = params.ownerPhone?.trim()
   const einLastFour = params.einLastFour?.trim()
-  const carrierId = params.carrierId?.trim()
+  const carrierId = params.carrierId?.trim() || null
 
-  if (!businessLegalName || !ownerFirstName || !ownerLastName || !ownerPhone || !carrierId) {
+  if (!businessLegalName || !ownerFirstName || !ownerLastName || !ownerPhone) {
     return { success: false, error: 'Missing required fields.' }
   }
 
@@ -88,7 +88,7 @@ export async function createMerchantOnboarding(
       name: businessLegalName,
       publicMetadata: {
         org_type: 'merchant',
-        carrierId,
+        ...(carrierId && { carrierId }),
         merchant_type: params.businessType,
         business_legal_name: businessLegalName,
         dba_name: normalizeValue(params.dbaName),
@@ -128,7 +128,7 @@ export async function createMerchantOnboarding(
       .upsert(
         {
           clerk_org_id: organization.id,
-          carrier_id: carrierId,
+          carrier_id: carrierId || null,
           type: params.businessType,
           name: merchantName,
           business_legal_name: businessLegalName,
@@ -181,7 +181,7 @@ export async function createMerchantOnboarding(
           business_legal_name: businessLegalName,
           dba_name: normalizeValue(params.dbaName),
           business_type: params.businessType,
-          carrier_id: carrierId,
+          carrier_id: carrierId || null,
           onboarding_status: 'onboarding',
           owner_email: ownerEmail,
         },

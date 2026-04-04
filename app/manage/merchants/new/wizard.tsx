@@ -44,26 +44,19 @@ const createMerchantSchema = z.object({
   businessState: z.string().min(2, 'State is required.'),
   businessPostalCode: z.string().min(3, 'Postal code is required.'),
   businessCountry: z.string().default('US'),
-  carrierId: z.string().min(1, 'Carrier selection is required.'),
 })
 
 type CreateMerchantWizardValues = z.infer<typeof createMerchantSchema>
 
-interface CarrierOption {
-  id: string
-  name: string
-}
-
-interface CreateMerchantWizardProps {
-  carriers: CarrierOption[]
-}
+interface CreateMerchantWizardProps {}
 
 const STEP_TITLES = ['Business Info', 'Owner Contact', 'Review & Create'] as const
+type StepNumber = 1 | 2 | 3
 
 const ALLOWED_LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']
 const MAX_LOGO_SIZE = 5 * 1024 * 1024 // 5MB
 
-export function CreateMerchantWizard({ carriers }: CreateMerchantWizardProps) {
+export function CreateMerchantWizard({}: CreateMerchantWizardProps) {
   const router = useRouter()
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [isSubmitting, startTransition] = useTransition()
@@ -110,7 +103,6 @@ export function CreateMerchantWizard({ carriers }: CreateMerchantWizardProps) {
       businessState: '',
       businessPostalCode: '',
       businessCountry: 'US',
-      carrierId: '',
     },
   })
 
@@ -127,7 +119,7 @@ export function CreateMerchantWizard({ carriers }: CreateMerchantWizardProps) {
         'businessState',
         'businessPostalCode',
       ] as const,
-      3: ['carrierId'] as const,
+      3: [] as const,
     }),
     []
   )
@@ -163,7 +155,6 @@ export function CreateMerchantWizard({ carriers }: CreateMerchantWizardProps) {
           postalCode: data.businessPostalCode,
           country: data.businessCountry || 'US',
         },
-        carrierId: data.carrierId,
       })
 
       if (!result.success) {
@@ -532,37 +523,6 @@ export function CreateMerchantWizard({ carriers }: CreateMerchantWizardProps) {
                   </div>
                 </div>
 
-                <FormField
-                  control={form.control}
-                  name="carrierId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Carrier Assignment</FormLabel>
-                      {carriers.length === 0 ? (
-                        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-                          No carriers found. Create a carrier first before creating a merchant.
-                        </div>
-                      ) : (
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select carrier" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {carriers.map((carrier) => (
-                              <SelectItem key={carrier.id} value={carrier.id}>
-                                {carrier.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
                 <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
                   Owner will receive an organization invitation email after creation.
                 </div>
@@ -581,7 +541,7 @@ export function CreateMerchantWizard({ carriers }: CreateMerchantWizardProps) {
               Continue
             </Button>
           ) : (
-            <Button type="submit" disabled={isSubmitting || carriers.length === 0}>
+            <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? 'Creating...' : 'Create Merchant'}
             </Button>
           )}
