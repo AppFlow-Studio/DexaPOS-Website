@@ -88,7 +88,7 @@ function getStoreUrl(slug: string): string {
   if (!slug) return "";
   const isDev = ROOT_DOMAIN.includes("localhost");
   if (isDev) return `http://${slug}.localhost:3000`;
-  return `https://order.${slug}.dexapos.com`;
+  return `https://${slug}.dexaposai.com`;
 }
 
 const FONT_OPTIONS = [

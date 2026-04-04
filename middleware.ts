@@ -18,11 +18,15 @@ function extractStoreSlug(hostname: string): string | null {
     return null;
   }
 
-  // Production: order.{slug}.dexaposai.com
+  // Production: {slug}.dexaposai.com
   if (hostWithoutPort.endsWith('.dexaposai.com')) {
     const parts = hostWithoutPort.split('.');
-    // order.pizzapalace.dexapos.com → ['order', 'pizzapalace', 'dexaposai', 'com']
-    return parts.length >= 4 ? parts[1] : null;
+    // slug.dexaposai.com → ['slug', 'dexaposai', 'com'] (3 parts)
+    if (parts.length !== 3) return null;
+    const subdomain = parts[0];
+    const RESERVED = new Set(['www', 'api', 'app', 'admin', 'mail', 'cdn', 'assets', 'static']);
+    if (RESERVED.has(subdomain)) return null;
+    return subdomain;
   }
 
   return null;

@@ -13,8 +13,7 @@ import { AlertsPanel } from './components/AlertsPanel'
 import { HealthDashboard } from './components/HealthDashboard'
 import { AnalyticsContent } from './components/AnalyticsContent'
 
-// HQ Organization ID for direct admin invites
-const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID || 'org_33z36QibAMZy6kc2xZNYmDl5duh'
+const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID ?? ''
 
 export default function Dashboard() {
   const [isAdminInviteOpen, setIsAdminInviteOpen] = useState(false)

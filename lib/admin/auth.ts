@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import type { HQPermission, HQRole, ServerAdminAuth } from '@/types/admin'
 
-const DEXA_HQ_ORG_ID = process.env.DEXA_POS_INTERNAL_TEAM_ID || 'org_33z36QibAMZy6kc2xZNYmDl5duh'
+const DEXA_HQ_ORG_ID = process.env.DEXA_POS_INTERNAL_TEAM_ID!
 
 interface RequireAdminAuthOptions {
   redirectToDashboard?: boolean

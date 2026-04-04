@@ -340,8 +340,7 @@ export async function GetHQTeamMembers(): Promise<{
 }> {
   const supabase = createServiceRoleClient();
   // organizations.id IS the Clerk org ID (text primary key) — no lookup needed
-  const hqOrgId =
-    process.env.DEXA_POS_INTERNAL_TEAM_ID || "org_33z36QibAMZy6kc2xZNYmDl5duh";
+  const hqOrgId = process.env.DEXA_POS_INTERNAL_TEAM_ID!;
 
   const { data: members, error } = await supabase
     .from("members")
