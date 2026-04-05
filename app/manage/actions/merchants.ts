@@ -2,6 +2,7 @@
 
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { revalidatePath } from 'next/cache'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
 import type {
@@ -224,7 +225,12 @@ export async function getMerchantDetails(
 ): Promise<MerchantDetails | null> {
   const { userId, role } = await assertHQPermission('hq.merchant.view')
 
-  const supabase = createServerSupabaseClient()
+  // HQ permission already asserted — use service-role to bypass RLS on the
+  // `merchants` table. The clerk `org_id` claim doesn't always match the HQ org
+  // (e.g. when the admin is acting inside another org context), which makes
+  // `is_dexapos_admin()` return NULL and RLS block direct merchants reads.
+  // Manager scoping is still enforced application-side via managerScopedIds below.
+  const supabase = createServiceRoleClient()
   const managerScopedIds = await getManagerScopedMerchantIds(userId, role?.role_code)
 
   if (managerScopedIds && managerScopedIds.length === 0) {
@@ -326,7 +332,7 @@ export async function getMerchantDetails(
       .from('order_payments')
       .select('id', { count: 'exact', head: true })
       .eq('merchant_id', merchant.id)
-      .in('status', ['captured', 'succeeded']),
+      .in('status', ['captured', 'paid']),
   ])
 
   if (merchantLifecycleError || !merchantLifecycle) {

@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { AddressAutocomplete } from '@/components/ui/address-autocomplete'
 import { ImagePlus, X } from 'lucide-react'
 import { createMerchantOnboarding, updateMerchantLogo } from '@/app/manage/actions/create-merchant-onboarding'
 import { uploadOrganizationLogo } from '@/lib/cdn/server'
@@ -409,7 +410,40 @@ export function CreateMerchantWizard({}: CreateMerchantWizardProps) {
                     <FormItem className="md:col-span-2">
                       <FormLabel>Business Address Line 1</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="123 Main St" />
+                        <AddressAutocomplete
+                          value={field.value ?? ''}
+                          onInputChange={(v) =>
+                            form.setValue('businessAddressLine1', v, {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            })
+                          }
+                          onAddressSelected={(parts) => {
+                            form.setValue('businessAddressLine1', parts.address_line1, {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            })
+                            form.setValue('businessCity', parts.city, {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            })
+                            form.setValue('businessState', parts.state, {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            })
+                            form.setValue('businessPostalCode', parts.postal_code, {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            })
+                            if (parts.country) {
+                              form.setValue('businessCountry', parts.country, {
+                                shouldDirty: true,
+                                shouldValidate: true,
+                              })
+                            }
+                          }}
+                          placeholder="123 Main St"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
