@@ -754,6 +754,8 @@ export interface LocationFormStep2 {
   postal_code: string;
   country: string;
   timezone: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface LocationFormStep3 {

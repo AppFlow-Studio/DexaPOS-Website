@@ -208,13 +208,13 @@ export async function getPlatformDashboardKPIs(): Promise<PlatformDashboardKPIs>
   const { data: paymentsDataToday } = await supabase
     .from('order_payments')
     .select('id, status')
-    .gte('created_at', today.toISOString())
-    .lt('created_at', tomorrow.toISOString())
+    .gte('initiated_at', today.toISOString())
+    .lt('initiated_at', tomorrow.toISOString())
 
   let paymentSuccessRate = 100
   if (paymentsDataToday && paymentsDataToday.length > 0) {
     const successCount = paymentsDataToday.filter(
-      (p) => p.status === 'captured' || p.status === 'succeeded'
+      (p) => p.status === 'captured' || p.status === 'paid'
     ).length
     paymentSuccessRate = (successCount / paymentsDataToday.length) * 100
   }
@@ -527,12 +527,12 @@ export async function getPlatformAlerts(): Promise<PlatformAlert[]> {
     .from('order_payments')
     .select('amount, total_amount')
     .in('status', ['refunded', 'partially_refunded'])
-    .gte('created_at', oneDayAgo.toISOString())
+    .gte('refunded_at', oneDayAgo.toISOString())
 
   const { data: allPayments } = await supabase
     .from('order_payments')
     .select('total_amount')
-    .gte('created_at', oneDayAgo.toISOString())
+    .gte('initiated_at', oneDayAgo.toISOString())
 
   if (refundsData && allPayments && allPayments.length > 0) {
     const totalRefunded = refundsData.reduce((sum, p) => sum + Number(p.amount || 0), 0)
@@ -606,10 +606,10 @@ export async function getPlatformActivityFeed(): Promise<ActivityFeedEvent[]> {
   // 3. Failed payments in last 30 minutes
   const { data: failedPayments } = await supabase
     .from('order_payments')
-    .select('id, status, created_at')
+    .select('id, status, failed_at')
     .in('status', ['failed', 'declined'])
-    .gte('created_at', thirtyMinutesAgo.toISOString())
-    .order('created_at', { ascending: false })
+    .gte('failed_at', thirtyMinutesAgo.toISOString())
+    .order('failed_at', { ascending: false })
     .limit(10)
 
   failedPayments?.forEach((payment: any) => {
@@ -617,7 +617,7 @@ export async function getPlatformActivityFeed(): Promise<ActivityFeedEvent[]> {
       id: `payment-${payment.id}`,
       emoji: '⚠️',
       message: `Payment failed — ${payment.status === 'declined' ? 'card declined' : 'error'}`,
-      timestamp: payment.created_at,
+      timestamp: payment.failed_at,
       link: `/manage/transactions?paymentId=${payment.id}`,
       resourceType: 'payment',
     })

@@ -1,6 +1,5 @@
 'use client'
 
-import { Badge } from '@/components/ui/badge'
 import { PaymentStatus } from '@/types/order-management'
 import { cn } from '@/lib/utils'
 
@@ -10,70 +9,83 @@ interface PaymentStatusBadgeProps {
 }
 
 export function PaymentStatusBadge({ status, className }: PaymentStatusBadgeProps) {
-    const statusConfig: Record<PaymentStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string }> = {
+    const statusConfig: Record<PaymentStatus, { label: string; dotColor: string; textColor: string; bgColor: string }> = {
         pending: {
             label: 'Payment Pending',
-            variant: 'default',
-            className: 'bg-amber-100 text-amber-800 border-amber-300',
+            dotColor: 'bg-amber-400',
+            textColor: 'text-amber-700 dark:text-amber-400',
+            bgColor: 'bg-amber-50 dark:bg-amber-900/20',
         },
         processing: {
             label: 'Processing',
-            variant: 'default',
-            className: 'bg-blue-100 text-blue-800 border-blue-300',
+            dotColor: 'bg-blue-400',
+            textColor: 'text-blue-600 dark:text-blue-400',
+            bgColor: 'bg-blue-50 dark:bg-blue-900/20',
         },
         authorized: {
             label: 'Authorized',
-            variant: 'default',
-            className: 'bg-blue-100 text-blue-800 border-blue-300',
+            dotColor: 'bg-blue-400',
+            textColor: 'text-blue-600 dark:text-blue-400',
+            bgColor: 'bg-blue-50 dark:bg-blue-900/20',
         },
         captured: {
             label: 'Paid',
-            variant: 'default',
-            className: 'bg-green-100 text-green-800 border-green-300',
+            dotColor: 'bg-emerald-400',
+            textColor: 'text-emerald-700 dark:text-emerald-400',
+            bgColor: 'bg-emerald-50 dark:bg-emerald-900/20',
         },
         failed: {
             label: 'Failed',
-            variant: 'destructive',
-            className: 'bg-red-100 text-red-800 border-red-300',
+            dotColor: 'bg-rose-400',
+            textColor: 'text-rose-600 dark:text-rose-400',
+            bgColor: 'bg-rose-50 dark:bg-rose-900/20',
         },
         declined: {
             label: 'Declined',
-            variant: 'destructive',
-            className: 'bg-red-100 text-red-800 border-red-300',
+            dotColor: 'bg-rose-400',
+            textColor: 'text-rose-600 dark:text-rose-400',
+            bgColor: 'bg-rose-50 dark:bg-rose-900/20',
         },
         refunded: {
             label: 'Refunded',
-            variant: 'outline',
-            className: 'bg-orange-100 text-orange-800 border-orange-300',
+            dotColor: 'bg-orange-400',
+            textColor: 'text-orange-600 dark:text-orange-400',
+            bgColor: 'bg-orange-50 dark:bg-orange-900/20',
         },
         partially_refunded: {
             label: 'Partially Refunded',
-            variant: 'outline',
-            className: 'bg-orange-100 text-orange-800 border-orange-300',
+            dotColor: 'bg-orange-400',
+            textColor: 'text-orange-600 dark:text-orange-400',
+            bgColor: 'bg-orange-50 dark:bg-orange-900/20',
         },
         void: {
             label: 'Void',
-            variant: 'outline',
-            className: 'bg-slate-100 text-slate-700 border-slate-300',
+            dotColor: 'bg-gray-400',
+            textColor: 'text-gray-500 dark:text-gray-400',
+            bgColor: 'bg-gray-50 dark:bg-gray-800/40',
         },
         paid: {
-
             label: 'Paid',
-            variant: 'default',
-            className: 'bg-green-100 text-green-800 border-green-300',
-
+            dotColor: 'bg-emerald-400',
+            textColor: 'text-emerald-700 dark:text-emerald-400',
+            bgColor: 'bg-emerald-50 dark:bg-emerald-900/20',
         }
     }
 
     const config = statusConfig[status] || statusConfig.pending
 
     return (
-        <Badge
-            variant={config.variant}
-            className={cn('text-xs font-medium', config.className, className)}
+        <span
+            className={cn(
+                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium',
+                config.bgColor,
+                config.textColor,
+                className
+            )}
         >
+            <span className={cn('h-1.5 w-1.5 rounded-full', config.dotColor)} />
             {config.label}
-        </Badge>
+        </span>
     )
 }
 

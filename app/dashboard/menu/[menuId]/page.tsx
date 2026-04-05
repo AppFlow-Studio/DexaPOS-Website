@@ -3,6 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import React, { useState, useMemo, useEffect } from "react";
 import { useMenuWithCategories } from "../../hooks/useMenu";
+import { ScopeContextStrip } from "@/components/dashboard/menu/ScopeContextStrip";
 import { useUserInfo } from "../../../manage/hooks/useUserInfo.";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -1034,6 +1035,7 @@ export default function MenuDetailPage() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+      <ScopeContextStrip menuName={menu?.name ?? null} />
       <MenuHeader
         menu={menu}
         onBack={() => router.back()}

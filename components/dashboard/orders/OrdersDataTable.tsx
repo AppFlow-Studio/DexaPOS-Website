@@ -32,7 +32,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import {
     MoreHorizontal,
     Search,
@@ -104,31 +103,26 @@ function formatCurrency(amount: number): string {
 
 // Get order type icon and label
 function getOrderTypeConfig(type: OrderType) {
-    const configs: Record<OrderType, { icon: React.ReactNode; label: string; className: string }> = {
+    const configs: Record<OrderType, { icon: React.ReactNode; label: string }> = {
         dine_in: {
-            icon: <Utensils className="h-3 w-3" />,
+            icon: <Utensils className="h-3 w-3 text-muted-foreground" />,
             label: 'Dine In',
-            className: 'bg-blue-100 text-blue-800 border-blue-300',
         },
         takeout: {
-            icon: <ShoppingBag className="h-3 w-3" />,
+            icon: <ShoppingBag className="h-3 w-3 text-muted-foreground" />,
             label: 'Takeout',
-            className: 'bg-purple-100 text-purple-800 border-purple-300',
         },
         delivery: {
-            icon: <Truck className="h-3 w-3" />,
+            icon: <Truck className="h-3 w-3 text-muted-foreground" />,
             label: 'Delivery',
-            className: 'bg-green-100 text-green-800 border-green-300',
         },
         online: {
-            icon: <Globe className="h-3 w-3" />,
+            icon: <Globe className="h-3 w-3 text-muted-foreground" />,
             label: 'Online',
-            className: 'bg-orange-100 text-orange-800 border-orange-300',
         },
         catering: {
-            icon: <ChefHat className="h-3 w-3" />,
+            icon: <ChefHat className="h-3 w-3 text-muted-foreground" />,
             label: 'Catering',
-            className: 'bg-pink-100 text-pink-800 border-pink-300',
         },
     }
     return configs[type] || configs.dine_in
@@ -188,7 +182,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                 const display = order.display_number || order.order_number
                 return (
                     <div
-                        className="font-medium cursor-pointer hover:text-primary transition-colors text-xs"
+                        className="font-mono font-medium cursor-pointer hover:text-primary transition-colors text-xs text-foreground/80"
                         onClick={() => handleRowClick(order)}
                     >
                         {display}
@@ -220,10 +214,10 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
             cell: ({ row }) => {
                 const typeConfig = getOrderTypeConfig(row.original.order_type)
                 return (
-                    <Badge variant="outline" className={`text-xs gap-1 ${typeConfig.className}`}>
+                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                         {typeConfig.icon}
-                        {typeConfig.label}
-                    </Badge>
+                        <span className="font-medium text-foreground/80">{typeConfig.label}</span>
+                    </span>
                 )
             },
         },
@@ -275,7 +269,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                 </Button>
             ),
             cell: ({ row }) => (
-                <div className="text-sm font-semibold">
+                <div className="text-sm font-medium tabular-nums text-foreground">
                     {formatCurrency(row.original.total_amount)}
                 </div>
             ),
@@ -286,18 +280,35 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
             header: 'Payment method',
             cell: ({ row }) => {
                 const order = row.original
-                const methods = [...new Set((order.order_payments || []).map((p) => p.payment_method))]
+                const payments = order.order_payments || []
+                const methods = [...new Set(payments.map((p) => p.payment_method))]
+
+                // Build rich labels with card info
                 const methodLabels = methods.map((m) => {
-                    if (typeof m === 'string' && m.startsWith('card_')) return 'Card'
+                    if (typeof m === 'string' && m.startsWith('card_')) {
+                        // Find the first card payment to get brand/last4
+                        const cardPayment = payments.find((p) => p.payment_method === m)
+                        const brand = cardPayment?.card_type
+                            ? cardPayment.card_type.charAt(0).toUpperCase() + cardPayment.card_type.slice(1).toLowerCase()
+                            : null
+                        const last4 = cardPayment?.card_last_four
+                        if (brand && last4) return `${brand} •••• ${last4}`
+                        if (last4) return `Card •••• ${last4}`
+                        if (brand) return brand
+                        return 'Card'
+                    }
                     if (m === 'cash') return 'Cash'
-                    if (m === 'gift_card') return 'Gift'
-                    return String(m ?? '').replace(/_/g, ' ')
+                    if (m === 'gift_card') return 'Gift Card'
+                    if (m === 'house_account') return 'House Account'
+                    if (m === 'external') return 'External'
+                    return String(m ?? '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
                 }).filter(Boolean)
+
                 const summary = methodLabels.length > 0 ? methodLabels.join(', ') : null
                 return (
                     <div className="flex flex-col gap-0.5">
                         {summary ? (
-                            <span className="text-sm">{summary}</span>
+                            <span className="text-sm text-muted-foreground">{summary}</span>
                         ) : (
                             <PaymentStatusBadge status={order.payment_status} />
                         )}
@@ -393,25 +404,25 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
             {/* Search */}
             <div className="flex items-center gap-2">
                 <div className="relative flex-1 max-w-sm">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
                     <Input
                         placeholder="Search orders..."
                         value={globalFilter}
                         onChange={(e) => setGlobalFilter(e.target.value)}
-                        className="pl-9"
+                        className="pl-9 border-border/60"
                     />
                 </div>
             </div>
 
             {/* Table */}
-            <div className="rounded-md border">
+            <div className="rounded-lg border border-border/60">
                 <Table>
                     <TableHeader>
                         {table.getHeaderGroups().map((headerGroup) => (
-                            <TableRow key={headerGroup.id}>
+                            <TableRow key={headerGroup.id} className="border-border/60 hover:bg-transparent">
                                 {headerGroup.headers.map((header) => {
                                     return (
-                                        <TableHead key={header.id}>
+                                        <TableHead key={header.id} className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
                                             {header.isPlaceholder
                                                 ? null
                                                 : flexRender(
@@ -438,7 +449,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                                 <TableRow
                                     key={row.id}
                                     data-state={row.getIsSelected() && 'selected'}
-                                    className="cursor-pointer"
+                                    className="cursor-pointer border-border/40 transition-colors hover:bg-muted/40"
                                     onClick={() => handleRowClick(row.original)}
                                 >
                                     {row.getVisibleCells().map((cell) => (
@@ -465,54 +476,54 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                 </Table>
             </div>
 
-            {/* Results count */}
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
-                <div>
+            {/* Results count & Pagination */}
+            <div className="flex items-center justify-between pt-2">
+                <div className="text-xs text-muted-foreground/70">
                     Page {table.getState().pagination.pageIndex + 1} of{" "}
                     {table.getPageCount()}
                 </div>
-            </div>
-            <div className="flex items-center space-x-2">
-                <Button
-                    variant="outline"
-                    size="icon"
-                    className="hidden size-8 lg:flex"
-                    onClick={() => table.setPageIndex(0)}
-                    disabled={!table.getCanPreviousPage()}
-                >
-                    <span className="sr-only">Go to first page</span>
-                    <ChevronsLeft />
-                </Button>
-                <Button
-                    variant="outline"
-                    size="icon"
-                    className="size-8"
-                    onClick={() => table.previousPage()}
-                    disabled={!table.getCanPreviousPage()}
-                >
-                    <span className="sr-only">Go to previous page</span>
-                    <ChevronLeft />
-                </Button>
-                <Button
-                    variant="outline"
-                    size="icon"
-                    className="size-8"
-                    onClick={() => table.nextPage()}
-                    disabled={!table.getCanNextPage()}
-                >
-                    <span className="sr-only">Go to next page</span>
-                    <ChevronRight />
-                </Button>
-                <Button
-                    variant="outline"
-                    size="icon"
-                    className="hidden size-8 lg:flex"
-                    onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-                    disabled={!table.getCanNextPage()}
-                >
-                    <span className="sr-only">Go to last page</span>
-                    <ChevronsRight />
-                </Button>
+                <div className="flex items-center space-x-1">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="hidden size-8 lg:flex"
+                        onClick={() => table.setPageIndex(0)}
+                        disabled={!table.getCanPreviousPage()}
+                    >
+                        <span className="sr-only">Go to first page</span>
+                        <ChevronsLeft className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        onClick={() => table.previousPage()}
+                        disabled={!table.getCanPreviousPage()}
+                    >
+                        <span className="sr-only">Go to previous page</span>
+                        <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        onClick={() => table.nextPage()}
+                        disabled={!table.getCanNextPage()}
+                    >
+                        <span className="sr-only">Go to next page</span>
+                        <ChevronRight className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="hidden size-8 lg:flex"
+                        onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                        disabled={!table.getCanNextPage()}
+                    >
+                        <span className="sr-only">Go to last page</span>
+                        <ChevronsRight className="h-4 w-4" />
+                    </Button>
+                </div>
             </div>
         </div>
     )

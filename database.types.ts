@@ -2500,7 +2500,7 @@ export type Database = {
           name: string
           reorder_point: number | null
           sku: string | null
-          stock_mode: string | null
+          stock_mode: Database["public"]["Enums"]["inventory_stock_mode"] | null
           unit_type: string
           updated_at: string | null
           vendor_id: string | null
@@ -2517,7 +2517,7 @@ export type Database = {
           name: string
           reorder_point?: number | null
           sku?: string | null
-          stock_mode?: string | null
+          stock_mode?: Database["public"]["Enums"]["inventory_stock_mode"] | null
           unit_type: string
           updated_at?: string | null
           vendor_id?: string | null
@@ -2534,7 +2534,7 @@ export type Database = {
           name?: string
           reorder_point?: number | null
           sku?: string | null
-          stock_mode?: string | null
+          stock_mode?: Database["public"]["Enums"]["inventory_stock_mode"] | null
           unit_type?: string
           updated_at?: string | null
           vendor_id?: string | null
@@ -8976,6 +8976,7 @@ export type Database = {
           external_id: string | null
           id: string
           internal_notes: string | null
+          inventory_deducted: boolean
           is_offline: boolean | null
           is_prepaid: boolean | null
           kitchen_notes: string | null
@@ -9050,6 +9051,7 @@ export type Database = {
           external_id?: string | null
           id?: string
           internal_notes?: string | null
+          inventory_deducted?: boolean
           is_offline?: boolean | null
           is_prepaid?: boolean | null
           kitchen_notes?: string | null
@@ -9124,6 +9126,7 @@ export type Database = {
           external_id?: string | null
           id?: string
           internal_notes?: string | null
+          inventory_deducted?: boolean
           is_offline?: boolean | null
           is_prepaid?: boolean | null
           kitchen_notes?: string | null
@@ -16822,28 +16825,15 @@ export type Database = {
         }
         Returns: Json
       }
-      upsert_menu_item_with_recipe:
-        | {
-            Args: { p_ingredients: Json; p_menu_item_id: string }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              p_ingredients?: Json
-              p_location_id?: string
-              p_menu_item_id: string
-              p_recipe_items?: Json
-            }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              p_location_id: string
-              p_menu_item_id: string
-              p_recipe_items: Json
-            }
-            Returns: undefined
-          }
+      upsert_menu_item_with_recipe: {
+        Args: {
+          p_ingredients?: Json
+          p_location_id?: string
+          p_menu_item_id: string
+          p_recipe_items?: Json
+        }
+        Returns: undefined
+      }
       upsert_modifier_item_with_recipe: {
         Args: { p_modifier_item_id: string; p_recipe_items: Json }
         Returns: undefined
@@ -16886,6 +16876,7 @@ export type Database = {
     }
     Enums: {
       discount_scope: "item" | "order" | "both"
+      inventory_stock_mode: "in_stock" | "stock_tracking" | "out_of_stock"
       discount_source: "preset" | "open" | "promo_code" | "loyalty"
       discount_type: "percentage" | "fixed_amount"
       floor_object_category:
