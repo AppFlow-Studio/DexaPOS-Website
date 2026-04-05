@@ -12,6 +12,7 @@ import {
     Building2,
     ShoppingCart,
     CreditCard,
+    DollarSign,
     Receipt,
     Users,
     UserRound,
@@ -53,6 +54,9 @@ import { BillingTab } from './components/BillingTab'
 import { CashDrawersTab } from './components/CashDrawersTab'
 import { TaxReportTab } from './components/TaxReportTab'
 import { MerchantLogoUpload } from './components/MerchantLogoUpload'
+import { PaymentsTab } from './components/PaymentsTab'
+import { InvoicesTab } from './components/InvoicesTab'
+import { TipsTab } from './components/TipsTab'
 
 // ─── Sidebar nav primitives ──────────────────────────────────────────────────
 
@@ -200,6 +204,9 @@ export default function MerchantDetailsPage() {
                             <NavGroup label="Operations">
                                 <NavItem value="orders" icon={ShoppingCart} active={activeTab === 'orders'} onClick={setActiveTab}>Orders</NavItem>
                                 <NavItem value="transactions" icon={CreditCard} active={activeTab === 'transactions'} onClick={setActiveTab}>Transactions</NavItem>
+                                <NavItem value="payments" icon={CreditCard} active={activeTab === 'payments'} onClick={setActiveTab}>Payments</NavItem>
+                                <NavItem value="invoices" icon={Receipt} active={activeTab === 'invoices'} onClick={setActiveTab}>Invoices</NavItem>
+                                <NavItem value="tips" icon={DollarSign} active={activeTab === 'tips'} onClick={setActiveTab}>Tips</NavItem>
                                 <NavItem value="billing" icon={Receipt} active={activeTab === 'billing'} onClick={setActiveTab}>Billing</NavItem>
                             </NavGroup>
 
@@ -252,6 +259,27 @@ export default function MerchantDetailsPage() {
 
                             {activeTab === 'transactions' && (
                                 <TransactionsTab merchantInfo={merchantDetails as unknown as MerchantInfoModel} />
+                            )}
+
+                            {activeTab === 'payments' && (
+                                <PaymentsTab
+                                    merchantId={merchantDetails.id}
+                                    locations={merchantDetails.locations}
+                                />
+                            )}
+
+                            {activeTab === 'invoices' && (
+                                <InvoicesTab
+                                    merchantId={merchantDetails.id}
+                                    locations={merchantDetails.locations}
+                                />
+                            )}
+
+                            {activeTab === 'tips' && (
+                                <TipsTab
+                                    merchantId={merchantDetails.id}
+                                    locations={merchantDetails.locations}
+                                />
                             )}
 
                             {activeTab === 'billing' && (

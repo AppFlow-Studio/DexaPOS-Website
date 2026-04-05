@@ -16,7 +16,7 @@ import { AccountDrawer } from "./AccountDrawer";
 import { useCart } from "../hooks/useCart";
 import { useSessionInit } from "../hooks/useSessionInit";
 import { useStorefrontPath } from "../lib/use-storefront-path";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { ChevronUp } from "lucide-react";
 import { SiteThemeConfig } from "@/types/site";
 

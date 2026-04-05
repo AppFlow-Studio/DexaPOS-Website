@@ -379,6 +379,55 @@ export const adminKeys = {
   merchantInventory: (merchantId: string, locationId?: string | null) =>
     [...adminKeys.merchants(), merchantId, 'inventory', locationId] as const,
 
+  // ============================================================================
+  // MERCHANT FINANCIALS (Admin View)
+  // ============================================================================
+
+  merchantPayments: (
+    merchantId: string,
+    locationId?: string | null,
+    filters?: Record<string, unknown>
+  ) =>
+    [
+      ...adminKeys.merchants(),
+      merchantId,
+      'payments',
+      locationId ?? 'all',
+      filters,
+    ] as const,
+
+  merchantInvoices: (
+    merchantId: string,
+    locationId?: string | null,
+    status?: string | null
+  ) =>
+    [
+      ...adminKeys.merchants(),
+      merchantId,
+      'invoices',
+      locationId ?? 'all',
+      status ?? 'all',
+    ] as const,
+
+  merchantTipSession: (
+    merchantId: string,
+    locationId: string,
+    sessionDate: string,
+    shiftPeriod: string
+  ) =>
+    [
+      ...adminKeys.merchants(),
+      merchantId,
+      'tips',
+      'session',
+      locationId,
+      sessionDate,
+      shiftPeriod,
+    ] as const,
+
+  merchantTipHistory: (merchantId: string, locationId: string) =>
+    [...adminKeys.merchants(), merchantId, 'tips', 'history', locationId] as const,
+
   merchantVendors: (merchantId: string) =>
     [...adminKeys.merchants(), merchantId, 'vendors'] as const,
 
