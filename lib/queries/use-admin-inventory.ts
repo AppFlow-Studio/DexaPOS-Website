@@ -10,7 +10,7 @@ export interface AdminInventoryItem {
     category?: string
     current_stock: number
     unit_type: string
-    stock_mode: 'in_stock' | 'out_of_stock' | 'low_stock' | 'manual' | 'stock_tracking'
+    stock_mode: 'in_stock' | 'out_of_stock' | 'stock_tracking'
     reorder_point?: number
     cost_per_unit: number
     location_count?: number
