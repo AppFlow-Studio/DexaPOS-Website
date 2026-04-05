@@ -1,47 +1,94 @@
-import * as React from "react";
+import React from "react";
 
 interface TableRectangle4ChairProps {
   color?: string;
+  chairColor?: string;
   width?: number;
   height?: number;
 }
 
-const TableRectangle4Chair = ({
-  color = "#F1F1F1",
+const TableRectangle4Chair: React.FC<TableRectangle4ChairProps> = ({
+  color = "#2DD4BF",
   width = 140,
   height = 90,
   ...props
-}: TableRectangle4ChairProps) => (
-  <svg
-    width={width}
-    height={height}
-    viewBox="0 0 140 90"
-    fill="none"
-    {...props}
-  >
-    {/* Table */}
-    <rect x="20" y="15" width="100" height="60" rx="8" fill={color} />
+}) => {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 140 90"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      {/* Chairs - top */}
+      <rect
+        x="30"
+        y="3"
+        width="32"
+        height="12"
+        rx="3"
+        fill={color}
+        fillOpacity="0.12"
+        stroke={color}
+        strokeWidth="1"
+        strokeOpacity="0.5"
+      />
+      <rect
+        x="78"
+        y="3"
+        width="32"
+        height="12"
+        rx="3"
+        fill={color}
+        fillOpacity="0.12"
+        stroke={color}
+        strokeWidth="1"
+        strokeOpacity="0.5"
+      />
 
-    {/* Top Chairs */}
-    <path
-      d="M35 4C35 1.79086 36.7909 0 39 0H59C61.2091 0 63 1.79086 63 4V8H35V4Z"
-      fill={color}
-    />
-    <path
-      d="M81 4C81 1.79086 82.7909 0 85 0H105C107.209 0 109 1.79086 109 4V8H81V4Z"
-      fill={color}
-    />
+      {/* Chairs - bottom */}
+      <rect
+        x="30"
+        y="75"
+        width="32"
+        height="12"
+        rx="3"
+        fill={color}
+        fillOpacity="0.12"
+        stroke={color}
+        strokeWidth="1"
+        strokeOpacity="0.5"
+      />
+      <rect
+        x="78"
+        y="75"
+        width="32"
+        height="12"
+        rx="3"
+        fill={color}
+        fillOpacity="0.12"
+        stroke={color}
+        strokeWidth="1"
+        strokeOpacity="0.5"
+      />
 
-    {/* Bottom Chairs */}
-    <path
-      d="M35 86C35 88.2091 36.7909 90 39 90H59C61.2091 90 63 88.2091 63 86V82H35V86Z"
-      fill={color}
-    />
-    <path
-      d="M81 86C81 88.2091 82.7909 90 85 90H105C107.209 90 109 88.2091 109 86V82H81V86Z"
-      fill={color}
-    />
-  </svg>
-);
+      {/* Table */}
+      <rect
+        x="20"
+        y="15"
+        width="100"
+        height="60"
+        rx="8"
+        fill={color}
+        fillOpacity="0.18"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeOpacity="0.8"
+      />
+    </svg>
+  );
+};
 
 export default TableRectangle4Chair;
