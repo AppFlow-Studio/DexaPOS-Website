@@ -50,6 +50,7 @@ import {
     LogOut,
     Monitor,
     Plug,
+    AlertOctagon,
     LucideIcon,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -138,6 +139,12 @@ const navMain: NavGroup[] = [
                 url: '/manage/audit-logs',
                 icon: History,
                 requiredPermission: 'audit.view',
+            },
+            {
+                title: 'Dead Letter Queue',
+                url: '/manage/dlq',
+                icon: AlertOctagon,
+                requiredPermission: 'hq.merchant.update' as PermissionCode,
             },
             {
                 title: 'Support',

@@ -142,8 +142,22 @@ async function insertDeadLetter(
   supabase: ReturnType<typeof createClient>,
   payload: unknown,
   errorMessage: string,
-  eventType?: string
+  eventType?: string,
+  replayId?: string | null
 ): Promise<void> {
+  // If this is an HQ-initiated replay, UPDATE the original row instead of
+  // creating a phantom duplicate. Uses an RPC so retry_count can be atomically
+  // incremented.
+  if (replayId) {
+    const { error } = await supabase.rpc('touch_dlq_replay_failure', {
+      p_id: replayId,
+      p_error_message: errorMessage,
+    })
+    if (error) logError('DLQ', 'Failed to update dead letter queue (replay)', error)
+    else logEvent('DLQ', `Replay failure recorded on ${replayId}: ${errorMessage}`)
+    return
+  }
+
   const { error } = await supabase.from('webhook_dead_letter_queue').insert({
     source: 'orderout',
     event_type: eventType || 'unknown',
@@ -318,11 +332,12 @@ async function handleCancellation(
   supabase: ReturnType<typeof createClient>,
   body: OrderOutWebhookPayload,
   restaurant: ProviderRestaurantMatch,
-  eventType: string
+  eventType: string,
+  replayId: string | null
 ): Promise<Response> {
   const orderNumber = body.source?.orderNumber
   if (!orderNumber) {
-    await insertDeadLetter(supabase, body, 'Cancellation missing orderNumber', eventType)
+    await insertDeadLetter(supabase, body, 'Cancellation missing orderNumber', eventType, replayId)
     return successResponse(null, 'Cancellation stored (missing orderNumber)')
   }
 
@@ -335,7 +350,7 @@ async function handleCancellation(
     .maybeSingle()
 
   if (lookupErr || !onlineOrder) {
-    await insertDeadLetter(supabase, body, `Order not found for cancellation: ${orderNumber}`, eventType)
+    await insertDeadLetter(supabase, body, `Order not found for cancellation: ${orderNumber}`, eventType, replayId)
     return successResponse(null, 'Cancellation stored (order not found)')
   }
 
@@ -360,7 +375,7 @@ async function handleCancellation(
     .eq('id', onlineOrder.order_id)
 
   if (cancelErr) {
-    await insertDeadLetter(supabase, body, `Failed to cancel order: ${cancelErr.message}`, eventType)
+    await insertDeadLetter(supabase, body, `Failed to cancel order: ${cancelErr.message}`, eventType, replayId)
     return successResponse(null, 'Cancellation stored (update failed)')
   }
 
@@ -414,6 +429,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return errorResponse('Unauthorized', 401)
   }
 
+  // HQ-initiated replay correlation. When present, any DLQ write path will
+  // UPDATE this row instead of INSERTing a new one.
+  const replayId = req.headers.get('x-dlq-replay-id') || null
+
   // 2. Parse
   let body: OrderOutWebhookPayload
   try {
@@ -440,7 +459,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const restaurantId = body.destination?.restaurantId
   if (!restaurantId) {
     logError('WEBHOOK', 'Missing destination.restaurantId', body)
-    await insertDeadLetter(supabase, body, 'Missing destination.restaurantId', eventType)
+    await insertDeadLetter(supabase, body, 'Missing destination.restaurantId', eventType, replayId)
     return successResponse(null, 'Payload stored for manual review (missing restaurantId)')
   }
 
@@ -449,7 +468,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   if (lookupError || !restaurant) {
     logError('WEBHOOK', lookupError || 'Restaurant not found', { restaurantId })
-    await insertDeadLetter(supabase, body, lookupError || `Restaurant not found: ${restaurantId}`, eventType)
+    await insertDeadLetter(supabase, body, lookupError || `Restaurant not found: ${restaurantId}`, eventType, replayId)
     return successResponse(null, 'Payload stored for manual review (restaurant lookup failed)')
   }
 
@@ -457,13 +476,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const eventAction = body.event?.toLowerCase()
 
   if (eventAction === 'cancelled') {
-    return await handleCancellation(supabase, body, restaurant, eventType)
+    return await handleCancellation(supabase, body, restaurant, eventType, replayId)
   }
 
   // 6. Check accepting orders (only for new order creation)
   if (!restaurant.is_accepting_orders) {
     logEvent('WEBHOOK', `Restaurant ${restaurant.provider_record_id} not accepting orders`)
-    await insertDeadLetter(supabase, body, `Restaurant not accepting orders`, eventType)
+    await insertDeadLetter(supabase, body, `Restaurant not accepting orders`, eventType, replayId)
     return successResponse(null, 'Payload stored (restaurant not accepting orders)')
   }
 
@@ -507,7 +526,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         supabase,
         { ...body, _matched_location_id: restaurant.location_id },
         `RPC error: ${rpcError.message}`,
-        eventType
+        eventType,
+        replayId
       )
       return successResponse(null, 'Payload stored for retry (RPC transport error)')
     }
@@ -521,7 +541,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         supabase,
         { ...body, _matched_location_id: restaurant.location_id, _rpc_error: processResult.error },
         `Processing error: ${processResult.error}`,
-        eventType
+        eventType,
+        replayId
       )
       return successResponse(null, `Payload stored for retry (${processResult.error})`)
     }
@@ -575,7 +596,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       supabase,
       { ...body, _matched_location_id: restaurant.location_id, _error: String(unexpectedError) },
       `Unexpected: ${String(unexpectedError)}`,
-      eventType
+      eventType,
+      replayId
     )
     return successResponse(null, 'Payload stored for retry (unexpected error)')
   }
