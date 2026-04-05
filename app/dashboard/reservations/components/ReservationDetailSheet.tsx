@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Sheet,
   SheetContent,
@@ -40,10 +40,9 @@ const STATUS_TRANSITIONS: Partial<Record<Reservation["status"], StatusTransition
   confirmed: [{ label: "Mark Arrived", status: "arrived" }],
   reminded: [{ label: "Mark Arrived", status: "arrived" }],
   arrived: [
-    { label: "Seat Guest", status: "seated" },
+    { label: "Complete", status: "completed" },
     { label: "Mark No-Show", status: "no_show" },
   ],
-  seated: [{ label: "Complete", status: "completed" }],
 };
 
 const CANCELLABLE_STATUSES: Reservation["status"][] = [
@@ -77,15 +76,37 @@ export default function ReservationDetailSheet({
   date,
 }: ReservationDetailSheetProps) {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [displayedReservation, setDisplayedReservation] = useState(reservation);
   const updateStatus = useUpdateReservationStatus(date);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _cancelMutation = useCancelReservation(date);
 
+  // Sync displayed reservation with prop updates
+  useEffect(() => {
+    setDisplayedReservation(reservation);
+  }, [reservation]);
+
   if (!reservation) return null;
 
-  const transitions = STATUS_TRANSITIONS[reservation.status] ?? [];
-  const canCancel = CANCELLABLE_STATUSES.includes(reservation.status);
-  const isTerminal = ["completed", "cancelled", "no_show"].includes(reservation.status);
+  const handleStatusChange = (newStatus: Reservation["status"]) => {
+    // Optimistically update the displayed reservation
+    setDisplayedReservation({ ...displayedReservation, status: newStatus });
+
+    // Then mutate to server
+    updateStatus.mutate(
+      { reservationId: reservation.id, status: newStatus },
+      {
+        onError: () => {
+          // Revert on error
+          setDisplayedReservation(reservation);
+        },
+      }
+    );
+  };
+
+  const transitions = STATUS_TRANSITIONS[displayedReservation.status] ?? [];
+  const canCancel = CANCELLABLE_STATUSES.includes(displayedReservation.status);
+  const isTerminal = ["completed", "cancelled", "no_show"].includes(displayedReservation.status);
 
   const formatTimestamp = (iso?: string) => {
     if (!iso) return null;
@@ -95,11 +116,11 @@ export default function ReservationDetailSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-          <SheetHeader className="mb-4">
-            <SheetTitle className="flex items-center gap-2">
-              {reservation.party_name}
-              {reservation.is_vip && (
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto p-6">
+          <SheetHeader className="mb-6 space-y-3">
+            <SheetTitle className="flex items-center gap-2 text-lg">
+              {displayedReservation.party_name}
+              {displayedReservation.is_vip && (
                 <Badge className="bg-amber-100 text-amber-800 flex items-center gap-1">
                   <Star className="h-3 w-3" />
                   VIP
@@ -107,68 +128,68 @@ export default function ReservationDetailSheet({
               )}
             </SheetTitle>
             <SheetDescription className="flex items-center gap-2">
-              <Badge className={STATUS_COLORS[reservation.status]}>
-                {reservation.status.replace("_", " ")}
+              <Badge className={STATUS_COLORS[displayedReservation.status]}>
+                {displayedReservation.status.replace("_", " ")}
               </Badge>
               <span className="text-xs text-muted-foreground">
-                #{reservation.confirmation_number}
+                #{displayedReservation.confirmation_number}
               </span>
             </SheetDescription>
           </SheetHeader>
 
-          <div className="space-y-4">
+          <div className="space-y-6">
             {/* Core details */}
-            <div className="space-y-2">
-              <InfoRow label="Date" value={reservation.reservation_date} />
-              <InfoRow label="Time" value={reservation.reservation_time} />
-              <InfoRow label="Duration" value={`${reservation.duration_minutes} min`} />
-              <InfoRow label="Party Size" value={String(reservation.party_size)} />
-              <InfoRow label="Phone" value={reservation.phone} />
-              <InfoRow label="Email" value={reservation.email} />
+            <div className="space-y-3">
+              <InfoRow label="Date" value={displayedReservation.reservation_date} />
+              <InfoRow label="Time" value={displayedReservation.reservation_time} />
+              <InfoRow label="Duration" value={`${displayedReservation.duration_minutes} min`} />
+              <InfoRow label="Party Size" value={String(displayedReservation.party_size)} />
+              <InfoRow label="Phone" value={displayedReservation.phone} />
+              <InfoRow label="Email" value={displayedReservation.email} />
             </div>
 
             <Separator />
 
             {/* Tables & seating */}
-            <div className="space-y-2">
+            <div className="space-y-3">
               <InfoRow
                 label="Assigned Tables"
                 value={
-                  reservation.assigned_tables && reservation.assigned_tables.length > 0
-                    ? reservation.assigned_tables.join(", ")
+                  displayedReservation.assigned_tables && displayedReservation.assigned_tables.length > 0
+                    ? displayedReservation.assigned_tables.join(", ")
                     : "None assigned"
                 }
               />
-              <InfoRow label="Preferred Section" value={reservation.preferred_section} />
-              <InfoRow label="Seating Preference" value={reservation.seating_preference} />
+              <InfoRow label="Preferred Section" value={displayedReservation.preferred_section} />
+              <InfoRow label="Seating Preference" value={displayedReservation.seating_preference} />
             </div>
 
             {/* Timestamps */}
-            {(reservation.arrived_at || reservation.seated_at) && (
+            {(displayedReservation.arrived_at || displayedReservation.seated_at) && (
               <>
                 <Separator />
-                <div className="space-y-2">
-                  <InfoRow label="Arrived At" value={formatTimestamp(reservation.arrived_at)} />
-                  <InfoRow label="Seated At" value={formatTimestamp(reservation.seated_at)} />
+                <div className="space-y-3">
+                  <InfoRow label="Arrived At" value={formatTimestamp(displayedReservation.arrived_at)} />
+                  <InfoRow label="Seated At" value={formatTimestamp(displayedReservation.seated_at)} />
                 </div>
               </>
             )}
 
             {/* Notes */}
-            {(reservation.notes || reservation.special_requests) && (
+            {(displayedReservation.notes || displayedReservation.special_requests) && (
               <>
                 <Separator />
-                <div className="space-y-2">
-                  {reservation.notes && (
+                <div className="space-y-3">
+                  {displayedReservation.notes && (
                     <div className="text-sm">
-                      <p className="text-muted-foreground mb-1">Notes</p>
-                      <p>{reservation.notes}</p>
+                      <p className="text-muted-foreground mb-2">Notes</p>
+                      <p>{displayedReservation.notes}</p>
                     </div>
                   )}
-                  {reservation.special_requests && (
+                  {displayedReservation.special_requests && (
                     <div className="text-sm">
-                      <p className="text-muted-foreground mb-1">Special Requests</p>
-                      <p>{reservation.special_requests}</p>
+                      <p className="text-muted-foreground mb-2">Special Requests</p>
+                      <p>{displayedReservation.special_requests}</p>
                     </div>
                   )}
                 </div>
@@ -176,12 +197,12 @@ export default function ReservationDetailSheet({
             )}
 
             {/* Cancellation reason */}
-            {reservation.cancellation_reason && (
+            {displayedReservation.cancellation_reason && (
               <>
                 <Separator />
-                <div className="text-sm">
-                  <p className="text-muted-foreground mb-1">Cancellation Reason</p>
-                  <p>{reservation.cancellation_reason}</p>
+                <div className="text-sm space-y-1">
+                  <p className="text-muted-foreground">Cancellation Reason</p>
+                  <p>{displayedReservation.cancellation_reason}</p>
                 </div>
               </>
             )}
@@ -189,7 +210,7 @@ export default function ReservationDetailSheet({
             <Separator />
 
             {/* Actions */}
-            <div className="space-y-2">
+            <div className="space-y-3 mt-6">
               {isTerminal ? (
                 <p className="text-sm text-muted-foreground">No further actions</p>
               ) : (
@@ -200,12 +221,7 @@ export default function ReservationDetailSheet({
                       className="w-full"
                       variant="outline"
                       disabled={updateStatus.isPending}
-                      onClick={() =>
-                        updateStatus.mutate({
-                          reservationId: reservation.id,
-                          status: t.status,
-                        })
-                      }
+                      onClick={() => handleStatusChange(t.status)}
                     >
                       {updateStatus.isPending && (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
