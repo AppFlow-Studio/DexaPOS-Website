@@ -42,6 +42,8 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
+import { cn } from "@/lib/utils";
+
 export default function OrdersPage() {
   const selectedLocation = useSelectedLocation();
   const isAllLocations = useIsAllLocations();
@@ -90,6 +92,8 @@ export default function OrdersPage() {
     null
   );
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [statsRange, setStatsRange] = useState<number>(7); // days
+  const rangeLabel = statsRange === 1 ? "today" : `last ${statsRange}d`;
   // Removed local status filter state as it's now handled by URL and server
 
   const ordersList = Array.isArray(orders) ? orders : [];
@@ -140,42 +144,44 @@ export default function OrdersPage() {
   // But this means if I filter for "Yesterday", "Today's" cards will be empty.
 
   const stats = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const rangeStart = new Date(now);
+    rangeStart.setDate(rangeStart.getDate() - statsRange);
+    rangeStart.setHours(0, 0, 0, 0);
 
-    const todayOrders = ordersList.filter((order) => {
+    const rangeOrders = ordersList.filter((order) => {
       const orderDate = new Date(order.created_at);
-      orderDate.setHours(0, 0, 0, 0);
-      return orderDate.getTime() === today.getTime();
+      return orderDate >= rangeStart;
     });
 
-    const totalToday = todayOrders.length;
-    const pendingToday = todayOrders.filter(
+    const totalInRange = rangeOrders.length;
+    const pendingInRange = rangeOrders.filter(
       (o) => o.status === "pending" || o.status === "preparing"
     ).length;
-    const completedToday = todayOrders.filter(
+    const completedInRange = rangeOrders.filter(
       (o) => o.status === "completed"
     ).length;
-    const revenueToday = todayOrders
+    const revenueInRange = rangeOrders
       .filter(
         (o) => o.payment_status === "captured" || o.payment_status === "paid"
       )
       .reduce((sum, o) => sum + o.total_amount, 0);
 
     return {
-      total: totalToday,
-      pending: pendingToday,
-      completed: completedToday,
-      revenue: revenueToday,
+      total: totalInRange,
+      pending: pendingInRange,
+      completed: completedInRange,
+      revenue: revenueInRange,
     };
-  }, [ordersList]);
+  }, [ordersList, statsRange]);
 
-  // Build daily breakdown for sparkline charts (last 7 days from ordersList)
+  // Build daily breakdown for sparkline charts based on selected range
   const dailyData = useMemo(() => {
     const days: { date: string; label: string; orders: number; revenue: number; completed: number; pending: number }[] = [];
     const now = new Date();
+    const numDays = statsRange;
 
-    for (let i = 6; i >= 0; i--) {
+    for (let i = numDays - 1; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       d.setHours(0, 0, 0, 0);
@@ -201,7 +207,7 @@ export default function OrdersPage() {
       });
     }
     return days;
-  }, [ordersList]);
+  }, [ordersList, statsRange]);
 
   const handleOrderClick = (order: OrderResponse) => {
     setSelectedOrder(order);
@@ -220,17 +226,6 @@ export default function OrdersPage() {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight">Orders</h1>
-            {isAllLocations ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                <Globe className="h-3 w-3" />
-                All Locations
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                <MapPin className="h-3 w-3" />
-                {selectedLocation?.name}
-              </span>
-            )}
           </div>
           <p className="text-sm text-muted-foreground">
             View and manage all orders across your locations
@@ -238,7 +233,33 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* Stripe-style Stats Cards with Sparklines */}
+      {/* Stats Time Range Selector + Cards */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-medium text-muted-foreground">Overview</h2>
+          <div className="flex bg-muted/50 p-0.5 rounded-lg gap-0.5">
+            {[
+              { value: 1, label: "Today" },
+              { value: 7, label: "7d" },
+              { value: 30, label: "30d" },
+              { value: 90, label: "90d" },
+            ].map((range) => (
+              <button
+                key={range.value}
+                onClick={() => setStatsRange(range.value)}
+                className={cn(
+                  "px-3 py-1 rounded-md text-xs font-medium transition-colors",
+                  statsRange === range.value
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {range.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {/* Total Orders */}
         <Card className="border-border/60 shadow-none overflow-hidden">
@@ -257,29 +278,28 @@ export default function OrdersPage() {
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-semibold tracking-tight">{stats.total}</span>
-                  <span className="text-xs text-muted-foreground/60">today</span>
+                  <span className="text-xs text-muted-foreground/60">{rangeLabel}</span>
                 </div>
                 <div className="mt-3 h-12">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={dailyData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="ordersGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
-                          <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                          <stop offset="0%" stopColor="#6366f1" stopOpacity={0.25} />
+                          <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <Area
                         type="monotone"
                         dataKey="orders"
-                        stroke="hsl(var(--primary))"
-                        strokeWidth={1.5}
+                        stroke="#6366f1"
+                        strokeWidth={2}
                         fill="url(#ordersGrad)"
                         dot={false}
                       />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
-                <p className="text-xs text-muted-foreground/60 mt-1">Last 7 days</p>
               </>
             )}
           </CardContent>
@@ -302,7 +322,7 @@ export default function OrdersPage() {
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-semibold tracking-tight text-amber-600 dark:text-amber-400">{stats.pending}</span>
-                  <span className="text-xs text-muted-foreground/60">active now</span>
+                  <span className="text-xs text-muted-foreground/60">{rangeLabel}</span>
                 </div>
                 <div className="mt-3 h-12">
                   <ResponsiveContainer width="100%" height="100%">
@@ -324,7 +344,6 @@ export default function OrdersPage() {
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
-                <p className="text-xs text-muted-foreground/60 mt-1">Last 7 days</p>
               </>
             )}
           </CardContent>
@@ -347,7 +366,7 @@ export default function OrdersPage() {
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-semibold tracking-tight text-emerald-600 dark:text-emerald-400">{stats.completed}</span>
-                  <span className="text-xs text-muted-foreground/60">today</span>
+                  <span className="text-xs text-muted-foreground/60">{rangeLabel}</span>
                 </div>
                 <div className="mt-3 h-12">
                   <ResponsiveContainer width="100%" height="100%">
@@ -369,7 +388,6 @@ export default function OrdersPage() {
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
-                <p className="text-xs text-muted-foreground/60 mt-1">Last 7 days</p>
               </>
             )}
           </CardContent>
@@ -392,33 +410,33 @@ export default function OrdersPage() {
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-semibold tracking-tight">${stats.revenue.toFixed(2)}</span>
-                  <span className="text-xs text-muted-foreground/60">today</span>
+                  <span className="text-xs text-muted-foreground/60">{rangeLabel}</span>
                 </div>
                 <div className="mt-3 h-12">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={dailyData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
-                          <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                          <stop offset="0%" stopColor="#0d9488" stopOpacity={0.25} />
+                          <stop offset="100%" stopColor="#0d9488" stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <Area
                         type="monotone"
                         dataKey="revenue"
-                        stroke="hsl(var(--primary))"
-                        strokeWidth={1.5}
+                        stroke="#0d9488"
+                        strokeWidth={2}
                         fill="url(#revenueGrad)"
                         dot={false}
                       />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
-                <p className="text-xs text-muted-foreground/60 mt-1">Last 7 days</p>
               </>
             )}
           </CardContent>
         </Card>
+      </div>
       </div>
 
       {/* Filter Tabs and Orders Table */}
