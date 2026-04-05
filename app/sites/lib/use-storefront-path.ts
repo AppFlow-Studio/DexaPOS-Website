@@ -17,7 +17,7 @@ export function useStorefrontPath(slug: string) {
     const hostname = window.location.hostname;
     setIsSubdomain(
       hostname !== "localhost" &&
-        (hostname.endsWith(".localhost") || hostname.endsWith(".dexapos.com"))
+        (hostname.endsWith(".localhost") || hostname.endsWith(".dexaposai.com"))
     );
   }, []);
 

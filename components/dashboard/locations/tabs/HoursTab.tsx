@@ -134,7 +134,8 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
         }
     }
 
-    const formatTime = (time: string) => {
+    const formatTime = (time: string | null | undefined) => {
+        if (!time) return '--:--'
         const [hours, minutes] = time.split(':').map(Number)
         const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours
         const ampm = hours < 12 ? 'AM' : 'PM'

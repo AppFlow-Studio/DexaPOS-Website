@@ -213,8 +213,12 @@ export async function GetOrders(
   let result = (data as OrderResponse[]) || [];
 
   // Enrich orders with staff/user names (embedded join can fail; batch fetch is reliable)
-  const staffIds = [...new Set(result.map((o) => o.created_by_staff_id).filter(Boolean))] as string[];
-  const userIds = [...new Set(result.map((o) => o.created_by_user_id).filter(Boolean))] as string[];
+  const staffIds = [
+    ...new Set(result.map((o) => (o as any).created_by_staff_id).filter(Boolean)),
+  ] as string[];
+  const userIds = [
+    ...new Set(result.map((o) => (o as any).created_by_user_id).filter(Boolean)),
+  ] as string[];
 
   const [staffRes, userRes] = await Promise.all([
     staffIds.length > 0
@@ -241,20 +245,22 @@ export async function GetOrders(
   }
 
   for (const order of result) {
-    if (!order.created_by_staff && order.created_by_staff_id) {
-      const s = staffById.get(order.created_by_staff_id);
+    const orderAny = order as any;
+
+    if (!order.created_by_staff && orderAny.created_by_staff_id) {
+      const s = staffById.get(orderAny.created_by_staff_id);
       if (s) {
-        (order as any).created_by_staff = {
+        orderAny.created_by_staff = {
           first_name: s.first_name ?? undefined,
           last_name: s.last_name ?? undefined,
           display_name: s.display_name ?? undefined,
         };
       }
     }
-    if (!order.created_by_user && order.created_by_user_id) {
-      const u = userById.get(order.created_by_user_id);
+    if (!order.created_by_user && orderAny.created_by_user_id) {
+      const u = userById.get(orderAny.created_by_user_id);
       if (u) {
-        (order as any).created_by_user = {
+        orderAny.created_by_user = {
           first_name: u.first_name ?? undefined,
           last_name: u.last_name ?? undefined,
         };
@@ -1311,6 +1317,49 @@ export async function GetOrderFullHistory(
   };
 
   return full;
+}
+
+/**
+ * Get all orders for a specific customer, optionally filtered by location
+ */
+export async function GetCustomerOrders(
+  customerId: string,
+  locationId?: string
+): Promise<OrderResponse[]> {
+  if (!customerId) {
+    return [];
+  }
+
+  try {
+    const supabase = createServiceRoleClient();
+
+    let query = supabase
+      .from("orders")
+      .select(
+        `
+        *,
+        order_items(*)
+      `
+      )
+      .eq("customer_id", customerId)
+      .order("created_at", { ascending: false });
+
+    if (locationId && locationId !== "all") {
+      query = query.eq("location_id", locationId);
+    }
+
+    const { data: orders, error } = await query;
+
+    if (error) {
+      console.error("[GetCustomerOrders] Error fetching customer orders:", error);
+      return [];
+    }
+
+    return (orders || []) as OrderResponse[];
+  } catch (err) {
+    console.error("[GetCustomerOrders] Exception:", err);
+    return [];
+  }
 }
 
 // ============================================================================

@@ -63,8 +63,7 @@ import {
 } from '../actions/admin-user-management'
 import { HQ_ROLES, type HQRoleCode } from '@/types/admin'
 
-// HQ Organization ID for direct admin invites
-const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID || 'org_33z36QibAMZy6kc2xZNYmDl5duh'
+const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID ?? ''
 
 
 const roleColors = {

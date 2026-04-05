@@ -2,10 +2,29 @@
 
 import { createClerkClient } from '@clerk/backend'
 import { assertHQPermission } from '@/lib/admin/auth'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
 import { revalidatePath } from 'next/cache'
+
+export async function updateMerchantLogo(
+  organizationId: string,
+  cdnUrl: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await assertHQPermission('hq.merchant.create')
+    const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
+    const org = await clerkClient.organizations.getOrganization({ organizationId })
+    await clerkClient.organizations.updateOrganization(organizationId, {
+      publicMetadata: {
+        ...(org.publicMetadata as Record<string, unknown>),
+        imageURL: cdnUrl,
+      },
+    })
+    return { success: true }
+  } catch (error: any) {
+    console.error('[updateMerchantLogo] Error:', error)
+    return { success: false, error: error?.message || 'Failed to update logo.' }
+  }
+}
 
 export interface CreateMerchantOnboardingParams {
   businessLegalName: string
@@ -24,7 +43,7 @@ export interface CreateMerchantOnboardingParams {
     postalCode: string
     country?: string
   }
-  carrierId: string
+  carrierId?: string
 }
 
 export interface CreateMerchantOnboardingResult {
@@ -63,9 +82,9 @@ export async function createMerchantOnboarding(
   const ownerEmail = normalizeEmail(params.ownerEmail || '')
   const ownerPhone = params.ownerPhone?.trim()
   const einLastFour = params.einLastFour?.trim()
-  const carrierId = params.carrierId?.trim()
+  const carrierId = params.carrierId?.trim() || null
 
-  if (!businessLegalName || !ownerFirstName || !ownerLastName || !ownerPhone || !carrierId) {
+  if (!businessLegalName || !ownerFirstName || !ownerLastName || !ownerPhone) {
     return { success: false, error: 'Missing required fields.' }
   }
 
@@ -78,17 +97,16 @@ export async function createMerchantOnboarding(
   }
 
   const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
-  const supabase = createServerSupabaseClient()
-  const serviceRoleSupabase = createServiceRoleClient()
 
   let organizationId: string | null = null
 
   try {
+    // 1. Create Clerk organization — the webhook will populate organizations + merchants tables
     const organization = await clerkClient.organizations.createOrganization({
-      name: businessLegalName,
+      name: normalizeValue(params.dbaName) || businessLegalName,
       publicMetadata: {
         org_type: 'merchant',
-        carrierId,
+        ...(carrierId && { carrierId }),
         merchant_type: params.businessType,
         business_legal_name: businessLegalName,
         dba_name: normalizeValue(params.dbaName),
@@ -97,6 +115,12 @@ export async function createMerchantOnboarding(
         owner_email: ownerEmail,
         owner_phone: ownerPhone,
         ein_last_four: einLastFour,
+        business_address_line1: normalizeValue(params.businessAddress?.line1),
+        business_address_line2: normalizeValue(params.businessAddress?.line2),
+        business_city: normalizeValue(params.businessAddress?.city),
+        business_state: normalizeValue(params.businessAddress?.state),
+        business_postal_code: normalizeValue(params.businessAddress?.postalCode),
+        business_country: normalizeValue(params.businessAddress?.country) || 'US',
         onboarding_status: 'onboarding',
         created_by: userId,
       },
@@ -104,58 +128,7 @@ export async function createMerchantOnboarding(
 
     organizationId = organization.id
 
-    // Guard against webhook timing/race conditions:
-    // ensure the organizations parent row exists before inserting merchants.
-    const { error: organizationSyncError } = await serviceRoleSupabase
-      .from('organizations')
-      .upsert(
-        {
-          id: organization.id,
-          name: organization.name || businessLegalName,
-          public_metadata: organization.publicMetadata || {},
-        },
-        { onConflict: 'id' }
-      )
-
-    if (organizationSyncError) {
-      throw new Error(`Failed to sync organization record: ${organizationSyncError.message}`)
-    }
-
-    const merchantName = normalizeValue(params.dbaName) || businessLegalName
-
-    const { data: merchant, error: merchantError } = await supabase
-      .from('merchants')
-      .upsert(
-        {
-          clerk_org_id: organization.id,
-          carrier_id: carrierId,
-          type: params.businessType,
-          name: merchantName,
-          business_legal_name: businessLegalName,
-          dba_name: normalizeValue(params.dbaName),
-          business_type: params.businessType,
-          ein_last_four: einLastFour,
-          owner_first_name: ownerFirstName,
-          owner_last_name: ownerLastName,
-          owner_email: ownerEmail,
-          owner_phone: ownerPhone,
-          business_address_line1: normalizeValue(params.businessAddress?.line1),
-          business_address_line2: normalizeValue(params.businessAddress?.line2),
-          business_city: normalizeValue(params.businessAddress?.city),
-          business_state: normalizeValue(params.businessAddress?.state),
-          business_postal_code: normalizeValue(params.businessAddress?.postalCode),
-          business_country: normalizeValue(params.businessAddress?.country) || 'US',
-          onboarding_status: 'onboarding',
-        },
-        { onConflict: 'clerk_org_id' }
-      )
-      .select('id, clerk_org_id, name')
-      .single()
-
-    if (merchantError || !merchant) {
-      throw new Error(merchantError?.message || 'Failed to persist merchant record.')
-    }
-
+    // 2. Send owner invite — they'll land at /join-organization after accepting
     await clerkClient.organizations.createOrganizationInvitation({
       organizationId: organization.id,
       emailAddress: ownerEmail,
@@ -163,19 +136,18 @@ export async function createMerchantOnboarding(
       publicMetadata: {
         org_type: 'merchant',
         roleCode: 'merchant.owner',
-        merchantId: merchant.id,
         level_type: 'org:admin',
         firstName: ownerFirstName,
         lastName: ownerLastName,
       },
     })
 
+    // 3. Audit log
     await logAdminAction('MERCHANT_CREATED', {
-      merchantId: merchant.id,
-      clerkOrgId: merchant.clerk_org_id,
+      clerkOrgId: organization.id,
       resourceType: 'merchant',
-      resourceId: merchant.id,
-      resourceName: merchant.name,
+      resourceId: organization.id,
+      resourceName: normalizeValue(params.dbaName) || businessLegalName,
       changes: {
         after: {
           business_legal_name: businessLegalName,
@@ -195,10 +167,10 @@ export async function createMerchantOnboarding(
 
     return {
       success: true,
-      merchantId: merchant.id,
-      organizationId: merchant.clerk_org_id,
+      organizationId: organization.id,
     }
   } catch (error: any) {
+    // Rollback: delete the Clerk org if it was created but something else failed
     if (organizationId) {
       try {
         await clerkClient.organizations.deleteOrganization(organizationId)

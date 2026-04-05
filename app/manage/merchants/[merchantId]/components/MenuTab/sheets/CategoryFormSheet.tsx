@@ -6,9 +6,6 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
-  BottomSheetSection,
-} from '@/components/ui/bottom-sheet'
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -31,6 +28,11 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -40,12 +42,18 @@ import {
 import { CdnImageUploadField } from '@/components/ui/cdn-image-upload-field'
 import {
   Loader2,
+  Calendar,
+  ChevronDown,
+  ChevronRight,
   Globe,
   MapPin,
   RotateCcw,
   AlertCircle,
   Flame,
   Info,
+  Palette,
+  Settings2,
+  Tag,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useMerchantCdnImageUpload } from '@/lib/cdn/use-merchant-cdn-image-upload'
@@ -126,6 +134,11 @@ export function CategoryFormSheet({
   const [isResetting, setIsResetting] = useState(false)
   const [selectedSchedules, setSelectedSchedules] = useState<string[]>([])
   const [scheduleActionId, setScheduleActionId] = useState<string | null>(null)
+  const [expandedSections, setExpandedSections] = useState({
+    appearance: false,
+    scheduling: false,
+    advanced: false,
+  })
   const imageUpload = useMerchantCdnImageUpload({
     merchantId,
     category: 'menu-categories',
@@ -148,7 +161,7 @@ export function CategoryFormSheet({
   const { data: availableSchedules = [], isLoading: isLoadingSchedules } = useQuery({
     queryKey: adminKeys.merchantSchedules(merchantId, locationId),
     queryFn: () => getAdminSchedules(merchantId, locationId),
-    enabled: open && isEdit && !!merchantId,
+    enabled: open && !!merchantId,
     staleTime: 5 * 60 * 1000,
   })
 
@@ -302,8 +315,13 @@ export function CategoryFormSheet({
     setSelectedSchedules((prev) => (prev.length === 0 ? prev : []))
   }, [assignedSchedules, category, isEdit, open])
 
+  const toggleSection = (section: keyof typeof expandedSections) => {
+    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }))
+  }
+
   const onSubmit = async (values: CategoryFormValues) => {
     let uploadedAsset: { cdnUrl: string; storagePath: string } | undefined
+    let createdCategoryId: string | null = null
 
     try {
       const resolvedImage = await imageUpload.resolveImageValue()
@@ -369,6 +387,8 @@ export function CategoryFormSheet({
           return
         }
 
+        createdCategoryId = result.data.id
+
         // If menuId provided, add category to menu
         if (menuId) {
           const addResult = await addCategoryToMenu(merchantId, menuId, result.data.id)
@@ -379,6 +399,19 @@ export function CategoryFormSheet({
           }
         } else {
           toast.success('Category created successfully')
+        }
+
+        if (selectedSchedules.length > 0) {
+          const scheduleResults = await Promise.all(
+            selectedSchedules.map((scheduleId) =>
+              assignScheduleToCategory(merchantId, result.data.id, scheduleId),
+            ),
+          )
+
+          const failedSchedules = scheduleResults.filter((scheduleResult) => !scheduleResult.success)
+          if (failedSchedules.length > 0) {
+            toast.warning('Category created but some schedules were not assigned')
+          }
         }
       }
 
@@ -394,8 +427,12 @@ export function CategoryFormSheet({
   }
 
   const handleToggleSchedule = async (scheduleId: string) => {
-    if (!category) {
-      toast.error('Save the category first to assign schedules')
+    if (!isEdit || !category) {
+      setSelectedSchedules((prev) =>
+        prev.includes(scheduleId)
+          ? prev.filter((id) => id !== scheduleId)
+          : [...prev, scheduleId],
+      )
       return
     }
 
@@ -522,10 +559,11 @@ export function CategoryFormSheet({
                   </div>
                 )}
 
-                <BottomSheetSection
-                  title="Basic Information"
-                  className="rounded-2xl border border-border/70 bg-background/80 p-5 shadow-sm"
-                >
+                <div className="space-y-4 rounded-2xl border border-border/70 bg-background/80 p-5 shadow-sm">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                    <Tag className="h-4 w-4" />
+                    Basic Information
+                  </h3>
                   <FormField
                     control={form.control}
                     name="name"
@@ -535,6 +573,7 @@ export function CategoryFormSheet({
                         <FormControl>
                           <Input
                             placeholder="e.g., Appetizers, Main Courses, Desserts"
+                            className="h-12 text-lg"
                             {...field}
                           />
                         </FormControl>
@@ -561,38 +600,78 @@ export function CategoryFormSheet({
                       </FormItem>
                     )}
                   />
+                </div>
 
-                  <FormField
-                    control={form.control}
-                    name="image"
-                    render={() => (
-                      <FormItem>
-                        <FormLabel>Category Image</FormLabel>
-                        <FormControl>
-                          <CdnImageUploadField
-                            disabled={isSubmitting}
-                            helperText="Uploads to Bunny CDN when you save the category."
-                            onClear={imageUpload.clear}
-                            onFileSelect={imageUpload.selectFile}
-                            previewUrl={imageUpload.previewUrl}
-                            selectedFileName={imageUpload.selectedFileName}
-                            uploadLabel="Upload category image"
-                            uploading={imageUpload.isUploading}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Optional image for this category
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </BottomSheetSection>
-
-                <BottomSheetSection
-                  title="Display Settings"
-                  className="rounded-2xl border border-border/70 bg-background/80 p-5 shadow-sm"
+                <Collapsible
+                  open={expandedSections.appearance}
+                  onOpenChange={() => toggleSection('appearance')}
                 >
+                  <CollapsibleTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between rounded-lg bg-muted/50 p-3 text-left transition-colors hover:bg-muted"
+                    >
+                      <span className="flex items-center gap-2 text-sm font-semibold">
+                        <Palette className="h-4 w-4 text-pink-500" />
+                        Appearance
+                      </span>
+                      {expandedSections.appearance ? (
+                        <ChevronDown className="h-4 w-4 transition-transform duration-200" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 transition-transform duration-200" />
+                      )}
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-4 pt-4">
+                    <FormField
+                      control={form.control}
+                      name="image"
+                      render={() => (
+                        <FormItem>
+                          <FormLabel>Category Image</FormLabel>
+                          <FormControl>
+                            <CdnImageUploadField
+                              disabled={isSubmitting}
+                              helperText="Uploads to Bunny CDN when you save the category."
+                              onClear={imageUpload.clear}
+                              onFileSelect={imageUpload.selectFile}
+                              previewUrl={imageUpload.previewUrl}
+                              selectedFileName={imageUpload.selectedFileName}
+                              uploadLabel="Upload category image"
+                              uploading={imageUpload.isUploading}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Optional image to represent this category
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </CollapsibleContent>
+                </Collapsible>
+
+                <Collapsible
+                  open={expandedSections.advanced}
+                  onOpenChange={() => toggleSection('advanced')}
+                >
+                  <CollapsibleTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between rounded-lg bg-muted/50 p-3 text-left transition-colors hover:bg-muted"
+                    >
+                      <span className="flex items-center gap-2 text-sm font-semibold">
+                        <Settings2 className="h-4 w-4 text-gray-500" />
+                        Advanced Settings
+                      </span>
+                      {expandedSections.advanced ? (
+                        <ChevronDown className="h-4 w-4 transition-transform duration-200" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 transition-transform duration-200" />
+                      )}
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-4 pt-4">
                   <FormField
                     control={form.control}
                     name="display_order"
@@ -603,12 +682,12 @@ export function CategoryFormSheet({
                           <Input
                             type="number"
                             min={0}
-                            {...field}
+                            value={field.value ?? ''}
                             onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                           />
                         </FormControl>
                         <FormDescription>
-                          Lower numbers appear first (0 = top)
+                          Lower numbers appear first. Leave 0 for automatic top placement.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -623,7 +702,7 @@ export function CategoryFormSheet({
                         <div className="space-y-0.5">
                           <FormLabel className="text-base">Active</FormLabel>
                           <FormDescription>
-                            Category is visible in menus
+                            Inactive categories will stay hidden from the POS.
                           </FormDescription>
                         </div>
                         <FormControl>
@@ -635,17 +714,36 @@ export function CategoryFormSheet({
                       </FormItem>
                     )}
                   />
-                </BottomSheetSection>
+                  </CollapsibleContent>
+                </Collapsible>
 
-                <BottomSheetSection
-                  title="Availability Schedule"
-                  className="rounded-2xl border border-border/70 bg-background/80 p-5 shadow-sm"
+                <Collapsible
+                  open={expandedSections.scheduling}
+                  onOpenChange={() => toggleSection('scheduling')}
                 >
-                  {!isEdit || !category ? (
-                    <div className="rounded-xl border p-4 text-sm text-muted-foreground">
-                      Save the category first, then reopen it to assign availability schedules.
-                    </div>
-                  ) : isLoadingSchedules ? (
+                  <CollapsibleTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between rounded-lg bg-muted/50 p-3 text-left transition-colors hover:bg-muted"
+                    >
+                      <span className="flex items-center gap-2 text-sm font-semibold">
+                        <Calendar className="h-4 w-4 text-blue-500" />
+                        Availability Schedule
+                        {selectedSchedules.length > 0 && (
+                          <Badge variant="secondary" className="ml-1">
+                            {selectedSchedules.length}
+                          </Badge>
+                        )}
+                      </span>
+                      {expandedSections.scheduling ? (
+                        <ChevronDown className="h-4 w-4 transition-transform duration-200" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 transition-transform duration-200" />
+                      )}
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-3 pt-4">
+                  {isLoadingSchedules ? (
                     <div className="flex items-center gap-2 rounded-xl border p-4 text-sm text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Loading schedules...
@@ -656,6 +754,11 @@ export function CategoryFormSheet({
                     </div>
                   ) : (
                     <div className="space-y-3">
+                      {!isEdit && (
+                        <div className="rounded-lg border border-blue-200 bg-blue-50/80 p-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
+                          Selected schedules will be assigned after the category is created.
+                        </div>
+                      )}
                       <p className="text-sm text-muted-foreground">
                         Assign schedules to control when this category is available.
                       </p>
@@ -736,12 +839,14 @@ export function CategoryFormSheet({
                       })}
                     </div>
                   )}
-                </BottomSheetSection>
+                  </CollapsibleContent>
+                </Collapsible>
 
-                <BottomSheetSection
-                  title="Kitchen Routing"
-                  className="rounded-2xl border border-border/70 bg-background/80 p-5 shadow-sm"
-                >
+                <div className="space-y-4 rounded-2xl border border-border/70 bg-background/80 p-5 shadow-sm">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                    <Flame className="h-4 w-4 text-orange-500" />
+                    Kitchen Routing
+                  </h3>
                   {!isEdit || !category ? (
                     <div className="rounded-xl border p-4 text-sm text-muted-foreground">
                       Save the category first, then reopen it to set a default prep station.
@@ -811,13 +916,10 @@ export function CategoryFormSheet({
                       </p>
                     </div>
                   )}
-                </BottomSheetSection>
+                </div>
 
                 {!isEdit && (
-                  <BottomSheetSection
-                    title="Scope"
-                    className="rounded-2xl border border-border/70 bg-background/80 p-5 shadow-sm"
-                  >
+                  <div className="rounded-2xl border border-border/70 bg-background/80 p-5 shadow-sm">
                     {isLocationView ? (
                       <FormField
                         control={form.control}
@@ -863,14 +965,11 @@ export function CategoryFormSheet({
                         </div>
                       </div>
                     )}
-                  </BottomSheetSection>
+                  </div>
                 )}
 
                 {isEdit && category && (
-                  <BottomSheetSection
-                    title="Scope"
-                    className="rounded-2xl border border-border/70 bg-background/80 p-5 shadow-sm"
-                  >
+                  <div className="rounded-2xl border border-border/70 bg-background/80 p-5 shadow-sm">
                     <div className="rounded-xl border p-4">
                       <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
@@ -896,7 +995,7 @@ export function CategoryFormSheet({
                         </Badge>
                       </div>
                     </div>
-                  </BottomSheetSection>
+                  </div>
                 )}
               </div>
             </div>

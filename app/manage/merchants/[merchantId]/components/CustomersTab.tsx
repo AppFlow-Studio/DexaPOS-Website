@@ -85,6 +85,7 @@ export function CustomersTab({ merchantInfo }: CustomersTabProps) {
 
             <AdminCustomerProfileSheet
                 customer={selectedCustomer}
+                merchantId={merchantInfo?.id || null}
                 open={isProfileOpen}
                 onOpenChange={setIsProfileOpen}
             />

@@ -7,14 +7,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
-  BottomSheet,
-  BottomSheetContent,
-  BottomSheetHeader,
-  BottomSheetBody,
-  BottomSheetFooter,
-  BottomSheetTitle,
-  BottomSheetDescription,
-} from "@/components/ui/bottom-sheet";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -335,19 +334,23 @@ export function AddItemToCategoryWizard({
   };
 
   return (
-    <BottomSheet open={open} onOpenChange={onOpenChange}>
-      <BottomSheetContent className="h-[85vh]">
-        <BottomSheetHeader>
-          <BottomSheetTitle className="flex items-center gap-2">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        overlayClassName="bg-slate-950/40 backdrop-blur-md"
+        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-4xl"
+      >
+        <div className="flex max-h-[min(92vh,920px)] flex-col">
+        <DialogHeader className="border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
+          <DialogTitle className="flex items-center gap-2 text-[1.625rem] font-semibold tracking-tight">
             <Utensils className="h-5 w-5 text-primary" />
             Add Items to {categoryName}
-          </BottomSheetTitle>
-          <BottomSheetDescription>
+          </DialogTitle>
+          <DialogDescription className="max-w-[60ch] text-sm leading-6">
             Add existing items from your library or create new ones
-          </BottomSheetDescription>
-        </BottomSheetHeader>
+          </DialogDescription>
+        </DialogHeader>
 
-        <BottomSheetBody className="flex-1">
+        <div className="min-h-0 flex flex-1 flex-col overflow-hidden px-6 py-5">
           {/* Context Banner */}
           <div className="mb-4 p-3 rounded-lg bg-primary/5 border border-primary/20">
             <div className="flex items-center gap-2 text-sm">
@@ -366,7 +369,7 @@ export function AddItemToCategoryWizard({
           <Tabs
             value={activeTab}
             onValueChange={(v) => setActiveTab(v as "existing" | "create")}
-            className="flex flex-col h-full"
+            className="min-h-0 flex flex-1 flex-col"
           >
             <TabsList className="grid w-full grid-cols-2 mb-4">
               <TabsTrigger value="existing" className="gap-2">
@@ -385,7 +388,7 @@ export function AddItemToCategoryWizard({
             </TabsList>
 
             {/* Existing Items Tab */}
-            <TabsContent value="existing" className="flex-1 flex flex-col mt-0">
+            <TabsContent value="existing" className="mt-0 min-h-0 flex-1 flex flex-col">
               {/* Search */}
               <div className="relative mb-4">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -521,7 +524,7 @@ export function AddItemToCategoryWizard({
             </TabsContent>
 
             {/* Create New Item Tab */}
-            <TabsContent value="create" className="flex-1 overflow-y-auto mt-0">
+            <TabsContent value="create" className="mt-0 min-h-0 flex-1 overflow-y-auto pr-1">
               <Form {...form}>
                 <form
                   onSubmit={form.handleSubmit(handleCreateItem)}
@@ -701,14 +704,15 @@ export function AddItemToCategoryWizard({
               </Form>
             </TabsContent>
           </Tabs>
-        </BottomSheetBody>
+        </div>
 
-        <BottomSheetFooter className="border-t pt-4">
-          <div className="flex items-center justify-between w-full">
+        <DialogFooter className="border-t border-border/70 bg-background/95 px-6 py-4">
+          <div className="flex w-full flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={isSaving}
+              className="sm:min-w-[140px]"
             >
               Cancel
             </Button>
@@ -717,7 +721,7 @@ export function AddItemToCategoryWizard({
               <Button
                 onClick={handleAddExistingItems}
                 disabled={selectedItems.size === 0 || isSaving}
-                className="gap-2"
+                className="gap-2 sm:min-w-[180px]"
               >
                 {isSaving ? (
                   <>
@@ -736,7 +740,7 @@ export function AddItemToCategoryWizard({
               <Button
                 onClick={form.handleSubmit(handleCreateItem)}
                 disabled={isSaving || !form.formState.isValid}
-                className="gap-2"
+                className="gap-2 sm:min-w-[180px]"
               >
                 {isSaving ? (
                   <>
@@ -752,8 +756,9 @@ export function AddItemToCategoryWizard({
               </Button>
             )}
           </div>
-        </BottomSheetFooter>
-      </BottomSheetContent>
-    </BottomSheet>
+        </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

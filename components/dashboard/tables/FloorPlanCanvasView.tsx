@@ -5,6 +5,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { FloorPlanEditorSidebar } from './FloorPlanToolbar'
 import { RuntimeFloorPlanView } from './RuntimeFloorPlanView'
 import { FloorPlanPropertiesPanel } from './FloorPlanPropertiesPanel'
+import { QuickTableSetupDialog } from './QuickTableSetupDialog'
+import { TableShapePickerDialog } from './TableShapePickerDialog'
 import { Button } from '@/components/ui/button'
 import {
     Select,
@@ -13,7 +15,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
-import { Save, Undo2, Undo, Redo, Plus, Pencil, Trash2, Star, Settings2 } from 'lucide-react'
+import { Save, Undo2, Undo, Redo, Plus, Pencil, Trash2, Star, Settings2, LayoutGrid } from 'lucide-react'
 import { toast } from 'sonner'
 import {
     Dialog,
@@ -50,6 +52,7 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
         selectedTableIds,
         initializeDraft,
         addTableToDraft,
+        addTablesToDraft,
         updateTablePositionInDraft,
         updateTableRotationInDraft,
         updateTableNameInDraft,
@@ -109,6 +112,8 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
 
     // Floor Plan Management Dialog
     const [showManageDialog, setShowManageDialog] = useState(false)
+    const [showShapePickerDialog, setShowShapePickerDialog] = useState(false)
+    const [showQuickSetupDialog, setShowQuickSetupDialog] = useState(false)
     const [newPlanName, setNewPlanName] = useState('')
     const [editingPlanId, setEditingPlanId] = useState<string | null>(null)
     const [editingPlanName, setEditingPlanName] = useState('')
@@ -118,6 +123,94 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
     // Canvas Size
     const [canvasWidth, setCanvasWidth] = useState<string>('')
     const [canvasHeight, setCanvasHeight] = useState<string>('')
+
+    const buildUniqueName = useCallback((baseName: string, usedNames: Set<string>) => {
+        let index = 1
+        let candidate = `${baseName} ${index}`
+
+        while (usedNames.has(candidate.toLowerCase())) {
+            index += 1
+            candidate = `${baseName} ${index}`
+        }
+
+        usedNames.add(candidate.toLowerCase())
+        return candidate
+    }, [])
+
+    const buildAutoPlacements = useCallback((
+        items: Array<{
+            shapeId: keyof typeof TABLE_SHAPES
+            name?: string
+        }>
+    ) => {
+        const canvasMaxWidth = activeFloorPlan?.canvas_width || 1200
+        const margin = 80
+        const gapX = 40
+        const gapY = 48
+        const visibleObjects = draftTables.filter((table) => table.is_visible !== false && table.is_active)
+        const usedNames = new Set(
+            draftTables
+                .map((table) => table.name?.trim().toLowerCase())
+                .filter((name): name is string => Boolean(name))
+        )
+
+        let cursorX = margin
+        let cursorY = margin
+        let rowHeight = 0
+
+        if (visibleObjects.length > 0) {
+            const lowestEdge = visibleObjects.reduce((maxEdge, table) => {
+                const shape = TABLE_SHAPES[table.shape_id]
+                const tableHeight = table.height || shape?.height || 100
+                return Math.max(maxEdge, table.y + tableHeight)
+            }, 0)
+
+            cursorY = lowestEdge + gapY
+        }
+
+        return items.map((item) => {
+            const shape = TABLE_SHAPES[item.shapeId]
+            const width = shape.width || 100
+            const height = shape.height || 100
+
+            if (cursorX > margin && cursorX + width > canvasMaxWidth - margin) {
+                cursorX = margin
+                cursorY += rowHeight + gapY
+                rowHeight = 0
+            }
+
+            const baseName =
+                item.name?.trim() ||
+                (shape.category === 'booth' ? 'Booth' : shape.type === 'table' ? 'Table' : shape.label)
+
+            const resolvedName = usedNames.has(baseName.toLowerCase())
+                ? buildUniqueName(baseName, usedNames)
+                : (() => {
+                    usedNames.add(baseName.toLowerCase())
+                    return baseName
+                })()
+
+            const placement = {
+                shape_id: item.shapeId,
+                category: shape.category as FloorPlanObject['category'],
+                name: resolvedName,
+                x: cursorX,
+                y: cursorY,
+                width: shape.width,
+                height: shape.height,
+                rotation: 0,
+                capacity: shape.capacity,
+                z_index: 1,
+                is_active: true,
+                is_visible: true,
+            } satisfies Partial<FloorPlanObject>
+
+            cursorX += width + gapX
+            rowHeight = Math.max(rowHeight, height)
+
+            return placement
+        })
+    }, [activeFloorPlan?.canvas_width, buildUniqueName, draftTables])
 
     // Sync canvas size inputs when active floor plan changes
     useEffect(() => {
@@ -372,6 +465,38 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
         [activeFloorPlan, addTableToDraft]
     )
 
+    const handleAddShapeFromLibrary = useCallback((shapeId: keyof typeof TABLE_SHAPES) => {
+        const [placement] = buildAutoPlacements([{ shapeId }])
+        if (!placement) return
+        addTableToDraft(placement)
+        toast.success(`${TABLE_SHAPES[shapeId].label} added to the draft`)
+    }, [addTableToDraft, buildAutoPlacements])
+
+    const handleAddShapeFromDialog = useCallback((payload: {
+        shapeId: keyof typeof TABLE_SHAPES
+        name: string
+    }) => {
+        const [placement] = buildAutoPlacements([{ shapeId: payload.shapeId, name: payload.name }])
+        if (!placement) return
+        addTableToDraft(placement)
+        toast.success(`${payload.name} added to the draft`)
+    }, [addTableToDraft, buildAutoPlacements])
+
+    const handleQuickSetupApply = useCallback((items: Array<{ shapeId: keyof typeof TABLE_SHAPES; quantity: number }>) => {
+        const placements = buildAutoPlacements(
+            items.flatMap((item) =>
+                Array.from({ length: item.quantity }, () => ({
+                    shapeId: item.shapeId,
+                }))
+            )
+        )
+
+        if (placements.length === 0) return
+
+        addTablesToDraft(placements)
+        toast.success(`${placements.length} objects added to the draft`)
+    }, [addTablesToDraft, buildAutoPlacements])
+
     const handleUpdatePosition = useCallback(
         (id: string, x: number, y: number) => {
             // Update in draft (local-only, no DB call)
@@ -554,6 +679,10 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
                         <Settings2 className="w-4 h-4 mr-1" />
                         Manage
                     </Button>
+                    <Button variant="outline" size="sm" onClick={() => setShowQuickSetupDialog(true)}>
+                        <LayoutGrid className="w-4 h-4 mr-1" />
+                        Quick Setup
+                    </Button>
                 </div>
                 <div className="flex items-center gap-2">
                     <Button
@@ -590,7 +719,11 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
 
             <div className="flex overflow-hidden relative h-full">
                 {/* 1. LEFT SIDEBAR (Shape Library) */}
-                <FloorPlanEditorSidebar />
+                <FloorPlanEditorSidebar
+                    onAddShape={handleAddShapeFromLibrary}
+                    onOpenShapePicker={() => setShowShapePickerDialog(true)}
+                    onOpenQuickSetup={() => setShowQuickSetupDialog(true)}
+                />
 
                 {/* 2. MAIN CANVAS (Reused Runtime Component) */}
                 <div className="flex-1 relative h-full bg-[#e5e5e5]">
@@ -621,6 +754,18 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
                     onClose={clearSelection}
                 />
             </div>
+
+            <TableShapePickerDialog
+                open={showShapePickerDialog}
+                onOpenChange={setShowShapePickerDialog}
+                onAdd={handleAddShapeFromDialog}
+            />
+
+            <QuickTableSetupDialog
+                open={showQuickSetupDialog}
+                onOpenChange={setShowQuickSetupDialog}
+                onApply={handleQuickSetupApply}
+            />
 
             {/* Manage Floor Plans Dialog */}
             <Dialog open={showManageDialog} onOpenChange={setShowManageDialog}>

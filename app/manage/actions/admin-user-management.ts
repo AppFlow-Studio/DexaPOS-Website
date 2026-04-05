@@ -8,8 +8,7 @@ import { logAdminAction } from '@/lib/admin/log-admin-action'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { HQ_ROLES } from '@/types/admin'
 
-const DEXA_HQ_ORG_ID =
-  process.env.DEXA_POS_INTERNAL_TEAM_ID || 'org_33z36QibAMZy6kc2xZNYmDl5duh'
+const DEXA_HQ_ORG_ID = process.env.DEXA_POS_INTERNAL_TEAM_ID!
 
 const VALID_HQ_ROLE_CODES = new Set(Object.keys(HQ_ROLES))
 

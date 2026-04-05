@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
+import { cn, isValidImageUrl } from '@/lib/utils'
 import Image from 'next/image'
 
 interface ItemPreviewCardProps {
@@ -31,6 +31,7 @@ export function ItemPreviewCard({
 }: ItemPreviewCardProps) {
     const safePrice = Number(price) || 0
     const safeCashPrice = cashPrice ? Number(cashPrice) : undefined
+    const validImage = isValidImageUrl(image) ? image : null
 
     return (
         <Card className={cn(
@@ -41,9 +42,9 @@ export function ItemPreviewCard({
         )}>
             {/* Image Section */}
             <div className="relative aspect-square bg-muted/30 overflow-hidden">
-                {image ? (
+                {validImage ? (
                     <Image
-                        src={'/file.svg'}
+                        src={validImage}
                         alt={name || 'Menu item'}
                         fill
                         className="object-cover transition-transform duration-500 hover:scale-105"
@@ -146,6 +147,7 @@ export function ItemPreviewRow({
 }: ItemPreviewCardProps) {
     const safePrice = Number(price) || 0
     const safeCashPrice = cashPrice ? Number(cashPrice) : undefined
+    const validImage = isValidImageUrl(image) ? image : null
 
     return (
         <div className={cn(
@@ -155,9 +157,9 @@ export function ItemPreviewRow({
         )}>
             {/* Image */}
             <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-muted/30 shrink-0">
-                {image ? (
+                {validImage ? (
                     <Image
-                        src={image}
+                        src={validImage}
                         alt={name || 'Menu item'}
                         fill
                         className="object-cover"

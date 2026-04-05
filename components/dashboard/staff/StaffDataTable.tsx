@@ -150,7 +150,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
     }
   }, [bulkRoleDialogOpen, availableRoles.length]);
 
-  // ── Bulk handlers ──
+  // â”€â”€ Bulk handlers â”€â”€
   const handleBulkDeactivate = () => {
     bulkDeactivate.mutate(selectedMemberIds, {
       onSuccess: () => {
@@ -336,12 +336,12 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
       header: "Primary Role",
       cell: ({ row }) => {
         const staff = row.original;
-        const primaryAssignment = staff.location_assignments.find(
-          (a) => a.is_primary
-        );
+        const primaryAssignment =
+          staff.location_assignments.find((a) => a.is_primary) ||
+          staff.location_assignments[0];
 
         if (!primaryAssignment) {
-          return <span className="text-muted-foreground text-sm">—</span>;
+          return <span className="text-muted-foreground text-sm">-</span>;
         }
 
         return (
@@ -364,29 +364,41 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
         const activeLocations = staff.location_assignments.filter(
           (a) => a.is_active
         );
+        const visibleLocations =
+          activeLocations.length > 0
+            ? activeLocations
+            : staff.location_assignments;
 
-        if (activeLocations.length === 0) {
+        if (visibleLocations.length === 0) {
           return <span className="text-muted-foreground text-sm">None</span>;
         }
 
-        const primaryLocation = activeLocations.find((a) => a.is_primary);
-        const otherLocations = activeLocations.filter((a) => !a.is_primary);
+        const primaryLocation =
+          visibleLocations.find((a) => a.is_primary) || visibleLocations[0];
+        const otherLocations = visibleLocations.filter(
+          (loc) => loc !== primaryLocation
+        );
 
         return (
           <div className="flex flex-wrap gap-1">
             {primaryLocation && (
-              <Badge variant="default" className="text-xs gap-1">
+              <Badge
+                variant={primaryLocation.is_active ? "default" : "outline"}
+                className="text-xs gap-1"
+              >
                 <MapPin className="h-2.5 w-2.5" />
                 {primaryLocation.location_name}
+                {!primaryLocation.is_active ? " (inactive)" : ""}
               </Badge>
             )}
             {otherLocations.slice(0, 2).map((loc) => (
               <Badge
                 key={loc.location_id}
-                variant="secondary"
+                variant={loc.is_active ? "secondary" : "outline"}
                 className="text-xs"
               >
                 {loc.location_name}
+                {!loc.is_active ? " (inactive)" : ""}
               </Badge>
             ))}
             {otherLocations.length > 2 && (
@@ -403,9 +415,9 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
       header: "Status",
       cell: ({ row }) => {
         const staff = row.original;
-        const primaryLocation = staff.location_assignments.find(
-          (a) => a.is_primary
-        );
+        const primaryLocation =
+          staff.location_assignments.find((a) => a.is_primary) ||
+          staff.location_assignments[0];
 
         const handleToggle = async () => {
           if (!primaryLocation) return;
@@ -473,9 +485,9 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
       id: "actions",
       cell: ({ row }) => {
         const staff = row.original;
-        const primaryLocation = staff.location_assignments.find(
-          (a) => a.is_primary
-        );
+        const primaryLocation =
+          staff.location_assignments.find((a) => a.is_primary) ||
+          staff.location_assignments[0];
 
         const handleResetPIN = () => {
           if (!primaryLocation) {
@@ -534,7 +546,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                   </DropdownMenuItem>
                 </>
               )}
-              {/* Upgrade to Dashboard User — only for POS-only staff */}
+              {/* Upgrade to Dashboard User â€” only for POS-only staff */}
               {!staff.is_clerk_user && !staff.user_id && (
                 <>
                   <DropdownMenuSeparator />
@@ -546,7 +558,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                   </DropdownMenuItem>
                 </>
               )}
-              {/* Demote to POS-Only — only for Clerk staff */}
+              {/* Demote to POS-Only â€” only for Clerk staff */}
               {staff.is_clerk_user && staff.user_id && (
                 <>
                   <DropdownMenuSeparator />
@@ -918,7 +930,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
             <DialogTitle>PIN Reset Results</DialogTitle>
             <DialogDescription>
               New PINs have been generated for {bulkPinResults.length} staff
-              member(s). Save these securely — they cannot be retrieved later.
+              member(s). Save or share them securely with your staff.
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[300px] overflow-y-auto">

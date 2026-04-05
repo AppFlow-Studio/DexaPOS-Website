@@ -9,6 +9,7 @@ import {
 } from "./location-menu-overrides";
 import { LocationLibraryItem } from "@/types/menu";
 import { LogAuditEvent } from "./audit-logs";
+import { getCurrentUserMerchantRole } from "./role-check";
 
 // ============================================================================
 // TYPES
@@ -386,6 +387,20 @@ export async function CreateMenuItem(
 
   const supabase = createServerSupabaseClient();
 
+  // Role check: managers can only create location-specific items for their assigned locations
+  const roleInfo = await getCurrentUserMerchantRole();
+  if (roleInfo?.isMember) {
+    return { error: "You do not have permission to create menu items" };
+  }
+  if (roleInfo?.isManager) {
+    if (!locationId) {
+      return { error: "Managers cannot create global menu items" };
+    }
+    if (!roleInfo.assignedLocationIds.includes(locationId)) {
+      return { error: "You do not have access to this location" };
+    }
+  }
+
   // Get merchant ID
   const { data: merchant, error: merchantError } = await supabase
     .from("merchants")
@@ -495,6 +510,62 @@ export async function UpdateMenuItem(
   }
 
   const supabase = createServerSupabaseClient();
+
+  // Role check for managers and members
+  const roleInfo = await getCurrentUserMerchantRole();
+  if (roleInfo?.isMember) {
+    return { error: "You do not have permission to update menu items" };
+  }
+  if (roleInfo?.isManager) {
+    // Look up the item's location_id to distinguish global vs location-specific
+    const { data: itemCheck } = await supabase
+      .from("menu_items")
+      .select("location_id")
+      .eq("id", itemId)
+      .single();
+
+    const itemLocationId = itemCheck?.location_id;
+
+    if (!itemLocationId) {
+      // Global item: manager can only edit price/availability via location override
+      if (!locationId || locationId === "all") {
+        return {
+          error:
+            "Managers must provide a location context to update global menu items",
+        };
+      }
+      if (!roleInfo.assignedLocationIds.includes(locationId)) {
+        return { error: "You do not have access to this location" };
+      }
+      // Block non-price/availability fields for global items
+      const blockedFields = [
+        "name",
+        "description",
+        "image",
+        "meal_types",
+        "allergens",
+        "card_bg_color",
+        "modifier_group_ids",
+        "tax_category",
+        "is_tax_exempt",
+        "available_channels",
+      ] as const;
+      const hasBlockedFields = blockedFields.some(
+        (f) => data[f as keyof typeof data] !== undefined,
+      );
+      if (hasBlockedFields) {
+        return {
+          error:
+            "Managers can only update price and availability for global menu items",
+        };
+      }
+    } else {
+      // Location-specific item: manager can only edit items in their assigned locations
+      if (!roleInfo.assignedLocationIds.includes(itemLocationId)) {
+        return { error: "You do not have access to this menu item" };
+      }
+    }
+  }
 
   // Determine if this is a location-scoped update
   const isLocationScoped = locationId && locationId !== "all";
@@ -794,6 +865,26 @@ export async function DeleteMenuItem(
 
   const supabase = createServerSupabaseClient();
 
+  // Role check: managers can only delete location-specific items for their assigned locations
+  const roleInfo = await getCurrentUserMerchantRole();
+  if (roleInfo?.isMember) {
+    return { error: "You do not have permission to delete menu items" };
+  }
+  if (roleInfo?.isManager) {
+    const { data: itemCheck } = await supabase
+      .from("menu_items")
+      .select("location_id")
+      .eq("id", itemId)
+      .single();
+
+    if (!itemCheck?.location_id) {
+      return { error: "Managers cannot delete global menu items" };
+    }
+    if (!roleInfo.assignedLocationIds.includes(itemCheck.location_id)) {
+      return { error: "You do not have access to this menu item" };
+    }
+  }
+
   // Get item details before deleting (for audit log)
   const { data: item } = await supabase
     .from("menu_items")
@@ -802,7 +893,6 @@ export async function DeleteMenuItem(
     .single();
 
   const { error } = await supabase.from("menu_items").delete().eq("id", itemId);
-  //TODO: Add rls policy to delete menu items based on location access
   if (error) {
     console.error("Error deleting menu item:", error);
     return { error: error.message };

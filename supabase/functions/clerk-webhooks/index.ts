@@ -6,7 +6,7 @@ import { createClerkClient, ClerkClient } from 'npm:@clerk/backend'
 // CONSTANTS & CONFIGURATION
 // ============================================================================
 
-const DEXA_HQ_ORG_ID = Deno.env.get('DEXA_HQ_ORG_ID') || 'org_33z36QibAMZy6kc2xZNYmDl5duh'
+const DEXA_HQ_ORG_ID = Deno.env.get('DEXA_HQ_ORG_ID')!
 const LEGACY_ORG_LOGO_BUCKET = 'Organizations-Logos'
 const BUNNY_STORAGE_ZONE = Deno.env.get('BUNNY_STORAGE_ZONE_NAME') || ''
 const BUNNY_STORAGE_API_KEY = Deno.env.get('BUNNY_STORAGE_API_KEY') || ''
@@ -480,14 +480,30 @@ async function handleOrganizationCreated(ctx: WebhookContext): Promise<Response>
 
   // Create merchant if org_type is 'merchant'
   if (event.data.public_metadata?.org_type === 'merchant') {
+    const meta = event.data.public_metadata
     const { error: merchantError } = await supabase
       .from('merchants')
       .insert([{
         name: event.data.name,
         clerk_org_id: event.data.id,
-        carrier_id: event.data.public_metadata.carrierId,
-        public_metadata: event.data.public_metadata,
-        type: event.data.public_metadata.merchant_type,
+        carrier_id: meta.carrierId || null,
+        public_metadata: meta,
+        type: meta.merchant_type,
+        business_legal_name: meta.business_legal_name || event.data.name,
+        dba_name: meta.dba_name || null,
+        business_type: meta.merchant_type || null,
+        ein_last_four: meta.ein_last_four || null,
+        owner_first_name: meta.owner_first_name || null,
+        owner_last_name: meta.owner_last_name || null,
+        owner_email: meta.owner_email || null,
+        owner_phone: meta.owner_phone || null,
+        business_address_line1: meta.business_address_line1 || null,
+        business_address_line2: meta.business_address_line2 || null,
+        business_city: meta.business_city || null,
+        business_state: meta.business_state || null,
+        business_postal_code: meta.business_postal_code || null,
+        business_country: meta.business_country || 'US',
+        onboarding_status: meta.onboarding_status || 'onboarding',
         created_at: new Date(event.data.created_at).toISOString(),
         updated_at: new Date(event.data.updated_at).toISOString(),
       }])
@@ -838,6 +854,8 @@ async function handleMerchantMembershipCreated(
       is_active: true,
       hourly_rate: assignment.hourlyRate || null,
       employment_type: assignment.employmentType || null,
+      pin_plain: assignment.pinCode || null,
+      pin_hashed: null,
       pin_code: assignment.pinCode || null,
       assigned_at: createdAt,
       updated_at: updatedAt,

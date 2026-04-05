@@ -68,9 +68,10 @@ export function TeamTab({ location }: TeamTabProps) {
 
     // Filter members
     const filteredMembers = membersList.filter(member => {
+        if (!member.user) return false
         const matchesSearch =
-            `${member.user.first_name} ${member.user.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            member.user.email.toLowerCase().includes(searchTerm.toLowerCase())
+            `${member.user.first_name ?? ''} ${member.user.last_name ?? ''}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (member.user.email ?? '').toLowerCase().includes(searchTerm.toLowerCase())
 
         const matchesRole = roleFilter === 'all' || member.role_code === roleFilter
         const matchesStatus = statusFilter === 'all' ||
@@ -203,29 +204,29 @@ export function TeamTab({ location }: TeamTabProps) {
                                     style={{ animationDelay: `${index * 30}ms` }}
                                 >
                                     <Avatar className="h-10 w-10">
-                                        <AvatarImage src={member.user.avatar_url || undefined} />
+                                        <AvatarImage src={member.user?.avatar_url || undefined} />
                                         <AvatarFallback>
-                                            {member.user.first_name[0]}{member.user.last_name[0]}
+                                            {member.user?.first_name?.[0]}{member.user?.last_name?.[0]}
                                         </AvatarFallback>
                                     </Avatar>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
                                             <span className="font-medium truncate">
-                                                {member.user.first_name} {member.user.last_name}
+                                                {member.user?.first_name} {member.user?.last_name}
                                             </span>
                                             {member.is_primary_location && (
                                                 <Star className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                                             )}
                                         </div>
                                         <p className="text-sm text-muted-foreground truncate">
-                                            {member.user.email}
+                                            {member.user?.email}
                                         </p>
                                     </div>
                                     <Badge
                                         variant="outline"
                                         className={cn("text-xs capitalize shrink-0", getRoleBadgeClass(member.role_code))}
                                     >
-                                        {member.role}
+                                        {member.role_code?.split('.').pop()?.replace('_', ' ') ?? 'Staff'}
                                     </Badge>
                                     <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                                 </button>
@@ -288,16 +289,16 @@ export function TeamTab({ location }: TeamTabProps) {
                             <SheetHeader>
                                 <div className="flex items-center gap-4">
                                     <Avatar className="h-16 w-16">
-                                        <AvatarImage src={selectedMember.user.avatar_url || undefined} />
+                                        <AvatarImage src={selectedMember.user?.avatar_url || undefined} />
                                         <AvatarFallback className="text-lg">
-                                            {selectedMember.user.first_name[0]}{selectedMember.user.last_name[0]}
+                                            {selectedMember.user?.first_name?.[0]}{selectedMember.user?.last_name?.[0]}
                                         </AvatarFallback>
                                     </Avatar>
                                     <div>
                                         <SheetTitle className="text-xl">
-                                            {selectedMember.user.first_name} {selectedMember.user.last_name}
+                                            {selectedMember.user?.first_name} {selectedMember.user?.last_name}
                                         </SheetTitle>
-                                        <SheetDescription>{selectedMember.user.email}</SheetDescription>
+                                        <SheetDescription>{selectedMember.user?.email}</SheetDescription>
                                     </div>
                                 </div>
                             </SheetHeader>
@@ -325,11 +326,13 @@ export function TeamTab({ location }: TeamTabProps) {
                                         variant="outline"
                                         className={cn("text-sm", getRoleBadgeClass(selectedMember.role_code))}
                                     >
-                                        {selectedMember.role}
+                                        {selectedMember.role_code?.split('.').pop()?.replace('_', ' ') ?? 'Staff'}
                                     </Badge>
-                                    <p className="text-sm text-muted-foreground mt-2">
-                                        Level: {selectedMember.role.level} ({selectedMember.role.level_type})
-                                    </p>
+                                    {selectedMember.role && typeof selectedMember.role === 'object' && (
+                                        <p className="text-sm text-muted-foreground mt-2">
+                                            Level: {selectedMember.role.level} ({selectedMember.role.level_type})
+                                        </p>
+                                    )}
                                 </div>
 
                                 <Separator />

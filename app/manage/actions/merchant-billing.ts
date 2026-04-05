@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 
-const DEXA_HQ_ORG_ID = process.env.DEXA_POS_INTERNAL_TEAM_ID || 'org_33z36QibAMZy6kc2xZNYmDl5duh'
+const DEXA_HQ_ORG_ID = process.env.DEXA_POS_INTERNAL_TEAM_ID!
 
 export type MerchantBillingMethod = 'ach' | 'card'
 export type MerchantBankAccountType = 'checking' | 'savings'

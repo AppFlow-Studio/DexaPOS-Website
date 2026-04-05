@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -25,7 +25,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { createMerchantOnboarding } from '@/app/manage/actions/create-merchant-onboarding'
+import { ImagePlus, X } from 'lucide-react'
+import { createMerchantOnboarding, updateMerchantLogo } from '@/app/manage/actions/create-merchant-onboarding'
+import { uploadOrganizationLogo } from '@/lib/cdn/server'
 
 const createMerchantSchema = z.object({
   businessLegalName: z.string().min(2, 'Business legal name is required.'),
@@ -42,26 +44,47 @@ const createMerchantSchema = z.object({
   businessState: z.string().min(2, 'State is required.'),
   businessPostalCode: z.string().min(3, 'Postal code is required.'),
   businessCountry: z.string().default('US'),
-  carrierId: z.string().min(1, 'Carrier selection is required.'),
 })
 
 type CreateMerchantWizardValues = z.infer<typeof createMerchantSchema>
 
-interface CarrierOption {
-  id: string
-  name: string
-}
-
-interface CreateMerchantWizardProps {
-  carriers: CarrierOption[]
-}
+interface CreateMerchantWizardProps {}
 
 const STEP_TITLES = ['Business Info', 'Owner Contact', 'Review & Create'] as const
+type StepNumber = 1 | 2 | 3
 
-export function CreateMerchantWizard({ carriers }: CreateMerchantWizardProps) {
+const ALLOWED_LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']
+const MAX_LOGO_SIZE = 5 * 1024 * 1024 // 5MB
+
+export function CreateMerchantWizard({}: CreateMerchantWizardProps) {
   const router = useRouter()
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [isSubmitting, startTransition] = useTransition()
+  const hasSubmitted = useRef(false)
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const logoInputRef = useRef<HTMLInputElement>(null)
+
+  const handleLogoSelect = (file: File | null) => {
+    if (!file) return
+    if (!ALLOWED_LOGO_TYPES.includes(file.type)) {
+      toast.error('Invalid file type. Use PNG, JPG, WEBP, or SVG.')
+      return
+    }
+    if (file.size > MAX_LOGO_SIZE) {
+      toast.error('File too large. Maximum size is 5MB.')
+      return
+    }
+    setLogoFile(file)
+    setLogoPreview(URL.createObjectURL(file))
+  }
+
+  const removeLogo = () => {
+    setLogoFile(null)
+    if (logoPreview) URL.revokeObjectURL(logoPreview)
+    setLogoPreview(null)
+    if (logoInputRef.current) logoInputRef.current.value = ''
+  }
 
   const form = useForm<CreateMerchantWizardValues>({
     resolver: zodResolver(createMerchantSchema),
@@ -81,7 +104,6 @@ export function CreateMerchantWizard({ carriers }: CreateMerchantWizardProps) {
       businessState: '',
       businessPostalCode: '',
       businessCountry: 'US',
-      carrierId: '',
     },
   })
 
@@ -98,7 +120,7 @@ export function CreateMerchantWizard({ carriers }: CreateMerchantWizardProps) {
         'businessState',
         'businessPostalCode',
       ] as const,
-      3: ['carrierId'] as const,
+      3: [] as const,
     }),
     []
   )
@@ -116,6 +138,8 @@ export function CreateMerchantWizard({ carriers }: CreateMerchantWizardProps) {
   }
 
   const onSubmit = (data: CreateMerchantWizardValues) => {
+    if (step !== 3 || hasSubmitted.current) return
+    hasSubmitted.current = true
     startTransition(async () => {
       const result = await createMerchantOnboarding({
         businessLegalName: data.businessLegalName,
@@ -134,22 +158,32 @@ export function CreateMerchantWizard({ carriers }: CreateMerchantWizardProps) {
           postalCode: data.businessPostalCode,
           country: data.businessCountry || 'US',
         },
-        carrierId: data.carrierId,
       })
 
       if (!result.success) {
+        hasSubmitted.current = false
         toast.error(result.error || 'Failed to create merchant.')
         return
       }
 
+      // Upload logo if provided, then set it on the Clerk org
+      if (logoFile && result.organizationId) {
+        const uploadResult = await uploadOrganizationLogo(logoFile, result.organizationId)
+        if (uploadResult.success && uploadResult.cdnUrl) {
+          await updateMerchantLogo(result.organizationId, uploadResult.cdnUrl)
+        } else if (!uploadResult.success) {
+          toast.warning('Merchant created but logo upload failed: ' + (uploadResult.error || 'Unknown error'))
+        }
+      }
+
       toast.success('Merchant created and owner invited.')
-      router.push(`/manage/merchants/${result.organizationId || result.merchantId}`)
+      router.push(`/manage/merchants/${result.organizationId}`)
     })
   }
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <div className="space-y-6">
         <Card>
           <CardHeader>
             <CardTitle>
@@ -177,6 +211,7 @@ export function CreateMerchantWizard({ carriers }: CreateMerchantWizardProps) {
 
           <CardContent className="space-y-4">
             {step === 1 && (
+              <>
               <div className="grid gap-4 md:grid-cols-2">
                 <FormField
                   control={form.control}
@@ -245,6 +280,68 @@ export function CreateMerchantWizard({ carriers }: CreateMerchantWizardProps) {
                   )}
                 />
               </div>
+
+              {/* Business Logo Upload */}
+              <div className="rounded-lg border bg-muted/30 p-5">
+                <div className="flex items-start justify-between gap-6">
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-sm font-semibold">Business Logo</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Upload a logo for the merchant. PNG, JPG, WEBP, or SVG — max 5MB, recommended 512×512px.
+                    </p>
+                    {!logoPreview && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-3 gap-1.5"
+                        onClick={() => logoInputRef.current?.click()}
+                      >
+                        <ImagePlus className="h-4 w-4" />
+                        Choose File
+                      </Button>
+                    )}
+                    {logoPreview && (
+                      <div className="flex items-center gap-2 pt-2">
+                        <span className="text-sm text-muted-foreground truncate max-w-[260px]">{logoFile?.name}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-destructive hover:text-destructive"
+                          onClick={removeLogo}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => logoInputRef.current?.click()}
+                    className={`shrink-0 h-24 w-24 rounded-xl border-2 flex items-center justify-center overflow-hidden transition-colors ${
+                      logoPreview
+                        ? 'border-solid border-border'
+                        : 'border-dashed border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/50'
+                    }`}
+                  >
+                    {logoPreview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={logoPreview} alt="Logo preview" className="h-full w-full object-cover" />
+                    ) : (
+                      <ImagePlus className="h-7 w-7 text-muted-foreground/40" />
+                    )}
+                  </button>
+                </div>
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.webp,.svg"
+                  className="hidden"
+                  onChange={(e) => handleLogoSelect(e.target.files?.[0] || null)}
+                />
+              </div>
+              </>
             )}
 
             {step === 2 && (
@@ -395,7 +492,16 @@ export function CreateMerchantWizard({ carriers }: CreateMerchantWizardProps) {
               <div className="space-y-5">
                 <div className="rounded-md border p-4">
                   <h3 className="mb-2 font-semibold">Review</h3>
-                  <div className="space-y-1 text-sm text-muted-foreground">
+                  <div className="flex gap-4">
+                    {logoPreview && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={logoPreview}
+                        alt="Logo"
+                        className="h-16 w-16 rounded-lg object-cover border shrink-0"
+                      />
+                    )}
+                    <div className="space-y-1 text-sm text-muted-foreground">
                     <p>
                       <span className="font-medium text-foreground">Business:</span>{' '}
                       {values.dbaName?.trim() || values.businessLegalName}
@@ -420,38 +526,8 @@ export function CreateMerchantWizard({ carriers }: CreateMerchantWizardProps) {
                       {values.businessCity}, {values.businessState} {values.businessPostalCode}
                     </p>
                   </div>
+                  </div>
                 </div>
-
-                <FormField
-                  control={form.control}
-                  name="carrierId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Carrier Assignment</FormLabel>
-                      {carriers.length === 0 ? (
-                        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-                          No carriers found. Create a carrier first before creating a merchant.
-                        </div>
-                      ) : (
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select carrier" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {carriers.map((carrier) => (
-                              <SelectItem key={carrier.id} value={carrier.id}>
-                                {carrier.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
 
                 <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
                   Owner will receive an organization invitation email after creation.
@@ -471,7 +547,7 @@ export function CreateMerchantWizard({ carriers }: CreateMerchantWizardProps) {
               Continue
             </Button>
           ) : (
-            <Button type="submit" disabled={isSubmitting || carriers.length === 0}>
+            <Button type="button" disabled={isSubmitting} onClick={form.handleSubmit(onSubmit)}>
               {isSubmitting ? 'Creating...' : 'Create Merchant'}
             </Button>
           )}
@@ -480,7 +556,7 @@ export function CreateMerchantWizard({ carriers }: CreateMerchantWizardProps) {
         <div className="text-xs text-muted-foreground">
           Required permissions: <Label className="font-mono text-xs">hq.merchant.create</Label>
         </div>
-      </form>
+      </div>
     </Form>
   )
 }

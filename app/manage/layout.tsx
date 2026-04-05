@@ -30,7 +30,6 @@ import {
     LayoutDashboard,
     Users,
     BarChart3,
-    FileText,
     Settings,
     HelpCircle,
     MessageSquare,
@@ -114,7 +113,7 @@ const navMain: NavGroup[] = [
                 url: '/manage/analytics',
                 icon: BarChart3,
                 requiredPermission: 'analytics.view',
-            }
+            },
         ]
     },
     {

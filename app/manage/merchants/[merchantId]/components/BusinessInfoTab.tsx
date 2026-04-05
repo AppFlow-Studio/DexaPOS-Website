@@ -38,9 +38,11 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
-import { useAdminUpdateMerchant } from '@/lib/queries/use-admin-merchant'
+import { useAdminMerchantLocationDetails, useAdminUpdateMerchant } from '@/lib/queries/use-admin-merchant'
 import { toast } from 'sonner'
 import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { AdminLocationDetailSheet } from './AdminLocationDetailSheet'
 
 interface BusinessInfoTabProps {
     merchantInfo: MerchantDetails
@@ -55,25 +57,33 @@ const businessTypes = {
 }
 
 export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
+    const searchParams = useSearchParams()
+    const router = useRouter()
     // Use locations from merchantInfo directly (since we use MerchantDetails)
     const locationsList = merchantInfo.locations || []
 
     const locationsLoading = false
 
-    // Get business info from public_metadata or use defaults
-    const businessInfo = (merchantInfo?.public_metadata as any) || {}
-    const legalBusinessName = businessInfo.legal_business_name || 'Not provided'
-    const dbaName = businessInfo.dba_name || 'Not provided'
-    const einTaxId = businessInfo.ein_tax_id || 'Not provided'
-    const businessType = businessInfo.business_type || 'Not specified'
-    const businessLicenseNumber = businessInfo.business_license_number || 'Not provided'
+    // Read business info from merchant columns directly
+    const legalBusinessName = merchantInfo?.business_legal_name || 'Not provided'
+    const dbaName = merchantInfo?.dba_name || merchantInfo?.name || 'Not provided'
+    const einTaxId = merchantInfo?.ein_last_four ? `****${merchantInfo.ein_last_four}` : 'Not provided'
+    const businessType = merchantInfo?.business_type || 'Not specified'
+    const businessLicenseNumber = (merchantInfo?.public_metadata as any)?.business_license_number || 'Not provided'
 
     const formatAddress = (loc: any) => {
         return [loc.address_line1, loc.city, loc.state].filter(Boolean).join(', ')
     }
 
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+    const [isLocationDetailsOpen, setIsLocationDetailsOpen] = useState(false)
+    const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
     const updateMutation = useAdminUpdateMerchant()
+    const {
+        data: selectedLocation,
+        isLoading: isLocationDetailsLoading,
+        error: locationDetailsError,
+    } = useAdminMerchantLocationDetails(merchantInfo.id, selectedLocationId, isLocationDetailsOpen)
 
     const [formData, setFormData] = useState({
         legal_business_name: '',
@@ -88,13 +98,13 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
     useEffect(() => {
         if (isEditDialogOpen) {
             setFormData({
-                legal_business_name: businessInfo.legal_business_name || '',
-                dba_name: businessInfo.dba_name || '',
-                ein_tax_id: businessInfo.ein_tax_id || '',
-                business_type: businessInfo.business_type || '',
-                business_license_number: businessInfo.business_license_number || '',
-                merchant_type: businessInfo.merchant_type || '',
-                status: businessInfo.status || ''
+                legal_business_name: merchantInfo?.business_legal_name || '',
+                dba_name: merchantInfo?.dba_name || '',
+                ein_tax_id: merchantInfo?.ein_last_four || '',
+                business_type: merchantInfo?.business_type || '',
+                business_license_number: (merchantInfo?.public_metadata as any)?.business_license_number || '',
+                merchant_type: merchantInfo?.business_type || '',
+                status: merchantInfo?.onboarding_status || ''
             })
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -105,9 +115,10 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
             const result = await updateMutation.mutateAsync({
                 merchantId: merchantInfo.id,
                 updates: {
-                    public_metadata: {
-                        ...formData
-                    }
+                    business_legal_name: formData.legal_business_name || null,
+                    dba_name: formData.dba_name || null,
+                    ein_last_four: formData.ein_tax_id || null,
+                    business_type: formData.business_type || null,
                 }
             })
 
@@ -117,8 +128,42 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
             } else {
                 toast.error(result.error || 'Failed to update business info')
             }
-        } catch (error) {
+        } catch {
             toast.error('An error occurred while updating business info')
+        }
+    }
+
+    const handleViewLocationDetails = (locationId: string) => {
+        setSelectedLocationId(locationId)
+        setIsLocationDetailsOpen(true)
+    }
+
+    useEffect(() => {
+        const openLocationId = searchParams.get('openLocation')
+        if (!openLocationId || isLocationDetailsOpen || selectedLocationId) return
+
+        const exists = locationsList.some((location) => location.id === openLocationId)
+        if (!exists) return
+
+        setSelectedLocationId(openLocationId)
+        setIsLocationDetailsOpen(true)
+    }, [isLocationDetailsOpen, locationsList, searchParams, selectedLocationId])
+
+    const handleLocationSheetOpenChange = (open: boolean) => {
+        setIsLocationDetailsOpen(open)
+
+        if (!open) {
+            setSelectedLocationId(null)
+
+            if (searchParams.get('openLocation')) {
+                const next = new URLSearchParams(searchParams.toString())
+                next.delete('openLocation')
+                const query = next.toString()
+                router.replace(
+                    query ? `/manage/merchants/${merchantInfo.id}?${query}` : `/manage/merchants/${merchantInfo.id}`,
+                    { scroll: false }
+                )
+            }
         }
     }
 
@@ -247,14 +292,14 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                 </div>
                                 <div className="space-y-2">
                                     <div className="text-sm font-medium text-muted-foreground">Status</div>
-                                    <Badge variant={businessInfo.status === 'active' ? 'default' : 'secondary'}>
-                                        {businessInfo.status || 'Unknown'}
+                                    <Badge variant={merchantInfo?.onboarding_status === 'active' ? 'default' : 'secondary'}>
+                                        {merchantInfo?.onboarding_status || 'Unknown'}
                                     </Badge>
                                 </div>
                                 <div className="space-y-2">
                                     <div className="text-sm font-medium text-muted-foreground">Business Type (Category)</div>
                                     <Badge variant="outline">
-                                        {businessInfo.merchant_type || 'Not specified'}
+                                        {merchantInfo?.business_type || 'Not specified'}
                                     </Badge>
                                 </div>
                             </div>
@@ -347,7 +392,11 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                                 )}
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <Button variant="ghost" size="sm">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleViewLocationDetails(location.id)}
+                                                >
                                                     View Details
                                                 </Button>
                                             </TableCell>
@@ -510,6 +559,15 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {!isLocationDetailsLoading && !locationDetailsError ? (
+                <AdminLocationDetailSheet
+                    merchantId={merchantInfo.id}
+                    location={selectedLocation ?? null}
+                    open={isLocationDetailsOpen}
+                    onOpenChange={handleLocationSheetOpenChange}
+                />
+            ) : null}
 
         </Tabs>
     )

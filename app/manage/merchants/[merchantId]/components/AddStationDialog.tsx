@@ -194,32 +194,52 @@ export function AddStationDialog({ open, onOpenChange, merchantId, locations }: 
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[600px]">
-                <DialogHeader>
-                    <DialogTitle>Add Station</DialogTitle>
-                    <DialogDescription>
-                        {step === 1 && 'Select the station type and location'}
-                        {step === 2 && 'Enter station details'}
-                        {step === 3 && 'Configure station capabilities'}
-                    </DialogDescription>
+            <DialogContent className="w-[calc(100%-1rem)] sm:max-w-[680px] max-h-[92vh] overflow-hidden gap-0 p-0">
+                <DialogHeader className="border-b bg-gradient-to-br from-slate-50 via-white to-cyan-50/60 px-6 pt-6 pb-4">
+                    <div className="flex items-start gap-4">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-200 bg-cyan-50 text-cyan-700">
+                            <Monitor className="h-6 w-6" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <DialogTitle className="text-xl">Add Station</DialogTitle>
+                            <DialogDescription className="mt-1">
+                                {step === 1 && 'Choose the location and station type first.'}
+                                {step === 2 && 'Define the station identity used by the POS.'}
+                                {step === 3 && 'Confirm the permissions this station should have.'}
+                            </DialogDescription>
+                        </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-3 gap-2">
+                        {[
+                            { id: 1, label: 'Type' },
+                            { id: 2, label: 'Details' },
+                            { id: 3, label: 'Capabilities' },
+                        ].map((item) => (
+                            <div
+                                key={item.id}
+                                className={cn(
+                                    'rounded-xl border px-3 py-2 text-sm transition-colors',
+                                    step === item.id
+                                        ? 'border-primary bg-primary/10 text-primary'
+                                        : step > item.id
+                                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                            : 'border-slate-200 bg-slate-50 text-slate-500'
+                                )}
+                            >
+                                <div className="text-[11px] uppercase tracking-wide opacity-70">
+                                    Step {item.id}
+                                </div>
+                                <div className="font-medium">{item.label}</div>
+                            </div>
+                        ))}
+                    </div>
                 </DialogHeader>
 
-                {/* Step Indicator */}
-                <div className="flex items-center justify-center gap-2 py-2">
-                    {[1, 2, 3].map((s) => (
-                        <div
-                            key={s}
-                            className={cn(
-                                'h-2 w-8 rounded-full transition-colors',
-                                s === step ? 'bg-primary' : s < step ? 'bg-primary/50' : 'bg-muted'
-                            )}
-                        />
-                    ))}
-                </div>
-
+                <div className="overflow-y-auto px-6 py-5 max-h-[calc(92vh-214px)]">
                 {/* Step 1: Type & Location */}
                 {step === 1 && (
-                    <div className="space-y-6 py-4">
+                    <div className="space-y-6">
                         <div className="space-y-2">
                             <Label>Location *</Label>
                             <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
@@ -270,7 +290,7 @@ export function AddStationDialog({ open, onOpenChange, merchantId, locations }: 
 
                 {/* Step 2: Details */}
                 {step === 2 && (
-                    <div className="space-y-4 py-4">
+                    <div className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="station-name">Station Name *</Label>
                             <Input
@@ -307,7 +327,7 @@ export function AddStationDialog({ open, onOpenChange, merchantId, locations }: 
 
                 {/* Step 3: Capabilities */}
                 {step === 3 && (
-                    <div className="space-y-4 py-4">
+                    <div className="space-y-4">
                         <div className="text-sm text-muted-foreground mb-4">
                             Configure what this station can do. These settings control permissions on the POS app.
                         </div>
@@ -380,16 +400,18 @@ export function AddStationDialog({ open, onOpenChange, merchantId, locations }: 
                         </div>
                     </div>
                 )}
+                </div>
 
-                <DialogFooter className="flex justify-between">
-                    <div>
+                <DialogFooter className="border-t bg-slate-50/80 px-6 py-4">
+                    <div className="flex w-full items-center justify-between gap-3">
+                        <div>
                         {step > 1 && (
                             <Button variant="outline" onClick={() => setStep(step - 1)}>
                                 Back
                             </Button>
                         )}
-                    </div>
-                    <div className="flex gap-2">
+                        </div>
+                        <div className="flex gap-2">
                         <Button variant="outline" onClick={() => onOpenChange(false)}>
                             Cancel
                         </Button>
@@ -411,6 +433,7 @@ export function AddStationDialog({ open, onOpenChange, merchantId, locations }: 
                                 Create Station
                             </Button>
                         )}
+                    </div>
                     </div>
                 </DialogFooter>
             </DialogContent>

@@ -1,1 +1,0 @@
-https://x.com/JadFahs/status/2037983903730794577?s=20

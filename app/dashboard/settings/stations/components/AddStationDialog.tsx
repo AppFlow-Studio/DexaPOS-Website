@@ -420,20 +420,34 @@ export function AddStationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn("sm:max-w-[600px]", isKds && "sm:max-w-[700px]")}>
-        <DialogHeader>
-          <DialogTitle>
-            {stationToEdit ? "Edit Station" : "Add New Station"}
-          </DialogTitle>
-          <DialogDescription>
-            {stationToEdit
-              ? "Update the station configuration."
-              : "Create a new station for your POS system."}
-          </DialogDescription>
+      <DialogContent className={cn(
+        "w-[calc(100%-1rem)] max-h-[94vh] overflow-hidden gap-0 p-0 sm:max-w-[760px]",
+        isKds && "sm:max-w-[920px]"
+      )}>
+        <DialogHeader className="border-b bg-gradient-to-br from-slate-50 via-white to-sky-50/60 px-6 pt-6 pb-4">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-sky-200 bg-sky-50 text-sky-700">
+              <span className="text-2xl">{getStationTypeIcon(stationType)}</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="text-xl">
+                {stationToEdit ? "Edit Station" : "Add New Station"}
+              </DialogTitle>
+              <DialogDescription className="mt-1">
+                {stationToEdit
+                  ? "Update the station configuration, device identity, and permissions."
+                  : "Create a new station for your POS devices, kiosks, or kitchen displays."}
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
+        <div className="overflow-y-auto px-6 py-5 max-h-[calc(94vh-176px)]">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className={cn("grid w-full", isKds ? "grid-cols-5" : "grid-cols-3")}>
+          <TabsList className={cn(
+            "grid w-full gap-1 rounded-2xl bg-slate-100/80 p-1",
+            isKds ? "grid-cols-5" : "grid-cols-3"
+          )}>
             <TabsTrigger value="basic">Basic Info</TabsTrigger>
             <TabsTrigger value="device">Device</TabsTrigger>
             {isKds && <TabsTrigger value="kds-display">Display</TabsTrigger>}
@@ -1030,8 +1044,9 @@ export function AddStationDialog({
             </div>
           </TabsContent>
         </Tabs>
+        </div>
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 border-t bg-slate-50/80 px-6 py-4">
           <Button type="button" variant="ghost" onClick={handleClose} disabled={isLoading}>
             Cancel
           </Button>

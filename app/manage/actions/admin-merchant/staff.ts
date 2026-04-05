@@ -5,7 +5,6 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
 import { revalidatePath } from 'next/cache'
-import bcrypt from 'bcryptjs'
 import { clerkClient } from '@clerk/nextjs/server'
 import type {
   AdminStaffMember,
@@ -33,7 +32,7 @@ export async function getAdminMerchantStaff(
 
   const supabase = createServerSupabaseClient()
 
-  const { data, error } = await supabase.rpc('get_unified_staff_view', {
+  const { data, error } = await supabase.rpc('admin_get_unified_staff_view', {
     p_merchant_id: merchantId,
     p_location_id: locationId || null,
   })
@@ -244,18 +243,18 @@ export async function adminCreateStaff(
   const supabase = createServiceRoleClient()
 
   // Generate or validate PIN
-  let hashedPin: string | null = null
+  let pinCode: string | null = null
   let generatedPin: string | undefined
 
   if (data.autoGeneratePin) {
     generatedPin = Math.floor(1000 + Math.random() * 9000).toString()
-    hashedPin = await bcrypt.hash(generatedPin, 10)
+    pinCode = generatedPin
   } else if (data.pin) {
     // Validate PIN format
     if (!/^\d{4,6}$/.test(data.pin)) {
       return { success: false, error: 'PIN must be 4-6 digits' }
     }
-    hashedPin = await bcrypt.hash(data.pin, 10)
+    pinCode = data.pin
   }
 
   // Create staff profile
@@ -287,7 +286,9 @@ export async function adminCreateStaff(
     role_code: data.roleCode,
     is_primary_location: true,
     is_active: true,
-    pin_code: hashedPin,
+    pin_plain: pinCode,
+    pin_hashed: null,
+    pin_code: pinCode,
     hourly_rate: data.hourlyRate || 0,
     employment_type: data.employmentType,
     assigned_at: new Date().toISOString(),
@@ -481,17 +482,17 @@ export async function adminCreateClerkStaff(
   const tempPassword = Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
 
   // 3. Optionally generate PIN
-  let hashedPin: string | null = null
+  let pinCode: string | null = null
   let generatedPin: string | undefined
 
   if (data.autoGeneratePin) {
     generatedPin = Math.floor(1000 + Math.random() * 9000).toString()
-    hashedPin = await bcrypt.hash(generatedPin, 10)
+    pinCode = generatedPin
   } else if (data.pin) {
     if (!/^\d{4,6}$/.test(data.pin)) {
       return { success: false, error: 'PIN must be 4-6 digits' }
     }
-    hashedPin = await bcrypt.hash(data.pin, 10)
+    pinCode = data.pin
   }
 
   // 4. Create Clerk user
@@ -596,7 +597,9 @@ export async function adminCreateClerkStaff(
     role_code: data.roleCode,
     is_primary_location: true,
     is_active: true,
-    pin_code: hashedPin,
+    pin_plain: pinCode,
+    pin_hashed: null,
+    pin_code: pinCode,
     hourly_rate: data.hourlyRate || 0,
     employment_type: data.employmentType,
     assigned_at: new Date().toISOString(),
