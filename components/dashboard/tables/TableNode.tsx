@@ -393,11 +393,7 @@ export function TableNode ({
         )}
       >
         <TableComponent
-          color={
-            isDesignMode
-              ? statusColor || table.color_override || '#F1F1F1'
-              : table.color_override || '#F1F1F1'
-          }
+          color={statusColor || table.color_override || '#F1F1F1'}
           width={width}
           height={height}
         />

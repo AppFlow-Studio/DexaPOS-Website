@@ -53,17 +53,32 @@ const getTableStatusColor = (
     case 'seated':
       return '#3b82f6'
     case 'ordered':
-      return '#8b5cf6'
-    case 'served':
       return '#f97316'
-    case 'paid':
+    case 'served':
       return '#eab308'
-    case 'cleaning':
+    case 'check_presented':
+      return '#a855f7'
+    case 'paid':
       return '#ef4444'
+    case 'cleaning':
+      return '#6b7280'
+    case 'blocked':
+      return '#18181b'
     default:
-      return undefined
+      return '#22c55e'
   }
 }
+
+const STATUS_LEGEND_ITEMS = [
+  { status: 'available', label: 'Available' },
+  { status: 'seated', label: 'Seated' },
+  { status: 'ordered', label: 'Ordered' },
+  { status: 'served', label: 'Served' },
+  { status: 'check_presented', label: 'Check' },
+  { status: 'paid', label: 'Paid' },
+  { status: 'cleaning', label: 'Cleaning' },
+  { status: 'blocked', label: 'Blocked' }
+] as const
 
 export const RuntimeFloorPlanView = forwardRef<
   RuntimeFloorPlanViewRef,
@@ -401,6 +416,27 @@ export const RuntimeFloorPlanView = forwardRef<
 
     return (
       <div className='relative h-full w-full overflow-hidden select-none animate-in fade-in duration-300 bg-slate-900'>
+        {/* Status Legend */}
+        <div className='absolute top-4 left-4 z-50 rounded-md border border-white/20 bg-black/45 px-3 py-2 text-white backdrop-blur-sm'>
+          <div className='flex items-center gap-x-3 text-[10px] font-medium whitespace-nowrap'>
+            {STATUS_LEGEND_ITEMS.map(item => {
+              const dotColor = getTableStatusColor(item.status)
+              return (
+                <div key={item.status} className='flex items-center gap-1.5'>
+                  <span
+                    className={cn(
+                      'inline-block h-2.5 w-2.5 rounded-full',
+                      item.status === 'blocked' && 'border border-white/40'
+                    )}
+                    style={{ backgroundColor: dotColor }}
+                  />
+                  <span className='text-white/90'>{item.label}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
         {/* Zoom Controls */}
         <div className='absolute top-4 right-4 z-50 flex items-center gap-2'>
           <Button
@@ -520,7 +556,11 @@ export const RuntimeFloorPlanView = forwardRef<
                     onDelete={() => onRemoveTable?.(table.id)}
                     onDragStart={handleTableDragStart}
                     onDragEnd={handleTableDragEnd}
-                    statusColor={getTableStatusColor(session?.status)}
+                    statusColor={
+                      table.category === 'table' || table.category === 'booth'
+                        ? getTableStatusColor(session?.status || 'available')
+                        : undefined
+                    }
                     billAmount={session?.total_amount}
                   />
                 </div>

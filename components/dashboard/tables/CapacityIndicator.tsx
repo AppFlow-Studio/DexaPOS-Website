@@ -29,14 +29,14 @@ export function CapacityIndicator({ tables }: CapacityIndicatorProps) {
     }, [tables])
 
     return (
-        <div className="space-y-2 p-4 border-b">
-            <div className="flex items-center justify-between text-sm">
+        <div className="space-y-1.5 px-2 py-2 border-b">
+            <div className="flex items-center justify-between text-[11px]">
                 <span className="text-muted-foreground">
                     {capacity.occupied}/{capacity.total} tables
                 </span>
                 <span className="font-medium">{capacity.capacityPercent}% capacity</span>
             </div>
-            <div className="h-2 bg-muted rounded-full overflow-hidden">
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                 <div
                     className="h-full bg-primary transition-all duration-300 rounded-full"
                     style={{ width: `${capacity.capacityPercent}%` }}
