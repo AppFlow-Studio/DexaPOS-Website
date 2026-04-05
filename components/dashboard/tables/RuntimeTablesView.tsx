@@ -12,6 +12,9 @@ import { EmptyFloorPlanView } from './EmptyFloorPlanView'
 import { CreateFloorPlanDialog } from './CreateFloorPlanDialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
+import { Button } from '@/components/ui/button'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface RuntimeTablesViewProps {
     locationId: string
@@ -20,6 +23,7 @@ interface RuntimeTablesViewProps {
 
 export function RuntimeTablesView({ locationId, onBack }: RuntimeTablesViewProps) {
     const [isDesignMode, setIsDesignMode] = React.useState(false)
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false)
     const [searchQuery, setSearchQuery] = React.useState('')
     const [selectedTableId, setSelectedTableId] = React.useState<string | undefined>()
     const [location, setLocation] = React.useState<Location | null>(null)
@@ -181,15 +185,42 @@ export function RuntimeTablesView({ locationId, onBack }: RuntimeTablesViewProps
                     onEditLayout={handleEditLayout}
                 />
                 <div className="flex overflow-hidden relative h-full ">
-                    <TablesSidebar
-                        locationId={locationId}
-                        tables={tables}
-                        waitlistInfo={waitlistInfo || undefined}
-                        reservations={reservations || []}
-                        searchQuery={searchQuery}
-                        selectedTableId={selectedTableId}
-                        onTableClick={setSelectedTableId}
-                    />
+                    <div
+                        className={cn(
+                            'shrink-0 overflow-hidden transition-[width] duration-200 ease-out',
+                            isSidebarCollapsed ? 'w-0' : 'w-80'
+                        )}
+                    >
+                        {!isSidebarCollapsed && (
+                            <TablesSidebar
+                                locationId={locationId}
+                                tables={tables}
+                                waitlistInfo={waitlistInfo || undefined}
+                                reservations={reservations || []}
+                                searchQuery={searchQuery}
+                                selectedTableId={selectedTableId}
+                                onTableClick={setSelectedTableId}
+                            />
+                        )}
+                    </div>
+
+                    <div className="relative w-0 shrink-0">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setIsSidebarCollapsed((prev) => !prev)}
+                            className="absolute left-0 top-1/2 z-50 h-8 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border bg-background/95 shadow-sm"
+                            title={isSidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+                            aria-label={isSidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+                        >
+                            {isSidebarCollapsed ? (
+                                <ChevronRight className="h-3.5 w-3.5" />
+                            ) : (
+                                <ChevronLeft className="h-3.5 w-3.5" />
+                            )}
+                        </Button>
+                    </div>
 
                     {/* PASS DATA ONLY. 
                        We don't need drag handlers here because isDesignMode is false.
