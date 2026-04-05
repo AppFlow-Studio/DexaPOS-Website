@@ -134,7 +134,11 @@ export function TablesSidebar ({
         occupied += 1
       }
 
-      if (status === 'check_presented' || status === 'cleaning' || status === 'blocked') {
+      if (
+        status === 'check_presented' ||
+        status === 'cleaning' ||
+        status === 'blocked'
+      ) {
         attention += 1
       }
     })
@@ -198,16 +202,28 @@ export function TablesSidebar ({
         className='flex flex-col h-full'
       >
         <TabsList className='m-1 grid w-auto grid-cols-4 rounded-md border bg-muted/40 p-0.5'>
-          <TabsTrigger value='tables' className='h-6 text-[10px] rounded-sm px-1'>
+          <TabsTrigger
+            value='tables'
+            className='h-6 text-[10px] rounded-sm px-1'
+          >
             Tables
           </TabsTrigger>
-          <TabsTrigger value='waitlist' className='h-6 text-[10px] rounded-sm px-1'>
+          <TabsTrigger
+            value='waitlist'
+            className='h-6 text-[10px] rounded-sm px-1'
+          >
             Waitlist
           </TabsTrigger>
-          <TabsTrigger value='seated' className='h-6 text-[10px] rounded-sm px-1'>
+          <TabsTrigger
+            value='seated'
+            className='h-6 text-[10px] rounded-sm px-1'
+          >
             Seated
           </TabsTrigger>
-          <TabsTrigger value='history' className='h-6 text-[10px] rounded-sm px-1'>
+          <TabsTrigger
+            value='history'
+            className='h-6 text-[10px] rounded-sm px-1'
+          >
             History
           </TabsTrigger>
         </TabsList>
@@ -257,7 +273,9 @@ export function TablesSidebar ({
                 {sortedTables.length === 0 ? (
                   <div className='text-center text-muted-foreground py-4'>
                     <p className='text-[11px] font-medium'>No tables found</p>
-                    <p className='text-[10px] mt-0.5'>Try a different filter or search term.</p>
+                    <p className='text-[10px] mt-0.5'>
+                      Try a different filter or search term.
+                    </p>
                   </div>
                 ) : (
                   sortedTables.map(table => {
@@ -289,7 +307,8 @@ export function TablesSidebar ({
                                   className={cn(
                                     'w-1.5 h-1.5 rounded-full shrink-0',
                                     STATUS_DOT_CLASS[statusColor],
-                                    statusColor === 'near-black' && 'border border-white/30'
+                                    statusColor === 'near-black' &&
+                                      'border border-white/30'
                                   )}
                                 />
                                 <span className='font-semibold text-[11px] truncate'>
@@ -325,7 +344,9 @@ export function TablesSidebar ({
                               )}
                             </div>
                             {(table.capacity || 0) > 0 && (
-                              <span className='shrink-0 ml-2 text-[9px]'>Seats {table.capacity}</span>
+                              <span className='shrink-0 ml-2 text-[9px]'>
+                                Seats {table.capacity}
+                              </span>
                             )}
                           </div>
                         </div>
