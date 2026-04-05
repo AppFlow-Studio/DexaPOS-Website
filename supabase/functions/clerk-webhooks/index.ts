@@ -136,6 +136,33 @@ async function deleteOrganizationLogoAsset(
 }
 
 // ============================================================================
+// MERCHANT RESOLUTION HELPERS
+// ============================================================================
+
+/**
+ * Resolve a Supabase merchants.id from a Clerk organization_id.
+ * Returns null if the merchant row hasn't been created yet (race with
+ * organization.created webhook) or if the org isn't actually a merchant.
+ */
+async function resolveMerchantIdByClerkOrgId(
+  supabase: SupabaseClient,
+  organizationId: string
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('merchants')
+    .select('id')
+    .eq('clerk_org_id', organizationId)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[resolveMerchantIdByClerkOrgId] lookup failed', error)
+    return null
+  }
+
+  return data?.id ?? null
+}
+
+// ============================================================================
 // USER OPERATIONS
 // ============================================================================
 
@@ -965,10 +992,25 @@ async function handleOrganizationMembershipCreated(ctx: WebhookContext): Promise
       role: effectiveMetadata?.role 
     })
 
-    // Determine merchant ID from effective metadata
-    const merchantId = effectiveMetadata?.merchantId
+    // Determine merchant ID — prefer metadata, fall back to clerk_org_id lookup.
+    // The fallback covers owner-invite flows (createMerchantOnboarding doesn't
+    // embed merchantId because the Supabase UUID doesn't exist at invite time)
+    // and any other path that forgets to pass merchantId.
+    let merchantId: string | undefined = effectiveMetadata?.merchantId
 
-    // Check if this is an HQ admin membership
+    if (!merchantId) {
+      // Try resolving from the merchants table via clerk_org_id.
+      const resolved = await resolveMerchantIdByClerkOrgId(supabase, organizationId)
+      if (resolved) {
+        merchantId = resolved
+        logEvent(eventType, 'Resolved merchantId via clerk_org_id fallback', {
+          organizationId,
+          merchantId,
+        })
+      }
+    }
+
+    // Still no merchantId — check if this is an HQ admin membership
     if (!merchantId) {
       const isHQOrg = organizationId === DEXA_HQ_ORG_ID
 
@@ -978,8 +1020,17 @@ async function handleOrganizationMembershipCreated(ctx: WebhookContext): Promise
         )
       }
 
-      logError(eventType, 'No merchantId found and not HQ org', { organizationId, effectiveMetadata })
-      return errorResponse('merchantId not found in metadata', 400)
+      // Neither metadata, DB lookup, nor HQ match. Most likely cause: the
+      // organization.created webhook for this org hasn't finished writing the
+      // merchants row yet. Return 500 so Clerk retries (exponential backoff ~24h).
+      logError(eventType, 'Could not resolve merchantId — merchant row may not exist yet', {
+        organizationId,
+        effectiveMetadata,
+      })
+      return errorResponse(
+        'merchantId not resolvable (retry expected)',
+        500
+      )
     }
 
     // Handle merchant membership
