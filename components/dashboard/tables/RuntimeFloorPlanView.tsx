@@ -425,7 +425,10 @@ export const RuntimeFloorPlanView = forwardRef<
     }
 
     return (
-      <div className='relative h-full w-full overflow-hidden select-none animate-in fade-in duration-300 bg-slate-950'>
+      <div
+        className='relative h-full w-full overflow-hidden select-none animate-in fade-in duration-300'
+        style={{ backgroundColor: '#0C0F1A' }}
+      >
         {/* Status Legend */}
         <div className='absolute bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-md border border-white/20 bg-black/45 px-3 py-2 text-white backdrop-blur-sm'>
           <div className='flex items-center gap-x-3 text-[10px] font-medium whitespace-nowrap'>
@@ -535,7 +538,7 @@ export const RuntimeFloorPlanView = forwardRef<
                   borderRadius: 4,
                   backgroundColor: isDesignMode
                     ? 'rgba(255,255,255,0.35)'
-                    : 'rgba(2,6,23,0.92)',
+                    : '#0C0F1A',
                   pointerEvents: 'none'
                 }}
               />
