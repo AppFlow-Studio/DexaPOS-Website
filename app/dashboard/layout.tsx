@@ -65,6 +65,7 @@ import {
   Mail,
   Gift,
   DollarSign,
+  CalendarClock,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -113,6 +114,11 @@ const navMain = [
         title: "Tables",
         url: "/dashboard/tables",
         icon: Coffee,
+      },
+      {
+        title: "Reservations",
+        url: "/dashboard/reservations",
+        icon: CalendarClock,
       },
     ],
   },
