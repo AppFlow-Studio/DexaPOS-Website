@@ -47,7 +47,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { cn } from "@/lib/utils";
+import { cn, isValidImageUrl } from "@/lib/utils";
 import {
   NewEditItemFormSheet,
   EditItemWithOverrides,
@@ -808,7 +808,7 @@ export default function MenuItemDetailPage() {
               <div className="grid gap-6 md:grid-cols-2">
                 {/* Image */}
                 <div className="aspect-square rounded-lg bg-muted/30 overflow-hidden border">
-                  {menuItem.image ? (
+                  {isValidImageUrl(menuItem.image) ? (
                     <img
                       src={menuItem.image}
                       alt={menuItem.name}

@@ -47,7 +47,7 @@ import { toast } from "sonner";
 import { Empty } from "@/components/ui/empty";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { cn } from "@/lib/utils";
+import { cn, isValidImageUrl } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -229,7 +229,7 @@ function ItemCard({
       >
         {/* Image Section */}
         <div className="relative aspect-[4/3] bg-gradient-to-br from-muted/50 to-muted overflow-hidden">
-          {item.image ? (
+          {isValidImageUrl(item.image) ? (
             <img
               src={item.image}
               alt={item.name}
@@ -507,7 +507,7 @@ function ItemRow({
       >
         {/* Image */}
         <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-muted/30 shrink-0">
-          {item.image ? (
+          {isValidImageUrl(item.image) ? (
             <img
               src={item.image}
               alt={item.name}

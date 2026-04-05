@@ -2031,6 +2031,7 @@ export function NewEditItemFormSheet({
                                                     item.location_override;
                                                   const price =
                                                     itemOverride?.price_modifier ??
+                                                    (item as any).price_modifier ??
                                                     item.effective_price ??
                                                     0;
                                                   const isActive =

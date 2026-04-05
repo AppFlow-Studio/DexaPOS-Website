@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -278,9 +278,8 @@ export function MenuOrderOutTab({
               </TableHeader>
               <TableBody>
                 {syncHistory.map((sync) => (
-                  <>
+                  <React.Fragment key={sync.id}>
                     <TableRow
-                      key={sync.id}
                       className={
                         sync.errorDetails
                           ? "cursor-pointer hover:bg-muted/50"
@@ -354,7 +353,7 @@ export function MenuOrderOutTab({
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </React.Fragment>
                 ))}
               </TableBody>
             </Table>
