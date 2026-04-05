@@ -38,26 +38,21 @@ interface TablesSidebarProps {
   onSeatedClose?: (tableId: string) => void
 }
 
-const getTableStatusColor = (
-  status: string | null
-):
-  | 'green'
-  | 'blue'
-  | 'orange'
-  | 'yellow'
-  | 'purple'
-  | 'red'
-  | 'gray'
-  | 'near-black' => {
-  if (!status || status === 'available') return 'green'
-  if (status === 'seated') return 'blue'
-  if (status === 'ordered') return 'orange'
-  if (status === 'served') return 'yellow'
-  if (status === 'check_presented') return 'purple'
-  if (status === 'paid') return 'red'
-  if (status === 'cleaning') return 'gray'
-  if (status === 'blocked') return 'near-black'
-  return 'green'
+const getTableStatusColor = (status: string | null): string => {
+  if (!status || status === 'available') return '#2D9E7A'
+  if (status === 'seated') return '#3D6FA8'
+  if (status === 'ordered') return '#B86A2E'
+  if (status === 'served') return '#A07C20'
+  if (status === 'check_presented') return '#7C4DA0'
+  if (status === 'paid') return '#B04040'
+  if (status === 'cleaning') return '#5A6270'
+  if (status === 'not_in_service' || status === 'blocked') return '#1F2937'
+  if (status === 'overtime') return '#C17D2A'
+  if (status === 'seating') return '#4A7FA5'
+  if (status === 'ordering') return '#6B5FA0'
+  if (status === 'paying') return '#C17D2A'
+  if (status === 'closing') return '#A05050'
+  return '#2D9E7A'
 }
 
 type TableFilter = 'all' | 'available' | 'occupied' | 'attention'
@@ -67,26 +62,18 @@ const STATUS_LABELS: Record<string, string> = {
   seated: 'Seated',
   ordered: 'Ordered',
   served: 'Served',
-  check_presented: 'Check',
+  check_presented: 'Check Presented',
   paid: 'Paid',
   cleaning: 'Cleaning',
-  blocked: 'Blocked',
+  blocked: 'Not in Service',
+  not_in_service: 'Not in Service',
+  overtime: 'Overtime',
+  seating: 'Seating',
+  ordering: 'Ordering',
+  paying: 'Paying',
+  closing: 'Closing',
   reserved: 'Reserved',
-  not_in_service: 'Out'
-}
-
-const STATUS_DOT_CLASS: Record<
-  ReturnType<typeof getTableStatusColor>,
-  string
-> = {
-  green: 'bg-green-500',
-  blue: 'bg-blue-500',
-  orange: 'bg-orange-500',
-  yellow: 'bg-yellow-500',
-  purple: 'bg-purple-500',
-  red: 'bg-red-500',
-  gray: 'bg-gray-500',
-  'near-black': 'bg-zinc-900'
+  out: 'Out'
 }
 
 export function TablesSidebar ({
@@ -306,10 +293,11 @@ export function TablesSidebar ({
                                 <span
                                   className={cn(
                                     'w-1.5 h-1.5 rounded-full shrink-0',
-                                    STATUS_DOT_CLASS[statusColor],
-                                    statusColor === 'near-black' &&
+                                    (status === 'not_in_service' ||
+                                      status === 'blocked') &&
                                       'border border-white/30'
                                   )}
+                                  style={{ backgroundColor: statusColor }}
                                 />
                                 <span className='font-semibold text-[11px] truncate'>
                                   {table.name}

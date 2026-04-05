@@ -43,29 +43,39 @@ export interface RuntimeFloorPlanViewRef {
   fitToView: () => void
 }
 
-// Helper for Colors
-const getTableStatusColor = (
-  status: string | undefined
-): string | undefined => {
+// Helper for status colors used on the runtime canvas and legend.
+const getTableStatusColor = (status: string | undefined): string => {
   switch (status) {
     case 'available':
-      return '#22c55e'
+      return '#2D9E7A'
     case 'seated':
-      return '#3b82f6'
+      return '#3D6FA8'
     case 'ordered':
-      return '#f97316'
+      return '#B86A2E'
     case 'served':
-      return '#eab308'
+      return '#A07C20'
     case 'check_presented':
-      return '#a855f7'
+      return '#7C4DA0'
     case 'paid':
-      return '#ef4444'
+      return '#B04040'
     case 'cleaning':
-      return '#6b7280'
-    case 'blocked':
-      return '#18181b'
+      return '#5A6270'
+    case 'not_in_service':
+      return '#1F2937'
+    case 'blocked': // legacy alias
+      return '#1F2937'
+    case 'overtime':
+      return '#C17D2A'
+    case 'seating':
+      return '#4A7FA5'
+    case 'ordering':
+      return '#6B5FA0'
+    case 'paying':
+      return '#C17D2A'
+    case 'closing':
+      return '#A05050'
     default:
-      return '#22c55e'
+      return '#2D9E7A'
   }
 }
 
@@ -415,9 +425,9 @@ export const RuntimeFloorPlanView = forwardRef<
     }
 
     return (
-      <div className='relative h-full w-full overflow-hidden select-none animate-in fade-in duration-300 bg-slate-900'>
+      <div className='relative h-full w-full overflow-hidden select-none animate-in fade-in duration-300 bg-slate-950'>
         {/* Status Legend */}
-        <div className='absolute top-4 left-4 z-50 rounded-md border border-white/20 bg-black/45 px-3 py-2 text-white backdrop-blur-sm'>
+        <div className='absolute bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-md border border-white/20 bg-black/45 px-3 py-2 text-white backdrop-blur-sm'>
           <div className='flex items-center gap-x-3 text-[10px] font-medium whitespace-nowrap'>
             {STATUS_LEGEND_ITEMS.map(item => {
               const dotColor = getTableStatusColor(item.status)
@@ -525,7 +535,7 @@ export const RuntimeFloorPlanView = forwardRef<
                   borderRadius: 4,
                   backgroundColor: isDesignMode
                     ? 'rgba(255,255,255,0.35)'
-                    : 'rgba(15,23,42,0.88)',
+                    : 'rgba(2,6,23,0.92)',
                   pointerEvents: 'none'
                 }}
               />
