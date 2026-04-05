@@ -637,8 +637,13 @@ function MerchantSidebar() {
 
 // Location indicator component for the header - now using Zustand store
 function LocationIndicator({ userRole }: { userRole?: string }) {
-  const { selectedLocationId, locations, setSelectedLocation, isLoading } =
-    useLocationStore();
+  const {
+    selectedLocationId,
+    locations,
+    setSelectedLocation,
+    isLoading,
+    isInitialized,
+  } = useLocationStore();
   const selectedLocation = useSelectedLocation();
   const isAllLocations = useIsAllLocations();
 
@@ -657,13 +662,27 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
     });
   };
 
-  // Show loading state instead of returning null
-  if (isLoading || locations.length === 0) {
+  // Show skeleton only while genuinely loading or before the store has hydrated
+  if (!isInitialized || isLoading) {
     return (
       <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full text-sm bg-muted/50">
         <Skeleton className="h-3.5 w-3.5 rounded-full" />
         <Skeleton className="h-4 w-24" />
       </div>
+    );
+  }
+
+  // Initialized, not loading, but no locations: first-time merchant.
+  // Show an actionable CTA instead of a forever-spinning skeleton.
+  if (locations.length === 0) {
+    return (
+      <Link
+        href="/dashboard/locations/new"
+        className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full text-sm bg-primary/10 border border-primary/20 hover:bg-primary/20 transition-colors"
+      >
+        <MapPin className="h-3.5 w-3.5 text-primary" />
+        <span className="font-medium text-primary">Add your first location</span>
+      </Link>
     );
   }
 
@@ -844,12 +863,12 @@ export default function MerchantDashboardLayout({
       initialize();
     }
 
-    // Update locations (store will validate selected location automatically)
-    // Only update if we have locations or current locations are empty
-    // This prevents clearing locations during refetches
-    if (locations.length > 0) {
-      setLocations(locations);
-    }
+    // Update locations (store will validate selected location automatically).
+    // Call unconditionally — setLocations() internally guards against clearing
+    // during transient refetches, and we NEED to call it on empty arrays so
+    // validateSelectedLocation can repair stale persisted selectedLocationIds
+    // (the "Viewing Unknown Location" bug for first-time merchants).
+    setLocations(locations);
 
     // Set primary location as default only on first load for non-owners with a single location.
     // Owners and users with multiple locations can remain on 'all'.

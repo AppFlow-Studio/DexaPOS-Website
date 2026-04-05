@@ -51,11 +51,12 @@ export const useLocationStore = create<LocationState>()(
 
       setLocations: (locations: Location[]) => {
         const currentState = get();
-        // Only update if we have new locations or current locations are empty
-        // This prevents clearing locations during refetches
+        // Only update if we have new locations or current locations are empty.
+        // This prevents clearing locations during transient refetches, while
+        // still allowing an authoritative empty result for first-time merchants.
         if (locations.length > 0 || currentState.locations.length === 0) {
           set({ locations });
-          // Validate selected location exists in new locations array
+          // Always validate — covers stale persisted IDs AND the 0-locations case
           get().validateSelectedLocation(locations);
         }
       },
@@ -66,8 +67,20 @@ export const useLocationStore = create<LocationState>()(
         // If 'all' is selected, no validation needed
         if (selectedLocationId === "all") return;
 
-        // If no locations, can't validate
-        if (locations.length === 0) return;
+        // If no locations exist, reset to 'all' so we don't get stuck
+        // pointing at a stale/deleted UUID (causes "Unknown Location" UI).
+        if (locations.length === 0) {
+          set({ selectedLocationId: "all" });
+          if (typeof document !== "undefined") {
+            document.cookie = `x-location-id=all; path=/; max-age=31536000; SameSite=Lax`;
+          }
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(
+              new CustomEvent("locationChanged", { detail: "all" }),
+            );
+          }
+          return;
+        }
 
         // Check if selected location exists in locations array
         const exists = locations.some((l) => l.id === selectedLocationId);
