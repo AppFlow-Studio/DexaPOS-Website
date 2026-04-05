@@ -49,6 +49,7 @@ import {
     History,
     LogOut,
     Monitor,
+    Plug,
     LucideIcon,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -160,6 +161,12 @@ const navMain: NavGroup[] = [
                 url: '/manage/device-catalog',
                 icon: Monitor,
                 requiredPermission: 'system.config.manage' as PermissionCode,
+            },
+            {
+                title: 'Integrations',
+                url: '/manage/settings/integrations',
+                icon: Plug,
+                requiredPermission: 'hq.merchant.update' as PermissionCode,
             },
         ]
     }

@@ -1,18 +1,20 @@
 'use client'
 
-import { Discount } from '@/types/discount'
+import { Discount, isDiscountExpired } from '@/types/discount'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { format } from 'date-fns'
 
 interface DiscountCardProps {
     discount: Discount
+    locationName?: string | null
 }
 
-export function DiscountCard({ discount }: DiscountCardProps) {
+export function DiscountCard({ discount, locationName }: DiscountCardProps) {
     const formatDate = (value: string | null) => (value ? format(new Date(value), 'MMM d, yyyy') : 'Not set')
     const formatValue = () =>
         discount.discount_type === 'percentage' ? `${discount.discount_value}%` : `$${discount.discount_value}`
+    const expired = isDiscountExpired(discount)
 
     return (
         <Card>
@@ -21,9 +23,12 @@ export function DiscountCard({ discount }: DiscountCardProps) {
                     <CardTitle>{discount.name}</CardTitle>
                     <p className="text-sm text-muted-foreground">{discount.description || 'No description'}</p>
                 </div>
-                <Badge variant={discount.is_active ? 'default' : 'secondary'}>
-                    {discount.is_active ? 'Active' : 'Inactive'}
-                </Badge>
+                <div className="flex items-center gap-2">
+                    <Badge variant={discount.is_active ? 'default' : 'secondary'}>
+                        {discount.is_active ? 'Active' : 'Inactive'}
+                    </Badge>
+                    {expired && <Badge variant="destructive">Expired</Badge>}
+                </div>
             </CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2">
                 <div>
@@ -53,6 +58,14 @@ export function DiscountCard({ discount }: DiscountCardProps) {
                 <div>
                     <p className="text-xs text-muted-foreground">Requires approval</p>
                     <p className="font-medium">{discount.requires_manager_approval ? 'Yes' : 'No'}</p>
+                </div>
+                <div>
+                    <p className="text-xs text-muted-foreground">Availability</p>
+                    <p className="font-medium">
+                        {discount.location_id
+                            ? (locationName ?? 'Location')
+                            : 'Global (all locations)'}
+                    </p>
                 </div>
             </CardContent>
         </Card>

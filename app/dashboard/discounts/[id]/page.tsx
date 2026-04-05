@@ -39,6 +39,9 @@ import { Discount, DiscountFormInput } from "@/types/discount";
 import { DiscountFormValues } from "@/lib/validations/discount";
 import { TargetingSheet } from "@/components/discounts/targeting-sheet";
 import Link from "next/link";
+import { useLocations } from "@/app/dashboard/hooks/useLocations";
+import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
+import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 
 export default function DiscountDetailPage() {
   const params = useParams();
@@ -80,6 +83,14 @@ export default function DiscountDetailPage() {
     () => (data?.success && data.data ? (data.data as Discount) : null),
     [data?.data, data?.success]
   );
+
+  const clerkOrgId = useClerkOrgId() || "";
+  const { data: userInfo } = useUserInfo();
+  const { data: locationsData = [] } = useLocations(clerkOrgId, userInfo?.id || "");
+  const locationName = useMemo(() => {
+    if (!discount?.location_id) return null;
+    return locationsData.find((l) => l.id === discount.location_id)?.name ?? null;
+  }, [discount?.location_id, locationsData]);
 
   const usageCount = usageData?.success ? usageData.data?.usage_count ?? 0 : 0;
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -186,7 +197,7 @@ export default function DiscountDetailPage() {
         </div>
       </div>
 
-      <DiscountCard discount={discount} />
+      <DiscountCard discount={discount} locationName={locationName} />
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
@@ -341,6 +352,7 @@ export default function DiscountDetailPage() {
               end_date: discount.end_date ? new Date(discount.end_date) : null,
               is_active: discount.is_active,
               scope: discount.scope,
+              location_id: discount.location_id,
               requires_manager_approval: discount.requires_manager_approval,
               max_uses_per_day: discount.max_uses_per_day,
               max_uses_per_order: discount.max_uses_per_order,

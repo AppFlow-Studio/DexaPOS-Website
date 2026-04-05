@@ -10,6 +10,7 @@ import {
   Plug,
   UtensilsCrossed,
 } from "lucide-react";
+import { extractConnectedPlatforms } from "@/lib/orderout/helpers";
 
 // ============================================================================
 // Types
@@ -38,7 +39,7 @@ export function OrderOutStatusCard({
   autoAcceptOrders,
   dashboardUrl,
 }: OrderOutStatusCardProps) {
-  const channels = Array.isArray(connectedChannels) ? connectedChannels : [];
+  const channels = extractConnectedPlatforms(connectedChannels);
 
   return (
     <div className="space-y-4">

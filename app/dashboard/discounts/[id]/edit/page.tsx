@@ -14,6 +14,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { DiscountFormInput } from "@/types/discount";
+import { useLocations } from "@/app/dashboard/hooks/useLocations";
+import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
+import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 
 export default function EditDiscountPage() {
     const params = useParams();
@@ -26,6 +29,10 @@ export default function EditDiscountPage() {
     const { data: menuItemData, isLoading: menuItemsLoading } = useDiscountMenuItems();
     const updateDiscount = useUpdateDiscount(discountId || "");
 
+    const clerkOrgId = useClerkOrgId() || "";
+    const { data: userInfo } = useUserInfo();
+    const { data: locationsData = [] } = useLocations(clerkOrgId, userInfo?.id || "");
+
     const categories = useMemo(
         () => (categoryData?.success ? categoryData.data : []),
         [categoryData]
@@ -33,6 +40,10 @@ export default function EditDiscountPage() {
     const menuItems = useMemo(
         () => (menuItemData?.success ? menuItemData.data : []),
         [menuItemData]
+    );
+    const locations = useMemo(
+        () => locationsData.map((l) => ({ id: l.id, name: l.name })),
+        [locationsData]
     );
 
     const defaultValues: Partial<DiscountFormInput> | undefined = useMemo(
@@ -82,6 +93,7 @@ export default function EditDiscountPage() {
                             submitting={updateDiscount.isPending}
                             categories={categories}
                             menuItems={menuItems}
+                            locations={locations}
                             onCancel={() => router.push(`/dashboard/discounts/${discountId}`)}
                             submitLabel="Save changes"
                         />

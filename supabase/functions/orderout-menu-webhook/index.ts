@@ -176,6 +176,43 @@ async function handleRegisterWebhook(params: ActionRequest): Promise<Response> {
   return successResponse(result.data, 'Webhook registered successfully')
 }
 
+async function handleRegisterPushMenuWebhook(params: ActionRequest): Promise<Response> {
+  const endpoint =
+    (params.endpoint as string) ||
+    `${SUPABASE_URL}/functions/v1/orderout-push-menu-webhook`
+  const webhookSecret =
+    (params.webhook_secret as string) || Deno.env.get('ORDEROUT_WEBHOOK_SECRET')
+  const deliveryServices =
+    (params.delivery_services as string[]) || ['UBEREATS', 'GRUBHUB', 'DOORDASH']
+
+  if (!webhookSecret) {
+    return errorResponse('Missing webhook_secret / ORDEROUT_WEBHOOK_SECRET', 400)
+  }
+  if (!endpoint.startsWith('https://')) {
+    return errorResponse('Endpoint must be HTTPS', 400)
+  }
+
+  const result = await api.post('/webhooks/push_menu', {
+    delivery_services: deliveryServices,
+    method: 'POST',
+    endpoint,
+    authorization_header: { Authorization: `Bearer ${webhookSecret}` },
+  })
+
+  if (!result.ok) {
+    return errorResponse(
+      'Failed to register push_menu webhook',
+      result.status,
+      result.data
+    )
+  }
+
+  return successResponse(
+    { endpoint, delivery_services: deliveryServices, orderout_response: result.data },
+    'push_menu webhook registered successfully'
+  )
+}
+
 async function handleCreateAccount(params: ActionRequest): Promise<Response> {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
   const merchantId = params.merchant_id as string
@@ -339,6 +376,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         return await handleHealthCheck()
       case 'register_webhook':
         return await handleRegisterWebhook(body)
+      case 'register_push_menu_webhook':
+        return await handleRegisterPushMenuWebhook(body)
       case 'create_account':
         return await handleCreateAccount(body)
       case 'create_restaurant':

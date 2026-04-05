@@ -4,26 +4,34 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Empty } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Badge } from '@/components/ui/badge'
 import { Calendar, Plus } from 'lucide-react'
 import { WeeklyScheduleView } from '../WeeklyScheduleView'
 import { ScheduleCard } from '../ScheduleCard'
 import { SchedulesModel, ScheduleTimeSlotsModel } from '@/types/db-modles'
 
+export type MenuScheduleAssignment = SchedulesModel & {
+    schedule_time_slots: ScheduleTimeSlotsModel[]
+    time_slots: Array<{ id: string; day_of_week: number; start_time: string; end_time: string }>
+    assignment_location_id: string | null
+}
+
 interface MenuSchedulesTabProps {
-    menuSchedules: (SchedulesModel & {
-        schedule_time_slots: ScheduleTimeSlotsModel[]
-        time_slots: Array<{ id: string; day_of_week: number; start_time: string; end_time: string }>
-    })[]
+    menuSchedules: MenuScheduleAssignment[]
     isLoading: boolean
+    scopeLabel?: string
+    locationNameById?: Record<string, string>
     onAddSchedule: () => void
     onOpenScheduleSheet: () => void
-    onRemoveSchedule: (scheduleId: string) => void
+    onRemoveSchedule: (scheduleId: string, assignmentLocationId: string | null) => void
     onEditSchedule?: (schedule: SchedulesModel & { schedule_time_slots: ScheduleTimeSlotsModel[] }) => void
 }
 
 export function MenuSchedulesTab({
     menuSchedules,
     isLoading,
+    scopeLabel,
+    locationNameById,
     onAddSchedule,
     onOpenScheduleSheet,
     onRemoveSchedule,
@@ -48,6 +56,11 @@ export function MenuSchedulesTab({
                                     : `${menuSchedules.length} schedule${menuSchedules.length !== 1 ? 's' : ''} controlling menu availability`
                                 }
                             </CardDescription>
+                            {scopeLabel && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    {scopeLabel}
+                                </p>
+                            )}
                         </div>
                         {/* <div className='items-end justify-end flex flex-col gap-2'>
                             <Button onClick={onAddSchedule}>
@@ -78,15 +91,26 @@ export function MenuSchedulesTab({
                         />
                     ) : (
                         <div className="space-y-4">
-                            {menuSchedules.map((schedule, index) => (
-                                <ScheduleCard
-                                    key={schedule.id}
-                                    schedule={schedule}
-                                    index={index}
-                                    onRemove={() => onRemoveSchedule(schedule.id)}
-                                    onEdit={onEditSchedule ? () => onEditSchedule(schedule) : undefined}
-                                />
-                            ))}
+                            {menuSchedules.map((schedule, index) => {
+                                const scopeName = schedule.assignment_location_id
+                                    ? (locationNameById?.[schedule.assignment_location_id] ?? 'Location')
+                                    : 'Global'
+                                return (
+                                    <div key={`${schedule.id}:${schedule.assignment_location_id ?? 'global'}`} className="space-y-2">
+                                        <div className="flex items-center gap-2">
+                                            <Badge variant={schedule.assignment_location_id ? 'outline' : 'secondary'}>
+                                                {scopeName}
+                                            </Badge>
+                                        </div>
+                                        <ScheduleCard
+                                            schedule={schedule}
+                                            index={index}
+                                            onRemove={() => onRemoveSchedule(schedule.id, schedule.assignment_location_id)}
+                                            onEdit={onEditSchedule ? () => onEditSchedule(schedule) : undefined}
+                                        />
+                                    </div>
+                                )
+                            })}
                         </div>
                     )}
                 </CardContent>

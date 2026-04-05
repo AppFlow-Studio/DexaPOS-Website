@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { format } from 'date-fns'
-import { Discount } from '@/types/discount'
+import { Discount, isDiscountExpired } from '@/types/discount'
 import {
     Table,
     TableBody,
@@ -22,11 +22,13 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import { Eye, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 
 interface DiscountTableProps {
     discounts: Discount[]
     isLoading?: boolean
+    locationNameById?: Record<string, string>
     onToggleStatus?: (id: string, isActive: boolean) => void
     onBulkStatus?: (ids: string[], isActive: boolean) => void
     onBulkDelete?: (ids: string[], mode?: 'soft' | 'hard') => void
@@ -38,6 +40,7 @@ interface DiscountTableProps {
 export function DiscountTable({
     discounts,
     isLoading,
+    locationNameById,
     onToggleStatus,
     onBulkStatus,
     onBulkDelete,
@@ -85,11 +88,23 @@ export function DiscountTable({
         return 'No date range'
     }
 
+    const renderScope = (discount: Discount) => {
+        if (!discount.location_id) {
+            return <Badge variant="secondary">Global</Badge>
+        }
+        const name = locationNameById?.[discount.location_id]
+        return (
+            <Badge variant="outline" className="max-w-[140px] truncate">
+                {name ?? 'Location'}
+            </Badge>
+        )
+    }
+
     const renderRows = () => {
         if (isLoading) {
             return Array.from({ length: 4 }).map((_, idx) => (
                 <TableRow key={idx}>
-                    <TableCell colSpan={7}>
+                    <TableCell colSpan={8}>
                         <Skeleton className="h-10 w-full" />
                     </TableCell>
                 </TableRow>
@@ -99,21 +114,24 @@ export function DiscountTable({
         if (!discounts.length) {
             return (
                 <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                    <TableCell colSpan={8} className="text-center py-8">
                         No discounts found
                     </TableCell>
                 </TableRow>
             )
         }
 
-        return discounts.map((discount) => (
-            <TableRow key={discount.id}>
+        return discounts.map((discount) => {
+            const expired = isDiscountExpired(discount)
+            return (
+            <TableRow key={discount.id} className={cn(expired && 'opacity-60')}>
                 <TableCell className="w-10">
                     <Checkbox checked={selectedIds.includes(discount.id)} onCheckedChange={() => toggleSelection(discount.id)} />
                 </TableCell>
                 <TableCell className="font-medium">{discount.name}</TableCell>
                 <TableCell className="capitalize">{discount.discount_type}</TableCell>
                 <TableCell>{formatValue(discount)}</TableCell>
+                <TableCell>{renderScope(discount)}</TableCell>
                 <TableCell>
                     <div className="flex items-center gap-2">
                         <Switch
@@ -123,9 +141,16 @@ export function DiscountTable({
                         <Badge variant={discount.is_active ? 'default' : 'secondary'}>
                             {discount.is_active ? 'Active' : 'Inactive'}
                         </Badge>
+                        {expired && (
+                            <Badge variant="destructive">Expired</Badge>
+                        )}
                     </div>
                 </TableCell>
-                <TableCell>{formatDateRange(discount)}</TableCell>
+                <TableCell>
+                    <span className={cn(expired && 'line-through text-muted-foreground')}>
+                        {formatDateRange(discount)}
+                    </span>
+                </TableCell>
                 <TableCell className="text-right">
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -153,7 +178,8 @@ export function DiscountTable({
                     </DropdownMenu>
                 </TableCell>
             </TableRow>
-        ))
+            )
+        })
     }
 
     return (
@@ -200,6 +226,7 @@ export function DiscountTable({
                             <TableHead>Name</TableHead>
                             <TableHead>Type</TableHead>
                             <TableHead>Value</TableHead>
+                            <TableHead>Scope</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Date range</TableHead>
                             <TableHead className="text-right">Actions</TableHead>

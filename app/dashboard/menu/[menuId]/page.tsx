@@ -67,6 +67,7 @@ import { MenuSettingsTab } from "@/components/dashboard/menu/menuId/MenuSettings
 import { MenuPreviewModal } from "@/components/dashboard/menu/menuId/MenuPreviewModal";
 import { MenuOrderOutTab } from "@/components/dashboard/menu/menuId/MenuOrderOutTab";
 import { useClerkOrgId } from "../../hooks/useLocationScoped";
+import { useMenuSchedulesScoped } from "../../hooks/useMenuSchedules";
 import { useMerchantCdnImageUpload } from "@/lib/cdn/use-merchant-cdn-image-upload";
 import { useOrderOutStatus } from "../../online-ordering/hooks/useOrderOutStatus";
 import {
@@ -449,6 +450,9 @@ export default function MenuDetailPage() {
       queryClient.invalidateQueries({
         queryKey: ["menu-with-categories", menuId],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["menu-schedules", menuId],
+      });
       refetchMenu();
       setIsScheduleWizardOpen(false);
       setScheduleWizardId(null);
@@ -512,7 +516,14 @@ export default function MenuDetailPage() {
     }
   };
 
-  // Extract menu schedules from the menu data and transform to expected format
+  // Location-scoped menu schedule assignments (global + current-location rows).
+  // Displayed in the Schedules tab; the full merchant/global schedule data still
+  // comes from the menu RPC for other parts of the page.
+  const {
+    data: scopedMenuSchedules,
+    isLoading: isLoadingScopedSchedules,
+  } = useMenuSchedulesScoped(menuId);
+
   type TransformedSchedule = SchedulesModel & {
     schedule_time_slots: ScheduleTimeSlotsModel[];
     time_slots: Array<{
@@ -521,33 +532,36 @@ export default function MenuDetailPage() {
       start_time: string;
       end_time: string;
     }>;
+    assignment_location_id: string | null;
   };
 
-  const menuSchedules = useMemo(() => {
-    if (!menu) return [];
-    const scheduleData = menu.schedules || [];
-    return scheduleData
-      .map((ms) => {
-        const schedule = ms.schedule;
-        if (!schedule) return null;
-        const timeSlots = schedule.time_slots || [];
-        return {
-          ...schedule,
-          merchant_id: menu.merchant_id,
-          created_at: schedule.id,
-          updated_at: schedule.id,
-          time_slots: timeSlots,
-          schedule_time_slots: timeSlots.map((ts) => ({
-            ...ts,
-            schedule_id: schedule.id,
-            is_active: true,
-            created_at: ts.id,
-            updated_at: ts.id,
-          })),
-        } as TransformedSchedule;
-      })
-      .filter(Boolean) as TransformedSchedule[];
-  }, [menu]);
+  const menuSchedules = useMemo<TransformedSchedule[]>(() => {
+    if (!scopedMenuSchedules) return [];
+    return scopedMenuSchedules.map((schedule) => {
+      const timeSlots = schedule.schedule_time_slots || [];
+      return {
+        ...schedule,
+        time_slots: timeSlots.map((ts) => ({
+          id: ts.id,
+          day_of_week: ts.day_of_week,
+          start_time: ts.start_time,
+          end_time: ts.end_time,
+        })),
+      } as TransformedSchedule;
+    });
+  }, [scopedMenuSchedules]);
+
+  const locationNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    (locations || []).forEach((loc) => {
+      if (loc.id) map[loc.id] = loc.name;
+    });
+    return map;
+  }, [locations]);
+
+  const scheduleScopeLabel = isAllLocations
+    ? "Viewing all assignments. Add while a specific location is selected to scope the assignment."
+    : "Showing global assignments (inherited) plus assignments for this location.";
 
   // Calculate total items across all categories
   const totalItems = useMemo(() => {
@@ -610,6 +624,7 @@ export default function MenuDetailPage() {
       menuId,
       createResult.data.id,
       clerkOrgId,
+      selectedLocationId || undefined,
     );
 
     if (assignResult.error) {
@@ -619,13 +634,21 @@ export default function MenuDetailPage() {
     queryClient.invalidateQueries({
       queryKey: ["menu-with-categories", menuId],
     });
+    queryClient.invalidateQueries({
+      queryKey: ["menu-schedules", menuId],
+    });
     refetchMenu();
 
     return { data: createResult.data };
   };
 
   const handleAssignSchedule = async (scheduleId: string) => {
-    const result = await AssignScheduleToMenu(menuId, scheduleId, clerkOrgId);
+    const result = await AssignScheduleToMenu(
+      menuId,
+      scheduleId,
+      clerkOrgId,
+      selectedLocationId || undefined,
+    );
 
     if (result.error) {
       return { error: result.error };
@@ -634,17 +657,23 @@ export default function MenuDetailPage() {
     queryClient.invalidateQueries({
       queryKey: ["menu-with-categories", menuId],
     });
+    queryClient.invalidateQueries({
+      queryKey: ["menu-schedules", menuId],
+    });
     refetchMenu();
 
     return {};
   };
 
-  const handleRemoveSchedule = async (scheduleId: string) => {
+  const handleRemoveSchedule = async (
+    scheduleId: string,
+    assignmentLocationId: string | null,
+  ) => {
     try {
       const result = await RemoveScheduleFromMenu(
         menuId,
         scheduleId,
-        selectedLocationId || undefined,
+        assignmentLocationId || undefined,
       );
 
       if (result.error) {
@@ -658,6 +687,9 @@ export default function MenuDetailPage() {
 
       queryClient.invalidateQueries({
         queryKey: ["menu-with-categories", menuId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["menu-schedules", menuId],
       });
       refetchMenu();
     } catch {
@@ -1107,7 +1139,9 @@ export default function MenuDetailPage() {
         <TabsContent value="schedules" className="space-y-4">
           <MenuSchedulesTab
             menuSchedules={menuSchedules}
-            isLoading={isLoading}
+            isLoading={isLoading || isLoadingScopedSchedules}
+            scopeLabel={scheduleScopeLabel}
+            locationNameById={locationNameById}
             onAddSchedule={() => setIsScheduleWizardOpen(true)}
             onOpenScheduleSheet={() => setIsScheduleSheetOpen(true)}
             onRemoveSchedule={handleRemoveSchedule}
