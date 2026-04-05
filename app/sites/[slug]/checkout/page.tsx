@@ -72,5 +72,5 @@ export default async function CheckoutRoute({ params, searchParams }: PageProps)
         />
       </StorefrontRoot>
     </>
-  
+  );
 }

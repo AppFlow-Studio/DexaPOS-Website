@@ -1,6 +1,6 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { Check, Hourglass } from "lucide-react";
 import Link from "next/link";
 import { useStorefrontPath } from "../../lib/use-storefront-path";
 
@@ -9,9 +9,10 @@ interface OrderConfirmationProps {
   estimatedTime?: number;
   orderId?: string;
   slug: string;
+  isPending?: boolean;
 }
 
-export function OrderConfirmation({ displayNumber, estimatedTime, orderId, slug }: OrderConfirmationProps) {
+export function OrderConfirmation({ displayNumber, estimatedTime, orderId, slug, isPending }: OrderConfirmationProps) {
   const storePath = useStorefrontPath(slug);
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] text-center px-6 space-y-6">
@@ -36,24 +37,61 @@ export function OrderConfirmation({ displayNumber, estimatedTime, orderId, slug 
         )}
       </div>
 
-      {estimatedTime && (
+      {isPending ? (
         <div
-          className="px-6 py-4 rounded-xl !bg-white"
-          style={{ backgroundColor: "#ffffff", border: "1px solid #e5e7eb" }}
+          className="flex items-center gap-3 px-6 py-4 rounded-xl"
+          style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
         >
-          <p className="text-sm" style={{ color: "#6b7280" }}>
+          <Hourglass className="h-5 w-5 flex-shrink-0" style={{ color: "var(--primary)" }} />
+          <div className="text-left">
+            <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+              Awaiting restaurant acceptance
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
+              You&apos;ll see the estimated time once accepted
+            </p>
+          </div>
+        </div>
+      ) : estimatedTime ? (
+        <div
+          className="px-6 py-4 rounded-xl"
+          style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
+        >
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
             Estimated ready in
           </p>
-          <p className="text-2xl font-bold" style={{ color: "#111827" }}>
+          <p className="text-2xl font-bold" style={{ color: "var(--text)" }}>
             {estimatedTime} min
           </p>
         </div>
-      )}
+      ) : null}
 
       <div className="flex flex-col items-center gap-3 w-full max-w-xs">
-        {orderId && (
+        {orderId ? (
+          <>
+            <Link
+              href={storePath(`/order/${orderId}`)}
+              className="w-full px-8 py-3 font-bold text-base transition-all inline-block text-center"
+              style={{
+                backgroundColor: "var(--primary)",
+                color: "#FFFFFF",
+                borderRadius: "var(--radius)",
+                boxShadow: "0 4px 16px color-mix(in srgb, var(--primary) 40%, transparent)",
+              }}
+            >
+              Track Your Order
+            </Link>
+            <Link
+              href={storePath()}
+              className="text-sm font-medium mt-1"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              Back to Menu
+            </Link>
+          </>
+        ) : (
           <Link
-            href={storePath(`/order/${orderId}`)}
+            href={storePath()}
             className="w-full px-8 py-3 font-bold text-base transition-all inline-block text-center"
             style={{
               backgroundColor: "var(--primary)",
@@ -62,22 +100,9 @@ export function OrderConfirmation({ displayNumber, estimatedTime, orderId, slug 
               boxShadow: "0 4px 16px color-mix(in srgb, var(--primary) 40%, transparent)",
             }}
           >
-            Track Your Order
+            Back to Menu
           </Link>
         )}
-        <Link
-          href={storePath()}
-          className="px-8 py-3 font-bold text-base transition-all inline-block text-center"
-          style={{
-            backgroundColor: orderId ? "transparent" : "var(--primary)",
-            color: orderId ? "var(--primary)" : "#FFFFFF",
-            borderRadius: "var(--radius)",
-            border: orderId ? "2px solid var(--primary)" : "none",
-            ...(orderId ? {} : { boxShadow: "0 4px 16px color-mix(in srgb, var(--primary) 40%, transparent)" }),
-          }}
-        >
-          Continue Shopping
-        </Link>
       </div>
     </div>
   );

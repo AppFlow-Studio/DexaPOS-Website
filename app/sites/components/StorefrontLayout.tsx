@@ -15,7 +15,9 @@ import { StoreInfoBar, getTodayHoursString, isStoreOpenNow } from "./StoreInfoBa
 import { AccountDrawer } from "./AccountDrawer";
 import { useCart } from "../hooks/useCart";
 import { useSessionInit } from "../hooks/useSessionInit";
+import { useSession } from "../hooks/useSession";
 import { useStorefrontPath } from "../lib/use-storefront-path";
+import { OrderStatusWatcher } from "./OrderStatusWatcher";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronUp } from "lucide-react";
 import { SiteThemeConfig } from "@/types/site";
@@ -47,11 +49,13 @@ export function StorefrontLayout({
 }: StorefrontLayoutProps) {
   useSessionInit(site?.id);
   const router = useRouter();
+  const activeOrderId = useSession((s) => s.activeOrderId);
   const storefrontPath = useStorefrontPath(slug);
 
   const [activeTab, setActiveTab] = useState<TabType>("menu");
   const [isOrdersSheetOpen, setIsOrdersSheetOpen] = useState(false);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
+  const [showWelcomeDrawer, setShowWelcomeDrawer] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => {
@@ -124,6 +128,8 @@ export function StorefrontLayout({
 
   return (
     <>
+      {/* Global order status watcher — shows toast when merchant accepts/declines */}
+      <OrderStatusWatcher orderId={activeOrderId} />
       {/* Header with desktop navigation callbacks */}
       <StorefrontHeader
         site={site}
@@ -134,6 +140,10 @@ export function StorefrontLayout({
         onInfoClick={() => router.push(storefrontPath("/info"))}
         onOrdersClick={() => setIsOrdersSheetOpen(true)}
         onAccountClick={() => setIsAccountOpen(true)}
+        onAuthSuccess={() => {
+          setShowWelcomeDrawer(true);
+          setIsAccountOpen(true);
+        }}
       />
 
       {/* Hero & upper chrome — plain div, no motion wrapper to avoid stacking context conflict with sticky menu nav */}
@@ -187,6 +197,8 @@ export function StorefrontLayout({
         isOpen={isAccountOpen}
         onOpenChange={setIsAccountOpen}
         storeConfigId={site?.id ?? ""}
+        showWelcomeOnMount={showWelcomeDrawer}
+        onWelcomeShown={() => setShowWelcomeDrawer(false)}
       />
 
       {/* Scroll-to-top — rendered at layout root to avoid inner stacking context issues */}

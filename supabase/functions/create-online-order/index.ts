@@ -201,7 +201,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           min_order_cents, estimated_prep_minutes,
           delivery_radius_miles, delivery_fee_cents,
           free_delivery_threshold_cents, address,
-          slug
+          slug, auto_accept_orders
         )
       `)
       .eq('session_token', body.session_token)
@@ -226,7 +226,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         min_order_cents, estimated_prep_minutes,
         delivery_radius_miles, delivery_fee_cents,
         free_delivery_threshold_cents, address,
-        slug
+        slug, auto_accept_orders
       `)
       .eq('id', body.store_config_id)
       .single()
@@ -555,7 +555,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     p_order_notes: body.special_instructions ?? null,
     p_placed_at: new Date().toISOString(),
     p_ready_by: body.requested_time ?? null,
-    p_auto_accept: true,
+    p_auto_accept: storeConfig.auto_accept_orders ?? false,
   }
 
   // ---- Step 10+: TEST MODE — Skip payment, call RPC directly ----
@@ -637,12 +637,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
     displayNumber: orderResult.display_number,
   })
 
+  const autoAccepted: boolean = storeConfig.auto_accept_orders ?? false
+
   return successResponse({
     requires_redirect: false,
     order_id: orderResult.order_id,
     order_number: orderResult.order_number,
     display_number: orderResult.display_number,
     estimated_time: estimatedMinutes,
+    auto_accepted: autoAccepted,
   })
 
   // ---- COMMENTED OUT: Steps 10-12 (Payment Intent + iPOS Pays + Payment Processing) ----

@@ -3,6 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import twilio from "twilio";
 import { assertHQPermission } from "@/lib/admin/auth";
 import {
   Order,
@@ -1310,4 +1311,184 @@ export async function GetOrderFullHistory(
   };
 
   return full;
+}
+
+// ============================================================================
+// Accept / Decline Online Orders (merchant-side)
+// ============================================================================
+
+/** Fire-and-forget: broadcast to the storefront's Realtime channel so the customer page refreshes instantly. */
+async function broadcastOrderStatus(orderId: string, status: string) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) return;
+
+  try {
+    await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            topic: `order-update:${orderId}`,
+            event: "status_changed",
+            payload: { orderId, status },
+          },
+        ],
+      }),
+    });
+  } catch (err) {
+    console.error("broadcastOrderStatus error:", err);
+  }
+}
+
+/** Fire-and-forget: send an SMS to the customer via Twilio. */
+async function sendOrderSms(toPhone: string, body: string) {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+  if (!accountSid || !authToken || !fromNumber) return;
+
+  try {
+    const client = twilio(accountSid, authToken);
+    await client.messages.create({ body, from: fromNumber, to: toPhone });
+  } catch (err) {
+    console.error("sendOrderSms error:", err);
+  }
+}
+
+export async function AcceptOnlineOrder(
+  clerkOrgId: string,
+  orderId: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = createServiceRoleClient();
+
+  // Verify caller owns this order
+  const { data: merchant } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("clerk_org_id", clerkOrgId)
+    .single();
+
+  if (!merchant) return { success: false, error: "Merchant not found" };
+
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id, merchant_id")
+    .eq("id", orderId)
+    .single();
+
+  if (!order || order.merchant_id !== merchant.id) {
+    return { success: false, error: "Order not found" };
+  }
+
+  const { data, error } = await supabase.rpc("accept_online_order", {
+    p_order_id: orderId,
+  });
+
+  if (error) {
+    console.error("accept_online_order error:", error);
+    return { success: false, error: "Failed to accept order" };
+  }
+
+  const result = data as any;
+  if (!result?.success) {
+    return { success: false, error: result?.error ?? "Failed to accept order" };
+  }
+
+  // Fetch order info for SMS + broadcast (fire-and-forget)
+  const { data: orderInfo } = await supabase
+    .from("orders")
+    .select("customer_phone, display_number, location_id, locations(name)")
+    .eq("id", orderId)
+    .single();
+
+  void broadcastOrderStatus(orderId, "accepted");
+
+  if (orderInfo?.customer_phone) {
+    const storeName = (orderInfo as any).locations?.name ?? "the restaurant";
+    const locationId = (orderInfo as any).location_id;
+    let eta = "";
+    if (locationId) {
+      const { data: storeConfig } = await supabase
+        .from("online_store_config")
+        .select("estimated_prep_minutes")
+        .eq("location_id", locationId)
+        .single();
+      if (storeConfig?.estimated_prep_minutes) {
+        eta = ` Estimated ready in ${storeConfig.estimated_prep_minutes} min.`;
+      }
+    }
+    void sendOrderSms(
+      (orderInfo as any).customer_phone,
+      `Your order ${(orderInfo as any).display_number} from ${storeName} has been accepted!${eta}`
+    );
+  }
+
+  return { success: true };
+}
+
+export async function DeclineOnlineOrder(
+  clerkOrgId: string,
+  orderId: string,
+  reason?: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = createServiceRoleClient();
+
+  const { data: merchant } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("clerk_org_id", clerkOrgId)
+    .single();
+
+  if (!merchant) return { success: false, error: "Merchant not found" };
+
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id, merchant_id")
+    .eq("id", orderId)
+    .single();
+
+  if (!order || order.merchant_id !== merchant.id) {
+    return { success: false, error: "Order not found" };
+  }
+
+  const { data, error } = await supabase.rpc("decline_online_order", {
+    p_order_id: orderId,
+    p_reason:   reason ?? null,
+  });
+
+  if (error) {
+    console.error("decline_online_order error:", error);
+    return { success: false, error: "Failed to decline order" };
+  }
+
+  const result = data as any;
+  if (!result?.success) {
+    return { success: false, error: result?.error ?? "Failed to decline order" };
+  }
+
+  // Fetch order info for SMS + broadcast (fire-and-forget)
+  const { data: orderInfo } = await supabase
+    .from("orders")
+    .select("customer_phone, display_number, locations(name)")
+    .eq("id", orderId)
+    .single();
+
+  void broadcastOrderStatus(orderId, "declined");
+
+  if (orderInfo?.customer_phone) {
+    const storeName = (orderInfo as any).locations?.name ?? "the restaurant";
+    const reasonSuffix = reason ? ` Reason: ${reason}.` : "";
+    void sendOrderSms(
+      (orderInfo as any).customer_phone,
+      `Your order ${(orderInfo as any).display_number} from ${storeName} was declined.${reasonSuffix} Please contact us for more information.`
+    );
+  }
+
+  return { success: true };
 }

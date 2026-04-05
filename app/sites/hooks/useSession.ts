@@ -14,6 +14,7 @@ interface SessionStore {
   customer: SessionCustomer | null;
   isAuthenticated: boolean;
   storeConfigId: string | null;
+  activeOrderId: string | null;
 
   login: (token: string, customer: SessionCustomer) => void;
   logout: () => void;
@@ -21,6 +22,7 @@ interface SessionStore {
   setStoreConfigId: (id: string) => void;
   initSessionToken: (token: string, configId: string) => void;
   refreshSession: () => Promise<boolean>;
+  setActiveOrderId: (id: string | null) => void;
 }
 
 export const useSession = create<SessionStore>()(
@@ -30,6 +32,7 @@ export const useSession = create<SessionStore>()(
       customer: null,
       isAuthenticated: false,
       storeConfigId: null,
+      activeOrderId: null,
 
       login: (token, customer) => {
         set({
@@ -44,8 +47,11 @@ export const useSession = create<SessionStore>()(
           sessionToken: null,
           customer: null,
           isAuthenticated: false,
+          activeOrderId: null,
         });
       },
+
+      setActiveOrderId: (id) => set({ activeOrderId: id }),
 
       setCustomer: (updates) => {
         const current = get().customer;
@@ -108,6 +114,7 @@ export const useSession = create<SessionStore>()(
         customer: state.customer,
         isAuthenticated: state.isAuthenticated,
         storeConfigId: state.storeConfigId,
+        activeOrderId: state.activeOrderId,
       }),
     }
   )
