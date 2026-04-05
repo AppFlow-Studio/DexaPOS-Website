@@ -4,6 +4,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 import { Switch } from "@/components/ui/switch";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -224,12 +225,19 @@ export function OrderTypeSection({
 
           {(selectedAddressId === "new" || savedAddresses.length === 0) && (
             <div className="space-y-2">
-              <Input
+              <AddressAutocomplete
                 value={newAddress.street}
-                onChange={(e) => onNewAddressChange({ ...newAddress, street: e.target.value })}
+                onInputChange={(v) => onNewAddressChange({ ...newAddress, street: v })}
+                onAddressSelected={(parts) =>
+                  onNewAddressChange({
+                    ...newAddress,
+                    street: parts.address_line1,
+                    city: parts.city,
+                    state: parts.state,
+                    zip: parts.postal_code.split("-")[0],
+                  })
+                }
                 placeholder="Street address"
-                autoComplete="street-address"
-                style={{ borderColor: "var(--border)", backgroundColor: "var(--card)", color: "var(--text)" }}
               />
               <div className="grid grid-cols-3 gap-2">
                 <Input

@@ -1,5 +1,6 @@
 "use client";
 
+import { ScopeContextStrip } from "@/components/dashboard/menu/ScopeContextStrip";
 import {
   Card,
   CardContent,
@@ -594,6 +595,7 @@ export default function CategoriesPage() {
   // console.log('categoriesList', categoriesList)
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+      <ScopeContextStrip />
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">

@@ -90,6 +90,9 @@ import {
   getEditingLevel,
   type PricingLevel,
 } from "./LevelIndicator";
+import { AffectsTag } from "./AffectsTag";
+import { DisabledFieldBanner } from "./DisabledFieldBanner";
+import { CascadeLadder } from "./CascadeLadder";
 import {
   TAX_CATEGORIES,
   TAX_CATEGORY_LABELS,
@@ -278,6 +281,16 @@ interface NewEditItemFormSheetProps {
   categoryName?: string; // For display purposes
   menuName?: string; // For display purposes
   isMenuLocationOwned?: boolean; // Is the menu a location-specific menu (Level 5)?
+  /**
+   * Controls how much of the form renders.
+   * - "full" (default): the entire mega-form
+   * - "inline-price": only the Pricing section, used for quick price edits
+   *    triggered from matrix cells / PriceSourcePopover.
+   * When NEXT_PUBLIC_NEW_ITEM_EDIT is "true" and mode is "full", the
+   * component logs a warning in dev since callers should route to the
+   * dedicated edit page instead.
+   */
+  mode?: "full" | "inline-price";
 }
 
 // Form schema
@@ -466,53 +479,50 @@ function getEditingContext(
 // EDITING CONTEXT INDICATOR
 // ============================================================================
 
-const LEVEL_INFO = {
-  1: {
-    name: "Global Base",
-    icon: Globe,
-    color: "text-emerald-600",
-    bgColor: "bg-emerald-50",
-    borderColor: "border-emerald-200",
-    description: "Base item price that applies everywhere by default.",
-    affects: "All locations and all menus",
-  },
-  2: {
-    name: "Location Override",
-    icon: Building2,
-    color: "text-blue-600",
-    bgColor: "bg-blue-50",
-    borderColor: "border-blue-200",
-    description:
-      "Location-specific base price that overrides the global price.",
-    affects: "All menus at this location",
-  },
-  3: {
-    name: "Menu Override",
-    icon: MenuIcon,
-    color: "text-purple-600",
-    bgColor: "bg-purple-50",
-    borderColor: "border-purple-200",
-    description: "Menu-specific price that applies when this menu is used.",
-    affects: "This menu at all locations",
-  },
-  4: {
-    name: "Location + Menu",
-    icon: MapPin,
-    color: "text-orange-600",
-    bgColor: "bg-orange-50",
-    borderColor: "border-orange-200",
-    description: "Price specific to this menu at this location only.",
-    affects: "This menu at this location only",
-  },
-  5: {
-    name: "Location Menu Owner",
-    icon: Sparkles,
-    color: "text-pink-600",
-    bgColor: "bg-pink-50",
-    borderColor: "border-pink-200",
-    description: "This is your location's own menu - you have full control.",
-    affects: "Your menu at your location",
-  },
+// Level metadata is now sourced from the shared cascade-labels helper so
+// there is a single source of truth for merchant-facing scope copy.
+import {
+  scopeLabel as getScopeLabel,
+  scopeDescription as getScopeDescription,
+  affectsLabel as getAffectsLabel,
+  scopeIcon as getScopeIcon,
+  scopeColor as getScopeColor,
+  type CascadeLevel,
+  type ScopeContext,
+} from "@/lib/menu/cascade-labels";
+
+type LevelInfo = {
+  name: string;
+  icon: ReturnType<typeof getScopeIcon>;
+  color: string;
+  bgColor: string;
+  borderColor: string;
+  description: string;
+  affects: string;
+};
+
+function buildLevelInfo(ctx: ScopeContext): LevelInfo {
+  const colors = getScopeColor(ctx.level);
+  return {
+    name: getScopeLabel(ctx),
+    icon: getScopeIcon(ctx.level),
+    color: colors.text,
+    bgColor: colors.bg,
+    borderColor: colors.border,
+    description: getScopeDescription(ctx),
+    affects: getAffectsLabel(ctx),
+  };
+}
+
+// Back-compat shim: static level-keyed lookup with generic (no name) context.
+// Used only for the hierarchy chip grid where we intentionally don't have
+// per-row context strings.
+const LEVEL_INFO: Record<CascadeLevel, LevelInfo> = {
+  1: buildLevelInfo({ level: 1 }),
+  2: buildLevelInfo({ level: 2 }),
+  3: buildLevelInfo({ level: 3 }),
+  4: buildLevelInfo({ level: 4 }),
+  5: buildLevelInfo({ level: 5 }),
 } as const;
 
 function EditingContextIndicator({ context }: { context: EditingContext }) {
@@ -755,8 +765,24 @@ export function NewEditItemFormSheet({
   categoryName,
   menuName,
   isMenuLocationOwned = false,
+  mode = "full",
 }: NewEditItemFormSheetProps) {
   const queryClient = useQueryClient();
+
+  // Dev warning: if the new edit page is enabled, callers should route to it.
+  React.useEffect(() => {
+    if (
+      mode === "full" &&
+      open &&
+      process.env.NEXT_PUBLIC_NEW_ITEM_EDIT === "true" &&
+      process.env.NODE_ENV !== "production"
+    ) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[NewEditItemFormSheet] Full-mode sheet opened while NEXT_PUBLIC_NEW_ITEM_EDIT=true. Prefer routing to /dashboard/menu/items/[itemId]/edit.",
+      );
+    }
+  }, [mode, open]);
   const { data: userInfo } = useUserInfo();
   const merchantId =
     userInfo?.members?.[0]?.organizations?.merchants?.id || "";
@@ -830,6 +856,24 @@ export function NewEditItemFormSheet({
     const location = locations.find((l) => l.id === selectedLocationId);
     return location?.name || "Unknown Location";
   }, [isAllLocations, selectedLocationId, locations]);
+
+  // Merchant-facing scope for AffectsTag / headers / banners.
+  // Kept separate from editingContext (which still carries table routing info).
+  const scopeCtx = React.useMemo<ScopeContext>(
+    () => ({
+      level: editingContext.level as CascadeLevel,
+      locationName: isAllLocations ? null : currentLocationName,
+      categoryName: categoryName ?? null,
+      menuName: menuName ?? null,
+    }),
+    [
+      editingContext.level,
+      isAllLocations,
+      currentLocationName,
+      categoryName,
+      menuName,
+    ],
+  );
 
   // Determine which price to show in the form based on context
   const getPriceForContext = React.useCallback(() => {
@@ -1483,6 +1527,14 @@ export function NewEditItemFormSheet({
                 />
               )}
 
+              {/* Disabled-field explainer - routes user to Global edit */}
+              {editItem && !editingContext.canEditBaseFields && (
+                <DisabledFieldBanner
+                  locationName={currentLocationName}
+                  className="mb-4"
+                />
+              )}
+
               <div className="space-y-4">
                   <div className="space-y-0">
 
@@ -1678,7 +1730,21 @@ export function NewEditItemFormSheet({
                         </Badge>
                       </div>
 
-                      {/* Price Breakdown - Show hierarchy */}
+                      {/* Horizontal cascade ladder - single-line visual */}
+                      {editItem && (
+                        <div className="rounded-lg border border-dashed bg-muted/20 p-3">
+                          <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            Price cascade
+                          </div>
+                          <CascadeLadder
+                            itemId={editItem.id}
+                            context={scopeCtx}
+                            locationId={locationIdForEdits}
+                          />
+                        </div>
+                      )}
+
+                      {/* Price Breakdown - Detailed vertical breakdown */}
                       {editItem && <PriceBreakdown />}
 
                       {/* Price Inputs */}
@@ -2809,20 +2875,11 @@ export function NewEditItemFormSheet({
                 </svg>
                 Saving...
               </>
-            ) : editItem ? (
-              editingContext.level === 1 ? (
-                "Save Changes"
-              ) : editingContext.level === 2 ? (
-                "Save  "
-              ) : editingContext.level === 3 ? (
-                "Save  "
-              ) : editingContext.level === 4 ? (
-                "Save Location Override"
-              ) : (
-                "Save"
-              )
             ) : (
-              "Create Item"
+              <>
+                {editItem ? "Save" : "Create Item"}
+                <AffectsTag ctx={scopeCtx} variant="save-button" />
+              </>
             )}
           </Button>
         </DialogFooter>

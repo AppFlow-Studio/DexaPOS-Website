@@ -20,6 +20,7 @@ import {
   GetMenuItemWithLocationContext,
   UpdateMenuItem,
   ResetMenuItemToGlobal,
+  GetItemPriceMatrix,
 } from "../actions/menu-items";
 import { GetCategories } from "../actions/categories";
 import { GetSchedules, GetSchedulesWithTimeSlots } from "../actions/schedules";
@@ -100,6 +101,27 @@ export function useLocationScopedMenuItems() {
     queryKey: ["menu-items", clerkOrgId, locationId, "scoped"],
     queryFn: () => GetMenuItems(clerkOrgId, locationId),
     enabled: !!clerkOrgId,
+  });
+}
+
+/**
+ * Get the full price cascade matrix for a single item across every
+ * location and context. Powers the Item Price Matrix page and the
+ * PriceSourcePopover cascade ladder.
+ */
+export function useItemPriceMatrix(itemId: string | null | undefined) {
+  const clerkOrgId = useClerkOrgId();
+
+  return useQuery({
+    queryKey: ["item-price-matrix", itemId, clerkOrgId],
+    queryFn: async () => {
+      if (!itemId) return null;
+      const result = await GetItemPriceMatrix(itemId, clerkOrgId);
+      if (result.error) throw new Error(result.error);
+      return result.data ?? null;
+    },
+    enabled: !!itemId && !!clerkOrgId,
+    staleTime: 30 * 1000,
   });
 }
 
