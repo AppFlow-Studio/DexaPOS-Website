@@ -9,13 +9,10 @@ import { useOrders } from "../hooks/useOrder";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ShoppingBag,
   Clock,
@@ -39,6 +36,11 @@ import { Empty } from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
 import { OrderFilters as OrderFiltersComponent } from "@/components/dashboard/orders/OrderFilters";
 import { useSearchParams } from "next/navigation";
+import {
+  Area,
+  AreaChart,
+  ResponsiveContainer,
+} from "recharts";
 
 export default function OrdersPage() {
   const selectedLocation = useSelectedLocation();
@@ -168,6 +170,39 @@ export default function OrdersPage() {
     };
   }, [ordersList]);
 
+  // Build daily breakdown for sparkline charts (last 7 days from ordersList)
+  const dailyData = useMemo(() => {
+    const days: { date: string; label: string; orders: number; revenue: number; completed: number; pending: number }[] = [];
+    const now = new Date();
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      d.setHours(0, 0, 0, 0);
+      const nextDay = new Date(d);
+      nextDay.setDate(nextDay.getDate() + 1);
+
+      const dayOrders = ordersList.filter((o) => {
+        const od = new Date(o.created_at);
+        return od >= d && od < nextDay;
+      });
+
+      const dayLabel = i === 0 ? "Today" : i === 1 ? "Yesterday" : d.toLocaleDateString("en-US", { weekday: "short" });
+
+      days.push({
+        date: d.toISOString().slice(0, 10),
+        label: dayLabel,
+        orders: dayOrders.length,
+        revenue: dayOrders
+          .filter((o) => o.payment_status === "captured" || o.payment_status === "paid")
+          .reduce((sum, o) => sum + o.total_amount, 0),
+        completed: dayOrders.filter((o) => o.status === "completed").length,
+        pending: dayOrders.filter((o) => o.status === "pending" || o.status === "preparing").length,
+      });
+    }
+    return days;
+  }, [ordersList]);
+
   const handleOrderClick = (order: OrderResponse) => {
     setSelectedOrder(order);
     setIsDetailOpen(true);
@@ -184,108 +219,222 @@ export default function OrdersPage() {
       <div className="flex items-center justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight">Orders</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Orders</h1>
             {isAllLocations ? (
-              <Badge variant="outline" className="gap-1">
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                 <Globe className="h-3 w-3" />
                 All Locations
-              </Badge>
+              </span>
             ) : (
-              <Badge variant="outline" className="gap-1">
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                 <MapPin className="h-3 w-3" />
                 {selectedLocation?.name}
-              </Badge>
+              </span>
             )}
           </div>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             View and manage all orders across your locations
           </p>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="transition-all hover:shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-            <ShoppingBag className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
+      {/* Stripe-style Stats Cards with Sparklines */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {/* Total Orders */}
+        <Card className="border-border/60 shadow-none overflow-hidden">
+          <CardContent className="p-5">
             {isLoading ? (
-              <Skeleton className="h-8 w-16" />
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-8 w-16" />
+                <Skeleton className="h-12 w-full" />
+              </div>
             ) : (
-              <div className="text-2xl font-bold">{stats.total}</div>
+              <>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium text-muted-foreground">Total Orders</span>
+                  <ShoppingBag className="h-4 w-4 text-muted-foreground/40" />
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-semibold tracking-tight">{stats.total}</span>
+                  <span className="text-xs text-muted-foreground/60">today</span>
+                </div>
+                <div className="mt-3 h-12">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={dailyData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="ordersGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
+                          <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <Area
+                        type="monotone"
+                        dataKey="orders"
+                        stroke="hsl(var(--primary))"
+                        strokeWidth={1.5}
+                        fill="url(#ordersGrad)"
+                        dot={false}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+                <p className="text-xs text-muted-foreground/60 mt-1">Last 7 days</p>
+              </>
             )}
-            <p className="text-xs text-muted-foreground">Today</p>
           </CardContent>
         </Card>
 
-        <Card className="transition-all hover:shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
-            <Clock className="h-4 w-4 text-amber-500" />
-          </CardHeader>
-          <CardContent>
+        {/* Pending */}
+        <Card className="border-border/60 shadow-none overflow-hidden">
+          <CardContent className="p-5">
             {isLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <div className="text-2xl font-bold text-amber-600">
-                {stats.pending}
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-8 w-16" />
+                <Skeleton className="h-12 w-full" />
               </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium text-muted-foreground">Pending</span>
+                  <Clock className="h-4 w-4 text-amber-400" />
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-semibold tracking-tight text-amber-600 dark:text-amber-400">{stats.pending}</span>
+                  <span className="text-xs text-muted-foreground/60">active now</span>
+                </div>
+                <div className="mt-3 h-12">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={dailyData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="pendingGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.2} />
+                          <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <Area
+                        type="monotone"
+                        dataKey="pending"
+                        stroke="#f59e0b"
+                        strokeWidth={1.5}
+                        fill="url(#pendingGrad)"
+                        dot={false}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+                <p className="text-xs text-muted-foreground/60 mt-1">Last 7 days</p>
+              </>
             )}
-            <p className="text-xs text-muted-foreground">Pending & Preparing</p>
           </CardContent>
         </Card>
 
-        <Card className="transition-all hover:shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
+        {/* Completed */}
+        <Card className="border-border/60 shadow-none overflow-hidden">
+          <CardContent className="p-5">
             {isLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <div className="text-2xl font-bold text-green-600">
-                {stats.completed}
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-8 w-16" />
+                <Skeleton className="h-12 w-full" />
               </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium text-muted-foreground">Completed</span>
+                  <CheckCircle className="h-4 w-4 text-emerald-400" />
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-semibold tracking-tight text-emerald-600 dark:text-emerald-400">{stats.completed}</span>
+                  <span className="text-xs text-muted-foreground/60">today</span>
+                </div>
+                <div className="mt-3 h-12">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={dailyData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="completedGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#10b981" stopOpacity={0.2} />
+                          <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <Area
+                        type="monotone"
+                        dataKey="completed"
+                        stroke="#10b981"
+                        strokeWidth={1.5}
+                        fill="url(#completedGrad)"
+                        dot={false}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+                <p className="text-xs text-muted-foreground/60 mt-1">Last 7 days</p>
+              </>
             )}
-            <p className="text-xs text-muted-foreground">Completed today</p>
           </CardContent>
         </Card>
 
-        <Card className="transition-all hover:shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
+        {/* Revenue */}
+        <Card className="border-border/60 shadow-none overflow-hidden">
+          <CardContent className="p-5">
             {isLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <div className="text-2xl font-bold">
-                ${stats.revenue.toFixed(2)}
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-8 w-24" />
+                <Skeleton className="h-12 w-full" />
               </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium text-muted-foreground">Revenue</span>
+                  <DollarSign className="h-4 w-4 text-muted-foreground/40" />
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-semibold tracking-tight">${stats.revenue.toFixed(2)}</span>
+                  <span className="text-xs text-muted-foreground/60">today</span>
+                </div>
+                <div className="mt-3 h-12">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={dailyData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
+                          <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <Area
+                        type="monotone"
+                        dataKey="revenue"
+                        stroke="hsl(var(--primary))"
+                        strokeWidth={1.5}
+                        fill="url(#revenueGrad)"
+                        dot={false}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+                <p className="text-xs text-muted-foreground/60 mt-1">Last 7 days</p>
+              </>
             )}
-            <p className="text-xs text-muted-foreground">Today</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Filter Tabs and Orders Table */}
-      <Card>
-        <CardHeader className="w-full">
+      <Card className="border-border/60 shadow-none">
+        <CardHeader className="w-full pb-4">
           <div className="flex flex-col items-start justify-between w-full space-y-4">
             <div className="flex items-center justify-between w-full">
-              <CardTitle>All Orders</CardTitle>
+              <CardTitle className="text-base font-medium">All Orders</CardTitle>
               <Button
-                variant="outline"
-                className="hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                variant="ghost"
+                className="text-muted-foreground hover:text-foreground cursor-pointer"
                 size="sm"
                 onClick={async () => await refetchOrders()}
               >
                 <RefreshCcwDot className="h-4 w-4 mr-2" />
-                Refresh Orders
+                Refresh
               </Button>
             </div>
             <OrderFiltersComponent className="w-full" />

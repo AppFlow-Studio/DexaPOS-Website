@@ -35,7 +35,7 @@ export function UnpaidOrdersCard({
 }: UnpaidOrdersCardProps) {
   if (isLoading) {
     return (
-      <Card className="border-none shadow-sm bg-card/80 backdrop-blur">
+      <Card className="border-border/60 shadow-none">
         <CardHeader className="pb-2">
           <div className="h-5 w-32 bg-muted animate-pulse rounded" />
         </CardHeader>
@@ -51,8 +51,8 @@ export function UnpaidOrdersCard({
   return (
     <Card
       className={cn(
-        "border-none shadow-sm backdrop-blur hover:shadow-md transition-shadow",
-        hasUnpaid ? "bg-amber-500/5 border border-amber-500/20" : "bg-card/80"
+        "border-border/60 shadow-none",
+        hasUnpaid && "bg-amber-50/50 border-amber-200/60 dark:bg-amber-900/10 dark:border-amber-500/20"
       )}
     >
       <CardHeader className="pb-2 flex flex-row items-center justify-between">

@@ -2,7 +2,14 @@
 
 import React, { useState, useMemo } from "react";
 import { format, subDays } from "date-fns";
-import { CreditCard, LayoutDashboard, Receipt } from "lucide-react";
+import {
+  CreditCard,
+  LayoutDashboard,
+  Receipt,
+  RefreshCcw,
+  MapPin,
+  Globe,
+} from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,8 +20,9 @@ import { FinancialHeroChart } from "./components/FinancialHeroChart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ReceiptModal } from "@/components/dashboard/orders/ReceiptModal";
 import { OrderResponse } from "@/types/order-management";
-import { useSelectedLocation } from "@/stores/location-store";
+import { useSelectedLocation, useIsAllLocations } from "@/stores/location-store";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 // Restore Component Imports
 import { RevenueSummaryCard } from "./components/RevenueSummaryCard";
@@ -44,6 +52,7 @@ export default function TransactionsPage() {
     null
   );
   const selectedLocation = useSelectedLocation();
+  const isAllLocations = useIsAllLocations();
 
   // 1. Fetch data for Left Column (Summary) based on Picker Date
   const { data: kpis, isLoading: isLoadingKPIs } = useFinancialKPIs(
@@ -160,219 +169,240 @@ export default function TransactionsPage() {
   }, [orders]);
 
   return (
-    // Fixed height layout with 50/50 split
-    <div className="h-[calc(100vh-112px)] w-full max-w-[1920px] mx-auto flex overflow-hidden bg-[#F9FAFB] font-sans">
-      {/* ===================================================================== */}
-      {/* LEFT COLUMN: Header + Tabs + Content (50%) */}
-      {/* ===================================================================== */}
-      <div className="w-1/2 h-full flex flex-col border-r border-gray-200">
-        {/* Fixed Header */}
-        <div className="shrink-0 p-6 pb-2 space-y-4 bg-[#F9FAFB] z-10">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-[#111827]">
+    <main className="space-y-6 animate-in fade-in duration-500">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight">
               Financial Information
             </h1>
-            <p className="text-gray-500 text-sm mt-1 truncate">
-              {selectedLocation?.name || "All Locations"} • Real-time overview
-            </p>
+            {isAllLocations ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                <Globe className="h-3 w-3" />
+                All Locations
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                <MapPin className="h-3 w-3" />
+                {selectedLocation?.name}
+              </span>
+            )}
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <DateRangePicker date={date} setDate={setDate} className="w-full" />
-            {/* Spacing or other control could go here */}
-          </div>
-
-          <Tabs
-            value={activeTab}
-            onValueChange={(v) => setActiveTab(v as TabType)}
-            className="w-full"
-          >
-            <TabsList className="bg-white p-1 h-auto rounded-xl shadow-sm border border-gray-200/50 w-full grid grid-cols-3">
-              <TabsTrigger
-                value="overview"
-                className="rounded-lg data-[state=active]:bg-[#6366f1] data-[state=active]:text-white py-2.5 text-sm font-medium transition-all"
-              >
-                <LayoutDashboard className="w-4 h-4 mr-2" />
-                Overview
-              </TabsTrigger>
-              <TabsTrigger
-                value="transactions"
-                className="rounded-lg data-[state=active]:bg-[#6366f1] data-[state=active]:text-white py-2.5 text-sm font-medium transition-all"
-              >
-                <Receipt className="w-4 h-4 mr-2" />
-                Transactions
-              </TabsTrigger>
-              <TabsTrigger
-                value="payments"
-                className="rounded-lg data-[state=active]:bg-[#6366f1] data-[state=active]:text-white py-2.5 text-sm font-medium transition-all"
-              >
-                <CreditCard className="w-4 h-4 mr-2" />
-                Payments
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <p className="text-sm text-muted-foreground">
+            Revenue, transactions, and payment activity
+          </p>
         </div>
-
-        {/* Scrollable Content Area */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
-          {/* TAB: OVERVIEW */}
-          {activeTab === "overview" && (
-            <div className="space-y-4 animate-in fade-in-50 duration-300">
-              <RevenueSummaryCard
-                netSales={summary.net_sales}
-                gratuity={0}
-                taxAmount={summary.tax_total}
-                tips={summary.tip_total}
-                paidInTotal={summary.paid_in_total || 0}
-                totalAmount={
-                  summary.net_sales +
-                  summary.tax_total +
-                  summary.tip_total +
-                  (summary.paid_in_total || 0)
-                }
-                isLoading={isLoading}
-              />
-
-              <NetSalesSummaryCard
-                grossSales={summary.gross_sales}
-                salesDiscounts={summary.discounts_total}
-                salesRefunds={summary.refunds_total}
-                netSales={summary.net_sales}
-                instantDepositAvailable={0}
-                isLoading={isLoading}
-              />
-
-              <TipSummaryCard
-                tipsCollected={summary.tip_total}
-                tipsRefunded={0}
-                totalTips={summary.tip_total}
-                isLoading={isLoading}
-              />
-
-              <UnpaidOrdersCard
-                unpaidAmount={unpaidData.amount}
-                unpaidCount={unpaidData.count}
-                isLoading={isLoadingOrders}
-              />
-
-              <CashSummaryCard
-                expectedCloseoutCash={0}
-                actualCloseoutCash={0}
-                cashOverageShortage={0}
-                expectedDeposit={0}
-                actualDeposit={0}
-                depositOverageShortage={0}
-                isLoading={isLoading}
-              />
-
-              <PaymentsSummaryCard
-                paymentMethods={paymentMethods}
-                isLoading={isLoading}
-              />
-
-              <BestSellersCard
-                items={kpis?.best_sellers || []}
-                isLoading={isLoading}
-              />
-            </div>
-          )}
-
-          {/* TAB: TRANSACTIONS */}
-          {activeTab === "transactions" && (
-            <div className="space-y-4 animate-in fade-in-50 duration-300">
-              {/* Quick Stats Grid */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">
-                    Total Orders
-                  </p>
-                  <p className="text-2xl font-bold mt-1 text-gray-900">
-                    {summary.order_count}
-                  </p>
-                </div>
-                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">
-                    Avg Ticket
-                  </p>
-                  <p className="text-2xl font-bold mt-1 text-gray-900 font-mono">
-                    ${summary.avg_order_value.toFixed(2)}
-                  </p>
-                </div>
-              </div>
-
-              <TransactionsList
-                transactions={orders || []}
-                isLoading={isLoadingOrders}
-                onTransactionClick={handleOrderClick}
-              />
-            </div>
-          )}
-
-          {/* TAB: PAYMENTS */}
-          {activeTab === "payments" && (
-            <div className="space-y-4 animate-in fade-in-50 duration-300">
-              <CashSummaryCard
-                expectedCloseoutCash={0}
-                actualCloseoutCash={0}
-                cashOverageShortage={0}
-                expectedDeposit={0}
-                actualDeposit={0}
-                depositOverageShortage={0}
-                isLoading={isLoading}
-              />
-
-              <CashActivityCard
-                totalCashPayments={
-                  paymentMethods.find((pm) =>
-                    pm.method.toLowerCase().includes("cash")
-                  )?.amount || 0
-                }
-                cashAdjustments={0}
-                cashRefunds={0}
-                cashBeforeTipouts={0}
-                cashGratuity={0}
-                creditNonCashGratuity={0}
-                creditNonCashTips={0}
-                tipoutsTipsWithheld={0}
-                totalCash={
-                  paymentMethods.find((pm) =>
-                    pm.method.toLowerCase().includes("cash")
-                  )?.amount || 0
-                }
-                isLoading={isLoading}
-              />
-
-              <PaymentsSummaryCard
-                paymentMethods={paymentMethods}
-                isLoading={isLoading}
-              />
-
-              <TipSummaryCard
-                tipsCollected={summary.tip_total}
-                tipsRefunded={0}
-                totalTips={summary.tip_total}
-                isLoading={isLoading}
-              />
-            </div>
-          )}
-        </div>
+        <DateRangePicker date={date} setDate={setDate} className="w-auto" />
       </div>
 
-      {/* ===================================================================== */}
-      {/* RIGHT COLUMN: Chart (50%) - FIXED/STICKY */}
-      {/* ===================================================================== */}
-      <div className="w-1/2 h-full bg-white p-6 relative">
-        <div className="h-full w-full rounded-[32px] overflow-hidden shadow-sm bg-white border border-gray-100 relative">
-          <FinancialHeroChart
-            data={chartData}
-            isLoading={isLoadingChartKPIs}
-            defaultTimeRange={chartTimeRange}
-            onTimeRangeChange={setChartTimeRange}
+      {/* Hero Chart */}
+      <Card className="border-border/60 shadow-none overflow-hidden">
+        <CardContent className="p-0">
+          <div className="h-[420px]">
+            <FinancialHeroChart
+              data={chartData}
+              isLoading={isLoadingChartKPIs}
+              defaultTimeRange={chartTimeRange}
+              onTimeRangeChange={setChartTimeRange}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Quick Stats Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card className="border-border/60 shadow-none">
+          <CardContent className="p-5">
+            <span className="text-sm font-medium text-muted-foreground">Net Sales</span>
+            <div className="text-2xl font-semibold mt-1 tabular-nums">
+              {isLoading ? (
+                <Skeleton className="h-8 w-24" />
+              ) : (
+                `$${summary.net_sales.toFixed(2)}`
+              )}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-border/60 shadow-none">
+          <CardContent className="p-5">
+            <span className="text-sm font-medium text-muted-foreground">Orders</span>
+            <div className="text-2xl font-semibold mt-1 tabular-nums">
+              {isLoading ? (
+                <Skeleton className="h-8 w-16" />
+              ) : (
+                summary.order_count
+              )}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-border/60 shadow-none">
+          <CardContent className="p-5">
+            <span className="text-sm font-medium text-muted-foreground">Avg Ticket</span>
+            <div className="text-2xl font-semibold mt-1 tabular-nums">
+              {isLoading ? (
+                <Skeleton className="h-8 w-20" />
+              ) : (
+                `$${summary.avg_order_value.toFixed(2)}`
+              )}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-border/60 shadow-none">
+          <CardContent className="p-5">
+            <span className="text-sm font-medium text-muted-foreground">Tips</span>
+            <div className="text-2xl font-semibold mt-1 tabular-nums">
+              {isLoading ? (
+                <Skeleton className="h-8 w-20" />
+              ) : (
+                `$${summary.tip_total.toFixed(2)}`
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Tabs */}
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as TabType)}
+        className="w-full"
+      >
+        <TabsList className="bg-muted/50 p-1 h-auto rounded-lg w-full sm:w-auto sm:inline-flex">
+          <TabsTrigger
+            value="overview"
+            className="rounded-md px-4 py-2 text-sm font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
+          >
+            <LayoutDashboard className="w-4 h-4 mr-2" />
+            Overview
+          </TabsTrigger>
+          <TabsTrigger
+            value="transactions"
+            className="rounded-md px-4 py-2 text-sm font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
+          >
+            <Receipt className="w-4 h-4 mr-2" />
+            Transactions
+          </TabsTrigger>
+          <TabsTrigger
+            value="payments"
+            className="rounded-md px-4 py-2 text-sm font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
+          >
+            <CreditCard className="w-4 h-4 mr-2" />
+            Payments
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {/* Tab Content */}
+      {activeTab === "overview" && (
+        <div className="grid gap-4 md:grid-cols-2 animate-in fade-in-50 duration-300">
+          <div className="space-y-4">
+            <RevenueSummaryCard
+              netSales={summary.net_sales}
+              gratuity={0}
+              taxAmount={summary.tax_total}
+              tips={summary.tip_total}
+              paidInTotal={summary.paid_in_total || 0}
+              totalAmount={
+                summary.net_sales +
+                summary.tax_total +
+                summary.tip_total +
+                (summary.paid_in_total || 0)
+              }
+              isLoading={isLoading}
+            />
+            <NetSalesSummaryCard
+              grossSales={summary.gross_sales}
+              salesDiscounts={summary.discounts_total}
+              salesRefunds={summary.refunds_total}
+              netSales={summary.net_sales}
+              instantDepositAvailable={0}
+              isLoading={isLoading}
+            />
+            <TipSummaryCard
+              tipsCollected={summary.tip_total}
+              tipsRefunded={0}
+              totalTips={summary.tip_total}
+              isLoading={isLoading}
+            />
+          </div>
+          <div className="space-y-4">
+            <UnpaidOrdersCard
+              unpaidAmount={unpaidData.amount}
+              unpaidCount={unpaidData.count}
+              isLoading={isLoadingOrders}
+            />
+            <PaymentsSummaryCard
+              paymentMethods={paymentMethods}
+              isLoading={isLoading}
+            />
+            <BestSellersCard
+              items={kpis?.best_sellers || []}
+              isLoading={isLoading}
+            />
+          </div>
+        </div>
+      )}
+
+      {activeTab === "transactions" && (
+        <div className="space-y-4 animate-in fade-in-50 duration-300">
+          <TransactionsList
+            transactions={orders || []}
+            isLoading={isLoadingOrders}
+            onTransactionClick={handleOrderClick}
           />
         </div>
-      </div>
+      )}
 
-      {/* Receipt Modal Integration */}
+      {activeTab === "payments" && (
+        <div className="grid gap-4 md:grid-cols-2 animate-in fade-in-50 duration-300">
+          <div className="space-y-4">
+            <CashSummaryCard
+              expectedCloseoutCash={0}
+              actualCloseoutCash={0}
+              cashOverageShortage={0}
+              expectedDeposit={0}
+              actualDeposit={0}
+              depositOverageShortage={0}
+              isLoading={isLoading}
+            />
+            <CashActivityCard
+              totalCashPayments={
+                paymentMethods.find((pm) =>
+                  pm.method.toLowerCase().includes("cash")
+                )?.amount || 0
+              }
+              cashAdjustments={0}
+              cashRefunds={0}
+              cashBeforeTipouts={0}
+              cashGratuity={0}
+              creditNonCashGratuity={0}
+              creditNonCashTips={0}
+              tipoutsTipsWithheld={0}
+              totalCash={
+                paymentMethods.find((pm) =>
+                  pm.method.toLowerCase().includes("cash")
+                )?.amount || 0
+              }
+              isLoading={isLoading}
+            />
+          </div>
+          <div className="space-y-4">
+            <PaymentsSummaryCard
+              paymentMethods={paymentMethods}
+              isLoading={isLoading}
+            />
+            <TipSummaryCard
+              tipsCollected={summary.tip_total}
+              tipsRefunded={0}
+              totalTips={summary.tip_total}
+              isLoading={isLoading}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Receipt Modal */}
       {selectedOrder && (
         <ReceiptModal
           order={selectedOrder}
@@ -385,6 +415,6 @@ export default function TransactionsPage() {
           onOpenChange={(open) => !open && setSelectedOrder(null)}
         />
       )}
-    </div>
+    </main>
   );
 }
