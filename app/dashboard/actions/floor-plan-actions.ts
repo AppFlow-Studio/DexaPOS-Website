@@ -549,7 +549,7 @@ export async function LoadReservationsAction(
 
   if (error) throw error;
 
-  return (data || []) as Reservation[];
+  return (data?.reservations || []) as Reservation[];
 }
 
 export async function AddToWaitlistAction(
