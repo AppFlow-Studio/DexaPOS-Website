@@ -35,12 +35,24 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { DaySelector } from "./day-selector";
 import { TimeWindowPicker } from "./time-window-picker";
 import { CategoryOption } from "./category-picker";
 import { MenuItemOption } from "./menu-item-picker";
 import { TargetingSheet } from "./targeting-sheet";
 import { Settings2, X } from "lucide-react";
+
+interface LocationOption {
+  id: string;
+  name: string;
+}
 
 interface DiscountFormProps {
   defaultValues?: Partial<DiscountFormValues>;
@@ -49,6 +61,7 @@ interface DiscountFormProps {
   submitLabel?: string;
   categories?: CategoryOption[];
   menuItems?: MenuItemOption[];
+  locations?: LocationOption[];
   onCancel?: () => void;
 }
 
@@ -64,6 +77,7 @@ export function DiscountForm({
   submitLabel = "Save discount",
   categories = [],
   menuItems = [],
+  locations = [],
   onCancel,
 }: DiscountFormProps) {
   const [openSections, setOpenSections] = useState({
@@ -86,6 +100,7 @@ export function DiscountForm({
       end_date: toDate(defaultValues?.end_date ?? null),
       is_active: defaultValues?.is_active ?? true,
       scope: defaultValues?.scope ?? "both",
+      location_id: defaultValues?.location_id ?? null,
       requires_manager_approval:
         defaultValues?.requires_manager_approval ?? false,
       max_uses_per_day: defaultValues?.max_uses_per_day,
@@ -269,6 +284,41 @@ export function DiscountForm({
                     )}
                   />
                 </div>
+                <FormField
+                  control={form.control}
+                  name="location_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Availability scope</FormLabel>
+                      <Select
+                        value={field.value ?? "__global__"}
+                        onValueChange={(val) =>
+                          field.onChange(val === "__global__" ? null : val)
+                        }
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select scope" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="__global__">
+                            Global (all locations)
+                          </SelectItem>
+                          {locations.map((loc) => (
+                            <SelectItem key={loc.id} value={loc.id}>
+                              {loc.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <CardDescription>
+                        Global discounts apply everywhere. Location-scoped discounts are only available at the selected location.
+                      </CardDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </CollapsibleContent>
             </Collapsible>
 

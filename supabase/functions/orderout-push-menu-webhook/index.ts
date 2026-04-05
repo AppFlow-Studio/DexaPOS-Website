@@ -3,16 +3,11 @@ import { createClient } from 'npm:@supabase/supabase-js'
 // ============================================================================
 // OrderOut Push Menu Webhook
 // Receives per-platform push results (UBEREATS, GRUBHUB, DOORDASH) after a
-// menu is pushed to OrderOut. Updates platform_statuses on orderout_menu_links.
+// menu is pushed to OrderOut. Updates platform_statuses on orderout_menu_links
+// and connected_channels on orderout_restaurants.
 //
-// TODO: Register this webhook with OrderOut when ready:
-//   POST https://api.orderout.co/api/webhooks/push_menu
-//   {
-//     "delivery_services": ["UBEREATS", "GRUBHUB", "DOORDASH"],
-//     "method": "POST",
-//     "endpoint": "{SUPABASE_URL}/functions/v1/orderout-push-menu-webhook",
-//     "authorization_header": { "Authorization": "Bearer {SERVICE_ROLE_KEY}" }
-//   }
+// Registration (one-time, platform-wide): POST /webhooks/push_menu on OrderOut
+// with the same ORDEROUT_WEBHOOK_SECRET this function validates against.
 // ============================================================================
 
 const WEBHOOK_SECRET = Deno.env.get('ORDEROUT_WEBHOOK_SECRET')
@@ -53,6 +48,41 @@ function logError(eventType: string, message: string, error: unknown): void {
 }
 
 // ============================================================================
+// DLQ — Dead Letter Queue
+// ============================================================================
+
+async function insertDeadLetter(
+  supabase: ReturnType<typeof createClient>,
+  payload: unknown,
+  errorMessage: string,
+  eventType: string = 'push_menu',
+  replayId?: string | null
+): Promise<void> {
+  // If this is an HQ-initiated replay, UPDATE the original row instead of
+  // creating a phantom duplicate. Uses an RPC so retry_count can be atomically
+  // incremented.
+  if (replayId) {
+    const { error } = await supabase.rpc('touch_dlq_replay_failure', {
+      p_id: replayId,
+      p_error_message: errorMessage,
+    })
+    if (error) logError('DLQ', 'Failed to update dead letter queue (replay)', error)
+    else logEvent('DLQ', `Replay failure recorded on ${replayId}: ${errorMessage}`)
+    return
+  }
+
+  const { error } = await supabase.from('webhook_dead_letter_queue').insert({
+    source: 'orderout',
+    event_type: eventType,
+    raw_payload: payload,
+    error_message: errorMessage,
+    status: 'pending',
+  })
+  if (error) logError('DLQ', 'Failed to insert into dead letter queue', error)
+  else logEvent('DLQ', `Payload stored: ${errorMessage}`)
+}
+
+// ============================================================================
 // AUTH VALIDATION
 // ============================================================================
 
@@ -61,13 +91,13 @@ function validateAuth(req: Request): { valid: boolean; error?: string } {
     return { valid: false, error: 'ORDEROUT_WEBHOOK_SECRET not configured' }
   }
 
-  const authHeader = req.headers.get('Authorization')
+  const authHeader = req.headers.get('Authorization') || req.headers.get('authorization')
   if (!authHeader) {
     return { valid: false, error: 'Missing Authorization header' }
   }
 
   const [scheme, token] = authHeader.split(' ')
-  if (scheme !== 'Bearer' || !token) {
+  if (scheme?.toLowerCase() !== 'bearer' || !token) {
     return { valid: false, error: 'Invalid Authorization format. Expected: Bearer <token>' }
   }
 
@@ -93,20 +123,45 @@ function validateAuth(req: Request): { valid: boolean; error?: string } {
 }
 
 // ============================================================================
+// PLATFORM + STATUS NORMALIZATION
+// ============================================================================
+
+const PLATFORM_ALIASES: Record<string, string> = {
+  'UBEREATS': 'UBEREATS', 'UBER_EATS': 'UBEREATS', 'UBER EATS': 'UBEREATS',
+  'DOORDASH': 'DOORDASH', 'DOOR_DASH': 'DOORDASH', 'DOOR DASH': 'DOORDASH',
+  'GRUBHUB': 'GRUBHUB',   'GRUB_HUB': 'GRUBHUB',   'GRUB HUB': 'GRUBHUB',
+}
+
+function normalizePlatform(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const key = raw.trim().toUpperCase().replace(/-/g, '_')
+  if (!key) return null
+  return PLATFORM_ALIASES[key] || key
+}
+
+const VALID_STATUSES = new Set(['success', 'failed', 'pending'])
+
+function normalizeStatus(raw: unknown): 'success' | 'failed' | 'pending' | 'unknown' {
+  if (typeof raw !== 'string') return 'unknown'
+  const s = raw.trim().toLowerCase()
+  return (VALID_STATUSES.has(s) ? s : 'unknown') as 'success' | 'failed' | 'pending' | 'unknown'
+}
+
+// ============================================================================
 // TYPES
 // ============================================================================
 
-interface PlatformResult {
-  platform: string  // e.g. "UBEREATS", "DOORDASH", "GRUBHUB"
-  status: 'success' | 'failed' | 'pending'
-  error?: string
+interface PushMenuWebhookPayload {
+  menu_id: number | string
+  restaurant_id?: string
+  results?: unknown
+  [key: string]: unknown
 }
 
-interface PushMenuWebhookPayload {
-  menu_id: number | string   // OrderOut menu ID
-  restaurant_id?: string     // OrderOut restaurant ID
-  results?: PlatformResult[]
-  [key: string]: unknown
+interface SanitizedResult {
+  platform: string
+  status: 'success' | 'failed' | 'pending' | 'unknown'
+  error: string | null
 }
 
 // ============================================================================
@@ -123,81 +178,183 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const auth = validateAuth(req)
   if (!auth.valid) {
     logError('AUTH', 'Authentication failed', auth.error)
+    // If the secret is unset we have a misconfigured server — surface as 500
+    if (auth.error === 'ORDEROUT_WEBHOOK_SECRET not configured') {
+      return errorResponse('Server not configured', 500)
+    }
     return errorResponse('Unauthorized', 401)
   }
 
-  // 2. Parse body
+  // HQ-initiated replay correlation. When present, any DLQ write path will
+  // UPDATE this row instead of INSERTing a new one.
+  const replayId = req.headers.get('x-dlq-replay-id') || null
+
+  // 2. Init Supabase service-role client (bypasses RLS)
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+  // 3. Parse body
+  let rawBody = ''
   let body: PushMenuWebhookPayload
   try {
-    body = await req.json()
+    rawBody = await req.text()
+    body = JSON.parse(rawBody) as PushMenuWebhookPayload
   } catch {
+    await insertDeadLetter(supabase, { _raw: rawBody }, 'Invalid JSON body', 'push_menu', replayId)
     return errorResponse('Invalid JSON body', 400)
   }
 
   logEvent('PUSH_MENU_WEBHOOK', 'Received push_menu callback', {
     menu_id: body.menu_id,
     restaurant_id: body.restaurant_id,
-    resultCount: body.results?.length ?? 0,
+    resultCount: Array.isArray(body.results) ? body.results.length : 0,
   })
 
-  // 3. Validate required fields
+  // 4. Validate required fields
   const ooMenuId = body.menu_id
-  if (!ooMenuId) {
+  if (ooMenuId === undefined || ooMenuId === null || ooMenuId === '') {
     logError('PUSH_MENU_WEBHOOK', 'Missing menu_id in payload', body)
+    await insertDeadLetter(supabase, body, 'Missing menu_id', 'push_menu', replayId)
     return errorResponse('Missing menu_id', 400)
   }
 
-  const platformResults = body.results
-  if (!Array.isArray(platformResults) || platformResults.length === 0) {
+  // 5. Guard against non-array results
+  if (body.results != null && !Array.isArray(body.results)) {
+    await insertDeadLetter(supabase, body, 'results field is not an array', 'push_menu', replayId)
+    return successResponse(null, 'Malformed results; stored in DLQ')
+  }
+
+  const rawResults = (body.results ?? []) as unknown[]
+
+  // 6. Short-circuit on empty results
+  if (rawResults.length === 0) {
     logEvent('PUSH_MENU_WEBHOOK', 'No platform results in payload — nothing to update')
     return successResponse(null, 'No platform results to process')
   }
 
-  // 4. Init Supabase service-role client (bypasses RLS)
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  // 7. Sanitize results
+  const sanitized: SanitizedResult[] = rawResults
+    .filter((r): r is Record<string, unknown> => r != null && typeof r === 'object')
+    .map((r) => {
+      const rawStatus = (r as Record<string, unknown>).status
+      const normalizedStatus = normalizeStatus(rawStatus)
+      const rawError = (r as Record<string, unknown>).error
+      // If status was not recognized, preserve the original value in last_error
+      const lastError =
+        typeof rawError === 'string'
+          ? rawError
+          : normalizedStatus === 'unknown' && typeof rawStatus === 'string'
+            ? `unknown_status:${rawStatus}`
+            : null
+      return {
+        platform: normalizePlatform((r as Record<string, unknown>).platform) ?? '',
+        status: normalizedStatus,
+        error: lastError,
+      }
+    })
+    .filter((r) => r.platform.length > 0)
 
-  // 5. Find the menu link by oo_menu_id
-  const { data: link, error: linkError } = await supabase
-    .from('orderout_menu_links')
-    .select('id, orderout_restaurant_id, menu_id, platform_statuses')
-    .eq('oo_menu_id', String(ooMenuId))
-    .maybeSingle()
-
-  if (linkError) {
-    logError('PUSH_MENU_WEBHOOK', 'Database error looking up menu link', linkError)
-    return errorResponse('Database error', 500)
+  if (sanitized.length === 0) {
+    await insertDeadLetter(supabase, body, 'All result entries had invalid platform', 'push_menu', replayId)
+    return successResponse(null, 'No valid entries; stored in DLQ')
   }
 
-  if (!link) {
-    logEvent('PUSH_MENU_WEBHOOK', `No menu link found for oo_menu_id: ${ooMenuId}`)
-    // Return 200 so OrderOut doesn't retry — we'll log it
-    return successResponse(null, `No menu link found for oo_menu_id: ${ooMenuId}`)
+  // 8. Find the menu link by oo_menu_id
+  let link: {
+    id: string
+    orderout_restaurant_id: string
+    menu_id: string
+    platform_statuses: unknown
+  } | null = null
+
+  {
+    const { data, error } = await supabase
+      .from('orderout_menu_links')
+      .select('id, orderout_restaurant_id, menu_id, platform_statuses')
+      .eq('oo_menu_id', String(ooMenuId))
+      .maybeSingle()
+
+    if (error) {
+      logError('PUSH_MENU_WEBHOOK', 'Database error looking up menu link', error)
+      return errorResponse('Database error', 500)
+    }
+    link = data as typeof link
   }
 
-  // 6. Build updated platform_statuses
-  const existingStatuses = (link.platform_statuses as Record<string, unknown>) || {}
-  const now = new Date().toISOString()
+  // 9. Fallback: resolve via restaurant_id + oo_menu_id (tiebreaker)
+  if (!link && body.restaurant_id) {
+    const { data: restaurant } = await supabase
+      .from('orderout_restaurants')
+      .select('id')
+      .eq('oo_restaurant_id', String(body.restaurant_id))
+      .maybeSingle()
 
-  for (const result of platformResults) {
-    existingStatuses[result.platform] = {
-      status: result.status,
-      ...(result.error ? { error: result.error } : {}),
-      updated_at: now,
+    if (restaurant) {
+      const { data: candidates } = await supabase
+        .from('orderout_menu_links')
+        .select('id, orderout_restaurant_id, menu_id, platform_statuses')
+        .eq('orderout_restaurant_id', (restaurant as { id: string }).id)
+        .eq('oo_menu_id', String(ooMenuId))
+
+      if (candidates?.length === 1) {
+        link = candidates[0] as typeof link
+      }
     }
   }
 
-  // 7. Update the menu link
-  const { error: updateError } = await supabase
-    .from('orderout_menu_links')
-    .update({ platform_statuses: existingStatuses })
-    .eq('id', link.id)
+  if (!link) {
+    await insertDeadLetter(
+      supabase,
+      body,
+      `No menu link for oo_menu_id=${ooMenuId} restaurant_id=${body.restaurant_id ?? 'null'}`,
+      'push_menu',
+      replayId
+    )
+    return successResponse(null, 'No matching menu link; stored in DLQ')
+  }
 
-  if (updateError) {
-    logError('PUSH_MENU_WEBHOOK', 'Failed to update platform_statuses', updateError)
+  // 10. Build JSONB merge payload
+  const nowIso = new Date().toISOString()
+  const platformStatusUpdates: Record<string, unknown> = {}
+  for (const r of sanitized) {
+    platformStatusUpdates[r.platform] = {
+      status: r.status,
+      last_updated: nowIso,
+      last_error: r.error,
+    }
+  }
+
+  // 11. Atomic merge into orderout_menu_links.platform_statuses
+  const { error: mergeLinkError } = await supabase.rpc(
+    'merge_orderout_platform_statuses',
+    { p_link_id: link.id, p_updates: platformStatusUpdates }
+  )
+
+  if (mergeLinkError) {
+    logError('PUSH_MENU_WEBHOOK', 'Failed to merge platform_statuses', mergeLinkError)
     return errorResponse('Failed to update platform statuses', 500)
   }
 
-  // 8. Optionally create a sync log entry for this webhook event
+  // 12. Atomic merge into orderout_restaurants.connected_channels
+  if (link.orderout_restaurant_id) {
+    const { error: mergeRestError } = await supabase.rpc(
+      'merge_orderout_connected_channels',
+      { p_restaurant_id: link.orderout_restaurant_id, p_updates: platformStatusUpdates }
+    )
+    if (mergeRestError) {
+      logError('PUSH_MENU_WEBHOOK', 'Failed to merge connected_channels (non-fatal)', mergeRestError)
+    }
+  }
+
+  // 13. Audit log entry in orderout_menu_syncs
+  const successCount = sanitized.filter((r) => r.status === 'success').length
+  const syncStatus =
+    successCount === sanitized.length
+      ? 'success'
+      : successCount > 0
+        ? 'partial'
+        : 'failed'
+
+  const errorEntries = sanitized.filter((r) => r.error)
   const { error: syncLogError } = await supabase
     .from('orderout_menu_syncs')
     .insert({
@@ -205,16 +362,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
       menu_id: link.menu_id,
       oo_menu_id: String(ooMenuId),
       sync_direction: 'push',
-      sync_status: platformResults.every(r => r.status === 'success') ? 'success'
-        : platformResults.some(r => r.status === 'success') ? 'partial'
-        : 'failed',
+      sync_status: syncStatus,
       items_synced: 0,
       items_failed: 0,
-      error_details: platformResults.some(r => r.error)
-        ? JSON.stringify(platformResults.filter(r => r.error).map(r => ({ platform: r.platform, error: r.error })))
+      error_details: errorEntries.length
+        ? JSON.stringify(errorEntries.map((r) => ({ platform: r.platform, error: r.error })))
         : null,
-      menu_payload_snapshot: { webhook_event: 'push_menu_result', platforms: platformResults },
-      synced_at: now,
+      menu_payload_snapshot: {
+        webhook_event: 'push_menu_result',
+        platforms: sanitized,
+        raw_payload: body,
+      },
+      synced_at: nowIso,
     })
 
   if (syncLogError) {
@@ -223,11 +382,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   logEvent('PUSH_MENU_WEBHOOK', 'Platform statuses updated', {
     linkId: link.id,
-    platforms: platformResults.map(r => `${r.platform}:${r.status}`),
+    platforms: sanitized.map((r) => `${r.platform}:${r.status}`),
   })
 
   return successResponse(
-    { linkId: link.id, platformsUpdated: platformResults.length },
+    { linkId: link.id, platformsUpdated: sanitized.length, syncStatus },
     'Platform statuses updated successfully'
   )
 })

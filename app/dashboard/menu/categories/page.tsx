@@ -1,5 +1,6 @@
 "use client";
 
+import { ScopeContextStrip } from "@/components/dashboard/menu/ScopeContextStrip";
 import {
   Card,
   CardContent,
@@ -65,7 +66,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { cn, isValidImageUrl } from "@/lib/utils";
 import { CategoriesModel, MenuItemsModel } from "@/types/db-modles";
 import { CategoryWithItems, CategoryMenuItem } from "@/types/menu";
 import { useRouter } from "next/navigation";
@@ -594,6 +595,7 @@ export default function CategoriesPage() {
   // console.log('categoriesList', categoriesList)
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+      <ScopeContextStrip />
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
@@ -812,7 +814,7 @@ export default function CategoriesPage() {
                     >
                       <div className="flex items-start gap-4">
                         {/* Icon/Image */}
-                        {category.image ? (
+                        {isValidImageUrl(category.image) ? (
                           <div className="h-16 w-16 rounded-lg overflow-hidden bg-muted shrink-0">
                             <img
                               src={category.image}
@@ -1694,7 +1696,7 @@ function SortableCategoryItemRow({
 
       {/* Item Image */}
       <div className="w-12 h-12 rounded-lg overflow-hidden bg-muted/30 shrink-0">
-        {item.menu_item.image && item.menu_item.image.includes("http") ? (
+        {isValidImageUrl(item.menu_item.image) ? (
           <img
             src={item.menu_item.image}
             alt={item.menu_item.name}
@@ -1826,7 +1828,7 @@ function DragOverlayCategoryItemContent({
         {index + 1}
       </span>
       <div className="w-12 h-12 rounded-lg overflow-hidden bg-muted/30 shrink-0">
-        {item.menu_item.image && item.menu_item.image.includes("http") ? (
+        {isValidImageUrl(item.menu_item.image) ? (
           <img
             src={item.menu_item.image}
             alt={item.menu_item.name}

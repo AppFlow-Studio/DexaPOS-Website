@@ -50,7 +50,7 @@ interface OrderOutWebhookPayload {
     deliveryCompany: { name: string }
     externalReferenceId: string
   }
-  payload: {
+  payload?: {  // Optional — cancelled events don't include payload
     order: {
       tax: number
       items: OrderOutRawItem[]
@@ -142,8 +142,22 @@ async function insertDeadLetter(
   supabase: ReturnType<typeof createClient>,
   payload: unknown,
   errorMessage: string,
-  eventType?: string
+  eventType?: string,
+  replayId?: string | null
 ): Promise<void> {
+  // If this is an HQ-initiated replay, UPDATE the original row instead of
+  // creating a phantom duplicate. Uses an RPC so retry_count can be atomically
+  // incremented.
+  if (replayId) {
+    const { error } = await supabase.rpc('touch_dlq_replay_failure', {
+      p_id: replayId,
+      p_error_message: errorMessage,
+    })
+    if (error) logError('DLQ', 'Failed to update dead letter queue (replay)', error)
+    else logEvent('DLQ', `Replay failure recorded on ${replayId}: ${errorMessage}`)
+    return
+  }
+
   const { error } = await supabase.from('webhook_dead_letter_queue').insert({
     source: 'orderout',
     event_type: eventType || 'unknown',
@@ -225,6 +239,7 @@ function translateOrderOutPayload(
   restaurant: ProviderRestaurantMatch
 ): OnlineOrderRpcParams {
   const { source, payload, destination } = body
+  if (!payload) throw new Error('Missing payload — cannot translate order without items/customer data')
   const { order, customer } = payload
 
   // Map OrderOut items → universal OnlineOrderItem format
@@ -310,6 +325,97 @@ function translateOrderOutPayload(
 }
 
 // ============================================================================
+// CANCELLATION HANDLER
+// ============================================================================
+
+async function handleCancellation(
+  supabase: ReturnType<typeof createClient>,
+  body: OrderOutWebhookPayload,
+  restaurant: ProviderRestaurantMatch,
+  eventType: string,
+  replayId: string | null
+): Promise<Response> {
+  const orderNumber = body.source?.orderNumber
+  if (!orderNumber) {
+    await insertDeadLetter(supabase, body, 'Cancellation missing orderNumber', eventType, replayId)
+    return successResponse(null, 'Cancellation stored (missing orderNumber)')
+  }
+
+  // Look up the existing order via online_orders
+  const { data: onlineOrder, error: lookupErr } = await supabase
+    .from('online_orders')
+    .select('id, order_id, provider_status')
+    .eq('provider', 'orderout')
+    .eq('provider_order_id', orderNumber)
+    .maybeSingle()
+
+  if (lookupErr || !onlineOrder) {
+    await insertDeadLetter(supabase, body, `Order not found for cancellation: ${orderNumber}`, eventType, replayId)
+    return successResponse(null, 'Cancellation stored (order not found)')
+  }
+
+  // Idempotent: already cancelled
+  if (onlineOrder.provider_status === 'cancelled') {
+    logEvent('WEBHOOK', `Order already cancelled: ${orderNumber}`)
+    return successResponse({ order_id: onlineOrder.order_id }, 'Already cancelled')
+  }
+
+  const deliveryCompanyName = body.source?.deliveryCompany?.name || 'provider'
+
+  // Cancel the order — trg_kds_order_cancel handles KDS cleanup automatically
+  const { error: cancelErr } = await supabase
+    .from('orders')
+    .update({
+      status: 'cancelled',
+      cancelled_at: new Date().toISOString(),
+      cancelled_by: 'provider',
+      cancellation_reason: `Cancelled via OrderOut (${deliveryCompanyName})`,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', onlineOrder.order_id)
+
+  if (cancelErr) {
+    await insertDeadLetter(supabase, body, `Failed to cancel order: ${cancelErr.message}`, eventType, replayId)
+    return successResponse(null, 'Cancellation stored (update failed)')
+  }
+
+  // Update online_orders provider_status
+  await supabase
+    .from('online_orders')
+    .update({
+      provider_status: 'cancelled',
+      status_updated_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', onlineOrder.id)
+
+  // Record status history
+  await supabase.from('order_status_history').insert({
+    order_id: onlineOrder.order_id,
+    to_status: 'cancelled',
+    notes: `Cancelled by provider via OrderOut (${deliveryCompanyName})`,
+    metadata: {
+      source: 'orderout_webhook',
+      event: 'cancelled',
+      provider_order_id: orderNumber,
+      delivery_company: body.source?.deliveryCompany?.name,
+      external_reference: body.source?.externalReferenceId,
+    },
+  })
+
+  logEvent('WEBHOOK', 'Order cancelled via provider', {
+    orderId: onlineOrder.order_id,
+    orderNumber,
+    deliveryCompany: deliveryCompanyName,
+  })
+
+  return successResponse(
+    { order_id: onlineOrder.order_id, cancelled: true },
+    'Order cancelled successfully'
+  )
+}
+
+// ============================================================================
 // MAIN HANDLER
 // ============================================================================
 
@@ -322,6 +428,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     logError('AUTH', 'Authentication failed', auth.error)
     return errorResponse('Unauthorized', 401)
   }
+
+  // HQ-initiated replay correlation. When present, any DLQ write path will
+  // UPDATE this row instead of INSERTing a new one.
+  const replayId = req.headers.get('x-dlq-replay-id') || null
 
   // 2. Parse
   let body: OrderOutWebhookPayload
@@ -336,6 +446,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     : body.event || 'received'
 
   logEvent('WEBHOOK', 'Received OrderOut webhook', {
+    event: body.event,
     orderNumber: body.source?.orderNumber,
     deliveryCompany: body.source?.deliveryCompany?.name,
     orderType: body.payload?.order?.orderType,
@@ -348,7 +459,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const restaurantId = body.destination?.restaurantId
   if (!restaurantId) {
     logError('WEBHOOK', 'Missing destination.restaurantId', body)
-    await insertDeadLetter(supabase, body, 'Missing destination.restaurantId', eventType)
+    await insertDeadLetter(supabase, body, 'Missing destination.restaurantId', eventType, replayId)
     return successResponse(null, 'Payload stored for manual review (missing restaurantId)')
   }
 
@@ -357,18 +468,25 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   if (lookupError || !restaurant) {
     logError('WEBHOOK', lookupError || 'Restaurant not found', { restaurantId })
-    await insertDeadLetter(supabase, body, lookupError || `Restaurant not found: ${restaurantId}`, eventType)
+    await insertDeadLetter(supabase, body, lookupError || `Restaurant not found: ${restaurantId}`, eventType, replayId)
     return successResponse(null, 'Payload stored for manual review (restaurant lookup failed)')
   }
 
-  // 5. Check accepting orders
+  // 5. Route by event type — cancellations bypass accepting-orders & idempotency checks
+  const eventAction = body.event?.toLowerCase()
+
+  if (eventAction === 'cancelled') {
+    return await handleCancellation(supabase, body, restaurant, eventType, replayId)
+  }
+
+  // 6. Check accepting orders (only for new order creation)
   if (!restaurant.is_accepting_orders) {
     logEvent('WEBHOOK', `Restaurant ${restaurant.provider_record_id} not accepting orders`)
-    await insertDeadLetter(supabase, body, `Restaurant not accepting orders`, eventType)
+    await insertDeadLetter(supabase, body, `Restaurant not accepting orders`, eventType, replayId)
     return successResponse(null, 'Payload stored (restaurant not accepting orders)')
   }
 
-  // 6. First-pass idempotency check
+  // 7. First-pass idempotency check
   const ooOrderNumber = body.source?.orderNumber
   if (ooOrderNumber) {
     const { data: existing } = await supabase
@@ -388,7 +506,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   // ========================================================================
-  // 7. TRANSLATE & PROCESS
+  // 8. TRANSLATE & PROCESS
   // ========================================================================
 
   try {
@@ -408,7 +526,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         supabase,
         { ...body, _matched_location_id: restaurant.location_id },
         `RPC error: ${rpcError.message}`,
-        eventType
+        eventType,
+        replayId
       )
       return successResponse(null, 'Payload stored for retry (RPC transport error)')
     }
@@ -422,7 +541,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         supabase,
         { ...body, _matched_location_id: restaurant.location_id, _rpc_error: processResult.error },
         `Processing error: ${processResult.error}`,
-        eventType
+        eventType,
+        replayId
       )
       return successResponse(null, `Payload stored for retry (${processResult.error})`)
     }
@@ -476,7 +596,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       supabase,
       { ...body, _matched_location_id: restaurant.location_id, _error: String(unexpectedError) },
       `Unexpected: ${String(unexpectedError)}`,
-      eventType
+      eventType,
+      replayId
     )
     return successResponse(null, 'Payload stored for retry (unexpected error)')
   }

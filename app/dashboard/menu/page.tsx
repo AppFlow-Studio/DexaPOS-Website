@@ -24,6 +24,7 @@ import {
 import { useState } from "react";
 import * as React from "react";
 import { useMenus } from "../hooks/useMenus";
+import { ScopeContextStrip } from "@/components/dashboard/menu/ScopeContextStrip";
 import { useUserInfo } from "../../manage/hooks/useUserInfo.";
 import {
   Dialog,
@@ -418,6 +419,7 @@ export default function MenuPage() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+      <ScopeContextStrip />
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Menus</h2>

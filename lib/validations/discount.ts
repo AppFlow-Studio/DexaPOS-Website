@@ -12,6 +12,7 @@ export const discountFormSchema = z
     end_date: z.date().nullish(),
     is_active: z.boolean().default(true),
     scope: z.enum(["dine_in", "takeout", "both"]).default("both"),
+    location_id: z.string().uuid().nullish(),
     requires_manager_approval: z.boolean().default(false),
     max_uses_per_day: z.number().int().min(1).nullish(),
     max_uses_per_order: z.number().int().min(1).default(1),

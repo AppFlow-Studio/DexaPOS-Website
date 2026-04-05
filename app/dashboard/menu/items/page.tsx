@@ -39,6 +39,7 @@ import {
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { useCategoriesWithItems } from "../../hooks/useCategories";
+import { ScopeContextStrip } from "@/components/dashboard/menu/ScopeContextStrip";
 import { useModifierGroups } from "../../hooks/useModifierGroups";
 import { useUserInfo } from "../../../manage/hooks/useUserInfo.";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -47,7 +48,7 @@ import { toast } from "sonner";
 import { Empty } from "@/components/ui/empty";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { cn } from "@/lib/utils";
+import { cn, isValidImageUrl } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -83,12 +84,22 @@ import {
 } from "@/components/dashboard/menu/NewEditItemFormSheet";
 import { FlatItem, resetItemToLevel } from "../../actions/menu-items-rpc";
 import { CategoryWithItems } from "@/types/menu";
-import { useLocationStore } from "@/stores/location-store";
+import {
+  useLocationStore,
+  useIsAllLocations,
+  useSelectedLocation,
+} from "@/stores/location-store";
+import { PriceSourcePopover } from "@/components/dashboard/menu/PriceSourcePopover";
+import {
+  priceSourceToLevel,
+  deriveScopeFromContext,
+} from "@/lib/menu/cascade-labels";
 import { useLocationTaxRates } from "../../hooks/useTaxRates";
 import { TAX_CATEGORY_LABELS } from "@/types/tax";
 import { AVAILABLE_CHANNELS } from "@/types/inventory";
 import { DeleteMenuItem } from "../../actions/menu-items";
 import { CreateItemWizard } from "@/components/dashboard/menu/items/CreateItemWizard";
+import { useManagerPermissions } from "../../hooks/useManagerPermissions";
 
 // ============================================================================
 // TYPES
@@ -204,6 +215,11 @@ function ItemCard({
   const priceColors =
     PRICE_SOURCE_COLORS[item.price_source] || PRICE_SOURCE_COLORS.base;
 
+  const isAllLocations = useIsAllLocations();
+  const { selectedLocationId } = useLocationStore();
+  const selectedLocation = useSelectedLocation();
+  const locationName = selectedLocation?.name ?? null;
+
   // Tax info
   const taxRate = taxRates.find(
     (r) => r.tax_category === item.effective_tax_category,
@@ -229,7 +245,7 @@ function ItemCard({
       >
         {/* Image Section */}
         <div className="relative aspect-[4/3] bg-gradient-to-br from-muted/50 to-muted overflow-hidden">
-          {item.image ? (
+          {isValidImageUrl(item.image) ? (
             <img
               src={item.image}
               alt={item.name}
@@ -341,17 +357,32 @@ function ItemCard({
                 {item.description}
               </p>
             )}
-            <div className="flex items-center justify-between pt-2">
-              <div className="flex items-baseline gap-2">
-                <span className="text-lg font-bold text-primary">
-                  ${item.effective_price.toFixed(2)}
-                </span>
-                {hasOverride && item.base_price !== item.effective_price && (
-                  <span className="text-sm text-muted-foreground line-through">
-                    ${item.base_price.toFixed(2)}
+            <div className="flex items-center justify-between pt-2" onClick={(e) => e.stopPropagation()}>
+              <PriceSourcePopover
+                itemId={item.id}
+                currentPrice={item.effective_price}
+                sourceLevel={priceSourceToLevel(item.price_source)}
+                locationId={isAllLocations ? null : selectedLocationId}
+                canRemoveOverride={
+                  item.price_source === "location_item" && !isAllLocations
+                }
+                editScope={deriveScopeFromContext({
+                  isAllLocations,
+                  locationName: locationName || null,
+                })}
+              >
+                <div className="flex items-baseline gap-2">
+                  <span className="text-lg font-bold text-primary">
+                    ${item.effective_price.toFixed(2)}
                   </span>
-                )}
-              </div>
+                  {hasOverride && item.base_price !== item.effective_price && (
+                    <span className="text-sm text-muted-foreground line-through">
+                      ${item.base_price.toFixed(2)}
+                    </span>
+                  )}
+                  <Info className="h-3 w-3 text-muted-foreground opacity-60 self-center" />
+                </div>
+              </PriceSourcePopover>
               {item.effective_cash_price && (
                 <Badge variant="outline" className="text-xs">
                   Cash: ${item.effective_cash_price.toFixed(2)}
@@ -507,7 +538,7 @@ function ItemRow({
       >
         {/* Image */}
         <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-muted/30 shrink-0">
-          {item.image ? (
+          {isValidImageUrl(item.image) ? (
             <img
               src={item.image}
               alt={item.name}
@@ -852,9 +883,30 @@ export default function MenuItemsPage() {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const { selectedLocationId } = useLocationStore();
+  const { canCreate, isMember, isManager, assignedLocationIds } =
+    useManagerPermissions();
 
   // Location context
   const { isAllLocations, locationName } = useLocationContext();
+
+  // Gate the "Create Item" trigger on role + current location context.
+  // Owners can always create. Managers at "all" need exactly 1 assigned
+  // location (auto-routed); at a specific location they must be assigned
+  // to it. Members can never create.
+  const createTargetLocId =
+    isManager && isAllLocations && assignedLocationIds.length === 1
+      ? assignedLocationIds[0]
+      : isAllLocations
+        ? null
+        : selectedLocationId;
+  const canCreateItem = !isMember && canCreate(createTargetLocId);
+  const createDisabledReason = isMember
+    ? "View-only access"
+    : isManager && isAllLocations && assignedLocationIds.length > 1
+      ? "Switch to a specific location to create"
+      : !canCreateItem
+        ? "You don't have permission to create items here"
+        : "";
 
   // Tax rates for current location
   const { data: taxRatesData } = useLocationTaxRates();
@@ -1030,7 +1082,13 @@ export default function MenuItemsPage() {
   }, [itemsList]);
 
   // Handlers
+  const useNewEditPage =
+    process.env.NEXT_PUBLIC_NEW_ITEM_EDIT === "true";
   const handleQuickEdit = (item: FlatItem) => {
+    if (useNewEditPage) {
+      router.push(`/dashboard/menu/items/${item.id}/edit`);
+      return;
+    }
     setEditingItem(item);
     setIsCreateSheetOpen(true);
   };
@@ -1182,6 +1240,7 @@ export default function MenuItemsPage() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+      <ScopeContextStrip />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -1219,10 +1278,33 @@ export default function MenuItemsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => setIsCreateWizardOpen(true)} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Create Item
-          </Button>
+          {canCreateItem ? (
+            <Button
+              onClick={() => setIsCreateWizardOpen(true)}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Create Item
+            </Button>
+          ) : !isMember ? (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button
+                      disabled
+                      className="gap-2"
+                      aria-label={createDisabledReason}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Create Item
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{createDisabledReason}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : null}
           <Button
             onClick={() => router.push("/dashboard/menu/categories")}
             variant="outline"

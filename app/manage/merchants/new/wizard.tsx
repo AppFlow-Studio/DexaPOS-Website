@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ImagePlus, X } from 'lucide-react'
-import { createMerchantOnboarding } from '@/app/manage/actions/create-merchant-onboarding'
+import { createMerchantOnboarding, updateMerchantLogo } from '@/app/manage/actions/create-merchant-onboarding'
 import { uploadOrganizationLogo } from '@/lib/cdn/server'
 
 const createMerchantSchema = z.object({
@@ -60,6 +60,7 @@ export function CreateMerchantWizard({}: CreateMerchantWizardProps) {
   const router = useRouter()
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [isSubmitting, startTransition] = useTransition()
+  const hasSubmitted = useRef(false)
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const logoInputRef = useRef<HTMLInputElement>(null)
@@ -137,6 +138,8 @@ export function CreateMerchantWizard({}: CreateMerchantWizardProps) {
   }
 
   const onSubmit = (data: CreateMerchantWizardValues) => {
+    if (step !== 3 || hasSubmitted.current) return
+    hasSubmitted.current = true
     startTransition(async () => {
       const result = await createMerchantOnboarding({
         businessLegalName: data.businessLegalName,
@@ -158,26 +161,29 @@ export function CreateMerchantWizard({}: CreateMerchantWizardProps) {
       })
 
       if (!result.success) {
+        hasSubmitted.current = false
         toast.error(result.error || 'Failed to create merchant.')
         return
       }
 
-      // Upload logo if provided
+      // Upload logo if provided, then set it on the Clerk org
       if (logoFile && result.organizationId) {
         const uploadResult = await uploadOrganizationLogo(logoFile, result.organizationId)
-        if (!uploadResult.success) {
+        if (uploadResult.success && uploadResult.cdnUrl) {
+          await updateMerchantLogo(result.organizationId, uploadResult.cdnUrl)
+        } else if (!uploadResult.success) {
           toast.warning('Merchant created but logo upload failed: ' + (uploadResult.error || 'Unknown error'))
         }
       }
 
       toast.success('Merchant created and owner invited.')
-      router.push(`/manage/merchants/${result.organizationId || result.merchantId}`)
+      router.push(`/manage/merchants/${result.organizationId}`)
     })
   }
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <div className="space-y-6">
         <Card>
           <CardHeader>
             <CardTitle>
@@ -541,7 +547,7 @@ export function CreateMerchantWizard({}: CreateMerchantWizardProps) {
               Continue
             </Button>
           ) : (
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="button" disabled={isSubmitting} onClick={form.handleSubmit(onSubmit)}>
               {isSubmitting ? 'Creating...' : 'Create Merchant'}
             </Button>
           )}
@@ -550,7 +556,7 @@ export function CreateMerchantWizard({}: CreateMerchantWizardProps) {
         <div className="text-xs text-muted-foreground">
           Required permissions: <Label className="font-mono text-xs">hq.merchant.create</Label>
         </div>
-      </form>
+      </div>
     </Form>
   )
 }

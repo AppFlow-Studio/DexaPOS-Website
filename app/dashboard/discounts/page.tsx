@@ -15,6 +15,10 @@ import {
 import { DiscountListFilters } from "@/types/discount";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useLocations } from "@/app/dashboard/hooks/useLocations";
+import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
+import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { useSelectedLocation, useIsAllLocations } from "@/stores/location-store";
 
 export default function DiscountsPage() {
     const router = useRouter();
@@ -23,6 +27,7 @@ export default function DiscountsPage() {
         isActive: "all",
         sortBy: "display_order",
         sortDir: "asc",
+        hideExpired: false,
     });
 
     const { data, isLoading } = useDiscounts(filters);
@@ -30,6 +35,20 @@ export default function DiscountsPage() {
     const bulkStatus = useBulkStatusUpdate();
     const bulkDelete = useBulkDelete();
     const deleteOne = useDeleteDiscount();
+
+    const clerkOrgId = useClerkOrgId() || "";
+    const { data: userInfo } = useUserInfo();
+    const { data: locations = [] } = useLocations(clerkOrgId, userInfo?.id || "");
+    const selectedLocation = useSelectedLocation();
+    const isAllLocations = useIsAllLocations();
+
+    const locationNameById = useMemo(() => {
+        const map: Record<string, string> = {};
+        locations.forEach((loc) => {
+            if (loc.id) map[loc.id] = loc.name;
+        });
+        return map;
+    }, [locations]);
 
     const discounts = useMemo(
         () => (data?.success && Array.isArray(data.data) ? data.data : []),
@@ -71,6 +90,12 @@ export default function DiscountsPage() {
                 </Button>
             </div>
 
+            {!isAllLocations && selectedLocation && (
+                <p className="text-sm text-muted-foreground">
+                    Showing discounts for <span className="font-medium">{selectedLocation.name}</span> plus all global discounts.
+                </p>
+            )}
+
             <DiscountFilters value={filters} onChange={setFilters} onCreate={handleCreate} />
 
             {emptyState ? (
@@ -79,6 +104,7 @@ export default function DiscountsPage() {
                 <DiscountTable
                     discounts={discounts}
                     isLoading={isLoading}
+                    locationNameById={locationNameById}
                     onToggleStatus={(id, isActive) => toggleStatus.mutate({ id, isActive })}
                     onBulkStatus={(ids, isActive) => bulkStatus.mutate({ ids, isActive })}
                     onBulkDelete={(ids) => bulkDelete.mutate({ ids })}

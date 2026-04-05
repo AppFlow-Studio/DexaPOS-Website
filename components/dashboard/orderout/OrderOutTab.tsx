@@ -35,6 +35,7 @@ import {
 } from "@/app/dashboard/online-ordering/hooks/useOrderOutStatus";
 import { OrderOutOnboardingForm, type OnboardingFormData } from "./OrderOutOnboardingForm";
 import type { OrderOutLocationStatus } from "@/app/dashboard/actions/orderout";
+import { extractConnectedPlatforms } from "@/lib/orderout/helpers";
 
 // ============================================================================
 // Types
@@ -132,9 +133,7 @@ export function OrderOutTab({
 
   const syncedMenus = syncedMenusData?.data || [];
   const recentOrders = recentOrdersData?.data || [];
-  const channels = Array.isArray(orderOutStatus?.connectedChannels)
-    ? (orderOutStatus.connectedChannels as string[])
-    : [];
+  const channels = extractConnectedPlatforms(orderOutStatus?.connectedChannels);
 
   const isOnboarded = !!orderOutStatus?.hasRestaurant;
   const dashboardUrl = orderOutStatus?.dashboardUrl || "https://dashboard.orderout.co";
