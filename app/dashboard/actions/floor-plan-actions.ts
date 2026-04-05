@@ -601,3 +601,132 @@ export async function AddToWaitlistAction(
     success: true,
   };
 }
+
+export async function CreateReservationAction(
+  clerkOrgId: string,
+  locationId: string,
+  params: {
+    partyName: string;
+    partySize: number;
+    phone: string;
+    email?: string;
+    reservationDate: string;
+    reservationTime: string;
+    durationMinutes?: number;
+    isVip?: boolean;
+    notes?: string;
+    specialRequests?: string;
+    preferredSection?: string;
+    seatingPreference?: string;
+    assignedTableIds?: string[];
+    source?: string;
+  },
+) {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.rpc("create_reservation", {
+    p_location_id: locationId,
+    p_party_name: params.partyName,
+    p_party_size: params.partySize,
+    p_phone: params.phone,
+    p_email: params.email ?? null,
+    p_reservation_date: params.reservationDate,
+    p_reservation_time: params.reservationTime,
+    p_duration_minutes: params.durationMinutes ?? 90,
+    p_is_vip: params.isVip ?? false,
+    p_notes: params.notes ?? null,
+    p_special_requests: params.specialRequests ?? null,
+    p_preferred_section: params.preferredSection ?? null,
+    p_seating_preference: params.seatingPreference ?? null,
+    p_assigned_table_ids: params.assignedTableIds ?? null,
+    p_source: params.source ?? "web_dashboard",
+  });
+  if (error) throw error;
+  await LogAuditEvent({
+    clerkOrgId,
+    locationId,
+    action: "created_reservation",
+    actionCategory: "reservations",
+    severity: "info",
+    resourceType: "reservation",
+    resourceId: (data as any)?.reservation_id,
+    resourceName: params.partyName,
+  });
+  return data as { reservation_id: string; confirmation_number: string };
+}
+
+export async function UpdateReservationStatusAction(
+  clerkOrgId: string,
+  locationId: string,
+  reservationId: string,
+  status: Reservation["status"],
+) {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.rpc("update_reservation_status", {
+    p_reservation_id: reservationId,
+    p_status: status,
+    p_cancellation_reason: null,
+  });
+  if (error) throw error;
+  await LogAuditEvent({
+    clerkOrgId,
+    locationId,
+    action: "updated_reservation_status",
+    actionCategory: "reservations",
+    severity: "info",
+    resourceType: "reservation",
+    resourceId: reservationId,
+    resourceName: status,
+  });
+  return data;
+}
+
+export async function CancelReservationAction(
+  clerkOrgId: string,
+  locationId: string,
+  reservationId: string,
+  cancellationReason?: string,
+) {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.rpc("update_reservation_status", {
+    p_reservation_id: reservationId,
+    p_status: "cancelled",
+    p_cancellation_reason: cancellationReason ?? null,
+  });
+  if (error) throw error;
+  await LogAuditEvent({
+    clerkOrgId,
+    locationId,
+    action: "cancelled_reservation",
+    actionCategory: "reservations",
+    severity: "info",
+    resourceType: "reservation",
+    resourceId: reservationId,
+    resourceName: cancellationReason ?? "no reason",
+  });
+  return data;
+}
+
+export async function AssignReservationTablesAction(
+  clerkOrgId: string,
+  locationId: string,
+  reservationId: string,
+  tableIds: string[],
+) {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.rpc("assign_reservation_tables", {
+    p_reservation_id: reservationId,
+    p_table_ids: tableIds,
+  });
+  if (error) throw error;
+  await LogAuditEvent({
+    clerkOrgId,
+    locationId,
+    action: "assigned_reservation_tables",
+    actionCategory: "reservations",
+    severity: "info",
+    resourceType: "reservation",
+    resourceId: reservationId,
+    resourceName: tableIds.join(", "),
+  });
+  return data;
+}
