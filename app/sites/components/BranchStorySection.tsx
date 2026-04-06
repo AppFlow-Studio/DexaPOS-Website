@@ -1,7 +1,7 @@
 "use client";
 
 import { Site } from "@/types/site";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { Sparkles } from "lucide-react";
 
 interface BranchStorySectionProps {

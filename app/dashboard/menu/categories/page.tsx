@@ -40,6 +40,7 @@ import {
   useCategories,
   useCategoriesWithItems,
 } from "../../hooks/useCategories";
+import { useModifierGroups } from "../../hooks/useModifierGroups";
 import { useMenus } from "../../hooks/useMenus";
 import { useSchedules } from "../../hooks/useSchedules";
 import { useLocations } from "../../hooks/useLocations";
@@ -143,6 +144,7 @@ export default function CategoriesPage() {
     refetch,
   } = useCategoriesWithItems(clerkOrgId || "", selectedLocationId);
   const { data: menus } = useMenus(clerkOrgId || "");
+  const { data: modifierGroups } = useModifierGroups(clerkOrgId || "");
   const { data: locations } = useLocations(
     clerkOrgId || "",
     userInfo?.id || "",
@@ -1539,7 +1541,7 @@ export default function CategoriesPage() {
           created_at: c.created_at,
           updated_at: c.updated_at,
         }))}
-        modifierGroups={[]}
+        modifierGroups={modifierGroups || []}
         onSuccess={() => {
           setIsItemSheetOpen(false);
           setEditingItem(null);

@@ -1,6 +1,5 @@
-'use client'
+﻿'use client'
 
-import * as React from 'react'
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -14,16 +13,15 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
+    ArrowLeft,
     Globe,
     Store,
-    Clock,
     Palette,
     Truck,
     CreditCard,
     Zap,
     Phone,
     Mail,
-    MapPin,
     Plus,
     Edit,
     Check,
@@ -50,6 +48,16 @@ import {
 import { useAdminOrderOutStatus, useAdminOnboardOrderOut } from '@/lib/queries/use-admin-orderout'
 import { OrderOutOnboardingForm, type OnboardingFormData } from '@/components/dashboard/orderout/OrderOutOnboardingForm'
 import { OrderOutStatusCard } from '@/components/dashboard/orderout/OrderOutStatusCard'
+
+const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000'
+
+function getStoreUrl(slug: string): string {
+    if (!slug) return ''
+
+    const isDev = ROOT_DOMAIN.includes('localhost')
+    if (isDev) return `http://${slug}.localhost:3000`
+    return `https://${slug}.dexaposai.com`
+}
 
 interface OnlineStoreTabProps {
     merchantId: string
@@ -297,6 +305,7 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
 
     // Find location name
     const selectedLocation = locations.find((l) => l.id === selectedLocationId)
+    const storeUrl = localSettings?.storeSlug ? getStoreUrl(localSettings.storeSlug) : ''
 
     // Render store configuration
     return (
@@ -305,7 +314,8 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     <Button variant="ghost" size="sm" onClick={() => setSelectedLocationId(null)}>
-                        ← Back to Locations
+                        <ArrowLeft className="h-4 w-4 mr-2" />
+                        Back to Locations
                     </Button>
                     <Separator orientation="vertical" className="h-6" />
                     <div>
@@ -332,11 +342,7 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                     )}
                     {localSettings?.enabled && localSettings?.storeSlug && (
                         <Button variant="outline" size="sm" asChild>
-                            <a
-                                href={`/sites/${selectedLocationId}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                            >
+                            <a href={storeUrl} target="_blank" rel="noopener noreferrer">
                                 <ExternalLink className="h-4 w-4 mr-2" />
                                 Preview Store
                             </a>
@@ -380,6 +386,11 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                                 ? 'Store is live and accepting online orders'
                                                 : 'Enable to start accepting online orders'}
                                         </p>
+                                        {localSettings.enabled && storeUrl && (
+                                            <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                                                {storeUrl}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                                 <Switch
@@ -391,11 +402,11 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                     </Card>
 
                     {/* Settings Tabs */}
-                    <Tabs defaultValue="general" className="space-y-6">
+                    <Tabs defaultValue="store" className="space-y-6">
                         <TabsList className="w-full justify-start overflow-x-auto">
-                            <TabsTrigger value="general" className="gap-2">
+                            <TabsTrigger value="store" className="gap-2">
                                 <Store className="h-4 w-4" />
-                                General
+                                Store Info
                             </TabsTrigger>
                             <TabsTrigger value="branding" className="gap-2">
                                 <Palette className="h-4 w-4" />
@@ -403,20 +414,20 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                             </TabsTrigger>
                             <TabsTrigger value="ordering" className="gap-2">
                                 <Truck className="h-4 w-4" />
-                                Pickup & Delivery
+                                Ordering
                             </TabsTrigger>
                             <TabsTrigger value="payment" className="gap-2">
                                 <CreditCard className="h-4 w-4" />
                                 Payment & Tips
                             </TabsTrigger>
-                            <TabsTrigger value="automation" className="gap-2">
-                                <Zap className="h-4 w-4" />
-                                Automation
+                            <TabsTrigger value="orderout" className="gap-2">
+                                <Plug className="h-4 w-4" />
+                                OrderOut
                             </TabsTrigger>
                         </TabsList>
 
-                        {/* General Settings */}
-                        <TabsContent value="general" className="space-y-6">
+                        {/* Store Info */}
+                        <TabsContent value="store" className="space-y-6">
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Store Information</CardTitle>
@@ -718,6 +729,85 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                     </div>
                                 </CardContent>
                             </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Order Automation</CardTitle>
+                                    <CardDescription>Automate order handling to match the merchant dashboard flow</CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <Zap className="h-5 w-5 text-yellow-500" />
+                                            <div>
+                                                <Label>Automatically Accept All Orders</Label>
+                                                <p className="text-sm text-muted-foreground">
+                                                    New orders will be accepted without manual confirmation
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <Switch
+                                            checked={localSettings.autoAcceptOrders ?? false}
+                                            onCheckedChange={(autoAcceptOrders) => updateSettings({ autoAcceptOrders })}
+                                        />
+                                    </div>
+                                    <Separator />
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <Check className="h-5 w-5 text-green-500" />
+                                            <div>
+                                                <Label>Auto-Close Paid Orders</Label>
+                                                <p className="text-sm text-muted-foreground">
+                                                    Automatically close orders that are paid upon acceptance
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <Switch
+                                            checked={localSettings.autoClosePaidOrders ?? false}
+                                            onCheckedChange={(autoClosePaidOrders) =>
+                                                updateSettings({ autoClosePaidOrders })
+                                            }
+                                        />
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Notifications</CardTitle>
+                                    <CardDescription>Get notified about new orders</CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <Bell className="h-5 w-5 text-muted-foreground" />
+                                            <div>
+                                                <Label>Email on New Order</Label>
+                                                <p className="text-sm text-muted-foreground">
+                                                    Send an email notification for every new order
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <Switch
+                                            checked={localSettings.sendEmailOnNewOrder ?? true}
+                                            onCheckedChange={(sendEmailOnNewOrder) =>
+                                                updateSettings({ sendEmailOnNewOrder })
+                                            }
+                                        />
+                                    </div>
+                                    {localSettings.sendEmailOnNewOrder && (
+                                        <div className="ml-8 space-y-2">
+                                            <Label>Notification Email</Label>
+                                            <Input
+                                                type="email"
+                                                value={localSettings.notificationEmail || ''}
+                                                onChange={(e) => updateSettings({ notificationEmail: e.target.value })}
+                                                placeholder="manager@yourstore.com"
+                                            />
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
                         </TabsContent>
 
                         {/* Payment & Tips */}
@@ -881,179 +971,98 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                             </Card>
                         </TabsContent>
 
-                        {/* Automation */}
-                        <TabsContent value="automation" className="space-y-6">
+                        <TabsContent value="orderout" className="space-y-6">
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>Order Automation</CardTitle>
-                                    <CardDescription>Automate order handling to save time</CardDescription>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <CardTitle className="flex items-center gap-2">
+                                                <Plug className="h-5 w-5" />
+                                                OrderOut Delivery Integration
+                                            </CardTitle>
+                                            <CardDescription>
+                                                Connect this location to UberEats, DoorDash, Grubhub, and other delivery marketplaces.
+                                            </CardDescription>
+                                        </div>
+                                        <Badge variant="outline">$79.99/mo</Badge>
+                                    </div>
                                 </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <Zap className="h-5 w-5 text-yellow-500" />
-                                            <div>
-                                                <Label>Automatically Accept All Orders</Label>
-                                                <p className="text-sm text-muted-foreground">
-                                                    New orders will be accepted without manual confirmation
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <Switch
-                                            checked={localSettings.autoAcceptOrders ?? false}
-                                            onCheckedChange={(autoAcceptOrders) => updateSettings({ autoAcceptOrders })}
-                                        />
-                                    </div>
-                                    <Separator />
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <Check className="h-5 w-5 text-green-500" />
-                                            <div>
-                                                <Label>Auto-Close Paid Orders</Label>
-                                                <p className="text-sm text-muted-foreground">
-                                                    Automatically close orders that are paid upon acceptance
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <Switch
-                                            checked={localSettings.autoClosePaidOrders ?? false}
-                                            onCheckedChange={(autoClosePaidOrders) =>
-                                                updateSettings({ autoClosePaidOrders })
-                                            }
-                                        />
-                                    </div>
-                                </CardContent>
-                            </Card>
+                                <CardContent>
+                                    {(() => {
+                                        const locOO = orderOutStatus?.restaurants.find(
+                                            (restaurant) => restaurant.locationId === selectedLocationId
+                                        )
 
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Notifications</CardTitle>
-                                    <CardDescription>Get notified about new orders</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <Bell className="h-5 w-5 text-muted-foreground" />
-                                            <div>
-                                                <Label>Email on New Order</Label>
-                                                <p className="text-sm text-muted-foreground">
-                                                    Send an email notification for every new order
+                                        if (locOO?.hasRestaurant) {
+                                            return (
+                                                <OrderOutStatusCard
+                                                    hasAccount={orderOutStatus?.account.hasAccount ?? false}
+                                                    hasRestaurant={true}
+                                                    isAcceptingOrders={locOO.isAcceptingOrders}
+                                                    prepTimeMinutes={locOO.prepTimeMinutes}
+                                                    connectedChannels={locOO.connectedChannels}
+                                                    autoAcceptOrders={locOO.autoAcceptOrders}
+                                                    dashboardUrl="https://dashboard.orderout.co"
+                                                />
+                                            )
+                                        }
+
+                                        if (showOrderOutForm) {
+                                            return (
+                                                <OrderOutOnboardingForm
+                                                    defaultValues={{
+                                                        accountName: merchantName || '',
+                                                        restaurantName: selectedLocation?.name || '',
+                                                        streetAddress: selectedLocation?.address_line1 || '',
+                                                        city: selectedLocation?.city || '',
+                                                        state: selectedLocation?.state || '',
+                                                        zipcode: selectedLocation?.postal_code || '',
+                                                        country: selectedLocation?.country || 'US',
+                                                    }}
+                                                    isSubmitting={onboardOrderOut.isPending}
+                                                    onSubmit={(data: OnboardingFormData) => {
+                                                        onboardOrderOut.mutate({
+                                                            merchantId,
+                                                            locationId: selectedLocationId!,
+                                                            accountName: data.accountName,
+                                                            restaurantName: data.restaurantName,
+                                                            streetAddress: data.streetAddress,
+                                                            city: data.city,
+                                                            state: data.state,
+                                                            zipcode: data.zipcode,
+                                                            country: data.country,
+                                                            restaurantManagerEmail: data.restaurantManagerEmail,
+                                                            restaurantManagerFirstname: data.restaurantManagerFirstname,
+                                                            restaurantManagerLastname: data.restaurantManagerLastname,
+                                                            restaurantManagerPhone: data.restaurantManagerPhone,
+                                                        }, {
+                                                            onSuccess: (result) => {
+                                                                if (result.success) setShowOrderOutForm(false)
+                                                            },
+                                                        })
+                                                    }}
+                                                    onCancel={() => setShowOrderOutForm(false)}
+                                                />
+                                            )
+                                        }
+
+                                        return (
+                                            <div className="flex flex-col items-center py-6">
+                                                <Plug className="h-10 w-10 text-muted-foreground mb-3" />
+                                                <p className="text-sm text-muted-foreground text-center mb-4 max-w-sm">
+                                                    Connect this location to delivery platforms like UberEats, DoorDash, and Grubhub through OrderOut.
                                                 </p>
+                                                <Button onClick={() => setShowOrderOutForm(true)}>
+                                                    <Plus className="h-4 w-4 mr-2" />
+                                                    Connect to OrderOut
+                                                </Button>
                                             </div>
-                                        </div>
-                                        <Switch
-                                            checked={localSettings.sendEmailOnNewOrder ?? true}
-                                            onCheckedChange={(sendEmailOnNewOrder) =>
-                                                updateSettings({ sendEmailOnNewOrder })
-                                            }
-                                        />
-                                    </div>
-                                    {localSettings.sendEmailOnNewOrder && (
-                                        <div className="ml-8 space-y-2">
-                                            <Label>Notification Email</Label>
-                                            <Input
-                                                type="email"
-                                                value={localSettings.notificationEmail || ''}
-                                                onChange={(e) => updateSettings({ notificationEmail: e.target.value })}
-                                                placeholder="manager@yourstore.com"
-                                            />
-                                        </div>
-                                    )}
+                                        )
+                                    })()}
                                 </CardContent>
                             </Card>
                         </TabsContent>
                     </Tabs>
-
-                    {/* OrderOut Integration */}
-                    <Card>
-                        <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <Plug className="h-5 w-5" />
-                                        OrderOut — Delivery Integration
-                                    </CardTitle>
-                                    <CardDescription>
-                                        Connect to UberEats, DoorDash, Grubhub and more
-                                    </CardDescription>
-                                </div>
-                                <Badge variant="outline">$79.99/mo</Badge>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            {(() => {
-                                const locOO = orderOutStatus?.restaurants.find(
-                                    (r) => r.locationId === selectedLocationId
-                                )
-
-                                if (locOO?.hasRestaurant) {
-                                    return (
-                                        <OrderOutStatusCard
-                                            hasAccount={orderOutStatus?.account.hasAccount ?? false}
-                                            hasRestaurant={true}
-                                            isAcceptingOrders={locOO.isAcceptingOrders}
-                                            prepTimeMinutes={locOO.prepTimeMinutes}
-                                            connectedChannels={locOO.connectedChannels}
-                                            autoAcceptOrders={locOO.autoAcceptOrders}
-                                            dashboardUrl="https://dashboard.orderout.co"
-                                        />
-                                    )
-                                }
-
-                                if (showOrderOutForm) {
-                                    return (
-                                        <OrderOutOnboardingForm
-                                            defaultValues={{
-                                                accountName: merchantName || '',
-                                                restaurantName: selectedLocation?.name || '',
-                                                streetAddress: selectedLocation?.address_line1 || '',
-                                                city: selectedLocation?.city || '',
-                                                state: selectedLocation?.state || '',
-                                                zipcode: selectedLocation?.postal_code || '',
-                                                country: selectedLocation?.country || 'US',
-                                            }}
-                                            isSubmitting={onboardOrderOut.isPending}
-                                            onSubmit={(data: OnboardingFormData) => {
-                                                onboardOrderOut.mutate({
-                                                    merchantId,
-                                                    locationId: selectedLocationId!,
-                                                    accountName: data.accountName,
-                                                    restaurantName: data.restaurantName,
-                                                    streetAddress: data.streetAddress,
-                                                    city: data.city,
-                                                    state: data.state,
-                                                    zipcode: data.zipcode,
-                                                    country: data.country,
-                                                    restaurantManagerEmail: data.restaurantManagerEmail,
-                                                    restaurantManagerFirstname: data.restaurantManagerFirstname,
-                                                    restaurantManagerLastname: data.restaurantManagerLastname,
-                                                    restaurantManagerPhone: data.restaurantManagerPhone,
-                                                }, {
-                                                    onSuccess: (result) => {
-                                                        if (result.success) setShowOrderOutForm(false)
-                                                    },
-                                                })
-                                            }}
-                                            onCancel={() => setShowOrderOutForm(false)}
-                                        />
-                                    )
-                                }
-
-                                return (
-                                    <div className="flex flex-col items-center py-6">
-                                        <Plug className="h-10 w-10 text-muted-foreground mb-3" />
-                                        <p className="text-sm text-muted-foreground text-center mb-4 max-w-sm">
-                                            Connect this location to delivery platforms like UberEats, DoorDash, and Grubhub through OrderOut.
-                                        </p>
-                                        <Button onClick={() => setShowOrderOutForm(true)}>
-                                            <Plus className="h-4 w-4 mr-2" />
-                                            Connect to OrderOut
-                                        </Button>
-                                    </div>
-                                )
-                            })()}
-                        </CardContent>
-                    </Card>
                 </>
             )}
         </div>

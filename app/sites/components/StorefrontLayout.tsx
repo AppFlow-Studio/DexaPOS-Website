@@ -18,7 +18,7 @@ import { useSessionInit } from "../hooks/useSessionInit";
 import { useSession } from "../hooks/useSession";
 import { useStorefrontPath } from "../lib/use-storefront-path";
 import { OrderStatusWatcher } from "./OrderStatusWatcher";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { ChevronUp } from "lucide-react";
 import { SiteThemeConfig } from "@/types/site";
 

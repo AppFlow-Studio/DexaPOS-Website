@@ -46,6 +46,7 @@ import { useLocationStore } from "@/stores/location-store";
 import { MenuCategory, MenuCategoryItem } from "@/types/menu";
 import { useCategoriesWithItems } from "../../hooks/useCategories";
 import { useLocations } from "../../hooks/useLocations";
+import { useModifierGroups } from "../../hooks/useModifierGroups";
 import {
   NewEditItemFormSheet,
   EditItemWithOverrides,
@@ -103,6 +104,7 @@ export default function MenuDetailPage() {
     clerkOrgId || "",
     selectedLocationId,
   );
+  const { data: modifierGroups } = useModifierGroups(clerkOrgId || "");
 
   // Locations for mapping location_id to location name
   const { data: locations } = useLocations(
@@ -1341,7 +1343,7 @@ export default function MenuDetailPage() {
           created_at: menu?.created_at || "",
           updated_at: menu?.updated_at || "",
         }))}
-        modifierGroups={[]}
+        modifierGroups={modifierGroups || []}
         onSuccess={() => {
           setIsItemSheetOpen(false);
           setEditingItem(null);

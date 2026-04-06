@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { CdnImageUploadField } from "@/components/ui/cdn-image-upload-field";
+import { PriceInputGroup } from "@/components/dashboard/locations/PriceInputGroup";
 import { CreateMenuItem } from "@/app/dashboard/actions/menu-items";
 import {
   useClerkOrgId,
@@ -82,7 +83,8 @@ export function QuickCreateItemDialog({
   });
 
   const [name, setName] = React.useState("");
-  const [price, setPrice] = React.useState("");
+  const [price, setPrice] = React.useState<number>(0);
+  const [cashPrice, setCashPrice] = React.useState<number | null>(null);
   const [categoryId, setCategoryId] = React.useState<string>(
     defaultCategoryId ?? "none",
   );
@@ -92,7 +94,8 @@ export function QuickCreateItemDialog({
   React.useEffect(() => {
     if (open) {
       setName("");
-      setPrice("");
+      setPrice(0);
+      setCashPrice(null);
       setCategoryId(defaultCategoryId ?? "none");
       setImage("");
       setAvailable(true);
@@ -114,16 +117,19 @@ export function QuickCreateItemDialog({
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const parsed = parseFloat(price);
       if (!name.trim()) throw new Error("Name is required");
-      if (Number.isNaN(parsed) || parsed < 0) {
+      if (!Number.isFinite(price) || price < 0) {
         throw new Error("Enter a valid price");
+      }
+      if (cashPrice !== null && (!Number.isFinite(cashPrice) || cashPrice < 0)) {
+        throw new Error("Enter a valid cash price");
       }
       const result = await CreateMenuItem(
         clerkOrgId,
         {
           name: name.trim(),
-          price: parsed,
+          price,
+          cash_price: cashPrice ?? undefined,
           image: image || undefined,
           availability: available,
         },
@@ -213,20 +219,13 @@ export function QuickCreateItemDialog({
               required
             />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="quick-price" className="text-xs">
-              Price <span className="text-rose-600">*</span>
-            </Label>
-            <Input
-              id="quick-price"
-              type="number"
-              step="0.01"
-              min="0"
-              inputMode="decimal"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              placeholder="0.00"
-              required
+          <div className="space-y-2">
+            <PriceInputGroup
+              price={price}
+              cashPrice={cashPrice}
+              onPriceChange={setPrice}
+              onCashPriceChange={setCashPrice}
+              label="Price"
             />
           </div>
           <div className="space-y-1.5">
