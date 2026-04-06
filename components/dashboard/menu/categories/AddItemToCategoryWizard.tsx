@@ -646,7 +646,7 @@ export function AddItemToCategoryWizard({
                         <FormControl>
                           <CdnImageUploadField
                             disabled={isSaving}
-                            helperText="Uploads to Bunny CDN when you create the item."
+                            helperText=""
                             onClear={imageUpload.clear}
                             onFileSelect={imageUpload.selectFile}
                             previewUrl={imageUpload.previewUrl}
