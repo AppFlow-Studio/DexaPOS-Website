@@ -456,7 +456,7 @@ function ItemCard({
                 >
                   {channel === "pos" && (
                     <CreditCard className="h-2.5 w-2.5 mr-0.5" />
-                  )}
+                  )}/
                   {channel === "online" && (
                     <Globe className="h-2.5 w-2.5 mr-0.5" />
                   )}

@@ -30,7 +30,7 @@ import {
   Star,
   type LucideIcon,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { useCart } from "../hooks/useCart";
 import { ItemDetailsModal } from "./ItemDetailsModal";
 

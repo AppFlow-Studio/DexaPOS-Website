@@ -20,6 +20,7 @@ import {
   Phone,
   Edit2,
   Check,
+  CheckCircle2,
 } from "lucide-react";
 import { useSession } from "../hooks/useSession";
 import { clearSession } from "../session-actions";
@@ -46,12 +47,16 @@ interface AccountDrawerProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   storeConfigId: string;
+  showWelcomeOnMount?: boolean;
+  onWelcomeShown?: () => void;
 }
 
 export function AccountDrawer({
   isOpen,
   onOpenChange,
   storeConfigId,
+  showWelcomeOnMount,
+  onWelcomeShown,
 }: AccountDrawerProps) {
   const {
     isAuthenticated,
@@ -64,6 +69,7 @@ export function AccountDrawer({
   const [section, setSection] = useState<Section>("main");
   const [loading, setLoading] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+  const [justLoggedIn, setJustLoggedIn] = useState(false);
 
   // Profile editing
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
@@ -91,8 +97,21 @@ export function AccountDrawer({
   const [loyalty, setLoyalty] = useState<LoyaltyProgramStatus[]>([]);
 
   useEffect(() => {
-    if (isOpen) setSection("main");
+    if (isOpen) {
+      setSection("main");
+      if (showWelcomeOnMount) {
+        setJustLoggedIn(true);
+        onWelcomeShown?.();
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!justLoggedIn) return;
+    const timer = setTimeout(() => setJustLoggedIn(false), 6000);
+    return () => clearTimeout(timer);
+  }, [justLoggedIn]);
 
   const loadSection = async (s: Section) => {
     setSection(s);
@@ -221,6 +240,33 @@ export function AccountDrawer({
     if (section === "main") {
       return (
         <div className="px-6 py-4 space-y-2">
+          {/* Welcome banner */}
+          <AnimatePresence>
+            {justLoggedIn && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.25 }}
+                className="flex items-start gap-3 px-4 py-3 rounded-xl mb-1"
+                style={{
+                  backgroundColor: "color-mix(in srgb, var(--primary) 12%, transparent)",
+                  border: "1px solid color-mix(in srgb, var(--primary) 30%, transparent)",
+                }}
+              >
+                <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "var(--primary)" }} />
+                <div>
+                  <p className="font-semibold text-sm" style={{ color: "var(--text)" }}>
+                    {customer?.name ? `Welcome back, ${customer.name.split(" ")[0]}!` : "Welcome back!"}
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                    You&apos;re now signed in.
+                  </p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* User info */}
           <div className="flex items-center gap-3 pb-4 mb-2" style={{ borderBottom: "1px solid var(--border)" }}>
             <div
@@ -894,6 +940,7 @@ export function AccountDrawer({
         storeConfigId={storeConfigId}
         onSuccess={() => {
           setShowAuth(false);
+          setJustLoggedIn(true);
         }}
       />
     </>

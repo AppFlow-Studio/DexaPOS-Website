@@ -1,17 +1,39 @@
 import React from "react";
 
-const ZoneRectangle = ({ color = "#888", width = 100, height = 100 }) => (
-  <svg width={width} height={height} viewBox="0 0 100 100">
-    <rect
-      width="100"
-      height="100"
-      fill={color}
-      fillOpacity="0.2"
-      stroke={color}
-      strokeWidth="2"
-      strokeDasharray="5,5"
-    />
-  </svg>
-);
+interface ZoneRectangleProps {
+  color?: string;
+  width?: number;
+  height?: number;
+}
+
+const ZoneRectangle: React.FC<ZoneRectangleProps> = ({
+  color = "#2DD4BF",
+  width = 200,
+  height = 200,
+}) => {
+  const defaultSize = 200;
+  const scaleX = (width || defaultSize) / defaultSize;
+
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 200 200"
+      xmlns="http://www.w3.org/2000/svg"
+      preserveAspectRatio="none"
+    >
+      <rect
+        width="200"
+        height="200"
+        fill={color}
+        fillOpacity="0.07"
+        stroke={color}
+        strokeWidth={1.5 * scaleX}
+        strokeDasharray="6,4"
+        strokeOpacity="0.6"
+      />
+    </svg>
+  );
+};
 
 export default ZoneRectangle;

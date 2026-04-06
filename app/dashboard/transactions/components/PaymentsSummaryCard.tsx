@@ -91,7 +91,7 @@ export function PaymentsSummaryCard({
   const sortedMethods = [...paymentMethods].sort((a, b) => b.amount - a.amount);
 
   return (
-    <Card className="border-none shadow-sm bg-card/80 backdrop-blur hover:shadow-md transition-shadow">
+    <Card className="border-border/60 shadow-none">
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <div>
           <CardTitle className="text-base font-bold tracking-tight">

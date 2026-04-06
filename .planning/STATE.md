@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-01-25)
 
 ## Current Position
 
-Phase: 1 of 7 (Menu Management) - COMPLETE ✓
-Plan: 5 of 5 in Phase 1
-Status: Phase 1 verified and complete
-Last activity: 2026-01-25 - Phase 1 verification passed (7/7 must-haves)
+Phase: 1.2 of 7 (Merchant Reservations Management) - COMPLETE
+Plan: 4 of 4 in Phase 1.2
+Status: Phase complete
+Last activity: 2026-04-05 - Completed 01.2-04-PLAN.md (Reservations Sidebar Navigation Entry)
 
-Progress: [██████████] 100% of Phase 1 | [█░░░░░░░░░] 14% of Milestone
+Progress: [██████████] 100% of Phase 1 | [██████████] 100% of Phase 1.2 | [█████░░░░░] 45% of Milestone
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
+- Total plans completed: 6
 - Average duration: 7 min
-- Total execution time: 0.58 hours
+- Total execution time: 0.72 hours
 
 **By Phase:**
 
@@ -56,6 +56,10 @@ Recent decisions affecting current work:
 - date-fns formatDistanceToNow for relative timestamps
 - Page route instead of sheet for menu details (better UX for complex data)
 - Clickable menu name + dropdown View Details for dual navigation paths
+- lib/reservations/ directory for reservation-specific pure utilities
+- BLOCKING_STATUSES constant: pending, confirmed, reminded, arrived, seated
+- byDate query key (clerkOrgId + locationId + date) for reservation cache targeting
+- staleTime 30s on reservations query for freshness vs. network balance
 
 ### Pending Todos
 
@@ -67,9 +71,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-01-25T20:18:00Z
-Stopped at: Phase 1 verified - ready for Phase 2
-Resume file: None - Phase 1 complete
+Last session: 2026-04-05T00:33:00Z
+Stopped at: Completed 01.2-04-PLAN.md - Reservations sidebar navigation entry (Phase 1.2 COMPLETE)
+Resume file: None
 
 **Verification:** 7/7 must-haves verified (100%)
 **Report:** .planning/phases/01-menu-management/01-VERIFICATION.md
