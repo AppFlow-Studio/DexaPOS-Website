@@ -66,6 +66,7 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { useLocations } from '../hooks/useLocations'
 import { useMerchantCdnImageUpload } from '@/lib/cdn/use-merchant-cdn-image-upload'
+import { useState } from 'react'
 const menuSchema = z.object({
   name: z
     .string()
