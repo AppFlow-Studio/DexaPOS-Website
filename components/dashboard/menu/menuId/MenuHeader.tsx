@@ -7,6 +7,7 @@ import { MenuWithCategories } from "@/types/menu";
 
 interface MenuHeaderProps {
   menu: MenuWithCategories;
+  locationName?: string | null;
   onBack: () => void;
   onNavigateToMenus: () => void;
   onPreview?: () => void;
@@ -14,6 +15,7 @@ interface MenuHeaderProps {
 
 export function MenuHeader({
   menu,
+  locationName,
   onBack,
   onNavigateToMenus,
   onPreview,
@@ -40,13 +42,13 @@ export function MenuHeader({
           <h2 className="text-2xl font-bold tracking-tight">{menu.name}</h2>
           <Badge variant={menu.is_location_owned ? "secondary" : "default"}>
             {menu.is_location_owned ? (
-              <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4" />
-                <p>Location Menu</p>
+              <div className="flex items-center gap-1.5">
+                <MapPin className="h-3.5 w-3.5" />
+                <p>{locationName || "Location Menu"}</p>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <Globe className="h-4 w-4" />
+              <div className="flex items-center gap-1.5">
+                <Globe className="h-3.5 w-3.5" />
                 <p>Global Menu</p>
               </div>
             )}

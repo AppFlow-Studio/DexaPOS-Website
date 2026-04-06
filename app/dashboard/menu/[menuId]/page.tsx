@@ -1038,6 +1038,7 @@ export default function MenuDetailPage() {
       <ScopeContextStrip menuName={menu?.name ?? null} />
       <MenuHeader
         menu={menu}
+        locationName={menu.location_id ? locations?.find(l => l.id === menu.location_id)?.name : null}
         onBack={() => router.back()}
         onNavigateToMenus={() => router.push("/dashboard/menu")}
         onPreview={() => setIsPreviewOpen(true)}
