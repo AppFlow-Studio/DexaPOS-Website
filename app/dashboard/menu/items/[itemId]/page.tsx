@@ -21,7 +21,6 @@ import {
   ChefHat,
   Layers,
   Edit3,
-  Plus,
   ChevronDown,
   AlertTriangle,
   Image as ImageIcon,
@@ -30,14 +29,11 @@ import {
   CheckCircle2,
   XCircle,
   Sparkles,
-  Link as LinkIcon,
-  Unlink,
   Globe,
   Building2,
   Menu as MenuIcon,
   MapPin,
   Info,
-  RotateCcw,
   DollarSign,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -53,13 +49,8 @@ import {
   EditItemWithOverrides,
 } from "@/components/dashboard/menu/NewEditItemFormSheet";
 import { ItemPreviewCard } from "@/components/dashboard/menu/ItemPreviewCard";
-import {
-  AssignModifierToItem,
-  RemoveModifierFromItem,
-} from "../../../actions/item-assignments";
 import { DeleteMenuItem } from "../../../actions/menu-items";
 import { toast } from "sonner";
-import { RecipeManager } from "../../components/RecipeManager";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import {
@@ -69,7 +60,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@/components/ui/dialog"; // Keep for delete confirmation
 import {
   Tooltip,
   TooltipContent,
@@ -489,8 +480,6 @@ export default function MenuItemDetailPage() {
     Record<string, boolean>
   >({});
   const [isEditSheetOpen, setIsEditSheetOpen] = React.useState(false);
-  const [linkingModifier, setLinkingModifier] = React.useState(false);
-  const [unlinkingModifier, setUnlinkingModifier] = React.useState<any>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
 
@@ -598,56 +587,6 @@ export default function MenuItemDetailPage() {
     ? allModifierGroups
     : [];
 
-  // Find unlinked modifier groups (ones not already assigned to this item)
-  const linkedModifierIds = modifierGroups.map((mg) => mg?.id);
-  const unlinkedModifierGroups = allModifierGroupsList.filter(
-    (mg) => !linkedModifierIds.includes(mg.id)
-  );
-
-  const handleLinkModifier = async (modifierGroupId: string) => {
-    try {
-      const result = await AssignModifierToItem(itemId, modifierGroupId);
-      if (result.error) {
-        toast.error("Link Failed", { description: result.error });
-        return;
-      }
-      toast.success("Modifier Linked", {
-        description: "The modifier group has been linked to this item.",
-      });
-      queryClient.invalidateQueries({ queryKey: ["menu-item", itemId] });
-      refetch();
-    } catch {
-      toast.error("Link Failed", {
-        description: "Unable to link the modifier group. Please try again.",
-      });
-    }
-    setLinkingModifier(false);
-  };
-
-  const handleUnlinkModifier = async () => {
-    if (!unlinkingModifier) return;
-    try {
-      const result = await RemoveModifierFromItem(
-        itemId,
-        unlinkingModifier.modifier_group?.id
-      );
-      if (result.error) {
-        toast.error("Unlink Failed", { description: result.error });
-        return;
-      }
-      toast.success("Modifier Unlinked", {
-        description: "The modifier group has been removed from this item.",
-      });
-      queryClient.invalidateQueries({ queryKey: ["menu-item", itemId] });
-      refetch();
-    } catch {
-      toast.error("Unlink Failed", {
-        description: "Unable to unlink the modifier group. Please try again.",
-      });
-    }
-    setUnlinkingModifier(null);
-  };
-
   const handleDeleteItem = async () => {
     setIsDeleting(true);
     try {
@@ -671,58 +610,9 @@ export default function MenuItemDetailPage() {
     }
   };
 
-  const levelInfo = LEVEL_INFO[editingContext.level];
-  const LevelIcon = levelInfo.icon;
-
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Context Banner */}
-      <div
-        className={cn(
-          "rounded-lg border p-4 flex items-center justify-between gap-4",
-          levelInfo.bgColor,
-          levelInfo.borderColor
-        )}
-      >
-        <div className="flex items-center gap-3">
-          <div
-            className={cn(
-              "h-10 w-10 rounded-lg flex items-center justify-center",
-              "bg-white/80 backdrop-blur"
-            )}
-          >
-            <LevelIcon className={cn("h-5 w-5", levelInfo.color)} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className={cn("font-semibold", levelInfo.color)}>
-                {isAllLocations
-                  ? "Global View"
-                  : `Location: ${currentLocationName}`}
-              </h3>
-              <Badge
-                variant="outline"
-                className={cn(
-                  "text-xs",
-                  levelInfo.borderColor,
-                  levelInfo.color
-                )}
-              >
-                Level {editingContext.level}
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {editingContext.description}
-            </p>
-          </div>
-        </div>
-        <EditingContextIndicator
-          context={editingContext}
-          locationName={currentLocationName}
-        />
-      </div>
-
-      {/* Breadcrumb & Header */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button
@@ -746,35 +636,41 @@ export default function MenuItemDetailPage() {
                 {menuItem.name}
               </span>
             </div>
-            <h1 className="text-2xl font-bold">{menuItem.name}</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold">{menuItem.name}</h1>
+              <Badge
+                variant={menuItem.effective_availability ? "default" : "secondary"}
+                className="h-7"
+              >
+                {menuItem.effective_availability ? (
+                  <>
+                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Available
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="h-3.5 w-3.5 mr-1" /> Unavailable
+                  </>
+                )}
+              </Badge>
+              <EditingContextIndicator
+                context={editingContext}
+                locationName={currentLocationName}
+              />
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Badge
-            variant={menuItem.effective_availability ? "default" : "secondary"}
-            className="h-7"
-          >
-            {menuItem.effective_availability ? (
-              <>
-                <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Available
-              </>
-            ) : (
-              <>
-                <XCircle className="h-3.5 w-3.5 mr-1" /> Unavailable
-              </>
-            )}
-          </Badge>
           <Button onClick={() => setIsEditSheetOpen(true)}>
             <Edit3 className="h-4 w-4 mr-2" />
-            {isAllLocations ? "Edit Item" : "Edit Item"}
+            Edit Item
           </Button>
           {isAllLocations && (
             <Button
               variant="destructive"
+              size="icon"
               onClick={() => setIsDeleteDialogOpen(true)}
             >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete
+              <Trash2 className="h-4 w-4" />
             </Button>
           )}
         </div>
@@ -790,19 +686,7 @@ export default function MenuItemDetailPage() {
               <CardTitle className="flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
                 Item Details
-                {!editingContext.canEditBaseFields && (
-                  <Badge variant="outline" className="ml-2 text-xs">
-                    <Globe className="h-3 w-3 mr-1" />
-                    View Only
-                  </Badge>
-                )}
               </CardTitle>
-              {!editingContext.canEditBaseFields && (
-                <CardDescription className="text-amber-600 flex items-center gap-1">
-                  <Info className="h-3 w-3" />
-                  Switch to "All Locations" to edit item details
-                </CardDescription>
-              )}
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid gap-6 md:grid-cols-2">
@@ -925,73 +809,26 @@ export default function MenuItemDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Recipe / Ingredients Section */}
-          <RecipeManager
-            menuItemId={menuItem.id}
-            menuItemName={menuItem.name}
-            clerkOrgId={clerkOrgId || ""}
-            locationId={isAllLocations ? null : selectedLocationId}
-            isEditable={
-              // Can edit recipe if:
-              // 1. In All Locations view (can edit global items)
-              // 2. Or, item is a local item AND we're at the location that owns it
-              isAllLocations ||
-              (!!menuItem.location_id &&
-                menuItem.location_id === selectedLocationId)
-            }
-          />
-
-          {/* Modifier Groups Section */}
+          {/* Modifier Groups Section - Read Only */}
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Layers className="h-5 w-5 text-purple-500" />
-                    Modifier Groups
-                  </CardTitle>
-                  <CardDescription>
-                    Customization options available for this item
-                  </CardDescription>
-                </div>
-                {isAllLocations && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setLinkingModifier(true)}
-                    disabled={unlinkedModifierGroups.length === 0}
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Link Modifier
-                  </Button>
-                )}
-              </div>
+              <CardTitle className="flex items-center gap-2">
+                <Layers className="h-5 w-5 text-purple-500" />
+                Modifier Groups
+                <Badge variant="secondary" className="ml-auto text-xs">
+                  {modifierGroups.length}
+                </Badge>
+              </CardTitle>
+              <CardDescription>
+                Customization options available for this item
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {modifierGroups.length === 0 ? (
                 <Empty
                   icon={Layers}
                   title="No modifier groups"
-                  description="Link modifier groups to let customers customize this item"
-                  action={
-                    isAllLocations && unlinkedModifierGroups.length > 0 ? (
-                      <Button
-                        variant="outline"
-                        onClick={() => setLinkingModifier(true)}
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Link Modifier Group
-                      </Button>
-                    ) : isAllLocations ? (
-                      <Button
-                        variant="outline"
-                        onClick={() => router.push("/dashboard/menu/modifiers")}
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create Modifier Group
-                      </Button>
-                    ) : null
-                  }
+                  description="Use the Edit Item button to link modifier groups"
                 />
               ) : (
                 <div className="space-y-3">
@@ -1166,33 +1003,6 @@ export default function MenuItemDetailPage() {
                                   </div>
                                 </div>
                               </div>
-
-                              {isAllLocations && (
-                                <div className="mt-4 flex items-center gap-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() =>
-                                      router.push("/dashboard/menu/modifiers")
-                                    }
-                                  >
-                                    <Edit3 className="h-4 w-4 mr-1" />
-                                    Edit Group
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setUnlinkingModifier(mg);
-                                    }}
-                                    className="text-destructive hover:text-destructive"
-                                  >
-                                    <Unlink className="h-4 w-4 mr-1" />
-                                    Unlink
-                                  </Button>
-                                </div>
-                              )}
                             </div>
                           </CollapsibleContent>
                         </Card>
@@ -1220,7 +1030,7 @@ export default function MenuItemDetailPage() {
                 <Empty
                   icon={ChefHat}
                   title="No recipes"
-                  description="Add recipes to track ingredients and costs"
+                  description="Use the Edit Item button to add recipes and track ingredients"
                 />
               ) : (
                 <div className="space-y-2">
@@ -1452,88 +1262,18 @@ export default function MenuItemDetailPage() {
           category_items: menuItem.categories,
           menu_item_modifier_groups:
             menuItem.modifier_groups as unknown as EditItemWithOverrides["menu_item_modifier_groups"],
+          location_id: menuItem.location_id,
+          delivery_price: menuItem.base_delivery_price,
+          effective_price: menuItem.effective_price,
+          effective_cash_price: menuItem.effective_cash_price,
+          effective_delivery_price: menuItem.effective_delivery_price,
+          has_location_item_override: menuItem.has_location_override,
         }}
         onSuccess={() => {
           setIsEditSheetOpen(false);
           refetch();
         }}
       />
-
-      {/* Link Modifier Dialog */}
-      <Dialog open={linkingModifier} onOpenChange={setLinkingModifier}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Link Modifier Group</DialogTitle>
-            <DialogDescription>
-              Select a modifier group to add to this item
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 max-h-[400px] overflow-y-auto">
-            {unlinkedModifierGroups.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                All modifier groups are already linked to this item.
-              </p>
-            ) : (
-              unlinkedModifierGroups.map((group) => (
-                <button
-                  key={group.id}
-                  type="button"
-                  className="w-full p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors text-left"
-                  onClick={() => handleLinkModifier(group.id)}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
-                      <Layers className="h-5 w-5 text-purple-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold flex items-center gap-2">
-                        {group.name}
-                        {group.is_required && (
-                          <Badge variant="destructive" className="text-xs">
-                            Required
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {group?.modifier_group_items?.length || 0} options
-                      </div>
-                    </div>
-                    <LinkIcon className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Unlink Modifier Confirmation */}
-      <Dialog
-        open={!!unlinkingModifier}
-        onOpenChange={(open) => !open && setUnlinkingModifier(null)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Unlink Modifier Group</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to remove "
-              {unlinkingModifier?.modifier_group?.name}" from this item? The
-              modifier group itself won't be deleted.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setUnlinkingModifier(null)}
-            >
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleUnlinkModifier}>
-              Unlink
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Delete Item Confirmation */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
