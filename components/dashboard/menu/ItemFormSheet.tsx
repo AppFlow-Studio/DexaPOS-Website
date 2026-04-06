@@ -41,6 +41,7 @@ import { CreateMenuItem, UpdateMenuItem, ResetMenuItemToGlobal } from '@/app/das
 import { CategoriesModel, ModifierGroupsModel, ModifierGroupItemsModel } from '@/types/db-modles'
 import { useLocationStore, useIsAllLocations } from '@/stores/location-store'
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
+import { PriceInputGroup } from '@/components/dashboard/locations/PriceInputGroup'
 
 // Form schema
 const itemSchema = z.object({
@@ -536,67 +537,34 @@ export function ItemFormSheet({
                                                 </div>
                                             )}
 
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <FormField
-                                                    control={form.control}
-                                                    name="price"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>
-                                                                {isLocationScoped ? 'Location Card Price *' : 'Card Price *'}
-                                                            </FormLabel>
-                                                            <FormControl>
-                                                                <div className="relative">
-                                                                    <span className="absolute left-3 top-2.5 text-muted-foreground font-medium">$</span>
-                                                                    <Input
-                                                                        type="number"
-                                                                        step="0.01"
-                                                                        min="0"
-                                                                        className={cn(
-                                                                            "pl-7",
-                                                                            isLocationScoped && hasExistingOverride && "border-amber-300 focus:ring-amber-500"
-                                                                        )}
-                                                                        placeholder="0.00"
-                                                                        {...field}
-                                                                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                                                                    />
-                                                                </div>
-                                                            </FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
+                                            <div className="space-y-2">
+                                                <PriceInputGroup
+                                                    price={form.watch('price') || 0}
+                                                    cashPrice={form.watch('cash_price') ?? null}
+                                                    onPriceChange={(value) =>
+                                                        form.setValue('price', value, { shouldValidate: true })
+                                                    }
+                                                    onCashPriceChange={(value) =>
+                                                        form.setValue('cash_price', value, { shouldValidate: true })
+                                                    }
+                                                    label={isLocationScoped ? 'Location Price' : 'Price'}
                                                 />
-                                                <FormField
-                                                    control={form.control}
-                                                    name="cash_price"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>
-                                                                {isLocationScoped ? 'Location Cash Price' : 'Cash Price'}
-                                                            </FormLabel>
-                                                            <FormControl>
-                                                                <div className="relative">
-                                                                    <span className="absolute left-3 top-2.5 text-muted-foreground font-medium">$</span>
-                                                                    <Input
-                                                                        type="number"
-                                                                        step="0.01"
-                                                                        min="0"
-                                                                        className={cn(
-                                                                            "pl-7",
-                                                                            isLocationScoped && hasExistingOverride && "border-amber-300 focus:ring-amber-500"
-                                                                        )}
-                                                                        placeholder="Optional"
-                                                                        {...field}
-                                                                        value={field.value ?? ''}
-                                                                        onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
-                                                                    />
-                                                                </div>
-                                                            </FormControl>
-                                                            <FormDescription>Optional cash discount</FormDescription>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
+                                                <div className="flex gap-4 px-4">
+                                                    <div className="flex-1">
+                                                        {form.formState.errors.price && (
+                                                            <p className="text-[0.8rem] font-medium text-destructive">
+                                                                {form.formState.errors.price.message}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        {form.formState.errors.cash_price && (
+                                                            <p className="text-[0.8rem] font-medium text-destructive">
+                                                                {form.formState.errors.cash_price.message}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </div>
 
                                             {/* Location scope notice */}
