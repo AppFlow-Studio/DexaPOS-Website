@@ -514,6 +514,7 @@ export async function CreateMenuItem(
     const modifierInserts = data.modifier_group_ids.map((groupId) => ({
       menu_item_id: item.id,
       modifier_group_id: groupId,
+      merchant_id: merchant.id,
     }));
 
     const { error: modifierError } = await supabase
@@ -789,9 +790,17 @@ export async function UpdateMenuItem(
 
     // Insert new assignments if any
     if (data.modifier_group_ids.length > 0) {
+      // Fetch merchant_id for RLS policy
+      const { data: itemForMerchant } = await supabase
+        .from("menu_items")
+        .select("merchant_id")
+        .eq("id", itemId)
+        .single();
+
       const modifierInserts = data.modifier_group_ids.map((groupId) => ({
         menu_item_id: itemId,
         modifier_group_id: groupId,
+        merchant_id: itemForMerchant?.merchant_id,
       }));
 
       const { error: insertError } = await supabase
