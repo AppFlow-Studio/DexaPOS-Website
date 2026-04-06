@@ -1432,7 +1432,7 @@ export function NewEditItemFormSheet({
             <Sparkles className="h-5 w-5 text-primary animate-pulse" />
             {editItem ? "Edit Menu Item" : "Create New Menu Item"}
           </DialogTitle>
-          <DialogDescription className="space-y-2 max-w-[80ch] text-sm leading-6">
+          <DialogDescription asChild><div className="space-y-2 max-w-[80ch] text-sm leading-6 text-muted-foreground">
             <span>{editingContext.description}</span>
 
             {/* Context Badges */}
@@ -1504,7 +1504,7 @@ export function NewEditItemFormSheet({
                   )}
               </div>
             )}
-          </DialogDescription>
+          </div></DialogDescription>
         </DialogHeader>
 
           <div className="min-h-0 flex flex-1 flex-col overflow-hidden lg:flex-row">
