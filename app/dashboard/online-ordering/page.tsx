@@ -78,7 +78,9 @@ import {
   useOrderOutStatus,
   useOnboardOrderOut,
 } from "./hooks/useOrderOutStatus";
+import { retriggerDomainWhitelist } from "./actions";
 import { OrderOutTab } from "@/components/dashboard/orderout/OrderOutTab";
+import { TestOrderCard } from "@/components/dashboard/orderout/TestOrderCard";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 
@@ -158,10 +160,31 @@ export default function OnlineOrderingPage() {
   const orderOutStatus = orderOutData?.data;
   const onboardOrderOut = useOnboardOrderOut(clerkOrgId || "");
 
+  const [isWhitelisting, setIsWhitelisting] = useState(false);
+
   const logoInputRef = useRef<HTMLInputElement>(null);
   const heroInputRef = useRef<HTMLInputElement>(null);
   const faviconInputRef = useRef<HTMLInputElement>(null);
   const ogInputRef = useRef<HTMLInputElement>(null);
+
+  const handleWhitelistDomain = async () => {
+    if (!selectedLocationId || isAllLocations) return;
+    setIsWhitelisting(true);
+    try {
+      const result = await retriggerDomainWhitelist(selectedLocationId);
+      if (result.skipped) {
+        toast.info("Domain whitelist API key not configured — skipped.");
+      } else if (result.success) {
+        toast.success("Domain successfully whitelisted with Dejavoo!");
+      } else {
+        toast.error(result.error || "Domain whitelist failed.");
+      }
+    } catch {
+      toast.error("Failed to whitelist domain.");
+    } finally {
+      setIsWhitelisting(false);
+    }
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -1307,7 +1330,7 @@ export default function OnlineOrderingPage() {
                 Configure your iPOSPays terminal for online payments
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <div className="space-y-2 max-w-md">
                 <Label htmlFor="tpn">iPOSPays TPN</Label>
                 <Input
@@ -1321,9 +1344,31 @@ export default function OnlineOrderingPage() {
                 />
                 <p className="text-xs text-muted-foreground">
                   Terminal Processing Number for this location&apos;s online
-                  card payments
+                  card payments. Save settings after updating the TPN to
+                  automatically whitelist your storefront domain with Dejavoo.
                 </p>
               </div>
+              {currentSettings.ipospaysTpn && !isDirty(selectedLocationId) && (
+                <div className="flex items-center gap-3 max-w-md">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleWhitelistDomain}
+                    disabled={isWhitelisting}
+                  >
+                    {isWhitelisting ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Globe className="h-4 w-4 mr-2" />
+                    )}
+                    {isWhitelisting ? "Whitelisting…" : "Whitelist Domain"}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Manually re-register your storefront domain with Dejavoo so
+                    the payment form loads correctly.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -1423,6 +1468,16 @@ export default function OnlineOrderingPage() {
               country: selectedLocation?.country || "US",
             }}
           />
+          {isAllLocations ? (
+            <div className="rounded-md border bg-muted/30 p-4 text-sm text-muted-foreground">
+              Select a specific location to send a test order.
+            </div>
+          ) : (
+            <TestOrderCard
+              locationId={selectedLocationId}
+              hasRestaurant={!!orderOutStatus?.hasRestaurant}
+            />
+          )}
         </TabsContent>
       </Tabs>
 

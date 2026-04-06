@@ -726,7 +726,7 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
                 />
 
                 {/* 2. MAIN CANVAS (Reused Runtime Component) */}
-                <div className="flex-1 relative h-full bg-[#e5e5e5]">
+                <div className="flex-1 relative h-full bg-slate-900">
                     <RuntimeFloorPlanView
                         floorPlan={activeFloorPlan}
                         tables={draftTables}

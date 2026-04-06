@@ -51,6 +51,7 @@ import {
   US_TIMEZONES,
 } from '@/types/merchant_locations'
 import { cn } from '@/lib/utils'
+import { AddressAutocomplete } from '@/components/ui/address-autocomplete'
 
 interface AdminLocationDetailSheetProps {
   merchantId: string
@@ -72,6 +73,8 @@ type LocationDetailsFormState = {
   postal_code: string
   country: string
   timezone: string
+  latitude: number | null
+  longitude: number | null
   ein: string
   tax_id: string
   sales_tax_rate: string
@@ -123,6 +126,8 @@ export function AdminLocationDetailSheet({
     postal_code: '',
     country: 'US',
     timezone: 'America/New_York',
+    latitude: null,
+    longitude: null,
     ein: '',
     tax_id: '',
     sales_tax_rate: '',
@@ -150,6 +155,8 @@ export function AdminLocationDetailSheet({
       postal_code: currentLocation.postal_code,
       country: currentLocation.country || 'US',
       timezone: currentLocation.timezone,
+      latitude: currentLocation.latitude,
+      longitude: currentLocation.longitude,
       ein: currentLocation.ein || '',
       tax_id: currentLocation.tax_id || '',
       sales_tax_rate:
@@ -201,6 +208,8 @@ export function AdminLocationDetailSheet({
         state: details.state,
         postal_code: details.postal_code.trim(),
         country: details.country,
+        latitude: details.latitude,
+        longitude: details.longitude,
         timezone: details.timezone,
         ein: details.ein.trim() || undefined,
         tax_id: details.tax_id.trim() || undefined,
@@ -403,7 +412,20 @@ export function AdminLocationDetailSheet({
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <Label>Address Line 1</Label>
-                      <Input value={details.address_line1} onChange={(e) => setDetails((p) => ({ ...p, address_line1: e.target.value }))} />
+                      <AddressAutocomplete
+                        value={details.address_line1}
+                        onInputChange={(v) => setDetails((p) => ({ ...p, address_line1: v }))}
+                        onAddressSelected={(parts) => setDetails((p) => ({
+                          ...p,
+                          address_line1: parts.address_line1,
+                          city: parts.city,
+                          state: parts.state,
+                          postal_code: parts.postal_code,
+                          country: parts.country || 'US',
+                          latitude: parts.latitude,
+                          longitude: parts.longitude,
+                        }))}
+                      />
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <Label>Address Line 2</Label>

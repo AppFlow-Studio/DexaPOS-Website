@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ScopeContextStrip } from "@/components/dashboard/menu/ScopeContextStrip";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Card,
@@ -610,6 +611,7 @@ export default function ModifiersPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6 max-w-[1600px] mx-auto w-full">
+      <ScopeContextStrip />
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Modifiers</h1>

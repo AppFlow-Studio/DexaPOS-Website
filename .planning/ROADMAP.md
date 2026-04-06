@@ -14,6 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Menu Management (Admin)** - Full menu, category, item, and modifier management ✓
 - [ ] **Phase 1.1: Support Ticketing UI/UX Overhaul** *(INSERTED)* - Comprehensive redesign of merchant and admin support ticket UI: message bubbles, date separators, drag-and-drop attachments, internal notes, KPI inbox cards, admin filter bar, and mobile sidebar
+- [ ] **Phase 1.2: Merchant Reservations Management** *(INSERTED)* - Full reservations CRUD in the merchant dashboard: create/view/manage reservations, status lifecycle, history view, and sidebar navigation entry under Operations
 - [ ] **Phase 2: Location & Floor Plan Management** - Location CRUD and table/floor plan administration
 - [ ] **Phase 3: Staff Management (Admin)** - Staff CRUD, roles, PINs, and location assignments
 - [ ] **Phase 4: Settings & Online Store** - Merchant settings and storefront configuration
@@ -65,6 +66,26 @@ Plans:
 - [ ] 01.1-02-PLAN.md — Admin inbox status tab bar + unread row accents
 - [ ] 01.1-03-PLAN.md — Merchant ticket detail overhaul (bubbles, dates, header, reply)
 - [ ] 01.1-04-PLAN.md — Admin ticket detail overhaul (internal notes, sidebar, merchant info)
+
+### Phase 1.2: Merchant Reservations Management *(INSERTED)*
+**Goal**: Merchants can create, view, and manage reservations from the web dashboard with full lifecycle control
+**Depends on**: Phase 1
+**Requirements**: User-provided Android reference (2026-04-05)
+**Success Criteria** (what must be TRUE):
+  1. "Reservations" entry appears under Operations in merchant sidebar
+  2. Merchant can view today's reservations and navigate to any date
+  3. Merchant can create a new reservation (party name, party size, phone, date/time, optional table assignment, VIP flag, notes)
+  4. Merchant can update reservation status through the full lifecycle (pending → confirmed → arrived → seated → completed / cancelled / no_show)
+  5. Merchant can view reservation history (completed, cancelled, no-show) with filtering
+  6. Merchant can cancel a reservation with an optional reason
+  7. Conflict detection warns when assigning tables that are already booked for overlapping time
+**Plans**: 4 plans
+
+Plans:
+- [ ] 01.2-01-PLAN.md — Extend Reservation type + four server actions (CreateReservationAction, UpdateReservationStatusAction, CancelReservationAction, AssignReservationTablesAction)
+- [ ] 01.2-02-PLAN.md — TanStack Query hooks (useReservations, useCreateReservation, etc.) + conflict detection utility
+- [ ] 01.2-03-PLAN.md — Reservations page + CreateReservationDialog + ReservationCard + ReservationDetailSheet + CancelReservationDialog
+- [ ] 01.2-04-PLAN.md — Sidebar nav entry (CalendarClock icon under Operations)
 
 ### Phase 2: Location & Floor Plan Management
 **Goal**: Admin can manage merchant locations and their physical layouts
@@ -163,19 +184,3 @@ Plans:
 
 Plans:
 - [ ] TBD
-
-## Progress
-
-**Execution Order:**
-Phases execute in numeric order: 1 → 1.1 → 2 → 3 → 4 → 5 → 6 → 7
-
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Menu Management (Admin) | 5/5 | Complete ✓ | 2026-01-25 |
-| 1.1. Support Ticketing UI/UX Overhaul | 0/4 | Not started | - |
-| 2. Location & Floor Plan Management | 0/TBD | Not started | - |
-| 3. Staff Management (Admin) | 0/TBD | Not started | - |
-| 4. Settings & Online Store | 0/TBD | Not started | - |
-| 5. Analytics Foundation | 0/TBD | Not started | - |
-| 6. Performance & Trends | 0/TBD | Not started | - |
-| 7. Time Controls & Exports | 0/TBD | Not started | - |

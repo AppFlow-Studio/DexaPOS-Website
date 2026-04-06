@@ -378,7 +378,7 @@ export async function getPlatformKPIs(): Promise<PlatformKPIs> {
     supabase
       .from('order_payments')
       .select('payment_method, amount')
-      .gte('created_at', thirtyDaysAgo.toISOString()),
+      .gte('initiated_at', thirtyDaysAgo.toISOString()),
   ])
 
   // --- Revenue metrics ---

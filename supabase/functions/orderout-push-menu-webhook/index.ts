@@ -55,8 +55,22 @@ async function insertDeadLetter(
   supabase: ReturnType<typeof createClient>,
   payload: unknown,
   errorMessage: string,
-  eventType: string = 'push_menu'
+  eventType: string = 'push_menu',
+  replayId?: string | null
 ): Promise<void> {
+  // If this is an HQ-initiated replay, UPDATE the original row instead of
+  // creating a phantom duplicate. Uses an RPC so retry_count can be atomically
+  // incremented.
+  if (replayId) {
+    const { error } = await supabase.rpc('touch_dlq_replay_failure', {
+      p_id: replayId,
+      p_error_message: errorMessage,
+    })
+    if (error) logError('DLQ', 'Failed to update dead letter queue (replay)', error)
+    else logEvent('DLQ', `Replay failure recorded on ${replayId}: ${errorMessage}`)
+    return
+  }
+
   const { error } = await supabase.from('webhook_dead_letter_queue').insert({
     source: 'orderout',
     event_type: eventType,
@@ -171,6 +185,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return errorResponse('Unauthorized', 401)
   }
 
+  // HQ-initiated replay correlation. When present, any DLQ write path will
+  // UPDATE this row instead of INSERTing a new one.
+  const replayId = req.headers.get('x-dlq-replay-id') || null
+
   // 2. Init Supabase service-role client (bypasses RLS)
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
@@ -181,7 +199,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     rawBody = await req.text()
     body = JSON.parse(rawBody) as PushMenuWebhookPayload
   } catch {
-    await insertDeadLetter(supabase, { _raw: rawBody }, 'Invalid JSON body')
+    await insertDeadLetter(supabase, { _raw: rawBody }, 'Invalid JSON body', 'push_menu', replayId)
     return errorResponse('Invalid JSON body', 400)
   }
 
@@ -195,13 +213,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const ooMenuId = body.menu_id
   if (ooMenuId === undefined || ooMenuId === null || ooMenuId === '') {
     logError('PUSH_MENU_WEBHOOK', 'Missing menu_id in payload', body)
-    await insertDeadLetter(supabase, body, 'Missing menu_id')
+    await insertDeadLetter(supabase, body, 'Missing menu_id', 'push_menu', replayId)
     return errorResponse('Missing menu_id', 400)
   }
 
   // 5. Guard against non-array results
   if (body.results != null && !Array.isArray(body.results)) {
-    await insertDeadLetter(supabase, body, 'results field is not an array')
+    await insertDeadLetter(supabase, body, 'results field is not an array', 'push_menu', replayId)
     return successResponse(null, 'Malformed results; stored in DLQ')
   }
 
@@ -236,7 +254,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .filter((r) => r.platform.length > 0)
 
   if (sanitized.length === 0) {
-    await insertDeadLetter(supabase, body, 'All result entries had invalid platform')
+    await insertDeadLetter(supabase, body, 'All result entries had invalid platform', 'push_menu', replayId)
     return successResponse(null, 'No valid entries; stored in DLQ')
   }
 
@@ -287,7 +305,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     await insertDeadLetter(
       supabase,
       body,
-      `No menu link for oo_menu_id=${ooMenuId} restaurant_id=${body.restaurant_id ?? 'null'}`
+      `No menu link for oo_menu_id=${ooMenuId} restaurant_id=${body.restaurant_id ?? 'null'}`,
+      'push_menu',
+      replayId
     )
     return successResponse(null, 'No matching menu link; stored in DLQ')
   }

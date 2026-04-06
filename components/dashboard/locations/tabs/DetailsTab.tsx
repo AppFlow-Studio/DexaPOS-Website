@@ -23,6 +23,7 @@ import { toast } from 'sonner'
 import { UpdateLocation } from '@/app/dashboard/actions/locations'
 import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
+import { AddressAutocomplete } from '@/components/ui/address-autocomplete'
 
 interface DetailsTabProps {
     location: Location
@@ -57,6 +58,8 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
         postal_code: location.postal_code,
         country: location.country || 'US',
         timezone: location.timezone,
+        latitude: location.latitude as number | null,
+        longitude: location.longitude as number | null,
     })
 
     const handleStartEdit = (section: EditSection) => {
@@ -81,6 +84,8 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
                 postal_code: location.postal_code,
                 country: location.country || 'US',
                 timezone: location.timezone,
+                latitude: location.latitude as number | null,
+                longitude: location.longitude as number | null,
             })
         }
         setEditSection(section)
@@ -128,6 +133,8 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
                 state: addressInfo.state,
                 postal_code: addressInfo.postal_code.trim(),
                 country: addressInfo.country.trim() || 'US',
+                latitude: addressInfo.latitude,
+                longitude: addressInfo.longitude,
                 timezone: addressInfo.timezone,
             }
         }
@@ -346,10 +353,20 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
                         <div className="space-y-4 animate-in fade-in duration-200">
                             <div className="space-y-2">
                                 <Label htmlFor="address_line1">Address Line 1 *</Label>
-                                <Input
+                                <AddressAutocomplete
                                     id="address_line1"
                                     value={addressInfo.address_line1}
-                                    onChange={(e) => setAddressInfo(prev => ({ ...prev, address_line1: e.target.value }))}
+                                    onInputChange={(v) => setAddressInfo(prev => ({ ...prev, address_line1: v }))}
+                                    onAddressSelected={(parts) => setAddressInfo(prev => ({
+                                        ...prev,
+                                        address_line1: parts.address_line1,
+                                        city: parts.city,
+                                        state: parts.state,
+                                        postal_code: parts.postal_code,
+                                        country: parts.country || 'US',
+                                        latitude: parts.latitude,
+                                        longitude: parts.longitude,
+                                    }))}
                                     placeholder="123 Main St"
                                 />
                             </div>

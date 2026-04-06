@@ -150,7 +150,7 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="w-[calc(100%-1rem)] sm:max-w-[550px] max-h-[90vh] overflow-hidden p-0 gap-0"
+        className="w-[calc(100%-1rem)] max-h-[90vh] overflow-hidden p-0 gap-0"
         overlayClassName="bg-black/35 backdrop-blur-md"
       >
         <DialogHeader className="px-6 pt-6 pb-4">

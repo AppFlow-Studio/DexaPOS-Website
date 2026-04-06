@@ -15,6 +15,8 @@ import { getCurrentUserMerchantRole } from "./role-check";
 // TYPES
 // ============================================================================
 
+export type EffectivePriceSource = 1 | 2 | 3 | 4 | 5;
+
 export interface MenuItemWithLocationContext extends MenuItemsModel {
   // Location override data
   effective_price: number;
@@ -24,6 +26,46 @@ export interface MenuItemWithLocationContext extends MenuItemsModel {
   location_is_available: boolean;
   global_price: number;
   global_cash_price: number | null;
+  /**
+   * Cascade level that produced effective_price for this row.
+   * Today the GetMenuItems path only resolves L1 (global) or L2
+   * (location_item_overrides), so values are 1 or 2. Deeper cascade
+   * resolution (L3-L5) happens in the price matrix endpoint.
+   */
+  effective_price_source: EffectivePriceSource;
+  /**
+   * Human-readable name of the source (e.g. "Global", "Downtown override").
+   * Safe to render directly in lists.
+   */
+  effective_price_source_name: string;
+}
+
+// ============================================================================
+// PRICE MATRIX
+// ============================================================================
+
+export interface PriceMatrixRow {
+  level: EffectivePriceSource;
+  /** Table name that stores this override (developer-only) */
+  tableName: string;
+  locationId: string | null;
+  locationName: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
+  menuId: string | null;
+  menuName: string | null;
+  price: number | null;
+  cashPrice: number | null;
+  /** ID of the override row itself (for delete/update) */
+  overrideId: string | null;
+}
+
+export interface PriceMatrixResult {
+  itemId: string;
+  itemName: string;
+  globalPrice: number;
+  globalCashPrice: number | null;
+  levels: PriceMatrixRow[];
 }
 
 // ============================================================================
@@ -73,6 +115,14 @@ export async function GetMenuItems(
     return data as MenuItemsModel[];
   }
 
+  // Look up location name so we can label the price source
+  const { data: location } = await supabase
+    .from("locations")
+    .select("name")
+    .eq("id", locationId)
+    .single();
+  const locationName = location?.name || "this location";
+
   // Get location overrides
   const { data: overrides } = await supabase
     .from("location_menu_item_overrides")
@@ -86,19 +136,25 @@ export async function GetMenuItems(
   // Return items with effective prices
   return data.map((item) => {
     const override = overrideMap.get(item.id);
+    const hasPriceOverride = !!(
+      override &&
+      (override.custom_price !== null || override.custom_cash_price !== null)
+    );
     return {
       ...item,
       effective_price: override?.custom_price ?? item.price,
       effective_cash_price: override?.custom_cash_price ?? item.cash_price,
-      has_price_override: !!(
-        override?.custom_price !== null || override?.custom_cash_price !== null
-      ),
+      has_price_override: hasPriceOverride,
       has_availability_override:
         override?.is_available !== undefined &&
         override?.is_available !== item.availability,
       location_is_available: override?.is_available ?? item.availability,
       global_price: item.price,
       global_cash_price: item.cash_price,
+      effective_price_source: (hasPriceOverride ? 2 : 1) as EffectivePriceSource,
+      effective_price_source_name: hasPriceOverride
+        ? `${locationName} override`
+        : "Global",
     } as MenuItemWithLocationContext;
   });
 }
@@ -188,11 +244,21 @@ export async function GetMenuItemWithLocationContext(
       global_price: item.price,
       global_cash_price: item.cash_price,
       location_override: null,
+      effective_price_source: 1 as EffectivePriceSource,
+      effective_price_source_name: "Global",
     };
   }
 
-  // Get location override
-  const override = await GetLocationMenuItemOverride(locationId, itemId);
+  // Get location override + location name
+  const [override, { data: location }] = await Promise.all([
+    GetLocationMenuItemOverride(locationId, itemId),
+    supabase
+      .from("locations")
+      .select("name")
+      .eq("id", locationId)
+      .single(),
+  ]);
+  const locationName = location?.name || "this location";
 
   const hasPriceOverride =
     override &&
@@ -216,6 +282,12 @@ export async function GetMenuItemWithLocationContext(
     global_price: item.price,
     global_cash_price: item.cash_price,
     location_override: override,
+    effective_price_source: (hasPriceOverride
+      ? 2
+      : 1) as EffectivePriceSource,
+    effective_price_source_name: hasPriceOverride
+      ? `${locationName} override`
+      : "Global",
   };
 }
 
@@ -994,27 +1066,40 @@ export async function GetMenuItemsWithCategories(
     (overrides || []).map((o) => [o.menu_item_id, o]),
   );
 
+  // Look up location name for source labeling
+  const { data: location } = await supabase
+    .from("locations")
+    .select("name")
+    .eq("id", locationId)
+    .single();
+  const locationName = location?.name || "this location";
+
   // Return items with location context
   return data.map((item) => {
     const override = overrideMap.get(item.id);
-    const hasPriceOverride =
+    const hasPriceOverride = !!(
       override &&
-      (override.custom_price !== null || override.custom_cash_price !== null);
+      (override.custom_price !== null || override.custom_cash_price !== null)
+    );
 
     return {
       ...item,
       effective_price:
-        hasPriceOverride && override.custom_price !== null
-          ? override.custom_price
+        hasPriceOverride && override!.custom_price !== null
+          ? override!.custom_price
           : item.price,
       effective_cash_price:
-        hasPriceOverride && override.custom_cash_price !== null
-          ? override.custom_cash_price
+        hasPriceOverride && override!.custom_cash_price !== null
+          ? override!.custom_cash_price
           : item.cash_price,
-      has_price_override: !!hasPriceOverride,
+      has_price_override: hasPriceOverride,
       location_is_available: override?.is_available ?? item.availability,
       global_price: item.price,
       global_cash_price: item.cash_price,
+      effective_price_source: (hasPriceOverride ? 2 : 1) as EffectivePriceSource,
+      effective_price_source_name: hasPriceOverride
+        ? `${locationName} override`
+        : "Global",
     };
   });
 }
@@ -1075,4 +1160,167 @@ export async function GetMenuItemsByCategory(categoryId: string) {
         display_order: number;
       } => item !== null,
     );
+}
+
+// ============================================================================
+// GET PRICE MATRIX
+// ============================================================================
+
+/**
+ * Returns every override row that exists for a single menu item across the
+ * 5-level cascade, joined with location/category/menu names. Used by the
+ * Item Price Matrix page and the PriceSourcePopover cascade ladder.
+ *
+ * The returned `levels` array does NOT pad in "inherits from above" rows —
+ * the UI layer computes inheritance by row+column. This keeps the server
+ * response proportional to the number of overrides that actually exist.
+ */
+export async function GetItemPriceMatrix(
+  itemId: string,
+  clerkOrgId: string,
+): Promise<{ data?: PriceMatrixResult; error?: string }> {
+  if (!itemId) return { error: "Item ID is required" };
+  if (!clerkOrgId) return { error: "Organization ID is required" };
+
+  const supabase = createServerSupabaseClient();
+
+  // Merchant lookup (also enforces org scoping)
+  const { data: merchant, error: merchantError } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("clerk_org_id", clerkOrgId)
+    .single();
+  if (merchantError || !merchant) {
+    return { error: "Merchant not found" };
+  }
+
+  // Base item
+  const { data: item, error: itemError } = await supabase
+    .from("menu_items")
+    .select("id, name, price, cash_price, merchant_id")
+    .eq("id", itemId)
+    .eq("merchant_id", merchant.id)
+    .single();
+  if (itemError || !item) {
+    return { error: "Item not found" };
+  }
+
+  // Fetch all 4 override tables in parallel
+  const [l2Res, l3Res, l4Res, l5Res, locsRes] = await Promise.all([
+    supabase
+      .from("location_item_overrides")
+      .select("id, location_id, custom_price, custom_cash_price")
+      .eq("menu_item_id", itemId),
+    supabase
+      .from("category_items")
+      .select(
+        "id, category_id, custom_price, custom_cash_price, category:categories(id, name)",
+      )
+      .eq("menu_item_id", itemId)
+      .eq("merchant_id", merchant.id),
+    supabase
+      .from("location_category_item_overrides")
+      .select(
+        "id, location_id, category_id, custom_price, custom_cash_price, category:categories(id, name)",
+      )
+      .eq("menu_item_id", itemId),
+    supabase
+      .from("location_menu_item_overrides")
+      .select(
+        "id, location_id, menu_id, category_id, custom_price, custom_cash_price, menu:menus(id, name), category:categories(id, name)",
+      )
+      .eq("menu_item_id", itemId),
+    supabase
+      .from("locations")
+      .select("id, name")
+      .eq("merchant_id", merchant.id),
+  ]);
+
+  const locationNameById = new Map(
+    (locsRes.data || []).map((l) => [l.id as string, l.name as string]),
+  );
+
+  const levels: PriceMatrixRow[] = [];
+
+  // L2 — location_item_overrides
+  for (const row of l2Res.data || []) {
+    levels.push({
+      level: 2,
+      tableName: "location_item_overrides",
+      locationId: row.location_id,
+      locationName: locationNameById.get(row.location_id) ?? null,
+      categoryId: null,
+      categoryName: null,
+      menuId: null,
+      menuName: null,
+      price: row.custom_price,
+      cashPrice: row.custom_cash_price,
+      overrideId: row.id,
+    });
+  }
+
+  // L3 — category_items (global)
+  for (const row of l3Res.data || []) {
+    const cat = Array.isArray(row.category) ? row.category[0] : row.category;
+    levels.push({
+      level: 3,
+      tableName: "category_items",
+      locationId: null,
+      locationName: null,
+      categoryId: row.category_id,
+      categoryName: cat?.name ?? null,
+      menuId: null,
+      menuName: null,
+      price: row.custom_price,
+      cashPrice: row.custom_cash_price,
+      overrideId: row.id,
+    });
+  }
+
+  // L4 — location_category_item_overrides
+  for (const row of l4Res.data || []) {
+    const cat = Array.isArray(row.category) ? row.category[0] : row.category;
+    levels.push({
+      level: 4,
+      tableName: "location_category_item_overrides",
+      locationId: row.location_id,
+      locationName: locationNameById.get(row.location_id) ?? null,
+      categoryId: row.category_id,
+      categoryName: cat?.name ?? null,
+      menuId: null,
+      menuName: null,
+      price: row.custom_price,
+      cashPrice: row.custom_cash_price,
+      overrideId: row.id,
+    });
+  }
+
+  // L5 — location_menu_item_overrides
+  for (const row of l5Res.data || []) {
+    const cat = Array.isArray(row.category) ? row.category[0] : row.category;
+    const menu = Array.isArray(row.menu) ? row.menu[0] : row.menu;
+    levels.push({
+      level: 5,
+      tableName: "location_menu_item_overrides",
+      locationId: row.location_id,
+      locationName: locationNameById.get(row.location_id) ?? null,
+      categoryId: row.category_id,
+      categoryName: cat?.name ?? null,
+      menuId: row.menu_id,
+      menuName: menu?.name ?? null,
+      price: row.custom_price,
+      cashPrice: row.custom_cash_price,
+      overrideId: row.id,
+    });
+  }
+
+  return {
+    data: {
+      itemId: item.id,
+      itemName: item.name,
+      globalPrice: item.price,
+      globalCashPrice: item.cash_price,
+      levels,
+    },
+  };
 }

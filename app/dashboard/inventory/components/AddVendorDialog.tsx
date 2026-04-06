@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 import { Truck, Loader2, Globe, MapPin } from "lucide-react";
 import { useCreateVendor } from "../hooks/useInventoryManagement";
 import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
@@ -201,10 +202,25 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
           {/* Address */}
           <div className="space-y-2">
             <Label htmlFor="address_line1">Address</Label>
-            <Input
+            <AddressAutocomplete
               id="address_line1"
+              value={form.watch("address_line1") ?? ""}
+              onInputChange={(v) =>
+                form.setValue("address_line1", v, { shouldDirty: true })
+              }
+              onAddressSelected={(parts) => {
+                form.setValue("address_line1", parts.address_line1, {
+                  shouldDirty: true,
+                });
+                form.setValue("city", parts.city, { shouldDirty: true });
+                form.setValue("state", parts.state, { shouldDirty: true });
+                form.setValue(
+                  "zip_code",
+                  parts.postal_code.split("-")[0],
+                  { shouldDirty: true }
+                );
+              }}
               placeholder="123 Main Street"
-              {...form.register("address_line1")}
             />
           </div>
 

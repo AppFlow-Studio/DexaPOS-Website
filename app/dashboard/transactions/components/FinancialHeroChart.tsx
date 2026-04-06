@@ -10,7 +10,6 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { format, subDays, parseISO } from "date-fns";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -226,43 +225,37 @@ export function FinancialHeroChart({
   // Loading state
   if (isLoading) {
     return (
-      <Card className="border-none shadow-none bg-transparent h-full">
-        <CardContent className="p-0 h-full flex flex-col justify-between">
-          <div className="flex items-start justify-between mb-6">
-            <div className="space-y-4">
-              <Skeleton className="h-14 w-64 rounded-xl" />
-              <Skeleton className="h-6 w-32 rounded-lg" />
-            </div>
-            <Skeleton className="h-10 w-36 rounded-lg" />
+      <div className="h-full p-6 flex flex-col justify-between">
+        <div className="flex items-start justify-between mb-4">
+          <div className="space-y-3">
+            <Skeleton className="h-10 w-48 rounded-lg" />
+            <Skeleton className="h-5 w-32 rounded" />
           </div>
-          <Skeleton className="h-[400px] w-full rounded-2xl" />
-          <div className="flex justify-center gap-2 mt-6">
-            {timeRanges.map((_, i) => (
-              <Skeleton key={i} className="h-8 w-12 rounded-full" />
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+          <Skeleton className="h-9 w-36 rounded-lg" />
+        </div>
+        <Skeleton className="flex-1 w-full rounded-xl" />
+        <div className="flex justify-center gap-2 mt-4">
+          {timeRanges.map((_, i) => (
+            <Skeleton key={i} className="h-8 w-12 rounded-full" />
+          ))}
+        </div>
+      </div>
     );
   }
 
   // No data state
   if (!data || data.length === 0) {
     return (
-      <Card className="border-none shadow-none bg-transparent h-full">
-        <CardContent className="h-full flex flex-col justify-center items-center p-12 lg:p-24 border border-dashed border-gray-200 rounded-3xl bg-gray-50/50">
-          <div className="bg-gray-100 p-4 rounded-full mb-4">
-            <Minus className="w-8 h-8 text-gray-400" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">
-            No Data Available
-          </h3>
-          <p className="text-muted-foreground text-center max-w-sm">
-            There is no financial data to display for the selected time range.
-            Try adjusting the filters.
-          </p>
-        </CardContent>
-      </Card>
+      <div className="h-full flex flex-col justify-center items-center p-12">
+        <div className="bg-muted p-4 rounded-full mb-4">
+          <Minus className="w-8 h-8 text-muted-foreground" />
+        </div>
+        <h3 className="text-lg font-semibold mb-1">No Data Available</h3>
+        <p className="text-sm text-muted-foreground text-center max-w-sm">
+          There is no financial data to display for the selected time range.
+          Try adjusting the filters.
+        </p>
+      </div>
     );
   }
 
@@ -271,87 +264,62 @@ export function FinancialHeroChart({
   const isNeutralTrend = trendPercentage === 0;
 
   return (
-    <Card className="border-none shadow-sm bg-white rounded-[32px] overflow-hidden h-full ring-1 ring-gray-100/80">
-      <CardContent className="p-8 h-full flex flex-col">
+    <div className="h-full flex flex-col p-6">
         {/* Header with Hero Value and Metric Switcher */}
-        <div className="flex items-start justify-between mb-8 shrink-0">
+        <div className="flex items-start justify-between mb-4 shrink-0">
           <div>
             {/* Hero Value */}
-            <h2 className="text-5xl md:text-[64px] font-bold tracking-tight text-[#111827] mb-4 font-mono leading-none">
+            <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-2 tabular-nums leading-none">
               {formatValue(totalValue, config.format)}
             </h2>
 
             {/* Trend Indicator */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <div
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold shadow-sm ring-1 ring-black/5",
-                  isPositiveTrend &&
-                    "bg-emerald-50 text-emerald-600 ring-emerald-100",
-                  isNegativeTrend && "bg-rose-50 text-rose-600 ring-rose-100",
-                  isNeutralTrend && "bg-gray-50 text-gray-600 ring-gray-200"
+                  "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
+                  isPositiveTrend && "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400",
+                  isNegativeTrend && "bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400",
+                  isNeutralTrend && "bg-muted text-muted-foreground"
                 )}
               >
                 {isPositiveTrend && (
-                  <TrendingUp className="h-4 w-4 stroke-[3px]" />
+                  <TrendingUp className="h-3 w-3" />
                 )}
                 {isNegativeTrend && (
-                  <TrendingDown className="h-4 w-4 stroke-[3px]" />
+                  <TrendingDown className="h-3 w-3" />
                 )}
-                {isNeutralTrend && <Minus className="h-4 w-4 stroke-[3px]" />}
+                {isNeutralTrend && <Minus className="h-3 w-3" />}
                 <span>
                   {isPositiveTrend ? "+" : ""}
-                  {formatCompactValue(Math.abs(trendValue), config.format)}
-                </span>
-                <span className="opacity-80">
-                  ({isPositiveTrend ? "+" : ""}
-                  {trendPercentage.toFixed(1)}%)
+                  {trendPercentage.toFixed(1)}%
                 </span>
               </div>
-              <span className="text-sm text-gray-400 font-medium tracking-wide">
+              <span className="text-xs text-muted-foreground/60">
                 vs. previous period
               </span>
             </div>
           </div>
 
-          {/* Metric Switcher (Pill Style) */}
+          {/* Metric Switcher */}
           <Select
             value={activeMetric}
             onValueChange={(v) => setActiveMetric(v as MetricType)}
           >
-            <SelectTrigger className="w-[160px] h-[40px] bg-gray-50/80 border-none rounded-full text-sm font-semibold hover:bg-gray-100 transition-all focus:ring-2 focus:ring-offset-2 focus:ring-indigo-100 text-gray-700">
+            <SelectTrigger className="w-[150px] h-9 bg-muted/50 border-border/60 rounded-lg text-sm font-medium">
               <SelectValue placeholder="Select metric" />
             </SelectTrigger>
-            <SelectContent className="rounded-2xl border-none shadow-xl p-2 min-w-[180px]">
-              <SelectItem value="net_sales" className="rounded-lg font-medium">
-                Net Sales
-              </SelectItem>
-              <SelectItem
-                value="gross_sales"
-                className="rounded-lg font-medium"
-              >
-                Gross Revenue
-              </SelectItem>
-              <SelectItem
-                value="order_count"
-                className="rounded-lg font-medium"
-              >
-                Total Orders
-              </SelectItem>
-              <SelectItem
-                value="payments_collected"
-                className="rounded-lg font-medium"
-              >
-                Payments
-              </SelectItem>
+            <SelectContent className="rounded-lg">
+              <SelectItem value="net_sales">Net Sales</SelectItem>
+              <SelectItem value="gross_sales">Gross Revenue</SelectItem>
+              <SelectItem value="order_count">Total Orders</SelectItem>
+              <SelectItem value="payments_collected">Payments</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         {/* Chart */}
-        <div className="flex-1 w-full min-h-[400px] relative pb-4">
-          {/* Fade Overlay for Left Side */}
-          <div className="absolute left-0 top-0 bottom-8 w-8 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
+        <div className="flex-1 w-full min-h-0 relative">
 
           <ChartContainer config={chartConfig} className="h-full w-full">
             <AreaChart
@@ -386,60 +354,58 @@ export function FinancialHeroChart({
               </defs>
               <CartesianGrid
                 vertical={false}
-                strokeDasharray="0 0"
-                strokeOpacity={0.06}
-                stroke="#000000"
+                strokeDasharray="4 4"
+                strokeOpacity={0.08}
+                stroke="currentColor"
+                className="text-border"
               />
               <XAxis
                 dataKey="date"
                 tickLine={false}
                 axisLine={false}
-                tickMargin={24}
+                tickMargin={16}
                 minTickGap={60}
                 tickFormatter={(value) => {
                   const date = parseISO(value);
                   return format(date, "MMM d");
                 }}
-                className="text-[11px] font-bold fill-gray-400 uppercase tracking-widest"
+                className="text-[11px] fill-muted-foreground/60"
               />
               <YAxis
                 tickLine={false}
                 axisLine={false}
-                tickMargin={12}
-                width={80}
+                tickMargin={8}
+                width={70}
                 domain={[0, "auto"]}
-                padding={{ top: 20, bottom: 20 }}
+                padding={{ top: 20, bottom: 10 }}
                 tickFormatter={(value) =>
                   formatCompactValue(value, config.format)
                 }
-                className="text-[11px] font-bold fill-gray-400"
+                className="text-[11px] fill-muted-foreground/60"
               />
               <ChartTooltip
                 cursor={{
                   stroke: config.color,
-                  strokeWidth: 2,
+                  strokeWidth: 1,
                   strokeDasharray: "4 4",
-                  strokeOpacity: 0.5,
+                  strokeOpacity: 0.3,
                 }}
                 content={
                   <ChartTooltipContent
-                    className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.12)] bg-white/95 backdrop-blur-xl rounded-2xl p-4 px-5 min-w-[200px]"
+                    className="shadow-md rounded-lg min-w-[180px]"
                     labelFormatter={(value) =>
-                      format(parseISO(value), "MMMM d, yyyy")
+                      format(parseISO(value), "MMM d, yyyy")
                     }
                     formatter={(value, name) => (
-                      <div className="flex items-center gap-3 mt-2">
-                        <div
-                          className="w-2.5 h-2.5 rounded-full ring-4 ring-opacity-20"
-                          style={{
-                            backgroundColor: config.color,
-                            boxShadow: `0 0 0 2px ${config.color}20`,
-                          }}
+                      <div className="flex items-center gap-2 mt-1">
+                        <span
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: config.color }}
                         />
-                        <span className="text-gray-500 font-semibold">
+                        <span className="text-sm text-muted-foreground">
                           {config.label}
                         </span>
-                        <span className="text-gray-900 font-bold ml-auto text-lg font-mono">
+                        <span className="text-sm font-medium ml-auto tabular-nums">
                           {formatValue(Number(value), config.format)}
                         </span>
                       </div>
@@ -453,15 +419,14 @@ export function FinancialHeroChart({
                 baseValue={0}
                 fill={`url(#${config.gradientId})`}
                 stroke={config.color}
-                strokeWidth={3}
-                animationDuration={1500}
-                animationEasing="ease-in-out"
+                strokeWidth={2}
+                animationDuration={800}
+                animationEasing="ease-out"
                 activeDot={{
-                  r: 6,
+                  r: 4,
                   fill: "white",
                   stroke: config.color,
-                  strokeWidth: 3,
-                  className: "shadow-lg",
+                  strokeWidth: 2,
                 }}
               />
             </AreaChart>
@@ -469,17 +434,17 @@ export function FinancialHeroChart({
         </div>
 
         {/* Time Range Selector */}
-        <div className="flex justify-center mt-6 shrink-0">
-          <div className="flex bg-gray-50/80 p-1.5 rounded-full shadow-inner ring-1 ring-black/5 gap-1">
+        <div className="flex justify-center mt-3 shrink-0">
+          <div className="flex bg-muted/50 p-1 rounded-lg gap-0.5">
             {timeRanges.map((range) => (
               <button
                 key={range.value}
                 onClick={() => handleTimeRangeChange(range.value)}
                 className={cn(
-                  "px-6 py-2 rounded-full text-xs font-bold transition-all duration-300 ease-out",
+                  "px-4 py-1.5 rounded-md text-xs font-medium transition-colors",
                   activeTimeRange === range.value
-                    ? "bg-white text-indigo-600 shadow-sm ring-1 ring-black/5 scale-[1.02]"
-                    : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 {range.label}
@@ -487,7 +452,6 @@ export function FinancialHeroChart({
             ))}
           </div>
         </div>
-      </CardContent>
-    </Card>
+    </div>
   );
 }
