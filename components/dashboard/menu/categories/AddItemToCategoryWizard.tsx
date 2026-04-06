@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { CdnImageUploadField } from "@/components/ui/cdn-image-upload-field";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PriceInputGroup } from "@/components/dashboard/locations/PriceInputGroup";
 import {
   Form,
   FormControl,
@@ -37,7 +38,6 @@ import {
   X,
   Loader2,
   Plus,
-  DollarSign,
   Tag,
   Info,
 } from "lucide-react";
@@ -581,59 +581,36 @@ export function AddItemToCategoryWizard({
                   />
 
                   {/* Prices */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="price"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="flex items-center gap-1">
-                            <DollarSign className="h-3 w-3" />
-                            Price *
-                          </FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              placeholder="0.00"
-                              {...field}
-                              onChange={(e) =>
-                                field.onChange(parseFloat(e.target.value) || 0)
-                              }
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+                  <div className="space-y-2">
+                    <PriceInputGroup
+                      price={form.watch("price") || 0}
+                      cashPrice={form.watch("cash_price") ?? null}
+                      onPriceChange={(value) =>
+                        form.setValue("price", value, { shouldValidate: true })
+                      }
+                      onCashPriceChange={(value) =>
+                        form.setValue("cash_price", value, {
+                          shouldValidate: true,
+                        })
+                      }
+                      label="Price"
                     />
-
-                    <FormField
-                      control={form.control}
-                      name="cash_price"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="flex items-center gap-1">
-                            <DollarSign className="h-3 w-3" />
-                            Cash Price
-                          </FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              placeholder="Optional"
-                              value={field.value ?? ""}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                field.onChange(val ? parseFloat(val) : null);
-                              }}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <div className="flex gap-4 px-4">
+                      <div className="flex-1">
+                        {form.formState.errors.price && (
+                          <p className="text-sm text-red-500">
+                            {form.formState.errors.price.message}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        {form.formState.errors.cash_price && (
+                          <p className="text-sm text-red-500">
+                            {form.formState.errors.cash_price.message}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Item Image */}

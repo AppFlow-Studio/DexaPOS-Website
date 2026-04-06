@@ -2,6 +2,33 @@
 
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
+async function broadcastOrderStatus(orderId: string, status: string) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) return;
+  try {
+    await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            topic: `order-update:${orderId}`,
+            event: "status_changed",
+            payload: { orderId, status },
+          },
+        ],
+      }),
+    });
+  } catch (err) {
+    console.error("broadcastOrderStatus error:", err);
+  }
+}
+
 /** Shared tax rate lookup by location_id. Prefers 'standard'/'default' category,
  *  falls back to any active rate (handles custom category names set in dashboard).
  *  Returns a decimal multiplier, e.g. 0.08875 for 8.875%. */
@@ -108,7 +135,7 @@ export async function placeOrder(
   // Load the session
   const { data: session } = await supabase
     .from("online_order_sessions")
-    .select("*, online_store_config!inner(location_id, merchant_id, estimated_prep_minutes)")
+    .select("*, online_store_config!inner(location_id, merchant_id, estimated_prep_minutes, auto_accept_orders)")
     .eq("session_token", sessionToken)
     .gt("expires_at", new Date().toISOString())
     .single();
@@ -124,6 +151,8 @@ export async function placeOrder(
   const locationId = (session as any).online_store_config.location_id;
   const estimatedMinutes =
     (session as any).online_store_config.estimated_prep_minutes ?? 20;
+  const autoAccept: boolean =
+    (session as any).online_store_config.auto_accept_orders ?? false;
 
   // Calculate totals
   let subtotal = 0;
@@ -218,7 +247,7 @@ export async function placeOrder(
       p_order_notes: details.specialInstructions ?? null,
       p_placed_at: new Date().toISOString(),
       p_ready_by: details.requestedTime ?? null,
-      p_auto_accept: true,
+      p_auto_accept: autoAccept,
     }
   );
 
@@ -275,19 +304,25 @@ export interface OrderTrackingData {
   orderType: string;
   customerName: string | null;
   createdAt: string;
+  acceptedAt: string | null;
   sentToKitchenAt: string | null;
   startedPreparingAt: string | null;
   readyAt: string | null;
   completedAt: string | null;
   cancelledAt: string | null;
+  cancelledBy: string | null;
   cancellationReason: string | null;
+  declinedAt: string | null;
+  declinedReason: string | null;
   estimatedPrepMinutes: number;
   subtotal: number;
   tax: number;
-  taxRatePercent: number | null; // stored rate from order_items.tax_rate (e.g. 8.875)
+  taxRatePercent: number | null;
   tip: number;
   total: number;
   specialInstructions: string | null;
+  cardLastFour: string | null;
+  cardType: string | null;
   items: {
     name: string;
     quantity: number;
@@ -307,8 +342,9 @@ export async function getOrderTracking(
     .select(
       `
       id, order_number, display_number, status, order_type,
-      customer_name, created_at, sent_to_kitchen_at, started_preparing_at,
-      ready_at, completed_at, cancelled_at, cancellation_reason,
+      customer_name, created_at, accepted_at, sent_to_kitchen_at, started_preparing_at,
+      ready_at, completed_at, cancelled_at, cancelled_by, cancellation_reason,
+      declined_at, declined_reason,
       subtotal, tax_amount, tip_amount, total_amount,
       special_instructions, location_id,
       order_items (item_name, quantity, unit_price, subtotal, special_instructions, tax_rate)
@@ -329,6 +365,15 @@ export async function getOrderTracking(
     .limit(1)
     .single();
 
+  // Get payment record for card info
+  const { data: payment } = await supabase
+    .from("order_payments")
+    .select("card_last_four, card_type")
+    .eq("order_id", orderId)
+    .eq("payment_method", "card")
+    .limit(1)
+    .single();
+
   const o = order as any;
   return {
     data: {
@@ -340,12 +385,16 @@ export async function getOrderTracking(
       orderType: o.order_type,
       customerName: o.customer_name,
       createdAt: o.created_at,
+      acceptedAt: o.accepted_at ?? null,
       sentToKitchenAt: o.sent_to_kitchen_at,
       startedPreparingAt: o.started_preparing_at,
       readyAt: o.ready_at,
       completedAt: o.completed_at,
       cancelledAt: o.cancelled_at,
+      cancelledBy: o.cancelled_by ?? null,
       cancellationReason: o.cancellation_reason ?? null,
+      declinedAt: o.declined_at ?? null,
+      declinedReason: o.declined_reason ?? null,
       estimatedPrepMinutes: config?.estimated_prep_minutes ?? 20,
       subtotal: Number(o.subtotal) || 0,
       tax: Number(o.tax_amount) || 0,
@@ -358,6 +407,8 @@ export async function getOrderTracking(
       tip: Number(o.tip_amount) || 0,
       total: Number(o.total_amount) || 0,
       specialInstructions: o.special_instructions,
+      cardLastFour: payment?.card_last_four ?? null,
+      cardType: payment?.card_type ?? null,
       items: (o.order_items ?? []).map((i: any) => ({
         name: i.item_name,
         quantity: i.quantity,
@@ -386,6 +437,41 @@ export interface OrderHistoryEntry {
     unitPrice: number;
     subtotal: number;
   }[];
+}
+
+// ---- Customer Cancel ----
+
+export async function cancelOnlineOrder(
+  orderId: string,
+  sessionToken: string,
+  reason: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!orderId || !sessionToken) {
+    return { success: false, error: "Missing order or session" };
+  }
+
+  const supabase = createServiceRoleClient();
+
+  const { data, error } = await supabase.rpc("cancel_online_order_by_customer", {
+    p_order_id:     orderId,
+    p_session_token: sessionToken,
+    p_reason:       reason || null,
+  });
+
+  if (error) {
+    console.error("cancel_online_order_by_customer error:", error);
+    return { success: false, error: "Failed to cancel order. Please try again." };
+  }
+
+  const result = data as any;
+  if (!result?.success) {
+    return { success: false, error: result?.error ?? "Could not cancel order" };
+  }
+
+  // Broadcast so any open storefront page / tracking page shows the updated status instantly
+  void broadcastOrderStatus(orderId, "cancelled");
+
+  return { success: true };
 }
 
 export async function getOrderHistory(

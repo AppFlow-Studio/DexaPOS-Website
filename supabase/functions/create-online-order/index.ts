@@ -201,7 +201,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           min_order_cents, estimated_prep_minutes,
           delivery_radius_miles, delivery_fee_cents,
           free_delivery_threshold_cents, address,
-          slug
+          slug, auto_accept_orders
         )
       `)
       .eq('session_token', body.session_token)
@@ -226,7 +226,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         min_order_cents, estimated_prep_minutes,
         delivery_radius_miles, delivery_fee_cents,
         free_delivery_threshold_cents, address,
-        slug
+        slug, auto_accept_orders
       `)
       .eq('id', body.store_config_id)
       .single()
@@ -555,7 +555,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     p_order_notes: body.special_instructions ?? null,
     p_placed_at: new Date().toISOString(),
     p_ready_by: body.requested_time ?? null,
-    p_auto_accept: true,
+    p_auto_accept: storeConfig.auto_accept_orders ?? false,
   }
 
   // ---- Step 10+: TEST MODE — Skip payment, call RPC directly ----
@@ -623,6 +623,29 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .eq('id', session.id)
   }
 
+  // Update the payment record created by process_online_order RPC with card info.
+  // In test mode: mock card data. When real payment is enabled, replace with iPOS response fields.
+  const { data: paymentUpdateData, error: paymentUpdateError } = await supabase
+    .from('order_payments')
+    .update({
+      payment_method: 'card',
+      terminal_type: 'dejavoo',
+      // TODO: replace mock fields below with real iPOS charge response when payment is live
+      card_type: 'Visa',
+      card_last_four: '0000',
+      transaction_id: transactionReferenceId,
+      reference_number: transactionReferenceId,
+      processor_name: 'iPOSPays',
+    })
+    .eq('order_id', orderResult.order_id)
+    .select('id, payment_method, card_last_four')
+
+  if (paymentUpdateError) {
+    logError('PAYMENT_UPDATE', 'Failed to update payment record with card info', paymentUpdateError)
+  } else {
+    logEvent('PAYMENT_UPDATE', 'Payment record updated with card info', { rows: paymentUpdateData?.length ?? 0, data: paymentUpdateData })
+  }
+
   // Link order to customer if session has customer_id
   if (session?.customer_id) {
     await supabase
@@ -637,12 +660,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
     displayNumber: orderResult.display_number,
   })
 
+  const autoAccepted: boolean = storeConfig.auto_accept_orders ?? false
+
   return successResponse({
     requires_redirect: false,
     order_id: orderResult.order_id,
     order_number: orderResult.order_number,
     display_number: orderResult.display_number,
     estimated_time: estimatedMinutes,
+    auto_accepted: autoAccepted,
   })
 
   // ---- COMMENTED OUT: Steps 10-12 (Payment Intent + iPOS Pays + Payment Processing) ----

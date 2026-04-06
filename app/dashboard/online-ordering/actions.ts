@@ -8,6 +8,103 @@ import {
 import { revalidatePath } from "next/cache";
 import { LogAuditEvent } from "../actions/audit-logs";
 
+// ─── Dejavoo Management API ───────────────────────────────────────────────────
+// These env vars must be set in your deployment environment.
+// DEJAVOO_MANAGEMENT_API_KEY: ISO-level API key from Dejavoo/iPOSPays portal
+// DEJAVOO_MANAGEMENT_API_URL: Base URL for the Management API
+//   Sandbox  → https://externalapi.ipospays.tech
+//   Production → https://externalapi.ipospays.com
+// ──────────────────────────────────────────────────────────────────────────────
+
+const DEJAVOO_MANAGEMENT_API_KEY = process.env.DEJAVOO_MANAGEMENT_API_KEY;
+const DEJAVOO_MANAGEMENT_API_URL =
+  process.env.DEJAVOO_MANAGEMENT_API_URL ||
+  "https://externalapi.ipospays.com";
+
+const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "dexaposai.com";
+
+/**
+ * Registers/updates the allowed domain for an FTD-enabled TPN.
+ * This must be called whenever a merchant saves a new/updated TPN so the
+ * FreedomToDesign script is allowed to load on their storefront origin.
+ *
+ * Dejavoo Management API — Edit TPN Parameters
+ * POST {DEJAVOO_MANAGEMENT_API_URL}/v3/tpn/parameters
+ */
+export async function whitelistDejavooDomain(
+  tpn: string,
+  storeSlug: string
+): Promise<{ success: boolean; error?: string; skipped?: boolean }> {
+  if (!DEJAVOO_MANAGEMENT_API_KEY) {
+    console.warn(
+      "[DEJAVOO_WHITELIST] DEJAVOO_MANAGEMENT_API_KEY not set — skipping domain whitelist"
+    );
+    return { success: true, skipped: true };
+  }
+
+  if (!tpn || !storeSlug) {
+    return { success: false, error: "TPN and store slug are required" };
+  }
+
+  // Derive the storefront origin to whitelist
+  const isDev = ROOT_DOMAIN.includes("localhost");
+  const storeDomain = isDev
+    ? `http://${storeSlug}.localhost:3000`
+    : `https://${storeSlug}.${ROOT_DOMAIN}`;
+
+  try {
+    const response = await fetch(
+      `${DEJAVOO_MANAGEMENT_API_URL}/v3/tpn/parameters`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: DEJAVOO_MANAGEMENT_API_KEY,
+        },
+        body: JSON.stringify({
+          tpn,
+          allowedDomains: [storeDomain],
+        }),
+      }
+    );
+
+    const responseText = await response.text();
+    let data: Record<string, unknown> = {};
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      // Non-JSON response
+    }
+
+    if (!response.ok) {
+      console.error(
+        "[DEJAVOO_WHITELIST] Failed:",
+        response.status,
+        responseText
+      );
+      return {
+        success: false,
+        error: `Dejavoo domain whitelist failed (${response.status}): ${
+          (data as any)?.message || responseText || "Unknown error"
+        }`,
+      };
+    }
+
+    console.log("[DEJAVOO_WHITELIST] Domain whitelisted:", {
+      tpn,
+      domain: storeDomain,
+      response: data,
+    });
+    return { success: true };
+  } catch (err) {
+    console.error("[DEJAVOO_WHITELIST] Network error:", err);
+    return {
+      success: false,
+      error: `Domain whitelist network error: ${String(err)}`,
+    };
+  }
+}
+
 function mapConfigToSettings(
   config: any,
   location: any
@@ -264,7 +361,11 @@ export async function saveOnlineOrderingSettings(
     configData.tip_presets = settings.tipPresets;
   }
 
-  // Payment
+  // Payment — track whether TPN is actually changing so we can whitelist below
+  const tpnIsChanging =
+    settings.ipospaysTpn !== undefined &&
+    (settings.ipospaysTpn || null) !==
+      (existingConfig?.ipospays_tpn ?? null);
   if (settings.ipospaysTpn !== undefined)
     configData.ipospays_tpn = settings.ipospaysTpn || null;
 
@@ -357,6 +458,53 @@ export async function saveOnlineOrderingSettings(
     });
   }
 
+  // If the TPN was set or changed, whitelist this store's domain with Dejavoo
+  const finalTpn = (configData.ipospays_tpn as string | null) ?? null;
+  const finalSlug = (configData.slug as string | undefined) ?? existingConfig?.slug ?? "";
+  if (tpnIsChanging && finalTpn && finalSlug) {
+    const whitelistResult = await whitelistDejavooDomain(finalTpn, finalSlug);
+    if (!whitelistResult.success && !whitelistResult.skipped) {
+      console.error("[SAVE_SETTINGS] Domain whitelist failed:", whitelistResult.error);
+      // Non-blocking — the TPN was saved successfully; whitelist failure is logged but
+      // doesn't roll back the save. The admin can retry by re-saving the same TPN.
+    }
+  }
+
   revalidatePath("/dashboard/online-ordering");
-  return { success: true };
+  return {
+    success: true,
+    ...(tpnIsChanging && finalTpn && finalSlug
+      ? { domainWhitelisted: true }
+      : {}),
+  };
+}
+
+/**
+ * Manually re-triggers the Dejavoo domain whitelist for a location's TPN.
+ * Useful if the initial whitelist failed or if the domain changed.
+ */
+export async function retriggerDomainWhitelist(
+  locationId: string
+): Promise<{ success: boolean; error?: string; skipped?: boolean }> {
+  const supabase = createServerSupabaseClient();
+
+  const { data: config, error } = await supabase
+    .from("online_store_config")
+    .select("ipospays_tpn, slug")
+    .eq("location_id", locationId)
+    .single();
+
+  if (error || !config) {
+    return { success: false, error: "Store config not found" };
+  }
+
+  if (!config.ipospays_tpn) {
+    return { success: false, error: "No TPN configured for this store" };
+  }
+
+  if (!config.slug) {
+    return { success: false, error: "No URL slug configured for this store" };
+  }
+
+  return whitelistDejavooDomain(config.ipospays_tpn, config.slug);
 }

@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useCart } from "../hooks/useCart";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -120,7 +119,7 @@ export function CartSidebar({ config, storeConfigId, slug, taxRate = 0, allItems
             </div>
 
             {/* Cart Items */}
-            <ScrollArea className="flex-1 overflow-auto">
+            <div className="flex-1 overflow-y-auto">
               {items.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-[250px] text-center px-6">
                   <div
@@ -331,7 +330,7 @@ export function CartSidebar({ config, storeConfigId, slug, taxRate = 0, allItems
                   )}
                 </div>
               )}
-            </ScrollArea>
+            </div>
 
             {/* Footer */}
             {items.length > 0 && (

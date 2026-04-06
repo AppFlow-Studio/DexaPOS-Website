@@ -99,6 +99,7 @@ export function CheckoutPage({
     displayNumber?: string;
     estimatedTime?: number;
     orderId?: string;
+    isPending?: boolean;
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
@@ -151,6 +152,7 @@ export function CheckoutPage({
   const paymentFormRef = useRef<PaymentCardFormHandle>(null);
   const [securityKey, setSecurityKey] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [payCashInStore, setPayCashInStore] = useState(false);
 
   // Calculated values
   const subtotal = getSubtotal();
@@ -181,38 +183,38 @@ export function CheckoutPage({
     if (customer?.email) setEmail(customer.email);
   }, [customer]);
 
-  // COMMENTED OUT FOR TESTING — payment bypass mode
-  // useEffect(() => {
-  //   if (!storeConfigId) return;
-  //
-  //   setPaymentError(null);
-  //   fetch(`${SUPABASE_URL}/functions/v1/process-online-payment`, {
-  //     method: "POST",
-  //     headers: {
-  //       "Content-Type": "application/json",
-  //       Authorization: `Bearer ${ANON_KEY}`,
-  //     },
-  //     body: JSON.stringify({
-  //       store_config_id: storeConfigId,
-  //     }),
-  //   })
-  //     .then((res) => res.json())
-  //     .then((data) => {
-  //       if (data.success) {
-  //         setSecurityKey(process.env.NEXT_PUBLIC_DEJAVOO_SECURITY_KEY_TOKEN!);
-  //       } else if (!data.success) {
-  //         // Don't show error if payment simply isn't configured — just hide the form
-  //         if (data.error?.includes("not configured")) {
-  //           console.log("iPOS payment not configured for this store");
-  //         } else {
-  //           setPaymentError(data.error || "Failed to initialize payment.");
-  //         }
-  //       }
-  //     })
-  //     .catch(() => {
-  //       setPaymentError("Failed to connect to payment service.");
-  //     });
-  // }, [storeConfigId]);
+  // Fetch iPOS security key — enables the card tokenization form
+  useEffect(() => {
+    if (!storeConfigId) return;
+
+    setPaymentError(null);
+    fetch(`${SUPABASE_URL}/functions/v1/process-online-payment`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        store_config_id: storeConfigId,
+      }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setSecurityKey(data.security_key);
+        } else {
+          // Don't show error if payment simply isn't configured — just hide the form
+          if (data.error?.includes("not configured")) {
+            console.log("iPOS payment not configured for this store");
+          } else {
+            setPaymentError(data.error || "Failed to initialize payment.");
+          }
+        }
+      })
+      .catch(() => {
+        setPaymentError("Failed to connect to payment service.");
+      });
+  }, [storeConfigId]);
 
   // Load saved addresses when authenticated + delivery
   useEffect(() => {
@@ -254,9 +256,9 @@ export function CheckoutPage({
     setLoading(true);
     setPaymentError(null);
 
-    // Step 1: Tokenize card via FTD (skip if no securityKey — test mode)
+    // Step 1: Tokenize card via FTD (skip if no securityKey — test mode, or cash payment)
     let paymentTokenId: string | undefined;
-    if (securityKey) {
+    if (securityKey && !payCashInStore) {
       try {
         if (!paymentFormRef.current) {
           throw new Error("Payment form not ready. Please wait a moment.");
@@ -370,7 +372,11 @@ export function CheckoutPage({
           displayNumber: result.display_number,
           estimatedTime: result.estimated_time,
           orderId: result.order_id,
+          isPending: !result.auto_accepted,
         });
+        if (result.order_id) {
+          useSession.getState().setActiveOrderId(result.order_id);
+        }
         // Save delivery address if requested
         if (saveNewAddress && isAuthenticated && orderType === "delivery" && selectedAddressId === "new" && newAddress.street) {
           const { sessionToken } = useSession.getState();
@@ -442,6 +448,7 @@ export function CheckoutPage({
           estimatedTime={orderResult.estimatedTime}
           orderId={orderResult.orderId}
           slug={slug}
+          isPending={orderResult.isPending}
         />
       </>
     );
@@ -518,9 +525,8 @@ export function CheckoutPage({
       <CheckoutHeader slug={slug} storeName={displayStoreName} logoUrl={site?.logo_url} />
 
       <main className="max-w-6xl mx-auto p-4 pb-32 lg:pb-10">
-        <div className="space-y-6">
-          {/* Quick link back to the menu at the very top */}
-          <div className="flex justify-end">
+        <div className="flex items-center justify-between">
+          <div className="flex justify-end w-full">
             <Link
               href={storePath()}
               className="inline-flex items-center justify-center px-4 py-2 text-xs font-semibold border rounded-full transition-colors"
@@ -533,22 +539,22 @@ export function CheckoutPage({
               Back to menu
             </Link>
           </div>
-
-          {/* Store closed banner */}
-          {storeIsClosed && (
-            <div
-              className="p-4 rounded-lg text-sm font-medium text-center"
-              style={{
-                backgroundColor: "color-mix(in srgb, #ef4444 10%, var(--bg))",
-                color: "#ef4444",
-                border: "1px solid color-mix(in srgb, #ef4444 40%, transparent)",
-                borderRadius: "var(--radius)",
-              }}
-            >
-              This store is currently closed and not accepting orders.
-            </div>
-          )}
         </div>
+
+        {/* Store closed banner */}
+        {storeIsClosed && (
+          <div
+            className="p-4 rounded-lg text-sm font-medium text-center"
+            style={{
+              backgroundColor: "color-mix(in srgb, #ef4444 10%, var(--bg))",
+              color: "#ef4444",
+              border: "1px solid color-mix(in srgb, #ef4444 40%, transparent)",
+              borderRadius: "var(--radius)",
+            }}
+          >
+            This store is currently closed and not accepting orders.
+          </div>
+        )}
 
         {/* items-start + self-start on sidebar: required so sticky sidebar works in CSS Grid (Square-style checkout) */}
         <div className="mt-6 flex flex-col lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:gap-8 lg:items-start">
@@ -573,7 +579,7 @@ export function CheckoutPage({
 
             <OrderTypeSection
               orderType={orderType}
-              onOrderTypeChange={setOrderType}
+              onOrderTypeChange={(type) => { setOrderType(type); if (type === "delivery") setPayCashInStore(false); }}
               pickupEnabled={pickupEnabled}
               deliveryEnabled={deliveryEnabled}
               pickupTime={pickupTime}
@@ -604,12 +610,68 @@ export function CheckoutPage({
 
             {config?.acceptOnlinePayments && (
               <>
-                <PaymentCardForm
-                  ref={paymentFormRef}
-                  securityKey={securityKey}
-                  onError={setPaymentError}
-                  disabled={loading}
-                />
+                {orderType === "pickup" && (
+                  <div
+                    className="flex items-center justify-between px-4 py-3 rounded-lg"
+                    style={{
+                      border: "1px solid var(--border)",
+                      backgroundColor: "var(--card)",
+                      borderRadius: "var(--radius)",
+                    }}
+                  >
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+                        Pay cash in store
+                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                        Pay at the counter when you pick up
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={payCashInStore}
+                      onClick={() => setPayCashInStore((v) => !v)}
+                      style={{
+                        position: "relative",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        flexShrink: 0,
+                        cursor: "pointer",
+                        width: "44px",
+                        height: "24px",
+                        borderRadius: "9999px",
+                        border: "none",
+                        padding: 0,
+                        backgroundColor: payCashInStore ? "var(--primary)" : "#94a3b8",
+                        transition: "background-color 0.2s ease",
+                        outline: "none",
+                      }}
+                    >
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: "2px",
+                          left: payCashInStore ? "22px" : "2px",
+                          width: "20px",
+                          height: "20px",
+                          borderRadius: "9999px",
+                          backgroundColor: "#ffffff",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+                          transition: "left 0.2s ease",
+                        }}
+                      />
+                    </button>
+                  </div>
+                )}
+                {!payCashInStore && (
+                  <PaymentCardForm
+                    ref={paymentFormRef}
+                    securityKey={securityKey}
+                    onError={setPaymentError}
+                    disabled={loading}
+                  />
+                )}
               </>
             )}
 
@@ -698,6 +760,10 @@ export function CheckoutPage({
                   setCustomTip("");
                 }}
                 onSelectCustom={() => setSelectedTipIndex(null)}
+                onSelectNoTip={() => {
+                  setSelectedTipIndex(-1);
+                  setCustomTip("");
+                }}
                 onCustomTipChange={setCustomTip}
               />
             )}

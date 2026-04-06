@@ -8,7 +8,7 @@ function isValidImageSrc(src?: string | null): boolean {
   return !!src && (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("/"));
 }
 import { ArrowRight, ShoppingBag } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 
 
 interface FloatingCartBarProps {

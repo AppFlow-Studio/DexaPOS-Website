@@ -28,6 +28,7 @@ interface StorefrontHeaderProps {
   onInfoClick?: () => void;
   onOrdersClick?: () => void;
   onAccountClick?: () => void;
+  onAuthSuccess?: () => void;
 }
 
 export function StorefrontHeader({
@@ -39,6 +40,7 @@ export function StorefrontHeader({
   onInfoClick,
   onOrdersClick,
   onAccountClick,
+  onAuthSuccess,
 }: StorefrontHeaderProps) {
   const { toggleCart, getTotalItems } = useCart();
   const { isAuthenticated, customer } = useSession();
@@ -91,16 +93,20 @@ export function StorefrontHeader({
   const headerBg =
     isTransparent && scrolled
       ? "var(--primary)"
-      : headerStyle === "outlined"
-        ? "var(--bg)"
-        : "var(--header-bg)";
+      : isTransparent && !scrolled
+        ? "transparent"
+        : headerStyle === "outlined"
+          ? "var(--bg)"
+          : "var(--header-bg)";
 
   const headerText =
     headerStyle === "outlined"
       ? "var(--text)"
-      : isTransparent && scrolled
-        ? "var(--primary-text)"
-        : "var(--header-text)";
+      : isTransparent && !scrolled
+        ? "#ffffff"
+        : isTransparent && scrolled
+          ? "var(--primary-text)"
+          : "var(--header-text)";
 
   const shadow =
     isTransparent && !scrolled
@@ -126,6 +132,10 @@ export function StorefrontHeader({
         className={`${positionClass} top-0 z-50 w-full transition-all duration-300`}
         style={{
           backgroundColor: headerBg,
+          backgroundImage:
+            isTransparent && !scrolled
+              ? "linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, transparent 100%)"
+              : undefined,
           color: headerText,
           fontFamily: "var(--font)",
           borderBottom:
@@ -152,28 +162,31 @@ export function StorefrontHeader({
                 }}
               />
             )}
-            <div className="min-w-0">
-              <h1
-                className="text-lg font-bold leading-tight tracking-tight truncate"
-                style={{ color: headerText, fontFamily: "var(--font-display)" }}
-              >
-                {storeName}
-              </h1>
-              <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                <span className="inline-flex items-center gap-1.5 truncate" style={{ color: headerText, opacity: 0.8 }}>
-                  <MapPin className="h-3 w-3" />
-                  <span className="truncate">
-                    {location.address_line1}, {location.city}
+            {/* Hide store name/address when transparent & not scrolled — the hero already shows them */}
+            {(!isTransparent || scrolled) && (
+              <div className="min-w-0">
+                <h1
+                  className="text-lg font-bold leading-tight tracking-tight truncate"
+                  style={{ color: headerText, fontFamily: "var(--font-display)" }}
+                >
+                  {storeName}
+                </h1>
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                  <span className="inline-flex items-center gap-1.5 truncate" style={{ color: headerText, opacity: 0.8 }}>
+                    <MapPin className="h-3 w-3" />
+                    <span className="truncate">
+                      {location.address_line1}, {location.city}
+                    </span>
                   </span>
-                </span>
-                {todayHours && (
-                  <span className="inline-flex items-center gap-1.5" style={{ color: headerText, opacity: 0.8 }}>
-                    <Clock className="h-3 w-3" />
-                    <span>{todayHours}</span>
-                  </span>
-                )}
+                  {todayHours && (
+                    <span className="inline-flex items-center gap-1.5" style={{ color: headerText, opacity: 0.8 }}>
+                      <Clock className="h-3 w-3" />
+                      <span>{todayHours}</span>
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <div className="flex items-center gap-1">
@@ -371,6 +384,7 @@ export function StorefrontHeader({
         isOpen={showAuth}
         onOpenChange={setShowAuth}
         storeConfigId={storeConfigId ?? ""}
+        onSuccess={onAuthSuccess}
       />
     </>
   );
