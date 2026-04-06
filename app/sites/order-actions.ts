@@ -317,10 +317,12 @@ export interface OrderTrackingData {
   estimatedPrepMinutes: number;
   subtotal: number;
   tax: number;
-  taxRatePercent: number | null; // stored rate from order_items.tax_rate (e.g. 8.875)
+  taxRatePercent: number | null;
   tip: number;
   total: number;
   specialInstructions: string | null;
+  cardLastFour: string | null;
+  cardType: string | null;
   items: {
     name: string;
     quantity: number;
@@ -363,6 +365,15 @@ export async function getOrderTracking(
     .limit(1)
     .single();
 
+  // Get payment record for card info
+  const { data: payment } = await supabase
+    .from("order_payments")
+    .select("card_last_four, card_type")
+    .eq("order_id", orderId)
+    .eq("payment_method", "card")
+    .limit(1)
+    .single();
+
   const o = order as any;
   return {
     data: {
@@ -396,6 +407,8 @@ export async function getOrderTracking(
       tip: Number(o.tip_amount) || 0,
       total: Number(o.total_amount) || 0,
       specialInstructions: o.special_instructions,
+      cardLastFour: payment?.card_last_four ?? null,
+      cardType: payment?.card_type ?? null,
       items: (o.order_items ?? []).map((i: any) => ({
         name: i.item_name,
         quantity: i.quantity,

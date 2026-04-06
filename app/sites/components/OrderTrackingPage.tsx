@@ -119,12 +119,6 @@ function buildTimeline(order: OrderTrackingData): TimelineStep[] {
   return steps;
 }
 
-function formatSecondsAgo(seconds: number): string {
-  if (seconds < 5) return "just now";
-  if (seconds < 60) return `${seconds}s ago`;
-  const mins = Math.floor(seconds / 60);
-  return `${mins}m ago`;
-}
 
 function formatTime(isoString: string | null): string {
   if (!isoString) return "";
@@ -157,9 +151,7 @@ export function OrderTrackingPage({
 }: OrderTrackingPageProps) {
   const { sessionToken } = useSession();
   const [order, setOrder] = useState<OrderTrackingData>(initialOrder);
-  const [lastUpdated, setLastUpdated] = useState<Date>(() => new Date());
   const [isFetching, setIsFetching] = useState(false);
-  const [secondsAgo, setSecondsAgo] = useState(0);
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
@@ -167,22 +159,20 @@ export function OrderTrackingPage({
   const [pendingCountdown, setPendingCountdown] = useState<number | null>(null);
   const storePath = useStorefrontPath(slug);
 
-  // Tick relative timestamp every second
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setSecondsAgo(Math.floor((Date.now() - lastUpdated.getTime()) / 1000));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [lastUpdated]);
 
-  // Start / clear 60-second auto-cancel countdown based on order status
+  // Start / clear auto-cancel countdown based on time elapsed since order was placed.
+  // This is recalculated on mount and on status change — refresh-safe.
   useEffect(() => {
     if (order.status === "pending") {
-      setPendingCountdown(60);
+      const secondsSincePlaced = Math.floor(
+        (Date.now() - new Date(order.createdAt).getTime()) / 1000
+      );
+      const remaining = Math.max(0, 60 - secondsSincePlaced);
+      setPendingCountdown(remaining);
     } else {
       setPendingCountdown(null);
     }
-  }, [order.status]);
+  }, [order.status, order.createdAt]);
 
   // Tick countdown and auto-cancel when it hits 0
   useEffect(() => {
@@ -215,8 +205,6 @@ export function OrderTrackingPage({
       const { data } = await getOrderTracking(orderId);
       if (data) {
         setOrder(data);
-        setLastUpdated(new Date());
-        setSecondsAgo(0);
       }
       setIsFetching(false);
     }, 60000);
@@ -228,8 +216,6 @@ export function OrderTrackingPage({
     const { data } = await getOrderTracking(orderId);
     if (data) {
       setOrder(data);
-      setLastUpdated(new Date());
-      setSecondsAgo(0);
     }
   }, [orderId]);
 
@@ -289,7 +275,7 @@ export function OrderTrackingPage({
       )}
       {/* Header */}
       <header
-        className="sticky top-0 z-30 px-4 py-3 flex items-center gap-3"
+        className="sticky top-0 z-30 px-4 py-3 flex items-center justify-between"
         style={{
           backgroundColor: "var(--bg)",
           borderBottom: "1px solid var(--border)",
@@ -297,19 +283,19 @@ export function OrderTrackingPage({
       >
         <Link
           href={storePath()}
-          className="flex items-center gap-1 text-sm font-medium"
-          style={{ color: "var(--primary)" }}
+          className="flex items-center gap-2 text-sm font-medium"
+          style={{ color: "var(--text)" }}
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="h-4 w-4" style={{ color: "var(--primary)" }} />
+          {logoUrl && (
+            <img
+              src={logoUrl}
+              alt={storeName}
+              className="h-7 w-7 rounded-full object-cover"
+            />
+          )}
           {storeName}
         </Link>
-        {logoUrl && (
-          <img
-            src={logoUrl}
-            alt={storeName}
-            className="h-8 w-8 rounded-full object-cover ml-auto"
-          />
-        )}
       </header>
 
       <main className="max-w-lg mx-auto p-4 space-y-6">
@@ -321,56 +307,115 @@ export function OrderTrackingPage({
           >
             {order.displayNumber}
           </h1>
-          <span
-            className="inline-block px-3 py-1 rounded-full text-sm font-semibold"
-            style={{
-              backgroundColor: statusColor.bg,
-              color: statusColor.text,
-            }}
-          >
-            {STATUS_LABELS[order.status] ?? order.status}
-          </span>
-
-          {/* Live indicator */}
-          {!TERMINAL_STATUSES.includes(order.status) && (
-            <div className="flex items-center justify-center gap-1.5 mt-1">
-              {isFetching ? (
-                <Loader2
-                  className="h-3 w-3 animate-spin"
-                  style={{ color: "var(--text-secondary)" }}
-                />
-              ) : (
-                <span
-                  className="inline-block h-2 w-2 rounded-full animate-pulse"
-                  style={{ backgroundColor: "var(--primary)" }}
-                />
-              )}
-              <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                {isFetching ? "Updating…" : `Last updated ${formatSecondsAgo(secondsAgo)}`}
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            <span
+              className="inline-block px-3 py-1 rounded-full text-sm font-semibold"
+              style={{
+                backgroundColor: statusColor.bg,
+                color: statusColor.text,
+              }}
+            >
+              {STATUS_LABELS[order.status] ?? order.status}
+            </span>
+            {!TERMINAL_STATUSES.includes(order.status) && (
+              <span className="flex items-center gap-1">
+                {isFetching ? (
+                  <Loader2 className="h-3 w-3 animate-spin" style={{ color: "var(--text-secondary)" }} />
+                ) : (
+                  <span className="inline-block h-2 w-2 rounded-full animate-pulse" style={{ backgroundColor: "#22c55e" }} />
+                )}
+                <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  {isFetching ? "Updating…" : "Live"}
+                </span>
               </span>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        {/* Pending countdown card */}
+        {/* Pending countdown + cancel — single amber card */}
         {isPending && pendingCountdown !== null && (
           <div
-            className="text-center px-6 py-4 rounded-xl"
+            className="px-5 py-4 rounded-xl space-y-3"
             style={{
               backgroundColor: "color-mix(in srgb, #f59e0b 10%, var(--bg))",
               border: "1px solid #f59e0b",
               borderRadius: "var(--radius)",
             }}
           >
-            <p className="text-sm" style={{ color: "#f59e0b" }}>
-              Waiting for restaurant response
-            </p>
-            <p className="text-2xl font-bold tabular-nums" style={{ color: "#f59e0b" }}>
-              {pendingCountdown}s
-            </p>
-            <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
-              Order will be cancelled automatically if no response
-            </p>
+            {/* Countdown row */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-base font-semibold" style={{ color: "#f59e0b" }}>
+                  Waiting for restaurant
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                  Auto-cancels if no response
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-xl font-bold tabular-nums" style={{ color: "#f59e0b" }}>
+                  {pendingCountdown}s
+                </p>
+                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>remaining</p>
+              </div>
+            </div>
+
+            {/* Inline cancel */}
+            {canCustomerCancel && (
+              <div style={{ borderTop: "1px solid color-mix(in srgb, #f59e0b 30%, transparent)", paddingTop: "12px" }}>
+                {!showCancelForm ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowCancelForm(true)}
+                    className="text-sm"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    Cancel this order
+                  </button>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+                      Why do you want to cancel?
+                    </p>
+                    <textarea
+                      rows={3}
+                      value={cancelReason}
+                      onChange={(e) => setCancelReason(e.target.value)}
+                      placeholder="e.g. Changed my mind, ordered by mistake…"
+                      className="w-full text-sm px-3 py-2 rounded-lg resize-none outline-none"
+                      style={{
+                        backgroundColor: "var(--bg)",
+                        border: "1px solid var(--border)",
+                        color: "var(--text)",
+                      }}
+                    />
+                    {cancelError && (
+                      <p className="text-xs" style={{ color: "#ef4444" }}>{cancelError}</p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setShowCancelForm(false); setCancelReason(""); setCancelError(null); }}
+                        disabled={isCancelling}
+                        className="flex-1 text-sm font-medium py-2 rounded-lg"
+                        style={{ backgroundColor: "var(--bg)", border: "1px solid var(--border)", color: "var(--text)" }}
+                      >
+                        Keep Order
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancel}
+                        disabled={isCancelling || !cancelReason.trim()}
+                        className="flex-1 text-sm font-semibold py-2 rounded-lg disabled:opacity-50"
+                        style={{ backgroundColor: "#ef4444", color: "#ffffff" }}
+                      >
+                        {isCancelling ? "Cancelling…" : "Confirm Cancel"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -471,73 +516,6 @@ export function OrderTrackingPage({
           </div>
         )}
 
-        {/* Cancel order — available while pending */}
-        {canCustomerCancel && (
-          <div
-            className="px-4 py-4 rounded-xl"
-            style={{
-              backgroundColor: "var(--card)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--radius)",
-            }}
-          >
-            {!showCancelForm ? (
-              <button
-                type="button"
-                onClick={() => setShowCancelForm(true)}
-                className="text-sm font-medium"
-                style={{ color: "#ef4444" }}
-              >
-                Cancel this order
-              </button>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>
-                  Why do you want to cancel?
-                </p>
-                <textarea
-                  rows={3}
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  placeholder="e.g. Changed my mind, ordered by mistake…"
-                  className="w-full text-sm px-3 py-2 rounded-lg resize-none outline-none"
-                  style={{
-                    backgroundColor: "var(--bg)",
-                    border: "1px solid var(--border)",
-                    color: "var(--text)",
-                  }}
-                />
-                {cancelError && (
-                  <p className="text-xs" style={{ color: "#ef4444" }}>{cancelError}</p>
-                )}
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { setShowCancelForm(false); setCancelReason(""); setCancelError(null); }}
-                    disabled={isCancelling}
-                    className="flex-1 text-sm font-medium py-2 rounded-lg"
-                    style={{
-                      backgroundColor: "var(--bg)",
-                      border: "1px solid var(--border)",
-                      color: "var(--text)",
-                    }}
-                  >
-                    Keep Order
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCancel}
-                    disabled={isCancelling || !cancelReason.trim()}
-                    className="flex-1 text-sm font-semibold py-2 rounded-lg disabled:opacity-50"
-                    style={{ backgroundColor: "#ef4444", color: "#ffffff" }}
-                  >
-                    {isCancelling ? "Cancelling…" : "Confirm Cancel"}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Status timeline */}
         {!isCancelled && !isDeclined && (
@@ -558,19 +536,28 @@ export function OrderTrackingPage({
             <div className="space-y-0">
               {timeline.map((step, i) => {
                 const isLast = i === timeline.length - 1;
+                const isCurrent = !isTerminal && i === pulseIndex && !step.isDone;
                 return (
                   <div key={step.label} className="flex gap-3">
                     {/* Icon + line */}
                     <div className="flex flex-col items-center">
                       <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0${!isTerminal && i === pulseIndex ? " animate-pulse" : ""}`}
+                        className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0${isCurrent ? " animate-pulse" : ""}`}
                         style={{
                           backgroundColor: step.isDone
                             ? "var(--primary)"
+                            : isCurrent
+                            ? "color-mix(in srgb, var(--primary) 15%, var(--bg))"
                             : "var(--bg)",
-                          color: step.isDone ? "#FFFFFF" : "var(--text)",
+                          color: step.isDone
+                            ? "#FFFFFF"
+                            : isCurrent
+                            ? "var(--primary)"
+                            : "var(--text-secondary)",
                           border: step.isDone
                             ? "none"
+                            : isCurrent
+                            ? "2px solid var(--primary)"
                             : "2px solid var(--border)",
                         }}
                       >
@@ -590,17 +577,17 @@ export function OrderTrackingPage({
                     {/* Label + time */}
                     <div className="pb-6">
                       <p
-                        className="text-sm font-medium"
+                        className={`text-sm ${step.isDone || isCurrent ? "font-semibold" : "font-medium"}`}
                         style={{
-                          color: "var(--text)",
+                          color: step.isDone || isCurrent ? "var(--text)" : "var(--text-secondary)",
                         }}
                       >
                         {step.label}
                       </p>
                       {step.timestamp && (
                         <p
-                          className="text-xs mt-0.5 opacity-80"
-                          style={{ color: "var(--text)" }}
+                          className="text-xs mt-0.5"
+                          style={{ color: "var(--text-secondary)" }}
                         >
                           {formatTime(step.timestamp)}
                         </p>

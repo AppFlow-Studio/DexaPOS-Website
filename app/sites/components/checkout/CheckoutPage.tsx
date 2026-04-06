@@ -183,38 +183,38 @@ export function CheckoutPage({
     if (customer?.email) setEmail(customer.email);
   }, [customer]);
 
-  // COMMENTED OUT FOR TESTING — payment bypass mode
-  // useEffect(() => {
-  //   if (!storeConfigId) return;
-  //
-  //   setPaymentError(null);
-  //   fetch(`${SUPABASE_URL}/functions/v1/process-online-payment`, {
-  //     method: "POST",
-  //     headers: {
-  //       "Content-Type": "application/json",
-  //       Authorization: `Bearer ${ANON_KEY}`,
-  //     },
-  //     body: JSON.stringify({
-  //       store_config_id: storeConfigId,
-  //     }),
-  //   })
-  //     .then((res) => res.json())
-  //     .then((data) => {
-  //       if (data.success) {
-  //         setSecurityKey(process.env.NEXT_PUBLIC_DEJAVOO_SECURITY_KEY_TOKEN!);
-  //       } else if (!data.success) {
-  //         // Don't show error if payment simply isn't configured — just hide the form
-  //         if (data.error?.includes("not configured")) {
-  //           console.log("iPOS payment not configured for this store");
-  //         } else {
-  //           setPaymentError(data.error || "Failed to initialize payment.");
-  //         }
-  //       }
-  //     })
-  //     .catch(() => {
-  //       setPaymentError("Failed to connect to payment service.");
-  //     });
-  // }, [storeConfigId]);
+  // Fetch iPOS security key — enables the card tokenization form
+  useEffect(() => {
+    if (!storeConfigId) return;
+
+    setPaymentError(null);
+    fetch(`${SUPABASE_URL}/functions/v1/process-online-payment`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        store_config_id: storeConfigId,
+      }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setSecurityKey(data.security_key);
+        } else {
+          // Don't show error if payment simply isn't configured — just hide the form
+          if (data.error?.includes("not configured")) {
+            console.log("iPOS payment not configured for this store");
+          } else {
+            setPaymentError(data.error || "Failed to initialize payment.");
+          }
+        }
+      })
+      .catch(() => {
+        setPaymentError("Failed to connect to payment service.");
+      });
+  }, [storeConfigId]);
 
   // Load saved addresses when authenticated + delivery
   useEffect(() => {

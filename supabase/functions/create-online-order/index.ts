@@ -623,6 +623,29 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .eq('id', session.id)
   }
 
+  // Update the payment record created by process_online_order RPC with card info.
+  // In test mode: mock card data. When real payment is enabled, replace with iPOS response fields.
+  const { data: paymentUpdateData, error: paymentUpdateError } = await supabase
+    .from('order_payments')
+    .update({
+      payment_method: 'card',
+      terminal_type: 'dejavoo',
+      // TODO: replace mock fields below with real iPOS charge response when payment is live
+      card_type: 'Visa',
+      card_last_four: '0000',
+      transaction_id: transactionReferenceId,
+      reference_number: transactionReferenceId,
+      processor_name: 'iPOSPays',
+    })
+    .eq('order_id', orderResult.order_id)
+    .select('id, payment_method, card_last_four')
+
+  if (paymentUpdateError) {
+    logError('PAYMENT_UPDATE', 'Failed to update payment record with card info', paymentUpdateError)
+  } else {
+    logEvent('PAYMENT_UPDATE', 'Payment record updated with card info', { rows: paymentUpdateData?.length ?? 0, data: paymentUpdateData })
+  }
+
   // Link order to customer if session has customer_id
   if (session?.customer_id) {
     await supabase

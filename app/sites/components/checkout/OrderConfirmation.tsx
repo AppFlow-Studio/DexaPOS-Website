@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Hourglass } from "lucide-react";
+import { Check, Hourglass, Clock } from "lucide-react";
 import Link from "next/link";
 import { useStorefrontPath } from "../../lib/use-storefront-path";
 
@@ -18,9 +18,12 @@ export function OrderConfirmation({ displayNumber, estimatedTime, orderId, slug,
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] text-center px-6 space-y-6">
       <div
         className="w-20 h-20 rounded-full flex items-center justify-center"
-        style={{ backgroundColor: "var(--primary)" }}
+        style={{ backgroundColor: isPending ? "color-mix(in srgb, #f59e0b 20%, var(--bg))" : "var(--primary)", border: isPending ? "2px solid #f59e0b" : "none" }}
       >
-        <Check className="h-10 w-10 text-white" />
+        {isPending
+          ? <Hourglass className="h-10 w-10" style={{ color: "#f59e0b" }} />
+          : <Check className="h-10 w-10 text-white" />
+        }
       </div>
 
       <div className="space-y-2">
@@ -39,16 +42,19 @@ export function OrderConfirmation({ displayNumber, estimatedTime, orderId, slug,
 
       {isPending ? (
         <div
-          className="flex items-center gap-3 px-6 py-4 rounded-xl"
-          style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
+          className="px-6 py-4 rounded-xl space-y-2 w-full max-w-xs"
+          style={{ backgroundColor: "color-mix(in srgb, #f59e0b 10%, var(--bg))", border: "1px solid #f59e0b" }}
         >
-          <Hourglass className="h-5 w-5 flex-shrink-0" style={{ color: "var(--primary)" }} />
-          <div className="text-left">
-            <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+          <div className="flex items-center gap-3">
+            <Hourglass className="h-5 w-5 flex-shrink-0 animate-pulse" style={{ color: "#f59e0b" }} />
+            <p className="text-sm font-semibold text-left" style={{ color: "#f59e0b" }}>
               Awaiting restaurant acceptance
             </p>
-            <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
-              You&apos;ll see the estimated time once accepted
+          </div>
+          <div className="flex items-start gap-2 pl-8">
+            <Clock className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" style={{ color: "var(--text-secondary)" }} />
+            <p className="text-xs text-left" style={{ color: "var(--text-secondary)" }}>
+              Restaurant has up to 1 minute to respond
             </p>
           </div>
         </div>
@@ -79,7 +85,7 @@ export function OrderConfirmation({ displayNumber, estimatedTime, orderId, slug,
                 boxShadow: "0 4px 16px color-mix(in srgb, var(--primary) 40%, transparent)",
               }}
             >
-              Track Your Order
+              View Order Status
             </Link>
             <Link
               href={storePath()}

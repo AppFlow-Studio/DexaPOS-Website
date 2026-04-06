@@ -166,15 +166,21 @@ export async function sendOrderConfirmationEmail(
   orderId: string,
   email: string
 ): Promise<{ success: boolean; error?: string }> {
+  console.log("[EMAIL] sendOrderConfirmationEmail called", { orderId, email });
+
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey || !email) {
+    console.error("[EMAIL] Missing apiKey or email", { hasApiKey: !!apiKey, email });
     return { success: false, error: "Email service not configured or no email" };
   }
 
   const { data: order } = await getOrderTracking(orderId);
   if (!order) {
+    console.error("[EMAIL] Order not found for id:", orderId);
     return { success: false, error: "Order not found" };
   }
+
+  console.log("[EMAIL] Order found, sending to:", email, "from:", process.env.RESEND_FROM_EMAIL);
 
   const itemsHtml = order.items
     .map(
@@ -204,6 +210,11 @@ export async function sendOrderConfirmationEmail(
     <div style="display:flex;justify-content:space-between;font-weight:600;font-size:16px;padding-top:8px;border-top:1px solid #ddd;"><span>Total</span><span>$${order.total.toFixed(2)}</span></div>
   </div>
   <p style="text-align:center;color:#666;font-size:14px;">Estimated prep time: ~${order.estimatedPrepMinutes} minutes</p>
+  ${order.cardLastFour ? `
+  <div style="margin:16px 0;padding:12px 16px;background:#f9fafb;border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
+    <span style="color:#666;font-size:14px;">Payment</span>
+    <span style="font-size:14px;font-weight:600;">${order.cardType || 'Card'} •••• ${order.cardLastFour}</span>
+  </div>` : ''}
   <p style="font-size:12px;color:#999;text-align:center;margin-top:24px;">Thank you for your order!</p>
 </body>
 </html>`.trim();
@@ -220,11 +231,14 @@ export async function sendOrderConfirmationEmail(
     });
 
     if (emailError) {
+      console.error("[EMAIL] Resend error:", emailError);
       return { success: false, error: emailError.message };
     }
 
+    console.log("[EMAIL] Email sent successfully to:", email);
     return { success: true };
   } catch (err: any) {
+    console.error("[EMAIL] Exception:", err);
     return { success: false, error: err?.message || "Failed to send email" };
   }
 }
