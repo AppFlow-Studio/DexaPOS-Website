@@ -80,6 +80,7 @@ function buildPayload(input: DiscountFormInput, merchantId: string) {
 
   return {
     merchant_id: merchantId,
+    location_id: parsed.location_id ?? null,
     name: parsed.name,
     description: parsed.description ?? null,
     discount_type: parsed.discount_type,
@@ -124,8 +125,22 @@ export async function listDiscounts(filters: DiscountListFilters = {}) {
       .select("*, menu_item_discounts (menu_item_id)")
       .eq("merchant_id", merchantId);
 
+    // Location scoping: when a specific location is selected, include both
+    // globals (location_id IS NULL) and that location's own discounts.
+    // When 'all' or not provided, no location filter is applied.
+    if (filters.locationId && filters.locationId !== "all") {
+      query = query.or(
+        `location_id.is.null,location_id.eq.${filters.locationId}`,
+      );
+    }
+
     if (filters.isActive !== undefined && filters.isActive !== "all") {
       query = query.eq("is_active", filters.isActive);
+    }
+
+    if (filters.hideExpired) {
+      const todayIso = new Date().toISOString().split("T")[0];
+      query = query.or(`end_date.is.null,end_date.gte.${todayIso}`);
     }
 
     if (filters.search) {

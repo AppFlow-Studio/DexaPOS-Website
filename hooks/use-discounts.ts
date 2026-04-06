@@ -22,11 +22,26 @@ import {
 import { toast } from "sonner";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { useMerchantId } from "@/app/dashboard/hooks/useLocationScopedModifiers";
+import {
+  useLocationStore,
+  useIsAllLocations,
+} from "@/stores/location-store";
+
+function useEffectiveLocationId() {
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
+  return isAllLocations ? "all" : selectedLocationId;
+}
 
 export function useDiscounts(filters: DiscountListFilters) {
+  const locationId = useEffectiveLocationId();
+  const scopedFilters: DiscountListFilters = {
+    ...filters,
+    locationId: locationId || "all",
+  };
   return useQuery({
-    queryKey: ["discounts", filters],
-    queryFn: () => listDiscounts(filters),
+    queryKey: ["discounts", locationId, scopedFilters, "scoped"],
+    queryFn: () => listDiscounts(scopedFilters),
   });
 }
 
@@ -54,8 +69,20 @@ export function useDiscountUsage(discountId: string | null) {
 
 export function useCreateDiscount() {
   const queryClient = useQueryClient();
+  const { selectedLocationId } = useLocationStore();
+  const isAllLocations = useIsAllLocations();
   return useMutation({
-    mutationFn: (input: DiscountFormInput) => createDiscount(input),
+    mutationFn: (input: DiscountFormInput) => {
+      // If the form didn't explicitly set a scope, inherit from the current
+      // location selector: All Locations -> global (null), specific -> that location.
+      const location_id =
+        input.location_id !== undefined
+          ? input.location_id
+          : isAllLocations
+            ? null
+            : selectedLocationId;
+      return createDiscount({ ...input, location_id });
+    },
     onSuccess: (result) => {
       if (result.success) {
         toast.success("Discount created");
@@ -96,21 +123,30 @@ export function useToggleDiscount() {
       toggleDiscountActive(id, isActive),
     onMutate: async ({ id, isActive }) => {
       await queryClient.cancelQueries({ queryKey: ["discounts"] });
-      const previous = queryClient.getQueryData<{
+      // Update every cached "discounts" query (all scope/filter variants) optimistically.
+      const snapshots = queryClient.getQueriesData<{
         success: boolean;
         data?: Discount[];
-      }>(["discounts"]);
-      if (previous?.data) {
-        const next: Discount[] = previous.data.map((d) =>
-          d.id === id ? { ...d, is_active: isActive } : d
-        );
-        queryClient.setQueryData(["discounts"], { success: true, data: next });
-      }
-      return { previous };
+      }>({ queryKey: ["discounts"] });
+      queryClient.setQueriesData<{ success: boolean; data?: Discount[] }>(
+        { queryKey: ["discounts"] },
+        (current) => {
+          if (!current?.data) return current;
+          return {
+            ...current,
+            data: current.data.map((d) =>
+              d.id === id ? { ...d, is_active: isActive } : d,
+            ),
+          };
+        },
+      );
+      return { snapshots };
     },
     onError: (_error, _variables, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(["discounts"], context.previous);
+      if (context?.snapshots) {
+        context.snapshots.forEach(([key, value]) => {
+          queryClient.setQueryData(key, value);
+        });
       }
       toast.error("Failed to update status");
     },

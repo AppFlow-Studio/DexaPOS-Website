@@ -5,6 +5,7 @@ export type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 export interface Discount {
   id: string;
   merchant_id: string;
+  location_id: string | null;
   name: string;
   description: string | null;
   discount_type: DiscountType;
@@ -42,6 +43,7 @@ export interface DiscountFormInput {
   end_date?: Date | null;
   is_active: boolean;
   scope: DiscountScope;
+  location_id?: string | null;
   requires_manager_approval: boolean;
   max_uses_per_day?: number | null;
   max_uses_per_order: number;
@@ -66,6 +68,17 @@ export interface DiscountListFilters {
   isActive?: boolean | "all";
   sortBy?: "name" | "created_at" | "display_order";
   sortDir?: "asc" | "desc";
+  locationId?: string;
+  hideExpired?: boolean;
 }
 
 export const defaultApplicableDays: DayOfWeek[] = [0, 1, 2, 3, 4, 5, 6];
+
+export function isDiscountExpired(
+  discount: Pick<Discount, "end_date">,
+): boolean {
+  if (!discount.end_date) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return new Date(discount.end_date) < today;
+}

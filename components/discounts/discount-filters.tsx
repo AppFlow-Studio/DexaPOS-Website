@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
     Select,
     SelectContent,
@@ -34,7 +35,7 @@ export function DiscountFilters({ value, onChange, onCreate }: DiscountFiltersPr
 
     const handleReset = () => {
         setSearch('')
-        onChange({ search: '', isActive: 'all', sortBy: 'display_order', sortDir: 'asc' })
+        onChange({ search: '', isActive: 'all', sortBy: 'display_order', sortDir: 'asc', hideExpired: false })
     }
 
     return (
@@ -97,6 +98,18 @@ export function DiscountFilters({ value, onChange, onCreate }: DiscountFiltersPr
                         <SelectItem value="desc">Descending</SelectItem>
                     </SelectContent>
                 </Select>
+            </div>
+            <div className="flex items-center gap-2 pb-2">
+                <Checkbox
+                    id="discount-hide-expired"
+                    checked={!!value.hideExpired}
+                    onCheckedChange={(checked) =>
+                        onChange({ ...value, hideExpired: !!checked })
+                    }
+                />
+                <Label htmlFor="discount-hide-expired" className="cursor-pointer">
+                    Hide expired
+                </Label>
             </div>
             <div className="flex gap-2">
                 <Button variant="outline" onClick={handleReset}>

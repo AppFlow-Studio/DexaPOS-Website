@@ -80,6 +80,7 @@ import {
 } from "./hooks/useOrderOutStatus";
 import { retriggerDomainWhitelist } from "./actions";
 import { OrderOutTab } from "@/components/dashboard/orderout/OrderOutTab";
+import { TestOrderCard } from "@/components/dashboard/orderout/TestOrderCard";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 
@@ -1467,6 +1468,16 @@ export default function OnlineOrderingPage() {
               country: selectedLocation?.country || "US",
             }}
           />
+          {isAllLocations ? (
+            <div className="rounded-md border bg-muted/30 p-4 text-sm text-muted-foreground">
+              Select a specific location to send a test order.
+            </div>
+          ) : (
+            <TestOrderCard
+              locationId={selectedLocationId}
+              hasRestaurant={!!orderOutStatus?.hasRestaurant}
+            />
+          )}
         </TabsContent>
       </Tabs>
 

@@ -49,6 +49,8 @@ import {
     History,
     LogOut,
     Monitor,
+    Plug,
+    AlertOctagon,
     LucideIcon,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -139,6 +141,12 @@ const navMain: NavGroup[] = [
                 requiredPermission: 'audit.view',
             },
             {
+                title: 'Dead Letter Queue',
+                url: '/manage/dlq',
+                icon: AlertOctagon,
+                requiredPermission: 'hq.merchant.update' as PermissionCode,
+            },
+            {
                 title: 'Support',
                 url: '/manage/support',
                 icon: MessageSquare,
@@ -160,6 +168,12 @@ const navMain: NavGroup[] = [
                 url: '/manage/device-catalog',
                 icon: Monitor,
                 requiredPermission: 'system.config.manage' as PermissionCode,
+            },
+            {
+                title: 'Integrations',
+                url: '/manage/settings/integrations',
+                icon: Plug,
+                requiredPermission: 'hq.merchant.update' as PermissionCode,
             },
         ]
     }

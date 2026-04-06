@@ -124,5 +124,15 @@ export interface Reservation {
     special_requests?: string;
     is_vip: boolean;
     source: string;
+    reservation_date?: string;          // YYYY-MM-DD
+    cancellation_reason?: string;
+    arrived_at?: string;                // ISO timestamp
+    seated_at?: string;                 // ISO timestamp
+    cancelled_at?: string;              // ISO timestamp
+    no_show_marked_at?: string;         // ISO timestamp
+    customer_id?: string;
+    created_by_staff_id?: string;
+    location_id?: string;
+    merchant_id?: string;
 }
 

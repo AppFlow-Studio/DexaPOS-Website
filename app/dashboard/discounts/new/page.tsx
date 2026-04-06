@@ -13,12 +13,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import { useLocations } from "@/app/dashboard/hooks/useLocations";
+import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
+import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { useLocationStore, useIsAllLocations } from "@/stores/location-store";
 
 export default function NewDiscountPage() {
     const router = useRouter();
     const createDiscount = useCreateDiscount();
     const { data: categoryData, isLoading: categoriesLoading } = useDiscountCategories();
     const { data: menuItemData, isLoading: menuItemsLoading } = useDiscountMenuItems();
+
+    const clerkOrgId = useClerkOrgId() || "";
+    const { data: userInfo } = useUserInfo();
+    const { data: locationsData = [] } = useLocations(clerkOrgId, userInfo?.id || "");
+    const { selectedLocationId } = useLocationStore();
+    const isAllLocations = useIsAllLocations();
 
     const categories = useMemo(
         () => (categoryData?.success ? categoryData.data : []),
@@ -28,6 +38,11 @@ export default function NewDiscountPage() {
         () => (menuItemData?.success ? menuItemData.data : []),
         [menuItemData]
     );
+    const locations = useMemo(
+        () => locationsData.map((l) => ({ id: l.id, name: l.name })),
+        [locationsData]
+    );
+    const defaultLocationId = isAllLocations ? null : selectedLocationId;
 
     const handleSubmit = async (values: DiscountFormInput) => {
         const result = await createDiscount.mutateAsync(values);
@@ -65,10 +80,12 @@ export default function NewDiscountPage() {
                         </div>
                     ) : (
                         <DiscountForm
+                            defaultValues={{ location_id: defaultLocationId }}
                             onSubmit={handleSubmit}
                             submitting={createDiscount.isPending}
                             categories={categories}
                             menuItems={menuItems}
+                            locations={locations}
                             onCancel={() => router.push("/dashboard/discounts")}
                             submitLabel="Create discount"
                         />

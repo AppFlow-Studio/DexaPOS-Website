@@ -8,14 +8,33 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { Utensils, Star, DollarSign } from 'lucide-react'
+import { Info, Utensils, Star, DollarSign } from 'lucide-react'
 import { MenuCategoryItem } from '@/types/menu'
+import { PriceSourcePopover } from '@/components/dashboard/menu/PriceSourcePopover'
+import {
+    priceSourceToLevel,
+    scopeColor,
+    scopeIcon,
+    deriveScopeFromContext,
+} from '@/lib/menu/cascade-labels'
+import {
+    useIsAllLocations,
+    useSelectedLocation,
+} from '@/stores/location-store'
 
 interface CategoryItemRowProps {
     item: MenuCategoryItem
     onClick: () => void
     showLocationPricing: boolean
     onEdit: () => void
+}
+
+const PRICE_SOURCE_LABELS: Record<string, string> = {
+    location_menu: "Menu at location",
+    location_category: "Category at location",
+    category: "Category default",
+    location_item: "Location override",
+    base: "Global",
 }
 
 export function CategoryItemRow({
@@ -26,20 +45,28 @@ export function CategoryItemRow({
 }: CategoryItemRowProps) {
     const menuItem = item.menu_item
     const priceSource = menuItem?.price_source || 'base'
-    console.log('item', menuItem)
+    const sourceLevel = priceSourceToLevel(priceSource)
+    const isAllLocations = useIsAllLocations()
+    const selectedLocation = useSelectedLocation()
+
     const getPriceSourceBadge = () => {
-        switch (priceSource) {
-            case 'location_menu':
-                return <Badge variant="default" className="text-xs">L5: Menu Override</Badge>
-            case 'location_category':
-                return <Badge variant="default" className="text-xs">L4: Location Category</Badge>
-            case 'category':
-                return <Badge variant="secondary" className="text-xs">L3: Category Price</Badge>
-            case 'location_item':
-                return <Badge variant="secondary" className="text-xs">L2: Location Base</Badge>
-            default:
-                return null
-        }
+        if (priceSource === 'base') return null
+        const colors = scopeColor(sourceLevel)
+        const Icon = scopeIcon(sourceLevel)
+        const base = PRICE_SOURCE_LABELS[priceSource] || "Override"
+        const label =
+            priceSource === 'location_item' && selectedLocation?.name
+                ? `${selectedLocation.name} override`
+                : base
+        return (
+            <Badge
+                variant="outline"
+                className={`text-[10px] gap-1 border ${colors.text} ${colors.bg} ${colors.border}`}
+            >
+                <Icon className="h-2.5 w-2.5" />
+                {label}
+            </Badge>
+        )
     }
 
     return (
@@ -85,13 +112,28 @@ export function CategoryItemRow({
 
             {/* Price */}
             <div className="text-right flex-shrink-0 flex items-center gap-2">
-                <div>
-                    <div className="flex items-center gap-1">
-                        <DollarSign className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-semibold">
-                            {menuItem?.effective_price?.toFixed(2) || '0.00'}
-                        </span>
-                    </div>
+                <div onClick={(e) => e.stopPropagation()}>
+                    <PriceSourcePopover
+                        itemId={menuItem?.id || item.menu_item_id}
+                        currentPrice={menuItem?.effective_price ?? 0}
+                        sourceLevel={sourceLevel}
+                        locationId={
+                            isAllLocations ? null : selectedLocation?.id ?? null
+                        }
+                        canRemoveOverride={sourceLevel === 2 && !isAllLocations}
+                        editScope={deriveScopeFromContext({
+                            isAllLocations,
+                            locationName: selectedLocation?.name ?? null,
+                        })}
+                    >
+                        <div className="flex items-center gap-1">
+                            <DollarSign className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-semibold">
+                                {menuItem?.effective_price?.toFixed(2) || '0.00'}
+                            </span>
+                            <Info className="h-3 w-3 text-muted-foreground opacity-60" />
+                        </div>
+                    </PriceSourcePopover>
                     {menuItem?.effective_cash_price && menuItem.effective_cash_price !== menuItem.effective_price && (
                         <div className="text-sm text-muted-foreground">
                             Cash: ${menuItem.effective_cash_price.toFixed(2)}

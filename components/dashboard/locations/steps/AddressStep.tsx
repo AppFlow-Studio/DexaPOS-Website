@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { AddressAutocomplete } from '@/components/ui/address-autocomplete'
 import { LocationFormStep2, US_STATES, US_TIMEZONES } from '@/types/merchant_locations'
 
 interface AddressStepProps {
@@ -81,16 +82,28 @@ export function AddressStep({ data, onChange, errors }: AddressStepProps) {
                 <Label htmlFor="address_line1" className="text-primary">
                     Street address <span className="text-destructive">*</span>
                 </Label>
-                <Input
+                <AddressAutocomplete
                     id="address_line1"
                     value={data.address_line1}
-                    onChange={(e) => onChange({ address_line1: e.target.value })}
+                    onInputChange={(v) => onChange({ address_line1: v })}
+                    onAddressSelected={(parts) => onChange({
+                        address_line1: parts.address_line1,
+                        city: parts.city,
+                        state: parts.state,
+                        postal_code: parts.postal_code,
+                        country: parts.country || 'US',
+                        latitude: parts.latitude,
+                        longitude: parts.longitude,
+                    })}
                     placeholder="123 Main Street"
-                    className={errors?.address_line1 ? 'border-destructive' : ''}
+                    error={!!errors?.address_line1}
                 />
                 {errors?.address_line1 && (
                     <p className="text-sm text-destructive">{errors.address_line1}</p>
                 )}
+                <p className="text-xs text-muted-foreground">
+                    Start typing to search. Selecting a suggestion auto-fills city, state, and ZIP.
+                </p>
             </div>
 
             <div className="space-y-2">

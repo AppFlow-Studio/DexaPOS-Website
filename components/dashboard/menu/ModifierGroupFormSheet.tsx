@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { AffectsTag } from "./AffectsTag";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -1113,10 +1114,11 @@ export function ModifierGroupFormSheet({
                       </svg>
                       Saving...
                     </>
-                  ) : editGroup ? (
-                    "Save Changes"
                   ) : (
-                    "Create Group"
+                    <>
+                      {editGroup ? "Save Changes" : "Create Group"}
+                      <AffectsTag ctx={{ level: 1 }} variant="save-button" />
+                    </>
                   )}
                 </Button>
               )}

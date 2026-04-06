@@ -1,56 +1,71 @@
-import * as React from "react";
+import React from "react";
 
 interface TableCircle6ChairProps {
   color?: string;
+  chairColor?: string;
   width?: number;
   height?: number;
 }
 
-const TableCircle6Chair = ({
-  color = "#F1F1F1",
+const ANGLES = [0, 60, 120, 180, 240, 300];
+const CENTER = 60;
+const CHAIR_ORBIT = 38;
+const CHAIR_W = 16;
+const CHAIR_H = 12;
+
+const TableCircle6Chair: React.FC<TableCircle6ChairProps> = ({
+  color = "#2DD4BF",
   width = 120,
   height = 120,
-  ...props
-}: TableCircle6ChairProps) => (
-  <svg
-    width={width}
-    height={height}
-    viewBox="0 0 120 120"
-    fill="none"
-    {...props}
-  >
-    {/* Table */}
-    <circle cx="60" cy="60" r="35" fill={color} />
-    {/* Chairs */}
-    <path
-      d="M48 4C48 1.79086 49.7909 0 52 0H68C70.2091 0 72 1.79086 72 4V8H48V4Z"
-      fill={color}
-    />
-    <path
-      d="M48 116C48 118.209 49.7909 120 52 120H68C70.2091 120 72 118.209 72 116V112H48V116Z"
-      fill={color}
-    />
-    <path
-      d="M12 28C9.79086 28 8 29.7909 8 32V48H4V32C4 29.7909 5.79086 28 8 28H12Z"
-      transform="rotate(45 12 28)"
-      fill={color}
-    />
-    <path
-      d="M108 28C110.209 28 112 29.7909 112 32V48H116V32C116 29.7909 114.209 28 112 28H108Z"
-      transform="rotate(-45 108 28)"
-      fill={color}
-    />
-    <path
-      d="M12 92C9.79086 92 8 90.2091 8 88V72H4V88C4 90.2091 5.79086 92 8 92H12Z"
-      transform="rotate(-45 12 92)"
-      fill={color}
-    />
-    <path
-      d="M108 92C110.209 92 112 90.2091 112 88V72H116V88C116 90.2091 114.209 92 112 92H108Z"
-      transform="rotate(45 108 92)"
-      fill={color}
-    />
-  </svg>
-);
+}) => {
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 120 120"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      {/* Chairs */}
+      {ANGLES.map((angleDeg) => {
+        const rad = (angleDeg * Math.PI) / 180;
+        const cx = CENTER + CHAIR_ORBIT * Math.sin(rad);
+        const cy = CENTER - CHAIR_ORBIT * Math.cos(rad);
+
+        return (
+          <g
+            key={angleDeg}
+            transform={`translate(${cx}, ${cy}) rotate(${angleDeg})`}
+          >
+            <rect
+              x={-CHAIR_W / 2}
+              y={-CHAIR_H / 2}
+              width={CHAIR_W}
+              height={CHAIR_H}
+              rx="3"
+              fill={color}
+              fillOpacity="0.12"
+              stroke={color}
+              strokeWidth="1"
+              strokeOpacity="0.5"
+            />
+          </g>
+        );
+      })}
+
+      {/* Table */}
+      <circle
+        cx="60"
+        cy="60"
+        r="32"
+        fill={color}
+        fillOpacity="0.18"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeOpacity="0.8"
+      />
+    </svg>
+  );
+};
 
 export default TableCircle6Chair;

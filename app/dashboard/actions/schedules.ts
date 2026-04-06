@@ -444,13 +444,23 @@ export async function AssignScheduleToMenu(
     return { error: "Merchant not found" };
   }
 
-  // Check if assignment already exists
-  const { data: existing } = await supabase
+  // Normalize the target location for the assignment. "all" / undefined / empty
+  // means the assignment is global (applies to all locations for this menu).
+  const targetLocationId =
+    !locationId || locationId === "all" ? null : locationId;
+
+  // Check if assignment already exists for this exact scope (menu + schedule + location).
+  // A schedule can be attached globally AND per-location without colliding.
+  let existingQuery = supabase
     .from("menu_schedules")
     .select("id")
     .eq("menu_id", menuId)
-    .eq("schedule_id", scheduleId)
-    .single();
+    .eq("schedule_id", scheduleId);
+  existingQuery =
+    targetLocationId === null
+      ? existingQuery.is("location_id", null)
+      : existingQuery.eq("location_id", targetLocationId);
+  const { data: existing } = await existingQuery.maybeSingle();
 
   if (existing) {
     return { success: true, data: existing };
@@ -463,6 +473,7 @@ export async function AssignScheduleToMenu(
       menu_id: menuId,
       schedule_id: scheduleId,
       merchant_id: merchant.id,
+      location_id: targetLocationId,
     })
     .select()
     .single();
@@ -575,11 +586,21 @@ export async function RemoveScheduleFromMenu(
 
   const supabase = createServerSupabaseClient();
 
-  const { error } = await supabase
+  // Target the assignment row for this exact scope. "all" / undefined means
+  // the global row (location_id IS NULL).
+  const targetLocationId =
+    !locationId || locationId === "all" ? null : locationId;
+
+  let deleteQuery = supabase
     .from("menu_schedules")
     .delete()
     .eq("menu_id", menuId)
     .eq("schedule_id", scheduleId);
+  deleteQuery =
+    targetLocationId === null
+      ? deleteQuery.is("location_id", null)
+      : deleteQuery.eq("location_id", targetLocationId);
+  const { error } = await deleteQuery;
 
   if (error) {
     console.error("Error removing schedule from menu:", error);
@@ -670,18 +691,22 @@ export async function RemoveScheduleFromCategory(
 // MENU SCHEDULE QUERIES
 // ============================================================================
 
-export async function GetMenuSchedules(menuId: string) {
+export async function GetMenuSchedules(
+  menuId: string,
+  locationId?: string | null,
+) {
   if (!menuId) {
     return [];
   }
 
   const supabase = createServerSupabaseClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("menu_schedules")
     .select(
       `
             id,
+            location_id,
             schedule:schedules(
                 *,
                 schedule_time_slots(*)
@@ -690,18 +715,39 @@ export async function GetMenuSchedules(menuId: string) {
     )
     .eq("menu_id", menuId);
 
+  // When a specific location is selected, return both global assignments
+  // (location_id IS NULL — inherited) and assignments scoped to that location.
+  // When "all" / undefined, return every assignment row.
+  if (locationId && locationId !== "all") {
+    query = query.or(`location_id.is.null,location_id.eq.${locationId}`);
+  }
+
+  const { data, error } = await query;
+
   if (error) {
     console.error("Error getting menu schedules:", error);
     return [];
   }
 
-  // Flatten to just return the schedules with time slots
+  // Flatten to return schedules with time slots, keeping assignment location_id.
   type ScheduleWithSlots = SchedulesModel & {
     schedule_time_slots: ScheduleTimeSlotsModel[];
+    assignment_location_id: string | null;
   };
 
   return data
-    .map((item) => item.schedule as unknown as ScheduleWithSlots | null)
+    .map((item) => {
+      const schedule = item.schedule as unknown as
+        | (SchedulesModel & {
+            schedule_time_slots: ScheduleTimeSlotsModel[];
+          })
+        | null;
+      if (!schedule) return null;
+      return {
+        ...schedule,
+        assignment_location_id: item.location_id,
+      } as ScheduleWithSlots;
+    })
     .filter((s): s is ScheduleWithSlots => s !== null);
 }
 

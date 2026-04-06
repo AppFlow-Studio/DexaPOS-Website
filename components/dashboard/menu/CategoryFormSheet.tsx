@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { AffectsTag } from "./AffectsTag";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -922,10 +923,11 @@ export function CategoryFormSheet({
                 </svg>
                 {editCategory ? "Saving..." : "Creating..."}
               </>
-            ) : editCategory ? (
-              "Save Changes"
             ) : (
-              "Create Category"
+              <>
+                {editCategory ? "Save Changes" : "Create Category"}
+                <AffectsTag ctx={{ level: 1 }} variant="save-button" />
+              </>
             )}
           </Button>
         </DialogFooter>
