@@ -40,7 +40,7 @@ export function MobileBottomTabs({
   const displayCount = mounted ? itemCount : 0;
 
   return (
-    <nav id="mobile-bottom-tabs" className="fixed bottom-0 left-0 right-0 z-40 lg:hidden">
+    <nav id="mobile-bottom-tabs" className="fixed bottom-0 left-0 right-0 z-40 hidden">
       <div
         className="absolute inset-0 backdrop-blur-xl"
         style={{

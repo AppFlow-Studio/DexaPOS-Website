@@ -354,6 +354,14 @@ html:has([data-template]) body {
   display: none; /* Chrome, Safari, Opera */
 }
 
+/* Storefront: keep page scrollable even when a Radix dialog is open.
+   Radix sets data-scroll-locked on <body> to block scroll — we undo it
+   only when a storefront template is mounted (data-template attribute). */
+html:has([data-template]) body[data-scroll-locked] {
+  overflow-y: auto !important;
+  margin-right: 0 !important;
+}
+
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation: none;
