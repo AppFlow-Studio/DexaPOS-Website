@@ -9,23 +9,23 @@ interface TableCircle2ChairProps {
 
 const TableCircle2Chair: React.FC<TableCircle2ChairProps> = ({
   color = "#2DD4BF",
-  width = 80,
-  height = 80,
+  width = 130,
+  height = 130,
   ...props
 }) => {
   return (
     <svg
       width={width}
       height={height}
-      viewBox="0 0 80 80"
+      viewBox="0 0 100 100"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       {...props}
     >
       {/* Chair - top */}
       <rect
-        x="26"
-        y="3"
+        x="36"
+        y="4"
         width="28"
         height="12"
         rx="3"
@@ -38,8 +38,8 @@ const TableCircle2Chair: React.FC<TableCircle2ChairProps> = ({
 
       {/* Chair - bottom */}
       <rect
-        x="26"
-        y="65"
+        x="36"
+        y="84"
         width="28"
         height="12"
         rx="3"
@@ -50,11 +50,11 @@ const TableCircle2Chair: React.FC<TableCircle2ChairProps> = ({
         strokeOpacity="0.5"
       />
 
-      {/* Table */}
+      {/* Table surface */}
       <circle
-        cx="40"
-        cy="40"
-        r="25"
+        cx="50"
+        cy="50"
+        r="31"
         fill={color}
         fillOpacity="0.18"
         stroke={color}

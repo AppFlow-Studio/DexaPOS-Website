@@ -8,8 +8,8 @@ interface CashierStandProps {
 
 const CashierStand: React.FC<CashierStandProps> = ({
   color = "#94A3B8",
-  width = 80,
-  height = 240,
+  width = 100,
+  height = 100,
 }) => {
   return (
     <svg
@@ -42,7 +42,7 @@ const CashierStand: React.FC<CashierStandProps> = ({
         fillOpacity="0.07"
       />
 
-      {/* Monitor / screen */}
+      {/* Monitor */}
       <rect
         x="10"
         y="20"
@@ -55,7 +55,7 @@ const CashierStand: React.FC<CashierStandProps> = ({
         strokeWidth="1.25"
       />
 
-      {/* Screen inner display area */}
+      {/* Screen inner */}
       <rect
         x="15"
         y="25"
@@ -69,7 +69,7 @@ const CashierStand: React.FC<CashierStandProps> = ({
         strokeOpacity="0.4"
       />
 
-      {/* Screen stand/neck */}
+      {/* Screen stand */}
       <rect
         x="34"
         y="100"
@@ -95,12 +95,12 @@ const CashierStand: React.FC<CashierStandProps> = ({
         strokeWidth="1"
       />
 
-      {/* Keyboard key rows */}
+      {/* Key rows */}
       <rect x="14" y="119" width="52" height="5" rx="1" fill={color} fillOpacity="0.08" />
       <rect x="14" y="127" width="52" height="5" rx="1" fill={color} fillOpacity="0.08" />
       <rect x="14" y="135" width="52" height="5" rx="1" fill={color} fillOpacity="0.08" />
 
-      {/* Cash drawer / card reader area */}
+      {/* Cash drawer */}
       <rect
         x="10"
         y="155"
@@ -125,7 +125,7 @@ const CashierStand: React.FC<CashierStandProps> = ({
         fillOpacity="0.2"
       />
 
-      {/* Customer-facing counter edge */}
+      {/* Counter edge */}
       <rect
         x="0.75"
         y="200"

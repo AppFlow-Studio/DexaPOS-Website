@@ -8,23 +8,23 @@ interface ZoneRectangleProps {
 
 const ZoneRectangle: React.FC<ZoneRectangleProps> = ({
   color = "#2DD4BF",
-  width = 100,
-  height = 100,
+  width = 200,
+  height = 200,
 }) => {
-  const defaultSize = 100;
+  const defaultSize = 200;
   const scaleX = (width || defaultSize) / defaultSize;
 
   return (
     <svg
       width={width}
       height={height}
-      viewBox="0 0 100 100"
+      viewBox="0 0 200 200"
       xmlns="http://www.w3.org/2000/svg"
       preserveAspectRatio="none"
     >
       <rect
-        width="100"
-        height="100"
+        width="200"
+        height="200"
         fill={color}
         fillOpacity="0.07"
         stroke={color}
