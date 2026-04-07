@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -137,6 +138,8 @@ export function OrderTypeSection({
   saveNewAddress,
   onSaveNewAddressChange,
 }: OrderTypeSectionProps) {
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+
   return (
     <section className="space-y-4">
       <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-display)", color: "var(--text)" }}>
@@ -298,12 +301,12 @@ export function OrderTypeSection({
         <div className="flex gap-3">
           <Button
             variant={pickupTime === "asap" ? "default" : "outline"}
-            className="flex-1"
+            className="flex-1 hover:bg-transparent active:bg-transparent"
             onClick={() => onPickupTimeChange("asap")}
             style={
               pickupTime === "asap"
                 ? { backgroundColor: "var(--primary)", color: "#fff", borderRadius: "var(--radius)" }
-                : { borderColor: "var(--border)", borderRadius: "var(--radius)" }
+                : { borderColor: "#E5E7EB", color: "#6B7280", borderRadius: "var(--radius)", backgroundColor: "#FFFFFF" }
             }
           >
             ASAP
@@ -313,12 +316,12 @@ export function OrderTypeSection({
           </Button>
           <Button
             variant={pickupTime === "scheduled" ? "default" : "outline"}
-            className="flex-1"
+            className="flex-1 hover:bg-transparent active:bg-transparent"
             onClick={() => onPickupTimeChange("scheduled")}
             style={
               pickupTime === "scheduled"
                 ? { backgroundColor: "var(--primary)", color: "#fff", borderRadius: "var(--radius)" }
-                : { borderColor: "var(--border)", borderRadius: "var(--radius)" }
+                : { borderColor: "#E5E7EB", color: "#6B7280", borderRadius: "var(--radius)", backgroundColor: "#FFFFFF" }
             }
           >
             Schedule
@@ -329,12 +332,12 @@ export function OrderTypeSection({
           <div className="grid grid-cols-2 gap-3 mt-3 animate-in fade-in slide-in-from-top-2">
             <div className="space-y-1.5">
               <Label className="text-sm">Date</Label>
-              <Popover>
+              <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className={cn("w-full justify-start text-left font-normal")}
-                    style={{ borderColor: "var(--border)" }}
+                    className={cn("w-full justify-start text-left font-normal hover:bg-transparent active:bg-transparent")}
+                    style={{ borderColor: "#E5E7EB", color: "#111827" }}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {scheduledDate ? format(scheduledDate, "PPP") : "Pick a date"}
@@ -344,12 +347,17 @@ export function OrderTypeSection({
                   <Calendar
                     mode="single"
                     selected={scheduledDate}
-                    onSelect={onScheduledDateChange}
+                    onSelect={(date) => {
+                      onScheduledDateChange(date);
+                      setDatePickerOpen(false);
+                    }}
                     initialFocus
                     disabled={(date) => {
-                      const maxDate = new Date();
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      const maxDate = new Date(today);
                       maxDate.setDate(maxDate.getDate() + maxFutureDays);
-                      return date < new Date() || date > maxDate;
+                      return date < today || date > maxDate;
                     }}
                   />
                 </PopoverContent>
@@ -376,7 +384,7 @@ export function OrderTypeSection({
                       const ampm = h >= 12 ? "PM" : "AM";
                       const displayHour = h % 12 || 12;
                       return (
-                        <SelectItem key={slot} value={slot}>
+                        <SelectItem key={slot} value={slot} className="focus:bg-transparent hover:bg-transparent data-[highlighted]:bg-gray-50">
                           {displayHour}:{m.toString().padStart(2, "0")} {ampm}
                         </SelectItem>
                       );

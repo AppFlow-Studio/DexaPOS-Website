@@ -410,6 +410,26 @@ export async function getItemsForLocationFlat(
 }
 
 // ============================================================================
+// GET ITEM MODIFIER GROUPS (for Edit Item dialog)
+// Direct query — not dependent on the RPC including modifier_groups.
+// ============================================================================
+
+export async function getItemModifierGroups(menuItemId: string): Promise<
+  Array<{ id: string; name: string; description: string | null }>
+> {
+  if (!menuItemId) return [];
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("menu_item_modifier_groups")
+    .select("modifier_group_id, modifier_groups(id, name, description)")
+    .eq("menu_item_id", menuItemId);
+  if (error || !data) return [];
+  return (data as any[])
+    .map((row) => row.modifier_groups)
+    .filter(Boolean);
+}
+
+// ============================================================================
 // GET MENU WITH CATEGORIES (Primary menu view)
 // ============================================================================
 

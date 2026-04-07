@@ -13,10 +13,11 @@ export const FONT_GOOGLE_URLS: Record<string, string> = {
   "Playfair Display": "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap",
 };
 
+// Typography and geometry vary per template — colors do not.
 export const TEMPLATE_DEFAULTS = {
   classic: {
     bg: "#FFFFFF",
-    card: "#F9FAFB",
+    card: "#FFFFFF",
     text: "#111827",
     textSecondary: "#6B7280",
     border: "#E5E7EB",
@@ -27,11 +28,11 @@ export const TEMPLATE_DEFAULTS = {
       "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap",
   },
   bold: {
-    bg: "#0A0A0A",
-    card: "#171717",
-    text: "#FAFAFA",
-    textSecondary: "#A3A3A3",
-    border: "#262626",
+    bg: "#FFFFFF",
+    card: "#FFFFFF",
+    text: "#111827",
+    textSecondary: "#6B7280",
+    border: "#E5E7EB",
     radius: "16px",
     font: "'Space Grotesk', sans-serif",
     fontDisplay: "'Playfair Display', serif",
@@ -39,11 +40,11 @@ export const TEMPLATE_DEFAULTS = {
       "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap",
   },
   minimal: {
-    bg: "#FAFAF9",
+    bg: "#FFFFFF",
     card: "#FFFFFF",
-    text: "#1C1917",
-    textSecondary: "#78716C",
-    border: "#E7E5E4",
+    text: "#111827",
+    textSecondary: "#6B7280",
+    border: "#E5E7EB",
     radius: "8px",
     font: "'Outfit', sans-serif",
     fontDisplay: "'DM Serif Display', serif",
@@ -64,131 +65,42 @@ export function getContrastTextColor(hex: string): string {
   return luminance > 0.4 ? "#111827" : "#FFFFFF";
 }
 
-const DARK_MODE_VARS = {
-  classic: {
-    dark: {
-      "--bg": "#111827",
-      "--card": "#1F2937",
-      "--text": "#F9FAFB",
-      "--text-secondary": "#9CA3AF",
-      "--border": "#374151",
-      "--surface": "#1F2937",
-      "--surface-text": "#F9FAFB",
-      "--card-text": "#F9FAFB",
-      "--background": "#111827",
-      "--foreground": "#F9FAFB",
-      "--muted": "#1F2937",
-      "--muted-foreground": "#9CA3AF",
-      "--popover": "#1F2937",
-      "--popover-foreground": "#F9FAFB",
-    },
-  },
-  minimal: {
-    dark: {
-      "--bg": "#111827",
-      "--card": "#1F2937",
-      "--text": "#FAFAF9",
-      "--text-secondary": "#A8A29E",
-      "--border": "#44403C",
-      "--surface": "#292524",
-      "--surface-text": "#FAFAF9",
-      "--card-text": "#FAFAF9",
-      "--background": "#1C1917",
-      "--foreground": "#FAFAF9",
-      "--muted": "#292524",
-      "--muted-foreground": "#A8A29E",
-      "--popover": "#292524",
-      "--popover-foreground": "#FAFAF9",
-    },
-  },
-} as const;
-
 /**
- * Returns CSS variable overrides for the requested color mode.
- * Returns an empty object when the mode matches the template's default
- * (no override needed — the base themeVars already have the right values).
- *
- * Bold: only the page background changes on dark toggle — cards/text stay
- * in their native bold colors so item cards are unaffected by the toggle.
+ * Dark mode is disabled on the storefront — always returns an empty object.
+ * The function is kept so callers compile without change.
  */
 export function getDarkModeOverrides(
-  isDark: boolean,
-  templateId: string
+  _isDark: boolean,
+  _templateId: string
 ): Record<string, string> {
-  if (templateId === "bold") {
-    // Only swap the page background; leave card/text/border vars untouched
-    return isDark ? { "--bg": "#1c1c1c", "--background": "#1c1c1c" } : {};
-  }
-  if (templateId === "minimal") {
-    return isDark
-      ? (DARK_MODE_VARS.minimal.dark as Record<string, string>)
-      : {};
-  }
-  // classic
-  return isDark
-    ? (DARK_MODE_VARS.classic.dark as Record<string, string>)
-    : {};
+  return {};
 }
 
 export function buildThemeVars(theme: SiteThemeConfig | null | undefined) {
   const templateId = theme?.templateId || "classic";
   const defaults = TEMPLATE_DEFAULTS[templateId];
 
-  // Bold gets a vivid neon-orange default primary/secondary if merchant hasn't customised
-  const isBold = templateId === "bold";
-  const primary = theme?.primaryColor || (isBold ? "#FF4D00" : "#2DD4BF");
+  // Only the merchant's primary color is variable — everything else is fixed white/gray.
+  const primary = theme?.primaryColor || "#111827";
+  const primaryText = getContrastTextColor(primary);
 
-  // '#f5f5f5' is the DB schema DEFAULT for background_color — it means "not explicitly set
-  // by the merchant". Fall through to the template default so bold stays dark, classic
-  // stays white, etc. Any other value was chosen intentionally and is respected.
-  const SCHEMA_BG_DEFAULT = "#f5f5f5";
-  const bg =
-    theme?.backgroundColor &&
-    theme.backgroundColor.toLowerCase() !== SCHEMA_BG_DEFAULT
-      ? theme.backgroundColor
-      : defaults.bg;
+  // Fixed system palette — identical for all merchants.
+  const bg = "#FFFFFF";
+  const card = "#FFFFFF";
+  const text = "#111827";
+  const border = "#E5E7EB";
+  const textSecondary = "#6B7280";
 
-  // Transparent header is not supported on the Minimal template — fall back to filled.
-  const rawHeaderStyle = theme?.headerStyle || "filled";
-  const headerStyle =
-    templateId === "minimal" && rawHeaderStyle === "transparent"
-      ? "filled"
-      : rawHeaderStyle;
+  // Header is always white with a gray bottom border.
+  const headerBg = "#FFFFFF";
+  const headerText = "#111827";
+  const headerBorder = "#E5E7EB";
 
-  const primaryText =
-    theme?.headerTextColor || getContrastTextColor(primary);
+  // Surface for inputs/panels.
+  const surface = "#F9FAFB";
+  const surfaceText = "#111827";
 
-  let headerBg: string;
-  let headerText: string;
-  let headerBorder: string;
-
-  switch (headerStyle) {
-    case "transparent":
-      headerBg = "transparent";
-      headerText = "#FFFFFF";
-      headerBorder = "transparent";
-      break;
-    case "outlined":
-      headerBg = bg;
-      headerText = primary;
-      headerBorder = primary;
-      break;
-    default:
-      headerBg = primary;
-      headerText = primaryText;
-      headerBorder = "transparent";
-      break;
-  }
-
-  // Surface colors for inputs/panels - ensure contrast even when user customizes
-  const card = theme?.cardColor || defaults.card;
-  const text = theme?.textColor || defaults.text;
-  const isCardDark = getContrastTextColor(card) === "#FFFFFF";
-  const surface = isCardDark ? "#FFFFFF" : card;
-  const surfaceText = isCardDark ? "#111827" : text;
-  const cardText = getContrastTextColor(card);
-
-  // Use merchant's custom font if set, otherwise template default
+  // Use merchant's custom font if set, otherwise template default.
   const font = theme?.fontFamily
     ? `'${theme.fontFamily}', sans-serif`
     : defaults.font;
@@ -196,16 +108,16 @@ export function buildThemeVars(theme: SiteThemeConfig | null | undefined) {
   return {
     // --- Storefront-custom vars ---
     "--primary": primary,
-    "--secondary": theme?.secondaryColor || (isBold ? "#FACC15" : "#10b981"),
-    "--accent": theme?.accentColor || (isBold ? "#A855F7" : primary),
+    "--secondary": primary,
+    "--accent": primary,
     "--bg": bg,
     "--card": card,
     "--text": text,
     "--surface": surface,
     "--surface-text": surfaceText,
-    "--card-text": cardText,
-    "--text-secondary": defaults.textSecondary,
-    "--border": theme?.borderColor || defaults.border,
+    "--card-text": text,
+    "--text-secondary": textSecondary,
+    "--border": border,
     "--radius": defaults.radius,
     "--font": font,
     "--font-display": defaults.fontDisplay,
@@ -215,17 +127,14 @@ export function buildThemeVars(theme: SiteThemeConfig | null | undefined) {
     "--header-text": headerText,
     "--header-border": headerBorder,
     // --- Shadcn UI compatibility overrides ---
-    // Bridge storefront vars to Shadcn's CSS token names so that Shadcn
-    // components (Tabs, Button, Popover, Select, Input, etc.) inherit the
-    // template's color scheme without per-component inline style overrides.
     "--background": bg,
     "--foreground": text,
-    "--muted": card,
-    "--muted-foreground": defaults.textSecondary,
+    "--muted": "#F3F4F6",
+    "--muted-foreground": textSecondary,
     "--popover": card,
-    "--popover-foreground": cardText,
+    "--popover-foreground": text,
     "--primary-foreground": primaryText,
-    "--input": theme?.borderColor || defaults.border,
+    "--input": border,
     "--ring": primary,
   } as React.CSSProperties;
 }

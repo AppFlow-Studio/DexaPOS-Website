@@ -318,7 +318,7 @@ export function CartSidebar({ config, storeConfigId, slug, taxRate = 0, allItems
                               </p>
                               <p
                                 className="text-xs font-medium"
-                                style={{ color: "var(--primary)" }}
+                                style={{ color: "var(--text)" }}
                               >
                                 ${upsellItem.price.toFixed(2)}
                               </p>

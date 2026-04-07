@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { setOptions, importLibrary } from '@googlemaps/js-api-loader'
+
 import { MapPin } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
@@ -48,9 +48,19 @@ function ensureGoogleMapsLoaded(): Promise<void> | null {
   }
 
   notify('loading')
-  setOptions({ key: apiKey, v: 'weekly' })
 
-  loaderPromise = importLibrary('places')
+  loaderPromise = new Promise<void>((resolve, reject) => {
+    const callbackName = `__gmapsReady_${Math.random().toString(36).slice(2)}`
+    ;(window as unknown as Record<string, unknown>)[callbackName] = () => {
+      delete (window as unknown as Record<string, unknown>)[callbackName]
+      resolve()
+    }
+    const script = document.createElement('script')
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=weekly&libraries=places&callback=${callbackName}`
+    script.async = true
+    script.onerror = () => reject(new Error('Failed to load Google Maps script'))
+    document.head.appendChild(script)
+  })
     .then(() => {
       notify('loaded')
     })
