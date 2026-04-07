@@ -65,12 +65,8 @@ export function StorefrontLayout({
   }, []);
   const { setOpen } = useCart();
 
-  const storeName = site?.title || location.name || "Store";
   const templateId: SiteThemeConfig["templateId"] =
     site?.theme_config?.templateId || "classic";
-
-  const pickupEnabled = site?.online_ordering_config?.pickupEnabled !== false;
-  const deliveryEnabled = site?.online_ordering_config?.deliveryEnabled === true;
 
   const rawBusinessHours =
     site?.online_ordering_config?.operatingHours ||
@@ -85,8 +81,6 @@ export function StorefrontLayout({
     () => isStoreOpenNow(rawBusinessHours),
     [rawBusinessHours]
   );
-
-  const prepTime = site?.online_ordering_config?.preparationLeadTime ?? null;
 
   const handleTabChange = (tab: TabType) => {
     if (tab === "cart") {
@@ -108,8 +102,8 @@ export function StorefrontLayout({
 
   const mainContainerClass =
     templateId === "minimal"
-      ? "mx-auto max-w-3xl px-4 sm:px-6 py-6 lg:pb-8 pb-24"
-      : "container mx-auto px-4 py-6 lg:pb-8 pb-24";
+      ? "mx-auto max-w-3xl px-4 sm:px-6 py-6 lg:pb-8 pb-6"
+      : "container mx-auto px-4 py-6 lg:pb-8 pb-6";
 
   const renderContent = () => {
     switch (activeTab) {
@@ -128,15 +122,11 @@ export function StorefrontLayout({
 
   return (
     <>
-      {/* Global order status watcher — shows toast when merchant accepts/declines */}
       <OrderStatusWatcher orderId={activeOrderId} />
-      {/* Header with desktop navigation callbacks */}
+
       <StorefrontHeader
         site={site}
-        location={location}
         storeConfigId={site?.id}
-        todayHours={todayHours}
-        forceFilledHeader={activeTab === "orders"}
         onInfoClick={() => router.push(storefrontPath("/info"))}
         onOrdersClick={() => setIsOrdersSheetOpen(true)}
         onAccountClick={() => setIsAccountOpen(true)}
@@ -146,47 +136,36 @@ export function StorefrontLayout({
         }}
       />
 
-      {/* Hero & upper chrome — plain div, no motion wrapper to avoid stacking context conflict with sticky menu nav */}
       {activeTab === "menu" && (
         <div id="storefront-hero">
-          <HeroBanner
+          {/* Hero — photo only, no text overlay */}
+          <HeroBanner site={site} />
+
+          {/* Info strip — name, address, hours, fulfillment toggle, CTA */}
+          <StoreInfoBar
             site={site}
-            storeName={storeName}
-            locationAddress={`${location.address_line1}, ${location.city}`}
+            location={location}
             isStoreOpen={isStoreOpen}
-            prepTime={prepTime}
-            pickupEnabled={pickupEnabled}
-            deliveryEnabled={deliveryEnabled}
+            todayHours={todayHours}
           />
 
-          {/* Story section — normal flow below hero */}
-          {templateId === "classic" && (
-            <div className="container mx-auto px-4 mt-4">
-              <BranchStorySection site={site} />
-            </div>
-          )}
-          {templateId === "bold" && (
-            <div className="container mx-auto px-4 mt-6 mb-2">
-              <BranchStorySection site={site} />
-            </div>
-          )}
-          {templateId === "minimal" && (
-            <div className="max-w-3xl mx-auto px-4 mt-4">
-              <BranchStorySection site={site} />
-            </div>
-          )}
+          {/* Story / description section */}
+          <div className={
+            templateId === "minimal"
+              ? "max-w-3xl mx-auto px-4 mt-4"
+              : "container mx-auto px-4 mt-4"
+          }>
+            <BranchStorySection site={site} />
+          </div>
         </div>
       )}
 
-      {/* Main Content Area - Plain div avoids AnimatePresence hydration mismatch and lets sticky work */}
       <main id="storefront-menu" className={mainContainerClass}>
         {renderContent()}
       </main>
 
-      {/* Mobile Bottom Tabs */}
       <MobileBottomTabs activeTab={activeTab} onTabChange={handleTabChange} />
 
-      {/* Desktop Side Sheets */}
       <OrdersSheet
         isOpen={isOrdersSheetOpen}
         onOpenChange={setIsOrdersSheetOpen}
@@ -201,7 +180,6 @@ export function StorefrontLayout({
         onWelcomeShown={() => setShowWelcomeDrawer(false)}
       />
 
-      {/* Scroll-to-top — rendered at layout root to avoid inner stacking context issues */}
       <AnimatePresence>
         {showScrollTop && (
           <motion.button
@@ -211,11 +189,10 @@ export function StorefrontLayout({
             transition={{ duration: 0.2 }}
             type="button"
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            className="fixed bottom-44 right-4 lg:bottom-8 z-[55] w-11 h-11 flex items-center justify-center rounded-full"
+            className="fixed bottom-28 right-4 z-[55] w-11 h-11 flex items-center justify-center rounded-full lg:bottom-6"
             style={{
               backgroundColor: "var(--primary)",
               color: "var(--primary-text)",
-              boxShadow: "0 4px 16px color-mix(in srgb, var(--primary) 45%, transparent)",
             }}
             aria-label="Scroll to top"
           >

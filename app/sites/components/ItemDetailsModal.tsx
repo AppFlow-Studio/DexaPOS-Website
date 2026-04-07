@@ -479,7 +479,7 @@ export function ItemDetailsModal({
                         >
                           {suggestion.name}
                         </p>
-                        <p className="text-xs font-medium" style={{ color: "var(--primary)" }}>
+                        <p className="text-xs font-medium" style={{ color: "var(--text)" }}>
                           ${suggestion.price.toFixed(2)}
                         </p>
                       </div>
@@ -492,7 +492,7 @@ export function ItemDetailsModal({
         </div>
 
         <DialogFooter
-          className="shrink-0 flex-row items-center gap-2 border-t p-3 sm:gap-4 sm:p-4 sm:justify-between"
+          className="shrink-0 flex-row items-center gap-3 border-t px-5 pt-3 pb-6 sm:gap-4 sm:px-6 sm:pt-4 sm:pb-6 sm:justify-between"
           style={{
             borderColor: "var(--border)",
             backgroundColor: "var(--bg)",
@@ -530,7 +530,7 @@ export function ItemDetailsModal({
           </div>
 
           <Button
-            className="min-h-[44px] flex-1 touch-manipulation"
+            className="min-h-[44px] flex-1 touch-manipulation mr-1"
             style={{
               backgroundColor: isUnavailable ? "var(--border)" : "var(--primary)",
               color: isUnavailable ? "var(--text-secondary)" : "var(--primary-text)",

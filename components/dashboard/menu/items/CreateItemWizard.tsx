@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, MapPin, Globe, Tag, DollarSign, Loader2 } from "lucide-react";
+import { Plus, MapPin, Globe, Tag, DollarSign, Loader2, Sliders, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +25,9 @@ import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import {
   CreateItemInCategory,
   AddItemToCategory,
+  AssignModifierToItem,
 } from "@/app/dashboard/actions/item-assignments";
+import { useModifierGroups } from "@/app/dashboard/hooks/useModifierGroups";
 import { PriceInputGroup } from "@/components/dashboard/locations/PriceInputGroup";
 import { useEffectivePricing } from "@/app/dashboard/hooks/useEffectivePricing";
 import { ItemPreviewCard } from "@/components/dashboard/menu/ItemPreviewCard";
@@ -57,6 +59,10 @@ export function CreateItemWizard({
     pricingStrategy,
     dualPricingPercentage,
   } = useEffectivePricing();
+  const { data: rawModifierGroups = [] } = useModifierGroups(
+    clerkOrgId,
+    isAllLocations ? null : selectedLocationId,
+  );
   const isDualPricing = pricingStrategy === "dual";
   const imageUpload = useMerchantCdnImageUpload({
     merchantId,
@@ -73,6 +79,8 @@ export function CreateItemWizard({
   const [selectedCategories, setSelectedCategories] = React.useState<
     Set<string>
   >(new Set());
+  const [selectedModifiers, setSelectedModifiers] = React.useState<Set<string>>(new Set());
+  const [modifierSearch, setModifierSearch] = React.useState("");
   const [isSaving, setIsSaving] = React.useState(false);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
 
@@ -90,6 +98,21 @@ export function CreateItemWizard({
     [accessibleCategories, selectedCategories],
   );
 
+  const modifierGroups = rawModifierGroups as Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    is_required: boolean;
+    location_id: string | null;
+    modifier_group_items?: { id: string }[];
+  }>;
+
+  const filteredModifierGroups = React.useMemo(() => {
+    if (!modifierSearch.trim()) return modifierGroups;
+    const lower = modifierSearch.toLowerCase();
+    return modifierGroups.filter((g) => g.name.toLowerCase().includes(lower));
+  }, [modifierGroups, modifierSearch]);
+
   // Reset on close
   React.useEffect(() => {
     if (!open) {
@@ -99,6 +122,8 @@ export function CreateItemWizard({
       setCashPrice(null);
       imageUpload.reset(null);
       setSelectedCategories(new Set());
+      setSelectedModifiers(new Set());
+      setModifierSearch("");
       setErrors({});
     }
   }, [imageUpload.reset, open]);
@@ -137,6 +162,18 @@ export function CreateItemWizard({
         next.delete(categoryId);
       } else {
         next.add(categoryId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleToggleModifier = React.useCallback((groupId: string) => {
+    setSelectedModifiers((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
       }
       return next;
     });
@@ -218,6 +255,15 @@ export function CreateItemWizard({
             successCount++;
           }
         }
+      }
+
+      // Assign modifier groups after item creation
+      if (createdItemId && selectedModifiers.size > 0) {
+        await Promise.allSettled(
+          Array.from(selectedModifiers).map((groupId) =>
+            AssignModifierToItem(createdItemId!, groupId),
+          ),
+        );
       }
 
       if (successCount > 0) {
@@ -309,6 +355,8 @@ export function CreateItemWizard({
             <div className="space-y-2">
               <label className="text-sm font-medium">Item Name *</label>
               <Input
+                autoFocus
+                type="text"
                 placeholder="e.g., Margherita Pizza"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -449,6 +497,98 @@ export function CreateItemWizard({
                 </div>
               )}
             </div>
+            {/* Modifier Groups */}
+            <div className="space-y-3">
+              <label className="text-base font-semibold">
+                Modifier Groups{" "}
+                <span className="text-muted-foreground text-sm font-normal">
+                  (Optional)
+                </span>
+              </label>
+              {modifierGroups.length === 0 ? (
+                <div className="p-4 rounded-lg border bg-muted/30 text-center">
+                  <Sliders className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
+                  <p className="text-sm text-muted-foreground">
+                    No modifier groups available. Create modifier groups first.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {modifierGroups.length > 3 && (
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                      <Input
+                        type="text"
+                        placeholder="Search modifier groups..."
+                        value={modifierSearch}
+                        onChange={(e) => setModifierSearch(e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-3">
+                    {filteredModifierGroups.map((group) => {
+                      const isSelected = selectedModifiers.has(group.id);
+                      return (
+                        <label
+                          key={group.id}
+                          className={cn(
+                            "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all",
+                            isSelected
+                              ? "border-primary bg-primary/5 ring-1 ring-primary"
+                              : "border-border hover:border-primary/30 hover:bg-muted/30",
+                          )}
+                        >
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() =>
+                              handleToggleModifier(group.id)
+                            }
+                            className="shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="font-medium text-sm">
+                                {group.name}
+                              </h4>
+                              <span
+                                className={cn(
+                                  "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium",
+                                  group.is_required
+                                    ? "bg-red-50 text-red-600 border-red-200"
+                                    : "bg-blue-50 text-blue-600 border-blue-200",
+                                )}
+                              >
+                                {group.is_required ? "Required" : "Optional"}
+                              </span>
+                              {group.modifier_group_items &&
+                                group.modifier_group_items.length > 0 && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {group.modifier_group_items.length} option
+                                    {group.modifier_group_items.length !== 1
+                                      ? "s"
+                                      : ""}
+                                  </span>
+                                )}
+                            </div>
+                            {group.description && (
+                              <p className="text-xs text-muted-foreground truncate mt-1">
+                                {group.description}
+                              </p>
+                            )}
+                          </div>
+                        </label>
+                      );
+                    })}
+                    {filteredModifierGroups.length === 0 && modifierSearch && (
+                      <p className="text-sm text-muted-foreground text-center py-2">
+                        No modifier groups match your search
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -477,6 +617,12 @@ export function CreateItemWizard({
                   ? `${selectedCategoryNames.length} categor${selectedCategoryNames.length === 1 ? "y" : "ies"} selected`
                   : "No categories selected yet"}
               </div>
+              {selectedModifiers.size > 0 && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Sliders className="h-4 w-4" />
+                  {selectedModifiers.size} modifier group{selectedModifiers.size !== 1 ? "s" : ""} selected
+                </div>
+              )}
               {!isAllLocations && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <MapPin className="h-4 w-4" />

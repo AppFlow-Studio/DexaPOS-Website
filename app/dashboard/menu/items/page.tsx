@@ -82,7 +82,7 @@ import {
   NewEditItemFormSheet,
   EditItemWithOverrides,
 } from "@/components/dashboard/menu/NewEditItemFormSheet";
-import { FlatItem, resetItemToLevel } from "../../actions/menu-items-rpc";
+import { FlatItem, resetItemToLevel, getItemModifierGroups } from "../../actions/menu-items-rpc";
 import { CategoryWithItems } from "@/types/menu";
 import {
   useLocationStore,
@@ -1084,12 +1084,35 @@ export default function MenuItemsPage() {
   // Handlers
   const useNewEditPage =
     process.env.NEXT_PUBLIC_NEW_ITEM_EDIT === "true";
-  const handleQuickEdit = (item: FlatItem) => {
+  const handleQuickEdit = async (item: FlatItem) => {
     if (useNewEditPage) {
       router.push(`/dashboard/menu/items/${item.id}/edit`);
       return;
     }
-    setEditingItem(item);
+    // If the RPC didn't return modifier_groups, fetch them directly
+    let itemWithModifiers = item;
+    if (!item.modifier_groups || item.modifier_groups.length === 0) {
+      const groups = await getItemModifierGroups(item.id);
+      if (groups.length > 0) {
+        itemWithModifiers = {
+          ...item,
+          modifier_groups: groups.map((g: any) => ({
+            id: g.id,
+            name: g.name,
+            description: g.description ?? null,
+            base_min_selections: 0,
+            base_max_selections: null,
+            base_is_required: false,
+            base_is_active: true,
+            location_override: null,
+            effective_availability: true,
+            has_location_override: false,
+            items: [],
+          })),
+        };
+      }
+    }
+    setEditingItem(itemWithModifiers);
     setIsCreateSheetOpen(true);
   };
 

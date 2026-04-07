@@ -12609,6 +12609,7 @@ BEGIN
                 'allergens', mi.allergens,
                 'meal_types', mi.meal_types,
                 'card_bg_color', mi.card_bg_color,
+                'location_id', mi.location_id,
 
                 -- Stock info
                 'stock_tracking_mode', mi.stock_tracking_mode,
@@ -12689,6 +12690,89 @@ BEGIN
                 -- Override flags
                 'has_location_override', (lio.id IS NOT NULL),
 
+                -- ============================================================
+                -- MODIFIER GROUPS WITH ITEMS
+                -- All groups assigned to this item, with location overrides.
+                -- Shown in the Edit Item dialog (read-only when location-scoped).
+                -- ============================================================
+                'modifier_groups', COALESCE(
+                    (
+                        SELECT json_agg(
+                            json_build_object(
+                                'id', mg.id,
+                                'name', mg.name,
+                                'description', mg.description,
+
+                                -- Base selection rules
+                                'base_min_selections', mg.min_selections,
+                                'base_max_selections', mg.max_selections,
+                                'base_is_required', mg.is_required,
+                                'base_is_active', mg.is_active,
+
+                                -- Location override
+                                'location_override', CASE
+                                    WHEN lmgo.id IS NOT NULL THEN json_build_object(
+                                        'id', lmgo.id,
+                                        'is_available', lmgo.is_active
+                                    )
+                                    ELSE NULL
+                                END,
+
+                                'effective_availability', COALESCE(lmgo.is_active, mg.is_active),
+                                'has_location_override', (lmgo.id IS NOT NULL),
+
+                                -- Modifier items
+                                'items', COALESCE(
+                                    (
+                                        SELECT json_agg(
+                                            json_build_object(
+                                                'id', mgi.id,
+                                                'name', mgi.name,
+                                                'description', mgi.description,
+
+                                                -- Base prices
+                                                'base_price', mgi.price_modifier,
+                                                'base_is_default', mgi.is_default,
+                                                'base_is_active', mgi.is_active,
+
+                                                -- Location override
+                                                'location_override', CASE
+                                                    WHEN lmio.id IS NOT NULL THEN json_build_object(
+                                                        'id', lmio.id,
+                                                        'custom_price', lmio.price_modifier,
+                                                        'is_active', lmio.is_active
+                                                    )
+                                                    ELSE NULL
+                                                END,
+
+                                                -- Effective values
+                                                'effective_price', COALESCE(lmio.price_modifier, mgi.price_modifier),
+                                                'effective_is_active', COALESCE(lmio.is_active, mgi.is_active),
+                                                'has_location_override', (lmio.id IS NOT NULL)
+                                            )
+                                            ORDER BY mgi.name
+                                        )
+                                        FROM modifier_group_items mgi
+                                        LEFT JOIN location_modifier_item_overrides lmio
+                                            ON lmio.modifier_group_item_id = mgi.id
+                                            AND lmio.location_id = p_location_id
+                                        WHERE mgi.modifier_group_id = mg.id
+                                    ),
+                                    '[]'::json
+                                )
+                            )
+                            ORDER BY mg.name
+                        )
+                        FROM menu_item_modifier_groups mimg
+                        JOIN modifier_groups mg ON mg.id = mimg.modifier_group_id
+                        LEFT JOIN location_modifier_group_overrides lmgo
+                            ON lmgo.modifier_group_id = mg.id
+                            AND lmgo.location_id = p_location_id
+                        WHERE mimg.menu_item_id = mi.id
+                    ),
+                    '[]'::json
+                ),
+
                 -- Categories this item belongs to (for UI filtering/display)
                 -- NOTE: We show categories but don't use their prices!
                 'categories', COALESCE(
@@ -12737,7 +12821,7 @@ $$;
 ALTER FUNCTION "public"."get_items_for_location_library"("p_merchant_id" "uuid", "p_location_id" "uuid") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."get_items_for_location_library"("p_merchant_id" "uuid", "p_location_id" "uuid") IS 'Get items for Items Library view with L2 (location override) + L1 (base) pricing only. Category prices are excluded from effective_price calculation.';
+COMMENT ON FUNCTION "public"."get_items_for_location_library"("p_merchant_id" "uuid", "p_location_id" "uuid") IS 'Get items for Items Library view with L2 (location override) + L1 (base) pricing only. Category prices are excluded from effective_price calculation. Includes modifier groups for display in the Edit Item dialog.';
 
 
 

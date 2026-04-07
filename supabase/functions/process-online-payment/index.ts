@@ -17,50 +17,7 @@ import { createClient } from 'npm:@supabase/supabase-js'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const DEJAVOO_IPOS_API_KEY = Deno.env.get('DEJAVOO_IPOS_API_KEY')!
-const DEJAVOO_IPOS_SECRET_KEY = Deno.env.get('DEJAVOO_IPOS_SECRET_KEY')!
-
-// ============================================================================
-// iPOS AUTHENTICATION
-// ============================================================================
-
-const IPOS_AUTH_URL = 'https://auth.ipospays.tech/v1/authenticate-token'
-
-async function authenticateIPOS(
-  apiKey: string,
-  secretKey: string
-): Promise<{ success: true; token: string } | { success: false; error: string }> {
-  try {
-    const response = await fetch(IPOS_AUTH_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apiKey': apiKey,
-        'secretKey': secretKey,
-        'scope': 'PaymentTokenization',
-      },
-    })
-
-    if (!response.ok) {
-      const text = await response.text()
-      console.error('[IPOS_AUTH] Authentication failed:', response.status, text)
-      return { success: false, error: `iPOS authentication failed: ${response.status}` }
-    }
-
-    const data = await response.json()
-    const token = data.token || data.access_token || data.jwt
-
-    if (!token) {
-      console.error('[IPOS_AUTH] No token in response:', JSON.stringify(data))
-      return { success: false, error: 'No token returned from iPOS authentication' }
-    }
-
-    return { success: true, token }
-  } catch (err) {
-    console.error('[IPOS_AUTH] Network error:', err)
-    return { success: false, error: `iPOS authentication network error: ${String(err)}` }
-  }
-}
+const DEJAVOO_SECURITY_KEY_TOKEN = Deno.env.get('DEJAVOO_SECURITY_KEY_TOKEN')!
 
 // ============================================================================
 // CORS TO DO MIGHT CHANGE LATER
@@ -137,23 +94,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
     )
   }
 
-  // ---- Authenticate with iPOS Pays ----
-  const authResult = await authenticateIPOS(DEJAVOO_IPOS_API_KEY, DEJAVOO_IPOS_SECRET_KEY)
-
-  if (!authResult.success) {
-    console.error('[PROCESS_PAYMENT] iPOS auth failed:', authResult.error)
+  if (!DEJAVOO_SECURITY_KEY_TOKEN) {
     return jsonResponse(
-      { success: false, error: 'Payment service is temporarily unavailable.' },
-      502
+      { success: false, error: 'Payment service is not configured.' },
+      503
     )
-  }  
-
-  console.log('[PROCESS_PAYMENT] iPOS auth successful')
-  console.log('[PROCESS_PAYMENT] authResult', authResult)
+  }
 
   return jsonResponse({
     success: true,
-    security_key: authResult.token,
+    security_key: DEJAVOO_SECURITY_KEY_TOKEN,
   })
 
   } catch (err) {
