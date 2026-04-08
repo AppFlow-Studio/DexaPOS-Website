@@ -9,8 +9,8 @@ interface TableCircle4ChairProps {
 
 const TableCircle4Chair: React.FC<TableCircle4ChairProps> = ({
   color = "#2DD4BF",
-  width = 90,
-  height = 90,
+  width = 130,
+  height = 130,
   ...props
 }) => {
   return (
@@ -78,7 +78,7 @@ const TableCircle4Chair: React.FC<TableCircle4ChairProps> = ({
         strokeOpacity="0.5"
       />
 
-      {/* Table */}
+      {/* Table surface */}
       <circle
         cx="45"
         cy="45"

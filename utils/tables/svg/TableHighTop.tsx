@@ -9,22 +9,22 @@ interface TableHighTopProps {
 
 const TableHighTop: React.FC<TableHighTopProps> = ({
   color = "#2DD4BF",
-  width = 60,
-  height = 60,
+  width = 120,
+  height = 120,
 }) => {
   return (
     <svg
       width={width}
       height={height}
-      viewBox="0 0 60 60"
+      viewBox="0 0 80 80"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
       {/* Table top surface */}
       <circle
-        cx="30"
-        cy="30"
-        r="27"
+        cx="40"
+        cy="40"
+        r="36"
         fill={color}
         fillOpacity="0.18"
         stroke={color}
@@ -34,9 +34,9 @@ const TableHighTop: React.FC<TableHighTopProps> = ({
 
       {/* Overhang ring */}
       <circle
-        cx="30"
-        cy="30"
-        r="21"
+        cx="40"
+        cy="40"
+        r="28"
         fill="none"
         stroke={color}
         strokeWidth="0.75"
@@ -45,9 +45,9 @@ const TableHighTop: React.FC<TableHighTopProps> = ({
 
       {/* Pedestal base */}
       <circle
-        cx="30"
-        cy="30"
-        r="7"
+        cx="40"
+        cy="40"
+        r="9"
         fill={color}
         fillOpacity="0.22"
         stroke={color}

@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(node -e ':*)",
-      "Bash(npx supabase:*)"
+      "Bash(npx supabase:*)",
+      "Bash(npm install:*)",
+      "Bash(pnpm add:*)",
+      "Bash(node -e \"const {execSync} = require\\('child_process'\\); console.log\\(execSync\\('npm install @googlemaps/js-api-loader --legacy-peer-deps 2>&1'\\).toString\\(\\)\\)\")",
+      "Bash(cmd.exe /c \"cd \\\\\"c:\\\\Users\\\\saleh\\\\OneDrive - Lebanese American University\\\\Apps\\\\Dexa\\\\DexaPOS-Website\\\\\" && npm install @googlemaps/js-api-loader --legacy-peer-deps\")"
     ]
   },
   "hooks": {

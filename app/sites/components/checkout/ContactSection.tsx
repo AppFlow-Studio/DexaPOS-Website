@@ -63,9 +63,10 @@ export function ContactSection({
               variant="outline"
               size="sm"
               onClick={onSignInClick}
+              className="hover:bg-transparent active:bg-transparent"
               style={{
-                borderColor: "var(--primary)",
-                color: "var(--primary)",
+                borderColor: "#E5E7EB",
+                color: "#6B7280",
                 borderRadius: "var(--radius)",
               }}
             >
@@ -81,9 +82,10 @@ export function ContactSection({
                 variant="outline"
                 size="sm"
                 onClick={onSignUpClick}
+                className="hover:bg-transparent active:bg-transparent"
                 style={{
-                  borderColor: "var(--border)",
-                  color: "var(--text-secondary)",
+                  borderColor: "#E5E7EB",
+                  color: "#6B7280",
                   borderRadius: "var(--radius)",
                 }}
               >

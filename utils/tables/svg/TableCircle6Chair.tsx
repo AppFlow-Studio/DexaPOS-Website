@@ -8,29 +8,27 @@ interface TableCircle6ChairProps {
 }
 
 const ANGLES = [0, 60, 120, 180, 240, 300];
-const CENTER = 60;
 const CHAIR_ORBIT = 38;
 const CHAIR_W = 16;
 const CHAIR_H = 12;
 
 const TableCircle6Chair: React.FC<TableCircle6ChairProps> = ({
   color = "#2DD4BF",
-  width = 120,
-  height = 120,
+  width = 150,
+  height = 150,
 }) => {
   return (
     <svg
       width={width}
       height={height}
-      viewBox="0 0 120 120"
+      viewBox="0 0 150 150"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
-      {/* Chairs */}
       {ANGLES.map((angleDeg) => {
         const rad = (angleDeg * Math.PI) / 180;
-        const cx = CENTER + CHAIR_ORBIT * Math.sin(rad);
-        const cy = CENTER - CHAIR_ORBIT * Math.cos(rad);
+        const cx = 75 + CHAIR_ORBIT * 1.25 * Math.sin(rad);
+        const cy = 75 - CHAIR_ORBIT * 1.25 * Math.cos(rad);
 
         return (
           <g
@@ -53,11 +51,11 @@ const TableCircle6Chair: React.FC<TableCircle6ChairProps> = ({
         );
       })}
 
-      {/* Table */}
+      {/* Table surface */}
       <circle
-        cx="60"
-        cy="60"
-        r="32"
+        cx="75"
+        cy="75"
+        r="41"
         fill={color}
         fillOpacity="0.18"
         stroke={color}

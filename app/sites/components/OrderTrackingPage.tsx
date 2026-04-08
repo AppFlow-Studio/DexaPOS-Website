@@ -287,14 +287,7 @@ export function OrderTrackingPage({
           style={{ color: "var(--text)" }}
         >
           <ArrowLeft className="h-4 w-4" style={{ color: "var(--primary)" }} />
-          {logoUrl && (
-            <img
-              src={logoUrl}
-              alt={storeName}
-              className="h-7 w-7 rounded-full object-cover"
-            />
-          )}
-          {storeName}
+          Back to menu
         </Link>
       </header>
 

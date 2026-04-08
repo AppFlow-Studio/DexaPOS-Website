@@ -290,6 +290,7 @@ export default function CategoriesPage() {
     has_location_item_override: !!item.menu_item.location_item_override,
     has_category_override: item.category_price !== null,
     has_location_category_override: !!item.menu_item.location_category_override,
+    menu_item_modifier_groups: item.menu_item.modifier_groups || [],
   });
 
   // Handle toggling category visibility at location level
