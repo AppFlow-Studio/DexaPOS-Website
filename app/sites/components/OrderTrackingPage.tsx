@@ -179,7 +179,7 @@ export function OrderTrackingPage({
     if (pendingCountdown === null) return;
     if (pendingCountdown === 0) {
       if (sessionToken) {
-        cancelOnlineOrder(orderId, sessionToken, "No response from restaurant within 1 minute").then(async (result) => {
+        cancelOnlineOrder(orderId, sessionToken, "No response from restaurant within 1 minute", "timeout").then(async (result) => {
           if (result.success) {
             toast.error("Order Cancelled", {
               description: "No response from the restaurant within 1 minute. Your order has been cancelled.",
@@ -223,7 +223,7 @@ export function OrderTrackingPage({
     if (!sessionToken || !cancelReason.trim()) return;
     setIsCancelling(true);
     setCancelError(null);
-    const result = await cancelOnlineOrder(orderId, sessionToken, cancelReason.trim());
+    const result = await cancelOnlineOrder(orderId, sessionToken, cancelReason.trim(), "customer");
     if (!result.success) {
       setCancelError(result.error ?? "Failed to cancel order");
       setIsCancelling(false);

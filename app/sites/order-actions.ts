@@ -444,34 +444,54 @@ export interface OrderHistoryEntry {
 export async function cancelOnlineOrder(
   orderId: string,
   sessionToken: string,
-  reason: string
+  reason: string,
+  trigger: "customer" | "timeout" = "customer"
 ): Promise<{ success: boolean; error?: string }> {
   if (!orderId || !sessionToken) {
     return { success: false, error: "Missing order or session" };
   }
 
-  const supabase = createServiceRoleClient();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceRoleKey) {
+    return { success: false, error: "Cancel service is not configured." };
+  }
 
-  const { data, error } = await supabase.rpc("cancel_online_order_by_customer", {
-    p_order_id:     orderId,
-    p_session_token: sessionToken,
-    p_reason:       reason || null,
-  });
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/cancel-online-order`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceRoleKey}`,
+        apikey: serviceRoleKey,
+      },
+      body: JSON.stringify({
+        order_id: orderId,
+        session_token: sessionToken,
+        reason: reason || null,
+        trigger,
+      }),
+    });
 
-  if (error) {
-    console.error("cancel_online_order_by_customer error:", error);
+    const result = await response.json();
+    if (!response.ok || !result?.success) {
+      return {
+        success: false,
+        error: result?.error ?? "Failed to cancel order. Please try again.",
+      };
+    }
+
+    if (result.customer_email) {
+      const { sendOrderCancellationEmail } = await import("./recovery-actions");
+      void sendOrderCancellationEmail(orderId, result.customer_email).catch(() => {});
+    }
+
+    void broadcastOrderStatus(orderId, result.status || "cancelled");
+    return { success: true };
+  } catch (error) {
+    console.error("cancel-online-order error:", error);
     return { success: false, error: "Failed to cancel order. Please try again." };
   }
-
-  const result = data as any;
-  if (!result?.success) {
-    return { success: false, error: result?.error ?? "Could not cancel order" };
-  }
-
-  // Broadcast so any open storefront page / tracking page shows the updated status instantly
-  void broadcastOrderStatus(orderId, "cancelled");
-
-  return { success: true };
 }
 
 export async function getOrderHistory(
