@@ -68,6 +68,8 @@ import {
   Search,
   Loader2,
   Flame,
+  Ruler,
+  Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMerchantCdnImageUpload } from "@/lib/cdn/use-merchant-cdn-image-upload";
@@ -119,6 +121,8 @@ import {
   SetItemNew,
 } from "@/app/dashboard/actions/location-menu-overrides";
 import { RecipeManager } from "@/app/dashboard/menu/components/RecipeManager";
+import { ItemSizesManager } from "@/components/dashboard/menu/ItemSizesManager";
+import { ItemAddonsManager } from "@/components/dashboard/menu/ItemAddonsManager";
 import { PriceInputGroup } from "@/components/dashboard/locations/PriceInputGroup";
 import { useEffectivePricing } from "@/app/dashboard/hooks/useEffectivePricing";
 import {
@@ -846,6 +850,8 @@ export function NewEditItemFormSheet({
     general: true,
     pricing: true,
     modifiers: false,
+    sizes: false,
+    addons: false,
     categories: false,
     tax: false,
     availability: false,
@@ -2225,6 +2231,66 @@ export function NewEditItemFormSheet({
                       })()}
                       </CollapsibleContent>
                     </Collapsible>
+
+                    {/* SECTION 3B: SIZES (collapsible, edit-only) */}
+                    {editItem && (
+                    <Collapsible
+                      open={expandedSections.sizes}
+                      onOpenChange={() => toggleSection("sizes")}
+                      className="border-t pt-4 mt-6"
+                    >
+                      <CollapsibleTrigger asChild>
+                        <button type="button" className="flex items-center justify-between w-full group">
+                          <div className="flex items-center gap-2">
+                            <Ruler className="h-4 w-4 text-blue-500" />
+                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Sizes</span>
+                          </div>
+                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.sizes && "rotate-180")} />
+                        </button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-4 pt-4">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1.5 px-1">
+                          <Info className="h-3 w-3 shrink-0" />
+                          Define size variants (e.g. Small, Medium, Large) with price adjustments from the base price.
+                        </p>
+                        <ItemSizesManager
+                          menuItemId={editItem.id}
+                          clerkOrgId={clerkOrgId || ""}
+                          isEditable={editingContext.canEditBaseFields || isItemLocationOwned}
+                        />
+                      </CollapsibleContent>
+                    </Collapsible>
+                    )}
+
+                    {/* SECTION 3C: ADDONS (collapsible, edit-only) */}
+                    {editItem && (
+                    <Collapsible
+                      open={expandedSections.addons}
+                      onOpenChange={() => toggleSection("addons")}
+                      className="border-t pt-4 mt-6"
+                    >
+                      <CollapsibleTrigger asChild>
+                        <button type="button" className="flex items-center justify-between w-full group">
+                          <div className="flex items-center gap-2">
+                            <Package className="h-4 w-4 text-orange-500" />
+                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Addons</span>
+                          </div>
+                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.addons && "rotate-180")} />
+                        </button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-4 pt-4">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1.5 px-1">
+                          <Info className="h-3 w-3 shrink-0" />
+                          Add extras customers can choose (e.g. Extra Cheese, Bacon) with fixed prices.
+                        </p>
+                        <ItemAddonsManager
+                          menuItemId={editItem.id}
+                          clerkOrgId={clerkOrgId || ""}
+                          isEditable={editingContext.canEditBaseFields || isItemLocationOwned}
+                        />
+                      </CollapsibleContent>
+                    </Collapsible>
+                    )}
 
                     {/* SECTION 4: TAX & FEES (collapsible) */}
                     <Collapsible

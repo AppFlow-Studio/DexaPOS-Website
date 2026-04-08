@@ -72,6 +72,9 @@ import { LocationLibraryItem } from "@/types/menu";
 import { Switch } from "@/components/ui/switch";
 import { GetItemIsPopular, SetItemPopular, GetItemIsNew, SetItemNew } from "../../../actions/location-menu-overrides";
 import { Flame } from "lucide-react";
+import { Ruler, Package } from "lucide-react";
+import { ItemSizesManager } from "@/components/dashboard/menu/ItemSizesManager";
+import { ItemAddonsManager } from "@/components/dashboard/menu/ItemAddonsManager";
 
 // ============================================================================
 // TYPES & HELPERS
@@ -1011,6 +1014,46 @@ export default function MenuItemDetailPage() {
                   })}
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Item Sizes Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Ruler className="h-5 w-5 text-blue-500" />
+                Item Sizes
+              </CardTitle>
+              <CardDescription>
+                Size variants with price adjustments (e.g. Small, Medium, Large)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ItemSizesManager
+                menuItemId={itemId}
+                clerkOrgId={clerkOrgId || ""}
+                isEditable={editingContext.canEditBaseFields}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Item Addons Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5 text-orange-500" />
+                Item Addons
+              </CardTitle>
+              <CardDescription>
+                Extra options customers can add (e.g. Extra Cheese, Bacon)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ItemAddonsManager
+                menuItemId={itemId}
+                clerkOrgId={clerkOrgId || ""}
+                isEditable={editingContext.canEditBaseFields}
+              />
             </CardContent>
           </Card>
 

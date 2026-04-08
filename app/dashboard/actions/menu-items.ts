@@ -973,6 +973,22 @@ export async function DeleteMenuItem(
     .eq("id", itemId)
     .single();
 
+  // Clean up child records before deleting the parent.
+  // This is defensive — the migration adds ON DELETE CASCADE, but it may
+  // not be deployed yet.  Order is not important because nothing references
+  // these tables except order_items.selected_size_id (SET NULL in migration).
+  await Promise.all([
+    supabase.from("item_sizes").delete().eq("menu_item_id", itemId),
+    supabase.from("item_addons").delete().eq("menu_item_id", itemId),
+    supabase.from("item_stock").delete().eq("menu_item_id", itemId),
+    supabase.from("category_items").delete().eq("menu_item_id", itemId),
+    supabase.from("menu_item_modifier_groups").delete().eq("menu_item_id", itemId),
+    supabase.from("menu_item_menus").delete().eq("menu_item_id", itemId),
+    supabase.from("location_item_overrides").delete().eq("menu_item_id", itemId),
+    supabase.from("location_menu_item_overrides").delete().eq("menu_item_id", itemId),
+    supabase.from("menu_item_discounts").delete().eq("menu_item_id", itemId),
+  ]);
+
   const { error } = await supabase.from("menu_items").delete().eq("id", itemId);
   if (error) {
     console.error("Error deleting menu item:", error);
