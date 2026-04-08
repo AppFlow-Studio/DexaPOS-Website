@@ -258,12 +258,17 @@ export function CheckoutPage({
 
     // Step 1: Tokenize card via FTD (skip if no securityKey — test mode, or cash payment)
     let paymentTokenId: string | undefined;
+    let paymentCardType: string | null = null;
+    let paymentCardLastFour: string | null = null;
     if (securityKey && !payCashInStore) {
       try {
         if (!paymentFormRef.current) {
           throw new Error("Payment form not ready. Please wait a moment.");
         }
-        paymentTokenId = await paymentFormRef.current.tokenize();
+        const tokenizedCard = await paymentFormRef.current.tokenize();
+        paymentTokenId = tokenizedCard.tokenId;
+        paymentCardType = tokenizedCard.cardType;
+        paymentCardLastFour = tokenizedCard.cardLastFour;
       } catch (err: any) {
         setLoading(false);
         setPaymentError(err.message || "Card tokenization failed.");
@@ -355,7 +360,10 @@ export function CheckoutPage({
             requested_time: requestedTime,
             tip: tipAmount,
             special_instructions: instructions || undefined,
+            pay_cash_in_store: payCashInStore,
             ...(paymentTokenId ? { payment_token_id: paymentTokenId } : {}),
+            ...(paymentCardType ? { payment_card_type: paymentCardType } : {}),
+            ...(paymentCardLastFour ? { payment_card_last_four: paymentCardLastFour } : {}),
             // Contact info (always sent — edge function uses session data if available)
             customer_name: `${firstName} ${lastName}`.trim() || undefined,
             customer_phone: customer?.phone || phone.trim() || undefined,

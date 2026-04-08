@@ -17,7 +17,11 @@ declare global {
 }
 
 export interface PaymentCardFormHandle {
-  tokenize: () => Promise<string>;
+  tokenize: () => Promise<{
+    tokenId: string;
+    cardType: string | null;
+    cardLastFour: string | null;
+  }>;
 }
 
 interface PaymentCardFormProps {
@@ -31,6 +35,21 @@ interface PaymentCardFormProps {
 // ---------------------------------------------------------------------------
 
 type CardBrand = "visa" | "mastercard" | "amex" | "discover" | "unknown";
+
+function toDisplayCardType(brand: CardBrand): string | null {
+  switch (brand) {
+    case "visa":
+      return "Visa";
+    case "mastercard":
+      return "Mastercard";
+    case "amex":
+      return "Amex";
+    case "discover":
+      return "Discover";
+    default:
+      return null;
+  }
+}
 
 function detectCardBrand(number: string): CardBrand {
   const digits = number.replace(/\D/g, "");
@@ -221,7 +240,11 @@ export const PaymentCardForm = forwardRef<
     };
   }, [securityKey, onError]);
 
-  const tokenize = useCallback(async (): Promise<string> => {
+  const tokenize = useCallback(async (): Promise<{
+    tokenId: string;
+    cardType: string | null;
+    cardLastFour: string | null;
+  }> => {
     if (!window.postData) {
       throw new Error(
         "Payment form not ready. Please wait a moment and try again."
@@ -232,8 +255,12 @@ export const PaymentCardForm = forwardRef<
     console.log("[FTD] postData result:", result);
 
     // FTD may return the token as a plain string
+    const cardDigits = cardRef.current?.value.replace(/\D/g, "") || "";
+    const cardLastFour = cardDigits.slice(-4) || null;
+    const cardType = toDisplayCardType(brand);
+
     if (typeof result === "string" && result.length > 0) {
-      return result;
+      return { tokenId: result, cardType, cardLastFour };
     }
 
     if (result?.error) {
@@ -253,8 +280,12 @@ export const PaymentCardForm = forwardRef<
       );
     }
 
-    return tokenId;
-  }, []);
+    return {
+      tokenId,
+      cardType,
+      cardLastFour,
+    };
+  }, [brand]);
 
   useImperativeHandle(ref, () => ({ tokenize }), [tokenize]);
 

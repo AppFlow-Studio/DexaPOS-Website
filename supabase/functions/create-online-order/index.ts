@@ -26,23 +26,12 @@ import {
   validateDeliveryZone,
   validateMinimumOrder,
 } from './validators.ts'
-import {
-  authenticateIPOS,
-  createHostedPayment,
-  chargeCardToken,
-  chargePaymentToken,
-  type IPOSCredentials,
-} from './ipospays.ts'
-
 // ============================================================================
 // ENV
 // ============================================================================
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const DEJAVOO_IPOS_API_KEY = Deno.env.get('DEJAVOO_IPOS_API_KEY')!
-const DEJAVOO_IPOS_SECRET_KEY = Deno.env.get('DEJAVOO_IPOS_SECRET_KEY')!
-
 // ============================================================================
 // REQUEST TYPES
 // ============================================================================
@@ -80,6 +69,9 @@ interface CreateOnlineOrderRequest {
   special_instructions?: string
   card_token?: string             // for returning customers with saved cards
   payment_token_id?: string       // from FTD (Freedom to Design) card tokenization
+  pay_cash_in_store?: boolean
+  payment_card_type?: string | null
+  payment_card_last_four?: string | null
   // Guest checkout contact info (used when session is not authenticated)
   customer_name?: string
   customer_phone?: string
@@ -244,8 +236,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const storeConfigId: string = storeConfig.id
   const ipospaysTpn: string | null = storeConfig.ipospays_tpn
   const estimatedMinutes: number = storeConfig.estimated_prep_minutes ?? 20
-  const storeSlug: string = storeConfig.slug
-
   // Auto-create guest session if none exists (guest checkout)
   if (!session && storeConfig) {
     const guestSessionToken = `guest-${crypto.randomUUID()}`
@@ -506,16 +496,25 @@ Deno.serve(async (req: Request): Promise<Response> => {
     )
   }
 
-  // ---- Step 8: Check payment configuration ----
-  // COMMENTED OUT FOR TESTING — payment bypass mode
-  // if (!ipospaysTpn) {
-  //   logError('PAYMENT', 'No iPOS Pays TPN configured for this store', { storeConfigId })
-  //   return errorResponse(
-  //     'Online payment is not configured for this store. Please contact the store.',
-  //     'payment_not_configured',
-  //     503
-  //   )
-  // }
+  // ---- Step 8: Resolve payment path ----
+  const payCashInStore = body.pay_cash_in_store === true
+
+  if (!payCashInStore && !ipospaysTpn) {
+    logError('PAYMENT', 'No iPOS Pays TPN configured for this store', { storeConfigId })
+    return errorResponse(
+      'Online payment is not configured for this store. Please contact the store.',
+      'payment_not_configured',
+      503
+    )
+  }
+
+  if (!payCashInStore && !body.payment_token_id && !body.card_token) {
+    return errorResponse(
+      'A valid payment token is required for online card payments.',
+      'payment_token_required',
+      422
+    )
+  }
 
   // ---- Step 9: Build frozen order data (RPC params snapshot) ----
   const sessionPrefix = session?.id ? session.id.slice(0, 8) : 'guest'
@@ -558,7 +557,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     p_auto_accept: storeConfig.auto_accept_orders ?? false,
   }
 
-  // ---- Step 10+: TEST MODE — Skip payment, call RPC directly ----
+  // ---- Step 10+: TEST MODE — Skip live payment, call RPC directly ----
   // Guest session insert is best-effort only; order can still be created without a row
   // in online_order_sessions (e.g. RLS/constraint issues) as long as storeConfig is resolved.
   if (!session) {
@@ -567,9 +566,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     })
   }
 
-  logEvent('TEST_MODE', 'Bypassing payment — calling process_online_order RPC directly', {
+  logEvent('TEST_MODE', 'Bypassing live payment — calling process_online_order RPC directly', {
     totalCents,
     referenceId: transactionReferenceId,
+    payCashInStore,
     sanitizedItemsSample: rpcParams.p_items.map((it) => ({
       id: it.id,
       qty: it.quantity,
@@ -577,7 +577,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
     })),
   })
 
-  // Call process_online_order RPC directly (test mode — no payment)
   const { data: rpcResult, error: rpcError } = await supabase.rpc(
     'process_online_order',
     rpcParams
@@ -623,29 +622,113 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .eq('id', session.id)
   }
 
-  // Update the payment record created by process_online_order RPC with card info.
-  // In test mode: mock card data. When real payment is enabled, replace with iPOS response fields.
+  const paymentUpdatePayload = payCashInStore
+    ? {
+        payment_method: 'cash',
+        status: 'pending',
+        terminal_type: 'none',
+        card_type: null,
+        card_last_four: null,
+        transaction_id: null,
+        reference_number: null,
+        authorization_code: null,
+        auth_code: null,
+        rrn: null,
+        result_code: null,
+        result_message: null,
+        batch_number: null,
+        approved_at: null,
+        captured_at: null,
+        processor_name: null,
+        processor_response: null,
+        terminal_response: null,
+        dejavoo_response_code: null,
+        dejavoo_response_message: null,
+        dejavoo_batch_number: null,
+        dejavoo_invoice_number: null,
+        metadata: {
+          source: 'online_order',
+          provider: 'website',
+          provider_order_id: transactionReferenceId,
+          payment_status_from_source: 'PENDING_CASH_IN_STORE',
+        },
+      }
+    : {
+        payment_method: 'card',
+        status: 'captured',
+        terminal_type: 'dejavoo',
+        card_type: body.payment_card_type || 'Visa',
+        card_last_four: body.payment_card_last_four || '0000',
+        transaction_id: transactionReferenceId,
+        reference_number: transactionReferenceId,
+        authorization_code: null,
+        auth_code: null,
+        rrn: null,
+        result_code: null,
+        result_message: 'TEST MODE - payment bypassed',
+        batch_number: null,
+        approved_at: new Date().toISOString(),
+        captured_at: new Date().toISOString(),
+        processor_name: 'iPOSPays',
+        processor_response: null,
+        terminal_response: null,
+        dejavoo_response_code: null,
+        dejavoo_response_message: null,
+        dejavoo_batch_number: null,
+        dejavoo_invoice_number: null,
+        metadata: {
+          source: 'online_order',
+          provider: 'website',
+          provider_order_id: transactionReferenceId,
+          payment_status_from_source: 'TEST_MODE_CAPTURED',
+          payment_bypass: true,
+        },
+      }
+
   const { data: paymentUpdateData, error: paymentUpdateError } = await supabase
     .from('order_payments')
-    .update({
-      payment_method: 'card',
-      terminal_type: 'dejavoo',
-      // TODO: replace mock fields below with real iPOS charge response when payment is live
-      card_type: 'Visa',
-      card_last_four: '0000',
-      transaction_id: transactionReferenceId,
-      reference_number: transactionReferenceId,
-      processor_name: 'iPOSPays',
-    })
+    .update(paymentUpdatePayload)
     .eq('order_id', orderResult.order_id)
-    .select('id, payment_method, card_last_four')
+    .select('id, payment_method, card_last_four, rrn, status')
+
+  if (payCashInStore) {
+    const { error: orderPaymentStateError } = await supabase
+      .from('orders')
+      .update({
+        payment_status: 'pending',
+        amount_paid: 0,
+        amount_due: toDollars(totalCents),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', orderResult.order_id)
+
+    if (orderPaymentStateError) {
+      logError('ORDER_UPDATE', 'Failed to reset cash-in-store order payment state', orderPaymentStateError)
+    }
+  } else {
+    const { error: orderPaymentStateError } = await supabase
+      .from('orders')
+      .update({
+        payment_status: 'paid',
+        amount_paid: toDollars(totalCents),
+        amount_due: 0,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', orderResult.order_id)
+
+    if (orderPaymentStateError) {
+      logError('ORDER_UPDATE', 'Failed to set card order payment state', orderPaymentStateError)
+    }
+  }
 
   if (paymentUpdateError) {
     logError('PAYMENT_UPDATE', 'Failed to update payment record with card info', paymentUpdateError)
   } else {
-    logEvent('PAYMENT_UPDATE', 'Payment record updated with card info', { rows: paymentUpdateData?.length ?? 0, data: paymentUpdateData })
+    logEvent('PAYMENT_UPDATE', 'Payment record updated with payment details', {
+      rows: paymentUpdateData?.length ?? 0,
+      data: paymentUpdateData,
+    })
   }
-
   // Link order to customer if session has customer_id
   if (session?.customer_id) {
     await supabase
@@ -654,10 +737,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .eq('id', orderResult.order_id)
   }
 
-  logEvent('ORDER', 'Order created successfully (test mode — no payment)', {
+  logEvent('ORDER', 'Order created successfully (test mode — no live payment)', {
     orderId: orderResult.order_id,
     orderNumber: orderResult.order_number,
     displayNumber: orderResult.display_number,
+    payCashInStore,
   })
 
   const autoAccepted: boolean = storeConfig.auto_accept_orders ?? false
@@ -670,8 +754,4 @@ Deno.serve(async (req: Request): Promise<Response> => {
     estimated_time: estimatedMinutes,
     auto_accepted: autoAccepted,
   })
-
-  // ---- COMMENTED OUT: Steps 10-12 (Payment Intent + iPOS Pays + Payment Processing) ----
-  // These will be restored when iPOS Pays integration is ready.
-  // See git history for the full payment flow.
 })
