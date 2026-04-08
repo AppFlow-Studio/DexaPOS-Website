@@ -425,57 +425,57 @@ END;
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.get_pos_inventory_sync(p_location_id uuid)
- RETURNS json
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-DECLARE
-    v_merchant_id UUID;
-    v_result      JSON;
-BEGIN
-    SELECT merchant_id INTO v_merchant_id
-    FROM locations
-    WHERE id = p_location_id;
+-- CREATE OR REPLACE FUNCTION public.get_pos_inventory_sync(p_location_id uuid)
+--  RETURNS json
+--  LANGUAGE plpgsql
+--  SECURITY DEFINER
+--  SET search_path TO 'public'
+-- AS $function$
+-- DECLARE
+--     v_merchant_id UUID;
+--     v_result      JSON;
+-- BEGIN
+--     SELECT merchant_id INTO v_merchant_id
+--     FROM locations
+--     WHERE id = p_location_id;
 
-    IF v_merchant_id IS NULL THEN
-        RETURN json_build_object('error', 'Location not found');
-    END IF;
+--     IF v_merchant_id IS NULL THEN
+--         RETURN json_build_object('error', 'Location not found');
+--     END IF;
 
-    SELECT json_agg(row_to_json(t)) INTO v_result
-    FROM (
-        SELECT
-            ii.id,
-            ii.name,
-            ii.sku,
-            ii.unit_type,
-            ii.stock_mode,
-            ii.reorder_point,
-            ii.reorder_quantity,
-            ii.is_active,
-            ii.updated_at,
-            COALESCE(lis.stock_quantity, 0)              AS stock_quantity,
-            -- Effective cost: location override → global (no per-row scalar function)
-            COALESCE(lio.cost_per_unit, ii.cost_per_unit, 0) AS effective_cost,
-            -- Effective reorder point: location override → global
-            COALESCE(lio.reorder_point, ii.reorder_point)    AS effective_reorder_point
-        FROM inventory_items ii
-        LEFT JOIN location_inventory_stock lis
-               ON lis.inventory_item_id = ii.id
-              AND lis.location_id       = p_location_id
-        LEFT JOIN location_inventory_overrides lio
-               ON lio.inventory_item_id = ii.id
-              AND lio.location_id       = p_location_id
-        WHERE ii.merchant_id = v_merchant_id
-          AND ii.is_active   = true
-        ORDER BY ii.name
-    ) t;
+--     SELECT json_agg(row_to_json(t)) INTO v_result
+--     FROM (
+--         SELECT
+--             ii.id,
+--             ii.name,
+--             ii.sku,
+--             ii.unit_type,
+--             ii.stock_mode,
+--             ii.reorder_point,
+--             ii.reorder_quantity,
+--             ii.is_active,
+--             ii.updated_at,
+--             COALESCE(lis.stock_quantity, 0)              AS stock_quantity,
+--             -- Effective cost: location override → global (no per-row scalar function)
+--             COALESCE(lio.cost_per_unit, ii.cost_per_unit, 0) AS effective_cost,
+--             -- Effective reorder point: location override → global
+--             COALESCE(lio.reorder_point, ii.reorder_point)    AS effective_reorder_point
+--         FROM inventory_items ii
+--         LEFT JOIN location_inventory_stock lis
+--                ON lis.inventory_item_id = ii.id
+--               AND lis.location_id       = p_location_id
+--         LEFT JOIN location_inventory_overrides lio
+--                ON lio.inventory_item_id = ii.id
+--               AND lio.location_id       = p_location_id
+--         WHERE ii.merchant_id = v_merchant_id
+--           AND ii.is_active   = true
+--         ORDER BY ii.name
+--     ) t;
 
-    RETURN COALESCE(v_result, '[]'::json);
-END;
-$function$
-;
+--     RETURN COALESCE(v_result, '[]'::json);
+-- END;
+-- $function$
+-- ;
 
 CREATE OR REPLACE FUNCTION public.initialize_location_stock(p_location_id uuid)
  RETURNS integer

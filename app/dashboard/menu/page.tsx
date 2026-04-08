@@ -22,7 +22,6 @@ import {
   Save
 } from 'lucide-react'
 import * as React from "react";
-import { useState } from "react";
 import { useMenus } from "../hooks/useMenus";
 import { ScopeContextStrip } from "@/components/dashboard/menu/ScopeContextStrip";
 import { useUserInfo } from "../../manage/hooks/useUserInfo.";
@@ -56,6 +55,7 @@ import {
   GetMenuWithCategories,
   UpdateMenusOrder
 } from '../actions/menus'
+import { AddCategoryToMenu } from '../actions/categories'
 import {
   MenuListView,
   MenuWithLocation
@@ -303,7 +303,7 @@ export default function MenuPage () {
     menuId: string,
     targetLocationId: string | null
   ) => {
-    // Get Menu Info with all the items and categories and modifiers and set settings
+    // Get Menu Info with all the categories
     const menu = await GetMenuWithCategories(menuId)
     if (!menu) {
       toast.error('Duplicate Failed', {
@@ -324,7 +324,30 @@ export default function MenuPage () {
       toast.error('Duplicate Failed', {
         description: result.error
       })
+      return
     }
+
+    // Copy all categories (and their items) to the new menu
+    if (result.data && menu.categories?.length) {
+      const newMenuId = result.data.id
+      await Promise.all(
+        menu.categories.map(cat =>
+          AddCategoryToMenu(
+            newMenuId,
+            cat.category_id,
+            merchantId,
+            cat.display_order,
+            undefined,
+            targetLocationId
+          )
+        )
+      )
+    }
+
+    toast.success('Menu Duplicated', {
+      description: `"${menu.name}" has been duplicated successfully.`
+    })
+    queryClient.invalidateQueries({ queryKey: ['menus'] })
   }
 
   // Initialize reordered menus when menus load
