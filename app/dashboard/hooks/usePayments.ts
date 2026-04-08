@@ -9,7 +9,7 @@ import { PaymentRecord, PaymentFilters } from "@/types/payment";
 /**
  * Get clerk organization ID from user info
  */
-function useClerkOrgId() {
+export function useClerkOrgId() {
   const { data: userInfo } = useUserInfo();
   return userInfo?.members?.[0]?.organizations?.id || "";
 }
