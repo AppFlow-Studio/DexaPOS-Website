@@ -604,12 +604,24 @@ export async function AssignModifierToItem(
     return { success: true, data: existing };
   }
 
+  // Fetch the item's merchant_id for RLS
+  const { data: menuItem } = await supabase
+    .from("menu_items")
+    .select("merchant_id")
+    .eq("id", menuItemId)
+    .single();
+
+  if (!menuItem?.merchant_id) {
+    return { error: "Could not determine merchant for this item" };
+  }
+
   // Create new assignment
   const { data, error } = await supabase
     .from("menu_item_modifier_groups")
     .insert({
       menu_item_id: menuItemId,
       modifier_group_id: modifierGroupId,
+      merchant_id: menuItem.merchant_id,
       display_order: displayOrder || null,
     })
     .select()

@@ -133,12 +133,6 @@ export function MenuCategoriesTab({
           )}
         </div>
         <div className="flex items-center gap-2">
-          {selectedLocationId !== "all" && (
-            <Badge variant="secondary" className="text-xs">
-              Location view
-            </Badge>
-          )}
-
           {canModifyCategories ? (
             <Button onClick={onAddCategory} className="gap-1">
               <Wand2 className="h-4 w-4" />

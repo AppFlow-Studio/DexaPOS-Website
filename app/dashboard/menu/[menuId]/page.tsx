@@ -145,6 +145,7 @@ export default function MenuDetailPage() {
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [editedName, setEditedName] = useState("");
   const [editedDescription, setEditedDescription] = useState("");
+  const [editedLocationId, setEditedLocationId] = useState<string | null>(null);
   const [hasSettingsChanges, setHasSettingsChanges] = useState(false);
   const [categoryViewMode, setCategoryViewMode] = useState<"list" | "table">(
     "list",
@@ -204,6 +205,7 @@ export default function MenuDetailPage() {
     if (menu) {
       setEditedName(menu.name);
       setEditedDescription(menu.description || "");
+      setEditedLocationId(menu.location_id ?? null);
       imageUpload.reset(menu.image || null);
       setHasSettingsChanges(false);
       // Categories start collapsed for easier drag-and-drop reordering
@@ -216,10 +218,11 @@ export default function MenuDetailPage() {
       const hasChanges =
         editedName !== menu.name ||
         editedDescription !== (menu.description || "") ||
+        editedLocationId !== (menu.location_id ?? null) ||
         imageUpload.hasPendingChange;
       setHasSettingsChanges(hasChanges);
     }
-  }, [editedDescription, editedName, imageUpload.hasPendingChange, menu]);
+  }, [editedDescription, editedName, editedLocationId, imageUpload.hasPendingChange, menu]);
 
   const allCategories = menu?.categories || [];
 
@@ -488,6 +491,7 @@ export default function MenuDetailPage() {
           name: editedName.trim(),
           description: editedDescription.trim() || undefined,
           image: resolvedImage.value ?? undefined,
+          location_id: editedLocationId,
         },
         selectedLocationId || undefined,
       );
@@ -1041,6 +1045,7 @@ export default function MenuDetailPage() {
       <ScopeContextStrip menuName={menu?.name ?? null} />
       <MenuHeader
         menu={menu}
+        locationName={menu.location_id ? locations?.find(l => l.id === menu.location_id)?.name : null}
         onBack={() => router.back()}
         onNavigateToMenus={() => router.push("/dashboard/menu")}
         onPreview={() => setIsPreviewOpen(true)}
@@ -1161,6 +1166,7 @@ export default function MenuDetailPage() {
             totalItems={totalItems}
             editedName={editedName}
             editedDescription={editedDescription}
+            editedLocationId={editedLocationId}
             hasSettingsChanges={hasSettingsChanges}
             imagePreviewUrl={imageUpload.previewUrl}
             isImageUploading={imageUpload.isUploading}
@@ -1168,15 +1174,18 @@ export default function MenuDetailPage() {
             isSavingSettings={isSavingSettings}
             selectedImageFileName={imageUpload.selectedFileName}
             selectedLocationId={selectedLocationId}
+            locations={locations ?? []}
             onClearImage={imageUpload.clear}
             onImageSelect={imageUpload.selectFile}
             onNameChange={setEditedName}
             onDescriptionChange={setEditedDescription}
+            onLocationChange={setEditedLocationId}
             onToggleActive={handleToggleMenuActive}
             onSaveSettings={handleSaveSettings}
             onCancelSettings={() => {
               setEditedName(menu.name);
               setEditedDescription(menu.description || "");
+              setEditedLocationId(menu.location_id ?? null);
               imageUpload.reset(menu.image || null);
               setHasSettingsChanges(false);
             }}
