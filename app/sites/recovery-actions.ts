@@ -243,6 +243,75 @@ export async function sendOrderConfirmationEmail(
   }
 }
 
+// ---- Send Order Cancellation Email ----
+
+export async function sendOrderCancellationEmail(
+  orderId: string,
+  email: string
+): Promise<{ success: boolean; error?: string }> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey || !email) {
+    return { success: false, error: "Email service not configured or no email" };
+  }
+
+  const { data: order } = await getOrderTracking(orderId);
+  if (!order) {
+    return { success: false, error: "Order not found" };
+  }
+
+  const itemsHtml = order.items
+    .map(
+      (item) =>
+        `<tr><td style="padding:8px;border-bottom:1px solid #eee;">${item.quantity}x ${item.name}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">$${item.subtotal.toFixed(2)}</td></tr>`
+    )
+    .join("");
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:'Segoe UI',system-ui,sans-serif;max-width:500px;margin:0 auto;padding:20px;color:#333;">
+  <div style="text-align:center;margin-bottom:24px;">
+    <div style="display:inline-block;width:48px;height:48px;background:#ef4444;border-radius:50%;line-height:48px;text-align:center;color:#fff;font-size:24px;">!</div>
+  </div>
+  <h2 style="text-align:center;margin-bottom:4px;">Order Cancelled</h2>
+  <p style="text-align:center;color:#666;margin-top:0;">Order ${order.displayNumber}</p>
+  <p style="text-align:center;color:#666;">${order.cancellationReason || "Your order was cancelled before it was accepted."}</p>
+  <table style="width:100%;border-collapse:collapse;margin:20px 0;">
+    <thead><tr><th style="text-align:left;padding:8px;border-bottom:2px solid #333;">Item</th><th style="text-align:right;padding:8px;border-bottom:2px solid #333;">Price</th></tr></thead>
+    <tbody>${itemsHtml}</tbody>
+  </table>
+  <div style="margin:20px 0;padding:16px;background:#f9fafb;border-radius:8px;">
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Subtotal</span><span>$${order.subtotal.toFixed(2)}</span></div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Tax</span><span>$${order.tax.toFixed(2)}</span></div>
+    ${order.tip > 0 ? `<div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Tip</span><span>$${order.tip.toFixed(2)}</span></div>` : ""}
+    <div style="display:flex;justify-content:space-between;font-weight:600;font-size:16px;padding-top:8px;border-top:1px solid #ddd;"><span>Total</span><span>$${order.total.toFixed(2)}</span></div>
+  </div>
+  <p style="font-size:12px;color:#999;text-align:center;margin-top:24px;">If your card was charged, the authorization has been voided.</p>
+</body>
+</html>`.trim();
+
+  try {
+    const resend = new Resend(apiKey);
+    const fromEmail = process.env.RESEND_FROM_EMAIL || "orders@resend.dev";
+
+    const { error: emailError } = await resend.emails.send({
+      from: fromEmail,
+      to: email,
+      subject: `Order Cancelled - ${order.displayNumber}`,
+      html,
+    });
+
+    if (emailError) {
+      return { success: false, error: emailError.message };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || "Failed to send email" };
+  }
+}
+
 // ---- Get Recovery Session ----
 
 export async function getRecoverySession(recoveryToken: string): Promise<{
