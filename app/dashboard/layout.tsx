@@ -653,8 +653,8 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
   const selectedLocation = useSelectedLocation();
   const isAllLocations = useIsAllLocations();
 
-  // Check if user is merchant.owner
-  const isMerchantOwner = userRole === "merchant.owner";
+  // Check if user is merchant.owner or merchant.admin — both can view All Locations
+  const isMerchantOwner = userRole === "merchant.owner" || userRole === "merchant.admin";
 
   const handleLocationChange = (locationId: string) => {
     setSelectedLocation(locationId);
@@ -732,7 +732,7 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
           Select Location
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {/* Only show "All Locations" option for merchant.owner */}
+        {/* Show "All Locations" option for owners and admins */}
         {isMerchantOwner && (
           <>
             <DropdownMenuItem
@@ -835,8 +835,8 @@ export default function MerchantDashboardLayout({
     isInitialized,
   } = useLocationStore();
 
-  // Check if user is merchant.owner
-  const isMerchantOwner = userRole === "merchant.owner";
+  // Check if user is merchant.owner or merchant.admin
+  const isMerchantOwner = userRole === "merchant.owner" || userRole === "merchant.admin";
 
   // Monitor session state to prevent unnecessary query invalidation
   useSessionSync();

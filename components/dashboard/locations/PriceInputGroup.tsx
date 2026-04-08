@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +25,18 @@ interface PriceInputGroupProps {
   dualPricingPercentage?: number;
 }
 
+/** Strips any character that isn't a digit or a single decimal point */
+function sanitizeNumeric(raw: string): string {
+  // Remove everything except digits and dot
+  let cleaned = raw.replace(/[^0-9.]/g, "");
+  // Keep only the first decimal point
+  const firstDot = cleaned.indexOf(".");
+  if (firstDot !== -1) {
+    cleaned = cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
+  }
+  return cleaned;
+}
+
 export function PriceInputGroup({
   price,
   cashPrice,
@@ -44,10 +56,26 @@ export function PriceInputGroup({
   const isDual = pricingStrategy === "dual";
   const percentage = Number(startDualPercentage);
 
-  // Track which input was last edited to prevent circular updates
+  // Local string state so the user can type freely (e.g. "1." mid-entry)
+  const [cardDisplay, setCardDisplay] = useState(price > 0 ? String(price) : "");
+  const [cashDisplay, setCashDisplay] = useState(cashPrice != null ? String(cashPrice) : "");
+
+  // Keep display in sync when the parent drives a change (dual-mode auto-calc)
   const lastEditedRef = useRef<"cash" | "card" | null>(null);
 
-  // On mount/dual mode: if we have card price but no cash, derive cash so cash becomes the driver
+  useEffect(() => {
+    if (lastEditedRef.current !== "card") {
+      setCardDisplay(price > 0 ? String(price) : "");
+    }
+  }, [price]);
+
+  useEffect(() => {
+    if (lastEditedRef.current !== "cash") {
+      setCashDisplay(cashPrice != null ? String(cashPrice) : "");
+    }
+  }, [cashPrice]);
+
+  // On mount/dual mode: if we have card price but no cash, derive cash
   useEffect(() => {
     if (isDual && price > 0 && (cashPrice === null || cashPrice === 0)) {
       const rawCash = price / (1 + percentage / 100);
@@ -59,23 +87,27 @@ export function PriceInputGroup({
     }
   }, [isDual, price, cashPrice, percentage, onCashPriceChange]);
 
-  // Card price change
-  const handlePriceChange = (newPrice: number) => {
+  const handleCardInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const cleaned = sanitizeNumeric(e.target.value);
+    setCardDisplay(cleaned);
     lastEditedRef.current = "card";
-    onPriceChange(newPrice);
-    if (!isDual) return;
-    // In dual mode: derive cash from card
-    const rawCash = newPrice / (1 + percentage / 100);
-    const roundedCash = Math.round(rawCash * 100) / 100;
-    onCashPriceChange(roundedCash);
+    const num = parseFloat(cleaned) || 0;
+    onPriceChange(num);
+    if (isDual) {
+      const rawCash = num / (1 + percentage / 100);
+      const roundedCash = Math.round(rawCash * 100) / 100;
+      onCashPriceChange(roundedCash);
+    }
   };
 
-  // Cash price change - the driver in dual mode
-  const handleCashPriceChange = (newCashPrice: number | null) => {
+  const handleCashInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const cleaned = sanitizeNumeric(e.target.value);
+    setCashDisplay(cleaned);
     lastEditedRef.current = "cash";
-    onCashPriceChange(newCashPrice);
-    if (isDual && !disabled && newCashPrice !== null) {
-      const rawCard = newCashPrice * (1 + percentage / 100);
+    const num = cleaned === "" ? null : parseFloat(cleaned) || 0;
+    onCashPriceChange(num);
+    if (isDual && !disabled && num !== null) {
+      const rawCard = num * (1 + percentage / 100);
       const roundedCard = Math.round(rawCard * 100) / 100;
       onPriceChange(roundedCard);
     }
@@ -93,22 +125,22 @@ export function PriceInputGroup({
           )}
         </h4>
         {isDual && (
-           <TooltipProvider>
-           <Tooltip>
-             <TooltipTrigger asChild>
-               <Info className="h-4 w-4 text-muted-foreground cursor-help" />
-             </TooltipTrigger>
-             <TooltipContent className="max-w-xs">
-               <p>Dual Pricing is enabled.</p>
-               <p>Edit either price — the other is auto-calculated at {percentage}%.</p>
-             </TooltipContent>
-           </Tooltip>
-         </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <p>Dual Pricing is enabled.</p>
+                <p>Edit either price — the other is auto-calculated at {percentage}%.</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        {/* Card Price Input - editable in dual mode */}
+        {/* Card Price Input */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label className="text-xs text-muted-foreground">Card Price</Label>
@@ -117,12 +149,12 @@ export function PriceInputGroup({
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
             <Input
-              type="number"
-              step="0.01"
-              min="0"
-              value={price || ""}
-              onChange={(e) => handlePriceChange(parseFloat(e.target.value) || 0)}
+              type="text"
+              inputMode="decimal"
+              value={cardDisplay}
+              onChange={handleCardInput}
               disabled={disabled}
+              placeholder="0.00"
               className={cn("pl-7", isDual && "border-blue-200 focus-visible:ring-blue-500")}
             />
           </div>
@@ -137,15 +169,12 @@ export function PriceInputGroup({
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
             <Input
-              type="number"
-              step="0.01"
-              min="0"
-              value={cashPrice ?? ""}
-              onChange={(e) => {
-                const val = e.target.value === "" ? null : parseFloat(e.target.value);
-                handleCashPriceChange(val);
-              }}
+              type="text"
+              inputMode="decimal"
+              value={cashDisplay}
+              onChange={handleCashInput}
               disabled={disabled}
+              placeholder="0.00"
               className={cn("pl-7", isDual && "border-blue-200 focus-visible:ring-blue-500")}
             />
           </div>
