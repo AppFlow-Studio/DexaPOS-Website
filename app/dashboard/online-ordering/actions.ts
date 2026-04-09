@@ -10,16 +10,11 @@ import { LogAuditEvent } from "../actions/audit-logs";
 
 // ─── Dejavoo Management API ───────────────────────────────────────────────────
 // These env vars must be set in your deployment environment.
-// DEJAVOO_MANAGEMENT_API_KEY: ISO-level API key from Dejavoo/iPOSPays portal
-// DEJAVOO_MANAGEMENT_API_URL: Base URL for the Management API
+// Domain whitelist is delegated to Supabase Edge Function `dejavoo-whitelist-domain`
+// The management API credentials are read from Supabase function secrets.
 //   Sandbox  → https://externalapi.ipospays.tech
 //   Production → https://externalapi.ipospays.com
 // ──────────────────────────────────────────────────────────────────────────────
-
-const DEJAVOO_MANAGEMENT_API_KEY = process.env.DEJAVOO_MANAGEMENT_API_KEY;
-const DEJAVOO_MANAGEMENT_API_URL =
-  process.env.DEJAVOO_MANAGEMENT_API_URL ||
-  "https://externalapi.ipospays.com";
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "dexaposai.com";
 
@@ -28,81 +23,47 @@ const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "dexaposai.com";
  * This must be called whenever a merchant saves a new/updated TPN so the
  * FreedomToDesign script is allowed to load on their storefront origin.
  *
- * Dejavoo Management API — Edit TPN Parameters
- * POST {DEJAVOO_MANAGEMENT_API_URL}/v3/tpn/parameters
+ * Delegates to Supabase function: `dejavoo-whitelist-domain`
  */
 export async function whitelistDejavooDomain(
   tpn: string,
   storeSlug: string
 ): Promise<{ success: boolean; error?: string; skipped?: boolean }> {
-  if (!DEJAVOO_MANAGEMENT_API_KEY) {
-    console.warn(
-      "[DEJAVOO_WHITELIST] DEJAVOO_MANAGEMENT_API_KEY not set — skipping domain whitelist"
-    );
-    return { success: true, skipped: true };
-  }
-
   if (!tpn || !storeSlug) {
     return { success: false, error: "TPN and store slug are required" };
   }
 
-  // Derive the storefront origin to whitelist
   const isDev = ROOT_DOMAIN.includes("localhost");
   const storeDomain = isDev
     ? `http://${storeSlug}.localhost:3000`
     : `https://${storeSlug}.${ROOT_DOMAIN}`;
 
-  try {
-    const response = await fetch(
-      `${DEJAVOO_MANAGEMENT_API_URL}/v3/tpn/parameters`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: DEJAVOO_MANAGEMENT_API_KEY,
-        },
-        body: JSON.stringify({
-          tpn,
-          allowedDomains: [storeDomain],
-        }),
-      }
-    );
-
-    const responseText = await response.text();
-    let data: Record<string, unknown> = {};
-    try {
-      data = JSON.parse(responseText);
-    } catch {
-      // Non-JSON response
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.functions.invoke(
+    "dejavoo-whitelist-domain",
+    {
+      body: { tpn, storeSlug, storeDomain },
     }
+  );
 
-    if (!response.ok) {
-      console.error(
-        "[DEJAVOO_WHITELIST] Failed:",
-        response.status,
-        responseText
-      );
-      return {
-        success: false,
-        error: `Dejavoo domain whitelist failed (${response.status}): ${
-          (data as any)?.message || responseText || "Unknown error"
-        }`,
-      };
-    }
-
-    console.log("[DEJAVOO_WHITELIST] Domain whitelisted:", {
-      tpn,
-      domain: storeDomain,
-      response: data,
-    });
-    return { success: true };
-  } catch (err) {
-    console.error("[DEJAVOO_WHITELIST] Network error:", err);
+  if (error) {
+    console.error("[DEJAVOO_WHITELIST] Edge invoke error:", error);
     return {
       success: false,
-      error: `Domain whitelist network error: ${String(err)}`,
+      error: `Domain whitelist invoke error: ${error.message}`,
     };
   }
+
+  const result = (data || {}) as {
+    success?: boolean;
+    skipped?: boolean;
+    error?: string;
+  };
+  return {
+    success: Boolean(result.success),
+    skipped: result.skipped,
+    error: result.error,
+  };
 }
 
 function mapConfigToSettings(
@@ -361,6 +322,15 @@ export async function saveOnlineOrderingSettings(
     configData.tip_presets = settings.tipPresets;
   }
 
+  // Payment/domain whitelist triggers
+  const previousSlug = existingConfig?.slug ?? null;
+  const nextSlugCandidate =
+    settings.storeSlug !== undefined && settings.storeSlug !== ""
+      ? settings.storeSlug
+      : previousSlug;
+  const slugIsChanging =
+    nextSlugCandidate !== null && nextSlugCandidate !== previousSlug;
+
   // Payment — track whether TPN is actually changing so we can whitelist below
   const tpnIsChanging =
     settings.ipospaysTpn !== undefined &&
@@ -458,10 +428,11 @@ export async function saveOnlineOrderingSettings(
     });
   }
 
-  // If the TPN was set or changed, whitelist this store's domain with Dejavoo
+  // If TPN changed or slug/domain changed, whitelist this store's domain with Dejavoo
   const finalTpn = (configData.ipospays_tpn as string | null) ?? null;
   const finalSlug = (configData.slug as string | undefined) ?? existingConfig?.slug ?? "";
-  if (tpnIsChanging && finalTpn && finalSlug) {
+  const shouldWhitelist = (tpnIsChanging || slugIsChanging) && finalTpn && finalSlug;
+  if (shouldWhitelist) {
     const whitelistResult = await whitelistDejavooDomain(finalTpn, finalSlug);
     if (!whitelistResult.success && !whitelistResult.skipped) {
       console.error("[SAVE_SETTINGS] Domain whitelist failed:", whitelistResult.error);
@@ -473,7 +444,7 @@ export async function saveOnlineOrderingSettings(
   revalidatePath("/dashboard/online-ordering");
   return {
     success: true,
-    ...(tpnIsChanging && finalTpn && finalSlug
+    ...(shouldWhitelist
       ? { domainWhitelisted: true }
       : {}),
   };
@@ -508,3 +479,5 @@ export async function retriggerDomainWhitelist(
 
   return whitelistDejavooDomain(config.ipospays_tpn, config.slug);
 }
+
+

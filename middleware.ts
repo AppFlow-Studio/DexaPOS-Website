@@ -32,7 +32,32 @@ function extractStoreSlug(hostname: string): string | null {
   return null;
 }
 
-async function lookupCustomDomain(hostname: string): Promise<string | null> {
+type StoreMatch = {
+  slug: string
+}
+
+async function getStoreBySlug(slug: string): Promise<StoreMatch | null> {
+  try {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    );
+    const { data } = await supabase
+      .from('online_store_config')
+      .select('slug')
+      .eq('slug', slug)
+      .single();
+
+    if (!data?.slug) return null;
+    return {
+      slug: data.slug,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function lookupCustomDomain(hostname: string): Promise<StoreMatch | null> {
   const hostWithoutPort = hostname.split(':')[0];
 
   if (
@@ -52,10 +77,12 @@ async function lookupCustomDomain(hostname: string): Promise<string | null> {
       .from('online_store_config')
       .select('slug')
       .eq('custom_domain', hostWithoutPort)
-      .eq('is_active', true)
       .single();
 
-    return data?.slug ?? null;
+    if (!data?.slug) return null;
+    return {
+      slug: data.slug,
+    };
   } catch {
     return null;
   }
@@ -64,14 +91,18 @@ async function lookupCustomDomain(hostname: string): Promise<string | null> {
 export default clerkMiddleware(async (auth, req) => {
   // ── Subdomain routing (before any Clerk auth) ──────────────────────
   const hostname = req.headers.get('host') || '';
-  let slug = extractStoreSlug(hostname);
+  const extractedSlug = extractStoreSlug(hostname);
+  let storeMatch: StoreMatch | null = null;
 
   // Custom domain fallback (production only)
-  if (!slug && process.env.NODE_ENV !== 'development') {
-    slug = await lookupCustomDomain(hostname);
+  if (extractedSlug) {
+    storeMatch = await getStoreBySlug(extractedSlug);
+  } else if (process.env.NODE_ENV !== 'development') {
+    storeMatch = await lookupCustomDomain(hostname);
   }
 
-  if (slug) {
+  if (storeMatch?.slug) {
+    const { slug } = storeMatch;
     const url = req.nextUrl.clone();
     url.pathname = `/sites/${slug}${url.pathname === '/' ? '' : url.pathname}`;
 

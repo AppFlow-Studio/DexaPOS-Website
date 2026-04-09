@@ -9,6 +9,8 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { assertHQPermission } from '@/lib/admin/auth'
 import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
 
+const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'dexaposai.com'
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -75,6 +77,7 @@ interface OnlineOrderingSettings {
   acceptOnlinePayments?: boolean
   acceptCashOnDelivery?: boolean
   acceptCardOnDelivery?: boolean
+  ipospaysTpn?: string
   tippingEnabled?: boolean
   tipConfig?: TipConfig
   baseDeliveryFee?: number
@@ -82,6 +85,44 @@ interface OnlineOrderingSettings {
   convenienceFeeEnabled?: boolean
   convenienceFeePercent?: number
   convenienceFeeFlat?: number
+}
+
+async function whitelistDejavooDomain(
+  tpn: string,
+  storeSlug: string
+): Promise<{ success: boolean; error?: string; skipped?: boolean; domain?: string }> {
+  if (!tpn || !storeSlug) {
+    return { success: false, error: 'TPN and store slug are required' }
+  }
+
+  const isDev = ROOT_DOMAIN.includes('localhost')
+  const storeDomain = isDev
+    ? `http://${storeSlug}.localhost:3000`
+    : `https://${storeSlug}.${ROOT_DOMAIN}`
+
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase.functions.invoke(
+    'dejavoo-whitelist-domain',
+    {
+      body: { tpn, storeSlug, storeDomain },
+    }
+  )
+
+  if (error) {
+    console.error('[HQ_DEJAVOO_WHITELIST] Edge invoke error:', error)
+    return {
+      success: false,
+      error: `Domain whitelist invoke error: ${error.message}`,
+    }
+  }
+
+  const result = (data || {}) as { success?: boolean; skipped?: boolean; error?: string }
+  return {
+    success: Boolean(result.success),
+    skipped: result.skipped,
+    error: result.error,
+    domain: storeDomain,
+  }
 }
 
 // ============================================================================
@@ -164,6 +205,7 @@ export async function getAdminOnlineOrderingSettings(
       settings.acceptOnlinePayments = config.accepts_online_payments ?? true
       settings.acceptCashOnDelivery = config.accepts_cash_on_delivery ?? false
       settings.acceptCardOnDelivery = config.accepts_card_on_delivery ?? false
+      settings.ipospaysTpn = config.ipospays_tpn ?? ''
     }
 
     return { success: true, data: settings, error: null }
@@ -314,6 +356,15 @@ export async function adminSaveOnlineOrderingSettings(
       configData.accepts_cash_on_delivery = settings.acceptCashOnDelivery
     if (settings.acceptCardOnDelivery !== undefined)
       configData.accepts_card_on_delivery = settings.acceptCardOnDelivery
+    if (settings.ipospaysTpn !== undefined) configData.ipospays_tpn = settings.ipospaysTpn || null
+
+    const previousSlug = existingConfig?.slug ?? null
+    const nextSlugCandidate =
+      settings.storeSlug !== undefined && settings.storeSlug !== '' ? settings.storeSlug : previousSlug
+    const slugIsChanging = nextSlugCandidate !== null && nextSlugCandidate !== previousSlug
+    const tpnIsChanging =
+      settings.ipospaysTpn !== undefined &&
+      (settings.ipospaysTpn || null) !== (existingConfig?.ipospays_tpn ?? null)
 
     if (existingConfig) {
       const { error: updateError } = await supabase
@@ -405,7 +456,31 @@ export async function adminSaveOnlineOrderingSettings(
       },
     })
 
-    return { success: true, error: null }
+    const finalSlug = (configData.slug as string | undefined) ?? existingConfig?.slug ?? ''
+    const finalTpn =
+      (configData.ipospays_tpn as string | null | undefined) ?? existingConfig?.ipospays_tpn ?? null
+    const shouldWhitelist = Boolean((tpnIsChanging || slugIsChanging) && finalTpn && finalSlug)
+
+    let domainWhitelistError: string | undefined
+    let domainWhitelistSkipped = false
+    if (shouldWhitelist) {
+      const whitelistResult = await whitelistDejavooDomain(finalTpn as string, finalSlug)
+      if (!whitelistResult.success && !whitelistResult.skipped) {
+        domainWhitelistError = whitelistResult.error || 'Domain whitelist failed'
+        console.error('[adminSaveOnlineOrderingSettings] Domain whitelist failed:', domainWhitelistError)
+      }
+      if (whitelistResult.skipped) {
+        domainWhitelistSkipped = true
+      }
+    }
+
+    return {
+      success: true,
+      error: null,
+      domainWhitelisted: shouldWhitelist,
+      domainWhitelistError,
+      domainWhitelistSkipped,
+    }
   } catch (error) {
     console.error('[adminSaveOnlineOrderingSettings] Exception:', error)
     return {
@@ -427,7 +502,7 @@ export async function adminToggleOnlineStore(
 
     const { data: existingConfig } = await supabase
       .from('online_store_config')
-      .select('id')
+      .select('id, slug, ipospays_tpn')
       .eq('location_id', locationId)
       .single()
 
@@ -466,9 +541,60 @@ export async function adminToggleOnlineStore(
       },
     })
 
-    return { success: true, error: null }
+    let domainWhitelistError: string | undefined
+    let domainWhitelistSkipped = false
+    if (enabled && existingConfig.ipospays_tpn && existingConfig.slug) {
+      const whitelistResult = await whitelistDejavooDomain(existingConfig.ipospays_tpn, existingConfig.slug)
+      if (!whitelistResult.success && !whitelistResult.skipped) {
+        domainWhitelistError = whitelistResult.error || 'Domain whitelist failed'
+        console.error('[adminToggleOnlineStore] Domain whitelist failed:', domainWhitelistError)
+      }
+      if (whitelistResult.skipped) {
+        domainWhitelistSkipped = true
+      }
+    }
+
+    return { success: true, error: null, domainWhitelistError, domainWhitelistSkipped }
   } catch (error) {
     console.error('[adminToggleOnlineStore] Exception:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }
+  }
+}
+
+export async function adminRetriggerDomainWhitelist(
+  merchantId: string,
+  locationId: string
+): Promise<{ success: boolean; error?: string; skipped?: boolean }> {
+  try {
+    await assertHQPermission('hq.merchant.update')
+
+    const supabase = createServerSupabaseClient()
+    const { data: config, error } = await supabase
+      .from('online_store_config')
+      .select('ipospays_tpn, slug')
+      .eq('merchant_id', merchantId)
+      .eq('location_id', locationId)
+      .single()
+
+    if (error || !config) {
+      return { success: false, error: 'Store config not found for this location' }
+    }
+    if (!config.ipospays_tpn) {
+      return { success: false, error: 'No TPN configured for this location' }
+    }
+    if (!config.slug) {
+      return { success: false, error: 'No store slug configured for this location' }
+    }
+
+    const result = await whitelistDejavooDomain(config.ipospays_tpn, config.slug)
+    if (!result.success) {
+      return { success: false, skipped: result.skipped, error: result.error || 'Domain whitelist failed' }
+    }
+    return { success: true, skipped: result.skipped }
+  } catch (error) {
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',

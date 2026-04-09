@@ -8,6 +8,7 @@ import {
   adminSaveOnlineOrderingSettings,
   adminToggleOnlineStore,
   adminCreateOnlineStore,
+  adminRetriggerDomainWhitelist,
 } from '@/app/manage/actions/admin-merchant/online-ordering'
 
 // ============================================================================
@@ -76,6 +77,7 @@ export interface OnlineOrderingSettings {
   acceptOnlinePayments?: boolean
   acceptCashOnDelivery?: boolean
   acceptCardOnDelivery?: boolean
+  ipospaysTpn?: string
   tippingEnabled?: boolean
   tipConfig?: TipConfig
   baseDeliveryFee?: number
@@ -205,5 +207,17 @@ export function useAdminCreateOnlineStore() {
         queryKey: [...adminKeys.merchants(), variables.merchantId, 'online-ordering-overview'],
       })
     },
+  })
+}
+
+export function useAdminRetriggerDomainWhitelist() {
+  return useMutation({
+    mutationFn: ({
+      merchantId,
+      locationId,
+    }: {
+      merchantId: string
+      locationId: string
+    }) => adminRetriggerDomainWhitelist(merchantId, locationId),
   })
 }

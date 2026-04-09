@@ -46,6 +46,9 @@ Main files involved:
 - `app/manage/merchants/[merchantId]/components/InvoicesTab.tsx`
 - `app/manage/merchants/[merchantId]/components/TipsTab.tsx`
 - `app/manage/merchants/[merchantId]/components/OnlineStoreTab.tsx`
+- `app/manage/actions/admin-merchant/online-ordering.ts`
+- `lib/queries/use-admin-online-ordering.ts`
+- `middleware.ts`
 
 ### 2.2 Menu popup fixes
 
@@ -132,6 +135,44 @@ Main files involved:
 - `app/sites/components/checkout/PaymentCardForm.tsx`
 - `app/sites/components/checkout/CheckoutPage.tsx`
 
+### Checkout empty-card validation fix
+
+The checkout flow now validates card input explicitly before tokenization so the user gets immediate feedback instead of a silent click/no-op.
+
+Behavior:
+
+- if card number / expiry / CVV are missing or invalid, checkout shows a clear error
+- tokenization only runs after client-side card validation passes
+
+Main files involved:
+
+- `app/sites/components/checkout/PaymentCardForm.tsx`
+- `app/sites/components/checkout/CheckoutPage.tsx`
+
+### Domain whitelist flow update
+
+Domain whitelisting now triggers not only when TPN changes, but also when the store slug/domain changes while TPN remains the same.
+
+Main file:
+
+- `app/dashboard/online-ordering/actions.ts`
+
+### Admin-side store status and whitelist checks
+
+Store operational checks are now surfaced on the HQ merchant admin side (not the public storefront preview):
+
+- store status remains controlled from the merchant `OnlineStoreTab` toggle
+- Dejavoo whitelist can be manually retriggered from the same tab
+- the tab now shows payment readiness (TPN present/missing) and whitelist outcome messaging
+- public storefront routes were reverted to normal rendering (no forced disabled screen)
+
+Main files involved:
+
+- `app/manage/merchants/[merchantId]/components/OnlineStoreTab.tsx`
+- `app/manage/actions/admin-merchant/online-ordering.ts`
+- `lib/queries/use-admin-online-ordering.ts`
+- `middleware.ts`
+
 ## 3.2 Current live-sale status
 
 ### What happened when real sale processing was enabled
@@ -190,6 +231,10 @@ A cancel path was added for online orders:
 - if there is a real processor `rrn`, the cancel path attempts a real Dejavoo `void`
 - if there is no real `rrn` because the order was created in fake-success mode, the system falls back to an internal `void` status only
 - cancellation email support was added
+- confirmed in demo testing:
+  - demo card orders cancel to `void`
+  - demo card orders save last 4 correctly
+  - cash orders should remain `cancelled`
 
 Main files involved:
 
@@ -261,6 +306,10 @@ This should be revisited later with the Dejavoo/iPOS sandbox team or internal ow
 
 ## 7. Open / Deferred Items
 
+### Known bug
+
+- none currently recorded for the checkout empty-card submit case (fixed in this batch)
+
 ### Deferred
 
 - real Dejavoo sale capture in `create-online-order`
@@ -310,4 +359,3 @@ This should be revisited later with the Dejavoo/iPOS sandbox team or internal ow
 - `app/manage/merchants/[merchantId]/components/InvoicesTab.tsx`
 - `app/manage/merchants/[merchantId]/components/TipsTab.tsx`
 - `app/manage/merchants/[merchantId]/components/OnlineStoreTab.tsx`
-

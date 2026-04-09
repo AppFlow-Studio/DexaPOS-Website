@@ -32,6 +32,7 @@ import {
     ExternalLink,
     Loader2,
     Plug,
+    AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -42,6 +43,7 @@ import {
     useAdminSaveOnlineOrderingSettings,
     useAdminToggleOnlineStore,
     useAdminCreateOnlineStore,
+    useAdminRetriggerDomainWhitelist,
     type OnlineOrderingSettings,
     type LocationOnlineStoreOverview,
 } from '@/lib/queries/use-admin-online-ordering'
@@ -87,12 +89,31 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
     const saveMutation = useAdminSaveOnlineOrderingSettings()
     const toggleMutation = useAdminToggleOnlineStore()
     const createMutation = useAdminCreateOnlineStore()
+    const whitelistMutation = useAdminRetriggerDomainWhitelist()
 
     // OrderOut
     const { data: orderOutData } = useAdminOrderOutStatus(merchantId)
     const orderOutStatus = orderOutData?.data
     const onboardOrderOut = useAdminOnboardOrderOut()
     const [showOrderOutForm, setShowOrderOutForm] = useState(false)
+
+    const handleWhitelistDomain = async () => {
+        if (!selectedLocationId) return
+        try {
+            const result = await whitelistMutation.mutateAsync({ merchantId, locationId: selectedLocationId })
+            if (result.skipped) {
+                toast.info('Dejavoo whitelist API key is not configured, request was skipped')
+                return
+            }
+            if (result.success) {
+                toast.success('Store domain was whitelisted successfully')
+                return
+            }
+            toast.error(result.error || 'Domain whitelist failed')
+        } catch {
+            toast.error('Failed to call domain whitelist')
+        }
+    }
 
     // Sync local settings when server data changes
     useEffect(() => {
@@ -121,6 +142,9 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
 
             if (result.success) {
                 toast.success('Settings saved successfully')
+                if (result.domainWhitelistError) {
+                    toast.error(`Settings saved, but domain whitelist failed: ${result.domainWhitelistError}`)
+                }
                 setIsDirty(false)
                 refetchSettings()
             } else {
@@ -170,6 +194,9 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
 
             if (result.success) {
                 toast.success(`Online store ${enabled ? 'enabled' : 'disabled'}`)
+                if (result.domainWhitelistError) {
+                    toast.error(`Store updated, but domain whitelist failed: ${result.domainWhitelistError}`)
+                }
             } else {
                 toast.error(result.error || 'Failed to toggle store')
             }
@@ -306,6 +333,8 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
     // Find location name
     const selectedLocation = locations.find((l) => l.id === selectedLocationId)
     const storeUrl = localSettings?.storeSlug ? getStoreUrl(localSettings.storeSlug) : ''
+    const hasTpn = Boolean(localSettings?.ipospaysTpn?.trim())
+    const canRunWhitelist = Boolean(localSettings?.storeSlug && hasTpn)
 
     // Render store configuration
     return (
@@ -397,6 +426,67 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                     checked={localSettings.enabled}
                                     onCheckedChange={(enabled) => updateSettings({ enabled })}
                                 />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Storefront Readiness</CardTitle>
+                            <CardDescription>
+                                Operational checks are managed here in admin (store status, TPN presence, and domain whitelist).
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="flex items-center justify-between rounded-md border p-3">
+                                <div>
+                                    <p className="text-sm font-medium">Store Status</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {localSettings.enabled ? 'Store is enabled in admin' : 'Store is disabled in admin'}
+                                    </p>
+                                </div>
+                                <Badge variant={localSettings.enabled ? 'default' : 'secondary'}>
+                                    {localSettings.enabled ? 'Enabled' : 'Disabled'}
+                                </Badge>
+                            </div>
+                            <div className="flex items-center justify-between rounded-md border p-3">
+                                <div>
+                                    <p className="text-sm font-medium">Card Payment Readiness</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {hasTpn
+                                            ? 'TPN is configured. You can whitelist the storefront domain.'
+                                            : 'TPN is missing. Card payments cannot run until a TPN is configured.'}
+                                    </p>
+                                </div>
+                                <Badge variant={hasTpn ? 'default' : 'destructive'}>{hasTpn ? 'Ready' : 'Missing TPN'}</Badge>
+                            </div>
+                            {!hasTpn && (
+                                <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-900">
+                                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                                    <p className="text-xs">
+                                        Add the merchant&apos;s iPOS TPN in the Payment &amp; Tips tab before enabling card checkout.
+                                    </p>
+                                </div>
+                            )}
+                            <div className="flex items-center gap-3">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleWhitelistDomain}
+                                    disabled={!canRunWhitelist || whitelistMutation.isPending}
+                                >
+                                    {whitelistMutation.isPending ? (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Plug className="mr-2 h-4 w-4" />
+                                    )}
+                                    Re-Whitelist Domain
+                                </Button>
+                                <p className="text-xs text-muted-foreground">
+                                    {canRunWhitelist
+                                        ? 'Call Dejavoo Management API for this location slug + TPN.'
+                                        : 'Requires both store slug and TPN.'}
+                                </p>
                             </div>
                         </CardContent>
                     </Card>
@@ -835,6 +925,19 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                             }
                                         />
                                     </div>
+                                    {localSettings.acceptOnlinePayments !== false && (
+                                        <div className="ml-8 space-y-2">
+                                            <Label>iPOS TPN</Label>
+                                            <Input
+                                                value={localSettings.ipospaysTpn || ''}
+                                                onChange={(e) => updateSettings({ ipospaysTpn: e.target.value })}
+                                                placeholder="Enter merchant TPN for Dejavoo"
+                                            />
+                                            <p className="text-xs text-muted-foreground">
+                                                This TPN is used for domain whitelist and card processing on this store.
+                                            </p>
+                                        </div>
+                                    )}
                                     <Separator />
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-3">

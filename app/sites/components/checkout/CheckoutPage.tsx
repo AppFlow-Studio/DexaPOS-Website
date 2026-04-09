@@ -265,6 +265,10 @@ export function CheckoutPage({
         if (!paymentFormRef.current) {
           throw new Error("Payment form not ready. Please wait a moment.");
         }
+        const cardValidation = paymentFormRef.current.validateCardInput();
+        if (!cardValidation.valid) {
+          throw new Error(cardValidation.error || "Please complete card details.");
+        }
         const tokenizedCard = await paymentFormRef.current.tokenize();
         paymentTokenId = tokenizedCard.tokenId;
         paymentCardType = tokenizedCard.cardType;
