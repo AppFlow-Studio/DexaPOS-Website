@@ -232,12 +232,12 @@ export function InviteUserWizard({
         // For POS staff, PIN is required
         if (staffType === "pos") {
           if (!autoGeneratePin && !pinCode.trim()) return false;
-          if (!autoGeneratePin && !/^\d{4,6}$/.test(pinCode)) return false;
+          if (!autoGeneratePin && !/^\d{4}$/.test(pinCode)) return false;
         }
         // For Clerk staff, POS access is optional, but if enabled, PIN validation applies
         if (staffType === "clerk" && enablePosAccess) {
           if (!autoGeneratePin && !pinCode.trim()) return false;
-          if (!autoGeneratePin && !/^\d{4,6}$/.test(pinCode)) return false;
+          if (!autoGeneratePin && !/^\d{4}$/.test(pinCode)) return false;
         }
         return true;
       case "review":
@@ -990,13 +990,13 @@ export function InviteUserWizard({
                             {!autoGeneratePin && (
                               <div className="space-y-2">
                                 <Label htmlFor="pinCode">
-                                  Enter PIN (4-6 digits)
+                                  Enter PIN (4 digits)
                                 </Label>
                                 <Input
                                   id="pinCode"
                                   type="text"
                                   placeholder="1234"
-                                  maxLength={6}
+                                  maxLength={4}
                                   value={pinCode}
                                   onChange={(e) => {
                                     const value = e.target.value;
@@ -1006,7 +1006,7 @@ export function InviteUserWizard({
                                   }}
                                 />
                                 <p className="text-xs text-muted-foreground">
-                                  Must be 4-6 digits
+                                  Must be 4 digits
                                 </p>
                               </div>
                             )}
