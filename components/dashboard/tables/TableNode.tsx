@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef } from 'react'
+import React, { useRef, useEffect, useState } from 'react'
 import { FloorPlanObject } from '@/types/floor-plan'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
@@ -54,6 +54,16 @@ export function TableNode ({
   statusColor,
   billAmount
 }: TableNodeProps) {
+  const [isDarkMode, setIsDarkMode] = useState(() =>
+    document.documentElement.classList.contains('dark')
+  )
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDarkMode(document.documentElement.classList.contains('dark'))
+    })
+    observer.observe(document.documentElement, { attributeFilter: ['class'] })
+    return () => observer.disconnect()
+  }, [])
   const elementRef = useRef<HTMLDivElement>(null)
   const rotateHandleRef = useRef<HTMLDivElement>(null)
   const resizeHandleRef = useRef<HTMLDivElement>(null)
@@ -396,6 +406,7 @@ export function TableNode ({
           color={statusColor || table.color_override || '#F1F1F1'}
           width={width}
           height={height}
+          darkMode={isDarkMode}
         />
       </div>
 

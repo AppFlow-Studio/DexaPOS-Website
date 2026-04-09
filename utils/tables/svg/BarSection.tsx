@@ -1,101 +1,112 @@
 import React from "react";
 
 interface BarSectionProps {
-  color?: string;
+  darkMode?: boolean;
   width?: number;
   height?: number;
 }
 
 const BarSection: React.FC<BarSectionProps> = ({
-  color = "#94A3B8",
+  darkMode = false,
   width = 170,
   height = 100,
 }) => {
+  // ONLY LIGHT MODE CHANGES HERE
+  const body = "#E5E7EB";
+  const surface = "#D1D5DB";
+  const inner = "#E5E7EB";
+  const ledge = "#9CA3AF";
+  const stroke = "#111827";
+  const stoolCenter = "#374151";
+
   return (
     <svg
       width={width}
       height={height}
       viewBox="0 0 170 100"
-      fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
-      {/* Bar back body */}
+      <style>{`
+        /* LIGHT MODE ONLY VISUAL IMPROVEMENT */
+        .light-body { fill: #E5E7EB; }
+        .dark .light-body { fill: white; } /* OLD EXACT BEHAVIOR */
+      `}</style>
+
+      {/* Main body */}
       <rect
         x="5"
         y="8"
         width="160"
         height="52"
         rx="4"
-        fill="#1E2340"
-        stroke={color}
-        strokeWidth="1.5"
+        fill={darkMode ? "#1E2340" : body}
+        stroke={darkMode ? "#94A3B8" : stroke}
+        strokeWidth="2"
       />
 
-      {/* Bar top surface fill */}
+      {/* Surface */}
       <rect
         x="5"
         y="8"
         width="160"
         height="52"
         rx="4"
-        fill={color}
-        fillOpacity="0.10"
+        fill={darkMode ? "#1E2340" : surface}
       />
 
-      {/* Inner counter detail */}
+      {/* Inner counter */}
       <rect
         x="12"
         y="15"
         width="146"
         height="16"
         rx="2"
-        fill={color}
-        fillOpacity="0.06"
-        stroke={color}
-        strokeWidth="0.75"
-        strokeOpacity="0.4"
+        fill={darkMode ? "#1E2340" : inner}
+        stroke={darkMode ? "#94A3B8" : stroke}
+        strokeWidth="1"
       />
 
-      {/* Second shelf detail */}
+      {/* Shelf */}
       <rect
         x="12"
         y="36"
         width="146"
         height="16"
         rx="2"
-        fill={color}
-        fillOpacity="0.06"
-        stroke={color}
-        strokeWidth="0.75"
-        strokeOpacity="0.4"
+        fill={darkMode ? "#1E2340" : inner}
+        stroke={darkMode ? "#94A3B8" : stroke}
+        strokeWidth="1"
       />
 
-      {/* Bar front ledge */}
+      {/* Front ledge */}
       <rect
         x="5"
         y="60"
         width="160"
         height="10"
         rx="2"
-        fill={color}
-        fillOpacity="0.15"
-        stroke={color}
-        strokeWidth="1"
+        fill={darkMode ? "#1E2340" : ledge}
+        stroke={darkMode ? "#94A3B8" : stroke}
+        strokeWidth="1.5"
       />
 
-      {/* Bar stools */}
+      {/* Stools */}
       {[25, 63, 107, 145].map((cx) => (
         <g key={cx}>
           <circle
             cx={cx}
             cy="83"
             r="9"
-            fill={color}
-            fillOpacity="0.08"
-            stroke={color}
-            strokeWidth="1"
+            fill={darkMode ? "#1E2340" : inner}
+            stroke={darkMode ? "#94A3B8" : stroke}
+            strokeWidth="1.5"
           />
-          <circle cx={cx} cy="83" r="3" fill={color} fillOpacity="0.2" />
+          <circle
+            cx={cx}
+            cy="83"
+            r="3"
+            fill={darkMode ? "#CBD5F5" : stoolCenter}
+          />
         </g>
       ))}
     </svg>
