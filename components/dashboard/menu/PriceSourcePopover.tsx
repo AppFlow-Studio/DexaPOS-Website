@@ -118,6 +118,11 @@ export function PriceSourcePopover({
       case 4:
         return "Category at location";
       case 5:
+        if (editScope.menuName && editScope.locationName) {
+          return `${editScope.menuName} menu at ${editScope.locationName}`;
+        }
+        if (editScope.menuName) return `${editScope.menuName} menu`;
+        if (editScope.locationName) return `Menu at ${editScope.locationName}`;
         return "Menu at location";
     }
   })();
