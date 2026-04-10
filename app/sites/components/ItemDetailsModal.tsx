@@ -50,11 +50,18 @@ export function ItemDetailsModal({
   const [notes, setNotes] = useState("");
   const [showValidationErrors, setShowValidationErrors] = useState(false);
 
-  // Reset state when item changes
+  // Reset state when item changes, pre-selecting default modifier options
   useEffect(() => {
     if (isOpen) {
       setQuantity(1);
-      setSelectedModifiers({});
+      const defaults: Record<string, string[]> = {};
+      item?.modifier_groups?.forEach((group) => {
+        const defaultOption = group.options.find((o) => o.is_default);
+        if (defaultOption) {
+          defaults[group.id] = [defaultOption.id];
+        }
+      });
+      setSelectedModifiers(defaults);
       setNotes("");
       setImageError(false);
       setShowValidationErrors(false);

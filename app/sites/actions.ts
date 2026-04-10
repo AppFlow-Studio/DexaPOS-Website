@@ -245,6 +245,7 @@ function mapRpcMenuToStorefront(rpcMenu: any): StorefrontMenu | null {
                   price: Number(opt.price_modifier) || 0,
                   is_active: true,
                   display_order: 0,
+                  is_default: opt.is_default ?? false,
                 })),
             }));
 

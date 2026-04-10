@@ -328,18 +328,6 @@ export function ModifierGroupFormSheet({
       return;
     }
 
-    // Validate: If group is required, at least one default option must be set
-    if (values.is_required && options.length > 0) {
-      const hasDefault = options.some((opt) => opt.is_default);
-      if (!hasDefault) {
-        toast.error("Default Option Required", {
-          description:
-            "Required modifier groups must have at least one option set as default.",
-        });
-        return;
-      }
-    }
-
     setIsSubmitting(true);
     try {
       if (editGroup) {
@@ -689,10 +677,12 @@ export function ModifierGroupFormSheet({
                                   type="button"
                                   role="switch"
                                   aria-checked={field.value}
-                                  onClick={() =>
-                                    canEditStructure &&
-                                    field.onChange(!field.value)
-                                  }
+                                  onClick={() => {
+                                    if (!canEditStructure) return;
+                                    const next = !field.value;
+                                    field.onChange(next);
+                                    if (!next) form.setValue("min_selections", 0);
+                                  }}
                                   disabled={!canEditStructure}
                                   className={cn(
                                     "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
@@ -726,7 +716,7 @@ export function ModifierGroupFormSheet({
                                   <Input
                                     type="number"
                                     min="0"
-                                    disabled={!canEditStructure}
+                                    disabled={!canEditStructure || !watchedValues.is_required}
                                     {...field}
                                     onChange={(e) =>
                                       field.onChange(
