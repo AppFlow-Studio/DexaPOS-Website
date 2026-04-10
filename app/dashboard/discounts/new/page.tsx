@@ -9,7 +9,6 @@ import {
     useDiscountMenuItems,
 } from "@/hooks/use-discounts";
 import { DiscountFormInput } from "@/types/discount";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -55,43 +54,51 @@ export default function NewDiscountPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={() => router.back()}>
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Back
+            <div className="flex items-center gap-3">
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => router.back()}>
+                    <ArrowLeft className="h-4 w-4" />
+                    <span className="sr-only">Back</span>
                 </Button>
                 <div>
-                    <h1 className="text-2xl font-semibold">Create discount</h1>
-                    <p className="text-sm text-muted-foreground">Set up discount details and targeting.</p>
+                    <h1 className="text-xl font-semibold">New discount</h1>
+                    <p className="text-sm text-muted-foreground">Configure a discount for your POS.</p>
                 </div>
             </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Discount configuration</CardTitle>
-                    <CardDescription>Define how the discount behaves on POS.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {loading ? (
-                        <div className="space-y-3">
-                            {Array.from({ length: 4 }).map((_, idx) => (
+            {loading ? (
+                <div className="grid gap-6 lg:grid-cols-3">
+                    <div className="space-y-6 lg:col-span-2">
+                        <div className="rounded-xl border p-6 space-y-4">
+                            {Array.from({ length: 5 }).map((_, idx) => (
                                 <Skeleton key={idx} className="h-10 w-full" />
                             ))}
                         </div>
-                    ) : (
-                        <DiscountForm
-                            defaultValues={{ location_id: defaultLocationId }}
-                            onSubmit={handleSubmit}
-                            submitting={createDiscount.isPending}
-                            categories={categories}
-                            menuItems={menuItems}
-                            locations={locations}
-                            onCancel={() => router.push("/dashboard/discounts")}
-                            submitLabel="Create discount"
-                        />
-                    )}
-                </CardContent>
-            </Card>
+                        <div className="rounded-xl border p-6 space-y-4">
+                            {Array.from({ length: 3 }).map((_, idx) => (
+                                <Skeleton key={idx} className="h-10 w-full" />
+                            ))}
+                        </div>
+                    </div>
+                    <div className="space-y-4">
+                        <div className="rounded-xl border p-6 space-y-4">
+                            {Array.from({ length: 3 }).map((_, idx) => (
+                                <Skeleton key={idx} className="h-10 w-full" />
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <DiscountForm
+                    defaultValues={{ location_id: defaultLocationId }}
+                    onSubmit={handleSubmit}
+                    submitting={createDiscount.isPending}
+                    categories={categories}
+                    menuItems={menuItems}
+                    locations={locations}
+                    onCancel={() => router.push("/dashboard/discounts")}
+                    submitLabel="Create discount"
+                />
+            )}
         </div>
     );
 }
