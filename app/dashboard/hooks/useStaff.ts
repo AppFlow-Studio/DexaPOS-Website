@@ -236,9 +236,17 @@ export function useInviteClerkStaff() {
         return;
       }
 
-      toast.success("Invitation sent", {
-        description: "Invitation email has been sent",
-      });
+      // Show PIN in credential toast if one was generated for POS access
+      if (result.data?.generated_pin) {
+        showCredentialToast(result.data.generated_pin);
+        toast.success("Invitation sent", {
+          description: "Invitation email has been sent. Save the PIN shown above.",
+        });
+      } else {
+        toast.success("Invitation sent", {
+          description: "Invitation email has been sent",
+        });
+      }
 
       queryClient.invalidateQueries({ queryKey: ["unified-staff"] });
       queryClient.invalidateQueries({ queryKey: ["staff-member"] });

@@ -241,8 +241,9 @@ export function ModifierGroupFormSheet({
   };
 
   const handleAddOption = (values: OptionFormValues) => {
-    // If setting as default, unset other defaults
-    if (values.is_default) {
+    // If setting as default and max_selections is 1 (or null for single-select), unset other defaults
+    const maxSel = form.getValues("max_selections");
+    if (values.is_default && maxSel !== null && maxSel !== undefined && maxSel <= 1) {
       setOptions((prev) => prev.map((opt) => ({ ...opt, is_default: false })));
     }
 
@@ -296,21 +297,39 @@ export function ModifierGroupFormSheet({
   const handleToggleDefault = (optionId: string) => {
     if (!canEditStructure) return;
 
+    const maxSel = form.getValues("max_selections");
+    const isSingleSelect = maxSel !== null && maxSel !== undefined && maxSel <= 1;
+
     setOptions((prev) => {
       const option = prev.find((o) => o.id === optionId);
       if (!option) return prev;
 
-      // If setting as default, unset all other defaults
       if (!option.is_default) {
+        // Setting as default
+        if (isSingleSelect) {
+          // Single-select: only one default allowed
+          return prev.map((opt) => ({
+            ...opt,
+            is_default: opt.id === optionId,
+          }));
+        }
+        // Multi-select: check if we'd exceed max_selections
+        const currentDefaults = prev.filter((o) => o.is_default).length;
+        if (maxSel && currentDefaults >= maxSel) {
+          toast.error("Max defaults reached", {
+            description: `You can only set up to ${maxSel} default options (matching max selections).`,
+          });
+          return prev;
+        }
         return prev.map((opt) => ({
           ...opt,
-          is_default: opt.id === optionId,
+          is_default: opt.id === optionId ? true : opt.is_default,
         }));
       } else {
-        // Unsetting default
+        // Unsetting this default
         return prev.map((opt) => ({
           ...opt,
-          is_default: false,
+          is_default: opt.id === optionId ? false : opt.is_default,
         }));
       }
     });
@@ -366,19 +385,6 @@ export function ModifierGroupFormSheet({
           }
 
           // Handle options updates (only if allowed)
-          // First, unset all defaults if multiple are set
-          const defaultOptions = options.filter((opt) => opt.is_default);
-          if (defaultOptions.length > 1) {
-            // Keep only the first one as default
-            const firstDefault = defaultOptions[0];
-            setOptions((prev) =>
-              prev.map((opt) => ({
-                ...opt,
-                is_default: opt.id === firstDefault.id,
-              })),
-            );
-          }
-
           for (const option of options) {
             if (option.isNew) {
               // Create new option
@@ -439,14 +445,6 @@ export function ModifierGroupFormSheet({
           });
         }
       } else {
-        // Ensure only one default is set
-        const defaultOptions = options.filter((opt) => opt.is_default);
-        const normalizedOptions = options.map((opt, index) => ({
-          ...opt,
-          is_default:
-            defaultOptions.length > 0 ? opt.id === defaultOptions[0].id : false,
-        }));
-
         // Create new group with options
         const result = await CreateModifierGroup(clerkOrgId, {
           name: values.name,
@@ -457,7 +455,7 @@ export function ModifierGroupFormSheet({
           display_order: values.display_order ?? undefined,
           location_id:
             selectedLocation?.id == "all" ? null : selectedLocation?.id,
-          options: normalizedOptions.map((opt, index) => ({
+          options: options.map((opt, index) => ({
             name: opt.name,
             description: opt.description,
             price_modifier: opt.price_modifier,
@@ -923,7 +921,9 @@ export function ModifierGroupFormSheet({
                                           <p>
                                             {option.is_default
                                               ? "Remove default"
-                                              : "Set as default"}
+                                              : (watchedValues.max_selections && watchedValues.max_selections > 1)
+                                                ? "Add as default"
+                                                : "Set as default"}
                                           </p>
                                         </TooltipContent>
                                       </Tooltip>

@@ -47,6 +47,7 @@ import {
 import { GetMerchantRoles } from "@/app/dashboard/actions/staff-invite";
 import { RolesModel, LocationsModel } from "@/types/db-modles";
 import { useLocations } from "@/app/dashboard/hooks/useLocations";
+import { useQuery } from "@tanstack/react-query";
 import {
   useCreatePOSStaff,
   useInviteClerkStaff,
@@ -112,8 +113,13 @@ export function InviteUserWizard({
   const onOpenChange = controlledOnOpenChange || setInternalOpen;
 
   const [currentStep, setCurrentStep] = React.useState<Step>("type");
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [roles, setRoles] = React.useState<RolesModel[]>([]);
+  const { data: rolesData, isLoading: isRolesLoading } = useQuery({
+    queryKey: ["merchant-roles"],
+    queryFn: () => GetMerchantRoles(),
+    staleTime: 5 * 60 * 1000, // cache for 5 minutes
+  });
+  const roles = rolesData || [];
+  const isLoading = isRolesLoading;
   const { data: locationsData } = useLocations(clerkOrgId, userInfo?.id || "");
   const locations = locationsData || [];
 
@@ -159,30 +165,12 @@ export function InviteUserWizard({
   const [employmentType, setEmploymentType] =
     React.useState<EmploymentType | null>(null);
 
-  // Load data
+  // Auto-select first role when roles load
   React.useEffect(() => {
-    if (open) {
-      loadData();
+    if (open && roles.length > 0 && !selectedRoleCode) {
+      setSelectedRoleCode(roles[0].code);
     }
-  }, [open]);
-
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const rolesData = await GetMerchantRoles();
-      setRoles(rolesData);
-
-      // Auto-select first role if available
-      if (rolesData.length > 0 && !selectedRoleCode) {
-        setSelectedRoleCode(rolesData[0].code);
-      }
-    } catch (error) {
-      console.error("Error loading data:", error);
-      toast.error("Failed to load roles");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  }, [open, roles, selectedRoleCode]);
 
   // Reset form when closing
   React.useEffect(() => {
