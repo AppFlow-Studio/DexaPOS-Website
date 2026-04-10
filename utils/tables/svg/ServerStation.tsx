@@ -1,16 +1,20 @@
 import React from "react";
 
 interface ServerStationProps {
+  darkMode?: boolean;
   color?: string;
   width?: number;
   height?: number;
 }
 
 const ServerStation: React.FC<ServerStationProps> = ({
+  darkMode = false,
   color = "#94A3B8",
   width = 60,
   height = 40,
 }) => {
+  const lightStroke = "#111827";
+
   return (
     <svg
       width={width}
@@ -26,8 +30,8 @@ const ServerStation: React.FC<ServerStationProps> = ({
         width="58.5"
         height="38.5"
         rx="4"
-        fill="#1E2340"
-        stroke={color}
+        fill={darkMode ? "#1E2340" : "#E5E7EB"}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="1.5"
       />
 
@@ -39,10 +43,10 @@ const ServerStation: React.FC<ServerStationProps> = ({
         height="13"
         rx="2"
         fill={color}
-        fillOpacity="0.08"
-        stroke={color}
+        fillOpacity={darkMode ? 0.08 : 0.75}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="0.75"
-        strokeOpacity="0.5"
+        strokeOpacity={darkMode ? 0.5 : 0.9}
       />
 
       {/* Bottom shelf */}
@@ -53,10 +57,10 @@ const ServerStation: React.FC<ServerStationProps> = ({
         height="13"
         rx="2"
         fill={color}
-        fillOpacity="0.08"
-        stroke={color}
+        fillOpacity={darkMode ? 0.08 : 0.75}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="0.75"
-        strokeOpacity="0.5"
+        strokeOpacity={darkMode ? 0.5 : 0.9}
       />
 
       {/* Divider */}
@@ -65,9 +69,9 @@ const ServerStation: React.FC<ServerStationProps> = ({
         y1="20"
         x2="42"
         y2="20"
-        stroke={color}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="0.5"
-        strokeOpacity="0.3"
+        strokeOpacity={darkMode ? 0.3 : 0.6}
       />
 
       {/* POS / printer */}
@@ -78,8 +82,8 @@ const ServerStation: React.FC<ServerStationProps> = ({
         height="28"
         rx="2"
         fill={color}
-        fillOpacity="0.12"
-        stroke={color}
+        fillOpacity={darkMode ? 0.12 : 0.75}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="0.75"
       />
 
@@ -91,7 +95,7 @@ const ServerStation: React.FC<ServerStationProps> = ({
         height="2"
         rx="1"
         fill={color}
-        fillOpacity="0.3"
+        fillOpacity={darkMode ? 0.3 : 0.75}
       />
     </svg>
   );

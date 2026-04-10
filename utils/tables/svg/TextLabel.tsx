@@ -1,18 +1,25 @@
 import React from "react";
 
 interface TextLabelProps {
+  darkMode?: boolean;
   color?: string;
   width?: number;
   height?: number;
+  text?: string;
 }
 
 const TextLabel: React.FC<TextLabelProps> = ({
+  darkMode = false,
   color = "#94A3B8",
   width = 100,
   height = 50,
+  text = "Aa",
 }) => {
-  const defaultHeight = 50;
-  const scaleY = (height || defaultHeight) / defaultHeight;
+  const baseHeight = 50;
+  const scaleY = height / baseHeight;
+
+  const lightOpacity = 0.9;
+  const darkOpacity = 0.7;
 
   return (
     <svg
@@ -30,9 +37,9 @@ const TextLabel: React.FC<TextLabelProps> = ({
         fontSize={24 * scaleY}
         fontWeight="bold"
         fill={color}
-        fillOpacity="0.7"
+        fillOpacity={darkMode ? darkOpacity : lightOpacity}
       >
-        Aa
+        {text}
       </text>
     </svg>
   );
