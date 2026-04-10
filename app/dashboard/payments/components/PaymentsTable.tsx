@@ -243,6 +243,12 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
               <dd className="font-mono">{payment.batch_number || ct?.batchNumber}</dd>
             </div>
           )}
+          {payment.settled_at && (
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Settled At</dt>
+              <dd>{formatDate(payment.settled_at)}</dd>
+            </div>
+          )}
           {(payment.invoice_number || raw?.txnInvoiceNumber) && (
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Invoice #</dt>
@@ -641,6 +647,41 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
             {config.label}
           </Badge>
         );
+      },
+      enableSorting: false,
+    },
+    // Settlement
+    {
+      id: "settlement",
+      header: "Settlement",
+      cell: ({ row }) => {
+        const p = row.original;
+        const batchNum = p.batch_number || p.dejavoo_batch_number;
+        if (p.is_settled) {
+          return (
+            <div className="flex flex-col gap-0.5">
+              <Badge
+                variant="outline"
+                className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-300"
+              >
+                Settled
+              </Badge>
+              {batchNum && (
+                <span className="text-[10px] text-muted-foreground font-mono">
+                  Batch {batchNum}
+                </span>
+              )}
+            </div>
+          );
+        }
+        if (batchNum) {
+          return (
+            <span className="text-xs text-muted-foreground font-mono">
+              Batch {batchNum}
+            </span>
+          );
+        }
+        return <span className="text-muted-foreground">—</span>;
       },
       enableSorting: false,
     },

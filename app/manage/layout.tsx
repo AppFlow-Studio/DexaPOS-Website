@@ -318,16 +318,18 @@ function AppSidebar() {
                         <Skeleton className="h-8 w-8" />
                     ) : (
                         <>
-                            <Avatar className="h-8 w-8">
-                                <AvatarImage src={userInfo?.avatar_url} alt={userInfo?.first_name || ''} />
-                                <AvatarFallback>{userInfo?.first_name?.charAt(0)}{userInfo?.last_name?.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <div className="grid flex-1 text-left text-sm leading-tight">
-                                <span className="truncate font-semibold">{userInfo?.first_name} {userInfo?.last_name}</span>
-                                <span className="truncate text-xs text-muted-foreground">
-                                    {role?.role_name || userInfo?.email}
-                                </span>
-                            </div>
+                            <Link href="/manage/profile" className="flex items-center gap-2 flex-1 min-w-0">
+                                <Avatar className="h-8 w-8 shrink-0">
+                                    <AvatarImage src={userInfo?.avatar_url} alt={userInfo?.first_name || ''} />
+                                    <AvatarFallback>{userInfo?.first_name?.charAt(0)}{userInfo?.last_name?.charAt(0)}</AvatarFallback>
+                                </Avatar>
+                                <div className="grid flex-1 text-left text-sm leading-tight">
+                                    <span className="truncate font-semibold">{userInfo?.first_name} {userInfo?.last_name}</span>
+                                    <span className="truncate text-xs text-muted-foreground">
+                                        {role?.role_name || userInfo?.email}
+                                    </span>
+                                </div>
+                            </Link>
                         </>
                     )}
 
@@ -349,13 +351,17 @@ function AppSidebar() {
                                 </div>
                             </DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem>
-                                <User className="mr-2 h-4 w-4" />
-                                Profile
+                            <DropdownMenuItem asChild>
+                                <Link href="/manage/profile">
+                                    <User className="mr-2 h-4 w-4" />
+                                    Profile
+                                </Link>
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
-                                <Settings className="mr-2 h-4 w-4" />
-                                Settings
+                            <DropdownMenuItem asChild>
+                                <Link href="/manage/settings">
+                                    <Settings className="mr-2 h-4 w-4" />
+                                    Settings
+                                </Link>
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem>

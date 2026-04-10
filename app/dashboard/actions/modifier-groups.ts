@@ -220,8 +220,6 @@ export async function CreateModifierGroup(
 
   // Create options if provided
   if (data.options && data.options.length > 0) {
-    // Ensure only one default is set - unset all others if multiple are set
-    const defaultOptions = data.options.filter((opt: any) => opt.is_default);
     const normalizedOptions = data.options.map((opt: any, index: number) => ({
       modifier_group_id: modifierGroup.id,
       name: opt.name,
@@ -229,11 +227,7 @@ export async function CreateModifierGroup(
       price_modifier: opt.price_modifier,
       display_order: opt.display_order ?? index,
       is_active: true,
-      is_default:
-        defaultOptions.length > 0
-          ? opt === defaultOptions[0] ||
-            (opt.id && opt.id === defaultOptions[0]?.id)
-          : (opt.is_default ?? false),
+      is_default: opt.is_default ?? false,
       merchant_id: opt.merchant_id,
     }));
 
@@ -515,19 +509,6 @@ export async function CreateModifierGroupItem(
     }
   }
 
-  // If setting as default, unset other defaults in this group
-  if (data.is_default) {
-    const { error: unsetError } = await supabase
-      .from("modifier_group_items")
-      .update({ is_default: false })
-      .eq("modifier_group_id", modifierGroupId)
-      .eq("is_default", true);
-
-    if (unsetError) {
-      console.error("Error unsetting other defaults:", unsetError);
-    }
-  }
-
   const { data: item, error } = await supabase
     .from("modifier_group_items")
     .insert({
@@ -622,20 +603,6 @@ export async function UpdateModifierGroupItem(
     }
     if (!roleInfo.assignedLocationIds.includes(parentGroup.location_id)) {
       return { error: "You do not have access to this modifier group" };
-    }
-  }
-
-  // If setting as default, unset other defaults in this group
-  if (data.is_default && existingItem?.modifier_group_id) {
-    const { error: unsetError } = await supabase
-      .from("modifier_group_items")
-      .update({ is_default: false })
-      .eq("modifier_group_id", existingItem.modifier_group_id)
-      .eq("is_default", true)
-      .neq("id", itemId); // Don't unset the current item
-
-    if (unsetError) {
-      console.error("Error unsetting other defaults:", unsetError);
     }
   }
 

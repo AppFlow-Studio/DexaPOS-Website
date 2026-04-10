@@ -514,6 +514,7 @@ export async function CreateMenuItem(
     const modifierInserts = data.modifier_group_ids.map((groupId) => ({
       menu_item_id: item.id,
       modifier_group_id: groupId,
+      merchant_id: merchant.id,
     }));
 
     const { error: modifierError } = await supabase
@@ -789,9 +790,17 @@ export async function UpdateMenuItem(
 
     // Insert new assignments if any
     if (data.modifier_group_ids.length > 0) {
+      // Fetch merchant_id for RLS policy
+      const { data: itemForMerchant } = await supabase
+        .from("menu_items")
+        .select("merchant_id")
+        .eq("id", itemId)
+        .single();
+
       const modifierInserts = data.modifier_group_ids.map((groupId) => ({
         menu_item_id: itemId,
         modifier_group_id: groupId,
+        merchant_id: itemForMerchant?.merchant_id,
       }));
 
       const { error: insertError } = await supabase
@@ -963,6 +972,22 @@ export async function DeleteMenuItem(
     .select("merchant_id, name")
     .eq("id", itemId)
     .single();
+
+  // Clean up child records before deleting the parent.
+  // This is defensive — the migration adds ON DELETE CASCADE, but it may
+  // not be deployed yet.  Order is not important because nothing references
+  // these tables except order_items.selected_size_id (SET NULL in migration).
+  await Promise.all([
+    supabase.from("item_sizes").delete().eq("menu_item_id", itemId),
+    supabase.from("item_addons").delete().eq("menu_item_id", itemId),
+    supabase.from("item_stock").delete().eq("menu_item_id", itemId),
+    supabase.from("category_items").delete().eq("menu_item_id", itemId),
+    supabase.from("menu_item_modifier_groups").delete().eq("menu_item_id", itemId),
+    supabase.from("menu_item_menus").delete().eq("menu_item_id", itemId),
+    supabase.from("location_item_overrides").delete().eq("menu_item_id", itemId),
+    supabase.from("location_menu_item_overrides").delete().eq("menu_item_id", itemId),
+    supabase.from("menu_item_discounts").delete().eq("menu_item_id", itemId),
+  ]);
 
   const { error } = await supabase.from("menu_items").delete().eq("id", itemId);
   if (error) {

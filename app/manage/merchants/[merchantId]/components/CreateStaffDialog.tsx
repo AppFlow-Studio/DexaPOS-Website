@@ -95,8 +95,8 @@ export function CreateStaffDialog({
       return
     }
 
-    if (!autoGeneratePin && (!pin || !/^\d{4,6}$/.test(pin))) {
-      toast.error('PIN must be 4-6 digits')
+    if (!autoGeneratePin && (!pin || !/^\d{4}$/.test(pin))) {
+      toast.error('PIN must be 4 digits')
       return
     }
 
@@ -333,11 +333,11 @@ export function CreateStaffDialog({
 
             {!autoGeneratePin && (
               <div className="space-y-2">
-                <Label htmlFor="pin">PIN Code (4-6 digits)</Label>
+                <Label htmlFor="pin">PIN Code (4 digits)</Label>
                 <Input
                   id="pin"
                   type="password"
-                  maxLength={6}
+                  maxLength={4}
                   value={pin}
                   onChange={(e) => {
                     const value = e.target.value

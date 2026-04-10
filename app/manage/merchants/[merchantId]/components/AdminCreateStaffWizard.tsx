@@ -147,7 +147,7 @@ export function AdminCreateStaffWizard({
         // For Clerk users, PIN is optional — always can proceed
         if (staffType === 'clerk') return true
         // For POS users, if not auto-generating, validate custom PIN
-        if (!autoGeneratePin && (!pinCode || !/^\d{4,6}$/.test(pinCode))) return false
+        if (!autoGeneratePin && (!pinCode || !/^\d{4}$/.test(pinCode))) return false
         return true
       case 'review':
         return true
@@ -565,12 +565,12 @@ export function AdminCreateStaffWizard({
 
                       {!autoGeneratePin && (
                         <div className="space-y-2">
-                          <Label htmlFor="pinCode">Enter 4–6 digit PIN</Label>
+                          <Label htmlFor="pinCode">Enter 4 digit PIN</Label>
                           <div className="relative">
                             <Input
                               id="pinCode"
                               type={showPin ? 'text' : 'password'}
-                              maxLength={6}
+                              maxLength={4}
                               value={pinCode}
                               onChange={(e) => setPinCode(e.target.value.replace(/\D/g, ''))}
                               placeholder="1234"

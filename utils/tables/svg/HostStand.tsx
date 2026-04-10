@@ -1,16 +1,20 @@
 import React from "react";
 
 interface HostStandProps {
+  darkMode?: boolean;
   color?: string;
   width?: number;
   height?: number;
 }
 
 const HostStand: React.FC<HostStandProps> = ({
+  darkMode = false,
   color = "#94A3B8",
   width = 40,
   height = 35,
 }) => {
+  const lightStroke = "#111827";
+
   return (
     <svg
       width={width}
@@ -26,8 +30,8 @@ const HostStand: React.FC<HostStandProps> = ({
         width="38.5"
         height="33.5"
         rx="3"
-        fill="#1E2340"
-        stroke={color}
+        fill={darkMode ? "#1E2340" : "#E5E7EB"}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="1.5"
       />
 
@@ -35,10 +39,10 @@ const HostStand: React.FC<HostStandProps> = ({
       <path
         d="M5 4 L35 4 L31 28 L9 28 Z"
         fill={color}
-        fillOpacity="0.10"
-        stroke={color}
+        fillOpacity={darkMode ? 0.1 : 0.75}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="0.75"
-        strokeOpacity="0.5"
+        strokeOpacity={darkMode ? 0.5 : 0.9}
         strokeLinejoin="round"
       />
 
@@ -50,8 +54,8 @@ const HostStand: React.FC<HostStandProps> = ({
         height="13"
         rx="2"
         fill={color}
-        fillOpacity="0.18"
-        stroke={color}
+        fillOpacity={darkMode ? 0.18 : 0.75}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="0.75"
       />
 
@@ -63,7 +67,7 @@ const HostStand: React.FC<HostStandProps> = ({
         height="13"
         rx="0.5"
         fill={color}
-        fillOpacity="0.3"
+        fillOpacity={darkMode ? 0.3 : 0.75}
       />
     </svg>
   );

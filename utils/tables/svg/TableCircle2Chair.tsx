@@ -1,18 +1,21 @@
 import React from "react";
 
 interface TableCircle2ChairProps {
+  darkMode?: boolean;
   color?: string;
-  chairColor?: string;
   width?: number;
   height?: number;
 }
 
 const TableCircle2Chair: React.FC<TableCircle2ChairProps> = ({
+  darkMode = false,
   color = "#2DD4BF",
   width = 130,
   height = 130,
   ...props
 }) => {
+  const strokeOpacity = darkMode ? 0.5 : 0.8;
+
   return (
     <svg
       width={width}
@@ -30,10 +33,10 @@ const TableCircle2Chair: React.FC<TableCircle2ChairProps> = ({
         height="12"
         rx="3"
         fill={color}
-        fillOpacity="0.12"
+        fillOpacity={darkMode ? 0.12 : 0.8}
         stroke={color}
+        strokeOpacity={strokeOpacity}
         strokeWidth="1"
-        strokeOpacity="0.5"
       />
 
       {/* Chair - bottom */}
@@ -44,10 +47,10 @@ const TableCircle2Chair: React.FC<TableCircle2ChairProps> = ({
         height="12"
         rx="3"
         fill={color}
-        fillOpacity="0.12"
+        fillOpacity={darkMode ? 0.12 : 0.8}
         stroke={color}
+        strokeOpacity={strokeOpacity}
         strokeWidth="1"
-        strokeOpacity="0.5"
       />
 
       {/* Table surface */}
@@ -56,10 +59,10 @@ const TableCircle2Chair: React.FC<TableCircle2ChairProps> = ({
         cy="50"
         r="31"
         fill={color}
-        fillOpacity="0.18"
+        fillOpacity={darkMode ? 0.18 : 0.85}
         stroke={color}
+        strokeOpacity={strokeOpacity}
         strokeWidth="1.5"
-        strokeOpacity="0.8"
       />
     </svg>
   );

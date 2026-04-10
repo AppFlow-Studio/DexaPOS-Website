@@ -584,24 +584,26 @@ function MerchantSidebar() {
             <Skeleton className="h-8 w-8" />
           ) : (
             <>
-              <Avatar className="h-8 w-8">
-                <AvatarImage
-                  src={userInfo?.avatar_url}
-                  alt={userInfo?.first_name}
-                />
-                <AvatarFallback>
-                  {userInfo?.first_name?.charAt(0)}
-                  {userInfo?.last_name?.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">
-                  {userInfo?.first_name} {userInfo?.last_name}
-                </span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {userInfo?.email}
-                </span>
-              </div>
+              <Link href="/dashboard/profile" className="flex items-center gap-2 flex-1 min-w-0">
+                <Avatar className="h-8 w-8 shrink-0">
+                  <AvatarImage
+                    src={userInfo?.avatar_url}
+                    alt={userInfo?.first_name}
+                  />
+                  <AvatarFallback>
+                    {userInfo?.first_name?.charAt(0)}
+                    {userInfo?.last_name?.charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-semibold">
+                    {userInfo?.first_name} {userInfo?.last_name}
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {userInfo?.email}
+                  </span>
+                </div>
+              </Link>
             </>
           )}
 
@@ -614,13 +616,17 @@ function MerchantSidebar() {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <User className="mr-2 h-4 w-4" />
-                Profile
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/profile">
+                  <User className="mr-2 h-4 w-4" />
+                  Profile
+                </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Settings className="mr-2 h-4 w-4" />
-                Settings
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/settings">
+                  <Settings className="mr-2 h-4 w-4" />
+                  Settings
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem>
@@ -653,8 +659,8 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
   const selectedLocation = useSelectedLocation();
   const isAllLocations = useIsAllLocations();
 
-  // Check if user is merchant.owner
-  const isMerchantOwner = userRole === "merchant.owner";
+  // Check if user is merchant.owner or merchant.admin — both can view All Locations
+  const isMerchantOwner = userRole === "merchant.owner" || userRole === "merchant.admin";
 
   const handleLocationChange = (locationId: string) => {
     setSelectedLocation(locationId);
@@ -732,7 +738,7 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
           Select Location
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {/* Only show "All Locations" option for merchant.owner */}
+        {/* Show "All Locations" option for owners and admins */}
         {isMerchantOwner && (
           <>
             <DropdownMenuItem
@@ -835,8 +841,8 @@ export default function MerchantDashboardLayout({
     isInitialized,
   } = useLocationStore();
 
-  // Check if user is merchant.owner
-  const isMerchantOwner = userRole === "merchant.owner";
+  // Check if user is merchant.owner or merchant.admin
+  const isMerchantOwner = userRole === "merchant.owner" || userRole === "merchant.admin";
 
   // Monitor session state to prevent unnecessary query invalidation
   useSessionSync();

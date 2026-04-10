@@ -6,9 +6,17 @@ import { CdnImageUploadField } from '@/components/ui/cdn-image-upload-field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Power, Settings, Info, AlertTriangle, Save, Trash2 } from 'lucide-react'
+import { Power, Settings, Info, AlertTriangle, Save, Trash2, Globe, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MenuWithCategories } from '@/types/menu'
+import { LocationsModel } from '@/types/db-modles'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
 
 interface MenuSettingsTabProps {
     menu: MenuWithCategories
@@ -16,6 +24,7 @@ interface MenuSettingsTabProps {
     totalItems: number
     editedName: string
     editedDescription: string
+    editedLocationId: string | null
     hasSettingsChanges: boolean
     imagePreviewUrl: string | null
     isImageUploading: boolean
@@ -23,10 +32,12 @@ interface MenuSettingsTabProps {
     isSavingSettings: boolean
     selectedImageFileName?: string | null
     selectedLocationId: string | null
+    locations: LocationsModel[]
     onClearImage: () => void
     onImageSelect: (file: File | null) => void
     onNameChange: (name: string) => void
     onDescriptionChange: (description: string) => void
+    onLocationChange: (locationId: string | null) => void
     onToggleActive: () => void
     onSaveSettings: () => void
     onCancelSettings: () => void
@@ -39,6 +50,7 @@ export function MenuSettingsTab({
     totalItems,
     editedName,
     editedDescription,
+    editedLocationId,
     hasSettingsChanges,
     imagePreviewUrl,
     isImageUploading,
@@ -46,15 +58,23 @@ export function MenuSettingsTab({
     isSavingSettings,
     selectedImageFileName,
     selectedLocationId,
+    locations,
     onClearImage,
     onImageSelect,
     onNameChange,
     onDescriptionChange,
+    onLocationChange,
     onToggleActive,
     onSaveSettings,
     onCancelSettings,
     onDeleteMenu,
 }: MenuSettingsTabProps) {
+    const currentLocation = editedLocationId
+        ? locations.find(l => l.id === editedLocationId)
+        : null
+
+    const isGlobal = editedLocationId === null
+
     return (
         <div className="space-y-4">
             {/* Status Card */}
@@ -124,6 +144,100 @@ export function MenuSettingsTab({
                             </>
                         )}
                     </Button>
+                </CardContent>
+            </Card>
+
+            {/* Menu Scope */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        {isGlobal ? <Globe className="h-5 w-5 text-blue-500" /> : <MapPin className="h-5 w-5 text-orange-500" />}
+                        Menu Scope
+                    </CardTitle>
+                    <CardDescription>
+                        Control which location this menu belongs to. Global menus are available across all locations.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {/* Current scope indicator */}
+                    <div className={cn(
+                        "flex items-center gap-3 rounded-lg border p-4",
+                        isGlobal
+                            ? "border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/20"
+                            : "border-orange-200 bg-orange-50/50 dark:border-orange-900 dark:bg-orange-950/20"
+                    )}>
+                        <div className={cn(
+                            "h-9 w-9 rounded-lg flex items-center justify-center shrink-0",
+                            isGlobal
+                                ? "bg-blue-500/15 text-blue-600"
+                                : "bg-orange-500/15 text-orange-600"
+                        )}>
+                            {isGlobal ? <Globe className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-sm font-medium">
+                                {isGlobal ? 'Global Menu' : currentLocation?.name ?? 'Unknown Location'}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                                {isGlobal
+                                    ? 'Visible at all locations'
+                                    : currentLocation
+                                        ? `${currentLocation.address_line1}, ${currentLocation.city}`
+                                        : 'Location not found'
+                                }
+                            </p>
+                        </div>
+                        <Badge
+                            variant="outline"
+                            className={cn(
+                                "ml-auto shrink-0",
+                                isGlobal
+                                    ? "border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-400"
+                                    : "border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-400"
+                            )}
+                        >
+                            {isGlobal ? 'Global' : 'Location-specific'}
+                        </Badge>
+                    </div>
+
+                    {/* Location selector */}
+                    <div className="space-y-2">
+                        <Label>Assign to</Label>
+                        <Select
+                            value={editedLocationId ?? 'global'}
+                            onValueChange={(val) => onLocationChange(val === 'global' ? null : val)}
+                            disabled={isSavingSettings}
+                        >
+                            <SelectTrigger className="max-w-sm">
+                                <SelectValue placeholder="Select location..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="global">
+                                    <div className="flex items-center gap-2">
+                                        <Globe className="h-4 w-4 text-blue-500" />
+                                        <span>Global (all locations)</span>
+                                    </div>
+                                </SelectItem>
+                                {locations.map(loc => (
+                                    <SelectItem key={loc.id} value={loc.id}>
+                                        <div className="flex items-center gap-2">
+                                            <MapPin className="h-4 w-4 text-orange-500" />
+                                            <span>{loc.name}</span>
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        {editedLocationId !== (menu.location_id ?? null) && (
+                            <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                                <AlertTriangle className="h-3 w-3" />
+                                {editedLocationId === null
+                                    ? 'Changing to global will make this menu available at all locations.'
+                                    : 'Changing to a specific location will restrict this menu to that location only.'
+                                }
+                            </p>
+                        )}
+                    </div>
                 </CardContent>
             </Card>
 

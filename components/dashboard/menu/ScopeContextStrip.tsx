@@ -1,19 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, Globe, Building2, MapPin } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
+import { Globe, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  useLocationStore,
   useIsAllLocations,
   useSelectedLocation,
 } from "@/stores/location-store";
@@ -49,7 +39,6 @@ export function ScopeContextStrip({
 }: ScopeContextStripProps) {
   const isAllLocations = useIsAllLocations();
   const selectedLocation = useSelectedLocation();
-  const { locations, setSelectedLocation } = useLocationStore();
 
   const rawScope = deriveScopeFromContext({
     isAllLocations,
@@ -91,56 +80,6 @@ export function ScopeContextStrip({
             <span className="text-sm font-semibold truncate">
               {locationName}
             </span>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={cn(
-                    "h-6 gap-0.5 px-1.5 text-[11px] font-medium",
-                    colors.text,
-                    "hover:bg-white/50 dark:hover:bg-black/20",
-                  )}
-                >
-                  change <ChevronDown className="h-3 w-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-60">
-                <DropdownMenuLabel className="flex items-center gap-2 text-xs">
-                  <MapPin className="h-3.5 w-3.5" />
-                  Switch location
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {vm.strip.showAllLocationsOption && (
-                  <DropdownMenuItem
-                    onClick={() => setSelectedLocation("all")}
-                    className={cn(
-                      "cursor-pointer gap-2",
-                      isAllLocations && "bg-accent",
-                    )}
-                  >
-                    <Building2 className="h-4 w-4" />
-                    All Locations
-                  </DropdownMenuItem>
-                )}
-                {vm.strip.showAllLocationsOption && locations.length > 0 && (
-                  <DropdownMenuSeparator />
-                )}
-                {locations.map((loc) => (
-                  <DropdownMenuItem
-                    key={loc.id}
-                    onClick={() => setSelectedLocation(loc.id)}
-                    className={cn(
-                      "cursor-pointer gap-2",
-                      selectedLocation?.id === loc.id && "bg-accent",
-                    )}
-                  >
-                    <MapPin className="h-4 w-4" />
-                    {loc.name}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
           <p className="text-[11px] leading-tight opacity-80 truncate">
             {secondary}

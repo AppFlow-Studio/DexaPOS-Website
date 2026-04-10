@@ -26,6 +26,8 @@ export interface PaymentRecord {
   card_entry_mode?: string;
   dejavoo_response_code?: string;
   batch_number?: string;
+  dejavoo_batch_number?: string;
+  is_settled?: boolean;
   invoice_number?: string;
   processor_response?: Record<string, any>;
   emv_data?: EmvData | null;
@@ -139,6 +141,74 @@ export interface PaymentFilters {
     max?: number;
   };
   searchQuery?: string;
+}
+
+// ============================================================================
+// Payment Summary — Aggregated stats
+// ============================================================================
+
+// ============================================================================
+// Settlement Batch — settlement_batches table
+// ============================================================================
+
+export type BatchStatus = "open" | "closed" | "submitted" | "settled" | "funded";
+
+export interface SettlementBatchRecord {
+  id: string;
+  batch_id: string;
+  merchant_id: string;
+  location_id: string;
+  terminal_id?: string;
+  business_date: string;
+  opened_at: string;
+  closed_at?: string;
+  settlement_date?: string;
+  funded_date?: string;
+  transaction_count: number;
+  sales_count: number;
+  refund_count: number;
+  void_count: number;
+  gross_amount: number;
+  tip_amount: number;
+  refund_amount: number;
+  interchange_fees: number;
+  assessment_fees: number;
+  processor_fees: number;
+  net_deposit: number;
+  status: BatchStatus;
+  raw_response?: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================================================
+// Computed Batch — Grouping payments by batch_number when settlement_batches is empty
+// ============================================================================
+
+export interface ComputedBatch {
+  batch_number: string;
+  sales_count: number;
+  refund_count: number;
+  void_count: number;
+  gross_amount: number;
+  tip_amount: number;
+  refund_amount: number;
+  net_amount: number;
+  earliest_payment: string;
+  latest_payment: string;
+  payments: PaymentRecord[];
+}
+
+// ============================================================================
+// Batch Filters
+// ============================================================================
+
+export interface BatchFilters {
+  dateRange?: {
+    from: Date | null;
+    to: Date | null;
+  };
+  status?: BatchStatus[];
 }
 
 // ============================================================================

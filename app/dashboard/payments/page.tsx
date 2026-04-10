@@ -28,6 +28,9 @@ import { PaymentCharts } from "./components/PaymentCharts";
 import { PaymentsTable } from "./components/PaymentsTable";
 import { PaymentFilters, PaymentRecord, PaymentSummary } from "@/types/payment";
 import { PaymentMethod, PaymentStatus } from "@/types/order-management";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { BatchesView } from "./components/BatchesView";
+import { Layers } from "lucide-react";
 
 function computePaymentSummary(payments: PaymentRecord[]): PaymentSummary {
   if (!payments.length) {
@@ -227,49 +230,69 @@ export default function PaymentsPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <PaymentStats summary={summary} isLoading={paymentsLoading} />
+      {/* Tabs */}
+      <Tabs defaultValue="payments">
+        <TabsList>
+          <TabsTrigger value="payments">
+            <CreditCard className="h-4 w-4" />
+            Payments
+          </TabsTrigger>
+          <TabsTrigger value="batches">
+            <Layers className="h-4 w-4" />
+            Batches
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Charts */}
-      <PaymentCharts summary={summary} isLoading={paymentsLoading} />
+        <TabsContent value="payments" className="space-y-6">
+          {/* Stats Cards */}
+          <PaymentStats summary={summary} isLoading={paymentsLoading} />
 
-      {/* Payments Table */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>All Payments</CardTitle>
-            <Button
-              variant="outline"
-              className="hover:bg-accent hover:text-accent-foreground cursor-pointer"
-              size="sm"
-              onClick={async () => await refetchPayments()}
-            >
-              <RefreshCcwDot className="h-4 w-4 mr-2" />
-              Refresh
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {paymentsLoading && paymentsList.length === 0 ? (
-            <div className="space-y-2">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          ) : paymentsList.length === 0 ? (
-            <Empty
-              icon={CreditCard}
-              title="No payments found"
-              description="Try adjusting your date range or filters to see more results."
-            />
-          ) : (
-            <PaymentsTable
-              data={paymentsList}
-              isLoading={paymentsLoading}
-            />
-          )}
-        </CardContent>
-      </Card>
+          {/* Charts */}
+          <PaymentCharts summary={summary} isLoading={paymentsLoading} />
+
+          {/* Payments Table */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>All Payments</CardTitle>
+                <Button
+                  variant="outline"
+                  className="hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                  size="sm"
+                  onClick={async () => await refetchPayments()}
+                >
+                  <RefreshCcwDot className="h-4 w-4 mr-2" />
+                  Refresh
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {paymentsLoading && paymentsList.length === 0 ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              ) : paymentsList.length === 0 ? (
+                <Empty
+                  icon={CreditCard}
+                  title="No payments found"
+                  description="Try adjusting your date range or filters to see more results."
+                />
+              ) : (
+                <PaymentsTable
+                  data={paymentsList}
+                  isLoading={paymentsLoading}
+                />
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="batches">
+          <BatchesView paymentFilters={filters} />
+        </TabsContent>
+      </Tabs>
     </main>
   );
 }
