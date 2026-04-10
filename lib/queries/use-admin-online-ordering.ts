@@ -77,7 +77,11 @@ export interface OnlineOrderingSettings {
   acceptOnlinePayments?: boolean
   acceptCashOnDelivery?: boolean
   acceptCardOnDelivery?: boolean
+  ipospaysDeviceId?: string | null
+  ipospaysDeviceLabel?: string | null
   ipospaysTpn?: string
+  ipospaysFtdEcomKey?: string
+  ipospaysFtdEcomKeyConfigured?: boolean
   tippingEnabled?: boolean
   tipConfig?: TipConfig
   baseDeliveryFee?: number

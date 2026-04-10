@@ -69,6 +69,7 @@ interface CreateOnlineOrderRequest {
   special_instructions?: string
   card_token?: string             // for returning customers with saved cards
   payment_token_id?: string       // from FTD (Freedom to Design) card tokenization
+  payment_device_id?: string      // selected payment device used during tokenization
   pay_cash_in_store?: boolean
   payment_card_type?: string | null
   payment_card_last_four?: string | null
@@ -174,6 +175,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     orderType: body.order_type,
     hasCardToken: !!body.card_token,
     hasPaymentToken: !!body.payment_token_id,
+    paymentDeviceId: body.payment_device_id ?? null,
     hasDeliveryAddress: !!body.delivery_address,
   })
 
@@ -498,9 +500,41 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   // ---- Step 8: Resolve payment path ----
   const payCashInStore = body.pay_cash_in_store === true
+  let paymentDevice: { id: string; tpn: string } | null = null
 
-  if (!payCashInStore && !ipospaysTpn) {
-    logError('PAYMENT', 'No iPOS Pays TPN configured for this store', { storeConfigId })
+  if (!payCashInStore) {
+    let paymentDeviceQuery = supabase
+      .from('location_payment_devices')
+      .select('id, tpn')
+      .eq('location_id', locationId)
+      .eq('is_active', true)
+
+    if (body.payment_device_id) {
+      paymentDeviceQuery = paymentDeviceQuery.eq('id', body.payment_device_id)
+    } else {
+      paymentDeviceQuery = paymentDeviceQuery.eq('use_for_online_ordering', true)
+    }
+
+    const { data: paymentDeviceRow, error: paymentDeviceError } = await paymentDeviceQuery.maybeSingle()
+
+    if (paymentDeviceError) {
+      logError('PAYMENT_DEVICE', 'Failed to resolve payment device', paymentDeviceError)
+      return errorResponse(
+        'Payment device configuration is unavailable for this store.',
+        'payment_device_unavailable',
+        503
+      )
+    }
+
+    if (paymentDeviceRow) {
+      paymentDevice = paymentDeviceRow
+    }
+  }
+
+  const effectiveIposTpn = paymentDevice?.tpn ?? ipospaysTpn
+
+  if (!payCashInStore && !effectiveIposTpn) {
+    logError('PAYMENT', 'No iPOS Pays TPN configured for this store', { storeConfigId, paymentDeviceId: body.payment_device_id ?? null })
     return errorResponse(
       'Online payment is not configured for this store. Please contact the store.',
       'payment_not_configured',
@@ -646,14 +680,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
         dejavoo_response_message: null,
         dejavoo_batch_number: null,
         dejavoo_invoice_number: null,
-        metadata: {
-          source: 'online_order',
-          provider: 'website',
-          provider_order_id: transactionReferenceId,
-          payment_status_from_source: 'PENDING_CASH_IN_STORE',
-        },
-      }
-    : {
+      metadata: {
+        source: 'online_order',
+        provider: 'website',
+        provider_order_id: transactionReferenceId,
+        payment_status_from_source: 'PENDING_CASH_IN_STORE',
+        payment_device_id: paymentDevice?.id ?? null,
+        payment_device_tpn: paymentDevice?.tpn ?? effectiveIposTpn ?? null,
+      },
+    }
+  : {
         payment_method: 'card',
         status: 'captured',
         terminal_type: 'dejavoo',
@@ -682,6 +718,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
           provider_order_id: transactionReferenceId,
           payment_status_from_source: 'TEST_MODE_CAPTURED',
           payment_bypass: true,
+          payment_device_id: paymentDevice?.id ?? null,
+          payment_device_tpn: paymentDevice?.tpn ?? effectiveIposTpn ?? null,
         },
       }
 

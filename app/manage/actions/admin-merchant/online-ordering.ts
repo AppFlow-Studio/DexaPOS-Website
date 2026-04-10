@@ -11,6 +11,15 @@ import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'dexaposai.com'
 
+interface PaymentDeviceSummary {
+  id: string
+  device_label: string | null
+  tpn: string
+  use_for_online_ordering: boolean
+  is_active: boolean
+  ftd_key_configured: boolean
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -77,7 +86,11 @@ interface OnlineOrderingSettings {
   acceptOnlinePayments?: boolean
   acceptCashOnDelivery?: boolean
   acceptCardOnDelivery?: boolean
+  ipospaysDeviceId?: string | null
+  ipospaysDeviceLabel?: string | null
   ipospaysTpn?: string
+  ipospaysFtdEcomKey?: string
+  ipospaysFtdEcomKeyConfigured?: boolean
   tippingEnabled?: boolean
   tipConfig?: TipConfig
   baseDeliveryFee?: number
@@ -125,6 +138,29 @@ async function whitelistDejavooDomain(
   }
 }
 
+async function getLocationPaymentDevices(locationId: string) {
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase.rpc('list_location_payment_devices', {
+    p_location_id: locationId,
+  })
+
+  if (error) {
+    console.error('[HQ_ONLINE_ORDERING] Failed to load payment devices:', error)
+    return [] as PaymentDeviceSummary[]
+  }
+
+  return ((data as PaymentDeviceSummary[] | null) ?? []).filter(Boolean)
+}
+
+async function getSelectedLocationPaymentDevice(locationId: string) {
+  const devices = await getLocationPaymentDevices(locationId)
+  return (
+    devices.find((device) => device.use_for_online_ordering && device.is_active) ??
+    devices.find((device) => device.is_active) ??
+    null
+  )
+}
+
 // ============================================================================
 // READ Operations
 // ============================================================================
@@ -158,6 +194,10 @@ export async function getAdminOnlineOrderingSettings(
     if (configError && configError.code !== 'PGRST116') {
       console.error('[getAdminOnlineOrderingSettings] Config error:', configError)
     }
+
+    const selectedDevice = config
+      ? await getSelectedLocationPaymentDevice(locationId)
+      : null
 
     const settings: Partial<OnlineOrderingSettings> = {
       locationId,
@@ -205,7 +245,11 @@ export async function getAdminOnlineOrderingSettings(
       settings.acceptOnlinePayments = config.accepts_online_payments ?? true
       settings.acceptCashOnDelivery = config.accepts_cash_on_delivery ?? false
       settings.acceptCardOnDelivery = config.accepts_card_on_delivery ?? false
-      settings.ipospaysTpn = config.ipospays_tpn ?? ''
+      settings.ipospaysDeviceId = selectedDevice?.id ?? null
+      settings.ipospaysDeviceLabel = selectedDevice?.device_label ?? null
+      settings.ipospaysTpn = selectedDevice?.tpn ?? config.ipospays_tpn ?? ''
+      settings.ipospaysFtdEcomKey = ''
+      settings.ipospaysFtdEcomKeyConfigured = selectedDevice?.ftd_key_configured ?? false
     }
 
     return { success: true, data: settings, error: null }
@@ -251,7 +295,10 @@ export async function getAdminMerchantOnlineOrderingOverview(merchantId: string)
       console.error('[getAdminMerchantOnlineOrderingOverview] Config error:', configError)
     }
 
-    const configMap = new Map(configs?.map((c) => [c.location_id, c]) || [])
+    const configMap = new Map<
+      string,
+      { id: string; location_id: string; is_active: boolean | null; store_name: string | null; slug: string | null }
+    >(configs?.map((c) => [c.location_id, c]) || [])
     const result = locations?.map((loc) => {
       const config = configMap.get(loc.id)
       return {
@@ -314,6 +361,8 @@ export async function adminSaveOnlineOrderingSettings(
       .eq('location_id', locationId)
       .single()
 
+    const existingPaymentDevice = await getSelectedLocationPaymentDevice(locationId)
+
     const configData: Record<string, unknown> = {
       location_id: locationId,
       merchant_id: merchantId,
@@ -362,9 +411,26 @@ export async function adminSaveOnlineOrderingSettings(
     const nextSlugCandidate =
       settings.storeSlug !== undefined && settings.storeSlug !== '' ? settings.storeSlug : previousSlug
     const slugIsChanging = nextSlugCandidate !== null && nextSlugCandidate !== previousSlug
-    const tpnIsChanging =
-      settings.ipospaysTpn !== undefined &&
-      (settings.ipospaysTpn || null) !== (existingConfig?.ipospays_tpn ?? null)
+    const nextTpn =
+      settings.ipospaysTpn !== undefined
+        ? settings.ipospaysTpn.trim() || null
+        : existingPaymentDevice?.tpn ?? existingConfig?.ipospays_tpn ?? null
+    const currentTpn =
+      existingPaymentDevice?.tpn ?? existingConfig?.ipospays_tpn ?? null
+    const tpnIsChanging = nextTpn !== currentTpn
+    const providedFtdKey = settings.ipospaysFtdEcomKey?.trim() ?? ''
+    const shouldUpsertPaymentDevice =
+      Boolean(nextTpn) &&
+      (tpnIsChanging || providedFtdKey.length > 0 || !existingPaymentDevice)
+
+    if (shouldUpsertPaymentDevice && providedFtdKey.length === 0) {
+      return {
+        success: false,
+        error: existingPaymentDevice
+          ? 'Enter the FTD Ecom/TOP key when changing the online-ordering TPN.'
+          : 'TPN and FTD Ecom/TOP key are both required to configure online card payments.',
+      }
+    }
 
     if (existingConfig) {
       const { error: updateError } = await supabase
@@ -435,6 +501,42 @@ export async function adminSaveOnlineOrderingSettings(
       }
     }
 
+    if (shouldUpsertPaymentDevice && nextTpn) {
+      const { error: paymentDeviceError } = await supabase.rpc(
+        'upsert_location_payment_device',
+        {
+          p_location_id: locationId,
+          p_tpn: nextTpn,
+          p_ftd_ecom_key: providedFtdKey,
+          p_device_label:
+            settings.ipospaysDeviceLabel?.trim() ||
+            existingPaymentDevice?.device_label ||
+            'Online ordering device',
+          p_use_for_online_ordering: true,
+        }
+      )
+
+      if (paymentDeviceError) {
+        return {
+          success: false,
+          error: `Payment device update failed: ${paymentDeviceError.message}`,
+        }
+      }
+    } else if (settings.ipospaysTpn !== undefined && !nextTpn) {
+      const { error: clearPaymentDeviceError } = await supabase
+        .from('location_payment_devices')
+        .update({ use_for_online_ordering: false })
+        .eq('location_id', locationId)
+        .eq('use_for_online_ordering', true)
+
+      if (clearPaymentDeviceError) {
+        return {
+          success: false,
+          error: `Failed to clear selected payment device: ${clearPaymentDeviceError.message}`,
+        }
+      }
+    }
+
     const { data: loc } = await supabase
       .from('locations')
       .select('name')
@@ -457,8 +559,7 @@ export async function adminSaveOnlineOrderingSettings(
     })
 
     const finalSlug = (configData.slug as string | undefined) ?? existingConfig?.slug ?? ''
-    const finalTpn =
-      (configData.ipospays_tpn as string | null | undefined) ?? existingConfig?.ipospays_tpn ?? null
+    const finalTpn = nextTpn
     const shouldWhitelist = Boolean((tpnIsChanging || slugIsChanging) && finalTpn && finalSlug)
 
     let domainWhitelistError: string | undefined
@@ -502,9 +603,11 @@ export async function adminToggleOnlineStore(
 
     const { data: existingConfig } = await supabase
       .from('online_store_config')
-      .select('id, slug, ipospays_tpn')
+      .select('id, slug')
       .eq('location_id', locationId)
       .single()
+
+    const selectedDevice = await getSelectedLocationPaymentDevice(locationId)
 
     if (!existingConfig) {
       return { success: false, error: 'Online store not configured for this location' }
@@ -543,8 +646,8 @@ export async function adminToggleOnlineStore(
 
     let domainWhitelistError: string | undefined
     let domainWhitelistSkipped = false
-    if (enabled && existingConfig.ipospays_tpn && existingConfig.slug) {
-      const whitelistResult = await whitelistDejavooDomain(existingConfig.ipospays_tpn, existingConfig.slug)
+    if (enabled && selectedDevice?.tpn && existingConfig.slug) {
+      const whitelistResult = await whitelistDejavooDomain(selectedDevice.tpn, existingConfig.slug)
       if (!whitelistResult.success && !whitelistResult.skipped) {
         domainWhitelistError = whitelistResult.error || 'Domain whitelist failed'
         console.error('[adminToggleOnlineStore] Domain whitelist failed:', domainWhitelistError)
@@ -572,9 +675,10 @@ export async function adminRetriggerDomainWhitelist(
     await assertHQPermission('hq.merchant.update')
 
     const supabase = createServerSupabaseClient()
+    const selectedDevice = await getSelectedLocationPaymentDevice(locationId)
     const { data: config, error } = await supabase
       .from('online_store_config')
-      .select('ipospays_tpn, slug')
+      .select('slug')
       .eq('merchant_id', merchantId)
       .eq('location_id', locationId)
       .single()
@@ -582,14 +686,14 @@ export async function adminRetriggerDomainWhitelist(
     if (error || !config) {
       return { success: false, error: 'Store config not found for this location' }
     }
-    if (!config.ipospays_tpn) {
+    if (!selectedDevice?.tpn) {
       return { success: false, error: 'No TPN configured for this location' }
     }
     if (!config.slug) {
       return { success: false, error: 'No store slug configured for this location' }
     }
 
-    const result = await whitelistDejavooDomain(config.ipospays_tpn, config.slug)
+    const result = await whitelistDejavooDomain(selectedDevice.tpn, config.slug)
     if (!result.success) {
       return { success: false, skipped: result.skipped, error: result.error || 'Domain whitelist failed' }
     }

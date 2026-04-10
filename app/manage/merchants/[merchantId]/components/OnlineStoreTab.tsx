@@ -334,6 +334,10 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
     const selectedLocation = locations.find((l) => l.id === selectedLocationId)
     const storeUrl = localSettings?.storeSlug ? getStoreUrl(localSettings.storeSlug) : ''
     const hasTpn = Boolean(localSettings?.ipospaysTpn?.trim())
+    const hasFtdKey = Boolean(
+        localSettings?.ipospaysFtdEcomKey?.trim() ||
+        localSettings?.ipospaysFtdEcomKeyConfigured
+    )
     const canRunWhitelist = Boolean(localSettings?.storeSlug && hasTpn)
 
     // Render store configuration
@@ -453,18 +457,20 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                 <div>
                                     <p className="text-sm font-medium">Card Payment Readiness</p>
                                     <p className="text-xs text-muted-foreground">
-                                        {hasTpn
-                                            ? 'TPN is configured. You can whitelist the storefront domain.'
-                                            : 'TPN is missing. Card payments cannot run until a TPN is configured.'}
+                                        {hasTpn && hasFtdKey
+                                            ? 'TPN and FTD key are configured for this branch.'
+                                            : 'Card payments need both a branch TPN and the matching FTD Ecom/TOP key.'}
                                     </p>
                                 </div>
-                                <Badge variant={hasTpn ? 'default' : 'destructive'}>{hasTpn ? 'Ready' : 'Missing TPN'}</Badge>
+                                <Badge variant={hasTpn && hasFtdKey ? 'default' : 'destructive'}>
+                                    {hasTpn && hasFtdKey ? 'Ready' : 'Incomplete'}
+                                </Badge>
                             </div>
-                            {!hasTpn && (
+                            {(!hasTpn || !hasFtdKey) && (
                                 <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-900">
                                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                                     <p className="text-xs">
-                                        Add the merchant&apos;s iPOS TPN in the Payment &amp; Tips tab before enabling card checkout.
+                                        Add the merchant&apos;s online-ordering TPN and the matching FTD Ecom/TOP key in the Payment &amp; Tips tab before enabling card checkout.
                                     </p>
                                 </div>
                             )}
@@ -935,6 +941,21 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                             />
                                             <p className="text-xs text-muted-foreground">
                                                 This TPN is used for domain whitelist and card processing on this store.
+                                            </p>
+                                            <Label className="pt-2">FTD Ecom/TOP Key</Label>
+                                            <Input
+                                                type="password"
+                                                value={localSettings.ipospaysFtdEcomKey || ''}
+                                                onChange={(e) => updateSettings({ ipospaysFtdEcomKey: e.target.value })}
+                                                placeholder={
+                                                    localSettings.ipospaysFtdEcomKeyConfigured
+                                                        ? 'Stored securely. Enter a new key only to rotate it.'
+                                                        : 'Enter branch-specific FTD Ecom/TOP key'
+                                                }
+                                            />
+                                            <p className="text-xs text-muted-foreground">
+                                                This branch-specific key is stored securely and is not shown back in plain text.
+                                                Enter a new value only when rotating the key or switching the online-ordering device.
                                             </p>
                                         </div>
                                     )}

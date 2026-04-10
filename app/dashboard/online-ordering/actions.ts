@@ -18,6 +18,40 @@ import { LogAuditEvent } from "../actions/audit-logs";
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "dexaposai.com";
 
+interface PaymentDeviceSummary {
+  id: string;
+  device_label: string | null;
+  tpn: string;
+  use_for_online_ordering: boolean;
+  is_active: boolean;
+  ftd_key_configured: boolean;
+}
+
+async function getLocationPaymentDevices(locationId: string) {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.rpc("list_location_payment_devices", {
+    p_location_id: locationId,
+  });
+
+  if (error) {
+    console.error("[ONLINE_ORDERING] Failed to load payment devices:", error);
+    return [] as PaymentDeviceSummary[];
+  }
+
+  return ((data as PaymentDeviceSummary[] | null) ?? []).filter(Boolean);
+}
+
+async function getSelectedLocationPaymentDevice(locationId: string) {
+  const devices = await getLocationPaymentDevices(locationId);
+  return (
+    devices.find(
+      (device) => device.use_for_online_ordering && device.is_active
+    ) ??
+    devices.find((device) => device.is_active) ??
+    null
+  );
+}
+
 /**
  * Registers/updates the allowed domain for an FTD-enabled TPN.
  * This must be called whenever a merchant saves a new/updated TPN so the
@@ -68,7 +102,8 @@ export async function whitelistDejavooDomain(
 
 function mapConfigToSettings(
   config: any,
-  location: any
+  location: any,
+  selectedDevice: PaymentDeviceSummary | null
 ): Partial<OnlineOrderingSettings> {
   return {
     id: config.id,
@@ -121,7 +156,11 @@ function mapConfigToSettings(
       ? config.tip_presets
       : [15, 18, 20, 25],
 
-    ipospaysTpn: config.ipospays_tpn ?? "",
+    ipospaysDeviceId: selectedDevice?.id ?? null,
+    ipospaysDeviceLabel: selectedDevice?.device_label ?? null,
+    ipospaysTpn: selectedDevice?.tpn ?? config.ipospays_tpn ?? "",
+    ipospaysFtdEcomKey: "",
+    ipospaysFtdEcomKeyConfigured: selectedDevice?.ftd_key_configured ?? false,
 
     headerStyle: config.header_style ?? "filled",
     headerTextColor: config.header_text_color ?? null,
@@ -166,7 +205,8 @@ export async function getOnlineOrderingSettings(
   }
 
   if (config) {
-    return mapConfigToSettings(config, location);
+    const selectedDevice = await getSelectedLocationPaymentDevice(locationId);
+    return mapConfigToSettings(config, location, selectedDevice);
   }
 
   return {
@@ -218,6 +258,8 @@ export async function saveOnlineOrderingSettings(
     .select("*")
     .eq("location_id", locationId)
     .single();
+
+  const existingPaymentDevice = await getSelectedLocationPaymentDevice(locationId);
 
   const auditChanges: {
     before: Record<string, unknown>;
@@ -331,13 +373,26 @@ export async function saveOnlineOrderingSettings(
   const slugIsChanging =
     nextSlugCandidate !== null && nextSlugCandidate !== previousSlug;
 
-  // Payment — track whether TPN is actually changing so we can whitelist below
-  const tpnIsChanging =
-    settings.ipospaysTpn !== undefined &&
-    (settings.ipospaysTpn || null) !==
-      (existingConfig?.ipospays_tpn ?? null);
+  const nextTpn =
+    settings.ipospaysTpn !== undefined
+      ? settings.ipospaysTpn.trim() || null
+      : existingPaymentDevice?.tpn ?? existingConfig?.ipospays_tpn ?? null;
+  const currentTpn =
+    existingPaymentDevice?.tpn ?? existingConfig?.ipospays_tpn ?? null;
+  const tpnIsChanging = nextTpn !== currentTpn;
+  const providedFtdKey = settings.ipospaysFtdEcomKey?.trim() ?? "";
+  const shouldUpsertPaymentDevice =
+    Boolean(nextTpn) &&
+    (tpnIsChanging || providedFtdKey.length > 0 || !existingPaymentDevice);
   if (settings.ipospaysTpn !== undefined)
     configData.ipospays_tpn = settings.ipospaysTpn || null;
+  if (shouldUpsertPaymentDevice && providedFtdKey.length === 0) {
+    throw new Error(
+      existingPaymentDevice
+        ? "Enter the FTD Ecom/TOP key when changing the online-ordering TPN."
+        : "TPN and FTD Ecom/TOP key are both required to configure online card payments."
+    );
+  }
 
   // Header
   if (settings.headerStyle !== undefined)
@@ -413,6 +468,47 @@ export async function saveOnlineOrderingSettings(
     auditChanges.after = configData;
   }
 
+  if (shouldUpsertPaymentDevice && nextTpn) {
+    const { error: paymentDeviceError } = await supabase.rpc(
+      "upsert_location_payment_device",
+      {
+        p_location_id: locationId,
+        p_tpn: nextTpn,
+        p_ftd_ecom_key: providedFtdKey,
+        p_device_label:
+          settings.ipospaysDeviceLabel?.trim() ||
+          existingPaymentDevice?.device_label ||
+          "Online ordering device",
+        p_use_for_online_ordering: true,
+      }
+    );
+
+    if (paymentDeviceError) {
+      throw new Error(
+        `Payment device update failed: ${paymentDeviceError.message}`
+      );
+    }
+
+    auditChanges.after.ipospays_tpn = nextTpn;
+    auditChanges.after.payment_device_model = "vault";
+    if (!auditChanges.before.ipospays_tpn && currentTpn) {
+      auditChanges.before.ipospays_tpn = currentTpn;
+    }
+    hasChanges = true;
+  } else if (settings.ipospaysTpn !== undefined && !nextTpn) {
+    const { error: clearPaymentDeviceError } = await supabase
+      .from("location_payment_devices")
+      .update({ use_for_online_ordering: false })
+      .eq("location_id", locationId)
+      .eq("use_for_online_ordering", true);
+
+    if (clearPaymentDeviceError) {
+      throw new Error(
+        `Failed to clear selected payment device: ${clearPaymentDeviceError.message}`
+      );
+    }
+  }
+
   if (hasChanges) {
     await LogAuditEvent({
       merchantId,
@@ -429,7 +525,7 @@ export async function saveOnlineOrderingSettings(
   }
 
   // If TPN changed or slug/domain changed, whitelist this store's domain with Dejavoo
-  const finalTpn = (configData.ipospays_tpn as string | null) ?? null;
+  const finalTpn = nextTpn;
   const finalSlug = (configData.slug as string | undefined) ?? existingConfig?.slug ?? "";
   const shouldWhitelist = (tpnIsChanging || slugIsChanging) && finalTpn && finalSlug;
   if (shouldWhitelist) {
@@ -458,10 +554,11 @@ export async function retriggerDomainWhitelist(
   locationId: string
 ): Promise<{ success: boolean; error?: string; skipped?: boolean }> {
   const supabase = createServerSupabaseClient();
+  const selectedDevice = await getSelectedLocationPaymentDevice(locationId);
 
   const { data: config, error } = await supabase
     .from("online_store_config")
-    .select("ipospays_tpn, slug")
+    .select("slug")
     .eq("location_id", locationId)
     .single();
 
@@ -469,7 +566,8 @@ export async function retriggerDomainWhitelist(
     return { success: false, error: "Store config not found" };
   }
 
-  if (!config.ipospays_tpn) {
+  const tpn = selectedDevice?.tpn ?? null;
+  if (!tpn) {
     return { success: false, error: "No TPN configured for this store" };
   }
 
@@ -477,7 +575,7 @@ export async function retriggerDomainWhitelist(
     return { success: false, error: "No URL slug configured for this store" };
   }
 
-  return whitelistDejavooDomain(config.ipospays_tpn, config.slug);
+  return whitelistDejavooDomain(tpn, config.slug);
 }
 
 

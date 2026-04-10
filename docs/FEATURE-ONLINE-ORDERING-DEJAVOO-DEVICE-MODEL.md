@@ -2,198 +2,244 @@
 
 ## Purpose
 
-This document defines the missing payment-configuration layer for online ordering:
+This document defines the production payment-device layer for online ordering.
 
-- a branch can have multiple Dejavoo/iPOS devices
-- online ordering must use one explicit device configuration
-- the storefront must always use a matched pair:
-  - `TPN`
-  - `FTD Ecom/TOP key`
+The key rule is:
 
-This was not fully documented in the original online-ordering payment notes and became visible during branch-level testing.
+- a branch can have many Dejavoo devices
+- online ordering must use exactly one selected device
+- that same selected device must be used for:
+  - FTD tokenization
+  - domain whitelist
+  - downstream charge/void flow
 
-## Problem
+## Why This Exists
 
-Current behavior mixes two different scopes:
+The old implementation mixed scopes:
 
-- `TPN` is being treated as branch-specific
-- `DEJAVOO_FTD_ECOM_KEY` is currently global
+- `TPN` was branch-specific
+- `DEJAVOO_FTD_ECOM_KEY` was global or stored in plaintext on `online_store_config`
 
-That works only if every branch uses the same device/key pair, which is not a safe assumption.
+That causes device mismatch:
 
-Failure mode:
-
-- branch A works because the global FTD key belongs to branch A's device
-- branch B fails even after updating its `TPN`
-- domain whitelist can also appear inconsistent because whitelist updates are applied to one device while tokenization is still using another device's FTD key
+- tokenization can use one device key
+- charge/whitelist can target another device TPN
 
 Typical symptom:
 
 - `FTD_013 Requested Origin is Not Registered`
 
-## Correct Model
+## Secure Model
 
-The system must distinguish between these levels:
+### Data boundaries
 
-1. Merchant
-2. Branch / location
-3. Payment device
+- `TPN` is not treated as a secret
+- `FTD Ecom/TOP key` is treated as a payment secret
+- the FTD key is stored in Supabase Vault, not in a client-readable table column
 
-For online ordering, each branch selects one payment device as its active online-ordering device.
+### Main table
 
-That device owns:
+The secure source of truth is now:
 
-- `TPN`
-- `FTD Ecom/TOP key`
-- Dejavoo domain whitelist entries
+- `public.location_payment_devices`
 
-The storefront should not guess or mix devices. It should use the branch's selected online-ordering payment device only.
+Important columns:
 
-## Recommended Data Model
+- `merchant_id`
+- `carrier_id`
+- `location_id`
+- `device_label`
+- `tpn`
+- `ftd_ecom_key_secret_id`
+- `is_active`
+- `use_for_online_ordering`
+- `last_synced_from_crm_at`
 
-Minimum pragmatic model:
+### One active online-ordering device per location
 
-- `online_store_config.ipospays_tpn`
-- `online_store_config.ipospays_ftd_ecom_key`
-- optional `online_store_config.ipospays_device_label`
-- optional `online_store_config.ipospays_device_id`
+This is enforced in the database with a partial unique index:
 
-Better long-term model:
+- at most one row per location can have:
+  - `use_for_online_ordering = true`
+  - `is_active = true`
 
-- separate branch payment-device table
-- `online_store_config.online_ordering_payment_device_id` references the selected device
+So the app cannot accidentally select multiple devices for the same branch.
 
-Example long-term shape:
+## Runtime Flow
 
-```sql
-create table public.location_payment_devices (
-  id uuid primary key default gen_random_uuid(),
-  merchant_id uuid not null references public.merchants(id),
-  location_id uuid not null references public.locations(id),
-  provider text not null default 'dejavoo',
-  device_label text,
-  tpn text not null,
-  ftd_ecom_key text not null,
-  is_active boolean not null default true,
-  use_for_online_ordering boolean not null default false,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-```
+### 1. Admin saves payment config
 
-Rules:
-
-- one location can have many payment devices
-- at most one active device should be marked `use_for_online_ordering = true`
-- the storefront should always resolve to that one selected device
-
-## Required Runtime Behavior
-
-### `process-online-payment`
-
-Current limitation:
-
-- returns one global `DEJAVOO_FTD_ECOM_KEY`
-
-Required behavior:
-
-- receive `store_config_id`
-- load the selected online-ordering device for that branch
-- return that branch/device's FTD key as `security_key`
-
-That means:
-
-- branch A checkout uses branch A FTD key
-- branch B checkout uses branch B FTD key
-
-### `create-online-order`
-
-Required behavior:
-
-- charge using the same branch/device `TPN` that matches the FTD key used in tokenization
-
-No cross-device mismatch is allowed.
-
-### Domain whitelist
-
-Whitelist must be applied to the same selected online-ordering device.
-
-If a branch changes its online-ordering payment device, the system must:
-
-1. save the new device's `TPN`
-2. save the new device's `FTD key`
-3. update whitelist for that same device
-4. use that same device for tokenization and charging
-
-## Admin UX Requirement
-
-The admin flow should not ask only for a `TPN`.
-
-It should support one of these:
-
-1. Simple version
-   - `TPN`
-   - `FTD Ecom/TOP key`
-   - optional label like `Front counter terminal`
-
-2. Better version
-   - list branch devices
-   - choose one as `Use for online ordering`
-   - surface current whitelist status
-
-Minimum required admin fields:
+Merchant dashboard and HQ admin both collect:
 
 - `TPN`
 - `FTD Ecom/TOP key`
 
-Without both values, branch-specific checkout is incomplete.
+They do not write the key directly to `online_store_config`.
 
-## Current Interim Workaround
+Instead they call:
 
-Until per-branch FTD keys are implemented:
+- `public.upsert_location_payment_device(...)`
 
-- only one branch/device can be reliably tested at a time with the global `DEJAVOO_FTD_ECOM_KEY`
-- to test a different branch, temporarily replace the global FTD key with that branch's generated Ecom/TOP key
+That RPC:
 
-This is a test workaround only. It is not the correct production architecture.
+- authorizes the caller
+- stores or rotates the key in Vault
+- upserts the device row
+- marks it as the selected online-ordering device
+- keeps `online_store_config.ipospays_tpn` in sync for compatibility
 
-## Localhost / Domain Notes
+### 2. Checkout initializes payment
 
-Dejavoo whitelist entries must use the origin only, not the full page path.
-
-Correct:
-
-- `http://ein-l-mirasi.localhost:3000`
-
-Incorrect:
-
-- `http://ein-l-mirasi.localhost:3000/checkout`
-
-Even with the correct origin, tokenization still fails if the FTD key belongs to a different device than the selected branch `TPN`.
-
-## Decision
-
-Recommended next implementation:
-
-1. add branch-level storage for `ipospays_ftd_ecom_key`
-2. update admin UI to save both `TPN` and `FTD key`
-3. update `process-online-payment` to return branch-specific FTD key
-4. keep domain whitelist aligned to that same branch/device pair
-
-## Related Files
+Storefront calls:
 
 - `supabase/functions/process-online-payment/index.ts`
+
+That function:
+
+- receives `store_config_id`
+- resolves `location_id`
+- loads the selected row from `location_payment_devices`
+- decrypts the FTD key from `vault.decrypted_secrets`
+- returns:
+  - `security_key`
+  - `payment_device_id`
+  - `tpn`
+
+It also writes a credential-access audit row to:
+
+- `public.payment_credential_access_log`
+
+### 3. Checkout places order
+
+Storefront now sends the selected device id with the order request:
+
+- `payment_device_id`
+
+`supabase/functions/create-online-order/index.ts` re-resolves the device by:
+
+- exact `payment_device_id` if provided
+- otherwise selected device for the location
+
+That prevents tokenization on one device and charge metadata on another.
+
+## Admin UX Rules
+
+The UI still looks simple for now:
+
+- enter `TPN`
+- enter `FTD Ecom/TOP key`
+
+But the behavior changed:
+
+- the FTD key is written once
+- after save, the UI reloads and does not show the key again
+- the field becomes a rotation field only
+
+Displayed back to the user:
+
+- `TPN`
+- readiness state
+- whether a key is configured
+
+Never displayed back:
+
+- decrypted FTD key
+
+## Whitelist Alignment
+
+Whitelist should always use the selected device TPN.
+
+Current code path:
+
+- dashboard/admin whitelist actions resolve the selected device
+- then call the Dejavoo whitelist function for that device TPN
+
+Important limitation:
+
+- automatic whitelist still requires the Dejavoo Management API key
+- if you do not have that key, whitelist must still be done manually in the Dejavoo portal
+
+## Backward Compatibility
+
+This implementation keeps a temporary compatibility path:
+
+- `online_store_config.ipospays_tpn` still exists and is kept in sync
+- `DEJAVOO_FTD_ECOM_KEY` can still act as a legacy fallback in `process-online-payment`
+
+But the intended secure path is:
+
+- selected device row
+- Vault secret
+- server-side secret resolution
+
+The old plaintext `ipospays_ftd_ecom_key` values are migrated into Vault and nulled during migration.
+
+## New Database Objects
+
+Migration:
+
+- `supabase/migrations/20260409170000_secure_online_ordering_payment_devices.sql`
+
+Main objects created:
+
+- `public.location_payment_devices`
+- `public.payment_credential_access_log`
+- `public.list_location_payment_devices(uuid)`
+- `public.upsert_location_payment_device(uuid, text, text, text, boolean)`
+
+## Files To Read
+
+Architecture:
+
+- `docs/FEATURE-ONLINE-ORDERING-DEJAVOO-DEVICE-MODEL.md`
+
+Practical payment flow:
+
+- `docs/FEATURE-ONLINE-ORDERING-PAYMENTS.md`
+
+Database:
+
+- `supabase/migrations/20260409170000_secure_online_ordering_payment_devices.sql`
+
+Storefront init:
+
+- `supabase/functions/process-online-payment/index.ts`
+
+Order placement:
+
 - `supabase/functions/create-online-order/index.ts`
+
+Merchant dashboard save/load:
+
 - `app/dashboard/online-ordering/actions.ts`
+- `app/dashboard/online-ordering/page.tsx`
+- `app/dashboard/online-ordering/hooks/useOnlineOrderingSettings.ts`
+
+HQ admin save/load:
+
 - `app/manage/actions/admin-merchant/online-ordering.ts`
 - `app/manage/merchants/[merchantId]/components/OnlineStoreTab.tsx`
-- `docs/FEATURE-ONLINE-ORDERING-PAYMENTS.md`
-- `docs/SPRINT-2026-04-08-ONLINE-ORDERING-PAYMENTS-HANDOFF.md`
+
+## Test Checklist
+
+1. Run the migration.
+2. Redeploy:
+   - `process-online-payment`
+   - `create-online-order`
+3. Open merchant dashboard or HQ admin.
+4. Save a branch `TPN` plus matching `FTD Ecom/TOP key`.
+5. Confirm the page reload no longer shows the FTD key in plaintext.
+6. Retry checkout on that branch.
+7. Confirm `process-online-payment` returns a `payment_device_id`.
+8. Confirm `create-online-order` receives and logs the same device id.
 
 ## Status
 
-- documented
-- not fully implemented yet
+- secure device model implemented
+- Vault-backed secret storage implemented
+- selected payment-device resolution implemented
+- checkout now passes `payment_device_id`
+- order creation re-resolves the same device
 
 ## Last Updated
 

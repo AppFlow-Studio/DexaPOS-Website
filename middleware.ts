@@ -34,6 +34,16 @@ function extractStoreSlug(hostname: string): string | null {
 
 type StoreMatch = {
   slug: string
+  isActive: boolean
+}
+
+function extractSitesRouteSlug(pathname: string): string | null {
+  const match = pathname.match(/^\/sites\/([^/]+)/)
+  return match?.[1] ?? null
+}
+
+function notFoundResponse(): NextResponse {
+  return new NextResponse('Not Found', { status: 404 })
 }
 
 async function getStoreBySlug(slug: string): Promise<StoreMatch | null> {
@@ -44,13 +54,14 @@ async function getStoreBySlug(slug: string): Promise<StoreMatch | null> {
     );
     const { data } = await supabase
       .from('online_store_config')
-      .select('slug')
+      .select('slug, is_active')
       .eq('slug', slug)
       .single();
 
     if (!data?.slug) return null;
     return {
       slug: data.slug,
+      isActive: data.is_active !== false,
     };
   } catch {
     return null;
@@ -75,13 +86,14 @@ async function lookupCustomDomain(hostname: string): Promise<StoreMatch | null> 
     );
     const { data } = await supabase
       .from('online_store_config')
-      .select('slug')
+      .select('slug, is_active')
       .eq('custom_domain', hostWithoutPort)
       .single();
 
     if (!data?.slug) return null;
     return {
       slug: data.slug,
+      isActive: data.is_active !== false,
     };
   } catch {
     return null;
@@ -102,6 +114,10 @@ export default clerkMiddleware(async (auth, req) => {
   }
 
   if (storeMatch?.slug) {
+    if (!storeMatch.isActive) {
+      return notFoundResponse();
+    }
+
     const { slug } = storeMatch;
     const url = req.nextUrl.clone();
     url.pathname = `/sites/${slug}${url.pathname === '/' ? '' : url.pathname}`;
@@ -109,6 +125,14 @@ export default clerkMiddleware(async (auth, req) => {
     const response = NextResponse.rewrite(url);
     response.headers.set('x-store-slug', slug);
     return response;
+  }
+
+  const directStoreSlug = extractSitesRouteSlug(req.nextUrl.pathname);
+  if (directStoreSlug) {
+    const directStoreMatch = await getStoreBySlug(directStoreSlug);
+    if (!directStoreMatch?.slug || !directStoreMatch.isActive) {
+      return notFoundResponse();
+    }
   }
 
   // ── Standard Clerk auth flow (unchanged) ───────────────────────────
