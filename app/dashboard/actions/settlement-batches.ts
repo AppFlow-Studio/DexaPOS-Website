@@ -56,16 +56,15 @@ export async function GetSettlementBatches(
     return [];
   }
 
-  // Convert integer cent amounts to dollars
   return (data || []).map((b) => ({
     ...b,
-    gross_amount: (b.gross_amount || 0) / 100,
-    tip_amount: (b.tip_amount || 0) / 100,
-    refund_amount: (b.refund_amount || 0) / 100,
-    interchange_fees: (b.interchange_fees || 0) / 100,
-    assessment_fees: (b.assessment_fees || 0) / 100,
-    processor_fees: (b.processor_fees || 0) / 100,
-    net_deposit: (b.net_deposit || 0) / 100,
+    gross_amount: Number(b.gross_amount) || 0,
+    tip_amount: Number(b.tip_amount) || 0,
+    refund_amount: Number(b.refund_amount) || 0,
+    interchange_fees: Number(b.interchange_fees) || 0,
+    assessment_fees: Number(b.assessment_fees) || 0,
+    processor_fees: Number(b.processor_fees) || 0,
+    net_deposit: Number(b.net_deposit) || 0,
   })) as SettlementBatchRecord[];
 }
 

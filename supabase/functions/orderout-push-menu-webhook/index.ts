@@ -13,6 +13,16 @@ import { createClient } from 'npm:@supabase/supabase-js'
 const WEBHOOK_SECRET = Deno.env.get('ORDEROUT_WEBHOOK_SECRET')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+// Flag for the new single-service callback shape (OrderOut rollout).
+// When set to '1'/'true', the webhook accepts per-service callbacks carrying
+// { delivery_service, status_code, response }. Legacy array-style payloads
+// continue to work regardless of this flag.
+const PUSH_CHANNELS_V2_ENABLED = ((): boolean => {
+  const raw = Deno.env.get('ORDEROUT_PUSH_CHANNELS_V2')
+  if (!raw) return false
+  const v = raw.trim().toLowerCase()
+  return v === '1' || v === 'true' || v === 'yes'
+})()
 
 // ============================================================================
 // RESPONSE HELPERS
@@ -164,6 +174,167 @@ interface SanitizedResult {
   error: string | null
 }
 
+// New single-service callback (flag-gated). OrderOut sends one of these per
+// delivery platform after a push_menu fan-out request.
+interface PushMenuChannelsCallbackPayload {
+  restaurant_id: string
+  menu_id: number | string
+  status_code: number
+  delivery_service: string
+  response?: unknown
+}
+
+function isChannelsShape(body: Record<string, unknown>): boolean {
+  // New shape: has a `delivery_service` field and no `results` array.
+  if (!('delivery_service' in body)) return false
+  if ('results' in body && Array.isArray((body as { results: unknown }).results)) return false
+  return true
+}
+
+function deriveStatusFromCode(
+  code: unknown
+): 'success' | 'failed' | 'unknown' {
+  if (typeof code !== 'number' || !Number.isFinite(code)) return 'unknown'
+  if (code >= 200 && code < 300) return 'success'
+  if (code >= 400) return 'failed'
+  return 'unknown'
+}
+
+function extractErrorMessage(
+  status: 'success' | 'failed' | 'unknown',
+  code: unknown,
+  response: unknown
+): string | null {
+  if (status !== 'failed') return null
+  if (response && typeof response === 'object') {
+    const obj = response as Record<string, unknown>
+    if (typeof obj.error === 'string' && obj.error.length > 0) return obj.error
+    if (typeof obj.message === 'string' && obj.message.length > 0) return obj.message
+  }
+  if (typeof code === 'number') return `HTTP ${code}`
+  return 'Unknown error'
+}
+
+// ============================================================================
+// NEW BRANCH — single-service channels callback (flag-gated)
+// ============================================================================
+
+async function handleChannelsCallback(
+  supabase: ReturnType<typeof createClient>,
+  body: Record<string, unknown>,
+  replayId: string | null
+): Promise<Response> {
+  // 1. Required-field validation
+  const rawRestaurantId = body.restaurant_id
+  const rawMenuId = body.menu_id
+  const rawStatusCode = body.status_code
+  const rawDeliveryService = body.delivery_service
+  const rawResponse = body.response
+
+  if (
+    typeof rawRestaurantId !== 'string' ||
+    rawRestaurantId.trim() === '' ||
+    rawMenuId === undefined ||
+    rawMenuId === null ||
+    rawMenuId === ''
+  ) {
+    await insertDeadLetter(
+      supabase,
+      body,
+      'Missing required fields (restaurant_id, menu_id)',
+      'push_menu_channels',
+      replayId
+    )
+    return errorResponse('Missing required fields', 400)
+  }
+
+  // 2. Normalize delivery_service via alias map
+  const normalizedService = normalizePlatform(rawDeliveryService)
+  if (!normalizedService) {
+    await insertDeadLetter(
+      supabase,
+      body,
+      `unknown_delivery_service:${typeof rawDeliveryService === 'string' ? rawDeliveryService : 'non-string'}`,
+      'push_menu_channels',
+      replayId
+    )
+    return successResponse(null, 'Unknown delivery_service; stored in DLQ')
+  }
+
+  // 3. Derive status + error
+  const derivedStatus = deriveStatusFromCode(rawStatusCode)
+  const statusCode =
+    typeof rawStatusCode === 'number' && Number.isFinite(rawStatusCode)
+      ? rawStatusCode
+      : null
+  const errorMessage = extractErrorMessage(derivedStatus, rawStatusCode, rawResponse)
+
+  logEvent('PUSH_MENU_CHANNELS', 'Received channel callback', {
+    restaurant_id: rawRestaurantId,
+    menu_id: rawMenuId,
+    delivery_service: normalizedService,
+    status_code: statusCode,
+    status: derivedStatus,
+  })
+
+  // 4. Call the atomic correlator RPC
+  const { data, error } = await supabase.rpc('correlate_push_channels_callback', {
+    p_oo_menu_id: String(rawMenuId),
+    p_oo_restaurant_id: String(rawRestaurantId),
+    p_delivery_service: normalizedService,
+    p_status: derivedStatus,
+    p_status_code: statusCode,
+    p_error_message: errorMessage,
+    p_raw_response:
+      rawResponse && typeof rawResponse === 'object' ? rawResponse : { value: rawResponse ?? null },
+  })
+
+  if (error) {
+    // PostgreSQL raised no_matching_link — DLQ and return 200 to stop retries.
+    if (error.message && error.message.includes('no_matching_link')) {
+      await insertDeadLetter(
+        supabase,
+        body,
+        `No menu link for oo_menu_id=${rawMenuId} restaurant_id=${rawRestaurantId}`,
+        'push_menu_channels',
+        replayId
+      )
+      return successResponse(null, 'No matching menu link; stored in DLQ')
+    }
+
+    // Other errors: let OrderOut retry. UNIQUE constraint + ON CONFLICT DO
+    // NOTHING prevents double-counting on retry.
+    logError('PUSH_MENU_CHANNELS', 'RPC error', error)
+    return errorResponse('Internal correlator error', 500)
+  }
+
+  // RPC returns a single row
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row) {
+    logError('PUSH_MENU_CHANNELS', 'RPC returned no rows', { body })
+    return errorResponse('Correlator returned no rows', 500)
+  }
+
+  logEvent('PUSH_MENU_CHANNELS', 'Correlated channel callback', {
+    sync_id: row.sync_id,
+    final_status: row.final_status,
+    reported: row.reported_count,
+    expected: row.expected_count,
+    was_duplicate: row.was_duplicate,
+  })
+
+  return successResponse(
+    {
+      sync_id: row.sync_id,
+      reported: row.reported_count,
+      expected: row.expected_count,
+      final_status: row.final_status,
+      was_duplicate: row.was_duplicate,
+    },
+    'Channel callback processed'
+  )
+}
+
 // ============================================================================
 // MAIN HANDLER
 // ============================================================================
@@ -201,6 +372,29 @@ Deno.serve(async (req: Request): Promise<Response> => {
   } catch {
     await insertDeadLetter(supabase, { _raw: rawBody }, 'Invalid JSON body', 'push_menu', replayId)
     return errorResponse('Invalid JSON body', 400)
+  }
+
+  // 3a. Shape detection — route new single-service callbacks when enabled.
+  const bodyAsRecord = body as unknown as Record<string, unknown>
+  if (PUSH_CHANNELS_V2_ENABLED && isChannelsShape(bodyAsRecord)) {
+    return await handleChannelsCallback(supabase, bodyAsRecord, replayId)
+  }
+
+  // If we got a shape we don't understand (neither results[] nor delivery_service)
+  // and the flag is off but it still smells like the new shape, DLQ for visibility.
+  if (
+    !PUSH_CHANNELS_V2_ENABLED &&
+    isChannelsShape(bodyAsRecord) &&
+    !Array.isArray(body.results)
+  ) {
+    await insertDeadLetter(
+      supabase,
+      body,
+      'unknown_payload_shape: channels shape received but V2 flag disabled',
+      'push_menu_channels',
+      replayId
+    )
+    return successResponse(null, 'Channels shape received but V2 disabled; stored in DLQ')
   }
 
   logEvent('PUSH_MENU_WEBHOOK', 'Received push_menu callback', {

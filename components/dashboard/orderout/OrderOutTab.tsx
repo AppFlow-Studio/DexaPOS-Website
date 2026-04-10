@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import Image from "next/image";
 import {
   CheckCircle2,
   Circle,
@@ -35,7 +36,14 @@ import {
 } from "@/app/dashboard/online-ordering/hooks/useOrderOutStatus";
 import { OrderOutOnboardingForm, type OnboardingFormData } from "./OrderOutOnboardingForm";
 import type { OrderOutLocationStatus } from "@/app/dashboard/actions/orderout";
-import { extractConnectedPlatforms } from "@/lib/orderout/helpers";
+import {
+  extractConnectedPlatforms,
+  formatRelativeTime,
+} from "@/lib/orderout/helpers";
+import { PushChannelsRowAction } from "./PushChannelsRowAction";
+import { PushChannelsCard } from "./PushChannelsCard";
+import { PushChannelsHistoryCard } from "./PushChannelsHistoryCard";
+import { ChannelSelfConfirmCard } from "./ChannelSelfConfirmCard";
 
 // ============================================================================
 // Types
@@ -59,6 +67,18 @@ interface OrderOutTabProps {
 
 const KNOWN_PLATFORMS = ["UberEats", "DoorDash", "GrubHub"] as const;
 
+const PLATFORM_LOGOS: Record<string, string> = {
+  ubereats: "/uber-eats.png",
+  doordash: "/doordash.png",
+  grubhub: "/grubhub.png",
+};
+
+function PlatformLogo({ platform, className = "h-6 w-6" }: { platform: string; className?: string }) {
+  const src = PLATFORM_LOGOS[platform.toLowerCase()];
+  if (!src) return <UtensilsCrossed className={`${className} text-muted-foreground`} />;
+  return <Image src={src} alt={platform} width={24} height={24} className={`${className} object-contain`} />;
+}
+
 function getPlatformStyle(platform: string): { color: string; bg: string } {
   switch (platform.toLowerCase()) {
     case "ubereats":
@@ -70,20 +90,6 @@ function getPlatformStyle(platform: string): { color: string; bg: string } {
     default:
       return { color: "text-gray-700 dark:text-gray-400", bg: "bg-gray-100 dark:bg-gray-900/30" };
   }
-}
-
-function formatRelativeTime(dateStr: string): string {
-  const now = new Date();
-  const date = new Date(dateStr);
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 1) return "Just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
 }
 
 function getSyncStatusBadge(status: string | null) {
@@ -133,7 +139,16 @@ export function OrderOutTab({
 
   const syncedMenus = syncedMenusData?.data || [];
   const recentOrders = recentOrdersData?.data || [];
-  const channels = extractConnectedPlatforms(orderOutStatus?.connectedChannels);
+
+  // Union: webhook-verified ∪ merchant self-confirmed.
+  // This one derivation unlocks every downstream gate — Setup Progress, the
+  // Connected Channels grid, PushChannelsRowAction, and PushChannelsCard all
+  // receive the union and treat it as "connected".
+  const verified = extractConnectedPlatforms(orderOutStatus?.connectedChannels);
+  const confirmed = (orderOutStatus?.channelsConfirmedByMerchant ?? []).map(
+    (c) => c.toUpperCase()
+  );
+  const channels = Array.from(new Set([...verified, ...confirmed]));
 
   const isOnboarded = !!orderOutStatus?.hasRestaurant;
   const dashboardUrl = orderOutStatus?.dashboardUrl || "https://dashboard.orderout.co";
@@ -266,6 +281,16 @@ export function OrderOutTab({
         </Card>
       )}
 
+      {/* A2. Merchant self-confirmation (tick what you've connected in OrderOut) */}
+      <ChannelSelfConfirmCard
+        clerkOrgId={clerkOrgId}
+        locationId={locationId}
+        dashboardUrl={dashboardUrl}
+        confirmedChannels={orderOutStatus?.channelsConfirmedByMerchant ?? []}
+        verifiedChannels={verified}
+        confirmedAt={orderOutStatus?.channelsConfirmedAt ?? null}
+      />
+
       {/* B. Connected Channels */}
       <Card>
         <CardHeader>
@@ -285,25 +310,37 @@ export function OrderOutTab({
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {KNOWN_PLATFORMS.map((platform) => {
-              const isConnected = channels.some(
-                (c) => c.toLowerCase() === platform.toLowerCase()
+              const platformUpper = platform.toUpperCase();
+              const isVerified = verified.some(
+                (c) => c.toUpperCase() === platformUpper
               );
+              const isSelfConfirmed =
+                !isVerified &&
+                confirmed.some((c) => c.toUpperCase() === platformUpper);
+              const isActive = isVerified || isSelfConfirmed;
               const style = getPlatformStyle(platform);
               return (
                 <div
                   key={platform}
                   className={`flex items-center gap-3 rounded-lg border p-3 ${
-                    isConnected ? style.bg : "bg-muted/30"
+                    isActive ? style.bg : "bg-muted/30"
                   }`}
                 >
-                  <UtensilsCrossed className={`h-5 w-5 ${isConnected ? style.color : "text-muted-foreground"}`} />
+                  <PlatformLogo platform={platform} className={`h-6 w-6 ${!isActive ? "opacity-40 grayscale" : ""}`} />
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-medium ${isConnected ? "" : "text-muted-foreground"}`}>
+                    <p className={`text-sm font-medium ${isActive ? "" : "text-muted-foreground"}`}>
                       {platform}
                     </p>
                   </div>
-                  {isConnected ? (
+                  {isVerified ? (
                     <Badge variant="default" className="bg-green-600 text-xs">Connected</Badge>
+                  ) : isSelfConfirmed ? (
+                    <Badge
+                      variant="outline"
+                      className="text-xs border-amber-500 text-amber-700 dark:text-amber-400"
+                    >
+                      Self-confirmed
+                    </Badge>
                   ) : (
                     <span className="text-xs text-muted-foreground">Not Connected</span>
                   )}
@@ -313,17 +350,31 @@ export function OrderOutTab({
           </div>
           {/* Show any extra connected channels not in KNOWN_PLATFORMS */}
           {channels
-            .filter((c) => !KNOWN_PLATFORMS.some((p) => p.toLowerCase() === c.toLowerCase()))
-            .map((channel) => (
-              <div
-                key={channel}
-                className="flex items-center gap-3 rounded-lg border p-3 mt-3 bg-blue-50 dark:bg-blue-950/20"
-              >
-                <Plug className="h-5 w-5 text-blue-600" />
-                <p className="text-sm font-medium flex-1">{channel}</p>
-                <Badge variant="default" className="bg-green-600 text-xs">Connected</Badge>
-              </div>
-            ))}
+            .filter((c) => !KNOWN_PLATFORMS.some((p) => p.toUpperCase() === c.toUpperCase()))
+            .map((channel) => {
+              const isVerified = verified.some(
+                (v) => v.toUpperCase() === channel.toUpperCase()
+              );
+              return (
+                <div
+                  key={channel}
+                  className="flex items-center gap-3 rounded-lg border p-3 mt-3 bg-blue-50 dark:bg-blue-950/20"
+                >
+                  <Plug className="h-5 w-5 text-blue-600" />
+                  <p className="text-sm font-medium flex-1">{channel}</p>
+                  {isVerified ? (
+                    <Badge variant="default" className="bg-green-600 text-xs">Connected</Badge>
+                  ) : (
+                    <Badge
+                      variant="outline"
+                      className="text-xs border-amber-500 text-amber-700 dark:text-amber-400"
+                    >
+                      Self-confirmed
+                    </Badge>
+                  )}
+                </div>
+              );
+            })}
         </CardContent>
       </Card>
 
@@ -357,6 +408,7 @@ export function OrderOutTab({
                   <TableHead>Last Synced</TableHead>
                   <TableHead className="text-right">Items</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -371,6 +423,16 @@ export function OrderOutTab({
                     </TableCell>
                     <TableCell className="text-right">{menu.itemsSynced}</TableCell>
                     <TableCell>{getSyncStatusBadge(menu.lastSyncStatus)}</TableCell>
+                    <TableCell className="text-right">
+                      <PushChannelsRowAction
+                        clerkOrgId={clerkOrgId}
+                        locationId={locationId}
+                        menuId={menu.menuId}
+                        menuName={menu.menuName}
+                        ooMenuId={menu.ooMenuId}
+                        connectedChannels={channels}
+                      />
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -378,6 +440,17 @@ export function OrderOutTab({
           )}
         </CardContent>
       </Card>
+
+      {/* C2. Push to Channels + History */}
+      <PushChannelsCard
+        clerkOrgId={clerkOrgId}
+        locationId={locationId}
+        syncedMenus={syncedMenus}
+        connectedChannels={channels}
+        isOnboarded={isOnboarded}
+      />
+
+      <PushChannelsHistoryCard clerkOrgId={clerkOrgId} locationId={locationId} />
 
       {/* D. Recent Orders */}
       <Card>
@@ -416,7 +489,8 @@ export function OrderOutTab({
                     <TableRow key={order.id}>
                       <TableCell className="font-mono text-xs">{order.ooOrderNumber}</TableCell>
                       <TableCell>
-                        <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${style.bg} ${style.color}`}>
+                        <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium ${style.bg} ${style.color}`}>
+                          <PlatformLogo platform={order.deliveryPlatform} className="h-4 w-4" />
                           {order.deliveryPlatform}
                         </span>
                       </TableCell>
