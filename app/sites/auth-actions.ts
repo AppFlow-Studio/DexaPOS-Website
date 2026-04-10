@@ -38,11 +38,11 @@ export async function sendOtp(
 
   const { data: storeConfig } = await supabase
     .from("online_store_config")
-    .select("merchant_id")
+    .select("merchant_id, is_active")
     .eq("id", storeConfigId)
     .single();
 
-  if (!storeConfig) {
+  if (!storeConfig || storeConfig.is_active === false) {
     return { success: false, error: "Store not found" };
   }
 
@@ -132,11 +132,11 @@ export async function verifyOtp(
 
   const { data: storeConfig } = await supabase
     .from("online_store_config")
-    .select("id, merchant_id")
+    .select("id, merchant_id, is_active")
     .eq("id", storeConfigId)
     .single();
 
-  if (!storeConfig) {
+  if (!storeConfig || storeConfig.is_active === false) {
     return { success: false, error: "Store not found" };
   }
 

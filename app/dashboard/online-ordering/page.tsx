@@ -1348,6 +1348,29 @@ export default function OnlineOrderingPage() {
                   automatically whitelist your storefront domain with Dejavoo.
                 </p>
               </div>
+              <div className="space-y-2 max-w-md">
+                <Label htmlFor="ftdEcomKey">FTD Ecom/TOP Key</Label>
+                <Input
+                  id="ftdEcomKey"
+                  type="password"
+                  value={currentSettings.ipospaysFtdEcomKey}
+                  onChange={(e) =>
+                    handleUpdate({ ipospaysFtdEcomKey: e.target.value })
+                  }
+                  placeholder={
+                    currentSettings.ipospaysFtdEcomKeyConfigured
+                      ? "Stored securely. Enter a new key only to rotate it."
+                      : "Enter this branch's FTD Ecom/TOP key"
+                  }
+                  className="font-mono text-sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Branch-specific key used by the embedded Dejavoo card form.
+                  It is stored securely and never shown back in plain text.
+                  Enter a new value only when rotating or changing the selected
+                  payment device.
+                </p>
+              </div>
               {currentSettings.ipospaysTpn && !isDirty(selectedLocationId) && (
                 <div className="flex items-center gap-3 max-w-md">
                   <Button
