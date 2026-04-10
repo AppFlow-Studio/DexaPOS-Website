@@ -3,7 +3,7 @@
 ## Status
 
 - feature status: `demo_mode`
-- tokenization path: `working`
+- tokenization path: `working on legacy branch / secure branch path aligned`
 - secure credential model: `implemented`
 - live processor capture: `still deferred`
 
@@ -24,6 +24,11 @@ Current behavior:
   - `security_key`
   - `payment_device_id`
   - `tpn`
+
+Current interpretation:
+
+- `payment_device_id = null` means the branch is still using the temporary legacy fallback key
+- non-null `payment_device_id` means the branch is using the secure selected-device flow
 
 ### Checkout validation
 
@@ -77,6 +82,19 @@ So the current objective is:
 - keep tokenization/device pairing correct
 - keep order/payment metadata correct
 - keep cancellation behavior correct
+
+## Storefront Access Control
+
+Disabled storefronts are now blocked at the request layer.
+
+Current behavior:
+
+- if `online_store_config.is_active = false`, middleware returns `404`
+- this applies to:
+  - subdomain storefront access
+  - custom-domain storefront access
+  - direct `/sites/[slug]` access
+- `app/sites/actions.ts` also treats inactive stores as not found as a server-side fallback
 
 ## Secure Credential Model
 
@@ -195,6 +213,27 @@ Whitelist automation only if available:
    - last 4
    - payment device id / TPN in metadata
 
+### Disabled-store middleware test
+
+1. Turn a branch store off in admin.
+2. Open the storefront by:
+   - branch subdomain / `slug.localhost`
+   - direct `/sites/[slug]`
+   - custom domain if configured
+3. Confirm request returns `404`.
+4. Turn the branch back on.
+5. Confirm storefront loads again.
+
+### Tokenization troubleshooting note
+
+If secure branch tokenization still fails with `FTD_013` after `process-online-payment` returns the correct:
+
+- `payment_device_id`
+- `tpn`
+- `security_key`
+
+then the remaining issue is consistent with Dejavoo-side origin/device/key registration, not a missing Dexa DB migration or missing `create-online-order` update.
+
 ### Cancellation test
 
 1. Place demo card order.
@@ -214,4 +253,4 @@ Whitelist automation only if available:
 
 ## Last Updated
 
-- 2026-04-09
+- 2026-04-11

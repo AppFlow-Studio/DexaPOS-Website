@@ -44,11 +44,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
     const { data: storeConfig, error: configError } = await supabase
       .from('online_store_config')
-      .select('id, location_id, ipospays_tpn')
+      .select('id, location_id, ipospays_tpn, is_active')
       .eq('id', body.store_config_id)
       .single()
 
     if (configError || !storeConfig) {
+      return jsonResponse(
+        { success: false, error: 'Store configuration not found.' },
+        404,
+      )
+    }
+
+    if (storeConfig.is_active === false) {
       return jsonResponse(
         { success: false, error: 'Store configuration not found.' },
         404,

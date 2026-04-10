@@ -174,6 +174,31 @@ But the intended secure path is:
 
 The old plaintext `ipospays_ftd_ecom_key` values are migrated into Vault and nulled during migration.
 
+## Current Verification State
+
+What has been verified in the app:
+
+- secure branches now return a non-null `payment_device_id` from `process-online-payment`
+- selected device row, selected branch `TPN`, Vault secret, and `process-online-payment` response can be verified as aligned
+- older branches may still show `payment_device_id = null` if they are using the temporary legacy fallback key
+
+What that means:
+
+- when a secure branch still returns `FTD_013 Requested Origin is Not Registered`, the remaining issue is no longer explained by the app-side branch/device lookup
+- the remaining issue is consistent with Dejavoo-side device/key/origin registration in the same environment
+
+## Related Storefront Access Guard
+
+Storefront access control now also has a request-layer guard:
+
+- inactive `online_store_config` branches are blocked in `middleware.ts`
+- subdomain, custom-domain, and direct `/sites/[slug]` access should all return `404` for disabled stores
+
+This is related because the public branch URL is now treated as a first-class runtime boundary:
+
+- payment device selection is branch-specific
+- branch storefront access is also enforced branch-specifically
+
 ## New Database Objects
 
 Migration:
@@ -243,4 +268,4 @@ HQ admin save/load:
 
 ## Last Updated
 
-- 2026-04-09
+- 2026-04-11

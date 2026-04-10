@@ -190,7 +190,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .select(`
         *,
         online_store_config!inner(
-          id, location_id, merchant_id, ipospays_tpn,
+          id, location_id, merchant_id, ipospays_tpn, is_active,
           operating_hours, accepts_pickup, accepts_delivery,
           min_order_cents, estimated_prep_minutes,
           delivery_radius_miles, delivery_fee_cents,
@@ -215,7 +215,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const { data: configData, error: configError } = await supabase
       .from('online_store_config')
       .select(`
-        id, location_id, merchant_id, ipospays_tpn,
+        id, location_id, merchant_id, ipospays_tpn, is_active,
         operating_hours, accepts_pickup, accepts_delivery,
         min_order_cents, estimated_prep_minutes,
         delivery_radius_miles, delivery_fee_cents,
@@ -231,6 +231,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     storeConfig = configData
   } else {
     return errorResponse('Unable to identify store.', 'invalid_request', 400)
+  }
+
+  if (storeConfig.is_active === false) {
+    return errorResponse('Store not found.', 'store_not_found', 404)
   }
 
   const locationId: string = storeConfig.location_id
