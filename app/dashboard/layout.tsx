@@ -231,6 +231,14 @@ const navMain = [
             title: "Tax Report",
             url: "/dashboard/reports/tax",
           },
+          {
+            title: "Kitchen Performance",
+            url: "/dashboard/reports/kitchen-performance",
+          },
+          {
+            title: "Discrepancy",
+            url: "/dashboard/reports/discrepancy",
+          },
         ],
       },
     ],

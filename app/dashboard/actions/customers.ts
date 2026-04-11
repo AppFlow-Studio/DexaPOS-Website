@@ -609,6 +609,19 @@ export async function CreateCustomer(
     phone: string;
     email?: string;
     address?: string;
+    birthday?: string;
+    anniversary?: string;
+    company_name?: string;
+    vip_level?: string;
+    preferred_seating?: string;
+    dietary_preferences?: string[];
+    allergy_notes?: string;
+    preferred_table?: string;
+    preferred_language?: string;
+    email_opt_in?: boolean;
+    sms_opt_in?: boolean;
+    receipt_via_email?: boolean;
+    receipt_via_sms?: boolean;
     tags?: string[];
     notes?: string;
   },
@@ -625,9 +638,7 @@ export async function CreateCustomer(
   const supabase = createServerSupabaseClient();
 
   // Normalize tags to uppercase
-  const normalizedTags = (data.tags || []).map((tag) =>
-    tag.trim().toUpperCase()
-  );
+  const normalizedTags = (data.tags || []).map((tag) => tag.trim().toUpperCase());
 
   const { data: newCustomer, error } = await supabase
     .from("customers")
@@ -637,6 +648,19 @@ export async function CreateCustomer(
       phone: data.phone.trim(),
       email: data.email?.trim() || null,
       address: data.address?.trim() || null,
+      birthday: data.birthday || null,
+      anniversary: data.anniversary || null,
+      company_name: data.company_name || null,
+      vip_level: data.vip_level && data.vip_level !== "None" ? data.vip_level : null,
+      preferred_seating: data.preferred_seating || null,
+      dietary_preferences: data.dietary_preferences && data.dietary_preferences.length > 0 ? data.dietary_preferences : null,
+      allergy_notes: data.allergy_notes || null,
+      preferred_table: data.preferred_table || null,
+      preferred_language: data.preferred_language || null,
+      email_opt_in: data.email_opt_in ?? false,
+      sms_opt_in: data.sms_opt_in ?? false,
+      receipt_via_email: data.receipt_via_email ?? false,
+      receipt_via_sms: data.receipt_via_sms ?? false,
       tags: normalizedTags.length > 0 ? normalizedTags : [],
       notes: data.notes?.trim() || null,
       is_active: true,
@@ -668,6 +692,19 @@ export async function CreateCustomer(
       phone: data.phone,
       email: data.email,
       tags: normalizedTags,
+      vip_level: data.vip_level,
+      preferred_seating: data.preferred_seating,
+      dietary_preferences: data.dietary_preferences,
+      allergy_notes: data.allergy_notes,
+      preferred_table: data.preferred_table,
+      preferred_language: data.preferred_language,
+      email_opt_in: data.email_opt_in,
+      sms_opt_in: data.sms_opt_in,
+      receipt_via_email: data.receipt_via_email,
+      receipt_via_sms: data.receipt_via_sms,
+      birthday: data.birthday,
+      anniversary: data.anniversary,
+      company_name: data.company_name,
     },
   });
 
