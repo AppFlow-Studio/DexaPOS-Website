@@ -32,7 +32,43 @@ function extractStoreSlug(hostname: string): string | null {
   return null;
 }
 
-async function lookupCustomDomain(hostname: string): Promise<string | null> {
+type StoreMatch = {
+  slug: string
+  isActive: boolean
+}
+
+function extractSitesRouteSlug(pathname: string): string | null {
+  const match = pathname.match(/^\/sites\/([^/]+)/)
+  return match?.[1] ?? null
+}
+
+function notFoundResponse(): NextResponse {
+  return new NextResponse('Not Found', { status: 404 })
+}
+
+async function getStoreBySlug(slug: string): Promise<StoreMatch | null> {
+  try {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    );
+    const { data } = await supabase
+      .from('online_store_config')
+      .select('slug, is_active')
+      .eq('slug', slug)
+      .single();
+
+    if (!data?.slug) return null;
+    return {
+      slug: data.slug,
+      isActive: data.is_active !== false,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function lookupCustomDomain(hostname: string): Promise<StoreMatch | null> {
   const hostWithoutPort = hostname.split(':')[0];
 
   if (
@@ -50,12 +86,15 @@ async function lookupCustomDomain(hostname: string): Promise<string | null> {
     );
     const { data } = await supabase
       .from('online_store_config')
-      .select('slug')
+      .select('slug, is_active')
       .eq('custom_domain', hostWithoutPort)
-      .eq('is_active', true)
       .single();
 
-    return data?.slug ?? null;
+    if (!data?.slug) return null;
+    return {
+      slug: data.slug,
+      isActive: data.is_active !== false,
+    };
   } catch {
     return null;
   }
@@ -64,20 +103,36 @@ async function lookupCustomDomain(hostname: string): Promise<string | null> {
 export default clerkMiddleware(async (auth, req) => {
   // ── Subdomain routing (before any Clerk auth) ──────────────────────
   const hostname = req.headers.get('host') || '';
-  let slug = extractStoreSlug(hostname);
+  const extractedSlug = extractStoreSlug(hostname);
+  let storeMatch: StoreMatch | null = null;
 
   // Custom domain fallback (production only)
-  if (!slug && process.env.NODE_ENV !== 'development') {
-    slug = await lookupCustomDomain(hostname);
+  if (extractedSlug) {
+    storeMatch = await getStoreBySlug(extractedSlug);
+  } else if (process.env.NODE_ENV !== 'development') {
+    storeMatch = await lookupCustomDomain(hostname);
   }
 
-  if (slug) {
+  if (storeMatch?.slug) {
+    if (!storeMatch.isActive) {
+      return notFoundResponse();
+    }
+
+    const { slug } = storeMatch;
     const url = req.nextUrl.clone();
     url.pathname = `/sites/${slug}${url.pathname === '/' ? '' : url.pathname}`;
 
     const response = NextResponse.rewrite(url);
     response.headers.set('x-store-slug', slug);
     return response;
+  }
+
+  const directStoreSlug = extractSitesRouteSlug(req.nextUrl.pathname);
+  if (directStoreSlug) {
+    const directStoreMatch = await getStoreBySlug(directStoreSlug);
+    if (!directStoreMatch?.slug || !directStoreMatch.isActive) {
+      return notFoundResponse();
+    }
   }
 
   // ── Standard Clerk auth flow (unchanged) ───────────────────────────

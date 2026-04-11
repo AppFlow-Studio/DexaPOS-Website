@@ -1,16 +1,27 @@
 import React from "react";
 
 interface DecorativePlantProps {
-  color?: string;
+  darkMode?: boolean;
   width?: number;
   height?: number;
 }
 
 const DecorativePlant: React.FC<DecorativePlantProps> = ({
-  color = "#34D399",
+  darkMode = false,
   width = 50,
-  height = 50,
+  height = 60,
 }) => {
+  // Theme-aware colors
+  const leafPrimary = darkMode ? "#4ADE80" : "#22C55E";
+  const leafSecondary = darkMode ? "#22C55E" : "#16A34A";
+  const leafHighlight = darkMode ? "#86EFAC" : "#4ADE80";
+  const stem = darkMode ? "#22C55E" : "#15803D";
+  const potBody = darkMode ? "#334155" : "#D4A574";
+  const potRim = darkMode ? "#475569" : "#C4956A";
+  const potShadow = darkMode ? "#1E293B" : "#A67C52";
+  const soil = darkMode ? "#292524" : "#78350F";
+  const shadowOpacity = darkMode ? 0.25 : 0.12;
+
   return (
     <svg
       width={width}
@@ -19,126 +30,214 @@ const DecorativePlant: React.FC<DecorativePlantProps> = ({
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
-      {/* Pot shadow */}
-      <ellipse cx="25" cy="57" rx="9" ry="2" fill="#000000" fillOpacity="0.18" />
+      {/* Shadow beneath pot */}
+      <ellipse
+        cx="25"
+        cy="57"
+        rx="12"
+        ry="2.5"
+        fill={darkMode ? "#0F172A" : "#000"}
+        opacity={shadowOpacity}
+      />
 
       {/* Pot body */}
       <path
-        d="M16 38 L34 38 L31 52 L19 52 Z"
-        fill="#1A1F35"
-        stroke={color}
-        strokeWidth="1"
-        strokeOpacity="0.5"
-        strokeLinejoin="round"
+        d="M14 42 L36 42 L33 55 Q25 56 17 55 Z"
+        fill={potBody}
       />
-
-      {/* Pot highlight stripe */}
+      
+      {/* Pot shading */}
       <path
-        d="M19 41 L31 41"
-        stroke={color}
-        strokeWidth="0.75"
-        strokeOpacity="0.2"
-        strokeLinecap="round"
+        d="M14 42 L17 55 Q25 56 25 55 L25 42 Z"
+        fill={potShadow}
+        opacity={0.3}
       />
 
       {/* Pot rim */}
-      <path
-        d="M14 36 L36 36 L34 40 L16 40 Z"
-        fill={color}
-        fillOpacity="0.15"
-        stroke={color}
-        strokeWidth="0.9"
-        strokeOpacity="0.6"
-        strokeLinejoin="round"
+      <rect
+        x="12"
+        y="38"
+        width="26"
+        height="5"
+        rx="1"
+        fill={potRim}
+      />
+      
+      {/* Pot rim highlight */}
+      <rect
+        x="12"
+        y="38"
+        width="26"
+        height="2"
+        rx="1"
+        fill={darkMode ? "#64748B" : "#E8C4A0"}
+        opacity={0.5}
       />
 
-      {/* Stem */}
-      <line
-        x1="25"
-        y1="36"
-        x2="25"
-        y2="28"
-        stroke={color}
-        strokeWidth="1.5"
-        strokeOpacity="0.5"
+      {/* Soil */}
+      <ellipse
+        cx="25"
+        cy="42"
+        rx="11"
+        ry="3"
+        fill={soil}
+      />
+
+      {/* Main stem */}
+      <path
+        d="M25 40 C25 35, 25 28, 25 22"
+        stroke={stem}
+        strokeWidth="2"
         strokeLinecap="round"
       />
 
-      {/* Leaves */}
+      {/* Left stem branch */}
       <path
-        d="M25 31 Q18 26 14 20 Q20 22 25 31Z"
-        fill={color}
-        fillOpacity="0.55"
-        stroke={color}
-        strokeWidth="0.5"
-        strokeOpacity="0.4"
-      />
-      <path
-        d="M25 29 Q32 24 36 18 Q30 21 25 29Z"
-        fill={color}
-        fillOpacity="0.55"
-        stroke={color}
-        strokeWidth="0.5"
-        strokeOpacity="0.4"
+        d="M25 32 C22 30, 18 28, 14 26"
+        stroke={stem}
+        strokeWidth="1.5"
+        strokeLinecap="round"
       />
 
-      {/* Back foliage */}
-      <circle
+      {/* Right stem branch */}
+      <path
+        d="M25 30 C28 28, 32 26, 36 24"
+        stroke={stem}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+
+      {/* Lower left branch */}
+      <path
+        d="M25 36 C21 35, 17 34, 13 33"
+        stroke={stem}
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+
+      {/* Lower right branch */}
+      <path
+        d="M25 35 C29 34, 33 33, 37 32"
+        stroke={stem}
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+
+      {/* Top center leaf */}
+      <ellipse
         cx="25"
+        cy="16"
+        rx="4"
+        ry="7"
+        fill={leafPrimary}
+        transform="rotate(-5 25 16)"
+      />
+      <ellipse
+        cx="24"
+        cy="16"
+        rx="2"
+        ry="5"
+        fill={leafHighlight}
+        opacity={0.4}
+        transform="rotate(-5 24 16)"
+      />
+
+      {/* Top left leaf */}
+      <ellipse
+        cx="14"
+        cy="22"
+        rx="3.5"
+        ry="6"
+        fill={leafPrimary}
+        transform="rotate(-35 14 22)"
+      />
+      <ellipse
+        cx="13"
+        cy="22"
+        rx="1.5"
+        ry="4"
+        fill={leafHighlight}
+        opacity={0.4}
+        transform="rotate(-35 13 22)"
+      />
+
+      {/* Top right leaf */}
+      <ellipse
+        cx="36"
+        cy="20"
+        rx="3.5"
+        ry="6"
+        fill={leafSecondary}
+        transform="rotate(35 36 20)"
+      />
+      <ellipse
+        cx="37"
+        cy="20"
+        rx="1.5"
+        ry="4"
+        fill={leafHighlight}
+        opacity={0.3}
+        transform="rotate(35 37 20)"
+      />
+
+      {/* Middle left leaf */}
+      <ellipse
+        cx="11"
+        cy="31"
+        rx="3"
+        ry="5"
+        fill={leafSecondary}
+        transform="rotate(-45 11 31)"
+      />
+
+      {/* Middle right leaf */}
+      <ellipse
+        cx="39"
+        cy="30"
+        rx="3"
+        ry="5"
+        fill={leafPrimary}
+        transform="rotate(45 39 30)"
+      />
+
+      {/* Small accent leaves */}
+      <ellipse
+        cx="20"
+        cy="18"
+        rx="2.5"
+        ry="4.5"
+        fill={leafSecondary}
+        transform="rotate(-20 20 18)"
+      />
+      <ellipse
+        cx="30"
         cy="17"
-        r="11"
-        fill={color}
-        fillOpacity="0.12"
-        stroke={color}
-        strokeWidth="0.75"
-        strokeOpacity="0.3"
+        rx="2.5"
+        ry="4.5"
+        fill={leafHighlight}
+        opacity={0.7}
+        transform="rotate(20 30 17)"
       />
 
-      {/* Main foliage */}
-      <circle
-        cx="19"
-        cy="21"
-        r="8"
-        fill={color}
-        fillOpacity="0.45"
-        stroke={color}
-        strokeWidth="1"
-        strokeOpacity="0.7"
+      {/* Tiny detail leaves */}
+      <ellipse
+        cx="17"
+        cy="26"
+        rx="2"
+        ry="3.5"
+        fill={leafPrimary}
+        opacity={0.8}
+        transform="rotate(-25 17 26)"
       />
-      <circle
-        cx="31"
-        cy="21"
-        r="8"
-        fill={color}
-        fillOpacity="0.45"
-        stroke={color}
-        strokeWidth="1"
-        strokeOpacity="0.7"
+      <ellipse
+        cx="33"
+        cy="25"
+        rx="2"
+        ry="3.5"
+        fill={leafSecondary}
+        opacity={0.8}
+        transform="rotate(25 33 25)"
       />
-      <circle
-        cx="25"
-        cy="14"
-        r="9"
-        fill={color}
-        fillOpacity="0.5"
-        stroke={color}
-        strokeWidth="1"
-        strokeOpacity="0.8"
-      />
-      <circle
-        cx="25"
-        cy="23"
-        r="7"
-        fill={color}
-        fillOpacity="0.4"
-        stroke={color}
-        strokeWidth="0.75"
-        strokeOpacity="0.5"
-      />
-
-      {/* Top highlight */}
-      <circle cx="22" cy="10" r="3.5" fill={color} fillOpacity="0.35" />
-      <circle cx="22" cy="10" r="1.5" fill="#ffffff" fillOpacity="0.18" />
     </svg>
   );
 };

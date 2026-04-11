@@ -1,18 +1,21 @@
 import React from "react";
 
 interface ZoneRectangleProps {
+  darkMode?: boolean;
   color?: string;
   width?: number;
   height?: number;
 }
 
 const ZoneRectangle: React.FC<ZoneRectangleProps> = ({
+  darkMode = false,
   color = "#2DD4BF",
   width = 200,
   height = 200,
 }) => {
-  const defaultSize = 200;
-  const scaleX = (width || defaultSize) / defaultSize;
+  const lightStroke = "#111827";
+
+  const stroke = darkMode ? color : lightStroke;
 
   return (
     <svg
@@ -26,11 +29,11 @@ const ZoneRectangle: React.FC<ZoneRectangleProps> = ({
         width="200"
         height="200"
         fill={color}
-        fillOpacity="0.07"
-        stroke={color}
-        strokeWidth={1.5 * scaleX}
+        fillOpacity={darkMode ? 0.07 : 0.12}
+        stroke={stroke}
+        strokeWidth={1.5}
         strokeDasharray="6,4"
-        strokeOpacity="0.6"
+        strokeOpacity={darkMode ? 0.6 : 0.9}
       />
     </svg>
   );

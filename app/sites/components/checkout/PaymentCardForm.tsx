@@ -17,6 +17,7 @@ declare global {
 }
 
 export interface PaymentCardFormHandle {
+  validateCardInput: () => { valid: boolean; error?: string };
   tokenize: () => Promise<{
     tokenId: string;
     cardType: string | null;
@@ -83,6 +84,20 @@ function formatExpiry(value: string): string {
   const digits = value.replace(/\D/g, "").slice(0, 4);
   if (digits.length <= 2) return digits;
   return digits.slice(0, 2) + "/" + digits.slice(2);
+}
+
+function isExpiryValid(value: string): boolean {
+  const raw = value.replace(/\D/g, "");
+  if (raw.length !== 4) return false;
+  const month = Number(raw.slice(0, 2));
+  const year2 = Number(raw.slice(2, 4));
+  if (month < 1 || month > 12) return false;
+  const now = new Date();
+  const currentYear2 = now.getFullYear() % 100;
+  const currentMonth = now.getMonth() + 1;
+  if (year2 < currentYear2) return false;
+  if (year2 === currentYear2 && month < currentMonth) return false;
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -287,7 +302,30 @@ export const PaymentCardForm = forwardRef<
     };
   }, [brand]);
 
-  useImperativeHandle(ref, () => ({ tokenize }), [tokenize]);
+  const validateCardInput = useCallback((): { valid: boolean; error?: string } => {
+    const cardDigits = cardRef.current?.value.replace(/\D/g, "") || "";
+    const expiry = expiryRef.current?.value || "";
+    const cvv = cvvRef.current?.value.replace(/\D/g, "") || "";
+    const minCardLength = brand === "amex" ? 15 : 16;
+    const expectedCvvLength = brand === "amex" ? 4 : 3;
+
+    if (!cardDigits || !expiry || !cvv) {
+      return { valid: false, error: "Please enter card number, expiry, and CVV." };
+    }
+    if (cardDigits.length < minCardLength) {
+      return { valid: false, error: "Please enter a valid card number." };
+    }
+    if (!isExpiryValid(expiry)) {
+      return { valid: false, error: "Please enter a valid expiry date." };
+    }
+    if (cvv.length !== expectedCvvLength) {
+      return { valid: false, error: "Please enter a valid CVV." };
+    }
+
+    return { valid: true };
+  }, [brand]);
+
+  useImperativeHandle(ref, () => ({ tokenize, validateCardInput }), [tokenize, validateCardInput]);
 
   // --- Uncontrolled input handlers (format via DOM, update brand via state) ---
 

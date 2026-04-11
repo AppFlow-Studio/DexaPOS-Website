@@ -1597,7 +1597,7 @@ export async function DemoteClerkToPOSOnly(
         );
         return {
           error:
-            clerkErr?.errors?.[0]?.long_message ||
+            clerkErr?.errors?.[0]?.longMessage ||
             "Failed to remove dashboard access — demotion aborted",
         };
       }

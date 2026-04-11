@@ -1,16 +1,22 @@
 import React from "react";
 
 interface WallSectionProps {
+  darkMode?: boolean;
   color?: string;
   width?: number;
   height?: number;
 }
 
 const WallSection: React.FC<WallSectionProps> = ({
+  darkMode = false,
   color = "#94A3B8",
   width = 200,
   height = 10,
 }) => {
+  const lightStroke = "#111827";
+
+  const stroke = darkMode ? color : lightStroke;
+
   return (
     <svg
       width={width}
@@ -26,8 +32,8 @@ const WallSection: React.FC<WallSectionProps> = ({
         y="0"
         width="200"
         height="10"
-        fill="#1E2340"
-        stroke={color}
+        fill={darkMode ? "#1E2340" : "#F3F4F6"}
+        stroke={stroke}
         strokeWidth="1.5"
       />
 
@@ -37,9 +43,9 @@ const WallSection: React.FC<WallSectionProps> = ({
         y1="3"
         x2="200"
         y2="3"
-        stroke={color}
+        stroke={stroke}
         strokeWidth="0.5"
-        strokeOpacity="0.35"
+        strokeOpacity={darkMode ? 0.35 : 0.4}
       />
 
       {/* Bottom shadow line */}
@@ -48,9 +54,9 @@ const WallSection: React.FC<WallSectionProps> = ({
         y1="7.5"
         x2="200"
         y2="7.5"
-        stroke={color}
+        stroke={stroke}
         strokeWidth="0.5"
-        strokeOpacity="0.15"
+        strokeOpacity={darkMode ? 0.15 : 0.25}
       />
     </svg>
   );

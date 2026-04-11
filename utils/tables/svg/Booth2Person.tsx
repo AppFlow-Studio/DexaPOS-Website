@@ -1,18 +1,21 @@
 import React from "react";
 
 interface Booth2PersonProps {
+  darkMode?: boolean;
   color?: string;
-  chairColor?: string;
   width?: number;
   height?: number;
 }
 
 const Booth2Person: React.FC<Booth2PersonProps> = ({
+  darkMode = false,
   color = "#2DD4BF",
   width = 150,
   height = 100,
   ...props
 }) => {
+  const strokeOpacity = darkMode ? 0.5 : 0.8;
+
   return (
     <svg
       width={width}
@@ -30,10 +33,10 @@ const Booth2Person: React.FC<Booth2PersonProps> = ({
         height="48"
         rx="4"
         fill={color}
-        fillOpacity="0.18"
+        fillOpacity={darkMode ? 0.18 : 0.8}
         stroke={color}
+        strokeOpacity={strokeOpacity}
         strokeWidth="1.5"
-        strokeOpacity="0.8"
       />
 
       {/* Booth top */}
@@ -44,10 +47,10 @@ const Booth2Person: React.FC<Booth2PersonProps> = ({
         height="13"
         rx="3"
         fill={color}
-        fillOpacity="0.12"
+        fillOpacity={darkMode ? 0.12 : 0.8}
         stroke={color}
+        strokeOpacity={strokeOpacity}
         strokeWidth="1"
-        strokeOpacity="0.5"
       />
 
       {/* Booth bottom */}
@@ -58,10 +61,10 @@ const Booth2Person: React.FC<Booth2PersonProps> = ({
         height="13"
         rx="3"
         fill={color}
-        fillOpacity="0.12"
+        fillOpacity={darkMode ? 0.12 : 0.8}
         stroke={color}
+        strokeOpacity={strokeOpacity}
         strokeWidth="1"
-        strokeOpacity="0.5"
       />
     </svg>
   );

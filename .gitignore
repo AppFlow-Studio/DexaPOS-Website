@@ -41,3 +41,6 @@ yarn-error.log*
 next-env.d.ts
 ADM-006-007-STATUS.md
 /.planning
+
+# clerk configuration (can include secrets)
+/.clerk/

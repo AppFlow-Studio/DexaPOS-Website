@@ -770,7 +770,7 @@ async function handleMerchantMembershipCreated(
       .eq('user_id', userId)
       .eq('merchant_id', merchantId)
 
-    if (locMemberCount && locMemberCount > 0) {
+    if (locMemberCount) {
       logEvent(eventType, 'Records already exist (eagerly provisioned by server action), no-op', {
         userId, memberId: existingMember.id, staffProfileId: existingMember.staff_profile_id,
         locationMemberCount: locMemberCount,
@@ -840,6 +840,12 @@ async function handleMerchantMembershipCreated(
       roleCode,
     })
 
+    // 0. Snapshot original location_members role codes for rollback
+    const { data: originalLocMembers } = await supabase
+      .from('location_members')
+      .select('id, role_code')
+      .eq('staff_profile_id', promotionStaffProfileId)
+
     // 1. Update staff_profiles: link to Clerk user and flip account_type
     const { error: profileUpdateError } = await supabase
       .from('staff_profiles')
@@ -897,10 +903,15 @@ async function handleMerchantMembershipCreated(
         .update({ user_id: null, account_type: 'pos_only', updated_at: updatedAt })
         .eq('id', promotionStaffProfileId)
         .eq('merchant_id', merchantId)
-      await supabase
-        .from('location_members')
-        .update({ user_id: null, role_code: 'staff', updated_at: updatedAt })
-        .eq('staff_profile_id', promotionStaffProfileId)
+      // Restore each location_member's original role_code
+      if (originalLocMembers?.length) {
+        await Promise.all(originalLocMembers.map((lm: any) =>
+          supabase
+            .from('location_members')
+            .update({ user_id: null, role_code: lm.role_code, updated_at: updatedAt })
+            .eq('id', lm.id)
+        ))
+      }
       return errorResponse(memberUpdateError.message, 500)
     }
 
@@ -1318,40 +1329,38 @@ async function handleOrganizationMembershipDeleted(ctx: WebhookContext): Promise
   // 2. Resolve merchant to scope location_members deactivation
   const merchantId = await resolveMerchantIdByClerkOrgId(supabase, organizationId)
 
-  // 3. Deactivate location_members rows for this user in this merchant
+  // 3+4. Deactivate location_members and staff_profiles in parallel (independent ops)
+  const now = new Date().toISOString()
+  const deactivations: Promise<any>[] = []
+
   if (merchantId) {
-    const { error: locError } = await supabase
-      .from('location_members')
-      .update({
-        is_active: false,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('user_id', userId)
-      .eq('merchant_id', merchantId)
-
-    if (locError) {
-      logError(eventType, 'Failed to deactivate location_members (non-fatal)', locError)
-    } else {
-      logEvent(eventType, 'Deactivated location_members', { userId, merchantId })
-    }
+    deactivations.push(
+      supabase
+        .from('location_members')
+        .update({ is_active: false, updated_at: now })
+        .eq('user_id', userId)
+        .eq('merchant_id', merchantId)
+        .then(({ error }) => {
+          if (error) logError(eventType, 'Failed to deactivate location_members (non-fatal)', error)
+          else logEvent(eventType, 'Deactivated location_members', { userId, merchantId })
+        })
+    )
   }
 
-  // 4. Deactivate staff_profiles linked via the member
   if (member.staff_profile_id) {
-    const { error: spError } = await supabase
-      .from('staff_profiles')
-      .update({
-        is_active: false,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', member.staff_profile_id)
-
-    if (spError) {
-      logError(eventType, 'Failed to deactivate staff_profile (non-fatal)', spError)
-    } else {
-      logEvent(eventType, 'Deactivated staff_profile', { staffProfileId: member.staff_profile_id })
-    }
+    deactivations.push(
+      supabase
+        .from('staff_profiles')
+        .update({ is_active: false, updated_at: now })
+        .eq('id', member.staff_profile_id)
+        .then(({ error }) => {
+          if (error) logError(eventType, 'Failed to deactivate staff_profile (non-fatal)', error)
+          else logEvent(eventType, 'Deactivated staff_profile', { staffProfileId: member.staff_profile_id })
+        })
+    )
   }
+
+  await Promise.all(deactivations)
 
   // 5. Delete the member row (hard delete — Clerk membership is gone)
   const { error: memberDeleteError } = await supabase

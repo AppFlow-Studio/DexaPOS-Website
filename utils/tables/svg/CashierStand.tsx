@@ -1,16 +1,20 @@
 import React from "react";
 
 interface CashierStandProps {
+  darkMode?: boolean;
   color?: string;
   width?: number;
   height?: number;
 }
 
 const CashierStand: React.FC<CashierStandProps> = ({
+  darkMode = false,
   color = "#94A3B8",
   width = 100,
   height = 100,
 }) => {
+  const lightStroke = "#111827";
+
   return (
     <svg
       width={width}
@@ -26,8 +30,8 @@ const CashierStand: React.FC<CashierStandProps> = ({
         width="78.5"
         height="238.5"
         rx="4"
-        fill="#1E2340"
-        stroke={color}
+        fill={darkMode ? "#1E2340" : "#E5E7EB"}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="1.5"
       />
 
@@ -39,7 +43,7 @@ const CashierStand: React.FC<CashierStandProps> = ({
         height="238.5"
         rx="4"
         fill={color}
-        fillOpacity="0.07"
+        fillOpacity={darkMode ? 0.07 : 0.75}
       />
 
       {/* Monitor */}
@@ -50,8 +54,8 @@ const CashierStand: React.FC<CashierStandProps> = ({
         height="80"
         rx="4"
         fill={color}
-        fillOpacity="0.12"
-        stroke={color}
+        fillOpacity={darkMode ? 0.12 : 0.75}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="1.25"
       />
 
@@ -63,10 +67,10 @@ const CashierStand: React.FC<CashierStandProps> = ({
         height="65"
         rx="2"
         fill={color}
-        fillOpacity="0.08"
-        stroke={color}
+        fillOpacity={darkMode ? 0.08 : 0.75}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="0.5"
-        strokeOpacity="0.4"
+        strokeOpacity={darkMode ? 0.4 : 0.9}
       />
 
       {/* Screen stand */}
@@ -77,8 +81,8 @@ const CashierStand: React.FC<CashierStandProps> = ({
         height="8"
         rx="1"
         fill={color}
-        fillOpacity="0.2"
-        stroke={color}
+        fillOpacity={darkMode ? 0.2 : 0.75}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="0.75"
       />
 
@@ -90,15 +94,15 @@ const CashierStand: React.FC<CashierStandProps> = ({
         height="28"
         rx="3"
         fill={color}
-        fillOpacity="0.08"
-        stroke={color}
+        fillOpacity={darkMode ? 0.08 : 0.75}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
       />
 
       {/* Key rows */}
-      <rect x="14" y="119" width="52" height="5" rx="1" fill={color} fillOpacity="0.08" />
-      <rect x="14" y="127" width="52" height="5" rx="1" fill={color} fillOpacity="0.08" />
-      <rect x="14" y="135" width="52" height="5" rx="1" fill={color} fillOpacity="0.08" />
+      <rect x="14" y="119" width="52" height="5" rx="1" fill={color} fillOpacity={darkMode ? 0.08 : 0.75} />
+      <rect x="14" y="127" width="52" height="5" rx="1" fill={color} fillOpacity={darkMode ? 0.08 : 0.75} />
+      <rect x="14" y="135" width="52" height="5" rx="1" fill={color} fillOpacity={darkMode ? 0.08 : 0.75} />
 
       {/* Cash drawer */}
       <rect
@@ -108,10 +112,10 @@ const CashierStand: React.FC<CashierStandProps> = ({
         height="30"
         rx="3"
         fill={color}
-        fillOpacity="0.06"
-        stroke={color}
+        fillOpacity={darkMode ? 0.06 : 0.75}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="0.75"
-        strokeOpacity="0.5"
+        strokeOpacity={darkMode ? 0.5 : 0.9}
       />
 
       {/* Card reader slot */}
@@ -122,7 +126,7 @@ const CashierStand: React.FC<CashierStandProps> = ({
         height="4"
         rx="2"
         fill={color}
-        fillOpacity="0.2"
+        fillOpacity={darkMode ? 0.2 : 0.75}
       />
 
       {/* Counter edge */}
@@ -133,10 +137,10 @@ const CashierStand: React.FC<CashierStandProps> = ({
         height="38.5"
         rx="4"
         fill={color}
-        fillOpacity="0.05"
-        stroke={color}
+        fillOpacity={darkMode ? 0.05 : 0.75}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="0.75"
-        strokeOpacity="0.4"
+        strokeOpacity={darkMode ? 0.4 : 0.9}
       />
     </svg>
   );

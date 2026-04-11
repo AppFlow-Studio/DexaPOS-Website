@@ -1,6 +1,7 @@
 import React from "react";
 
 interface TableSquare4ChairProps {
+  darkMode?: boolean;
   color?: string;
   chairColor?: string;
   width?: number;
@@ -8,11 +9,14 @@ interface TableSquare4ChairProps {
 }
 
 const TableSquare4Chair: React.FC<TableSquare4ChairProps> = ({
+  darkMode = false,
   color = "#2DD4BF",
   width = 97,
   height = 97,
   ...props
 }) => {
+  const lightStroke = "#111827";
+
   return (
     <svg
       width={width}
@@ -30,10 +34,10 @@ const TableSquare4Chair: React.FC<TableSquare4ChairProps> = ({
         height="11"
         rx="3"
         fill={color}
-        fillOpacity="0.12"
-        stroke={color}
+        fillOpacity={darkMode ? 0.12 : 0.75}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity="0.5"
+        strokeOpacity={darkMode ? 0.5 : 0.9}
       />
 
       {/* Chair - bottom */}
@@ -44,10 +48,10 @@ const TableSquare4Chair: React.FC<TableSquare4ChairProps> = ({
         height="11"
         rx="3"
         fill={color}
-        fillOpacity="0.12"
-        stroke={color}
+        fillOpacity={darkMode ? 0.12 : 0.75}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity="0.5"
+        strokeOpacity={darkMode ? 0.5 : 0.9}
       />
 
       {/* Chair - left */}
@@ -58,10 +62,10 @@ const TableSquare4Chair: React.FC<TableSquare4ChairProps> = ({
         height="39"
         rx="3"
         fill={color}
-        fillOpacity="0.12"
-        stroke={color}
+        fillOpacity={darkMode ? 0.12 : 0.75}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity="0.5"
+        strokeOpacity={darkMode ? 0.5 : 0.9}
       />
 
       {/* Chair - right */}
@@ -72,10 +76,10 @@ const TableSquare4Chair: React.FC<TableSquare4ChairProps> = ({
         height="39"
         rx="3"
         fill={color}
-        fillOpacity="0.12"
-        stroke={color}
+        fillOpacity={darkMode ? 0.12 : 0.75}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity="0.5"
+        strokeOpacity={darkMode ? 0.5 : 0.9}
       />
 
       {/* Table surface */}
@@ -86,10 +90,10 @@ const TableSquare4Chair: React.FC<TableSquare4ChairProps> = ({
         height="73"
         rx="6"
         fill={color}
-        fillOpacity="0.18"
-        stroke={color}
+        fillOpacity={darkMode ? 0.18 : 0.75}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="1.5"
-        strokeOpacity="0.8"
+        strokeOpacity={darkMode ? 0.8 : 0.9}
       />
     </svg>
   );
