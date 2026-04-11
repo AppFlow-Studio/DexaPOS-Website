@@ -7,7 +7,11 @@
       "Bash(pnpm add:*)",
       "Bash(node -e \"const {execSync} = require\\('child_process'\\); console.log\\(execSync\\('npm install @googlemaps/js-api-loader --legacy-peer-deps 2>&1'\\).toString\\(\\)\\)\")",
       "Bash(cmd.exe /c \"cd \\\\\"c:\\\\Users\\\\saleh\\\\OneDrive - Lebanese American University\\\\Apps\\\\Dexa\\\\DexaPOS-Website\\\\\" && npm install @googlemaps/js-api-loader --legacy-peer-deps\")",
-      "Read(//c/Users/saleh/AppData/Local/Temp/claude/c--Users-saleh-OneDrive---Lebanese-American-University-Apps-Dexa-DexaPOS-Website/77d4621e-29c5-4973-92ee-3f90189e9a85/tasks/**)"
+      "Read(//c/Users/saleh/AppData/Local/Temp/claude/c--Users-saleh-OneDrive---Lebanese-American-University-Apps-Dexa-DexaPOS-Website/77d4621e-29c5-4973-92ee-3f90189e9a85/tasks/**)",
+      "Bash(grep -n 'CREATE OR REPLACE FUNCTION\\\\|END;$function$' 'c:/Users/saleh/OneDrive - Lebanese American University/Apps/Dexa/DexaPOS-Website/supabase/migrations/20260408220443_remote_schema.sql')",
+      "Bash(awk -F: '$2>3680 && $2<5030')",
+      "Bash(awk -F: '{n=$1; sub\\(/^[0-9]+:/, \"\", $0\\); if\\(n>3680 && n<5030\\) print n\": \"$0}')",
+      "Bash(awk -F: '{n=$1; sub\\(/^[0-9]+:/, \"\", $0\\); if\\(n>4290 && n<5030\\) print n\": \"$0}')"
     ]
   },
   "hooks": {

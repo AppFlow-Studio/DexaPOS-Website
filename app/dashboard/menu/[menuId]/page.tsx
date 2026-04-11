@@ -1354,6 +1354,15 @@ export default function MenuDetailPage() {
           updated_at: menu?.updated_at || "",
         }))}
         modifierGroups={modifierGroups || []}
+        isMenuLocationOwned={!!menu?.is_location_owned}
+        onOpenGlobalEdit={
+          editingItem
+            ? () => {
+                setIsItemSheetOpen(false);
+                router.push(`/dashboard/menu/items/${editingItem.id}/edit`);
+              }
+            : undefined
+        }
         onSuccess={() => {
           setIsItemSheetOpen(false);
           setEditingItem(null);

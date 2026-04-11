@@ -408,7 +408,7 @@ export function MenuBrowser({
                       <span className="font-medium truncate block" style={{ color: "#111827" }}>{item.name}</span>
                       {item.description && <span className="text-xs truncate block" style={{ color: "#6B7280" }}>{item.description}</span>}
                     </div>
-                    <span className="font-semibold shrink-0 text-sm" style={{ color: "#111827" }}>${item.price.toFixed(2)}</span>
+                    <span className="font-semibold shrink-0 text-sm" style={{ color: "#111827" }}>${item.delivery_price.toFixed(2)}</span>
                   </button>
                 ))}
               </motion.div>
@@ -452,7 +452,7 @@ export function MenuBrowser({
                       <span className="font-medium truncate block" style={{ color: "#111827" }}>{item.name}</span>
                       {item.description && <span className="text-xs truncate block" style={{ color: "#6B7280" }}>{item.description}</span>}
                     </div>
-                    <span className="font-semibold shrink-0 text-sm" style={{ color: "#111827" }}>${item.price.toFixed(2)}</span>
+                    <span className="font-semibold shrink-0 text-sm" style={{ color: "#111827" }}>${item.delivery_price.toFixed(2)}</span>
                   </button>
                 ))}
               </motion.div>
@@ -629,7 +629,7 @@ export function MenuBrowser({
                               {item.name}
                             </p>
                             <p className="text-xs font-semibold" style={{ color: "#6B7280" }}>
-                              ${item.price.toFixed(2)}
+                              ${item.delivery_price.toFixed(2)}
                             </p>
                           </div>
                         </button>
@@ -803,7 +803,7 @@ function ItemCard({
           )}
         </div>
         <span className="font-semibold text-sm shrink-0" style={{ color: "#111827" }}>
-          ${item.price.toFixed(2)}
+          ${item.delivery_price.toFixed(2)}
         </span>
         <AddButton item={item} onClick={onClick} />
       </motion.div>
@@ -858,7 +858,7 @@ function ItemCard({
           </div>
           <div className="mt-2 flex items-center justify-between gap-2">
             <span className="font-semibold text-sm" style={{ color: "#111827" }}>
-              ${item.price.toFixed(2)}
+              ${item.delivery_price.toFixed(2)}
             </span>
             <AddButton item={item} onClick={onClick} />
           </div>
@@ -951,7 +951,7 @@ function ItemCard({
           )}
           <div className="flex items-center justify-between gap-2 mt-auto">
             <span className="text-base font-bold" style={{ color: "#111827" }}>
-              ${item.price.toFixed(2)}
+              ${item.delivery_price.toFixed(2)}
             </span>
             <AddButton item={item} onClick={onClick} />
           </div>
@@ -1026,7 +1026,7 @@ function ItemCard({
         )}
         <div className="flex items-center justify-between gap-2 mt-auto pt-1">
           <span className="text-sm font-semibold" style={{ color: "#111827" }}>
-            ${item.price.toFixed(2)}
+            ${item.delivery_price.toFixed(2)}
           </span>
           <AddButton item={item} onClick={onClick} />
         </div>

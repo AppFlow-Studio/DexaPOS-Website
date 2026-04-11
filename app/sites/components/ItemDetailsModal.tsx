@@ -116,7 +116,7 @@ export function ItemDetailsModal({
   };
 
   const calculateTotal = () => {
-    let total = item.price;
+    let total = item.delivery_price ?? item.price;
     item.modifier_groups?.forEach((group) => {
       const selections = selectedModifiers[group.id] || [];
       selections.forEach((selId) => {
@@ -239,7 +239,7 @@ export function ItemDetailsModal({
             )}
 
             <p className="text-lg font-semibold" style={{ color: "var(--text)" }}>
-              ${item.price.toFixed(2)}
+              ${(item.delivery_price ?? item.price).toFixed(2)}
             </p>
 
             {item.dietary_tags && item.dietary_tags.length > 0 && (
@@ -487,7 +487,7 @@ export function ItemDetailsModal({
                           {suggestion.name}
                         </p>
                         <p className="text-xs font-medium" style={{ color: "var(--text)" }}>
-                          ${suggestion.price.toFixed(2)}
+                          ${(suggestion.delivery_price ?? suggestion.price).toFixed(2)}
                         </p>
                       </div>
                     </button>
