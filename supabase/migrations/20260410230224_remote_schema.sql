@@ -239,37 +239,37 @@ drop index if exists "public"."uq_sync_result";
 drop table "public"."orderout_menu_sync_results";
 
 
-  create table "public"."location_payment_devices" (
-    "id" uuid not null default gen_random_uuid(),
-    "merchant_id" uuid not null,
-    "carrier_id" uuid not null,
-    "location_id" uuid not null,
-    "provider" text not null default 'dejavoo'::text,
-    "device_label" text,
-    "tpn" text not null,
-    "ftd_ecom_key_secret_id" uuid not null,
-    "whitelist_origins" text[] not null default '{}'::text[],
-    "whitelist_synced_at" timestamp with time zone,
-    "last_synced_from_crm_at" timestamp with time zone,
-    "is_active" boolean not null default true,
-    "use_for_online_ordering" boolean not null default false,
-    "created_at" timestamp with time zone not null default now(),
-    "updated_at" timestamp with time zone not null default now()
-      );
+  -- create table "public"."location_payment_devices" (
+  --   "id" uuid not null default gen_random_uuid(),
+  --   "merchant_id" uuid not null,
+  --   "carrier_id" uuid not null,
+  --   "location_id" uuid not null,
+  --   "provider" text not null default 'dejavoo'::text,
+  --   "device_label" text,
+  --   "tpn" text not null,
+  --   "ftd_ecom_key_secret_id" uuid not null,
+  --   "whitelist_origins" text[] not null default '{}'::text[],
+  --   "whitelist_synced_at" timestamp with time zone,
+  --   "last_synced_from_crm_at" timestamp with time zone,
+  --   "is_active" boolean not null default true,
+  --   "use_for_online_ordering" boolean not null default false,
+  --   "created_at" timestamp with time zone not null default now(),
+  --   "updated_at" timestamp with time zone not null default now()
+  --     );
 
 
 alter table "public"."location_payment_devices" enable row level security;
 
 
-  create table "public"."payment_credential_access_log" (
-    "id" uuid not null default gen_random_uuid(),
-    "device_id" uuid not null,
-    "function_name" text not null,
-    "store_config_id" uuid,
-    "actor_user_id" text,
-    "called_at" timestamp with time zone not null default now(),
-    "metadata" jsonb not null default '{}'::jsonb
-      );
+  -- create table "public"."payment_credential_access_log" (
+  --   "id" uuid not null default gen_random_uuid(),
+  --   "device_id" uuid not null,
+  --   "function_name" text not null,
+  --   "store_config_id" uuid,
+  --   "actor_user_id" text,
+  --   "called_at" timestamp with time zone not null default now(),
+  --   "metadata" jsonb not null default '{}'::jsonb
+  --     );
 
 
 alter table "public"."payment_credential_access_log" enable row level security;
@@ -278,7 +278,7 @@ alter table "public"."device_heartbeats" add column "created_at" timestamp with 
 
 alter table "public"."device_heartbeats" add column "updated_at" timestamp with time zone not null default now();
 
-alter table "public"."online_store_config" add column "ipospays_ftd_ecom_key" text;
+-- alter table "public"."online_store_config" add column "ipospays_ftd_ecom_key" text;
 
 alter table "public"."order_payments" add column "settlement_batch_id" uuid;
 
