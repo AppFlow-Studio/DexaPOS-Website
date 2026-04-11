@@ -1,18 +1,16 @@
 'use client'
 
-import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
 import { DayOfWeek, defaultApplicableDays } from '@/types/discount'
+import { cn } from '@/lib/utils'
 
-const dayOptions: { label: string; value: DayOfWeek }[] = [
-    { label: 'Sun', value: 0 },
-    { label: 'Mon', value: 1 },
-    { label: 'Tue', value: 2 },
-    { label: 'Wed', value: 3 },
-    { label: 'Thu', value: 4 },
-    { label: 'Fri', value: 5 },
-    { label: 'Sat', value: 6 },
+const dayOptions: { label: string; short: string; value: DayOfWeek }[] = [
+    { label: 'Sunday',    short: 'Su', value: 0 },
+    { label: 'Monday',    short: 'Mo', value: 1 },
+    { label: 'Tuesday',   short: 'Tu', value: 2 },
+    { label: 'Wednesday', short: 'We', value: 3 },
+    { label: 'Thursday',  short: 'Th', value: 4 },
+    { label: 'Friday',    short: 'Fr', value: 5 },
+    { label: 'Saturday',  short: 'Sa', value: 6 },
 ]
 
 interface DaySelectorProps {
@@ -29,58 +27,60 @@ export function DaySelector({ value, onChange }: DaySelectorProps) {
         }
     }
 
-    const handleSelectAll = () => {
-        onChange([...defaultApplicableDays])
-    }
-
-    const handleClearAll = () => {
-        onChange([])
-    }
-
     const allSelected = value.length === 7
     const noneSelected = value.length === 0
 
     return (
-        <div className="space-y-2">
-            <div className="flex flex-wrap gap-2">
-                {dayOptions.map((day) => (
-                    <Label
-                        key={day.value}
-                        className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm cursor-pointer"
-                    >
-                        <Checkbox
-                            checked={value.includes(day.value)}
-                            onCheckedChange={() => handleToggle(day.value)}
-                        />
-                        {day.label}
-                    </Label>
-                ))}
+        <div className="space-y-3">
+            <div className="flex gap-1.5">
+                {dayOptions.map((day) => {
+                    const selected = value.includes(day.value)
+                    return (
+                        <button
+                            key={day.value}
+                            type="button"
+                            title={day.label}
+                            onClick={() => handleToggle(day.value)}
+                            className={cn(
+                                'flex h-9 flex-1 items-center justify-center rounded-md text-xs font-semibold transition-colors select-none',
+                                selected
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground'
+                            )}
+                        >
+                            {day.short}
+                        </button>
+                    )
+                })}
             </div>
-            <div className="flex gap-2">
-                {!allSelected && (
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleSelectAll}
-                        className="h-7 text-xs text-muted-foreground"
-                    >
-                        Select all days
-                    </Button>
-                )}
-                {!noneSelected && (
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleClearAll}
-                        className="h-7 text-xs text-muted-foreground"
-                    >
-                        Clear all
-                    </Button>
-                )}
+
+            <div className="flex items-center gap-3">
+                <div className="h-px flex-1 bg-border" />
+                <div className="flex gap-2">
+                    {!allSelected && (
+                        <button
+                            type="button"
+                            onClick={() => onChange([...defaultApplicableDays])}
+                            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                            Select all
+                        </button>
+                    )}
+                    {!allSelected && !noneSelected && (
+                        <span className="text-xs text-border">·</span>
+                    )}
+                    {!noneSelected && (
+                        <button
+                            type="button"
+                            onClick={() => onChange([])}
+                            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                            Clear
+                        </button>
+                    )}
+                </div>
+                <div className="h-px flex-1 bg-border" />
             </div>
         </div>
     )
 }
-

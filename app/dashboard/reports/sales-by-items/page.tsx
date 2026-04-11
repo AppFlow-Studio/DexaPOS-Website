@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useSalesByItemReport } from "../../hooks/useOrderAnalytics";
 import {
   DateRangePicker,
@@ -16,10 +16,77 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Search,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  ShoppingCart,
+  DollarSign,
+  Package,
+  TrendingUp,
+  X,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { useSelectedLocation } from "@/stores/location-store";
+import { SalesByItemReportItem } from "@/app/dashboard/actions/order-analytics";
+
+type SortKey = keyof Pick<
+  SalesByItemReportItem,
+  "item_name" | "category" | "quantity_sold" | "gross_sales" | "net_sales"
+>;
+type SortDir = "asc" | "desc";
+
+const CATEGORY_COLORS: Record<string, string> = {
+  default: "#6366f1",
+};
+
+// Generate a stable color per category name
+function categoryColor(category: string): string {
+  const palette = [
+    "#6366f1", // indigo
+    "#f59e0b", // amber
+    "#10b981", // emerald
+    "#3b82f6", // blue
+    "#f43f5e", // rose
+    "#8b5cf6", // violet
+    "#06b6d4", // cyan
+    "#f97316", // orange
+  ];
+  let hash = 0;
+  for (let i = 0; i < category.length; i++) {
+    hash = category.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return palette[Math.abs(hash) % palette.length];
+}
+
+function SortIcon({
+  column,
+  active,
+  dir,
+}: {
+  column: SortKey;
+  active: SortKey;
+  dir: SortDir;
+}) {
+  if (column !== active)
+    return <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/40 ml-1" />;
+  return dir === "asc" ? (
+    <ArrowUp className="h-3.5 w-3.5 text-primary ml-1" />
+  ) : (
+    <ArrowDown className="h-3.5 w-3.5 text-primary ml-1" />
+  );
+}
 
 export default function SalesByItemsPage() {
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
@@ -27,131 +94,434 @@ export default function SalesByItemsPage() {
     to: new Date(),
   });
   const [preset, setPreset] = useState<DatePreset>("last_30_days");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [sortKey, setSortKey] = useState<SortKey>("net_sales");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
+  const selectedLocation = useSelectedLocation();
   const { data: items, isLoading } = useSalesByItemReport(
     dateRange.from,
     dateRange.to
   );
 
-  const handleDateRangeChange = (from: Date | null, to: Date | null) => {
-    if (from && to) {
-      setDateRange({ from, to });
-    }
-  };
+  // Derived: unique categories
+  const categories = useMemo(() => {
+    if (!items) return [];
+    const cats = [...new Set(items.map((i) => i.category).filter(Boolean))].sort();
+    return cats;
+  }, [items]);
 
-  const filteredItems =
-    items?.filter(
-      (item) =>
-        item.item_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.category?.toLowerCase().includes(searchQuery.toLowerCase())
-    ) || [];
+  // Filter + sort
+  const processed = useMemo(() => {
+    let rows = items ?? [];
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      rows = rows.filter(
+        (r) =>
+          r.item_name.toLowerCase().includes(q) ||
+          r.category?.toLowerCase().includes(q)
+      );
+    }
+    if (categoryFilter !== "all") {
+      rows = rows.filter((r) => r.category === categoryFilter);
+    }
+    rows = [...rows].sort((a, b) => {
+      const av = a[sortKey] ?? "";
+      const bv = b[sortKey] ?? "";
+      if (typeof av === "string" && typeof bv === "string") {
+        return sortDir === "asc"
+          ? av.localeCompare(bv)
+          : bv.localeCompare(av);
+      }
+      return sortDir === "asc"
+        ? (av as number) - (bv as number)
+        : (bv as number) - (av as number);
+    });
+    return rows;
+  }, [items, search, categoryFilter, sortKey, sortDir]);
+
+  // Summary KPIs
+  const summary = useMemo(() => {
+    const src = items ?? [];
+    return {
+      totalItems: src.length,
+      totalQty: src.reduce((s, r) => s + r.quantity_sold, 0),
+      totalGross: src.reduce((s, r) => s + r.gross_sales, 0),
+      totalNet: src.reduce((s, r) => s + r.net_sales, 0),
+    };
+  }, [items]);
+
+  const maxNet = processed.reduce((m, r) => Math.max(m, r.net_sales), 0);
+  const maxQty = processed.reduce((m, r) => Math.max(m, r.quantity_sold), 0);
+
+  function handleSort(key: SortKey) {
+    if (key === sortKey) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  }
+
+  const hasFilters = search || categoryFilter !== "all";
+
+  const kpis = [
+    {
+      label: "Unique Items",
+      value: isLoading ? null : summary.totalItems.toLocaleString(),
+      icon: Package,
+      iconColor: "text-indigo-500",
+      iconBg: "bg-indigo-50",
+    },
+    {
+      label: "Total Qty Sold",
+      value: isLoading ? null : summary.totalQty.toLocaleString(),
+      icon: ShoppingCart,
+      iconColor: "text-emerald-500",
+      iconBg: "bg-emerald-50",
+    },
+    {
+      label: "Gross Sales",
+      value: isLoading
+        ? null
+        : `$${summary.totalGross.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
+      icon: DollarSign,
+      iconColor: "text-amber-500",
+      iconBg: "bg-amber-50",
+    },
+    {
+      label: "Net Sales",
+      value: isLoading
+        ? null
+        : `$${summary.totalNet.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
+      icon: TrendingUp,
+      iconColor: "text-purple-500",
+      iconBg: "bg-purple-50",
+    },
+  ];
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-6 pb-8">
+      {/* ── Header ── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Sales By Items</h2>
-          <p className="text-muted-foreground">
-            Detailed performance breakdown of your menu items
+          <h1 className="text-2xl font-bold tracking-tight">Sales by Items</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {selectedLocation && !Array.isArray(selectedLocation)
+              ? selectedLocation.name
+              : "All Locations"}{" "}
+            · Menu item performance breakdown
           </p>
         </div>
-        <div>
-          <DateRangePicker
-            dateFrom={dateRange.from}
-            dateTo={dateRange.to}
-            onDateRangeChange={handleDateRangeChange}
-            preset={preset}
-            onPresetChange={setPreset}
-          />
-        </div>
+        <DateRangePicker
+          dateFrom={dateRange.from}
+          dateTo={dateRange.to}
+          onDateRangeChange={(from, to) => {
+            if (from && to) setDateRange({ from, to });
+          }}
+          preset={preset}
+          onPresetChange={setPreset}
+        />
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between">
-            <CardTitle>Item Performance</CardTitle>
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+      {/* ── KPI Cards ── */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {kpis.map((kpi) => (
+          <Card
+            key={kpi.label}
+            className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl overflow-hidden"
+          >
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className={cn("p-2 rounded-xl", kpi.iconBg)}>
+                  <kpi.icon className={cn("h-4 w-4", kpi.iconColor)} />
+                </div>
+              </div>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                {kpi.label}
+              </p>
+              {kpi.value === null ? (
+                <div className="h-7 w-24 bg-muted animate-pulse rounded mt-1.5" />
+              ) : (
+                <p className="text-2xl font-bold mt-1">{kpi.value}</p>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* ── Table Card ── */}
+      <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl overflow-hidden">
+        {/* Filters toolbar */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center justify-between px-5 pt-5 pb-4 border-b border-border/50">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
-                type="search"
-                placeholder="Search items..."
-                className="pl-8"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search items or categories..."
+                className="pl-9 h-9 w-full sm:w-64 text-sm rounded-lg bg-muted/40 border-0 focus-visible:ring-1"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
               />
             </div>
+
+            {/* Category filter */}
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="h-9 w-full sm:w-44 text-sm rounded-lg bg-muted/40 border-0 focus:ring-1">
+                <SelectValue placeholder="All categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {categories.map((cat) => (
+                  <SelectItem key={cat} value={cat}>
+                    {cat}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Sort by (mobile fallback) */}
+            <Select
+              value={`${sortKey}:${sortDir}`}
+              onValueChange={(v) => {
+                const [k, d] = v.split(":") as [SortKey, SortDir];
+                setSortKey(k);
+                setSortDir(d);
+              }}
+            >
+              <SelectTrigger className="h-9 w-full sm:w-48 text-sm rounded-lg bg-muted/40 border-0 focus:ring-1">
+                <SelectValue placeholder="Sort by…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="net_sales:desc">Net Sales ↓</SelectItem>
+                <SelectItem value="net_sales:asc">Net Sales ↑</SelectItem>
+                <SelectItem value="gross_sales:desc">Gross Sales ↓</SelectItem>
+                <SelectItem value="gross_sales:asc">Gross Sales ↑</SelectItem>
+                <SelectItem value="quantity_sold:desc">Qty Sold ↓</SelectItem>
+                <SelectItem value="quantity_sold:asc">Qty Sold ↑</SelectItem>
+                <SelectItem value="item_name:asc">Name A–Z</SelectItem>
+                <SelectItem value="item_name:desc">Name Z–A</SelectItem>
+                <SelectItem value="category:asc">Category A–Z</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-        </CardHeader>
-        <CardContent>
+
+          <div className="flex items-center gap-2">
+            {hasFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-9 text-xs text-muted-foreground gap-1.5"
+                onClick={() => {
+                  setSearch("");
+                  setCategoryFilter("all");
+                }}
+              >
+                <X className="h-3.5 w-3.5" />
+                Clear filters
+              </Button>
+            )}
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {isLoading
+                ? "Loading…"
+                : `${processed.length} item${processed.length !== 1 ? "s" : ""}`}
+            </span>
+          </div>
+        </div>
+
+        <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Item Name</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead className="text-right">Qty Sold</TableHead>
-                <TableHead className="text-right">Gross Sales</TableHead>
-                <TableHead className="text-right">Net Sales</TableHead>
+              <TableRow className="hover:bg-transparent border-b border-border/50">
+                <TableHead className="w-10 pl-5 text-center text-xs font-semibold text-muted-foreground">
+                  #
+                </TableHead>
+                <TableHead
+                  className="text-xs font-semibold text-muted-foreground cursor-pointer select-none"
+                  onClick={() => handleSort("item_name")}
+                >
+                  <div className="flex items-center">
+                    Item Name
+                    <SortIcon column="item_name" active={sortKey} dir={sortDir} />
+                  </div>
+                </TableHead>
+                <TableHead
+                  className="text-xs font-semibold text-muted-foreground cursor-pointer select-none"
+                  onClick={() => handleSort("category")}
+                >
+                  <div className="flex items-center">
+                    Category
+                    <SortIcon column="category" active={sortKey} dir={sortDir} />
+                  </div>
+                </TableHead>
+                <TableHead
+                  className="text-xs font-semibold text-muted-foreground cursor-pointer select-none"
+                  onClick={() => handleSort("quantity_sold")}
+                >
+                  <div className="flex items-center justify-end">
+                    Qty Sold
+                    <SortIcon column="quantity_sold" active={sortKey} dir={sortDir} />
+                  </div>
+                </TableHead>
+                <TableHead
+                  className="text-xs font-semibold text-muted-foreground cursor-pointer select-none"
+                  onClick={() => handleSort("gross_sales")}
+                >
+                  <div className="flex items-center justify-end">
+                    Gross Sales
+                    <SortIcon column="gross_sales" active={sortKey} dir={sortDir} />
+                  </div>
+                </TableHead>
+                <TableHead
+                  className="text-xs font-semibold text-muted-foreground cursor-pointer select-none pr-5"
+                  onClick={() => handleSort("net_sales")}
+                >
+                  <div className="flex items-center justify-end">
+                    Net Sales
+                    <SortIcon column="net_sales" active={sortKey} dir={sortDir} />
+                  </div>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 Array.from({ length: 10 }).map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell>
-                      <Skeleton className="h-4 w-40" />
+                  <TableRow key={i} className="border-b border-border/30">
+                    <TableCell className="pl-5 py-3.5">
+                      <div className="h-4 w-5 bg-muted animate-pulse rounded mx-auto" />
                     </TableCell>
-                    <TableCell>
-                      <Skeleton className="h-4 w-24" />
+                    <TableCell className="py-3.5">
+                      <div className="h-4 w-44 bg-muted animate-pulse rounded" />
                     </TableCell>
-                    <TableCell className="text-right">
-                      <Skeleton className="h-4 w-12 ml-auto" />
+                    <TableCell className="py-3.5">
+                      <div className="h-5 w-20 bg-muted animate-pulse rounded-full" />
                     </TableCell>
-                    <TableCell className="text-right">
-                      <Skeleton className="h-4 w-20 ml-auto" />
+                    <TableCell className="py-3.5">
+                      <div className="h-4 w-16 bg-muted animate-pulse rounded ml-auto" />
                     </TableCell>
-                    <TableCell className="text-right">
-                      <Skeleton className="h-4 w-20 ml-auto" />
+                    <TableCell className="py-3.5">
+                      <div className="h-4 w-20 bg-muted animate-pulse rounded ml-auto" />
+                    </TableCell>
+                    <TableCell className="py-3.5 pr-5">
+                      <div className="h-4 w-20 bg-muted animate-pulse rounded ml-auto" />
                     </TableCell>
                   </TableRow>
                 ))
-              ) : filteredItems.length === 0 ? (
+              ) : processed.length === 0 ? (
                 <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="text-center h-48 text-muted-foreground"
-                  >
-                    {items && items.length > 0
-                      ? "No items match your search"
-                      : "No sales data found for this period"}
+                  <TableCell colSpan={6} className="h-48 text-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <Package className="h-8 w-8 opacity-30" />
+                      <p className="text-sm font-medium">
+                        {items && items.length > 0
+                          ? "No items match your filters"
+                          : "No sales data for this period"}
+                      </p>
+                      {hasFilters && (
+                        <button
+                          className="text-xs text-primary underline underline-offset-2"
+                          onClick={() => {
+                            setSearch("");
+                            setCategoryFilter("all");
+                          }}
+                        >
+                          Clear filters
+                        </button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredItems.map((item, index) => (
-                  <TableRow key={index}>
-                    <TableCell className="font-medium">
-                      {item.item_name}
-                    </TableCell>
-                    <TableCell>
-                      {item.category ? (
-                        <Badge variant="secondary" className="font-normal">
-                          {item.category}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {item.quantity_sold}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-muted-foreground">
-                      ${item.gross_sales.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono font-medium">
-                      ${item.net_sales.toFixed(2)}
-                    </TableCell>
-                  </TableRow>
-                ))
+                processed.map((item, index) => {
+                  const qtyPct = maxQty > 0 ? (item.quantity_sold / maxQty) * 100 : 0;
+                  const netPct = maxNet > 0 ? (item.net_sales / maxNet) * 100 : 0;
+                  const color = item.category
+                    ? categoryColor(item.category)
+                    : "#94a3b8";
+
+                  return (
+                    <TableRow
+                      key={index}
+                      className="border-b border-border/30 hover:bg-muted/30 transition-colors group"
+                    >
+                      {/* Rank */}
+                      <TableCell className="pl-5 py-3.5 text-center">
+                        <span className="text-xs font-bold text-muted-foreground/50">
+                          {index + 1}
+                        </span>
+                      </TableCell>
+
+                      {/* Item name */}
+                      <TableCell className="py-3.5 font-medium text-sm max-w-50">
+                        <span className="truncate block">{item.item_name}</span>
+                      </TableCell>
+
+                      {/* Category badge */}
+                      <TableCell className="py-3.5">
+                        {item.category ? (
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium"
+                            style={{
+                              backgroundColor: color + "1a",
+                              color: color,
+                            }}
+                          >
+                            {item.category}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground/40">
+                            —
+                          </span>
+                        )}
+                      </TableCell>
+
+                      {/* Qty sold with bar */}
+                      <TableCell className="py-3.5 text-right">
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="text-sm font-semibold font-mono">
+                            {item.quantity_sold.toLocaleString()}
+                          </span>
+                          <div className="w-20 h-1 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-emerald-400"
+                              style={{ width: `${qtyPct}%` }}
+                            />
+                          </div>
+                        </div>
+                      </TableCell>
+
+                      {/* Gross sales */}
+                      <TableCell className="py-3.5 text-right">
+                        <span className="text-sm font-mono text-muted-foreground">
+                          $
+                          {item.gross_sales.toLocaleString("en-US", {
+                            minimumFractionDigits: 2,
+                          })}
+                        </span>
+                      </TableCell>
+
+                      {/* Net sales with bar */}
+                      <TableCell className="py-3.5 pr-5 text-right">
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="text-sm font-bold font-mono">
+                            $
+                            {item.net_sales.toLocaleString("en-US", {
+                              minimumFractionDigits: 2,
+                            })}
+                          </span>
+                          <div className="w-20 h-1 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-indigo-400"
+                              style={{ width: `${netPct}%` }}
+                            />
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>

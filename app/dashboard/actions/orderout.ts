@@ -12,6 +12,11 @@ import {
   canonicalStringify,
 } from "@/lib/orderout/transform-menu";
 import type { MenuWithCategories } from "@/types/menu";
+import {
+  extractConnectedPlatforms,
+  normalizeDeliveryChannels,
+} from "@/lib/orderout/helpers";
+import { auth } from "@clerk/nextjs/server";
 
 // ============================================================================
 // Types
@@ -28,6 +33,8 @@ export interface OrderOutLocationStatus {
   connectedChannels: unknown;
   autoAcceptOrders: boolean;
   dashboardUrl: string;
+  channelsConfirmedByMerchant: string[];
+  channelsConfirmedAt: string | null;
 }
 
 export interface OnboardOrderOutParams {
@@ -83,7 +90,7 @@ export async function getOrderOutStatus(
     const { data: restaurant } = await supabase
       .from("orderout_restaurants")
       .select(
-        "oo_account_id, oo_restaurant_id, status, is_accepting_orders, prep_time_minutes, connected_channels, auto_accept_orders"
+        "oo_account_id, oo_restaurant_id, status, is_accepting_orders, prep_time_minutes, connected_channels, auto_accept_orders, channels_confirmed_by_merchant, channels_confirmed_at"
       )
       .eq("location_id", locationId)
       .single();
@@ -101,6 +108,9 @@ export async function getOrderOutStatus(
         connectedChannels: restaurant?.connected_channels || null,
         autoAcceptOrders: restaurant?.auto_accept_orders ?? false,
         dashboardUrl: "https://dashboard.orderout.co",
+        channelsConfirmedByMerchant:
+          restaurant?.channels_confirmed_by_merchant ?? [],
+        channelsConfirmedAt: restaurant?.channels_confirmed_at ?? null,
       },
       error: null,
     };
@@ -218,6 +228,129 @@ export async function onboardOrderOut(
     return { success: true, data: result.data, error: null };
   } catch (error) {
     console.error("[onboardOrderOut] Exception:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+// ============================================================================
+// Merchant Channel Self-Confirmation
+// ============================================================================
+
+export interface SetOrderOutChannelsConfirmedParams {
+  clerkOrgId: string;
+  locationId: string;
+  confirmedChannels: string[]; // caller-normalized UPPERCASE enum list
+}
+
+/**
+ * Merchant self-attests which delivery channels they have connected inside the
+ * OrderOut dashboard. The resulting list is unioned with webhook-verified
+ * channels (connected_channels) by the push guard and the UI, so merchants can
+ * unblock "Push Menus to Channels" on a fresh install — before any webhook has
+ * fired. Once a real webhook arrives, verified channels take visual precedence.
+ */
+export async function setOrderOutChannelsConfirmed(
+  params: SetOrderOutChannelsConfirmedParams
+): Promise<{
+  success: boolean;
+  data?: { channels: string[]; confirmedAt: string };
+  error: string | null;
+}> {
+  const { clerkOrgId, locationId, confirmedChannels } = params;
+
+  if (!clerkOrgId || !locationId) {
+    return { success: false, error: "Missing required parameters" };
+  }
+
+  try {
+    const supabase = createServerSupabaseClient();
+
+    // Resolve merchant
+    const { data: merchant, error: merchantError } = await supabase
+      .from("merchants")
+      .select("id")
+      .eq("clerk_org_id", clerkOrgId)
+      .single();
+
+    if (merchantError || !merchant) {
+      return { success: false, error: "Merchant not found" };
+    }
+
+    // Resolve orderout restaurant
+    const { data: restaurant, error: restaurantError } = await supabase
+      .from("orderout_restaurants")
+      .select("id, oo_restaurant_id, channels_confirmed_by_merchant")
+      .eq("location_id", locationId)
+      .single();
+
+    if (restaurantError || !restaurant) {
+      return {
+        success: false,
+        error: "Location is not onboarded to OrderOut",
+      };
+    }
+
+    // Normalize input against the canonical allowlist
+    const normalized = normalizeDeliveryChannels(confirmedChannels);
+
+    // Diff vs existing for audit metadata
+    const previous = ((restaurant.channels_confirmed_by_merchant ?? []) as string[]).map(
+      (c: string) => c.toUpperCase()
+    );
+    const previousSet = new Set(previous);
+    const normalizedSet = new Set(normalized);
+    const added = normalized.filter((c) => !previousSet.has(c));
+    const removed = previous.filter((c) => !normalizedSet.has(c));
+
+    // Clerk user id for attribution
+    const { userId } = await auth();
+
+    const confirmedAt = new Date().toISOString();
+
+    const { error: updateError } = await supabase
+      .from("orderout_restaurants")
+      .update({
+        channels_confirmed_by_merchant: normalized,
+        channels_confirmed_at: confirmedAt,
+        channels_confirmed_by_user_id: userId ?? null,
+      })
+      .eq("id", restaurant.id);
+
+    if (updateError) {
+      console.error(
+        "[setOrderOutChannelsConfirmed] update failed:",
+        updateError
+      );
+      return { success: false, error: updateError.message };
+    }
+
+    await LogAuditEvent({
+      clerkOrgId,
+      locationId,
+      action: "confirmed_delivery_channels",
+      actionCategory: "integrations",
+      severity: "info",
+      resourceType: "orderout_integration",
+      resourceId: locationId,
+      metadata: {
+        before: previous,
+        after: normalized,
+        added,
+        removed,
+        oo_restaurant_id: restaurant.oo_restaurant_id,
+      },
+    });
+
+    return {
+      success: true,
+      data: { channels: normalized, confirmedAt },
+      error: null,
+    };
+  } catch (error) {
+    console.error("[setOrderOutChannelsConfirmed] Exception:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -1281,6 +1414,566 @@ export async function getRecentOrderOutOrders(
     return { success: true, data: result, error: null };
   } catch (error) {
     console.error("[getRecentOrderOutOrders] Exception:", error);
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+// ============================================================================
+// Push Menu to Connected Delivery Channels
+// ============================================================================
+
+export interface PushMenuToChannelsParams {
+  clerkOrgId: string;
+  menuId: string;
+  locationId: string;
+}
+
+export interface PushMenuToChannelsResult {
+  syncId: string;
+  ooMenuId: string;
+  expectedChannels: string[];
+  triggeredAt: string;
+}
+
+const PUSH_CHANNELS_COOLDOWN_SECONDS = 30;
+const PUSH_CHANNELS_HOURLY_LIMIT = 5;
+
+/**
+ * Push an already-synced menu to all connected delivery channels via OrderOut's
+ * async fan-out endpoint. Per-service results come back via
+ * orderout-push-menu-webhook.
+ */
+export async function pushMenuToConnectedChannels(
+  params: PushMenuToChannelsParams
+): Promise<{
+  success: boolean;
+  data?: PushMenuToChannelsResult;
+  error: string | null;
+}> {
+  const { clerkOrgId, menuId, locationId } = params;
+
+  if (!clerkOrgId || !menuId || !locationId) {
+    return { success: false, error: "Missing required parameters" };
+  }
+
+  try {
+    const supabase = createServerSupabaseClient();
+
+    // Best-effort reconcile of stuck rows. Never fail the action on reconcile error.
+    try {
+      const { error: reconcileError } = await supabase.rpc(
+        "reconcile_stuck_push_channels_syncs",
+        { p_stale_minutes: 5 }
+      );
+      if (reconcileError) {
+        console.warn(
+          "[pushMenuToConnectedChannels] reconcile error (non-fatal):",
+          reconcileError.message
+        );
+      }
+    } catch (e) {
+      console.warn("[pushMenuToConnectedChannels] reconcile threw (non-fatal):", e);
+    }
+
+    // Clerk user id for audit + trigger tracking
+    const { userId: clerkUserId } = await auth();
+
+    // Resolve merchant
+    const { data: merchant, error: merchantError } = await supabase
+      .from("merchants")
+      .select("id")
+      .eq("clerk_org_id", clerkOrgId)
+      .single();
+
+    if (merchantError || !merchant) {
+      return { success: false, error: "Merchant not found" };
+    }
+
+    // Resolve OrderOut restaurant for the location
+    const { data: restaurant, error: restaurantError } = await supabase
+      .from("orderout_restaurants")
+      .select(
+        "id, oo_restaurant_id, connected_channels, channels_confirmed_by_merchant"
+      )
+      .eq("location_id", locationId)
+      .single();
+
+    if (restaurantError || !restaurant?.oo_restaurant_id) {
+      return {
+        success: false,
+        error: "Location is not onboarded to OrderOut",
+      };
+    }
+
+    // Resolve the menu link (must exist + active + have oo_menu_id)
+    const { data: link, error: linkError } = await supabase
+      .from("orderout_menu_links")
+      .select("id, oo_menu_id")
+      .eq("orderout_restaurant_id", restaurant.id)
+      .eq("menu_id", menuId)
+      .eq("is_active", true)
+      .single();
+
+    if (linkError || !link?.oo_menu_id) {
+      return {
+        success: false,
+        error: "Menu has not been uploaded to OrderOut yet",
+      };
+    }
+
+    // Expected channels — union of webhook-verified + merchant self-confirmed.
+    // Merchants can self-attest to avoid the chicken-and-egg problem on fresh
+    // installs where no webhook has fired yet. Once a real webhook arrives the
+    // verified set grows organically via merge_orderout_connected_channels.
+    const verified = extractConnectedPlatforms(restaurant.connected_channels);
+    const confirmed = ((restaurant.channels_confirmed_by_merchant ?? []) as string[]).map(
+      (c: string) => c.toUpperCase()
+    );
+    const expectedChannels = Array.from(new Set([...verified, ...confirmed]));
+
+    if (expectedChannels.length === 0) {
+      return {
+        success: false,
+        error:
+          "No connected delivery channels. Confirm your platforms in the OrderOut tab first.",
+      };
+    }
+
+    // Rate limit — 30-second cooldown
+    const cooldownSince = new Date(
+      Date.now() - PUSH_CHANNELS_COOLDOWN_SECONDS * 1000
+    ).toISOString();
+    const { count: recentCount, error: recentErr } = await supabase
+      .from("orderout_menu_syncs")
+      .select("id", { head: true, count: "exact" })
+      .eq("orderout_restaurant_id", restaurant.id)
+      .eq("menu_id", menuId)
+      .eq("sync_direction", "push_channels")
+      .gte("created_at", cooldownSince);
+
+    if (recentErr) {
+      console.warn(
+        "[pushMenuToConnectedChannels] cooldown query failed:",
+        recentErr.message
+      );
+    } else if ((recentCount ?? 0) >= 1) {
+      await LogAuditEvent({
+        clerkOrgId,
+        locationId,
+        action: "pushed_menu_to_channels_rate_limited",
+        actionCategory: "integrations",
+        severity: "warning",
+        resourceType: "menu",
+        resourceId: menuId,
+        metadata: {
+          cooldown_seconds: PUSH_CHANNELS_COOLDOWN_SECONDS,
+          trigger: "merchant",
+        },
+      });
+      return {
+        success: false,
+        error: `Please wait ${PUSH_CHANNELS_COOLDOWN_SECONDS} seconds between pushes.`,
+      };
+    }
+
+    // Rate limit — 5/hour ceiling
+    const hourSince = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: hourlyCount, error: hourlyErr } = await supabase
+      .from("orderout_menu_syncs")
+      .select("id", { head: true, count: "exact" })
+      .eq("orderout_restaurant_id", restaurant.id)
+      .eq("menu_id", menuId)
+      .eq("sync_direction", "push_channels")
+      .gte("created_at", hourSince);
+
+    if (hourlyErr) {
+      console.warn(
+        "[pushMenuToConnectedChannels] hourly query failed:",
+        hourlyErr.message
+      );
+    } else if ((hourlyCount ?? 0) >= PUSH_CHANNELS_HOURLY_LIMIT) {
+      await LogAuditEvent({
+        clerkOrgId,
+        locationId,
+        action: "pushed_menu_to_channels_rate_limited",
+        actionCategory: "integrations",
+        severity: "warning",
+        resourceType: "menu",
+        resourceId: menuId,
+        metadata: {
+          hourly_count: hourlyCount,
+          hourly_limit: PUSH_CHANNELS_HOURLY_LIMIT,
+          trigger: "merchant",
+        },
+      });
+      return {
+        success: false,
+        error: `Hourly push limit reached (${PUSH_CHANNELS_HOURLY_LIMIT}). Try again later.`,
+      };
+    }
+
+    // Insert the sync row (pending)
+    const { data: syncRow, error: insertErr } = await supabase
+      .from("orderout_menu_syncs")
+      .insert({
+        orderout_restaurant_id: restaurant.id,
+        menu_id: menuId,
+        oo_menu_id: link.oo_menu_id,
+        sync_direction: "push_channels",
+        sync_status: "pending",
+        expected_channels: expectedChannels,
+        pushed_to_channels: [],
+        trigger_source: "merchant",
+        triggered_by_user_id: clerkUserId ?? null,
+        menu_payload_snapshot: {
+          trigger: "push_channels",
+          expected_channels: expectedChannels,
+          oo_menu_id: link.oo_menu_id,
+        },
+      })
+      .select("id")
+      .single();
+
+    if (insertErr || !syncRow) {
+      console.error(
+        "[pushMenuToConnectedChannels] insert sync failed:",
+        insertErr
+      );
+      return { success: false, error: "Failed to create sync record" };
+    }
+
+    // Call OrderOut's async fan-out endpoint
+    const orderOutApiUrl = process.env.NEXT_PUBLIC_ORDEROUT_API_URL;
+    const orderOutApiKey = process.env.ORDEROUT_API_KEY;
+    if (!orderOutApiUrl || !orderOutApiKey) {
+      await supabase
+        .from("orderout_menu_syncs")
+        .update({
+          sync_status: "failed",
+          error_details: "OrderOut API configuration missing",
+          synced_at: new Date().toISOString(),
+        })
+        .eq("id", syncRow.id);
+      return { success: false, error: "OrderOut API configuration missing" };
+    }
+
+    const triggeredAt = new Date().toISOString();
+    const pushUrl = `${orderOutApiUrl}/pos/restaurant/${restaurant.oo_restaurant_id}/push_menu/${link.oo_menu_id}`;
+
+    let httpStatus = 0;
+    let errMsg: string | null = null;
+    try {
+      const resp = await fetch(pushUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": orderOutApiKey,
+        },
+      });
+      httpStatus = resp.status;
+      if (!resp.ok) {
+        try {
+          const body = await resp.json();
+          errMsg =
+            (body?.error as string) ||
+            (body?.message as string) ||
+            `OrderOut API returned ${resp.status}`;
+        } catch {
+          errMsg = `OrderOut API returned ${resp.status}`;
+        }
+      }
+    } catch (e) {
+      errMsg = e instanceof Error ? e.message : "Network error";
+    }
+
+    if (httpStatus >= 200 && httpStatus < 300) {
+      // 2xx — move the row to syncing and await webhook callbacks
+      const { error: updErr } = await supabase
+        .from("orderout_menu_syncs")
+        .update({ sync_status: "syncing" })
+        .eq("id", syncRow.id);
+      if (updErr) {
+        console.warn(
+          "[pushMenuToConnectedChannels] failed to mark syncing:",
+          updErr.message
+        );
+      }
+
+      await LogAuditEvent({
+        clerkOrgId,
+        locationId,
+        action: "pushed_menu_to_channels",
+        actionCategory: "integrations",
+        severity: "info",
+        resourceType: "menu",
+        resourceId: menuId,
+        metadata: {
+          sync_id: syncRow.id,
+          oo_menu_id: link.oo_menu_id,
+          oo_restaurant_id: restaurant.oo_restaurant_id,
+          expected_channels: expectedChannels,
+          verified_channels: verified,
+          self_confirmed_channels: confirmed,
+          trigger: "merchant",
+        },
+      });
+
+      return {
+        success: true,
+        data: {
+          syncId: syncRow.id,
+          ooMenuId: link.oo_menu_id,
+          expectedChannels,
+          triggeredAt,
+        },
+        error: null,
+      };
+    }
+
+    // Non-2xx — mark failed + audit
+    await supabase
+      .from("orderout_menu_syncs")
+      .update({
+        sync_status: "failed",
+        error_details: errMsg ?? "Unknown error",
+        synced_at: new Date().toISOString(),
+      })
+      .eq("id", syncRow.id);
+
+    await LogAuditEvent({
+      clerkOrgId,
+      locationId,
+      action: "pushed_menu_to_channels_failed",
+      actionCategory: "integrations",
+      severity: "warning",
+      resourceType: "menu",
+      resourceId: menuId,
+      metadata: {
+        sync_id: syncRow.id,
+        oo_menu_id: link.oo_menu_id,
+        oo_restaurant_id: restaurant.oo_restaurant_id,
+        http_status: httpStatus,
+        error_message: errMsg,
+        trigger: "merchant",
+      },
+    });
+
+    return { success: false, error: errMsg ?? "Failed to push to channels" };
+  } catch (error) {
+    console.error("[pushMenuToConnectedChannels] Exception:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+// ============================================================================
+// Push-Channels History + Live Status
+// ============================================================================
+
+export interface PushChannelsHistoryEntry {
+  syncId: string;
+  menuId: string | null;
+  menuName: string | null;
+  ooMenuId: string | null;
+  syncStatus: string;
+  expectedChannels: string[];
+  pushedToChannels: string[];
+  triggerSource: string | null;
+  triggeredByUserId: string | null;
+  createdAt: string;
+  syncedAt: string | null;
+  errorDetails: unknown;
+  perChannelResults: Array<{
+    deliveryService: string;
+    status: string;
+    statusCode: number | null;
+    errorMessage: string | null;
+    rawResponse: unknown;
+    receivedAt: string;
+  }>;
+}
+
+export async function getPushChannelsHistory(
+  clerkOrgId: string,
+  locationId: string,
+  opts?: { menuId?: string; limit?: number }
+): Promise<{
+  success: boolean;
+  data: PushChannelsHistoryEntry[] | null;
+  error: string | null;
+}> {
+  if (!clerkOrgId || !locationId) {
+    return { success: false, data: null, error: "Missing required parameters" };
+  }
+
+  try {
+    const supabase = createServerSupabaseClient();
+
+    // Resolve merchant (for auth scoping via RLS)
+    const { data: merchant, error: merchantError } = await supabase
+      .from("merchants")
+      .select("id")
+      .eq("clerk_org_id", clerkOrgId)
+      .single();
+
+    if (merchantError || !merchant) {
+      return { success: false, data: null, error: "Merchant not found" };
+    }
+
+    // Resolve restaurant
+    const { data: restaurant } = await supabase
+      .from("orderout_restaurants")
+      .select("id")
+      .eq("location_id", locationId)
+      .single();
+
+    if (!restaurant) {
+      return { success: true, data: [], error: null };
+    }
+
+    const limit = opts?.limit ?? 25;
+
+    let query = supabase
+      .from("orderout_menu_syncs")
+      .select(
+        "id, menu_id, oo_menu_id, sync_status, expected_channels, pushed_to_channels, trigger_source, triggered_by_user_id, created_at, synced_at, error_details"
+      )
+      .eq("orderout_restaurant_id", restaurant.id)
+      .eq("sync_direction", "push_channels")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (opts?.menuId) {
+      query = query.eq("menu_id", opts.menuId);
+    }
+
+    const { data: rows, error: rowsErr } = await query;
+    if (rowsErr) {
+      return { success: false, data: null, error: rowsErr.message };
+    }
+    if (!rows || rows.length === 0) {
+      return { success: true, data: [], error: null };
+    }
+
+    // Fetch per-channel results
+    const syncIds = rows.map((r) => r.id);
+    const { data: results } = await supabase
+      .from("orderout_menu_sync_results")
+      .select(
+        "sync_id, delivery_service, status, status_code, error_message, raw_response, received_at"
+      )
+      .in("sync_id", syncIds);
+
+    const resultsBySyncId = new Map<
+      string,
+      PushChannelsHistoryEntry["perChannelResults"]
+    >();
+    for (const r of results || []) {
+      const list = resultsBySyncId.get(r.sync_id) ?? [];
+      list.push({
+        deliveryService: r.delivery_service,
+        status: r.status,
+        statusCode: r.status_code ?? null,
+        errorMessage: r.error_message ?? null,
+        rawResponse: r.raw_response,
+        receivedAt: r.received_at,
+      });
+      resultsBySyncId.set(r.sync_id, list);
+    }
+
+    // Fetch menu names
+    const menuIds = Array.from(
+      new Set(rows.map((r) => r.menu_id).filter(Boolean) as string[])
+    );
+    const { data: menus } =
+      menuIds.length > 0
+        ? await supabase.from("menus").select("id, name").in("id", menuIds)
+        : { data: [] as { id: string; name: string }[] };
+
+    const menuNameById = new Map(menus?.map((m) => [m.id, m.name]) || []);
+
+    const entries: PushChannelsHistoryEntry[] = rows.map((r) => ({
+      syncId: r.id,
+      menuId: r.menu_id || null,
+      menuName: r.menu_id ? menuNameById.get(r.menu_id) ?? null : null,
+      ooMenuId: r.oo_menu_id || null,
+      syncStatus: r.sync_status,
+      expectedChannels: (r.expected_channels as string[] | null) ?? [],
+      pushedToChannels: (r.pushed_to_channels as string[] | null) ?? [],
+      triggerSource: r.trigger_source ?? null,
+      triggeredByUserId: r.triggered_by_user_id ?? null,
+      createdAt: r.created_at,
+      syncedAt: r.synced_at ?? null,
+      errorDetails: r.error_details,
+      perChannelResults: resultsBySyncId.get(r.id) ?? [],
+    }));
+
+    return { success: true, data: entries, error: null };
+  } catch (error) {
+    console.error("[getPushChannelsHistory] Exception:", error);
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+export interface PushChannelsLiveStatus {
+  syncId: string;
+  syncStatus: string;
+  expectedChannels: string[];
+  reportedChannels: string[];
+  lastUpdatedAt: string;
+}
+
+export async function getPushChannelsLiveStatus(
+  clerkOrgId: string,
+  syncId: string
+): Promise<{
+  success: boolean;
+  data: PushChannelsLiveStatus | null;
+  error: string | null;
+}> {
+  if (!clerkOrgId || !syncId) {
+    return { success: false, data: null, error: "Missing required parameters" };
+  }
+
+  try {
+    const supabase = createServerSupabaseClient();
+
+    // Merchant scoping is handled by RLS on orderout_menu_syncs
+    const { data: row, error: rowErr } = await supabase
+      .from("orderout_menu_syncs")
+      .select(
+        "id, sync_status, expected_channels, pushed_to_channels, synced_at, created_at"
+      )
+      .eq("id", syncId)
+      .single();
+
+    if (rowErr || !row) {
+      return { success: false, data: null, error: "Sync not found" };
+    }
+
+    return {
+      success: true,
+      data: {
+        syncId: row.id,
+        syncStatus: row.sync_status,
+        expectedChannels: (row.expected_channels as string[] | null) ?? [],
+        reportedChannels: (row.pushed_to_channels as string[] | null) ?? [],
+        lastUpdatedAt: row.synced_at ?? row.created_at,
+      },
+      error: null,
+    };
+  } catch (error) {
+    console.error("[getPushChannelsLiveStatus] Exception:", error);
     return {
       success: false,
       data: null,

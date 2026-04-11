@@ -10,8 +10,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Download, Loader2, MapPin } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Download,
+  Loader2,
+  MapPin,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { TaxLocationRow } from "@/app/dashboard/reports/tax/types";
 import { exportToCsv, exportToPdf, formatReportDateRange } from "@/utils/export";
 
@@ -22,7 +30,17 @@ interface TaxLocationTableProps {
   dateTo: Date;
 }
 
-function formatCurrency(value: number) {
+type SortKey = "locationName" | "taxableSales" | "grossTax" | "taxRefunded" | "netLiability";
+type SortDir = "asc" | "desc";
+
+function SortIcon({ col, active, dir }: { col: SortKey; active: SortKey; dir: SortDir }) {
+  if (col !== active) return <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/40 ml-1 shrink-0" />;
+  return dir === "asc"
+    ? <ArrowUp className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />
+    : <ArrowDown className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />;
+}
+
+function fmt(value: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
@@ -32,24 +50,34 @@ function formatCurrency(value: number) {
 
 const exportColumns = [
   { key: "locationName", header: "Location" },
-  {
-    key: "salesTaxRate",
-    header: "Configured Rate",
-    format: (v: number | null) => (v != null ? `${(v * 100).toFixed(2)}%` : "—"),
-  },
-  { key: "taxableSales", header: "Taxable Sales", format: (v: number) => formatCurrency(v) },
-  { key: "grossTax", header: "Gross Tax", format: (v: number) => formatCurrency(v) },
-  { key: "taxRefunded", header: "Tax Refunded", format: (v: number) => formatCurrency(v) },
-  { key: "netLiability", header: "Net Liability", format: (v: number) => formatCurrency(v) },
+  { key: "salesTaxRate", header: "Configured Rate", format: (v: number | null) => v != null ? `${(v * 100).toFixed(2)}%` : "—" },
+  { key: "taxableSales", header: "Taxable Sales", format: (v: number) => fmt(v) },
+  { key: "grossTax", header: "Gross Tax", format: (v: number) => fmt(v) },
+  { key: "taxRefunded", header: "Tax Refunded", format: (v: number) => fmt(v) },
+  { key: "netLiability", header: "Net Liability", format: (v: number) => fmt(v) },
 ];
 
-export function TaxLocationTable({
-  data,
-  isLoading,
-  dateFrom,
-  dateTo,
-}: TaxLocationTableProps) {
+export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocationTableProps) {
   const [isExporting, setIsExporting] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("netLiability");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  function handleSort(key: SortKey) {
+    if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir("desc"); }
+  }
+
+  const sorted = data
+    ? [...data].sort((a, b) => {
+        const av = a[sortKey] ?? "";
+        const bv = b[sortKey] ?? "";
+        if (typeof av === "string" && typeof bv === "string")
+          return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+        return sortDir === "asc" ? (av as number) - (bv as number) : (bv as number) - (av as number);
+      })
+    : data;
+
+  const maxLiability = Math.max(...(data ?? []).map((r) => r.netLiability), 0);
 
   const totals =
     data && data.length > 1
@@ -63,127 +91,217 @@ export function TaxLocationTable({
 
   function handleExportCsv() {
     if (!data) return;
-    exportToCsv(
-      data,
-      exportColumns as any,
-      `tax-by-location-${formatReportDateRange(dateFrom, dateTo)}`
-    );
+    exportToCsv(data, exportColumns as any, `tax-by-location-${formatReportDateRange(dateFrom, dateTo)}`);
   }
 
   async function handleExportPdf() {
     if (!data) return;
     setIsExporting(true);
     try {
-      await exportToPdf(
-        data,
-        exportColumns as any,
-        `Tax by Location - ${formatReportDateRange(dateFrom, dateTo)}`,
-        undefined,
-        undefined,
-        dateFrom,
-        dateTo
-      );
+      await exportToPdf(data, exportColumns as any, `Tax by Location - ${formatReportDateRange(dateFrom, dateTo)}`, undefined, undefined, dateFrom, dateTo);
     } finally {
       setIsExporting(false);
     }
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl overflow-hidden">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-border/50">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <MapPin className="h-4 w-4" />
-          <span>
-            {data?.length ?? 0} location{(data?.length ?? 0) !== 1 ? "s" : ""}
+          <span className="text-xs font-medium">
+            {isLoading ? "Loading…" : `${data?.length ?? 0} location${(data?.length ?? 0) !== 1 ? "s" : ""}`}
           </span>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleExportCsv} disabled={!data?.length}>
-            <Download className="h-4 w-4 mr-1" />
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs gap-1.5"
+            onClick={handleExportCsv}
+            disabled={!data?.length}
+          >
+            <Download className="h-3.5 w-3.5" />
             CSV
           </Button>
-          <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={!data?.length || isExporting}>
-            {isExporting ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4 mr-1" />
-            )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs gap-1.5"
+            onClick={handleExportPdf}
+            disabled={!data?.length || isExporting}
+          >
+            {isExporting
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : <Download className="h-3.5 w-3.5" />
+            }
             PDF
           </Button>
         </div>
       </div>
 
-      <div className="rounded-md border overflow-x-auto">
+      <CardContent className="p-0 overflow-x-auto">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead>Location</TableHead>
-              <TableHead className="text-right">Configured Rate</TableHead>
-              <TableHead className="text-right">Taxable Sales</TableHead>
-              <TableHead className="text-right">Gross Tax</TableHead>
-              <TableHead className="text-right">Tax Refunded</TableHead>
-              <TableHead className="text-right">Net Liability</TableHead>
+            <TableRow className="hover:bg-transparent border-b border-border/50">
+              <TableHead
+                className="pl-5 text-xs font-semibold text-muted-foreground cursor-pointer select-none"
+                onClick={() => handleSort("locationName")}
+              >
+                <div className="flex items-center">
+                  Location
+                  <SortIcon col="locationName" active={sortKey} dir={sortDir} />
+                </div>
+              </TableHead>
+              <TableHead className="text-xs font-semibold text-muted-foreground text-right">
+                Tax Rate
+              </TableHead>
+              <TableHead
+                className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right"
+                onClick={() => handleSort("taxableSales")}
+              >
+                <div className="flex items-center justify-end">
+                  Taxable Sales
+                  <SortIcon col="taxableSales" active={sortKey} dir={sortDir} />
+                </div>
+              </TableHead>
+              <TableHead
+                className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right"
+                onClick={() => handleSort("grossTax")}
+              >
+                <div className="flex items-center justify-end">
+                  Gross Tax
+                  <SortIcon col="grossTax" active={sortKey} dir={sortDir} />
+                </div>
+              </TableHead>
+              <TableHead
+                className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right"
+                onClick={() => handleSort("taxRefunded")}
+              >
+                <div className="flex items-center justify-end">
+                  Refunded
+                  <SortIcon col="taxRefunded" active={sortKey} dir={sortDir} />
+                </div>
+              </TableHead>
+              <TableHead
+                className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right pr-5"
+                onClick={() => handleSort("netLiability")}
+              >
+                <div className="flex items-center justify-end">
+                  Net Liability
+                  <SortIcon col="netLiability" active={sortKey} dir={sortDir} />
+                </div>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               Array.from({ length: 4 }).map((_, i) => (
-                <TableRow key={i}>
+                <TableRow key={i} className="border-b border-border/30">
                   {Array.from({ length: 6 }).map((_, j) => (
-                    <TableCell key={j}>
+                    <TableCell key={j} className="py-3.5">
                       <div className="h-4 bg-muted animate-pulse rounded" />
                     </TableCell>
                   ))}
                 </TableRow>
               ))
-            ) : !data?.length ? (
+            ) : !sorted?.length ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                  No location data available.
+                <TableCell colSpan={6} className="h-40 text-center">
+                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                    <MapPin className="h-7 w-7 opacity-30" />
+                    <p className="text-sm font-medium">No location data available</p>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
               <>
-                {data.map((row) => (
-                  <TableRow key={row.locationId}>
-                    <TableCell className="font-medium">{row.locationName}</TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {row.salesTaxRate != null ? (
-                        <Badge variant="outline" className="text-xs">
-                          {(row.salesTaxRate * 100).toFixed(2)}%
-                        </Badge>
+                {sorted.map((row) => {
+                  const barPct = maxLiability > 0 ? (row.netLiability / maxLiability) * 100 : 0;
+                  return (
+                    <TableRow
+                      key={row.locationId}
+                      className="border-b border-border/30 hover:bg-muted/30 transition-colors"
+                    >
+                      <TableCell className="pl-5 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <div className="h-7 w-7 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                            <MapPin className="h-3.5 w-3.5 text-indigo-500" />
+                          </div>
+                          <span className="text-sm font-medium">{row.locationName}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-3.5 text-right">
+                        {row.salesTaxRate != null ? (
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                            {(row.salesTaxRate * 100).toFixed(2)}%
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-3.5 text-right text-sm">
+                        {fmt(row.taxableSales)}
+                      </TableCell>
+                      <TableCell className="py-3.5 text-right">
+                        <span className="text-sm font-semibold text-emerald-600">
+                          {fmt(row.grossTax)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-3.5 text-right">
+                        {row.taxRefunded > 0 ? (
+                          <span className="text-sm font-medium text-rose-500">
+                            -{fmt(row.taxRefunded)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-3.5 pr-5 text-right">
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="text-sm font-bold text-blue-600">
+                            {fmt(row.netLiability)}
+                          </span>
+                          <div className="w-20 h-1 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-blue-400"
+                              style={{ width: `${barPct}%` }}
+                            />
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+
+                {/* Totals row */}
+                {totals && (
+                  <TableRow className="border-t-2 border-border bg-muted/30 font-semibold">
+                    <TableCell className="pl-5 py-3.5 text-sm font-bold" colSpan={2}>
+                      Total — All Locations
+                    </TableCell>
+                    <TableCell className="py-3.5 text-right text-sm font-bold">
+                      {fmt(totals.taxableSales)}
+                    </TableCell>
+                    <TableCell className="py-3.5 text-right">
+                      <span className="text-sm font-bold text-emerald-600">
+                        {fmt(totals.grossTax)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="py-3.5 text-right">
+                      {totals.taxRefunded > 0 ? (
+                        <span className="text-sm font-bold text-rose-500">
+                          -{fmt(totals.taxRefunded)}
+                        </span>
                       ) : (
-                        "—"
+                        <span className="text-muted-foreground text-xs">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrency(row.taxableSales)}
-                    </TableCell>
-                    <TableCell className="text-right text-green-700 font-medium">
-                      {formatCurrency(row.grossTax)}
-                    </TableCell>
-                    <TableCell className="text-right text-red-500">
-                      {row.taxRefunded > 0 ? formatCurrency(row.taxRefunded) : "—"}
-                    </TableCell>
-                    <TableCell className="text-right font-bold text-blue-700">
-                      {formatCurrency(row.netLiability)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {totals && (
-                  <TableRow className="border-t-2 bg-muted/40 font-semibold">
-                    <TableCell colSpan={2}>Total (All Locations)</TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrency(totals.taxableSales)}
-                    </TableCell>
-                    <TableCell className="text-right text-green-700">
-                      {formatCurrency(totals.grossTax)}
-                    </TableCell>
-                    <TableCell className="text-right text-red-500">
-                      {totals.taxRefunded > 0 ? formatCurrency(totals.taxRefunded) : "—"}
-                    </TableCell>
-                    <TableCell className="text-right text-blue-700">
-                      {formatCurrency(totals.netLiability)}
+                    <TableCell className="py-3.5 pr-5 text-right">
+                      <span className="text-sm font-bold text-blue-600">
+                        {fmt(totals.netLiability)}
+                      </span>
                     </TableCell>
                   </TableRow>
                 )}
@@ -191,7 +309,7 @@ export function TaxLocationTable({
             )}
           </TableBody>
         </Table>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

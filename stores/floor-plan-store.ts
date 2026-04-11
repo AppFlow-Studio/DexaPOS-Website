@@ -251,21 +251,6 @@ export const useFloorPlanStore = create<FloorPlanState>()(
                                 get().loadReservations();
                             }
                         )
-                        .on(
-                            'postgres_changes',
-                            {
-                                event: '*',
-                                schema: 'public',
-                                table: 'floor_plan_objects',
-                                filter: `location_id=eq.${locationId}`
-                            },
-                            () => {
-                                // Only reload in design mode or if objects change significantly
-                                if (get().isDesignMode) {
-                                    get().loadFloorPlanStatus();
-                                }
-                            }
-                        )
                         .subscribe((status) => {
                             set({ isOnline: status === 'SUBSCRIBED' });
                         });

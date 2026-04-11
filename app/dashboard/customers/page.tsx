@@ -4,8 +4,10 @@ import { useCustomers } from "./hooks/useCustomers";
 import { CustomerList } from "./components/CustomerList";
 import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Search, Plus } from "lucide-react";
 import { CustomerProfileSheet } from "./components/CustomerProfileSheet";
+import { CreateCustomerDialog } from "./components/CreateCustomerDialog";
 import type { CustomerListItem } from "@/types/customer";
 import { getCustomerDisplayName } from "@/types/customer";
 
@@ -15,6 +17,7 @@ export default function CustomersPage() {
   const [selectedCustomer, setSelectedCustomer] =
     useState<CustomerListItem | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   // Filter customers based on search term
   const filteredData = useMemo(() => {
@@ -46,14 +49,20 @@ export default function CustomersPage() {
             Manage your customer database and view order history
           </p>
         </div>
-        <div className="relative w-full sm:w-[300px]">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search customers..."
-            className="pl-9"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+        <div className="flex items-center gap-3">
+          <div className="relative w-full sm:w-[300px]">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search customers..."
+              className="pl-9"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <Button onClick={() => setIsCreateOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            New Customer
+          </Button>
         </div>
       </div>
 
@@ -67,6 +76,11 @@ export default function CustomersPage() {
         customer={selectedCustomer}
         open={isProfileOpen}
         onOpenChange={setIsProfileOpen}
+      />
+
+      <CreateCustomerDialog
+        open={isCreateOpen}
+        onOpenChange={setIsCreateOpen}
       />
     </div>
   );

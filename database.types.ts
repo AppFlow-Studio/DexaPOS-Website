@@ -8834,6 +8834,9 @@ export type Database = {
         Row: {
           auto_accept_orders: boolean
           auto_print: boolean
+          channels_confirmed_at: string | null
+          channels_confirmed_by_merchant: string[]
+          channels_confirmed_by_user_id: string | null
           connected_channels: Json | null
           created_at: string
           id: string
@@ -8854,6 +8857,9 @@ export type Database = {
         Insert: {
           auto_accept_orders?: boolean
           auto_print?: boolean
+          channels_confirmed_at?: string | null
+          channels_confirmed_by_merchant?: string[]
+          channels_confirmed_by_user_id?: string | null
           connected_channels?: Json | null
           created_at?: string
           id?: string
@@ -8874,6 +8880,9 @@ export type Database = {
         Update: {
           auto_accept_orders?: boolean
           auto_print?: boolean
+          channels_confirmed_at?: string | null
+          channels_confirmed_by_merchant?: string[]
+          channels_confirmed_by_user_id?: string | null
           connected_channels?: Json | null
           created_at?: string
           id?: string

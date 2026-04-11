@@ -47,9 +47,15 @@ import {
     type OnlineOrderingSettings,
     type LocationOnlineStoreOverview,
 } from '@/lib/queries/use-admin-online-ordering'
-import { useAdminOrderOutStatus, useAdminOnboardOrderOut } from '@/lib/queries/use-admin-orderout'
+import {
+    useAdminOrderOutStatus,
+    useAdminOnboardOrderOut,
+    useAdminOrderOutSyncedMenusForLocation,
+} from '@/lib/queries/use-admin-orderout'
 import { OrderOutOnboardingForm, type OnboardingFormData } from '@/components/dashboard/orderout/OrderOutOnboardingForm'
 import { OrderOutStatusCard } from '@/components/dashboard/orderout/OrderOutStatusCard'
+import { AdminPushChannelsSection } from '@/components/dashboard/orderout/AdminPushChannelsSection'
+import { extractConnectedPlatforms } from '@/lib/orderout/helpers'
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000'
 
@@ -96,6 +102,8 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
     const orderOutStatus = orderOutData?.data
     const onboardOrderOut = useAdminOnboardOrderOut()
     const [showOrderOutForm, setShowOrderOutForm] = useState(false)
+    const { data: adminSyncedMenusData } =
+        useAdminOrderOutSyncedMenusForLocation(merchantId, selectedLocationId || '')
 
     const handleWhitelistDomain = async () => {
         if (!selectedLocationId) return
@@ -1119,15 +1127,29 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
 
                                         if (locOO?.hasRestaurant) {
                                             return (
-                                                <OrderOutStatusCard
-                                                    hasAccount={orderOutStatus?.account.hasAccount ?? false}
-                                                    hasRestaurant={true}
-                                                    isAcceptingOrders={locOO.isAcceptingOrders}
-                                                    prepTimeMinutes={locOO.prepTimeMinutes}
-                                                    connectedChannels={locOO.connectedChannels}
-                                                    autoAcceptOrders={locOO.autoAcceptOrders}
-                                                    dashboardUrl="https://dashboard.orderout.co"
-                                                />
+                                                <div className="space-y-6">
+                                                    <OrderOutStatusCard
+                                                        hasAccount={orderOutStatus?.account.hasAccount ?? false}
+                                                        hasRestaurant={true}
+                                                        isAcceptingOrders={locOO.isAcceptingOrders}
+                                                        prepTimeMinutes={locOO.prepTimeMinutes}
+                                                        connectedChannels={locOO.connectedChannels}
+                                                        autoAcceptOrders={locOO.autoAcceptOrders}
+                                                        dashboardUrl="https://dashboard.orderout.co"
+                                                    />
+                                                    <AdminPushChannelsSection
+                                                        merchantId={merchantId}
+                                                        locationId={selectedLocationId!}
+                                                        isOnboarded={true}
+                                                        verifiedChannels={extractConnectedPlatforms(
+                                                            locOO.connectedChannels
+                                                        )}
+                                                        selfConfirmedChannels={
+                                                            locOO.channelsConfirmedByMerchant ?? []
+                                                        }
+                                                        syncedMenus={adminSyncedMenusData?.data ?? []}
+                                                    />
+                                                </div>
                                             )
                                         }
 
