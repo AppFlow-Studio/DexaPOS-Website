@@ -256,7 +256,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const orderUpdate: Record<string, unknown> = {
       status: finalStatus,
-      payment_status: payment ? 'void' : order.payment_status,
+      payment_status: finalStatus === 'void' ? 'void' : order.payment_status,
       cancelled_at: now,
       cancelled_by: cancelledBy,
       cancellation_reason: reason,
@@ -278,7 +278,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return jsonResponse({ success: false, error: updateOrderError.message }, 500)
     }
 
-    if (payment?.id) {
+    if (payment?.id && finalStatus === 'void') {
       const paymentUpdate: Record<string, unknown> = {
         status: 'void',
         is_voided: true,

@@ -1,18 +1,22 @@
 import React from "react";
 
 interface TableRectangle6ChairProps {
+  darkMode?: boolean;
   color?: string;
-  chairColor?: string;
   width?: number;
   height?: number;
 }
 
 const TableRectangle6Chair: React.FC<TableRectangle6ChairProps> = ({
+  darkMode = false,
   color = "#2DD4BF",
   width = 180,
   height = 90,
   ...props
 }) => {
+  const lightStroke = "#94A3B8";
+  const strokeOpacity = darkMode ? 0.5 : 0.7;
+
   return (
     <svg
       width={width}
@@ -30,10 +34,10 @@ const TableRectangle6Chair: React.FC<TableRectangle6ChairProps> = ({
         height="12"
         rx="3"
         fill={color}
-        fillOpacity="0.12"
-        stroke={color}
+        fillOpacity={darkMode ? 0.12 : 0.85}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity="0.5"
+        strokeOpacity={strokeOpacity}
       />
       <rect
         x="74"
@@ -42,10 +46,10 @@ const TableRectangle6Chair: React.FC<TableRectangle6ChairProps> = ({
         height="12"
         rx="3"
         fill={color}
-        fillOpacity="0.12"
-        stroke={color}
+        fillOpacity={darkMode ? 0.12 : 0.85}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity="0.5"
+        strokeOpacity={strokeOpacity}
       />
       <rect
         x="118"
@@ -54,10 +58,10 @@ const TableRectangle6Chair: React.FC<TableRectangle6ChairProps> = ({
         height="12"
         rx="3"
         fill={color}
-        fillOpacity="0.12"
-        stroke={color}
+        fillOpacity={darkMode ? 0.12 : 0.85}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity="0.5"
+        strokeOpacity={strokeOpacity}
       />
 
       {/* Chairs - bottom */}
@@ -68,10 +72,10 @@ const TableRectangle6Chair: React.FC<TableRectangle6ChairProps> = ({
         height="12"
         rx="3"
         fill={color}
-        fillOpacity="0.12"
-        stroke={color}
+        fillOpacity={darkMode ? 0.12 : 0.85}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity="0.5"
+        strokeOpacity={strokeOpacity}
       />
       <rect
         x="74"
@@ -80,10 +84,10 @@ const TableRectangle6Chair: React.FC<TableRectangle6ChairProps> = ({
         height="12"
         rx="3"
         fill={color}
-        fillOpacity="0.12"
-        stroke={color}
+        fillOpacity={darkMode ? 0.12 : 0.85}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity="0.5"
+        strokeOpacity={strokeOpacity}
       />
       <rect
         x="118"
@@ -92,10 +96,10 @@ const TableRectangle6Chair: React.FC<TableRectangle6ChairProps> = ({
         height="12"
         rx="3"
         fill={color}
-        fillOpacity="0.12"
-        stroke={color}
+        fillOpacity={darkMode ? 0.12 : 0.85}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="1"
-        strokeOpacity="0.5"
+        strokeOpacity={strokeOpacity}
       />
 
       {/* Table surface */}
@@ -106,10 +110,10 @@ const TableRectangle6Chair: React.FC<TableRectangle6ChairProps> = ({
         height="60"
         rx="8"
         fill={color}
-        fillOpacity="0.18"
-        stroke={color}
+        fillOpacity={darkMode ? 0.18 : 0.88}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="1.5"
-        strokeOpacity="0.8"
+        strokeOpacity={darkMode ? 0.8 : 0.75}
       />
     </svg>
   );

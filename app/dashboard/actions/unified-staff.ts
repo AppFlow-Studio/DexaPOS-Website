@@ -779,7 +779,9 @@ export async function InviteClerkStaff(
 
     if (inviteError) {
       console.error("[InviteClerkStaff] Failed to store invite:", inviteError);
-      // Don't fail - Clerk invitation was sent
+      return {
+        error: "Invitation was sent but failed to save tracking data. Please check the staff list and retry if needed.",
+      };
     }
 
     revalidatePath("/dashboard/staff");
@@ -802,6 +804,7 @@ export async function InviteClerkStaff(
     return {
       data: {
         invite_id: invitation.id,
+        generated_pin: pinCode ?? undefined,
       },
     };
   } catch (error) {

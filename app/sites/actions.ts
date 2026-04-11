@@ -118,6 +118,10 @@ export async function getStorefrontData(
     return getStorefrontDataLegacy(slugOrId, isUuid);
   }
 
+  if (storeConfig.is_active === false) {
+    return { site: null, location: null, menus: [] };
+  }
+
   const site = mapStoreConfigToSite(storeConfig);
   const locationId = storeConfig.location_id;
 
@@ -156,6 +160,10 @@ async function getStorefrontDataLegacy(
   }
 
   const { data: siteData } = await siteQuery.single();
+
+  if (siteData?.is_active === false) {
+    return { site: null, location: null, menus: [] };
+  }
 
   const locationId = isUuid ? slugOrId : siteData?.location_id;
   if (!locationId) {

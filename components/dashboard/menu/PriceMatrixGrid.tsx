@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, Globe, MapPin, Pencil } from "lucide-react";
+import { Loader2, Globe, MapPin, Pencil, RotateCcw, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,10 +9,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { useItemPriceMatrix } from "@/app/dashboard/hooks/useLocationScoped";
 import { useLocationStore } from "@/stores/location-store";
 import { InlinePriceEditor } from "./InlinePriceEditor";
 import { scopeColor, type CascadeLevel } from "@/lib/menu/cascade-labels";
+import { resetItemToLevel } from "@/app/dashboard/actions/menu-items-rpc";
 import type { PriceMatrixRow } from "@/app/dashboard/actions/menu-items";
 
 interface PriceMatrixGridProps {
@@ -24,6 +27,13 @@ interface RowDef {
   level: CascadeLevel;
   rowLabel: string;
   rowHint: string;
+}
+
+interface L5Context {
+  menuId: string;
+  menuName: string;
+  categoryId: string;
+  categoryName: string;
 }
 
 const ROW_DEFS: RowDef[] = [
@@ -76,6 +86,25 @@ export function PriceMatrixGrid({ itemId, className }: PriceMatrixGridProps) {
     return map;
   }, [matrix]);
 
+  // Extract unique L5 override contexts (menu + category combos)
+  const l5Contexts = React.useMemo(() => {
+    if (!matrix) return [];
+    const seen = new Map<string, L5Context>();
+    for (const row of matrix.levels) {
+      if (row.level !== 5 || !row.menuId || !row.categoryId) continue;
+      const key = `${row.menuId}|${row.categoryId}`;
+      if (!seen.has(key)) {
+        seen.set(key, {
+          menuId: row.menuId,
+          menuName: row.menuName ?? "Unknown Menu",
+          categoryId: row.categoryId,
+          categoryName: row.categoryName ?? "Unknown Category",
+        });
+      }
+    }
+    return Array.from(seen.values());
+  }, [matrix]);
+
   if (isLoading || !matrix) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
@@ -125,6 +154,74 @@ export function PriceMatrixGrid({ itemId, className }: PriceMatrixGridProps) {
           <tbody>
             {ROW_DEFS.map((rowDef) => {
               const colors = scopeColor(rowDef.level);
+
+              // L5: render dynamic sub-rows from actual data
+              if (rowDef.level === 5) {
+                if (l5Contexts.length === 0) {
+                  // No L5 overrides exist — show a placeholder row
+                  return (
+                    <tr key="l5-empty" className="border-t">
+                      <td className="sticky left-0 z-10 border-r bg-background px-3 py-2">
+                        <div className="flex flex-col gap-0.5">
+                          <span className={cn("text-xs font-semibold", colors.text)}>
+                            <BookOpen className="mr-1 inline h-3 w-3" />
+                            {rowDef.rowLabel}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground leading-tight">
+                            No menu-level overrides set
+                          </span>
+                        </div>
+                      </td>
+                      <td className="border-r px-3 py-2 text-center text-xs text-muted-foreground/60">
+                        —
+                      </td>
+                      {locations.map((loc) => (
+                        <td key={loc.id} className="border-r px-3 py-2 text-center text-xs text-muted-foreground/60">
+                          —
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                }
+
+                return l5Contexts.map((ctx) => (
+                  <tr key={`l5-${ctx.menuId}-${ctx.categoryId}`} className="border-t">
+                    <td className="sticky left-0 z-10 border-r bg-background px-3 py-2">
+                      <div className="flex flex-col gap-0.5">
+                        <span className={cn("text-xs font-semibold", colors.text)}>
+                          <BookOpen className="mr-1 inline h-3 w-3" />
+                          {ctx.menuName}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground leading-tight">
+                          {ctx.categoryName} category
+                        </span>
+                      </div>
+                    </td>
+                    {/* "All" column — N/A for L5 */}
+                    <td className="border-r px-3 py-2 text-center text-xs text-muted-foreground/60">
+                      —
+                    </td>
+                    {locations.map((loc) => (
+                      <L5MatrixCell
+                        key={loc.id}
+                        itemId={itemId}
+                        locationId={loc.id}
+                        locationName={loc.name}
+                        menuId={ctx.menuId}
+                        menuName={ctx.menuName}
+                        categoryId={ctx.categoryId}
+                        categoryName={ctx.categoryName}
+                        row={
+                          cellMap.get(
+                            `5|${loc.id}|${ctx.categoryName}|${ctx.menuName}`,
+                          ) ?? null
+                        }
+                      />
+                    ))}
+                  </tr>
+                ));
+              }
+
               return (
                 <tr key={rowDef.level} className="border-t">
                   <td className="sticky left-0 z-10 border-r bg-background px-3 py-2">
@@ -301,6 +398,129 @@ function MatrixCell({
       ) : (
         <span className="inline-block text-xs text-muted-foreground/50">↓</span>
       )}
+    </td>
+  );
+}
+
+/**
+ * L5-specific cell with inline editing + reset support.
+ * Shows the price from a location_menu_item_overrides row (Location + Menu + Category).
+ */
+function L5MatrixCell({
+  itemId,
+  locationId,
+  locationName,
+  menuId,
+  menuName,
+  categoryId,
+  categoryName,
+  row,
+}: {
+  itemId: string;
+  locationId: string;
+  locationName: string;
+  menuId: string;
+  menuName: string;
+  categoryId: string;
+  categoryName: string;
+  row: PriceMatrixRow | null;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const queryClient = useQueryClient();
+
+  const resetMutation = useMutation({
+    mutationFn: async () => {
+      const result = await resetItemToLevel(itemId, 4, {
+        categoryId,
+        menuId,
+        locationId,
+      });
+      if (!result.success) throw new Error(result.error || "Reset failed");
+      return result;
+    },
+    onSuccess: () => {
+      toast.success("Override removed", {
+        description: `Reverted to category-level pricing for ${menuName} at ${locationName}.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["item-price-matrix", itemId] });
+      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      setOpen(false);
+    },
+    onError: (err) => {
+      toast.error("Reset failed", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    },
+  });
+
+  const hasOverride = row && row.price != null;
+
+  return (
+    <td className="border-r px-1 py-1 text-center">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              "flex w-full flex-col items-center gap-0.5 rounded px-2 py-1 text-sm tabular-nums hover:bg-muted",
+              hasOverride ? "font-semibold" : "text-muted-foreground/50",
+            )}
+          >
+            {hasOverride ? (
+              <>
+                {formatPrice(row!.price)}
+                <span className="flex items-center gap-0.5 text-[9px] text-muted-foreground">
+                  <Pencil className="h-2 w-2" /> override
+                </span>
+              </>
+            ) : (
+              <span className="text-xs">↓ set</span>
+            )}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="center" className="w-[280px] p-3">
+          <div className="mb-2 rounded border bg-rose-50 px-2 py-1.5">
+            <p className="text-[10px] font-semibold text-rose-700">
+              {menuName} menu at {locationName}
+            </p>
+            <p className="text-[10px] text-rose-600">
+              {categoryName} category
+            </p>
+          </div>
+          <InlinePriceEditor
+            itemId={itemId}
+            scope={{
+              level: 5,
+              locationName,
+              menuName,
+              categoryName,
+            }}
+            locationId={locationId}
+            menuId={menuId}
+            categoryId={categoryId}
+            initialPrice={row?.price ?? null}
+            initialCashPrice={row?.cashPrice ?? null}
+            onClose={() => setOpen(false)}
+          />
+          {hasOverride && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="mt-2 h-7 w-full justify-start gap-2 text-xs text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+              onClick={() => resetMutation.mutate()}
+              disabled={resetMutation.isPending}
+            >
+              {resetMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RotateCcw className="h-3.5 w-3.5" />
+              )}
+              Remove override (revert to L4)
+            </Button>
+          )}
+        </PopoverContent>
+      </Popover>
     </td>
   );
 }

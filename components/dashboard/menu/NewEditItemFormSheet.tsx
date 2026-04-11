@@ -2230,7 +2230,6 @@ export function NewEditItemFormSheet({
                       </CollapsibleContent>
                     </Collapsible>
 
-
                     {/* SECTION 4: TAX & FEES (collapsible) */}
                     <Collapsible
                       open={expandedSections.tax}

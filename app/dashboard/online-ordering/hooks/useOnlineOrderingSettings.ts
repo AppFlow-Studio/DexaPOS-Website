@@ -72,7 +72,11 @@ export interface OnlineOrderingSettings {
   tipPresets: number[];
 
   // Payment
+  ipospaysDeviceId?: string | null;
+  ipospaysDeviceLabel?: string | null;
   ipospaysTpn: string;
+  ipospaysFtdEcomKey: string;
+  ipospaysFtdEcomKeyConfigured?: boolean;
 
   // SEO
   metaTitle: string;
@@ -178,6 +182,10 @@ const createDefaultSettings = (
   tipPresets: [15, 18, 20, 25],
 
   ipospaysTpn: "",
+  ipospaysFtdEcomKey: "",
+  ipospaysFtdEcomKeyConfigured: false,
+  ipospaysDeviceId: null,
+  ipospaysDeviceLabel: null,
 
   headerStyle: "filled",
   headerTextColor: null,
@@ -282,15 +290,13 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
       set({ isSaving: true });
       try {
         await saveOnlineOrderingSettings(locationId, currentSettings);
-        set((state) => {
-          const newDirty = new Set(state.dirtyLocations);
-          newDirty.delete(locationId);
-          return { dirtyLocations: newDirty };
-        });
+        await get().loadSettings(locationId);
         toast.success("Settings saved");
       } catch (error) {
         console.error("Failed to save settings:", error);
-        toast.error("Failed to save settings");
+        toast.error(
+          error instanceof Error ? error.message : "Failed to save settings"
+        );
       } finally {
         set({ isSaving: false });
       }
