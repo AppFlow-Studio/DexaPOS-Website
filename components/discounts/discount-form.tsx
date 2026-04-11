@@ -21,20 +21,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -42,12 +28,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import { DaySelector } from "./day-selector";
 import { TimeWindowPicker } from "./time-window-picker";
 import { CategoryOption } from "./category-picker";
 import { MenuItemOption } from "./menu-item-picker";
 import { TargetingSheet } from "./targeting-sheet";
-import { Settings2, X } from "lucide-react";
+import {
+  Percent,
+  DollarSign,
+  Settings2,
+  CalendarDays,
+  ChevronDown,
+  ChevronUp,
+  X,
+  MapPin,
+  ShieldCheck,
+  Layers,
+  ArrowRight,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface LocationOption {
   id: string;
@@ -80,12 +82,7 @@ export function DiscountForm({
   locations = [],
   onCancel,
 }: DiscountFormProps) {
-  const [openSections, setOpenSections] = useState({
-    basic: true,
-    constraints: true,
-    schedule: false,
-    approval: true,
-  });
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const [targetingSheetOpen, setTargetingSheetOpen] = useState(false);
 
   const resolvedDefaults: DiscountFormValues = useMemo(
@@ -125,6 +122,11 @@ export function DiscountForm({
   });
 
   const watchType = form.watch("discount_type");
+  const watchScope = form.watch("scope");
+  const watchAppliesTo = form.watch("applies_to_categories");
+  const watchExcludeCategories = form.watch("exclude_categories");
+  const watchMenuItems = form.watch("menu_item_ids");
+  const watchExcludeAlcohol = form.watch("exclude_alcohol");
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -139,7 +141,6 @@ export function DiscountForm({
 
   const handleSubmit = form.handleSubmit(
     async (values) => {
-      console.log("values", values);
       await onSubmit(values);
     },
     (errors) => {
@@ -147,149 +148,151 @@ export function DiscountForm({
     }
   );
 
-  const toggleSection = (key: keyof typeof openSections, value: boolean) =>
-    setOpenSections((prev) => ({ ...prev, [key]: value }));
+  const targetingCount =
+    (watchAppliesTo?.length || 0) +
+    (watchExcludeCategories?.length || 0) +
+    (watchMenuItems?.length || 0) +
+    (watchExcludeAlcohol ? 1 : 0);
 
-  const renderSectionHeader = (
-    title: string,
-    description: string,
-    key: keyof typeof openSections
-  ) => (
-    <div className="flex items-center justify-between">
-      <div>
-        <CardTitle className="text-lg">{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </div>
-      <CollapsibleTrigger asChild>
-        <Button variant="ghost" size="sm">
-          {openSections[key] ? "Hide" : "Show"}
-        </Button>
-      </CollapsibleTrigger>
-    </div>
-  );
+  const scopeLabel =
+    watchScope === "dine_in"
+      ? "Dine-in only"
+      : watchScope === "takeout"
+      ? "Takeout only"
+      : "Dine-in & Takeout";
 
   return (
     <Form {...form}>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Discount details</CardTitle>
-            <CardDescription>
-              Configure how this discount behaves on POS.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <Collapsible
-              open={openSections.basic}
-              onOpenChange={(val) => toggleSection("basic", val)}
-            >
-              <div className="mb-3">
-                {renderSectionHeader(
-                  "Basic info",
-                  "Name, type, and value",
-                  "basic"
-                )}
-              </div>
-              <CollapsibleContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Happy Hour 10%" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="discount_type"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Discount type</FormLabel>
-                        <FormControl>
-                          <RadioGroup
-                            onValueChange={field.onChange}
-                            value={field.value}
-                            className="flex gap-4"
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* ── Main column ── */}
+          <div className="space-y-6 lg:col-span-2">
+
+            {/* ── Section 1: Discount details ── */}
+            <Card>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-base">Discount details</CardTitle>
+                <CardDescription>Name, type, and value.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {/* Name */}
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name <span className="text-destructive">*</span></FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g. Happy Hour 10%" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Discount type toggle */}
+                <FormField
+                  control={form.control}
+                  name="discount_type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Discount type <span className="text-destructive">*</span></FormLabel>
+                      <FormControl>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => field.onChange("percentage")}
+                            className={cn(
+                              "flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-medium transition-colors",
+                              field.value === "percentage"
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                            )}
                           >
-                            <div className="flex items-center space-x-2">
-                              <RadioGroupItem
-                                value="percentage"
-                                id="type-percentage"
-                              />
-                              <Label htmlFor="type-percentage">
-                                Percentage
-                              </Label>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <RadioGroupItem
-                                value="fixed_amount"
-                                id="type-fixed"
-                              />
-                              <Label htmlFor="type-fixed">Fixed amount</Label>
-                            </div>
-                          </RadioGroup>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="discount_value"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Discount value</FormLabel>
-                        <FormControl>
+                            <Percent className="h-4 w-4" />
+                            Percentage
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => field.onChange("fixed_amount")}
+                            className={cn(
+                              "flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-medium transition-colors",
+                              field.value === "fixed_amount"
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                            )}
+                          >
+                            <DollarSign className="h-4 w-4" />
+                            Fixed amount
+                          </button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Value */}
+                <FormField
+                  control={form.control}
+                  name="discount_value"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Value <span className="text-destructive">*</span></FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground text-sm">
+                            {watchType === "percentage" ? "%" : "$"}
+                          </span>
                           <Input
                             type="number"
                             step="0.01"
                             min={0}
+                            className="pl-8"
                             {...field}
                             value={field.value}
                             onChange={(e) =>
                               field.onChange(Number(e.target.value))
                             }
-                            placeholder={
-                              watchType === "percentage" ? "10" : "5"
-                            }
+                            placeholder={watchType === "percentage" ? "10" : "5.00"}
                           />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Description</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="Optional details for staff"
-                            {...field}
-                            value={field.value ?? ""}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Description */}
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description <span className="text-muted-foreground font-normal text-xs">(optional)</span></FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Staff-facing notes about this discount…"
+                          rows={2}
+                          {...field}
+                          value={field.value ?? ""}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Location scope */}
                 <FormField
                   control={form.control}
                   name="location_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Availability scope</FormLabel>
+                      <FormLabel className="flex items-center gap-1.5">
+                        <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                        Location scope
+                      </FormLabel>
                       <Select
                         value={field.value ?? "__global__"}
                         onValueChange={(val) =>
@@ -303,7 +306,7 @@ export function DiscountForm({
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="__global__">
-                            Global (all locations)
+                            Global — all locations
                           </SelectItem>
                           {locations.map((loc) => (
                             <SelectItem key={loc.id} value={loc.id}>
@@ -312,50 +315,49 @@ export function DiscountForm({
                           ))}
                         </SelectContent>
                       </Select>
-                      <CardDescription>
-                        Global discounts apply everywhere. Location-scoped discounts are only available at the selected location.
-                      </CardDescription>
+                      <p className="text-xs text-muted-foreground">
+                        Global discounts apply to every location. Location-scoped discounts are only available at the selected location.
+                      </p>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              </CollapsibleContent>
-            </Collapsible>
+              </CardContent>
+            </Card>
 
-            <Collapsible
-              open={openSections.constraints}
-              onOpenChange={(val) => toggleSection("constraints", val)}
-            >
-              <div className="mb-3">
-                {renderSectionHeader(
-                  "Constraints",
-                  "Usage limits and thresholds",
-                  "constraints"
-                )}
-              </div>
-              <CollapsibleContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-3">
+            {/* ── Section 2: Usage limits ── */}
+            <Card>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-base">Usage limits</CardTitle>
+                <CardDescription>Control when and how often this discount can be applied.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <FormField
                     control={form.control}
                     name="min_purchase_amount"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Min purchase amount</FormLabel>
+                        <FormLabel>Min. purchase amount</FormLabel>
                         <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min={0}
-                            value={field.value ?? ""}
-                            onChange={(e) =>
-                              field.onChange(
-                                e.target.value
-                                  ? Number(e.target.value)
-                                  : undefined
-                              )
-                            }
-                          />
+                          <div className="relative">
+                            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground text-sm">$</span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min={0}
+                              className="pl-8"
+                              placeholder="0.00"
+                              value={field.value ?? ""}
+                              onChange={(e) =>
+                                field.onChange(
+                                  e.target.value ? Number(e.target.value) : undefined
+                                )
+                              }
+                            />
+                          </div>
                         </FormControl>
+                        <p className="text-xs text-muted-foreground">Leave blank for no minimum.</p>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -366,22 +368,26 @@ export function DiscountForm({
                       name="max_discount_amount"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Max discount amount</FormLabel>
+                          <FormLabel>Max. discount cap</FormLabel>
                           <FormControl>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min={0}
-                              value={field.value ?? ""}
-                              onChange={(e) =>
-                                field.onChange(
-                                  e.target.value
-                                    ? Number(e.target.value)
-                                    : undefined
-                                )
-                              }
-                            />
+                            <div className="relative">
+                              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground text-sm">$</span>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min={0}
+                                className="pl-8"
+                                placeholder="No cap"
+                                value={field.value ?? ""}
+                                onChange={(e) =>
+                                  field.onChange(
+                                    e.target.value ? Number(e.target.value) : undefined
+                                  )
+                                }
+                              />
+                            </div>
                           </FormControl>
+                          <p className="text-xs text-muted-foreground">Maximum $ off regardless of percentage.</p>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -397,12 +403,11 @@ export function DiscountForm({
                           <Input
                             type="number"
                             min={1}
+                            placeholder="Unlimited"
                             value={field.value ?? ""}
                             onChange={(e) =>
                               field.onChange(
-                                e.target.value
-                                  ? Number(e.target.value)
-                                  : undefined
+                                e.target.value ? Number(e.target.value) : undefined
                               )
                             }
                           />
@@ -411,8 +416,6 @@ export function DiscountForm({
                       </FormItem>
                     )}
                   />
-                </div>
-                <div className="grid gap-4 md:grid-cols-3">
                   <FormField
                     control={form.control}
                     name="max_uses_per_order"
@@ -433,313 +436,353 @@ export function DiscountForm({
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name="stackable"
-                    render={({ field }) => (
-                      <FormItem className="flex items-center justify-between rounded-md border p-3">
-                        <div>
-                          <FormLabel>Stackable</FormLabel>
-                          <CardDescription>
-                            Allow combining with other discounts
-                          </CardDescription>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
                 </div>
-              </CollapsibleContent>
-            </Collapsible>
 
-            <Collapsible
-              open={openSections.schedule}
-              onOpenChange={(val) => toggleSection("schedule", val)}
-            >
-              <div className="mb-3">
-                {renderSectionHeader(
-                  "Schedule",
-                  "Date, days, and hours",
-                  "schedule"
-                )}
-              </div>
-              <CollapsibleContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <FormField
-                      control={form.control}
-                      name="start_date"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Start date</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="date"
-                              value={
-                                field.value
-                                  ? format(field.value, "yyyy-MM-dd")
-                                  : ""
-                              }
-                              onChange={(e) =>
-                                field.onChange(
-                                  e.target.value
-                                    ? new Date(e.target.value)
-                                    : undefined
-                                )
-                              }
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="end_date"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>End date</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="date"
-                              value={
-                                field.value
-                                  ? format(field.value, "yyyy-MM-dd")
-                                  : ""
-                              }
-                              onChange={(e) =>
-                                field.onChange(
-                                  e.target.value
-                                    ? new Date(e.target.value)
-                                    : undefined
-                                )
-                              }
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  {(form.watch("start_date") || form.watch("end_date")) && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        form.setValue("start_date", undefined);
-                        form.setValue("end_date", undefined);
-                      }}
-                      className="h-7 text-xs text-muted-foreground"
-                    >
-                      <X className="h-3 w-3 mr-1" />
-                      Clear date range
-                    </Button>
-                  )}
-                </div>
+                <Separator />
+
                 <FormField
                   control={form.control}
-                  name="applicable_days"
+                  name="stackable"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Applicable days</FormLabel>
+                    <FormItem className="flex items-center justify-between gap-4">
+                      <div>
+                        <FormLabel className="flex items-center gap-1.5">
+                          <Layers className="h-3.5 w-3.5 text-muted-foreground" />
+                          Stackable
+                        </FormLabel>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Allow this discount to be combined with others on the same order.
+                        </p>
+                      </div>
                       <FormControl>
-                        <DaySelector
-                          value={field.value}
-                          onChange={field.onChange}
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
                         />
                       </FormControl>
-                      <FormMessage />
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name="applicable_hours_start"
-                  render={() => (
-                    <FormItem>
-                      <FormLabel>Time window</FormLabel>
-                      <FormControl>
-                        <TimeWindowPicker
-                          start={form.watch("applicable_hours_start")}
-                          end={form.watch("applicable_hours_end")}
-                          onChange={(start, end) => {
-                            form.setValue("applicable_hours_start", start);
-                            form.setValue("applicable_hours_end", end);
-                          }}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </CollapsibleContent>
-            </Collapsible>
-
-            {/* Targeting Section - Now using Bottom Sheet */}
-            <Card className="border-dashed">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-lg">Targeting</CardTitle>
-                    <CardDescription>
-                      Scope, categories, and items
-                    </CardDescription>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setTargetingSheetOpen(true)}
-                    className="gap-2"
-                  >
-                    <Settings2 className="h-4 w-4" />
-                    Configure Targeting
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Scope:</span>
-                    <span className="font-medium capitalize">
-                      {form.watch("scope")?.replace("_", " ") || "Both"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">
-                      Include categories:
-                    </span>
-                    <span className="font-medium">
-                      {form.watch("applies_to_categories")?.length || 0}{" "}
-                      selected
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">
-                      Exclude categories:
-                    </span>
-                    <span className="font-medium">
-                      {form.watch("exclude_categories")?.length || 0} selected
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Menu items:</span>
-                    <span className="font-medium">
-                      {form.watch("menu_item_ids")?.length || 0} selected
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">
-                      Exclude alcohol:
-                    </span>
-                    <span className="font-medium">
-                      {form.watch("exclude_alcohol") ? "Yes" : "No"}
-                    </span>
-                  </div>
-                </div>
               </CardContent>
             </Card>
 
-            <Collapsible
-              open={openSections.approval}
-              onOpenChange={(val) => toggleSection("approval", val)}
-            >
-              <div className="mb-3">
-                {renderSectionHeader(
-                  "Approval & status",
-                  "Manager approval, ordering, and activation",
-                  "approval"
-                )}
-              </div>
-              <CollapsibleContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-3">
-                  <FormField
-                    control={form.control}
-                    name="requires_manager_approval"
-                    render={({ field }) => (
-                      <FormItem className="flex items-center justify-between rounded-md border p-3">
-                        <div>
-                          <FormLabel>Requires manager approval</FormLabel>
-                          <CardDescription>
-                            Prompt for manager PIN on POS
-                          </CardDescription>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="display_order"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Display order</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min={0}
-                            value={field.value}
-                            onChange={(e) =>
-                              field.onChange(Number(e.target.value))
-                            }
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="is_active"
-                    render={({ field }) => (
-                      <FormItem className="flex items-center justify-between rounded-md border p-3">
-                        <div>
-                          <FormLabel>Active</FormLabel>
-                          <CardDescription>
-                            Control POS availability
-                          </CardDescription>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+            {/* ── Section 3: Schedule (collapsible) ── */}
+            <Card>
+              <button
+                type="button"
+                onClick={() => setScheduleOpen((v) => !v)}
+                className="flex w-full items-center justify-between px-6 py-4 text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">Schedule</p>
+                    <p className="text-xs text-muted-foreground">Date range, days, and hours — optional</p>
+                  </div>
                 </div>
-              </CollapsibleContent>
-            </Collapsible>
-          </CardContent>
-        </Card>
+                {scheduleOpen ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+              </button>
 
-        <div className="flex items-center justify-end gap-2">
-          {onCancel && (
-            <Button variant="outline" type="button" onClick={onCancel}>
-              Cancel
-            </Button>
-          )}
-          <Button type="submit" disabled={submitting}>
-            {submitting ? "Saving..." : submitLabel}
-          </Button>
+              {scheduleOpen && (
+                <>
+                  <Separator />
+                  <CardContent className="pt-5 space-y-0">
+
+                    {/* ── Date range ── */}
+                    <div className="space-y-3 pb-5">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Date range</p>
+                        {(form.watch("start_date") || form.watch("end_date")) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              form.setValue("start_date", undefined);
+                              form.setValue("end_date", undefined);
+                            }}
+                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            <X className="h-3 w-3" />
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <FormField
+                          control={form.control}
+                          name="start_date"
+                          render={({ field }) => (
+                            <FormItem className="flex-1 space-y-1">
+                              <FormLabel className="text-xs text-muted-foreground font-normal">From</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="date"
+                                  className="text-sm"
+                                  value={field.value ? format(field.value, "yyyy-MM-dd") : ""}
+                                  onChange={(e) =>
+                                    field.onChange(
+                                      e.target.value ? new Date(e.target.value) : undefined
+                                    )
+                                  }
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <ArrowRight className="mt-5 h-4 w-4 shrink-0 text-muted-foreground" />
+                        <FormField
+                          control={form.control}
+                          name="end_date"
+                          render={({ field }) => (
+                            <FormItem className="flex-1 space-y-1">
+                              <FormLabel className="text-xs text-muted-foreground font-normal">To</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="date"
+                                  className="text-sm"
+                                  value={field.value ? format(field.value, "yyyy-MM-dd") : ""}
+                                  onChange={(e) =>
+                                    field.onChange(
+                                      e.target.value ? new Date(e.target.value) : undefined
+                                    )
+                                  }
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      {form.watch("start_date") && form.watch("end_date") && (
+                        <p className="text-xs text-muted-foreground">
+                          Active from{" "}
+                          <span className="font-medium text-foreground">
+                            {format(form.watch("start_date")!, "MMM d, yyyy")}
+                          </span>{" "}
+                          to{" "}
+                          <span className="font-medium text-foreground">
+                            {format(form.watch("end_date")!, "MMM d, yyyy")}
+                          </span>.
+                        </p>
+                      )}
+                    </div>
+
+                    <Separator />
+
+                    {/* ── Active days ── */}
+                    <div className="space-y-3 py-5">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Active days</p>
+                      <FormField
+                        control={form.control}
+                        name="applicable_days"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <DaySelector value={field.value} onChange={field.onChange} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <Separator />
+
+                    {/* ── Time window ── */}
+                    <div className="space-y-3 pt-5">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Time window</p>
+                      <FormField
+                        control={form.control}
+                        name="applicable_hours_start"
+                        render={() => (
+                          <FormItem>
+                            <FormControl>
+                              <TimeWindowPicker
+                                start={form.watch("applicable_hours_start")}
+                                end={form.watch("applicable_hours_end")}
+                                onChange={(start, end) => {
+                                  form.setValue("applicable_hours_start", start);
+                                  form.setValue("applicable_hours_end", end);
+                                }}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                  </CardContent>
+                </>
+              )}
+            </Card>
+          </div>
+
+          {/* ── Sidebar column ── */}
+          <div className="space-y-4">
+
+            {/* Status card */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Status</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="is_active"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between gap-4">
+                      <div>
+                        <FormLabel>Active on POS</FormLabel>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Staff can apply this discount.
+                        </p>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <Separator />
+
+                <FormField
+                  control={form.control}
+                  name="requires_manager_approval"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between gap-4">
+                      <div>
+                        <FormLabel className="flex items-center gap-1.5">
+                          <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                          Manager approval
+                        </FormLabel>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Requires manager PIN on POS.
+                        </p>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <Separator />
+
+                <FormField
+                  control={form.control}
+                  name="display_order"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Display order</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={field.value}
+                          onChange={(e) =>
+                            field.onChange(Number(e.target.value))
+                          }
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        Lower numbers appear first on POS.
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Targeting card */}
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base">Targeting</CardTitle>
+                    <CardDescription className="mt-0.5 text-xs">
+                      Items, categories & order type
+                    </CardDescription>
+                  </div>
+                  {targetingCount > 0 && (
+                    <Badge variant="secondary">{targetingCount} rule{targetingCount !== 1 ? "s" : ""}</Badge>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="rounded-md bg-muted/50 divide-y divide-border text-sm">
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span className="text-muted-foreground">Order type</span>
+                    <span className="font-medium">{scopeLabel}</span>
+                  </div>
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span className="text-muted-foreground">Include categories</span>
+                    <span className="font-medium">
+                      {watchAppliesTo?.length ? `${watchAppliesTo.length} selected` : "All"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span className="text-muted-foreground">Exclude categories</span>
+                    <span className="font-medium">
+                      {watchExcludeCategories?.length ? `${watchExcludeCategories.length} selected` : "None"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span className="text-muted-foreground">Menu items</span>
+                    <span className="font-medium">
+                      {watchMenuItems?.length ? `${watchMenuItems.length} selected` : "All"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span className="text-muted-foreground">Exclude alcohol</span>
+                    <span className="font-medium">{watchExcludeAlcohol ? "Yes" : "No"}</span>
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={() => setTargetingSheetOpen(true)}
+                >
+                  <Settings2 className="h-4 w-4" />
+                  Configure targeting
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Actions — sticky on desktop */}
+            <div className="space-y-2 lg:sticky lg:top-4">
+              <Button type="submit" className="w-full" disabled={submitting}>
+                {submitting ? "Saving…" : submitLabel}
+              </Button>
+              {onCancel && (
+                <Button
+                  variant="ghost"
+                  type="button"
+                  className="w-full"
+                  onClick={onCancel}
+                >
+                  Cancel
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
       </form>
 
-      {/* Targeting Bottom Sheet */}
       <TargetingSheet
         open={targetingSheetOpen}
         onOpenChange={setTargetingSheetOpen}
