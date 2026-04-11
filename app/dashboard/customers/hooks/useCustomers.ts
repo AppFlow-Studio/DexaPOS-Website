@@ -241,6 +241,19 @@ export function useCreateCustomer() {
       phone: string;
       email?: string;
       address?: string;
+      birthday?: string;
+      anniversary?: string;
+      company_name?: string;
+      vip_level?: string;
+      preferred_seating?: string;
+      dietary_preferences?: string[];
+      allergy_notes?: string;
+      preferred_table?: string;
+      preferred_language?: string;
+      email_opt_in?: boolean;
+      sms_opt_in?: boolean;
+      receipt_via_email?: boolean;
+      receipt_via_sms?: boolean;
       tags?: string[];
       notes?: string;
     }) => CreateCustomer(clerkOrgId, data),
