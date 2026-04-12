@@ -12,12 +12,17 @@ import { AffectsTag } from "./AffectsTag";
 import type { ScopeContext } from "@/lib/menu/cascade-labels";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { UpdateMenuItem } from "@/app/dashboard/actions/menu-items";
+import { updateLocationMenuCategoryItemOverride } from "@/app/dashboard/actions/menu-items-rpc";
 
 interface InlinePriceEditorProps {
   itemId: string;
   scope: ScopeContext;
   /** The scope's location id (null for global / L3). */
   locationId: string | null;
+  /** Menu id — required for L5 (menu+location) overrides. */
+  menuId?: string | null;
+  /** Category id — required for L5 (menu+location) overrides. */
+  categoryId?: string | null;
   initialPrice: number | null;
   initialCashPrice?: number | null;
   onClose?: () => void;
@@ -41,6 +46,8 @@ export function InlinePriceEditor({
   itemId,
   scope,
   locationId,
+  menuId,
+  categoryId,
   initialPrice,
   initialCashPrice,
   onClose,
@@ -66,6 +73,24 @@ export function InlinePriceEditor({
       if (parsedCash !== undefined && (Number.isNaN(parsedCash) || parsedCash < 0)) {
         throw new Error("Enter a valid cash price");
       }
+
+      // L5: Location + Menu + Category — route through dedicated server action
+      if (scope.level === 5 && locationId && menuId && categoryId) {
+        const result = await updateLocationMenuCategoryItemOverride(
+          locationId,
+          menuId,
+          categoryId,
+          itemId,
+          {
+            customPrice: parsed,
+            customCashPrice: parsedCash ?? null,
+          },
+        );
+        if (!result.success) throw new Error(result.error || "Update failed");
+        return result;
+      }
+
+      // L1/L2: Route through UpdateMenuItem
       const result = await UpdateMenuItem(
         itemId,
         { price: parsed, ...(parsedCash !== undefined ? { cash_price: parsedCash } : {}) },

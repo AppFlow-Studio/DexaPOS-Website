@@ -1,16 +1,23 @@
 import React from "react";
 
 interface KitchenPassProps {
+  darkMode?: boolean;
   color?: string;
   width?: number;
   height?: number;
 }
 
 const KitchenPass: React.FC<KitchenPassProps> = ({
+  darkMode = false,
   color = "#94A3B8",
   width = 180,
   height = 25,
 }) => {
+  // LIGHT MODE ONLY IMPROVEMENTS
+  const lightStroke = "#111827";
+  const lightFill = "#F3F4F6";
+  const lightOpening = "#E5E7EB";
+
   return (
     <svg
       width={width}
@@ -26,8 +33,8 @@ const KitchenPass: React.FC<KitchenPassProps> = ({
         width="178.5"
         height="23.5"
         rx="2"
-        fill="#1E2340"
-        stroke={color}
+        fill={darkMode ? "#1E2340" : lightFill}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="1.5"
       />
 
@@ -38,11 +45,11 @@ const KitchenPass: React.FC<KitchenPassProps> = ({
         width="168"
         height="17"
         rx="1"
-        fill={color}
-        fillOpacity="0.10"
-        stroke={color}
+        fill={darkMode ? color : lightOpening}
+        fillOpacity={darkMode ? 0.10 : 1}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="0.75"
-        strokeOpacity="0.4"
+        strokeOpacity={darkMode ? 0.4 : 0.8}
       />
 
       {/* Center dashed line */}
@@ -51,9 +58,9 @@ const KitchenPass: React.FC<KitchenPassProps> = ({
         y1="12.5"
         x2="174"
         y2="12.5"
-        stroke={color}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="0.75"
-        strokeOpacity="0.5"
+        strokeOpacity={darkMode ? 0.5 : 0.7}
         strokeDasharray="8 5"
       />
 
@@ -65,9 +72,9 @@ const KitchenPass: React.FC<KitchenPassProps> = ({
           y1="4"
           x2={x}
           y2="21"
-          stroke={color}
+          stroke={darkMode ? color : lightStroke}
           strokeWidth="0.75"
-          strokeOpacity="0.3"
+          strokeOpacity={darkMode ? 0.3 : 0.4}
         />
       ))}
     </svg>

@@ -8,6 +8,12 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { assertHQPermission } from '@/lib/admin/auth'
 import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
+import { extractConnectedPlatforms } from '@/lib/orderout/helpers'
+import type {
+  PushMenuToChannelsResult,
+  PushChannelsHistoryEntry,
+  PushChannelsLiveStatus,
+} from '@/app/dashboard/actions/orderout'
 
 // ============================================================================
 // Types
@@ -31,6 +37,8 @@ export interface OrderOutRestaurantStatus {
   prepTimeMinutes: number
   connectedChannels: unknown
   autoAcceptOrders: boolean
+  channelsConfirmedByMerchant: string[]
+  channelsConfirmedAt: string | null
 }
 
 export interface OrderOutStatus {
@@ -94,7 +102,7 @@ export async function getAdminOrderOutStatus(
     if (locationIds.length > 0) {
       const { data: restData } = await supabase
         .from('orderout_restaurants')
-        .select('location_id, oo_account_id, oo_restaurant_id, status, is_accepting_orders, prep_time_minutes, connected_channels, auto_accept_orders')
+        .select('location_id, oo_account_id, oo_restaurant_id, status, is_accepting_orders, prep_time_minutes, connected_channels, auto_accept_orders, channels_confirmed_by_merchant, channels_confirmed_at')
         .in('location_id', locationIds)
 
       const restMap = new Map(restData?.map((r) => [r.location_id, r]) || [])
@@ -112,6 +120,8 @@ export async function getAdminOrderOutStatus(
           prepTimeMinutes: rest?.prep_time_minutes ?? 20,
           connectedChannels: rest?.connected_channels || null,
           autoAcceptOrders: rest?.auto_accept_orders ?? false,
+          channelsConfirmedByMerchant: rest?.channels_confirmed_by_merchant ?? [],
+          channelsConfirmedAt: rest?.channels_confirmed_at ?? null,
         }
       })
     }
@@ -738,6 +748,542 @@ export async function adminOnboardOrderOut(
     console.error('[adminOnboardOrderOut] Exception:', error)
     return {
       success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }
+  }
+}
+
+// ============================================================================
+// Admin: Push Menu to Connected Delivery Channels
+// ============================================================================
+
+const ADMIN_PUSH_CHANNELS_COOLDOWN_SECONDS = 30
+const ADMIN_PUSH_CHANNELS_HOURLY_LIMIT = 5
+
+export interface AdminPushMenuToChannelsParams {
+  merchantId: string
+  menuId: string
+  locationId: string
+}
+
+/**
+ * HQ admin variant of pushMenuToConnectedChannels. Same rate limits apply in v1.
+ */
+export async function adminPushMenuToConnectedChannels(
+  params: AdminPushMenuToChannelsParams
+): Promise<{
+  success: boolean
+  data?: PushMenuToChannelsResult
+  error: string | null
+}> {
+  const { merchantId, menuId, locationId } = params
+
+  if (!merchantId || !menuId || !locationId) {
+    return { success: false, error: 'Missing required parameters' }
+  }
+
+  try {
+    const { userId } = await assertHQPermission('hq.merchant.update')
+
+    const supabase = createServerSupabaseClient()
+
+    // Lazy reconcile
+    try {
+      await supabase.rpc('reconcile_stuck_push_channels_syncs', {
+        p_stale_minutes: 5,
+      })
+    } catch (e) {
+      console.warn('[adminPushMenuToConnectedChannels] reconcile threw (non-fatal):', e)
+    }
+
+    // Resolve OrderOut restaurant
+    const { data: restaurant, error: restaurantError } = await supabase
+      .from('orderout_restaurants')
+      .select(
+        'id, oo_restaurant_id, connected_channels, channels_confirmed_by_merchant'
+      )
+      .eq('location_id', locationId)
+      .single()
+
+    if (restaurantError || !restaurant?.oo_restaurant_id) {
+      return { success: false, error: 'Location is not onboarded to OrderOut' }
+    }
+
+    // Resolve active menu link
+    const { data: link, error: linkError } = await supabase
+      .from('orderout_menu_links')
+      .select('id, oo_menu_id')
+      .eq('orderout_restaurant_id', restaurant.id)
+      .eq('menu_id', menuId)
+      .eq('is_active', true)
+      .single()
+
+    if (linkError || !link?.oo_menu_id) {
+      return {
+        success: false,
+        error: 'Menu has not been uploaded to OrderOut yet',
+      }
+    }
+
+    // Union of webhook-verified + merchant self-confirmed channels. HQ has no
+    // self-attest control — the merchant confirms from their dashboard — but
+    // the admin push inherits the same union so HQ can push as soon as the
+    // merchant has self-confirmed.
+    const verified = extractConnectedPlatforms(restaurant.connected_channels)
+    const confirmed = ((restaurant.channels_confirmed_by_merchant ?? []) as string[]).map(
+      (c: string) => c.toUpperCase()
+    )
+    const expectedChannels = Array.from(new Set([...verified, ...confirmed]))
+
+    if (expectedChannels.length === 0) {
+      return {
+        success: false,
+        error:
+          'No connected delivery channels. Ask the merchant to confirm platforms in the OrderOut tab first.',
+      }
+    }
+
+    // 30-second cooldown
+    const cooldownSince = new Date(
+      Date.now() - ADMIN_PUSH_CHANNELS_COOLDOWN_SECONDS * 1000
+    ).toISOString()
+    const { count: recentCount } = await supabase
+      .from('orderout_menu_syncs')
+      .select('id', { head: true, count: 'exact' })
+      .eq('orderout_restaurant_id', restaurant.id)
+      .eq('menu_id', menuId)
+      .eq('sync_direction', 'push_channels')
+      .gte('created_at', cooldownSince)
+
+    if ((recentCount ?? 0) >= 1) {
+      await LogAuditEvent({
+        merchantId,
+        locationId,
+        action: 'pushed_menu_to_channels_rate_limited',
+        actionCategory: 'integrations',
+        severity: 'warning',
+        resourceType: 'menu',
+        resourceId: menuId,
+        metadata: {
+          admin_action: true,
+          triggered_by_admin: userId,
+          cooldown_seconds: ADMIN_PUSH_CHANNELS_COOLDOWN_SECONDS,
+          trigger: 'admin',
+        },
+      })
+      return {
+        success: false,
+        error: `Please wait ${ADMIN_PUSH_CHANNELS_COOLDOWN_SECONDS} seconds between pushes.`,
+      }
+    }
+
+    // Hourly ceiling
+    const hourSince = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+    const { count: hourlyCount } = await supabase
+      .from('orderout_menu_syncs')
+      .select('id', { head: true, count: 'exact' })
+      .eq('orderout_restaurant_id', restaurant.id)
+      .eq('menu_id', menuId)
+      .eq('sync_direction', 'push_channels')
+      .gte('created_at', hourSince)
+
+    if ((hourlyCount ?? 0) >= ADMIN_PUSH_CHANNELS_HOURLY_LIMIT) {
+      await LogAuditEvent({
+        merchantId,
+        locationId,
+        action: 'pushed_menu_to_channels_rate_limited',
+        actionCategory: 'integrations',
+        severity: 'warning',
+        resourceType: 'menu',
+        resourceId: menuId,
+        metadata: {
+          admin_action: true,
+          triggered_by_admin: userId,
+          hourly_count: hourlyCount,
+          hourly_limit: ADMIN_PUSH_CHANNELS_HOURLY_LIMIT,
+          trigger: 'admin',
+        },
+      })
+      return {
+        success: false,
+        error: `Hourly push limit reached (${ADMIN_PUSH_CHANNELS_HOURLY_LIMIT}). Try again later.`,
+      }
+    }
+
+    // Insert sync row
+    const { data: syncRow, error: insertErr } = await supabase
+      .from('orderout_menu_syncs')
+      .insert({
+        orderout_restaurant_id: restaurant.id,
+        menu_id: menuId,
+        oo_menu_id: link.oo_menu_id,
+        sync_direction: 'push_channels',
+        sync_status: 'pending',
+        expected_channels: expectedChannels,
+        pushed_to_channels: [],
+        trigger_source: 'admin',
+        triggered_by_user_id: userId ?? null,
+        menu_payload_snapshot: {
+          trigger: 'push_channels',
+          expected_channels: expectedChannels,
+          oo_menu_id: link.oo_menu_id,
+        },
+      })
+      .select('id')
+      .single()
+
+    if (insertErr || !syncRow) {
+      console.error('[adminPushMenuToConnectedChannels] insert sync failed:', insertErr)
+      return { success: false, error: 'Failed to create sync record' }
+    }
+
+    const orderOutApiUrl = process.env.NEXT_PUBLIC_ORDEROUT_API_URL
+    const orderOutApiKey = process.env.ORDEROUT_API_KEY
+    if (!orderOutApiUrl || !orderOutApiKey) {
+      await supabase
+        .from('orderout_menu_syncs')
+        .update({
+          sync_status: 'failed',
+          error_details: 'OrderOut API configuration missing',
+          synced_at: new Date().toISOString(),
+        })
+        .eq('id', syncRow.id)
+      return { success: false, error: 'OrderOut API configuration missing' }
+    }
+
+    const triggeredAt = new Date().toISOString()
+    const pushUrl = `${orderOutApiUrl}/pos/restaurant/${restaurant.oo_restaurant_id}/push_menu/${link.oo_menu_id}`
+
+    let httpStatus = 0
+    let errMsg: string | null = null
+    try {
+      const resp = await fetch(pushUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'api-key': orderOutApiKey,
+        },
+      })
+      httpStatus = resp.status
+      if (!resp.ok) {
+        try {
+          const body = await resp.json()
+          errMsg =
+            (body?.error as string) ||
+            (body?.message as string) ||
+            `OrderOut API returned ${resp.status}`
+        } catch {
+          errMsg = `OrderOut API returned ${resp.status}`
+        }
+      }
+    } catch (e) {
+      errMsg = e instanceof Error ? e.message : 'Network error'
+    }
+
+    if (httpStatus >= 200 && httpStatus < 300) {
+      await supabase
+        .from('orderout_menu_syncs')
+        .update({ sync_status: 'syncing' })
+        .eq('id', syncRow.id)
+
+      await LogAuditEvent({
+        merchantId,
+        locationId,
+        action: 'pushed_menu_to_channels',
+        actionCategory: 'integrations',
+        severity: 'info',
+        resourceType: 'menu',
+        resourceId: menuId,
+        metadata: {
+          admin_action: true,
+          triggered_by_admin: userId,
+          sync_id: syncRow.id,
+          oo_menu_id: link.oo_menu_id,
+          oo_restaurant_id: restaurant.oo_restaurant_id,
+          expected_channels: expectedChannels,
+          verified_channels: verified,
+          self_confirmed_channels: confirmed,
+          trigger: 'admin',
+        },
+      })
+
+      return {
+        success: true,
+        data: {
+          syncId: syncRow.id,
+          ooMenuId: link.oo_menu_id,
+          expectedChannels,
+          triggeredAt,
+        },
+        error: null,
+      }
+    }
+
+    await supabase
+      .from('orderout_menu_syncs')
+      .update({
+        sync_status: 'failed',
+        error_details: errMsg ?? 'Unknown error',
+        synced_at: new Date().toISOString(),
+      })
+      .eq('id', syncRow.id)
+
+    await LogAuditEvent({
+      merchantId,
+      locationId,
+      action: 'pushed_menu_to_channels_failed',
+      actionCategory: 'integrations',
+      severity: 'warning',
+      resourceType: 'menu',
+      resourceId: menuId,
+      metadata: {
+        admin_action: true,
+        triggered_by_admin: userId,
+        sync_id: syncRow.id,
+        oo_menu_id: link.oo_menu_id,
+        oo_restaurant_id: restaurant.oo_restaurant_id,
+        http_status: httpStatus,
+        error_message: errMsg,
+        trigger: 'admin',
+      },
+    })
+
+    return { success: false, error: errMsg ?? 'Failed to push to channels' }
+  } catch (error) {
+    console.error('[adminPushMenuToConnectedChannels] Exception:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }
+  }
+}
+
+export async function getAdminPushChannelsHistory(
+  merchantId: string,
+  locationId: string,
+  opts?: { menuId?: string; limit?: number }
+): Promise<{
+  success: boolean
+  data: PushChannelsHistoryEntry[] | null
+  error: string | null
+}> {
+  if (!merchantId || !locationId) {
+    return { success: false, data: null, error: 'Missing required parameters' }
+  }
+
+  try {
+    await assertHQPermission('hq.merchant.view')
+
+    const supabase = createServerSupabaseClient()
+
+    const { data: restaurant } = await supabase
+      .from('orderout_restaurants')
+      .select('id')
+      .eq('location_id', locationId)
+      .single()
+
+    if (!restaurant) {
+      return { success: true, data: [], error: null }
+    }
+
+    const limit = opts?.limit ?? 25
+
+    let query = supabase
+      .from('orderout_menu_syncs')
+      .select(
+        'id, menu_id, oo_menu_id, sync_status, expected_channels, pushed_to_channels, trigger_source, triggered_by_user_id, created_at, synced_at, error_details'
+      )
+      .eq('orderout_restaurant_id', restaurant.id)
+      .eq('sync_direction', 'push_channels')
+      .order('created_at', { ascending: false })
+      .limit(limit)
+
+    if (opts?.menuId) {
+      query = query.eq('menu_id', opts.menuId)
+    }
+
+    const { data: rows, error: rowsErr } = await query
+    if (rowsErr) {
+      return { success: false, data: null, error: rowsErr.message }
+    }
+    if (!rows || rows.length === 0) {
+      return { success: true, data: [], error: null }
+    }
+
+    const syncIds = rows.map((r) => r.id)
+    const { data: results } = await supabase
+      .from('orderout_menu_sync_results')
+      .select(
+        'sync_id, delivery_service, status, status_code, error_message, raw_response, received_at'
+      )
+      .in('sync_id', syncIds)
+
+    const resultsBySyncId = new Map<string, PushChannelsHistoryEntry['perChannelResults']>()
+    for (const r of results || []) {
+      const list = resultsBySyncId.get(r.sync_id) ?? []
+      list.push({
+        deliveryService: r.delivery_service,
+        status: r.status,
+        statusCode: r.status_code ?? null,
+        errorMessage: r.error_message ?? null,
+        rawResponse: r.raw_response,
+        receivedAt: r.received_at,
+      })
+      resultsBySyncId.set(r.sync_id, list)
+    }
+
+    const menuIds = Array.from(
+      new Set(rows.map((r) => r.menu_id).filter(Boolean) as string[])
+    )
+    const { data: menus } =
+      menuIds.length > 0
+        ? await supabase.from('menus').select('id, name').in('id', menuIds)
+        : { data: [] as { id: string; name: string }[] }
+
+    const menuNameById = new Map(menus?.map((m) => [m.id, m.name]) || [])
+
+    const entries: PushChannelsHistoryEntry[] = rows.map((r) => ({
+      syncId: r.id,
+      menuId: r.menu_id || null,
+      menuName: r.menu_id ? menuNameById.get(r.menu_id) ?? null : null,
+      ooMenuId: r.oo_menu_id || null,
+      syncStatus: r.sync_status,
+      expectedChannels: (r.expected_channels as string[] | null) ?? [],
+      pushedToChannels: (r.pushed_to_channels as string[] | null) ?? [],
+      triggerSource: r.trigger_source ?? null,
+      triggeredByUserId: r.triggered_by_user_id ?? null,
+      createdAt: r.created_at,
+      syncedAt: r.synced_at ?? null,
+      errorDetails: r.error_details,
+      perChannelResults: resultsBySyncId.get(r.id) ?? [],
+    }))
+
+    return { success: true, data: entries, error: null }
+  } catch (error) {
+    console.error('[getAdminPushChannelsHistory] Exception:', error)
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }
+  }
+}
+
+/**
+ * Minimal synced-menus getter for the admin UI. Mirrors the merchant
+ * getOrderOutSyncedMenus but is location-scoped by merchantId + locationId.
+ */
+export async function getAdminOrderOutSyncedMenusForLocation(
+  merchantId: string,
+  locationId: string
+): Promise<{
+  success: boolean
+  data: Array<{ menuId: string; menuName: string; ooMenuId: string | null }> | null
+  error: string | null
+}> {
+  if (!merchantId || !locationId) {
+    return { success: false, data: null, error: 'Missing required parameters' }
+  }
+
+  try {
+    await assertHQPermission('hq.merchant.view')
+
+    const supabase = createServerSupabaseClient()
+
+    const { data: restaurant } = await supabase
+      .from('orderout_restaurants')
+      .select('id')
+      .eq('location_id', locationId)
+      .single()
+
+    if (!restaurant) {
+      return { success: true, data: [], error: null }
+    }
+
+    const { data: links, error: linksError } = await supabase
+      .from('orderout_menu_links')
+      .select('menu_id, oo_menu_id, oo_menu_name, is_active')
+      .eq('orderout_restaurant_id', restaurant.id)
+      .eq('is_active', true)
+
+    if (linksError) {
+      return { success: false, data: null, error: linksError.message }
+    }
+
+    if (!links || links.length === 0) {
+      return { success: true, data: [], error: null }
+    }
+
+    const menuIds = links.map((l) => l.menu_id).filter(Boolean) as string[]
+    const { data: menus } = await supabase
+      .from('menus')
+      .select('id, name')
+      .in('id', menuIds)
+
+    const menuNameMap = new Map(menus?.map((m) => [m.id, m.name]) || [])
+
+    const result = links.map((l) => ({
+      menuId: l.menu_id,
+      menuName: menuNameMap.get(l.menu_id) || l.oo_menu_name || 'Unknown Menu',
+      ooMenuId: l.oo_menu_id,
+    }))
+
+    return { success: true, data: result, error: null }
+  } catch (error) {
+    console.error('[getAdminOrderOutSyncedMenusForLocation] Exception:', error)
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }
+  }
+}
+
+export async function getAdminPushChannelsLiveStatus(
+  merchantId: string,
+  syncId: string
+): Promise<{
+  success: boolean
+  data: PushChannelsLiveStatus | null
+  error: string | null
+}> {
+  if (!merchantId || !syncId) {
+    return { success: false, data: null, error: 'Missing required parameters' }
+  }
+
+  try {
+    await assertHQPermission('hq.merchant.view')
+
+    const supabase = createServerSupabaseClient()
+
+    const { data: row, error: rowErr } = await supabase
+      .from('orderout_menu_syncs')
+      .select(
+        'id, sync_status, expected_channels, pushed_to_channels, synced_at, created_at'
+      )
+      .eq('id', syncId)
+      .single()
+
+    if (rowErr || !row) {
+      return { success: false, data: null, error: 'Sync not found' }
+    }
+
+    return {
+      success: true,
+      data: {
+        syncId: row.id,
+        syncStatus: row.sync_status,
+        expectedChannels: (row.expected_channels as string[] | null) ?? [],
+        reportedChannels: (row.pushed_to_channels as string[] | null) ?? [],
+        lastUpdatedAt: row.synced_at ?? row.created_at,
+      },
+      error: null,
+    }
+  } catch (error) {
+    console.error('[getAdminPushChannelsLiveStatus] Exception:', error)
+    return {
+      success: false,
+      data: null,
       error: error instanceof Error ? error.message : 'Unknown error',
     }
   }

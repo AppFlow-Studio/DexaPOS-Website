@@ -442,15 +442,28 @@ export async function CreateClerkUserDirectly(
     }
 
     // 4. Add user to organization — capture membership ID for idempotent DB write
-    const membership = await clerk.organizations.createOrganizationMembership({
-      organizationId: clerkOrgId,
-      userId: clerkUser.id,
-      role: "org:member",
-    });
+    let membership;
+    try {
+      membership = await clerk.organizations.createOrganizationMembership({
+        organizationId: clerkOrgId,
+        userId: clerkUser.id,
+        role: "org:member",
+      });
+    } catch (orgError: any) {
+      console.error(
+        "[CreateClerkUserDirectly] Failed to create org membership, rolling back Clerk user:",
+        orgError,
+      );
+      await clerk.users.deleteUser(clerkUser.id);
+      return {
+        error: `Failed to add user to organization: ${orgError.errors?.[0]?.message || orgError.message}`,
+      };
+    }
 
     // 4b. Eagerly create the users row — members.user_id is a FK to users.id and the
-    //     user.created webhook hasn't fired yet, so we write it now (upsert = safe on retry)
-    await supabase
+    //     user.created webhook hasn't fired yet, so we write it now (upsert = safe on retry).
+    //     Must use service role — users table RLS is reserved for the Clerk webhook.
+    const { error: userUpsertError } = await createServiceRoleClient()
       .from("users")
       .upsert(
         {
@@ -462,6 +475,15 @@ export async function CreateClerkUserDirectly(
         },
         { onConflict: "id", ignoreDuplicates: true },
       );
+
+    if (userUpsertError) {
+      console.error(
+        "[CreateClerkUserDirectly] Failed to upsert users row:",
+        userUpsertError,
+      );
+      await clerk.users.deleteUser(clerkUser.id);
+      return { error: "Failed to create user record" };
+    }
 
     // 5. Eagerly create staff_profile (webhook acts as fallback/sync, not primary writer)
     const { data: staffProfile, error: profileError } = await supabase
@@ -595,6 +617,13 @@ export async function CreateClerkUserDirectly(
       "[CreateClerkUserDirectly] Clerk error details:",
       (error as any)?.errors,
     );
+    const clerkErrors = (error as any)?.errors;
+    if (clerkErrors?.length) {
+      const msg = clerkErrors
+        .map((e: any) => e.longMessage || e.message)
+        .join("; ");
+      return { error: msg };
+    }
     return { error: "An unexpected error occurred" };
   }
 }
@@ -696,7 +725,9 @@ export async function InviteClerkStaff(
         inviterUserId,
         emailAddress: formData.email,
         role: "org:member",
-        ...(appUrl && { redirectUrl: `${appUrl}/dashboard` }),
+        ...(appUrl && {
+          redirectUrl: `${appUrl}/accept-invitation?email=${encodeURIComponent(formData.email)}&firstName=${encodeURIComponent(formData.first_name ?? '')}&lastName=${encodeURIComponent(formData.last_name ?? '')}`,
+        }),
         publicMetadata: {
           creationType: "invitation", // Mark as invitation flow
           roleCode: formData.role_code,
@@ -750,7 +781,9 @@ export async function InviteClerkStaff(
 
     if (inviteError) {
       console.error("[InviteClerkStaff] Failed to store invite:", inviteError);
-      // Don't fail - Clerk invitation was sent
+      return {
+        error: "Invitation was sent but failed to save tracking data. Please check the staff list and retry if needed.",
+      };
     }
 
     revalidatePath("/dashboard/staff");
@@ -773,6 +806,7 @@ export async function InviteClerkStaff(
     return {
       data: {
         invite_id: invitation.id,
+        generated_pin: pinCode ?? undefined,
       },
     };
   } catch (error) {
@@ -1291,7 +1325,8 @@ export async function UpgradePOSStaffToClerk(
           organizationId: member.organization_id,
           merchantId: staffProfile.merchant_id,
           roleCode: locationAssignment.role_code,
-          upgradedFromStaffProfileId: staffProfile.id,
+          staffProfileId: staffProfile.id,
+          upgradedFromStaffProfileId: staffProfile.id, // backward compat
           phone: staffProfile.phone,
         },
         skipPasswordRequirement: false,
@@ -1331,8 +1366,9 @@ export async function UpgradePOSStaffToClerk(
     }
 
     // 7b. Eagerly create the users row — members.user_id is a FK to users.id and the
-    //     user.created webhook hasn't fired yet, so we write it now (upsert = safe on retry)
-    await supabase
+    //     user.created webhook hasn't fired yet, so we write it now (upsert = safe on retry).
+    //     Must use service role — users table RLS is reserved for the Clerk webhook.
+    const { error: userUpsertError } = await createServiceRoleClient()
       .from("users")
       .upsert(
         {
@@ -1344,6 +1380,15 @@ export async function UpgradePOSStaffToClerk(
         },
         { onConflict: "id", ignoreDuplicates: true },
       );
+
+    if (userUpsertError) {
+      console.error(
+        "[UpgradePOSStaffToClerk] Failed to upsert users row:",
+        userUpsertError,
+      );
+      await clerk.users.deleteUser(clerkUser.id);
+      return { error: "Failed to create user record" };
+    }
 
     // 8. Update staff_profiles - change account type and add user_id
     const { error: profileUpdateError } = await supabase
@@ -1468,6 +1513,17 @@ export async function UpgradePOSStaffToClerk(
     };
   } catch (error) {
     console.error("[UpgradePOSStaffToClerk] Unexpected error:", error);
+    console.error(
+      "[UpgradePOSStaffToClerk] Clerk error details:",
+      (error as any)?.errors,
+    );
+    const clerkErrors = (error as any)?.errors;
+    if (clerkErrors?.length) {
+      const msg = clerkErrors
+        .map((e: any) => e.longMessage || e.message)
+        .join("; ");
+      return { error: msg };
+    }
     return { error: "An unexpected error occurred during upgrade" };
   }
 }
@@ -1531,11 +1587,26 @@ export async function DemoteClerkToPOSOnly(
         userId: clerkUserId,
       });
     } catch (clerkErr: any) {
-      console.error(
-        "[DemoteClerkToPOSOnly] Failed to remove org membership:",
-        clerkErr,
+      // "Not found" / 404 means membership is already removed — safe to continue
+      const isNotFound =
+        clerkErr?.status === 404 ||
+        clerkErr?.errors?.[0]?.code === "resource_not_found";
+
+      if (!isNotFound) {
+        console.error(
+          "[DemoteClerkToPOSOnly] Failed to remove org membership:",
+          clerkErr,
+        );
+        return {
+          error:
+            clerkErr?.errors?.[0]?.longMessage ||
+            "Failed to remove dashboard access — demotion aborted",
+        };
+      }
+      // Already removed — continue with DB demotion
+      console.warn(
+        "[DemoteClerkToPOSOnly] Org membership already removed, continuing with DB demotion",
       );
-      // Continue — membership may already be removed
     }
 
     // 3. Update location_members: switch from user_id to staff_profile_id, preserve PIN
@@ -1557,10 +1628,18 @@ export async function DemoteClerkToPOSOnly(
         })
         .eq("id", lm.id)
     );
-    await Promise.all(locationUpdatePromises);
+    const locationResults = await Promise.all(locationUpdatePromises);
+    const locationFailure = locationResults.find((r) => r.error);
+    if (locationFailure) {
+      console.error(
+        "[DemoteClerkToPOSOnly] Failed to update location_members:",
+        locationFailure.error,
+      );
+      return { error: "Failed to update location assignments during demotion" };
+    }
 
     // 4. Update staff_profiles: revert to pos_only
-    await supabase
+    const { error: spUpdateError } = await supabase
       .from("staff_profiles")
       .update({
         account_type: "pos_only",
@@ -1569,14 +1648,30 @@ export async function DemoteClerkToPOSOnly(
       })
       .eq("id", staffProfile.id);
 
+    if (spUpdateError) {
+      console.error(
+        "[DemoteClerkToPOSOnly] Failed to update staff_profiles:",
+        spUpdateError,
+      );
+      return { error: "Failed to update staff profile during demotion" };
+    }
+
     // 5. Nullify user_id on members row
-    await supabase
+    const { error: memberUpdateError } = await supabase
       .from("members")
       .update({
         user_id: null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", memberId);
+
+    if (memberUpdateError) {
+      console.error(
+        "[DemoteClerkToPOSOnly] Failed to update members:",
+        memberUpdateError,
+      );
+      return { error: "Failed to update member record during demotion" };
+    }
 
     // 6. Audit log
     await LogAuditEvent({
@@ -1727,10 +1822,17 @@ export async function UpdateStaffProfile(
         usersPayload.last_name = updates.last_name;
       if (updates.email !== undefined) usersPayload.email = updates.email;
 
-      await supabase
+      const { error: usersUpdateError } = await supabase
         .from("users")
         .update(usersPayload)
         .eq("id", member.user_id);
+
+      if (usersUpdateError) {
+        console.error(
+          "[UpdateStaffProfile] Failed to sync users table (non-fatal):",
+          usersUpdateError,
+        );
+      }
 
       // 5. Clerk sync — keep the auth provider in sync
       try {

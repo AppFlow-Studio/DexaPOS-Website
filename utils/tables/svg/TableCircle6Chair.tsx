@@ -1,6 +1,7 @@
 import React from "react";
 
 interface TableCircle6ChairProps {
+  darkMode?: boolean;
   color?: string;
   chairColor?: string;
   width?: number;
@@ -13,10 +14,14 @@ const CHAIR_W = 16;
 const CHAIR_H = 12;
 
 const TableCircle6Chair: React.FC<TableCircle6ChairProps> = ({
+  darkMode = false,
   color = "#2DD4BF",
   width = 150,
   height = 150,
 }) => {
+  // light mode = soft neutral stroke (not black)
+  const lightStroke = "#94A3B8";
+
   return (
     <svg
       width={width}
@@ -42,10 +47,10 @@ const TableCircle6Chair: React.FC<TableCircle6ChairProps> = ({
               height={CHAIR_H}
               rx="3"
               fill={color}
-              fillOpacity="0.12"
-              stroke={color}
+              fillOpacity={darkMode ? 0.12 : 0.85}
+              stroke={darkMode ? color : lightStroke}
               strokeWidth="1"
-              strokeOpacity="0.5"
+              strokeOpacity={darkMode ? 0.5 : 0.7}
             />
           </g>
         );
@@ -57,10 +62,10 @@ const TableCircle6Chair: React.FC<TableCircle6ChairProps> = ({
         cy="75"
         r="41"
         fill={color}
-        fillOpacity="0.18"
-        stroke={color}
+        fillOpacity={darkMode ? 0.18 : 0.88}
+        stroke={darkMode ? color : lightStroke}
         strokeWidth="1.5"
-        strokeOpacity="0.8"
+        strokeOpacity={darkMode ? 0.8 : 0.75}
       />
     </svg>
   );

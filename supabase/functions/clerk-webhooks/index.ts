@@ -62,6 +62,31 @@ function logError(eventType: string, message: string, error: any): void {
   console.error(`[${timestamp}] [${eventType}] ERROR: ${message}`, error)
 }
 
+/**
+ * Safely fetches a Clerk user with optional retries and exponential backoff.
+ * Returns null instead of throwing when the user is not found (race condition).
+ */
+async function safeGetUser(
+  clerkClient: ClerkClient,
+  userId: string,
+  options?: { retries?: number; baseDelayMs?: number }
+): Promise<any | null> {
+  const maxRetries = options?.retries ?? 0
+  const baseDelay = options?.baseDelayMs ?? 500
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await clerkClient.users.getUser(userId)
+    } catch (error: any) {
+      const isNotFound = error?.status === 404 || error?.clerkError
+      if (!isNotFound || attempt === maxRetries) return null
+      const delay = baseDelay * Math.pow(2, attempt)
+      logEvent('safeGetUser', `User not found, retrying in ${delay}ms (${attempt + 1}/${maxRetries + 1})`, { userId })
+      await new Promise(r => setTimeout(r, delay))
+    }
+  }
+  return null
+}
+
 function extractStoragePathFromUrl(url: string): string {
   const parsedUrl = new URL(url)
   return parsedUrl.pathname.replace(/^\/+/, '')
@@ -186,7 +211,7 @@ async function ensureUserExists(
       email: userData.email || '',
       avatar_url: userData.avatarUrl || null,
       updated_at: updatedAt
-    }, { onConflict: 'id', ignoreDuplicates: true })
+    }, { onConflict: 'id' })
 
   if (error) {
     return { success: false, error: error.message }
@@ -347,6 +372,14 @@ async function handleUserCreated(ctx: WebhookContext): Promise<Response> {
 
   logEvent(eventType, 'User created successfully', { userId: event.data.id })
 
+  // For direct/upgrade flows the server action handles everything —
+  // skip the pending-invite logic to avoid redundant work or errors.
+  const creationType = event.data.public_metadata?.creationType
+  if (creationType === 'direct' || creationType === 'upgrade') {
+    logEvent(eventType, 'Direct/upgrade creation — skipping pending invite flow', { userId: event.data.id, creationType })
+    return successResponse({ user }, 'User created (server action handles membership)')
+  }
+
   // Check if this user was invited to an organization
   const organizationId = event.data.public_metadata?.organizationId
   if (!organizationId) {
@@ -381,8 +414,11 @@ async function handleUserCreated(ctx: WebhookContext): Promise<Response> {
 
       logEvent(eventType, 'Org membership created and invite updated', { userId: event.data.id })
     } catch (err: any) {
-      logError(eventType, 'Failed to create org membership', err)
-      return errorResponse(err.message || 'Failed to create organization membership', 500)
+      // Non-fatal: the users row is already written. Returning 500 would cause Clerk
+      // to retry the entire webhook, re-upserting the users row each time while the
+      // membership creation keeps failing — leaving an orphaned user that never
+      // gets cleaned up if the Clerk user is later deleted during rollback.
+      logError(eventType, 'Failed to create org membership (non-fatal, users row saved)', err)
     }
   }
 
@@ -451,11 +487,16 @@ async function handleUserDeleted(ctx: WebhookContext): Promise<Response> {
     .delete()
     .eq('id', event.data.id)
     .select()
-    .single()
+    .maybeSingle()
 
   if (error) {
     logError(eventType, 'Failed to delete user', error)
     return errorResponse(error.message, 500)
+  }
+
+  if (!data) {
+    logEvent(eventType, 'User row not found (already deleted or never created), no-op', { userId: event.data.id })
+    return successResponse({ data: null }, 'User already removed')
   }
 
   logEvent(eventType, 'User deleted successfully', { userId: event.data.id })
@@ -571,18 +612,22 @@ async function handleOrganizationUpdated(ctx: WebhookContext): Promise<Response>
 
   // Update carrier if org_type is 'carrier'
   if (event.data.public_metadata?.org_type === 'carrier') {
-    await supabase
+    const { error: carrierError } = await supabase
       .from('carriers')
       .update({
         name: event.data.name,
         updated_at: new Date(event.data.updated_at).toISOString(),
       })
       .eq('clerk_org_id', event.data.id)
+
+    if (carrierError) {
+      logError(eventType, 'Failed to update carrier record (non-fatal)', carrierError)
+    }
   }
 
   // Update merchant if org_type is 'merchant'
   if (event.data.public_metadata?.org_type === 'merchant') {
-    await supabase
+    const { error: merchantError } = await supabase
       .from('merchants')
       .update({
         name: event.data.name,
@@ -590,6 +635,10 @@ async function handleOrganizationUpdated(ctx: WebhookContext): Promise<Response>
         updated_at: new Date(event.data.updated_at).toISOString(),
       })
       .eq('clerk_org_id', event.data.id)
+
+    if (merchantError) {
+      logError(eventType, 'Failed to update merchant record (non-fatal)', merchantError)
+    }
   }
 
   logEvent(eventType, 'Organization updated successfully', { orgId: event.data.id })
@@ -692,12 +741,50 @@ async function handleMerchantMembershipCreated(
   merchantId: string,
   userMetadata: any,
   createdAt: string,
-  updatedAt: string
+  updatedAt: string,
+  clerkUser?: any
 ): Promise<Response> {
   const { supabase, clerkClient, event } = ctx
   const eventType = 'organizationMembership.created:Merchant'
 
   logEvent(eventType, 'Processing merchant membership', { userId, merchantId })
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // EARLY-EXIT: If records already exist (server action wrote them eagerly),
+  // return 200 immediately. This check is unconditional — it doesn't depend
+  // on metadata which may be empty due to race conditions.
+  // ──────────────────────────────────────────────────────────────────────────
+  const { data: existingMember } = await supabase
+    .from('members')
+    .select('id, staff_profile_id, role')
+    .eq('user_id', userId)
+    .eq('organization_id', organizationId)
+    .maybeSingle()
+
+  if (existingMember) {
+    // Verify location_members were also created — if member row exists but
+    // location assignments are missing, we should NOT early-exit.
+    const { count: locMemberCount } = await supabase
+      .from('location_members')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('merchant_id', merchantId)
+
+    if (locMemberCount) {
+      logEvent(eventType, 'Records already exist (eagerly provisioned by server action), no-op', {
+        userId, memberId: existingMember.id, staffProfileId: existingMember.staff_profile_id,
+        locationMemberCount: locMemberCount,
+      })
+      return successResponse(
+        { member_id: existingMember.id, early_exit: true },
+        'Membership already provisioned'
+      )
+    }
+
+    logEvent(eventType, 'Member exists but location_members missing — continuing to provision', {
+      userId, memberId: existingMember.id,
+    })
+  }
 
   // Determine role and creation type up-front (used in both paths)
   const roleCode =
@@ -705,8 +792,35 @@ async function handleMerchantMembershipCreated(
     userMetadata?.roleCode ||
     'staff'
 
-  const creationType = userMetadata?.creationType || 'invitation'
-  const isDirectCreation = creationType === 'direct'
+  const creationType =
+    event.data?.public_metadata?.creationType ||
+    userMetadata?.creationType ||
+    'invitation'
+  const isDirectCreation = creationType === 'direct' || creationType === 'upgrade'
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // INSUFFICIENT DATA GUARD: If metadata is empty (both getUser() and
+  // membership metadata failed) AND no early-exit triggered, we can't
+  // determine the correct role. Return 500 so Clerk retries — by then
+  // the user will be available in Clerk's API.
+  // ──────────────────────────────────────────────────────────────────────────
+  const hasMetadata = !!(
+    event.data?.public_metadata?.roleCode ||
+    userMetadata?.roleCode ||
+    event.data?.public_metadata?.locationAssignments ||
+    userMetadata?.locationAssignments
+  )
+
+  if (!hasMetadata && !clerkUser) {
+    logEvent(eventType, 'Insufficient metadata and user unavailable — returning 500 for retry', {
+      userId, merchantId,
+      membershipMetadata: event.data?.public_metadata,
+    })
+    return errorResponse(
+      'User data not yet available (Clerk eventual consistency) — retry expected',
+      500
+    )
+  }
 
   // ──────────────────────────────────────────────────────────────────────────
   // PROMOTION PATH: POS-only staff being upgraded to a Clerk account.
@@ -715,7 +829,9 @@ async function handleMerchantMembershipCreated(
   // ──────────────────────────────────────────────────────────────────────────
   const promotionStaffProfileId: string | undefined =
     event.data?.public_metadata?.staffProfileId ||
-    userMetadata?.staffProfileId
+    event.data?.public_metadata?.upgradedFromStaffProfileId ||
+    userMetadata?.staffProfileId ||
+    userMetadata?.upgradedFromStaffProfileId
 
   if (promotionStaffProfileId) {
     logEvent(eventType, 'PROMOTION PATH — updating existing POS staff to Clerk user', {
@@ -723,6 +839,12 @@ async function handleMerchantMembershipCreated(
       userId,
       roleCode,
     })
+
+    // 0. Snapshot original location_members role codes for rollback
+    const { data: originalLocMembers } = await supabase
+      .from('location_members')
+      .select('id, role_code')
+      .eq('staff_profile_id', promotionStaffProfileId)
 
     // 1. Update staff_profiles: link to Clerk user and flip account_type
     const { error: profileUpdateError } = await supabase
@@ -751,7 +873,13 @@ async function handleMerchantMembershipCreated(
       .eq('staff_profile_id', promotionStaffProfileId)
 
     if (locMembersUpdateError) {
-      logError(eventType, 'Promotion: failed to update location_members', locMembersUpdateError)
+      logError(eventType, 'Promotion: failed to update location_members, rolling back staff_profile', locMembersUpdateError)
+      // Rollback step 1: revert staff_profiles to POS-only state
+      await supabase
+        .from('staff_profiles')
+        .update({ user_id: null, account_type: 'pos_only', updated_at: updatedAt })
+        .eq('id', promotionStaffProfileId)
+        .eq('merchant_id', merchantId)
       return errorResponse(locMembersUpdateError.message, 500)
     }
 
@@ -768,7 +896,22 @@ async function handleMerchantMembershipCreated(
       .eq('organization_id', organizationId)
 
     if (memberUpdateError) {
-      logError(eventType, 'Promotion: failed to update members', memberUpdateError)
+      logError(eventType, 'Promotion: failed to update members, rolling back', memberUpdateError)
+      // Rollback steps 1+2: revert staff_profiles and location_members
+      await supabase
+        .from('staff_profiles')
+        .update({ user_id: null, account_type: 'pos_only', updated_at: updatedAt })
+        .eq('id', promotionStaffProfileId)
+        .eq('merchant_id', merchantId)
+      // Restore each location_member's original role_code
+      if (originalLocMembers?.length) {
+        await Promise.all(originalLocMembers.map((lm: any) =>
+          supabase
+            .from('location_members')
+            .update({ user_id: null, role_code: lm.role_code, updated_at: updatedAt })
+            .eq('id', lm.id)
+        ))
+      }
       return errorResponse(memberUpdateError.message, 500)
     }
 
@@ -780,8 +923,21 @@ async function handleMerchantMembershipCreated(
   // NEW USER PATH (invitation or direct creation — no existing POS profile)
   // ──────────────────────────────────────────────────────────────────────────
 
-  // Get user from Clerk for full details
-  const user = await clerkClient.users.getUser(userId)
+  // Use pre-fetched user, or try again with retries
+  let user = clerkUser
+  if (!user) {
+    user = await safeGetUser(clerkClient, userId, {
+      retries: isDirectCreation ? 1 : 3,
+      baseDelayMs: 500,
+    })
+  }
+
+  // Build fallback from event data (always available)
+  const publicUserData = event.data?.public_user_data
+  const firstName = user?.firstName || publicUserData?.first_name || userMetadata?.firstName || ''
+  const lastName = user?.lastName || publicUserData?.last_name || userMetadata?.lastName || ''
+  const userEmail = user?.emailAddresses?.[0]?.emailAddress || publicUserData?.identifier || userMetadata?.email || ''
+  const phone = userMetadata?.phone || null
 
   // Get location assignments
   const rawLocationAssignments: any[] =
@@ -832,10 +988,10 @@ async function handleMerchantMembershipCreated(
       .insert({
         merchant_id: merchantId,
         user_id: userId,
-        first_name: user.firstName || userMetadata?.firstName || '',
-        last_name: user.lastName || userMetadata?.lastName || '',
-        email: user.emailAddresses?.[0]?.emailAddress || '',
-        phone: userMetadata?.phone || null,
+        first_name: firstName,
+        last_name: lastName,
+        email: userEmail,
+        phone: phone,
         public_metadata: userMetadata,
         account_type: 'clerk',
         is_active: true,
@@ -844,12 +1000,30 @@ async function handleMerchantMembershipCreated(
       .single()
 
     if (profileError) {
-      logError(eventType, 'Failed to create staff profile', profileError)
-      return errorResponse(profileError.message, 500)
-    }
+      // Handle race condition: another webhook may have inserted the same profile concurrently
+      if (profileError.code === '23505') {
+        logEvent(eventType, 'Staff profile already created (concurrent webhook), fetching existing', { userId, merchantId })
+        const { data: reFetched } = await supabase
+          .from('staff_profiles')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('merchant_id', merchantId)
+          .maybeSingle()
 
-    staffProfile = newProfile
-    logEvent(eventType, 'Created new staff profile', { profileId: staffProfile.id })
+        if (reFetched) {
+          staffProfile = reFetched
+        } else {
+          logError(eventType, 'Failed to create staff profile and re-fetch failed', profileError)
+          return errorResponse(profileError.message, 500)
+        }
+      } else {
+        logError(eventType, 'Failed to create staff profile', profileError)
+        return errorResponse(profileError.message, 500)
+      }
+    } else {
+      staffProfile = newProfile
+      logEvent(eventType, 'Created new staff profile', { profileId: staffProfile.id })
+    }
   }
 
   // Create member record
@@ -908,11 +1082,18 @@ async function handleMerchantMembershipCreated(
         .insert(newAssignments)
 
       if (locationMembersError) {
-        logError(eventType, 'Failed to create location members', locationMembersError)
-        return errorResponse(locationMembersError.message, 500)
+        // Handle race condition: another webhook may have inserted the same rows concurrently
+        if (locationMembersError.code === '23505') {
+          logEvent(eventType, 'Location members already exist (concurrent insert), treating as success', {
+            count: newAssignments.length,
+          })
+        } else {
+          logError(eventType, 'Failed to create location members', locationMembersError)
+          return errorResponse(locationMembersError.message, 500)
+        }
+      } else {
+        logEvent(eventType, 'Created location members', { count: newAssignments.length })
       }
-
-      logEvent(eventType, 'Created location members', { count: newAssignments.length })
     } else {
       logEvent(eventType, 'Location members already exist, skipping insert (idempotent)', {
         skipped: locationMembersData.length,
@@ -929,7 +1110,7 @@ async function handleMerchantMembershipCreated(
         accepted_at: createdAt,
         accepted_by_user_id: userId,
       })
-      .eq('email', user.emailAddresses?.[0]?.emailAddress)
+      .eq('email', userEmail)
       .eq('status', 'pending')
       .eq('merchant_id', merchantId)
 
@@ -972,11 +1153,13 @@ async function handleOrganizationMembershipCreated(ctx: WebhookContext): Promise
     
     // Only fetch user metadata as fallback (may be empty for invited users)
     let userMetadata: any = {}
-    try {
-      const user = await clerkClient.users.getUser(userId)
-      userMetadata = user.publicMetadata || {}
-    } catch (fetchError) {
-      logEvent(eventType, 'Could not fetch user metadata (may be race condition)', { userId })
+    let fetchedUser: any = null
+    const clerkUser = await safeGetUser(clerkClient, userId)
+    if (clerkUser) {
+      fetchedUser = clerkUser
+      userMetadata = clerkUser.publicMetadata || {}
+    } else {
+      logEvent(eventType, 'Could not fetch user (race condition), will use event data', { userId })
     }
 
     // Merge metadata: membership metadata takes priority (contains invite data)
@@ -1035,7 +1218,7 @@ async function handleOrganizationMembershipCreated(ctx: WebhookContext): Promise
 
     // Handle merchant membership
     return await handleMerchantMembershipCreated(
-      ctx, userId, organizationId, merchantId, effectiveMetadata, createdAt, updatedAt
+      ctx, userId, organizationId, merchantId, effectiveMetadata, createdAt, updatedAt, fetchedUser
     )
 
   } catch (error: any) {
@@ -1048,15 +1231,33 @@ async function handleOrganizationMembershipUpdated(ctx: WebhookContext): Promise
   const { supabase, event } = ctx
   const eventType = 'organizationMembership.updated'
 
-  logEvent(eventType, 'Processing membership update', { membershipId: event.data.id })
+  const userId = event.data.public_user_data?.user_id
+  const organizationId = event.data.organization?.id
+
+  logEvent(eventType, 'Processing membership update', { membershipId: event.data.id, userId, organizationId })
+
+  // Only use our explicit roleCode from public_metadata — Clerk's org:admin/org:member
+  // is too coarse to map reliably (e.g. both merchant.owner and merchant.admin are org:admin)
+  const roleCode: string | null = event.data.public_metadata?.roleCode || null
+
+  logEvent(eventType, 'Role resolved', {
+    clerkRole: event.data.role,
+    metadataRoleCode: roleCode,
+  })
+
+  const updatePayload: Record<string, any> = {
+    user_id: userId,
+    organization_id: organizationId,
+    updated_at: new Date(event.data.updated_at).toISOString(),
+  }
+
+  if (roleCode) {
+    updatePayload.role = roleCode
+  }
 
   const { data, error } = await supabase
     .from('members')
-    .update({
-      user_id: event.data.public_user_data?.user_id,
-      organization_id: event.data.organization?.id,
-      updated_at: new Date(event.data.updated_at).toISOString(),
-    })
+    .update(updatePayload)
     .eq('id', event.data.id)
     .select()
     .single()
@@ -1066,8 +1267,114 @@ async function handleOrganizationMembershipUpdated(ctx: WebhookContext): Promise
     return errorResponse(error.message, 500)
   }
 
-  logEvent(eventType, 'Membership updated successfully', { membershipId: event.data.id })
+  // Sync role to location_members if role changed
+  if (roleCode && userId && organizationId) {
+    // Resolve merchant to scope location_members update
+    const merchantId = await resolveMerchantIdByClerkOrgId(supabase, organizationId)
+
+    if (merchantId) {
+      const { error: locError } = await supabase
+        .from('location_members')
+        .update({
+          role_code: roleCode,
+          updated_at: new Date(event.data.updated_at).toISOString(),
+        })
+        .eq('user_id', userId)
+        .eq('merchant_id', merchantId)
+
+      if (locError) {
+        logError(eventType, 'Failed to sync role to location_members (non-fatal)', locError)
+      } else {
+        logEvent(eventType, 'Synced role to location_members', { userId, merchantId, roleCode })
+      }
+    }
+  }
+
+  logEvent(eventType, 'Membership updated successfully', { membershipId: event.data.id, roleCode })
   return successResponse({ data }, 'Membership updated successfully')
+}
+
+async function handleOrganizationMembershipDeleted(ctx: WebhookContext): Promise<Response> {
+  const { supabase, event } = ctx
+  const eventType = 'organizationMembership.deleted'
+
+  const userId = event.data.public_user_data?.user_id
+  const organizationId = event.data.organization?.id
+
+  logEvent(eventType, 'Processing membership deletion', { userId, organizationId })
+
+  if (!userId || !organizationId) {
+    logError(eventType, 'Missing userId or organizationId', { userId, organizationId })
+    return errorResponse('Missing userId or organizationId in event data', 400)
+  }
+
+  // 1. Find the member row for this user + org
+  const { data: member, error: memberFetchError } = await supabase
+    .from('members')
+    .select('id, staff_profile_id')
+    .eq('user_id', userId)
+    .eq('organization_id', organizationId)
+    .maybeSingle()
+
+  if (memberFetchError) {
+    logError(eventType, 'Failed to fetch member record', memberFetchError)
+    return errorResponse(memberFetchError.message, 500)
+  }
+
+  if (!member) {
+    logEvent(eventType, 'No member row found (already deleted or never created), no-op', { userId, organizationId })
+    return successResponse({ userId, organizationId }, 'No member found — already cleaned up')
+  }
+
+  // 2. Resolve merchant to scope location_members deactivation
+  const merchantId = await resolveMerchantIdByClerkOrgId(supabase, organizationId)
+
+  // 3+4. Deactivate location_members and staff_profiles in parallel (independent ops)
+  const now = new Date().toISOString()
+  const deactivations: Promise<any>[] = []
+
+  if (merchantId) {
+    deactivations.push(
+      supabase
+        .from('location_members')
+        .update({ is_active: false, updated_at: now })
+        .eq('user_id', userId)
+        .eq('merchant_id', merchantId)
+        .then(({ error }) => {
+          if (error) logError(eventType, 'Failed to deactivate location_members (non-fatal)', error)
+          else logEvent(eventType, 'Deactivated location_members', { userId, merchantId })
+        })
+    )
+  }
+
+  if (member.staff_profile_id) {
+    deactivations.push(
+      supabase
+        .from('staff_profiles')
+        .update({ is_active: false, updated_at: now })
+        .eq('id', member.staff_profile_id)
+        .then(({ error }) => {
+          if (error) logError(eventType, 'Failed to deactivate staff_profile (non-fatal)', error)
+          else logEvent(eventType, 'Deactivated staff_profile', { staffProfileId: member.staff_profile_id })
+        })
+    )
+  }
+
+  await Promise.all(deactivations)
+
+  // 5. Delete the member row (hard delete — Clerk membership is gone)
+  const { error: memberDeleteError } = await supabase
+    .from('members')
+    .delete()
+    .eq('id', member.id)
+
+  if (memberDeleteError) {
+    logError(eventType, 'Failed to delete member record', memberDeleteError)
+    return errorResponse(memberDeleteError.message, 500)
+  }
+
+  logEvent(eventType, 'Membership deletion processed', { userId, organizationId, memberId: member.id })
+  return successResponse({ memberId: member.id }, 'Membership deleted and related records deactivated')
 }
 
 async function handleOrganizationInvitationAccepted(ctx: WebhookContext): Promise<Response> {
@@ -1249,6 +1556,9 @@ Deno.serve(async (req) => {
 
     case 'organizationMembership.updated':
       return await handleOrganizationMembershipUpdated(ctx)
+
+    case 'organizationMembership.deleted':
+      return await handleOrganizationMembershipDeleted(ctx)
 
     case 'organizationInvitation.accepted':
       return await handleOrganizationInvitationAccepted(ctx)

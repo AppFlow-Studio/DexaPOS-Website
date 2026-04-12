@@ -615,8 +615,9 @@ export default function OnlineOrderingPage() {
                           <span className="text-sm">Open 24 hours</span>
                         ) : (
                           <span className="text-sm">
-                            {formatTimeDisplay(schedule.from)} â€“{" "}
-                            {formatTimeDisplay(schedule.to)}
+                            {formatTimeDisplay(schedule.from) || '--:--'}
+                            <span className="mx-1">–</span>
+                            {formatTimeDisplay(schedule.to) || '--:--'}
                           </span>
                         )
                       ) : (
@@ -652,7 +653,7 @@ export default function OnlineOrderingPage() {
                     onChange={(e) =>
                       handleUpdate({ metaTitle: e.target.value })
                     }
-                    placeholder="Your Store â€” Order Online"
+                    placeholder="Your Store — Order Online"
                   />
                 </div>
                 <div className="space-y-2">
@@ -910,11 +911,12 @@ export default function OnlineOrderingPage() {
                 <div className="flex items-center gap-3">
                   <Input
                     type="color"
-                    value={currentSettings.headerTextColor || "#FFFFFF"}
+                    value={/^#[0-9A-Fa-f]{6}$/.test(currentSettings.headerTextColor || "") ? currentSettings.headerTextColor : "#FFFFFF"}
                     onChange={(e) =>
                       handleUpdate({ headerTextColor: e.target.value })
                     }
                     className="h-9 w-14 p-1 rounded cursor-pointer"
+                    aria-label="Header text color picker"
                   />
                   <Input
                     type="text"
@@ -1194,7 +1196,7 @@ export default function OnlineOrderingPage() {
                         <Input
                           type="number"
                           step="0.01"
-                          value={currentSettings.baseDeliveryFee}
+                          value={isNaN(currentSettings.baseDeliveryFee) ? 0 : currentSettings.baseDeliveryFee}
                           onChange={(e) =>
                             handleUpdate({
                               baseDeliveryFee:
@@ -1212,7 +1214,7 @@ export default function OnlineOrderingPage() {
                         <Input
                           type="number"
                           step="0.01"
-                          value={currentSettings.freeDeliveryThreshold}
+                          value={isNaN(currentSettings.freeDeliveryThreshold) ? 0 : currentSettings.freeDeliveryThreshold}
                           onChange={(e) =>
                             handleUpdate({
                               freeDeliveryThreshold:
@@ -1229,7 +1231,7 @@ export default function OnlineOrderingPage() {
                       <Input
                         type="number"
                         step="0.5"
-                        value={currentSettings.deliveryRadiusMiles ?? ""}
+                        value={isNaN(currentSettings.deliveryRadiusMiles) || currentSettings.deliveryRadiusMiles === null ? '' : currentSettings.deliveryRadiusMiles}
                         onChange={(e) =>
                           handleUpdate({
                             deliveryRadiusMiles: e.target.value
@@ -1269,7 +1271,7 @@ export default function OnlineOrderingPage() {
                     />
                     <Input
                       type="number"
-                      value={currentSettings.preparationLeadTime}
+                      value={isNaN(currentSettings.preparationLeadTime) ? 0 : currentSettings.preparationLeadTime}
                       onChange={(e) =>
                         handleUpdate({
                           preparationLeadTime: parseInt(e.target.value) || 0,
@@ -1286,7 +1288,7 @@ export default function OnlineOrderingPage() {
                     <Input
                       type="number"
                       step="0.01"
-                      value={currentSettings.minimumOrderAmount}
+                      value={isNaN(currentSettings.minimumOrderAmount) ? 0 : currentSettings.minimumOrderAmount}
                       onChange={(e) =>
                         handleUpdate({
                           minimumOrderAmount: parseFloat(e.target.value) || 0,
@@ -1305,7 +1307,7 @@ export default function OnlineOrderingPage() {
                   <Input
                     type="number"
                     min={0}
-                    value={currentSettings.futureOrderMaxDays}
+                    value={isNaN(currentSettings.futureOrderMaxDays) ? 0 : currentSettings.futureOrderMaxDays}
                     onChange={(e) =>
                       handleUpdate({
                         futureOrderMaxDays: parseInt(e.target.value) || 0,
@@ -1346,6 +1348,29 @@ export default function OnlineOrderingPage() {
                   Terminal Processing Number for this location&apos;s online
                   card payments. Save settings after updating the TPN to
                   automatically whitelist your storefront domain with Dejavoo.
+                </p>
+              </div>
+              <div className="space-y-2 max-w-md">
+                <Label htmlFor="ftdEcomKey">FTD Ecom/TOP Key</Label>
+                <Input
+                  id="ftdEcomKey"
+                  type="password"
+                  value={currentSettings.ipospaysFtdEcomKey}
+                  onChange={(e) =>
+                    handleUpdate({ ipospaysFtdEcomKey: e.target.value })
+                  }
+                  placeholder={
+                    currentSettings.ipospaysFtdEcomKeyConfigured
+                      ? "Stored securely. Enter a new key only to rotate it."
+                      : "Enter this branch's FTD Ecom/TOP key"
+                  }
+                  className="font-mono text-sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Branch-specific key used by the embedded Dejavoo card form.
+                  It is stored securely and never shown back in plain text.
+                  Enter a new value only when rotating or changing the selected
+                  payment device.
                 </p>
               </div>
               {currentSettings.ipospaysTpn && !isDirty(selectedLocationId) && (
@@ -1401,7 +1426,7 @@ export default function OnlineOrderingPage() {
                             type="number"
                             min={0}
                             max={100}
-                            value={pct}
+                            value={isNaN(pct) ? 0 : pct}
                             onChange={(e) => {
                               const raw = parseInt(e.target.value);
                               const clamped = isNaN(raw) ? 0 : Math.min(100, Math.max(0, raw));

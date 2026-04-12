@@ -548,4 +548,36 @@ export const adminKeys = {
 
   merchantOrderOutPayloadDiff: (merchantId: string, locationId: string, menuId: string) =>
     [...adminKeys.merchants(), merchantId, 'orderout-payload-diff', locationId, menuId] as const,
+
+  merchantOrderOutPushChannelsHistory: (
+    merchantId: string,
+    locationId: string,
+    menuId: string
+  ) =>
+    [
+      ...adminKeys.merchants(),
+      merchantId,
+      'orderout-push-channels-history',
+      locationId,
+      menuId,
+    ] as const,
+
+  merchantOrderOutPushChannelsLive: (merchantId: string, syncId: string) =>
+    [
+      ...adminKeys.merchants(),
+      merchantId,
+      'orderout-push-channels-live',
+      syncId,
+    ] as const,
+
+  merchantOrderOutSyncedMenusForLocation: (
+    merchantId: string,
+    locationId: string
+  ) =>
+    [
+      ...adminKeys.merchants(),
+      merchantId,
+      'orderout-synced-menus',
+      locationId,
+    ] as const,
 }

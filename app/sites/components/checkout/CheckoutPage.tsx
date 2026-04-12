@@ -151,6 +151,7 @@ export function CheckoutPage({
   // Payment
   const paymentFormRef = useRef<PaymentCardFormHandle>(null);
   const [securityKey, setSecurityKey] = useState<string | null>(null);
+  const [paymentDeviceId, setPaymentDeviceId] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [payCashInStore, setPayCashInStore] = useState(false);
 
@@ -188,6 +189,7 @@ export function CheckoutPage({
     if (!storeConfigId) return;
 
     setPaymentError(null);
+    setPaymentDeviceId(null);
     fetch(`${SUPABASE_URL}/functions/v1/process-online-payment`, {
       method: "POST",
       headers: {
@@ -202,7 +204,9 @@ export function CheckoutPage({
       .then((data) => {
         if (data.success) {
           setSecurityKey(data.security_key);
+          setPaymentDeviceId(data.payment_device_id ?? null);
         } else {
+          setPaymentDeviceId(null);
           // Don't show error if payment simply isn't configured — just hide the form
           if (data.error?.includes("not configured")) {
             console.log("iPOS payment not configured for this store");
@@ -212,6 +216,7 @@ export function CheckoutPage({
         }
       })
       .catch(() => {
+        setPaymentDeviceId(null);
         setPaymentError("Failed to connect to payment service.");
       });
   }, [storeConfigId]);
@@ -264,6 +269,10 @@ export function CheckoutPage({
       try {
         if (!paymentFormRef.current) {
           throw new Error("Payment form not ready. Please wait a moment.");
+        }
+        const cardValidation = paymentFormRef.current.validateCardInput();
+        if (!cardValidation.valid) {
+          throw new Error(cardValidation.error || "Please complete card details.");
         }
         const tokenizedCard = await paymentFormRef.current.tokenize();
         paymentTokenId = tokenizedCard.tokenId;
@@ -361,6 +370,7 @@ export function CheckoutPage({
             tip: tipAmount,
             special_instructions: instructions || undefined,
             pay_cash_in_store: payCashInStore,
+            ...(paymentDeviceId ? { payment_device_id: paymentDeviceId } : {}),
             ...(paymentTokenId ? { payment_token_id: paymentTokenId } : {}),
             ...(paymentCardType ? { payment_card_type: paymentCardType } : {}),
             ...(paymentCardLastFour ? { payment_card_last_four: paymentCardLastFour } : {}),
