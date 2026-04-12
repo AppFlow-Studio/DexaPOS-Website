@@ -725,7 +725,9 @@ export async function InviteClerkStaff(
         inviterUserId,
         emailAddress: formData.email,
         role: "org:member",
-        ...(appUrl && { redirectUrl: `${appUrl}/dashboard` }),
+        ...(appUrl && {
+          redirectUrl: `${appUrl}/accept-invitation?email=${encodeURIComponent(formData.email)}&firstName=${encodeURIComponent(formData.first_name ?? '')}&lastName=${encodeURIComponent(formData.last_name ?? '')}`,
+        }),
         publicMetadata: {
           creationType: "invitation", // Mark as invitation flow
           roleCode: formData.role_code,
