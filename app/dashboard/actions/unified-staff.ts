@@ -27,6 +27,41 @@ const ADMIN_ROLE_CODES = ["merchant.owner", "merchant.admin"];
 // ============================================================================
 
 /**
+ * Checks if a PIN is already in use at the given location(s).
+ * Returns the conflicting location ID if found, otherwise null.
+ * Optionally excludes a specific staff_profile_id or user_id (for updates).
+ */
+async function checkPinConflict(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  pin: string,
+  locationIds: string[],
+  excludeStaffProfileId?: string | null,
+  excludeUserId?: string | null,
+): Promise<string | null> {
+  for (const locationId of locationIds) {
+    let query = supabase
+      .from("location_members")
+      .select("id, staff_profile_id, user_id")
+      .eq("location_id", locationId)
+      .eq("pin_plain", pin)
+      .eq("is_active", true);
+
+    const { data } = await query;
+    if (!data || data.length === 0) continue;
+
+    // Filter out the current staff member (for edits/resets)
+    const conflicts = data.filter((row) => {
+      if (excludeStaffProfileId && row.staff_profile_id === excludeStaffProfileId) return false;
+      if (excludeUserId && row.user_id === excludeUserId) return false;
+      return true;
+    });
+
+    if (conflicts.length > 0) return locationId;
+  }
+  return null;
+}
+
+/**
  * Resolves the final set of location IDs for a staff creation request.
  * Owner / admin roles are automatically provisioned to EVERY merchant location.
  */
@@ -220,6 +255,15 @@ export async function CreatePOSStaff(
       pinCode = formData.pin_code;
     }
 
+    // Check PIN uniqueness across all assigned locations
+    if (pinCode) {
+      const conflictLocationId = await checkPinConflict(supabase, pinCode, formData.location_ids);
+      if (conflictLocationId) {
+        const { data: loc } = await supabase.from("locations").select("name").eq("id", conflictLocationId).single();
+        return { error: `PIN is already in use at ${loc?.name ?? "another location"}. Each staff member at a location must have a unique PIN.` };
+      }
+    }
+
     // 3. Create staff_profile record (POS-only)
     const { data: staffProfile, error: profileError } = await supabase
       .from("staff_profiles")
@@ -405,6 +449,15 @@ export async function CreateClerkUserDirectly(
       pinCode = generatedPin;
     } else if (formData.pin_code) {
       pinCode = formData.pin_code;
+    }
+
+    // Check PIN uniqueness across all assigned locations
+    if (pinCode) {
+      const conflictLocationId = await checkPinConflict(supabase, pinCode, resolvedLocationIds);
+      if (conflictLocationId) {
+        const { data: loc } = await supabase.from("locations").select("name").eq("id", conflictLocationId).single();
+        return { error: `PIN is already in use at ${loc?.name ?? "another location"}. Each staff member at a location must have a unique PIN.` };
+      }
     }
 
     // 2. Prepare location assignments for publicMetadata (webhook fallback)
@@ -683,6 +736,15 @@ export async function InviteClerkStaff(
       pinCode = generatedPin;
     } else if (formData.pin_code) {
       pinCode = formData.pin_code;
+    }
+
+    // Check PIN uniqueness across all assigned locations
+    if (pinCode) {
+      const conflictLocationId = await checkPinConflict(supabase, pinCode, resolvedLocationIds);
+      if (conflictLocationId) {
+        const { data: loc } = await supabase.from("locations").select("name").eq("id", conflictLocationId).single();
+        return { error: `PIN is already in use at ${loc?.name ?? "another location"}. Each staff member at a location must have a unique PIN.` };
+      }
     }
 
     const locationAssignmentsWithPin = pinCode
@@ -970,6 +1032,18 @@ export async function ResetStaffPIN(
 
     if (!member) {
       return { error: "Member not found" };
+    }
+
+    // Check PIN uniqueness at this location, excluding the current staff member
+    const conflictLocationId = await checkPinConflict(
+      supabase,
+      pin,
+      [locationId],
+      member.staff_profile_id,
+      member.user_id,
+    );
+    if (conflictLocationId) {
+      return { error: "PIN is already in use at this location. Please choose a different PIN." };
     }
 
     let query = supabase
