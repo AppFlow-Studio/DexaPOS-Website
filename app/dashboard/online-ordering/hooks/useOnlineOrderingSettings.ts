@@ -3,9 +3,17 @@
 import { create } from "zustand";
 import {
   getOnlineOrderingSettings,
+  requestOnlineOrderingSetup,
   saveOnlineOrderingSettings,
 } from "../actions";
 import { toast } from "sonner";
+
+export type OnlineStoreSetupStatus =
+  | "not_requested"
+  | "pending_review"
+  | "approved"
+  | "rejected"
+  | "setup_completed";
 
 export interface DaySchedule {
   enabled: boolean;
@@ -27,6 +35,14 @@ export interface WeeklySchedule {
 export interface OnlineOrderingSettings {
   id: string;
   locationId: string;
+  setupRequestStatus: OnlineStoreSetupStatus;
+  setupRequestedAt: string | null;
+  setupRequestedBy: string | null;
+  setupReviewedAt: string | null;
+  setupReviewedBy: string | null;
+  setupApprovedAt: string | null;
+  setupCompletedAt: string | null;
+  setupRejectionReason: string | null;
 
   // Identity
   enabled: boolean;
@@ -141,6 +157,14 @@ const createDefaultSettings = (
 ): OnlineOrderingSettings => ({
   id: `temp_${locationId}`,
   locationId,
+  setupRequestStatus: "not_requested",
+  setupRequestedAt: null,
+  setupRequestedBy: null,
+  setupReviewedAt: null,
+  setupReviewedBy: null,
+  setupApprovedAt: null,
+  setupCompletedAt: null,
+  setupRejectionReason: null,
 
   enabled: false,
   storeName: locationName,
@@ -214,10 +238,7 @@ interface OnlineOrderingStore {
   ) => void;
   saveSettings: (locationId: string) => Promise<void>;
   discardChanges: (locationId: string) => Promise<void>;
-  createSettings: (
-    locationId: string,
-    locationName: string
-  ) => Promise<OnlineOrderingSettings>;
+  requestSetup: (locationId: string) => Promise<void>;
   isDirty: (locationId: string) => boolean;
 }
 
@@ -289,7 +310,39 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
 
       set({ isSaving: true });
       try {
-        await saveOnlineOrderingSettings(locationId, currentSettings);
+        // Merchant dashboard is intentionally restricted: no payment/tip changes.
+        // It can maintain non-payment storefront settings only after HQ completes setup.
+        await saveOnlineOrderingSettings(locationId, {
+          enabled: currentSettings.enabled,
+          storeName: currentSettings.storeName,
+          description: currentSettings.description,
+          phone: currentSettings.phone,
+          email: currentSettings.email,
+
+          // Branding
+          templateId: currentSettings.templateId,
+          primaryColor: currentSettings.primaryColor,
+          secondaryColor: currentSettings.secondaryColor,
+          accentColor: currentSettings.accentColor,
+          backgroundColor: currentSettings.backgroundColor,
+          textColor: currentSettings.textColor,
+          fontFamily: currentSettings.fontFamily,
+          logoUrl: currentSettings.logoUrl,
+          heroImageUrl: currentSettings.heroImageUrl,
+          faviconUrl: currentSettings.faviconUrl,
+          ogImageUrl: currentSettings.ogImageUrl,
+
+          // Ordering
+          operatingHours: currentSettings.operatingHours,
+          pickupEnabled: currentSettings.pickupEnabled,
+          deliveryEnabled: currentSettings.deliveryEnabled,
+          preparationLeadTime: currentSettings.preparationLeadTime,
+          futureOrderMaxDays: currentSettings.futureOrderMaxDays,
+          minimumOrderAmount: currentSettings.minimumOrderAmount,
+          baseDeliveryFee: currentSettings.baseDeliveryFee,
+          freeDeliveryThreshold: currentSettings.freeDeliveryThreshold,
+          deliveryRadiusMiles: currentSettings.deliveryRadiusMiles,
+        });
         await get().loadSettings(locationId);
         toast.success("Settings saved");
       } catch (error) {
@@ -306,22 +359,17 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
       await get().loadSettings(locationId);
       toast.info("Changes discarded");
     },
-
-    createSettings: async (locationId: string, locationName: string) => {
-      const newSettings = createDefaultSettings(locationId, locationName);
-
-      set((state) => ({
-        settings: [...state.settings, newSettings],
-      }));
-
+    requestSetup: async (locationId: string) => {
       try {
-        await saveOnlineOrderingSettings(locationId, newSettings);
+        await requestOnlineOrderingSetup(locationId);
+        await get().loadSettings(locationId);
+        toast.success("Setup request submitted to HQ");
       } catch (error) {
-        console.error("Failed to create settings:", error);
-        toast.error("Failed to initialize settings");
+        console.error("Failed to request setup:", error);
+        toast.error(
+          error instanceof Error ? error.message : "Failed to request setup"
+        );
       }
-
-      return newSettings;
     },
 
     isDirty: (locationId: string) => {

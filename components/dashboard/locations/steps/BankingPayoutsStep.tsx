@@ -1,16 +1,20 @@
 'use client'
 
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
 import { LocationFormStep4 } from '@/types/merchant_locations'
+import { X } from 'lucide-react'
 
 interface BankingPayoutsStepProps {
     data: LocationFormStep4
     onChange: (data: Partial<LocationFormStep4>) => void
     errors?: Record<string, string>
+    onBankSupportDocumentSelect?: (file: File | null) => void
+    onClearBankSupportDocument?: () => void
 }
 
 function onlyDigits(value: string, maxLength: number): string {
@@ -34,7 +38,13 @@ const dayOfWeekOptions = [
     { value: '6', label: 'Saturday' },
 ]
 
-export function BankingPayoutsStep({ data, onChange, errors }: BankingPayoutsStepProps) {
+export function BankingPayoutsStep({
+    data,
+    onChange,
+    errors,
+    onBankSupportDocumentSelect,
+    onClearBankSupportDocument,
+}: BankingPayoutsStepProps) {
     return (
         <div className="space-y-6">
             <div className="space-y-2">
@@ -117,6 +127,66 @@ export function BankingPayoutsStep({ data, onChange, errors }: BankingPayoutsSte
                     maxLength={17}
                 />
                 {errors?.confirm_account_number && <p className="text-sm text-destructive">{errors.confirm_account_number}</p>}
+            </div>
+
+            <div className="space-y-2">
+                <Label>Bank Letter or Voided Check</Label>
+                <div className="rounded-lg border p-4 space-y-3">
+                    <p className="text-xs text-muted-foreground">
+                        Upload the bank support document that HQ will review before approving online ordering for this branch.
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => document.getElementById('bank-support-document-input')?.click()}
+                        >
+                            Choose File
+                        </Button>
+                        {data.bank_support_document_name ? (
+                            <>
+                                <span className="text-sm text-muted-foreground truncate">{data.bank_support_document_name}</span>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2 text-destructive hover:text-destructive"
+                                    onClick={() => {
+                                        onChange({
+                                            bank_support_document_name: '',
+                                            bank_support_document_url: '',
+                                        })
+                                        onClearBankSupportDocument?.()
+                                    }}
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                </Button>
+                            </>
+                        ) : (
+                            <span className="text-sm text-muted-foreground">No file selected</span>
+                        )}
+                    </div>
+                    <input
+                        id="bank-support-document-input"
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg,.webp"
+                        className="hidden"
+                        onChange={(event) => {
+                            const file = event.target.files?.[0] || null
+                            if (file) {
+                                onChange({
+                                    bank_support_document_name: file.name,
+                                    bank_support_document_url: '',
+                                })
+                            }
+                            onBankSupportDocumentSelect?.(file)
+                        }}
+                    />
+                    {errors?.bank_support_document_name ? (
+                        <p className="text-sm text-destructive">{errors.bank_support_document_name}</p>
+                    ) : null}
+                </div>
             </div>
 
             <div className="space-y-2">

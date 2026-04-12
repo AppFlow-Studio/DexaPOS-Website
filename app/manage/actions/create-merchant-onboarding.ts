@@ -26,15 +26,38 @@ export async function updateMerchantLogo(
   }
 }
 
+export async function updateMerchantOnboardingMetadata(
+  organizationId: string,
+  metadata: Record<string, unknown>
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await assertHQPermission('hq.merchant.create')
+    const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
+    const org = await clerkClient.organizations.getOrganization({ organizationId })
+    await clerkClient.organizations.updateOrganization(organizationId, {
+      publicMetadata: {
+        ...(org.publicMetadata as Record<string, unknown>),
+        ...metadata,
+      },
+    })
+    return { success: true }
+  } catch (error: any) {
+    console.error('[updateMerchantOnboardingMetadata] Error:', error)
+    return { success: false, error: error?.message || 'Failed to update merchant metadata.' }
+  }
+}
+
 export interface CreateMerchantOnboardingParams {
   businessLegalName: string
   dbaName?: string
   businessType: 'llc' | 'corporation' | 'sole_proprietor' | 'partnership' | 'nonprofit'
-  einLastFour: string
+  einTaxId: string
   ownerFirstName: string
   ownerLastName: string
   ownerEmail: string
   ownerPhone: string
+  ownerDob: string
+  ownerSsn: string
   businessAddress?: {
     line1: string
     line2?: string
@@ -63,8 +86,16 @@ function normalizeValue(value?: string | null): string | null {
   return trimmed.length > 0 ? trimmed : null
 }
 
-function isValidEinLastFour(value: string): boolean {
-  return /^[0-9]{4}$/.test(value)
+function normalizeDigits(value: string): string {
+  return value.replace(/\D/g, '')
+}
+
+function isValidEinTaxId(value: string): boolean {
+  return /^\d{9}$/.test(normalizeDigits(value))
+}
+
+function isValidSsn(value: string): boolean {
+  return /^\d{9}$/.test(normalizeDigits(value))
 }
 
 function isValidEmail(value: string): boolean {
@@ -81,10 +112,12 @@ export async function createMerchantOnboarding(
   const ownerLastName = params.ownerLastName?.trim()
   const ownerEmail = normalizeEmail(params.ownerEmail || '')
   const ownerPhone = params.ownerPhone?.trim()
-  const einLastFour = params.einLastFour?.trim()
+  const ownerDob = params.ownerDob?.trim()
+  const ownerSsn = normalizeDigits(params.ownerSsn || '')
+  const einTaxId = normalizeDigits(params.einTaxId || '')
   const carrierId = params.carrierId?.trim() || null
 
-  if (!businessLegalName || !ownerFirstName || !ownerLastName || !ownerPhone) {
+  if (!businessLegalName || !ownerFirstName || !ownerLastName || !ownerPhone || !ownerDob) {
     return { success: false, error: 'Missing required fields.' }
   }
 
@@ -92,8 +125,12 @@ export async function createMerchantOnboarding(
     return { success: false, error: 'Owner email is invalid.' }
   }
 
-  if (!isValidEinLastFour(einLastFour)) {
-    return { success: false, error: 'EIN must be exactly 4 digits.' }
+  if (!isValidEinTaxId(einTaxId)) {
+    return { success: false, error: 'EIN / Tax ID must be 9 digits.' }
+  }
+
+  if (!isValidSsn(ownerSsn)) {
+    return { success: false, error: 'Owner SSN must be 9 digits.' }
   }
 
   const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
@@ -114,7 +151,13 @@ export async function createMerchantOnboarding(
         owner_last_name: ownerLastName,
         owner_email: ownerEmail,
         owner_phone: ownerPhone,
-        ein_last_four: einLastFour,
+        owner_dob: ownerDob,
+        owner_ssn: ownerSsn,
+        online_store_owner_dob: ownerDob,
+        online_store_owner_ssn: ownerSsn,
+        ein_last_four: einTaxId.slice(-4),
+        ein_tax_id: einTaxId,
+        online_store_ein_tax_id: einTaxId,
         business_address_line1: normalizeValue(params.businessAddress?.line1),
         business_address_line2: normalizeValue(params.businessAddress?.line2),
         business_city: normalizeValue(params.businessAddress?.city),
@@ -156,6 +199,8 @@ export async function createMerchantOnboarding(
           carrier_id: carrierId,
           onboarding_status: 'onboarding',
           owner_email: ownerEmail,
+          owner_dob: ownerDob,
+          ein_tax_id: einTaxId,
         },
       },
       metadata: {

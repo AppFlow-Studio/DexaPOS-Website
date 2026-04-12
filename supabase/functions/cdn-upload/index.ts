@@ -9,7 +9,7 @@ type MerchantAssetCategory =
   | "menus"
   | "documents";
 
-type OrganizationAssetCategory = "logos";
+type OrganizationAssetCategory = "logos" | "documents";
 
 type UploadRequest =
   | {

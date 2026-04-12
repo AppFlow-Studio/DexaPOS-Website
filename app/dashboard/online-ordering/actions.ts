@@ -1,5 +1,6 @@
 "use server";
 
+import { auth } from "@clerk/nextjs/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   OnlineOrderingSettings,
@@ -7,6 +8,11 @@ import {
 } from "./hooks/useOnlineOrderingSettings";
 import { revalidatePath } from "next/cache";
 import { LogAuditEvent } from "../actions/audit-logs";
+import {
+  canMerchantMaintainCompletedStore,
+  getDefaultStoreSlug,
+  normalizeOnlineStoreRequestStatus,
+} from "@/lib/online-store/setup-flow";
 
 // ─── Dejavoo Management API ───────────────────────────────────────────────────
 // These env vars must be set in your deployment environment.
@@ -50,6 +56,29 @@ async function getSelectedLocationPaymentDevice(locationId: string) {
     devices.find((device) => device.is_active) ??
     null
   );
+}
+
+async function buildRequestedStoreSlug(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  locationName: string,
+  locationId: string
+) {
+  const baseSlug = getDefaultStoreSlug(locationName) || "store";
+  const candidates = [baseSlug, `${baseSlug}-${locationId.slice(0, 8)}`];
+
+  for (const candidate of candidates) {
+    const { data: existing } = await supabase
+      .from("online_store_config")
+      .select("id")
+      .eq("slug", candidate)
+      .maybeSingle();
+
+    if (!existing) {
+      return candidate;
+    }
+  }
+
+  return `${baseSlug}-${Date.now().toString().slice(-6)}`;
 }
 
 /**
@@ -105,9 +134,21 @@ function mapConfigToSettings(
   location: any,
   selectedDevice: PaymentDeviceSummary | null
 ): Partial<OnlineOrderingSettings> {
+  const setupRequestStatus = normalizeOnlineStoreRequestStatus(
+    config.setup_request_status
+  );
+
   return {
     id: config.id,
     locationId: config.location_id,
+    setupRequestStatus,
+    setupRequestedAt: config.setup_requested_at ?? null,
+    setupRequestedBy: config.setup_requested_by ?? null,
+    setupReviewedAt: config.setup_reviewed_at ?? null,
+    setupReviewedBy: config.setup_reviewed_by ?? null,
+    setupApprovedAt: config.setup_approved_at ?? null,
+    setupCompletedAt: config.setup_completed_at ?? null,
+    setupRejectionReason: config.setup_rejection_reason ?? null,
     enabled: config.is_active ?? false,
     storeName: config.store_name ?? location.name,
     storeSlug: config.slug ?? "",
@@ -211,12 +252,128 @@ export async function getOnlineOrderingSettings(
 
   return {
     locationId,
+    setupRequestStatus: "not_requested",
+    setupRequestedAt: null,
+    setupRequestedBy: null,
+    setupReviewedAt: null,
+    setupReviewedBy: null,
+    setupApprovedAt: null,
+    setupCompletedAt: null,
+    setupRejectionReason: null,
     storeName: location.name,
     phone: location.phone ?? "",
     email: location.email ?? "",
     address: `${location.address_line1}, ${location.city}, ${location.state} ${location.postal_code}`,
     operatingHours: location.business_hours as WeeklySchedule,
   };
+}
+
+export async function requestOnlineOrderingSetup(locationId: string) {
+  const supabase = createServerSupabaseClient();
+  const { userId } = await auth();
+
+  const { data: location, error: locationError } = await supabase
+    .from("locations")
+    .select("id, merchant_id, name")
+    .eq("id", locationId)
+    .single();
+
+  if (locationError || !location) {
+    throw new Error("Location not found");
+  }
+
+  const { data: existingConfig } = await supabase
+    .from("online_store_config")
+    .select(
+      "id, slug, setup_request_status, setup_rejection_reason, setup_reviewed_at, setup_reviewed_by"
+    )
+    .eq("location_id", locationId)
+    .maybeSingle();
+
+  const now = new Date().toISOString();
+  const setupRequestStatus = normalizeOnlineStoreRequestStatus(
+    existingConfig?.setup_request_status
+  );
+
+  if (setupRequestStatus === "pending_review") {
+    return { success: true, status: "pending_review" as const };
+  }
+
+  if (
+    setupRequestStatus === "approved" ||
+    setupRequestStatus === "setup_completed"
+  ) {
+    throw new Error(
+      "This branch already has an approved online-store setup request."
+    );
+  }
+
+  if (existingConfig) {
+    const { error: updateError } = await supabase
+      .from("online_store_config")
+      .update({
+        setup_request_status: "pending_review",
+        setup_requested_at: now,
+        setup_requested_by: userId ?? null,
+        setup_reviewed_at: null,
+        setup_reviewed_by: null,
+        setup_rejection_reason: null,
+        setup_approved_at: null,
+      })
+      .eq("id", existingConfig.id);
+
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
+  } else {
+    const slug = await buildRequestedStoreSlug(
+      supabase,
+      location.name,
+      location.id
+    );
+
+    const { error: insertError } = await supabase
+      .from("online_store_config")
+      .insert({
+        merchant_id: location.merchant_id,
+        location_id: location.id,
+        store_name: location.name,
+        slug,
+        is_active: false,
+        accepts_pickup: true,
+        accepts_delivery: false,
+        estimated_prep_minutes: 20,
+        min_order_cents: 0,
+        tip_enabled: true,
+        tip_presets: [15, 18, 20, 25],
+        setup_request_status: "pending_review",
+        setup_requested_at: now,
+        setup_requested_by: userId ?? null,
+      });
+
+    if (insertError) {
+      throw new Error(insertError.message);
+    }
+  }
+
+  await LogAuditEvent({
+    merchantId: location.merchant_id,
+    action: "Submitted Online Store Setup Request",
+    actionCategory: "settings",
+    resourceType: "online_store",
+    resourceId: location.id,
+    resourceName: location.name,
+    locationId: location.id,
+    changes: {
+      after: {
+        setup_request_status: "pending_review",
+        setup_requested_at: now,
+      },
+    },
+  });
+
+  revalidatePath("/dashboard/online-ordering");
+  return { success: true, status: "pending_review" as const };
 }
 
 export async function saveOnlineOrderingSettings(
@@ -227,7 +384,7 @@ export async function saveOnlineOrderingSettings(
 
   const { data: currentLocation, error: locFetchError } = await supabase
     .from("locations")
-    .select("merchant_id, name, phone, email, business_hours")
+    .select("merchant_id, name")
     .eq("id", locationId)
     .single();
 
@@ -237,29 +394,42 @@ export async function saveOnlineOrderingSettings(
 
   const merchantId = currentLocation.merchant_id;
 
-  const locationUpdates: Record<string, unknown> = {};
-  if (settings.phone !== undefined) locationUpdates.phone = settings.phone;
-  if (settings.email !== undefined) locationUpdates.email = settings.email;
-  if (settings.operatingHours !== undefined)
-    locationUpdates.business_hours = settings.operatingHours;
-
-  if (Object.keys(locationUpdates).length > 0) {
-    const { error: locError } = await supabase
-      .from("locations")
-      .update(locationUpdates)
-      .eq("id", locationId);
-
-    if (locError)
-      throw new Error(`Location update failed: ${locError.message}`);
-  }
-
   const { data: existingConfig } = await supabase
     .from("online_store_config")
     .select("*")
     .eq("location_id", locationId)
-    .single();
+    .maybeSingle();
 
-  const existingPaymentDevice = await getSelectedLocationPaymentDevice(locationId);
+  if (!existingConfig) {
+    throw new Error(
+      "Online-store setup has not been requested for this location yet."
+    );
+  }
+
+  if (!canMerchantMaintainCompletedStore(existingConfig.setup_request_status)) {
+    throw new Error(
+      "HQ must finish the online-store setup before branch storefront settings can be changed."
+    );
+  }
+
+  // Payment + tipping are HQ-only, enforced server-side to prevent UI bypass.
+  const forbiddenKeys = [
+    "ipospaysTpn",
+    "ipospaysFtdEcomKey",
+    "ipospaysDeviceLabel",
+    "ipospaysDeviceId",
+    "tippingEnabled",
+    "tipPresets",
+  ] as const;
+  if (
+    forbiddenKeys.some((key) =>
+      Object.prototype.hasOwnProperty.call(settings, key)
+    )
+  ) {
+    throw new Error(
+      "Payment credentials and tips are managed by HQ and cannot be updated from the merchant dashboard."
+    );
+  }
 
   const auditChanges: {
     before: Record<string, unknown>;
@@ -267,285 +437,85 @@ export async function saveOnlineOrderingSettings(
   } = { before: {}, after: {} };
   let hasChanges = false;
 
-  const configData: Record<string, unknown> = {
-    location_id: locationId,
-    merchant_id: merchantId,
-  };
+  const configData: Record<string, unknown> = {};
 
-  // Identity
-  if (settings.storeName !== undefined)
-    configData.store_name = settings.storeName;
-  if (settings.storeSlug !== undefined && settings.storeSlug !== "") {
-    // Check slug uniqueness across all merchants (excluding this location's own config)
-    const { data: slugConflict } = await supabase
-      .from("online_store_config")
-      .select("id, location_id")
-      .eq("slug", settings.storeSlug)
-      .neq("location_id", locationId)
-      .maybeSingle();
-    if (slugConflict) {
-      throw new Error(
-        `The URL slug "${settings.storeSlug}" is already taken. Please choose a different one.`
-      );
-    }
-    configData.slug = settings.storeSlug;
-  }
-  if (settings.enabled !== undefined) configData.is_active = settings.enabled;
-  if (settings.description !== undefined)
-    configData.description = settings.description;
+  // Identity / status (non-payment)
+  if (settings.enabled !== undefined) configData.is_active = Boolean(settings.enabled);
+  if (settings.storeName !== undefined) configData.store_name = settings.storeName;
+  if (settings.description !== undefined) configData.description = settings.description;
   if (settings.phone !== undefined) configData.phone = settings.phone;
   if (settings.email !== undefined) configData.email = settings.email;
 
-  // Template & Branding
-  if (settings.templateId !== undefined)
-    configData.template_id = settings.templateId;
-  if (settings.primaryColor !== undefined)
-    configData.primary_color = settings.primaryColor;
-  if (settings.secondaryColor !== undefined)
-    configData.secondary_color = settings.secondaryColor;
-  if (settings.accentColor !== undefined)
-    configData.accent_color = settings.accentColor;
-  if (settings.backgroundColor !== undefined)
-    configData.background_color = settings.backgroundColor;
-  if (settings.textColor !== undefined)
-    configData.text_color = settings.textColor;
-  if (settings.fontFamily !== undefined)
-    configData.font_family = settings.fontFamily;
-
-  // Assets
+  // Branding
+  if (settings.templateId !== undefined) configData.template_id = settings.templateId;
+  if (settings.primaryColor !== undefined) configData.primary_color = settings.primaryColor;
+  if (settings.secondaryColor !== undefined) configData.secondary_color = settings.secondaryColor;
+  if (settings.accentColor !== undefined) configData.accent_color = settings.accentColor;
+  if (settings.backgroundColor !== undefined) configData.background_color = settings.backgroundColor;
+  if (settings.textColor !== undefined) configData.text_color = settings.textColor;
+  if (settings.fontFamily !== undefined) configData.font_family = settings.fontFamily;
   if (settings.logoUrl !== undefined) configData.logo_url = settings.logoUrl;
-  if (settings.heroImageUrl !== undefined)
-    configData.hero_image_url = settings.heroImageUrl;
-  if (settings.faviconUrl !== undefined)
-    configData.favicon_url = settings.faviconUrl;
-  if (settings.ogImageUrl !== undefined)
-    configData.og_image_url = settings.ogImageUrl;
+  if (settings.heroImageUrl !== undefined) configData.hero_image_url = settings.heroImageUrl;
+  if (settings.faviconUrl !== undefined) configData.favicon_url = settings.faviconUrl;
+  if (settings.ogImageUrl !== undefined) configData.og_image_url = settings.ogImageUrl;
 
   // Hours
-  if (settings.operatingHours !== undefined)
-    configData.operating_hours = settings.operatingHours;
+  if (settings.operatingHours !== undefined) configData.operating_hours = settings.operatingHours;
 
   // Ordering
-  if (settings.pickupEnabled !== undefined)
-    configData.accepts_pickup = settings.pickupEnabled;
-  if (settings.deliveryEnabled !== undefined)
-    configData.accepts_delivery = settings.deliveryEnabled;
-  if (settings.minimumOrderAmount !== undefined)
-    configData.min_order_cents = Math.round(settings.minimumOrderAmount * 100);
-  if (settings.preparationLeadTime !== undefined)
-    configData.estimated_prep_minutes = settings.preparationLeadTime;
-  if (settings.futureOrderMaxDays !== undefined)
-    configData.max_future_order_days = settings.futureOrderMaxDays;
+  if (settings.pickupEnabled !== undefined) configData.accepts_pickup = Boolean(settings.pickupEnabled);
+  if (settings.deliveryEnabled !== undefined) configData.accepts_delivery = Boolean(settings.deliveryEnabled);
+  if (settings.preparationLeadTime !== undefined) configData.estimated_prep_minutes = Number(settings.preparationLeadTime) || 0;
+  if (settings.futureOrderMaxDays !== undefined) configData.max_future_order_days = Number(settings.futureOrderMaxDays) || 0;
+  if (settings.minimumOrderAmount !== undefined) configData.min_order_cents = Math.round(Number(settings.minimumOrderAmount || 0) * 100);
 
   // Delivery
-  if (settings.baseDeliveryFee !== undefined)
-    configData.delivery_fee_cents = Math.round(
-      settings.baseDeliveryFee * 100
-    );
-  if (settings.freeDeliveryThreshold !== undefined)
-    configData.free_delivery_threshold_cents =
-      settings.freeDeliveryThreshold > 0
-        ? Math.round(settings.freeDeliveryThreshold * 100)
-        : null;
-  if (settings.deliveryRadiusMiles !== undefined)
-    configData.delivery_radius_miles = settings.deliveryRadiusMiles;
-
-  // Tipping
-  if (settings.tippingEnabled !== undefined)
-    configData.tip_enabled = settings.tippingEnabled;
-  if (settings.tipPresets !== undefined) {
-    if (settings.tipPresets.length > 6) {
-      throw new Error("Tip presets cannot exceed 6 options.");
-    }
-    const invalid = settings.tipPresets.find((p) => p < 0 || p > 100 || !Number.isInteger(p));
-    if (invalid !== undefined) {
-      throw new Error("Each tip preset must be a whole number between 0 and 100.");
-    }
-    configData.tip_presets = settings.tipPresets;
+  if (settings.baseDeliveryFee !== undefined) configData.delivery_fee_cents = Math.round(Number(settings.baseDeliveryFee || 0) * 100);
+  if (settings.freeDeliveryThreshold !== undefined) configData.free_delivery_threshold_cents = Math.round(Number(settings.freeDeliveryThreshold || 0) * 100);
+  if (settings.deliveryRadiusMiles !== undefined) {
+    const parsed = settings.deliveryRadiusMiles === null ? null : Number(settings.deliveryRadiusMiles);
+    configData.delivery_radius_miles = parsed === null || Number.isFinite(parsed) ? parsed : null;
   }
 
-  // Payment/domain whitelist triggers
-  const previousSlug = existingConfig?.slug ?? null;
-  const nextSlugCandidate =
-    settings.storeSlug !== undefined && settings.storeSlug !== ""
-      ? settings.storeSlug
-      : previousSlug;
-  const slugIsChanging =
-    nextSlugCandidate !== null && nextSlugCandidate !== previousSlug;
+  // Merchant cannot change payment device/TPN/whitelist.
 
-  const nextTpn =
-    settings.ipospaysTpn !== undefined
-      ? settings.ipospaysTpn.trim() || null
-      : existingPaymentDevice?.tpn ?? existingConfig?.ipospays_tpn ?? null;
-  const currentTpn =
-    existingPaymentDevice?.tpn ?? existingConfig?.ipospays_tpn ?? null;
-  const tpnIsChanging = nextTpn !== currentTpn;
-  const providedFtdKey = settings.ipospaysFtdEcomKey?.trim() ?? "";
-  const shouldUpsertPaymentDevice =
-    Boolean(nextTpn) &&
-    (tpnIsChanging || providedFtdKey.length > 0 || !existingPaymentDevice);
-  if (settings.ipospaysTpn !== undefined)
-    configData.ipospays_tpn = settings.ipospaysTpn || null;
-  if (shouldUpsertPaymentDevice && providedFtdKey.length === 0) {
-    throw new Error(
-      existingPaymentDevice
-        ? "Enter the FTD Ecom/TOP key when changing the online-ordering TPN."
-        : "TPN and FTD Ecom/TOP key are both required to configure online card payments."
-    );
+  for (const key of Object.keys(configData)) {
+    const newVal = configData[key];
+    const oldVal = existingConfig[key as keyof typeof existingConfig];
+    if (JSON.stringify(newVal) !== JSON.stringify(oldVal)) {
+      auditChanges.before[key] = oldVal;
+      auditChanges.after[key] = newVal;
+      hasChanges = true;
+    }
   }
 
-  // Header
-  if (settings.headerStyle !== undefined)
-    configData.header_style = settings.headerStyle;
-  if (settings.headerTextColor !== undefined)
-    configData.header_text_color = settings.headerTextColor || null;
-  if (settings.borderColor !== undefined)
-    configData.border_color = settings.borderColor;
-  if (settings.cardColor !== undefined)
-    configData.card_color = settings.cardColor;
-
-  // Menu layout
-  if (settings.menuLayout !== undefined)
-    configData.menu_layout = settings.menuLayout;
-
-  // SEO
-  if (settings.metaTitle !== undefined)
-    configData.meta_title = settings.metaTitle || null;
-  if (settings.metaDescription !== undefined)
-    configData.meta_description = settings.metaDescription || null;
-
-  // Analytics
-  if (settings.googleAnalyticsId !== undefined)
-    configData.google_analytics_id = settings.googleAnalyticsId || null;
-  if (settings.facebookPixelId !== undefined)
-    configData.facebook_pixel_id = settings.facebookPixelId || null;
-
-  if (existingConfig) {
-    const compareKeys = Object.keys(configData).filter(
-      (k) => k !== "location_id" && k !== "merchant_id"
-    );
-    for (const key of compareKeys) {
-      const newVal = configData[key];
-      const oldVal = existingConfig[key as keyof typeof existingConfig];
-      if (JSON.stringify(newVal) !== JSON.stringify(oldVal)) {
-        auditChanges.before[key] = oldVal;
-        auditChanges.after[key] = newVal;
-        hasChanges = true;
-      }
-    }
-
+  if (Object.keys(configData).length > 0) {
     const { error: updateError } = await supabase
       .from("online_store_config")
       .update(configData)
       .eq("id", existingConfig.id);
 
-    if (updateError)
+    if (updateError) {
       throw new Error(`Store config update failed: ${updateError.message}`);
-  } else {
-    if (!configData.store_name) configData.store_name = currentLocation.name;
-    if (!configData.slug)
-      configData.slug = currentLocation.name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "");
-
-    const { data: newConfig, error: insertError } = await supabase
-      .from("online_store_config")
-      .insert(configData)
-      .select("id")
-      .single();
-
-    if (insertError) {
-      if (insertError.code === "23505" && insertError.message.includes("slug")) {
-        throw new Error(
-          `The URL slug "${configData.slug}" is already taken. Please choose a different one.`
-        );
-      }
-      throw new Error(`Store config creation failed: ${insertError.message}`);
-    }
-
-    hasChanges = true;
-    auditChanges.after = configData;
-  }
-
-  if (shouldUpsertPaymentDevice && nextTpn) {
-    const { error: paymentDeviceError } = await supabase.rpc(
-      "upsert_location_payment_device",
-      {
-        p_location_id: locationId,
-        p_tpn: nextTpn,
-        p_ftd_ecom_key: providedFtdKey,
-        p_device_label:
-          settings.ipospaysDeviceLabel?.trim() ||
-          existingPaymentDevice?.device_label ||
-          "Online ordering device",
-        p_use_for_online_ordering: true,
-      }
-    );
-
-    if (paymentDeviceError) {
-      throw new Error(
-        `Payment device update failed: ${paymentDeviceError.message}`
-      );
-    }
-
-    auditChanges.after.ipospays_tpn = nextTpn;
-    auditChanges.after.payment_device_model = "vault";
-    if (!auditChanges.before.ipospays_tpn && currentTpn) {
-      auditChanges.before.ipospays_tpn = currentTpn;
-    }
-    hasChanges = true;
-  } else if (settings.ipospaysTpn !== undefined && !nextTpn) {
-    const { error: clearPaymentDeviceError } = await supabase
-      .from("location_payment_devices")
-      .update({ use_for_online_ordering: false })
-      .eq("location_id", locationId)
-      .eq("use_for_online_ordering", true);
-
-    if (clearPaymentDeviceError) {
-      throw new Error(
-        `Failed to clear selected payment device: ${clearPaymentDeviceError.message}`
-      );
     }
   }
 
   if (hasChanges) {
     await LogAuditEvent({
       merchantId,
-      action: existingConfig
-        ? "Updated Online Store Config"
-        : "Created Online Store Config",
+      action: "Updated Merchant Online Store Settings",
       actionCategory: "settings",
       resourceType: "online_store",
       resourceId: locationId,
-      resourceName: (settings.storeName || currentLocation.name) as string,
+      resourceName: currentLocation.name as string,
       locationId,
       changes: auditChanges,
     });
   }
 
-  // If TPN changed or slug/domain changed, whitelist this store's domain with Dejavoo
-  const finalTpn = nextTpn;
-  const finalSlug = (configData.slug as string | undefined) ?? existingConfig?.slug ?? "";
-  const shouldWhitelist = (tpnIsChanging || slugIsChanging) && finalTpn && finalSlug;
-  if (shouldWhitelist) {
-    const whitelistResult = await whitelistDejavooDomain(finalTpn, finalSlug);
-    if (!whitelistResult.success && !whitelistResult.skipped) {
-      console.error("[SAVE_SETTINGS] Domain whitelist failed:", whitelistResult.error);
-      // Non-blocking — the TPN was saved successfully; whitelist failure is logged but
-      // doesn't roll back the save. The admin can retry by re-saving the same TPN.
-    }
-  }
-
   revalidatePath("/dashboard/online-ordering");
-  return {
-    success: true,
-    ...(shouldWhitelist
-      ? { domainWhitelisted: true }
-      : {}),
-  };
+  return { success: true };
 }
-
 /**
  * Manually re-triggers the Dejavoo domain whitelist for a location's TPN.
  * Useful if the initial whitelist failed or if the domain changed.
@@ -553,29 +523,7 @@ export async function saveOnlineOrderingSettings(
 export async function retriggerDomainWhitelist(
   locationId: string
 ): Promise<{ success: boolean; error?: string; skipped?: boolean }> {
-  const supabase = createServerSupabaseClient();
-  const selectedDevice = await getSelectedLocationPaymentDevice(locationId);
-
-  const { data: config, error } = await supabase
-    .from("online_store_config")
-    .select("slug")
-    .eq("location_id", locationId)
-    .single();
-
-  if (error || !config) {
-    return { success: false, error: "Store config not found" };
-  }
-
-  const tpn = selectedDevice?.tpn ?? null;
-  if (!tpn) {
-    return { success: false, error: "No TPN configured for this store" };
-  }
-
-  if (!config.slug) {
-    return { success: false, error: "No URL slug configured for this store" };
-  }
-
-  return whitelistDejavooDomain(tpn, config.slug);
+  throw new Error("Domain whitelisting is managed by HQ only.");
 }
 
 
