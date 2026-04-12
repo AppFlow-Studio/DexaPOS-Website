@@ -373,23 +373,26 @@ export async function UpdateStockWithReason(
   const userId = user?.id || null;
   const userName = user?.fullName || user?.firstName || "Unknown User";
 
-  // Map the UI source to the enum values the DB constraint accepts.
-  // The free-text reason the user typed goes into p_update_source (no constraint).
-  const sourceToReason: Record<string, string> = {
-    manual: "physical_count",
-    adjustment: "manual_adjustment",
-    waste: "waste_spoilage",
-    transfer: "transfer_in",
+  // Both columns are constrained enums — map UI source to both allowed values.
+  // update_source: manual | delivery | sale | waste | adjustment | transfer
+  // update_reason: received_delivery | manual_adjustment | sale_deduction |
+  //                waste_spoilage | physical_count | transfer_in | transfer_out |
+  //                initial_stock | other
+  const sourceEnumMap: Record<string, { source: string; reason: string }> = {
+    manual:     { source: "manual",     reason: "physical_count" },
+    adjustment: { source: "adjustment", reason: "manual_adjustment" },
+    waste:      { source: "waste",      reason: "waste_spoilage" },
+    transfer:   { source: "transfer",   reason: "transfer_in" },
   };
-  const updateReason = sourceToReason[params.source || "manual"] ?? "manual_adjustment";
+  const mapped = sourceEnumMap[params.source || "manual"] ?? { source: "manual", reason: "physical_count" };
 
   // Call RPC
   const { data, error } = await supabase.rpc("log_stock_update_with_audit", {
     p_location_id: params.locationId,
     p_inventory_item_id: params.inventoryItemId,
     p_new_stock: params.newStock,
-    p_update_reason: updateReason,
-    p_update_source: params.reason,
+    p_update_reason: mapped.reason,
+    p_update_source: mapped.source,
     p_user_id: userId,
     p_user_name: userName,
   });
