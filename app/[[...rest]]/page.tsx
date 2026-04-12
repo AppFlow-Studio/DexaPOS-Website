@@ -56,15 +56,6 @@ export default function Home() {
               />
             </div>
 
-            {/* Sign Up Option */}
-            <div className="text-center">
-              <p className="text-muted-foreground text-sm">
-                Need to create a new organization?{' '}
-                <Link href="/sign-up" className="text-primary hover:text-primary/80 font-medium">
-                  Sign up
-                </Link>
-              </p>
-            </div>
           </SignedOut>
 
           <SignedIn>
