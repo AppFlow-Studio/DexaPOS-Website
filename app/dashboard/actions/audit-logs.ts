@@ -373,13 +373,23 @@ export async function UpdateStockWithReason(
   const userId = user?.id || null;
   const userName = user?.fullName || user?.firstName || "Unknown User";
 
+  // Map the UI source to the enum values the DB constraint accepts.
+  // The free-text reason the user typed goes into p_update_source (no constraint).
+  const sourceToReason: Record<string, string> = {
+    manual: "physical_count",
+    adjustment: "manual_adjustment",
+    waste: "waste_spoilage",
+    transfer: "transfer_in",
+  };
+  const updateReason = sourceToReason[params.source || "manual"] ?? "manual_adjustment";
+
   // Call RPC
   const { data, error } = await supabase.rpc("log_stock_update_with_audit", {
     p_location_id: params.locationId,
     p_inventory_item_id: params.inventoryItemId,
     p_new_stock: params.newStock,
-    p_update_reason: params.reason,
-    p_update_source: params.source || "manual",
+    p_update_reason: updateReason,
+    p_update_source: params.reason,
     p_user_id: userId,
     p_user_name: userName,
   });

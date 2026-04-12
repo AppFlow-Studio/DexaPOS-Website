@@ -181,12 +181,13 @@ export async function GetInventoryItems(
       const effectiveThreshold =
         stock?.reorder_threshold ??
         override?.custom_reorder_threshold ??
-        item.reorder_threshold;
+        item.reorder_point;
 
       return {
         ...item,
-        // Location-specific stock
-        current_stock: stock?.stock_quantity ?? 0,
+        // Location-specific stock — fall back to item's base stock for items
+        // that pre-date location_inventory_stock seeding (avoids false "Out of Stock")
+        current_stock: stock?.stock_quantity ?? item.current_stock ?? 0,
         // Location-specific or effective values
         cost_per_unit: effectiveCost,
         reorder_threshold: effectiveThreshold,
@@ -203,12 +204,13 @@ export async function GetInventoryItems(
   // GLOBAL VIEW: Fetch aggregate stock across all locations
   // ========================================================================
 
-  // Get aggregate stock for all items
+  // Get aggregate stock for this merchant's items only
   const { data: allStockData } = await supabase
     .from("location_inventory_stock")
     .select(
       "inventory_item_id, stock_quantity, reorder_threshold, location_id",
-    );
+    )
+    .in("inventory_item_id", itemIds);
 
   // Get item reorder thresholds
   const itemThresholdMap = new Map(
@@ -341,6 +343,18 @@ export async function CreateInventoryItem(
   if (error) {
     console.error("Error creating inventory item:", error);
     return { error: error.message };
+  }
+
+  // Seed location_inventory_stock for tracked location-specific items.
+  // GetInventoryItems reads stock from this table in location view — without a
+  // record the item always shows 0 stock (Out of Stock) even if initial stock > 0.
+  if (locationId && (data.stock_mode || "in_stock") === "stock_tracking") {
+    await supabase.from("location_inventory_stock").insert({
+      inventory_item_id: item.id,
+      location_id: locationId,
+      stock_quantity: data.current_stock || 0,
+      reorder_threshold: data.reorder_point || 0,
+    });
   }
 
   // Log audit event
@@ -1333,7 +1347,8 @@ export async function GetInventoryStats(
     .from("location_inventory_stock")
     .select(
       "inventory_item_id, stock_quantity, reorder_threshold, location_id",
-    );
+    )
+    .in("inventory_item_id", itemIds);
 
   // Get all locations for this merchant
   const { data: allLocations } = await supabase
