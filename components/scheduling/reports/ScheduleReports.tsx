@@ -1,7 +1,6 @@
 "use client";
 
 import { useScheduleStore } from "@/stores/useScheduleStore";
-import { useUnifiedStaff } from "@/app/dashboard/hooks/useStaff";
 import { useState, useMemo } from "react";
 import {
   Card,
@@ -30,12 +29,10 @@ import {
   format,
   parseISO,
   differenceInMinutes,
-  startOfWeek,
   addDays,
   isSameDay,
 } from "date-fns";
 import {
-  AlertTriangle,
   Download,
   FileText,
   TrendingDown,
@@ -48,48 +45,9 @@ import {
 import { VarianceChart } from "./VarianceChart";
 import { BreakComplianceTable, ComplianceRecord } from "./BreakComplianceTable";
 
-// --- Mock Data & Helpers ---
+// --- Helpers ---
 
-const HOURLY_WAGE_ESTIMATE = 18.5; // Mock average wage
-const SALES_FORECAST = 45000; // Mock weekly sales
-
-const MOCK_COMPLIANCE: ComplianceRecord[] = [
-  {
-    name: "John Doe",
-    violations: 0,
-    missedBreaks: 1,
-    lateStarts: 2,
-    earlyOuts: 0,
-  },
-  {
-    name: "Sarah Smith",
-    violations: 0,
-    missedBreaks: 0,
-    lateStarts: 0,
-    earlyOuts: 0,
-  },
-  {
-    name: "Mike Jones",
-    violations: 1,
-    missedBreaks: 0,
-    lateStarts: 1,
-    earlyOuts: 0,
-  },
-  {
-    name: "Emily Davis",
-    violations: 0,
-    missedBreaks: 0,
-    lateStarts: 0,
-    earlyOuts: 0,
-  },
-  {
-    name: "Robert Wilson",
-    violations: 0,
-    missedBreaks: 0,
-    lateStarts: 0,
-    earlyOuts: 1,
-  },
-];
+const HOURLY_WAGE_ESTIMATE = 18.5; // Average wage estimate used for labor cost calculations
 
 const StatCard = ({
   title,
@@ -129,7 +87,6 @@ const StatCard = ({
 
 export function ScheduleReports() {
   const { weeklySchedules } = useScheduleStore();
-  const { data: staffMembers = [] } = useUnifiedStaff();
 
   // Selected Schedule State
   const [selectedScheduleId, setSelectedScheduleId] = useState<string>(
@@ -148,42 +105,65 @@ export function ScheduleReports() {
     const shifts = selectedSchedule.shifts;
     const totalShifts = shifts.length;
 
-    let totalMinutes = 0;
-    const scheduledDailySales: any[] = []; // Mock Daily Sales
+    // Per-employee hours map for overtime calculation
+    const employeeHoursMap = new Map<string, number>();
 
-    // Calculate Totals & Daily Buckets
+    let totalMinutes = 0;
     shifts.forEach((shift) => {
       const start = parseISO(shift.start_time);
       const end = parseISO(shift.end_time);
-      totalMinutes += differenceInMinutes(end, start);
+      const mins = differenceInMinutes(end, start);
+      totalMinutes += mins;
+
+      if (shift.employee_id && shift.employee_id !== "unassigned") {
+        const prev = employeeHoursMap.get(shift.employee_id) || 0;
+        employeeHoursMap.set(shift.employee_id, prev + mins / 60);
+      }
     });
 
     const totalHours = totalMinutes / 60;
     const estLaborCost = totalHours * HOURLY_WAGE_ESTIMATE;
-    const laborPercentage = (estLaborCost / SALES_FORECAST) * 100;
 
-    // Daily Mock Data Generation for Chart
+    // Overtime = hours scheduled beyond 40h/week per employee
+    let overtimeHours = 0;
+    for (const hours of employeeHoursMap.values()) {
+      if (hours > 40) overtimeHours += hours - 40;
+    }
+
+    // Real daily labor cost from actual shifts
     const startOfSchedule = parseISO(selectedSchedule.startDate);
     const chartData = Array.from({ length: 7 }, (_, i) => {
       const day = addDays(startOfSchedule, i);
       const dayName = format(day, "EEE");
-      // Generate vaguely realistic curve (higher on weekends)
-      const isWeekend = i === 5 || i === 6;
-      const dailySales = isWeekend ? 8500 : 5500;
-      const dailyLabor = isWeekend ? 2200 : 1400; // Mock actuals
-
-      return { day: dayName, sales: dailySales, labor: dailyLabor };
+      const dayMins = shifts
+        .filter((s) => isSameDay(parseISO(s.start_time), day))
+        .reduce((acc, s) => acc + differenceInMinutes(parseISO(s.end_time), parseISO(s.start_time)), 0);
+      return { day: dayName, labor: Math.round((dayMins / 60) * HOURLY_WAGE_ESTIMATE) };
     });
+
+    // Compliance records built from real scheduled employees (violations require actual timesheet data)
+    const uniqueEmployees = new Map<string, string>();
+    shifts.forEach((s) => {
+      if (s.employee_id && s.employee_id !== "unassigned" && s.employee_name) {
+        uniqueEmployees.set(s.employee_id, s.employee_name);
+      }
+    });
+    const complianceData: ComplianceRecord[] = Array.from(uniqueEmployees.values()).map((name) => ({
+      name,
+      violations: 0,
+      missedBreaks: 0,
+      lateStarts: 0,
+      earlyOuts: 0,
+    }));
 
     return {
       totalHours,
       totalShifts,
       estLaborCost,
-      laborPercentage,
+      overtimeHours,
       chartData,
-      employeeCount: new Set(
-        shifts.map((s) => s.employee_id).filter((id) => id !== "unassigned")
-      ).size,
+      complianceData,
+      employeeCount: uniqueEmployees.size,
     };
   }, [selectedSchedule]);
 
@@ -242,6 +222,29 @@ export function ScheduleReports() {
                 variant="outline"
                 size="sm"
                 className="h-9 gap-2 hidden md:flex"
+                disabled={!selectedSchedule || !stats}
+                onClick={() => {
+                  if (!selectedSchedule || !stats) return;
+                  const rows = [
+                    ["Employee", "Role", "Date", "Start", "End", "Hours"],
+                    ...selectedSchedule.shifts.map((s) => [
+                      s.employee_name || "Unassigned",
+                      s.role,
+                      format(parseISO(s.start_time), "yyyy-MM-dd"),
+                      format(parseISO(s.start_time), "HH:mm"),
+                      format(parseISO(s.end_time), "HH:mm"),
+                      (differenceInMinutes(parseISO(s.end_time), parseISO(s.start_time)) / 60).toFixed(2),
+                    ]),
+                  ];
+                  const csv = rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
+                  const blob = new Blob([csv], { type: "text/csv" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `schedule-${selectedSchedule.name.replace(/\s+/g, "-")}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
               >
                 <Download className="h-4 w-4" />
                 Export CSV
@@ -256,31 +259,27 @@ export function ScheduleReports() {
           {/* Top Row Stats */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <StatCard
-              title="Total Labor Cost"
+              title="Est. Labor Cost"
               value={`$${stats.estLaborCost.toLocaleString(undefined, {
                 maximumFractionDigits: 0,
               })}`}
-              trend="-2.4% vs Forecast"
-              trendColor="text-green-500"
               icon={DollarSign}
             />
             <StatCard
-              title="Labor %"
-              value={`${stats.laborPercentage.toFixed(1)}%`}
-              trend="Within Target"
-              trendColor="text-green-500"
+              title="Employees Scheduled"
+              value={String(stats.employeeCount)}
               icon={Briefcase}
             />
             <StatCard
               title="Scheduled Hours"
-              value={`${stats.totalHours.toFixed(0)}h`}
+              value={`${stats.totalHours.toFixed(1)}h`}
               icon={Clock}
             />
             <StatCard
               title="Overtime Hours"
-              value="12.5h"
-              trend="+4.5h vs Last Week"
-              trendColor="text-red-500"
+              value={`${stats.overtimeHours.toFixed(1)}h`}
+              trendColor={stats.overtimeHours > 0 ? "text-red-500" : "text-green-500"}
+              trend={stats.overtimeHours > 0 ? "Over 40h threshold" : "No overtime"}
               icon={AlertCircle}
             />
           </div>
@@ -290,10 +289,10 @@ export function ScheduleReports() {
             <Card className="md:col-span-2 lg:col-span-4">
               <CardHeader>
                 <CardTitle className="text-base">
-                  Labor vs Sales Variance
+                  Daily Labor Cost
                 </CardTitle>
                 <CardDescription>
-                  Daily labor costs compared to sales revenue.
+                  Estimated labor cost per day based on scheduled hours.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -324,27 +323,33 @@ export function ScheduleReports() {
                     Avg Shift Length
                   </span>
                   <span className="font-medium">
-                    {(stats.totalHours / stats.totalShifts).toFixed(1)}h
+                    {stats.totalShifts > 0
+                      ? `${(stats.totalHours / stats.totalShifts).toFixed(1)}h`
+                      : "—"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between py-2 border-b">
                   <span className="text-sm text-muted-foreground">
-                    Call-offs
+                    Overtime Hours
                   </span>
-                  <span className="font-medium text-yellow-500">2</span>
+                  <span className={`font-medium ${stats.overtimeHours > 0 ? "text-red-500" : "text-muted-foreground"}`}>
+                    {stats.overtimeHours > 0 ? `${stats.overtimeHours.toFixed(1)}h` : "—"}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between py-2">
                   <span className="text-sm text-muted-foreground">
-                    Late Clock-ins
+                    Open Shifts
                   </span>
-                  <span className="font-medium text-yellow-500">3</span>
+                  <span className="font-medium">
+                    {selectedSchedule.shifts.filter((s) => !s.employee_id || s.employee_id === "unassigned").length}
+                  </span>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Compliance Table - Using Component */}
-          <BreakComplianceTable data={MOCK_COMPLIANCE} />
+          {/* Compliance Table - built from scheduled employees (violations require actual timesheet data) */}
+          <BreakComplianceTable data={stats.complianceData} />
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center p-12 text-muted-foreground border border-dashed rounded-lg bg-muted/10 h-[400px]">
