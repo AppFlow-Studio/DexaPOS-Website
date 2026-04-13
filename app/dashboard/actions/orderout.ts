@@ -94,6 +94,7 @@ export async function getOrderOutStatus(
       )
       .eq("location_id", locationId)
       .single();
+    
 
     return {
       success: true,

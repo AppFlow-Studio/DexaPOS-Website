@@ -328,99 +328,99 @@ alter table "public"."settlement_batches" alter column "refund_amount" set data 
 
 alter table "public"."settlement_batches" alter column "tip_amount" set data type numeric(10,2) using "tip_amount"::numeric(10,2);
 
-CREATE UNIQUE INDEX device_heartbeats_station_id_key ON public.device_heartbeats USING btree (station_id);
+CREATE UNIQUE INDEX IF NOT EXISTS device_heartbeats_station_id_key ON public.device_heartbeats USING btree (station_id);
 
-CREATE INDEX idx_kds_displays_location_id ON public.kds_displays USING btree (location_id);
+CREATE INDEX IF NOT EXISTS idx_kds_displays_location_id ON public.kds_displays USING btree (location_id);
 
-CREATE INDEX idx_kds_displays_merchant_id ON public.kds_displays USING btree (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_kds_displays_merchant_id ON public.kds_displays USING btree (merchant_id);
 
-CREATE INDEX idx_kds_item_status_bumped_by ON public.kds_item_status USING btree (bumped_by);
+CREATE INDEX IF NOT EXISTS idx_kds_item_status_bumped_by ON public.kds_item_status USING btree (bumped_by);
 
-CREATE INDEX idx_kds_item_status_order_item_id ON public.kds_item_status USING btree (order_item_id);
+CREATE INDEX IF NOT EXISTS idx_kds_item_status_order_item_id ON public.kds_item_status USING btree (order_item_id);
 
-CREATE INDEX idx_location_payment_devices_carrier ON public.location_payment_devices USING btree (carrier_id);
+CREATE INDEX IF NOT EXISTS idx_location_payment_devices_carrier ON public.location_payment_devices USING btree (carrier_id);
 
-CREATE INDEX idx_location_payment_devices_location ON public.location_payment_devices USING btree (merchant_id, location_id);
+CREATE INDEX IF NOT EXISTS idx_location_payment_devices_location ON public.location_payment_devices USING btree (merchant_id, location_id);
 
-CREATE INDEX idx_order_courses_fired_by ON public.order_courses USING btree (fired_by);
+CREATE INDEX IF NOT EXISTS idx_order_courses_fired_by ON public.order_courses USING btree (fired_by);
 
-CREATE INDEX idx_order_discounts_applied_by_staff_id ON public.order_discounts USING btree (applied_by_staff_profiles_id);
+CREATE INDEX IF NOT EXISTS idx_order_discounts_applied_by_staff_id ON public.order_discounts USING btree (applied_by_staff_profiles_id);
 
-CREATE INDEX idx_order_discounts_approved_by_staff_id ON public.order_discounts USING btree (approved_by_staff_profiles_id);
+CREATE INDEX IF NOT EXISTS idx_order_discounts_approved_by_staff_id ON public.order_discounts USING btree (approved_by_staff_profiles_id);
 
-CREATE INDEX idx_order_discounts_voided_by ON public.order_discounts USING btree (voided_by);
+CREATE INDEX IF NOT EXISTS idx_order_discounts_voided_by ON public.order_discounts USING btree (voided_by);
 
-CREATE INDEX idx_order_item_modifiers_modifier_group_id ON public.order_item_modifiers USING btree (modifier_group_id);
+CREATE INDEX IF NOT EXISTS idx_order_item_modifiers_modifier_group_id ON public.order_item_modifiers USING btree (modifier_group_id);
 
-CREATE INDEX idx_order_item_modifiers_modifier_item_id ON public.order_item_modifiers USING btree (modifier_item_id);
+CREATE INDEX IF NOT EXISTS idx_order_item_modifiers_modifier_item_id ON public.order_item_modifiers USING btree (modifier_item_id);
 
-CREATE INDEX idx_order_items_assigned_to_staff_id ON public.order_items USING btree (assigned_to_staff_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_assigned_to_staff_id ON public.order_items USING btree (assigned_to_staff_id);
 
-CREATE INDEX idx_order_items_discount_applied_by ON public.order_items USING btree (discount_applied_by);
+CREATE INDEX IF NOT EXISTS idx_order_items_discount_applied_by ON public.order_items USING btree (discount_applied_by);
 
-CREATE INDEX idx_order_items_discount_approved_by ON public.order_items USING btree (discount_approved_by);
+CREATE INDEX IF NOT EXISTS idx_order_items_discount_approved_by ON public.order_items USING btree (discount_approved_by);
 
-CREATE INDEX idx_order_items_discount_id ON public.order_items USING btree (discount_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_discount_id ON public.order_items USING btree (discount_id);
 
-CREATE INDEX idx_order_items_location_exclusive_item_id ON public.order_items USING btree (location_exclusive_item_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_location_exclusive_item_id ON public.order_items USING btree (location_exclusive_item_id);
 
-CREATE INDEX idx_order_items_selected_size_id ON public.order_items USING btree (selected_size_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_selected_size_id ON public.order_items USING btree (selected_size_id);
 
-CREATE INDEX idx_order_items_voided_by ON public.order_items USING btree (voided_by);
+CREATE INDEX IF NOT EXISTS idx_order_items_voided_by ON public.order_items USING btree (voided_by);
 
-CREATE INDEX idx_order_payments_initiated_by ON public.order_payments USING btree (initiated_by);
+CREATE INDEX IF NOT EXISTS idx_order_payments_initiated_by ON public.order_payments USING btree (initiated_by);
 
-CREATE INDEX idx_order_payments_location_id ON public.order_payments USING btree (location_id);
+CREATE INDEX IF NOT EXISTS idx_order_payments_location_id ON public.order_payments USING btree (location_id);
 
-CREATE INDEX idx_order_payments_parent_payment_id ON public.order_payments USING btree (parent_payment_id);
+CREATE INDEX IF NOT EXISTS idx_order_payments_parent_payment_id ON public.order_payments USING btree (parent_payment_id);
 
-CREATE INDEX idx_order_payments_processed_by_staff_id ON public.order_payments USING btree (processed_by_staff_id);
+CREATE INDEX IF NOT EXISTS idx_order_payments_processed_by_staff_id ON public.order_payments USING btree (processed_by_staff_id);
 
-CREATE INDEX idx_order_payments_processed_by_user_id ON public.order_payments USING btree (processed_by_user_id);
+CREATE INDEX IF NOT EXISTS idx_order_payments_processed_by_user_id ON public.order_payments USING btree (processed_by_user_id);
 
-CREATE INDEX idx_order_payments_refunded_by ON public.order_payments USING btree (refunded_by);
+CREATE INDEX IF NOT EXISTS idx_order_payments_refunded_by ON public.order_payments USING btree (refunded_by);
 
-CREATE INDEX idx_order_payments_returned_by ON public.order_payments USING btree (returned_by);
+CREATE INDEX IF NOT EXISTS idx_order_payments_returned_by ON public.order_payments USING btree (returned_by);
 
-CREATE INDEX idx_order_payments_settlement_batch ON public.order_payments USING btree (settlement_batch_id) WHERE (settlement_batch_id IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_order_payments_settlement_batch ON public.order_payments USING btree (settlement_batch_id) WHERE (settlement_batch_id IS NOT NULL);
 
-CREATE INDEX idx_order_payments_tip_adjusted_by ON public.order_payments USING btree (tip_adjusted_by);
+CREATE INDEX IF NOT EXISTS idx_order_payments_tip_adjusted_by ON public.order_payments USING btree (tip_adjusted_by);
 
-CREATE INDEX idx_order_payments_unsettled_terminal ON public.order_payments USING btree (terminal_id, status) WHERE ((is_settled = false) AND (settlement_batch_id IS NULL));
+CREATE INDEX IF NOT EXISTS idx_order_payments_unsettled_terminal ON public.order_payments USING btree (terminal_id, status) WHERE ((is_settled = false) AND (settlement_batch_id IS NULL));
 
-CREATE INDEX idx_order_payments_voided_by ON public.order_payments USING btree (voided_by);
+CREATE INDEX IF NOT EXISTS idx_order_payments_voided_by ON public.order_payments USING btree (voided_by);
 
-CREATE INDEX idx_order_refund_items_order_payment_item_id ON public.order_refund_items USING btree (order_payment_item_id);
+CREATE INDEX IF NOT EXISTS idx_order_refund_items_order_payment_item_id ON public.order_refund_items USING btree (order_payment_item_id);
 
-CREATE INDEX idx_order_status_history_changed_by_staff_id ON public.order_status_history USING btree (changed_by_staff_id);
+CREATE INDEX IF NOT EXISTS idx_order_status_history_changed_by_staff_id ON public.order_status_history USING btree (changed_by_staff_id);
 
-CREATE INDEX idx_order_status_history_changed_by_user_id ON public.order_status_history USING btree (changed_by_user_id);
+CREATE INDEX IF NOT EXISTS idx_order_status_history_changed_by_user_id ON public.order_status_history USING btree (changed_by_user_id);
 
-CREATE INDEX idx_orders_assigned_server_id ON public.orders USING btree (assigned_server_id);
+CREATE INDEX IF NOT EXISTS idx_orders_assigned_server_id ON public.orders USING btree (assigned_server_id);
 
-CREATE INDEX idx_orders_created_by_staff_id ON public.orders USING btree (created_by_staff_id);
+CREATE INDEX IF NOT EXISTS idx_orders_created_by_staff_id ON public.orders USING btree (created_by_staff_id);
 
-CREATE INDEX idx_orders_created_by_user_id ON public.orders USING btree (created_by_user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_created_by_user_id ON public.orders USING btree (created_by_user_id);
 
-CREATE INDEX idx_orders_station_id ON public.orders USING btree (station_id);
+CREATE INDEX IF NOT EXISTS idx_orders_station_id ON public.orders USING btree (station_id);
 
-CREATE INDEX idx_orders_voided_by ON public.orders USING btree (voided_by);
+CREATE INDEX IF NOT EXISTS idx_orders_voided_by ON public.orders USING btree (voided_by);
 
-CREATE INDEX idx_payment_credential_access_log_device_called_at ON public.payment_credential_access_log USING btree (device_id, called_at DESC);
+CREATE INDEX IF NOT EXISTS idx_payment_credential_access_log_device_called_at ON public.payment_credential_access_log USING btree (device_id, called_at DESC);
 
-CREATE INDEX idx_printers_merchant_id ON public.printers USING btree (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_printers_merchant_id ON public.printers USING btree (merchant_id);
 
-CREATE INDEX idx_settlement_batches_terminal_status ON public.settlement_batches USING btree (payment_terminal_id, status) WHERE (payment_terminal_id IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_settlement_batches_terminal_status ON public.settlement_batches USING btree (payment_terminal_id, status) WHERE (payment_terminal_id IS NOT NULL);
 
-CREATE INDEX idx_stations_deactivated_by ON public.stations USING btree (deactivated_by);
+CREATE INDEX IF NOT EXISTS idx_stations_deactivated_by ON public.stations USING btree (deactivated_by);
 
-CREATE UNIQUE INDEX location_payment_devices_location_tpn_key ON public.location_payment_devices USING btree (location_id, tpn);
+CREATE UNIQUE INDEX IF NOT EXISTS location_payment_devices_location_tpn_key ON public.location_payment_devices USING btree (location_id, tpn);
 
-CREATE UNIQUE INDEX location_payment_devices_one_online_per_location ON public.location_payment_devices USING btree (location_id) WHERE ((use_for_online_ordering = true) AND (is_active = true));
+CREATE UNIQUE INDEX IF NOT EXISTS location_payment_devices_one_online_per_location ON public.location_payment_devices USING btree (location_id) WHERE ((use_for_online_ordering = true) AND (is_active = true));
 
-CREATE UNIQUE INDEX location_payment_devices_pkey ON public.location_payment_devices USING btree (id);
+CREATE UNIQUE INDEX IF NOT EXISTS location_payment_devices_pkey ON public.location_payment_devices USING btree (id);
 
-CREATE UNIQUE INDEX payment_credential_access_log_pkey ON public.payment_credential_access_log USING btree (id);
+CREATE UNIQUE INDEX IF NOT EXISTS payment_credential_access_log_pkey ON public.payment_credential_access_log USING btree (id);
 
 alter table "public"."location_payment_devices" add constraint "location_payment_devices_pkey" PRIMARY KEY using index "location_payment_devices_pkey";
 
