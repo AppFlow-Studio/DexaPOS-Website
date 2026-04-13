@@ -156,6 +156,7 @@ export function ReviewStep({ data, onEditStep }: ReviewStepProps) {
                     <InfoRow label="Account Holder" value={data.account_holder_name} />
                     <InfoRow label="Routing" value={maskLastFour(data.routing_number)} />
                     <InfoRow label="Account" value={maskLastFour(data.account_number)} />
+                    <InfoRow label="Bank Support Document" value={data.bank_support_document_name || '-'} />
                     <InfoRow label="Account Type" value={data.account_type} />
                     <InfoRow label="Payout Frequency" value={getPayoutLabel(data)} />
                     <InfoRow

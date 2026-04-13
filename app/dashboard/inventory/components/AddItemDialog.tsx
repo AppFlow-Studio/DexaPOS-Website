@@ -124,26 +124,30 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
   const stockMode = form.watch("stock_mode");
 
   const onSubmit = async (values: FormValues) => {
-    await createItem.mutateAsync({
-      name: values.name,
-      sku: values.sku || undefined,
-      category: values.category || undefined,
-      unit_type: values.unit_type,
-      stock_mode: values.stock_mode,
-      current_stock: values.current_stock,
-      reorder_point: values.reorder_point,
-      cost_per_unit: values.cost_per_unit,
-      vendor_id:
-        values.vendor_id === "none" ? undefined : values.vendor_id || undefined,
-      // Set location_id based on view:
-      // - Global view (All Locations) → null (global item)
-      // - Location view → selectedLocationId (location-specific item)
-      location_id: isGlobalView ? null : selectedLocationId,
-    });
+    try {
+      const result = await createItem.mutateAsync({
+        name: values.name,
+        sku: values.sku || undefined,
+        category: values.category || undefined,
+        unit_type: values.unit_type,
+        stock_mode: values.stock_mode,
+        current_stock: values.current_stock,
+        reorder_point: values.reorder_point,
+        cost_per_unit: values.cost_per_unit,
+        vendor_id:
+          values.vendor_id === "none" ? undefined : values.vendor_id || undefined,
+        // Set location_id based on view:
+        // - Global view (All Locations) → null (global item)
+        // - Location view → selectedLocationId (location-specific item)
+        location_id: isGlobalView ? null : selectedLocationId,
+      });
 
-    if (!createItem.isError) {
-      form.reset();
-      onOpenChange(false);
+      if (!result?.error) {
+        form.reset();
+        onOpenChange(false);
+      }
+    } catch {
+      // Error toast is already shown by the mutation's onError handler
     }
   };
 

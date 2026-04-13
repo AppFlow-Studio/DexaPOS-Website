@@ -14,7 +14,11 @@ import {
   useTaxByLocation,
 } from "@/app/dashboard/hooks/useTaxReport";
 import { TaxSummaryCards } from "./components/TaxSummaryCards";
-import { TaxBreakdownTable } from "./components/TaxBreakdownTable";
+import {
+  TaxBreakdownTable,
+  SortKey,
+  SortDir,
+} from "./components/TaxBreakdownTable";
 import { TaxCategoryChart } from "./components/TaxCategoryChart";
 import { TaxLocationTable } from "./components/TaxLocationTable";
 import { useSelectedLocation } from "@/stores/location-store";
@@ -32,6 +36,12 @@ export default function TaxReportPage() {
   const [filterOrderType, setFilterOrderType] = useState("all");
   const [filterPaymentMethod, setFilterPaymentMethod] = useState("all");
 
+  // Sort state lifted to page level so useTaxBreakdown can re-fetch with
+  // server-side ordering. Resetting page to 0 on every sort change ensures
+  // the user always sees the first page of the newly ordered result set.
+  const [sortKey, setSortKey] = useState<SortKey>("createdAt");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
   const selectedLocation = useSelectedLocation();
 
   function handleDateRangeChange(from: Date | null, to: Date | null) {
@@ -39,6 +49,16 @@ export default function TaxReportPage() {
       setDateRange({ from, to });
       setPage(0);
     }
+  }
+
+  function handleSort(key: SortKey) {
+    if (key === sortKey) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+    setPage(0);
   }
 
   const { data: summaryResult, isLoading: summaryLoading } = useTaxSummary(
@@ -52,8 +72,11 @@ export default function TaxReportPage() {
     PAGE_SIZE,
     {
       orderType: filterOrderType !== "all" ? filterOrderType : undefined,
-      paymentMethod: filterPaymentMethod !== "all" ? filterPaymentMethod : undefined,
-    }
+      paymentMethod:
+        filterPaymentMethod !== "all" ? filterPaymentMethod : undefined,
+    },
+    sortKey,
+    sortDir
   );
   const { data: categoryResult, isLoading: categoryLoading } = useTaxByCategory(
     dateRange.from,
@@ -122,10 +145,19 @@ export default function TaxReportPage() {
             onPageChange={setPage}
             filterOrderType={filterOrderType}
             filterPaymentMethod={filterPaymentMethod}
-            onFilterOrderType={(v) => { setFilterOrderType(v); setPage(0); }}
-            onFilterPaymentMethod={(v) => { setFilterPaymentMethod(v); setPage(0); }}
+            onFilterOrderType={(v) => {
+              setFilterOrderType(v);
+              setPage(0);
+            }}
+            onFilterPaymentMethod={(v) => {
+              setFilterPaymentMethod(v);
+              setPage(0);
+            }}
             dateFrom={dateRange.from}
             dateTo={dateRange.to}
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onSort={handleSort}
           />
         </TabsContent>
 

@@ -2,8 +2,9 @@
 
 import { useScheduleStore } from "@/stores/useScheduleStore";
 import { SchedulePeriod, WeeklySchedule } from "@/types/schedule";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Plus } from "lucide-react";
+import { useUser } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { PeriodCard, WeeklyScheduleCard } from "./ScheduleCards";
@@ -14,6 +15,7 @@ import { format, addDays, differenceInDays } from "date-fns";
 
 export function ScheduleDashboard() {
   const router = useRouter();
+  const { user } = useUser();
   const {
     schedulePeriods,
     weeklySchedules,
@@ -22,6 +24,7 @@ export function ScheduleDashboard() {
     updateWeeklySchedule,
     addWeeklySchedule,
     deleteSchedule,
+    compareSchedules,
   } = useScheduleStore();
 
   const [isWizardOpen, setWizardOpen] = useState(false);
@@ -51,6 +54,8 @@ export function ScheduleDashboard() {
       ? `Week of ${format(new Date(startDate), "MMM dd")} - ${format(new Date(endDate), "MMM dd, yyyy")}`
       : `${format(new Date(startDate), "MMM dd")} - ${format(new Date(endDate), "MMM dd, yyyy")} (${numberOfWeeks} weeks)`;
 
+    const createdBy = user?.fullName || user?.firstName || "Manager";
+
     const newId = addWeeklySchedule({
       name,
       startDate,
@@ -58,7 +63,7 @@ export function ScheduleDashboard() {
       shifts: [],
       status: "draft",
       type: "weekly",
-      createdBy: "Manager", // Placeholder
+      createdBy,
     });
 
     setIsQuickScheduleModalOpen(false);
@@ -80,22 +85,18 @@ export function ScheduleDashboard() {
     setEditingWeekly(null);
   };
 
-  const { compareSchedules, deleteSchedule: deleteScheduleFn } =
-    useScheduleStore();
-
-  // Helper to check if a draft has actual changes
-  const draftHasChanges = (schedule: WeeklySchedule | SchedulePeriod) => {
+  // Helper to check if a draft has actual changes — stable ref via useCallback
+  const draftHasChanges = useCallback((schedule: WeeklySchedule | SchedulePeriod) => {
     if (schedule.status !== "draft-edit" || !schedule.originalScheduleId) {
       return true; // Not a draft-edit, keep it
     }
     const changes = compareSchedules(schedule.originalScheduleId, schedule.id);
     return changes.added > 0 || changes.updated > 0 || changes.removed > 0;
-  };
+  }, [compareSchedules]);
 
   // Filter out published schedules that have an active draft-edit WITH changes
   // Also filter out unchanged drafts (show original instead)
   const filteredWeeklySchedules = useMemo(() => {
-    // Get IDs of schedules that have active draft-edits WITH changes
     const schedulesWithChangedDrafts = new Set(
       weeklySchedules
         .filter(
@@ -107,17 +108,12 @@ export function ScheduleDashboard() {
         .map((s) => s.originalScheduleId)
     );
 
-    // Filter out:
-    // 1. Originals that have drafts with changes (show draft instead)
-    // 2. Unchanged drafts (show original instead)
     return weeklySchedules.filter((s) => {
-      // Hide originals that have changed drafts
       if (schedulesWithChangedDrafts.has(s.id)) return false;
-      // Hide unchanged drafts
       if (s.status === "draft-edit" && !draftHasChanges(s)) return false;
       return true;
     });
-  }, [weeklySchedules]);
+  }, [weeklySchedules, draftHasChanges]);
 
   const filteredSchedulePeriods = useMemo(() => {
     const schedulesWithChangedDrafts = new Set(
@@ -136,7 +132,7 @@ export function ScheduleDashboard() {
       if (s.status === "draft-edit" && !draftHasChanges(s)) return false;
       return true;
     });
-  }, [schedulePeriods]);
+  }, [schedulePeriods, draftHasChanges]);
 
   return (
     <div className="space-y-8">

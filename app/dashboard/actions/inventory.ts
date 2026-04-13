@@ -181,12 +181,13 @@ export async function GetInventoryItems(
       const effectiveThreshold =
         stock?.reorder_threshold ??
         override?.custom_reorder_threshold ??
-        item.reorder_threshold;
+        item.reorder_point;
 
       return {
         ...item,
-        // Location-specific stock
-        current_stock: stock?.stock_quantity ?? 0,
+        // Location-specific stock — fall back to item's base stock for items
+        // that pre-date location_inventory_stock seeding (avoids false "Out of Stock")
+        current_stock: stock?.stock_quantity ?? item.current_stock ?? 0,
         // Location-specific or effective values
         cost_per_unit: effectiveCost,
         reorder_threshold: effectiveThreshold,
@@ -203,12 +204,13 @@ export async function GetInventoryItems(
   // GLOBAL VIEW: Fetch aggregate stock across all locations
   // ========================================================================
 
-  // Get aggregate stock for all items
+  // Get aggregate stock for this merchant's items only
   const { data: allStockData } = await supabase
     .from("location_inventory_stock")
     .select(
       "inventory_item_id, stock_quantity, reorder_threshold, location_id",
-    );
+    )
+    .in("inventory_item_id", itemIds);
 
   // Get item reorder thresholds
   const itemThresholdMap = new Map(
@@ -341,6 +343,18 @@ export async function CreateInventoryItem(
   if (error) {
     console.error("Error creating inventory item:", error);
     return { error: error.message };
+  }
+
+  // Seed location_inventory_stock for tracked location-specific items.
+  // GetInventoryItems reads stock from this table in location view — without a
+  // record the item always shows 0 stock (Out of Stock) even if initial stock > 0.
+  if (locationId && (data.stock_mode || "in_stock") === "stock_tracking") {
+    await supabase.from("location_inventory_stock").insert({
+      inventory_item_id: item.id,
+      location_id: locationId,
+      stock_quantity: data.current_stock || 0,
+      reorder_threshold: data.reorder_point || 0,
+    });
   }
 
   // Log audit event
@@ -1251,7 +1265,6 @@ export async function GetInventoryStats(
     };
   }
 
-  const totalItems = items.length;
   const itemIds = items.map((i) => i.id);
   const itemMap = new Map(items.map((i) => [i.id, i]));
 
@@ -1259,12 +1272,24 @@ export async function GetInventoryStats(
   // LOCATION VIEW: Get stats from location_inventory_stock
   // ========================================================================
   if (isLocationView) {
+    // Fetch items scoped to this location (global items + location-specific items)
+    // to match exactly what the table shows
+    const { data: scopedItems } = await supabase
+      .from("inventory_items")
+      .select("id, cost_per_unit, reorder_point, stock_mode, current_stock, location_id")
+      .eq("merchant_id", merchant.id)
+      .or(`location_id.is.null,location_id.eq.${locationId}`);
+
+    const locationItems = scopedItems || [];
+    const locationItemIds = locationItems.map((i) => i.id);
+    const totalItems = locationItems.length;
+
     // Get stock records for this location (may not exist for all items)
     const { data: stockData } = await supabase
       .from("location_inventory_stock")
       .select("inventory_item_id, stock_quantity, reorder_threshold")
       .eq("location_id", locationId)
-      .in("inventory_item_id", itemIds);
+      .in("inventory_item_id", locationItemIds);
 
     // Build a map of item_id -> stock record
     const stockMap = new Map(
@@ -1276,7 +1301,7 @@ export async function GetInventoryStats(
       .from("location_inventory_overrides")
       .select("inventory_item_id, custom_cost")
       .eq("location_id", locationId)
-      .in("inventory_item_id", itemIds);
+      .in("inventory_item_id", locationItemIds);
 
     const overrideMap = new Map(
       (overrides || []).map((o) => [o.inventory_item_id, o.custom_cost]),
@@ -1292,12 +1317,12 @@ export async function GetInventoryStats(
     let outOfStock = 0;
     let totalValue = 0;
 
-    // Iterate over ALL items, not just ones with stock records
-    for (const item of items) {
-      // Get stock from location_inventory_stock if exists, else default to 0
-      // This matches the table display logic exactly
+    // Iterate over scoped items only — matches the table exactly
+    for (const item of locationItems) {
+      // Match the same two-level fallback used in GetInventoryItems:
+      // location stock record → item.current_stock → 0
       const stockRecord = stockMap.get(item.id);
-      const qty = stockRecord?.stock_quantity ?? 0;
+      const qty = stockRecord?.stock_quantity ?? item.current_stock ?? 0;
       const threshold =
         stockRecord?.reorder_threshold ?? item.reorder_point ?? 0;
       const effectiveCost = overrideMap.get(item.id) ?? item.cost_per_unit ?? 0;
@@ -1329,11 +1354,14 @@ export async function GetInventoryStats(
   // ========================================================================
   // GLOBAL VIEW: Count LOCATIONS with issues
   // ========================================================================
+  const totalItems = items.length;
+
   const { data: allStockData } = await supabase
     .from("location_inventory_stock")
     .select(
       "inventory_item_id, stock_quantity, reorder_threshold, location_id",
-    );
+    )
+    .in("inventory_item_id", itemIds);
 
   // Get all locations for this merchant
   const { data: allLocations } = await supabase

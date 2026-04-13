@@ -73,13 +73,13 @@ export function useCreateInventoryItem() {
       vendor_id?: string;
       location_id?: string | null;
     }) => CreateInventoryItem(clerkOrgId, data),
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       if (result.error) {
         toast.error(result.error);
       } else {
         toast.success("Inventory item created");
-        queryClient.invalidateQueries({ queryKey: ["inventory-items"] });
-        queryClient.invalidateQueries({ queryKey: ["inventory-stats"] });
+        await queryClient.invalidateQueries({ queryKey: ["inventory-items", clerkOrgId] });
+        await queryClient.invalidateQueries({ queryKey: ["inventory-stats", clerkOrgId] });
       }
     },
     onError: (error) => {

@@ -41,7 +41,9 @@ export function useTaxBreakdown(
   dateTo: Date,
   page: number,
   pageSize: number,
-  filters?: { orderType?: string; paymentMethod?: string }
+  filters?: { orderType?: string; paymentMethod?: string },
+  sortBy = "createdAt",
+  sortDir: "asc" | "desc" = "desc"
 ) {
   const clerkOrgId = useClerkOrgId();
   const { selectedLocationId } = useLocationStore();
@@ -59,6 +61,8 @@ export function useTaxBreakdown(
       pageSize,
       filters?.orderType ?? null,
       filters?.paymentMethod ?? null,
+      sortBy,
+      sortDir,
     ],
     queryFn: () =>
       GetTaxBreakdown(
@@ -68,7 +72,9 @@ export function useTaxBreakdown(
         dateTo,
         page,
         pageSize,
-        filters
+        filters,
+        sortBy,
+        sortDir
       ),
     enabled: !!clerkOrgId,
     staleTime: 2 * 60 * 1000,

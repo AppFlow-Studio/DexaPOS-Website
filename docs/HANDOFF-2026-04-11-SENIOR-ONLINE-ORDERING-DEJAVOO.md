@@ -10,6 +10,10 @@ The online-ordering work is now in a materially better state than the original i
 
 Implemented:
 
+- HQ-owned online-store request/review/setup flow is now in place
+- merchant online-store page is request/status driven and limited to payment/tips after HQ completes setup
+- merchant and location onboarding now collect the compliance/banking fields required for HQ review
+- W-9, owner government ID, and branch bank support documents now upload through Bunny-backed document flows
 - branch storefront disable is now enforced at middleware level with hard `404`
 - inactive-store API bypasses are now blocked in OTP, payment-init, and order-create paths
 - Dejavoo configuration moved from a global/plaintext branch model toward a secure per-branch selected-device model
@@ -17,6 +21,7 @@ Implemented:
 - checkout now carries `payment_device_id` through the payment flow
 - order creation re-resolves the same selected device server-side
 - demo card orders still save payment metadata correctly and can be voided/cancelled in demo mode
+- merchant dashboard no longer exposes payment/tips configuration (HQ-only)
 
 Current conclusion:
 
@@ -26,6 +31,82 @@ Current conclusion:
 - current evidence points to Dejavoo-side device/key/origin registration in UAT, not a missing Dexa migration or missing order-function update
 
 ## 2. What Was Implemented
+
+### 2.0 HQ-owned online-store setup flow
+
+Online-store setup ownership moved out of the merchant storefront editor and into HQ review/setup flow.
+
+Merchant behavior now:
+
+- branch can submit an online-store setup request only
+- branch sees one of:
+  - pending review
+  - approved / setup in progress
+  - rejected with reason
+  - setup completed
+- after setup is completed, branch can only maintain:
+  - `TPN`
+  - FTD Ecom/TOP key
+  - tip configuration
+
+HQ behavior now:
+
+- HQ overview shows request status per location
+- pending requests open into a review screen with:
+  - merchant compliance packet
+  - location banking packet
+  - approve action
+  - reject action with reason
+- after approval, HQ continues with the storefront setup editor
+- first successful HQ save marks setup as completed
+- approval/rejection emails are sent to merchant owner/admin recipients
+
+Files:
+
+- `supabase/migrations/20260412090000_online_store_request_review_flow.sql`
+- `lib/online-store/setup-flow.ts`
+- `app/dashboard/online-ordering/actions.ts`
+- `app/dashboard/online-ordering/page.tsx`
+- `app/dashboard/online-ordering/hooks/useOnlineOrderingSettings.ts`
+- `app/manage/actions/admin-merchant/online-ordering.ts`
+- `app/manage/merchants/[merchantId]/components/OnlineStoreTab.tsx`
+
+### 2.0.1 Merchant/location onboarding packet expansion
+
+To support HQ review before approval, onboarding now captures the missing compliance and banking fields.
+
+Merchant onboarding now captures:
+
+- legal business name
+- DBA name
+- EIN / Tax ID
+- owner name
+- owner DOB
+- owner SSN
+- signed W-9 document
+- owner government ID document
+
+Location onboarding now captures:
+
+- bank name
+- account holder name
+- routing number
+- DDA account number
+- bank letter or voided check
+
+Documents are uploaded to Bunny-backed CDN flows and then written into metadata so HQ review can open them directly from the online-store review screen.
+
+Files:
+
+- `app/manage/merchants/new/wizard.tsx`
+- `app/manage/actions/create-merchant-onboarding.ts`
+- `components/dashboard/locations/CreateLocationWizard.tsx`
+- `components/admin/locations/AdminCreateLocationWizard.tsx`
+- `components/dashboard/locations/steps/BankingPayoutsStep.tsx`
+- `components/dashboard/locations/steps/ReviewStep.tsx`
+- `lib/cdn/server.ts`
+- `supabase/functions/cdn-upload/index.ts`
+- `types/merchant_locations.ts`
 
 ### 2.1 Storefront disabled-state protection
 
@@ -86,6 +167,15 @@ Security improvements:
 - no longer intended to sit in public/plaintext branch config
 - UI stores/rotates the key through RPCs
 - checkout resolves the key server-side at runtime
+
+Merchant access restriction:
+
+- payment device selection, TPN/FTD keys, and tipping are HQ-only
+- merchant dashboard can submit requests and maintain non-payment storefront settings after HQ completes setup:
+  - store info + status toggle
+  - branding (colors/images)
+  - ordering thresholds (pickup/delivery/min order/etc)
+  - OrderOut onboarding/status
 
 Files:
 
@@ -159,6 +249,14 @@ Important DB objects:
 - `public.list_location_payment_devices(uuid)`
 - `public.upsert_location_payment_device(uuid, text, text, text, boolean)`
 - `public.get_location_payment_device_secret(uuid, uuid)`
+- `online_store_config.setup_request_status`
+- `online_store_config.setup_requested_at`
+- `online_store_config.setup_requested_by`
+- `online_store_config.setup_reviewed_at`
+- `online_store_config.setup_reviewed_by`
+- `online_store_config.setup_rejection_reason`
+- `online_store_config.setup_approved_at`
+- `online_store_config.setup_completed_at`
 
 ### Supabase functions
 
@@ -209,6 +307,16 @@ Expected and implemented:
 
 - disabled branch storefronts should return `404` at request layer
 - no storefront UI should render first
+
+### Verified HQ request/review flow behavior
+
+Expected and implemented:
+
+- merchant no longer gets full storefront editor before HQ setup completion
+- HQ review screen reads merchant and location packets before approval
+- HQ approve/reject actions are server-side gated by request status
+- merchant sees rejection reason after HQ reject
+- first successful HQ setup save transitions approved requests to `setup_completed`
 
 ## 5. Current Blocker
 
@@ -292,6 +400,12 @@ These are small, high-value follow-ups worth doing next:
 5. Remove stale public Dejavoo token configuration
    - clean any unused `NEXT_PUBLIC_*` Dejavoo security token setup from env/config to reduce debugging noise
 
+6. Surface onboarding packet completeness outside online-store review
+   - show the same W-9 / owner ID / bank-support state in merchant HQ business info and location detail surfaces
+
+7. Replace prompt-based HQ rejection reason entry with a proper dialog
+   - current implementation uses a prompt for speed; it should be upgraded to a typed modal
+
 ## 9. Supporting Docs
 
 If deeper detail is needed:
@@ -299,3 +413,4 @@ If deeper detail is needed:
 - `docs/SPRINT-2026-04-08-ONLINE-ORDERING-PAYMENTS-HANDOFF.md`
 - `docs/FEATURE-ONLINE-ORDERING-DEJAVOO-DEVICE-MODEL.md`
 - `docs/FEATURE-ONLINE-ORDERING-PAYMENTS.md`
+- `docs/FEATURE-ONLINE-STORE-HQ-REQUEST-FLOW.md`
