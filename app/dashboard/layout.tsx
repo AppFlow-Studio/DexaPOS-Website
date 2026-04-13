@@ -345,7 +345,7 @@ function MerchantSidebar() {
 
                           return (
                             <SidebarMenuItem key={menuItem.title}>
-                              <Collapsible defaultOpen={isOrdersOpen}>
+                              <Collapsible defaultOpen={isOrdersOpen} className="group">
                                 <CollapsibleTrigger asChild>
                                   <SidebarMenuButton
                                     isActive={isOrdersActive}
@@ -419,7 +419,7 @@ function MerchantSidebar() {
 
                           return (
                             <SidebarMenuItem key={menuItem.title}>
-                              <Collapsible defaultOpen={isReportsOpen}>
+                              <Collapsible defaultOpen={isReportsOpen} className="group">
                                 <CollapsibleTrigger asChild>
                                   <SidebarMenuButton
                                     isActive={isReportsActive}
@@ -462,7 +462,7 @@ function MerchantSidebar() {
 
                           return (
                             <SidebarMenuItem key={menuItem.title}>
-                              <Collapsible defaultOpen={isTipsOpen}>
+                              <Collapsible defaultOpen={isTipsOpen} className="group">
                                 <CollapsibleTrigger asChild>
                                   <SidebarMenuButton isActive={isTipsActive} className="w-full">
                                     <menuItem.icon className="h-4 w-4" />
@@ -525,6 +525,7 @@ function MerchantSidebar() {
           <SidebarMenuItem>
             <Collapsible
               defaultOpen={pathname.startsWith("/dashboard/settings")}
+              className="group"
             >
               <CollapsibleTrigger asChild>
                 <SidebarMenuButton
