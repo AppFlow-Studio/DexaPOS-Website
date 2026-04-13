@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { startOfWeek, endOfWeek } from "date-fns";
 import { useTimesheets, useTimesheetResources } from "@/hooks/useTimesheets";
-import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { useAuth } from "@clerk/nextjs";
 import {
   useIsAllLocations,
   useSelectedLocation,
@@ -31,9 +31,9 @@ export default function TimesheetsPage() {
   const isAllLocations = useIsAllLocations();
   const selectedLocation = useSelectedLocation();
 
-  // Get organization ID for API calls
-  const { data: userInfo } = useUserInfo();
-  const clerkOrgId = userInfo?.members?.[0]?.organizations?.id || "";
+  // Get organization ID directly from Clerk's local session — no network call
+  const { orgId } = useAuth();
+  const clerkOrgId = orgId || "";
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfWeek(new Date()),

@@ -26,7 +26,18 @@ import {
   Loader2,
   Clock,
   Receipt,
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown,
+  X,
 } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
 import {
@@ -349,9 +360,26 @@ function StockEditCell({
 // MAIN PAGE
 // ============================================================================
 
+type SortField = "name" | "stock" | "cost" | "category";
+type SortDir = "asc" | "desc";
+
 export default function InventoryPage() {
   const [activeTab, setActiveTab] = useState("catalog");
   const [searchTerm, setSearchTerm] = useState("");
+  const [sortField, setSortField] = useState<SortField>("name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  // Applied filter state (drives the table)
+  const [filterCategories, setFilterCategories] = useState<string[]>([]);
+  const [filterStockModes, setFilterStockModes] = useState<string[]>([]);
+  const [filterScope, setFilterScope] = useState<"all" | "global" | "local">("all");
+
+  // Pending filter state (shown inside the popover until Apply is clicked)
+  const [pendingCategories, setPendingCategories] = useState<string[]>([]);
+  const [pendingStockModes, setPendingStockModes] = useState<string[]>([]);
+  const [pendingScope, setPendingScope] = useState<"all" | "global" | "local">("all");
+
+  const [filterOpen, setFilterOpen] = useState(false);
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
   const [isAddVendorOpen, setIsAddVendorOpen] = useState(false);
   const [isCreatePOOpen, setIsCreatePOOpen] = useState(false);
@@ -415,13 +443,103 @@ export default function InventoryPage() {
   const updateStockWithReason = useUpdateStockWithReason();
   const createAdhocExpense = useCreateAdhocExpense();
 
-  // Filter items
-  const filteredItems = items.filter(
-    (item) =>
-      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.category?.toLowerCase().includes(searchTerm.toLowerCase())
+  // Derive available categories from actual data
+  const availableCategories = useMemo(
+    () => [...new Set(items.map((i) => i.category).filter(Boolean) as string[])].sort(),
+    [items]
   );
+
+  const activeFilterCount =
+    filterCategories.length +
+    filterStockModes.length +
+    (filterScope !== "all" ? 1 : 0);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
+  };
+
+  const clearFilters = () => {
+    setFilterCategories([]);
+    setFilterStockModes([]);
+    setFilterScope("all");
+    setPendingCategories([]);
+    setPendingStockModes([]);
+    setPendingScope("all");
+  };
+
+  const handleFilterOpenChange = (open: boolean) => {
+    if (open) {
+      // Sync applied → pending when opening
+      setPendingCategories(filterCategories);
+      setPendingStockModes(filterStockModes);
+      setPendingScope(filterScope);
+    }
+    setFilterOpen(open);
+  };
+
+  const applyFilters = () => {
+    setFilterCategories(pendingCategories);
+    setFilterStockModes(pendingStockModes);
+    setFilterScope(pendingScope);
+    setFilterOpen(false);
+  };
+
+  const cancelFilters = () => {
+    // Reset pending back to applied and close
+    setPendingCategories(filterCategories);
+    setPendingStockModes(filterStockModes);
+    setPendingScope(filterScope);
+    setFilterOpen(false);
+  };
+
+  const toggleCategory = (cat: string) =>
+    setPendingCategories((prev) =>
+      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
+    );
+
+  const toggleStockMode = (mode: string) =>
+    setPendingStockModes((prev) =>
+      prev.includes(mode) ? prev.filter((m) => m !== mode) : [...prev, mode]
+    );
+
+  // Filter + sort items
+  const filteredItems = useMemo(() => {
+    const search = searchTerm.toLowerCase();
+    let result = items.filter((item) => {
+      const matchesSearch =
+        !search ||
+        item.name.toLowerCase().includes(search) ||
+        item.sku?.toLowerCase().includes(search) ||
+        item.category?.toLowerCase().includes(search);
+      const matchesCategory =
+        filterCategories.length === 0 ||
+        (item.category != null && filterCategories.includes(item.category));
+      const matchesMode =
+        filterStockModes.length === 0 || filterStockModes.includes(item.stock_mode);
+      const matchesScope =
+        filterScope === "all" ||
+        (filterScope === "global" && item.location_id == null) ||
+        (filterScope === "local" && item.location_id != null);
+      return matchesSearch && matchesCategory && matchesMode && matchesScope;
+    });
+
+    result = [...result].sort((a, b) => {
+      let cmp = 0;
+      if (sortField === "name") cmp = a.name.localeCompare(b.name);
+      else if (sortField === "stock") cmp = (a.current_stock ?? 0) - (b.current_stock ?? 0);
+      else if (sortField === "cost") cmp = (a.cost_per_unit ?? 0) - (b.cost_per_unit ?? 0);
+      else if (sortField === "category")
+        cmp = (a.category ?? "").localeCompare(b.category ?? "");
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+
+    return result;
+  }, [items, searchTerm, filterCategories, filterStockModes, filterScope, sortField, sortDir]);
 
   const filteredVendors = vendors.filter((vendor) =>
     vendor.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -686,9 +804,121 @@ export default function InventoryPage() {
                     className="pl-9 w-64 bg-background"
                   />
                 </div>
-                <Button variant="outline" size="icon">
-                  <Filter className="h-4 w-4" />
-                </Button>
+                <Popover open={filterOpen} onOpenChange={handleFilterOpenChange}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2 relative">
+                      <Filter className="h-4 w-4" />
+                      Filters
+                      {activeFilterCount > 0 && (
+                        <Badge className="h-4 w-4 p-0 flex items-center justify-center text-[10px] rounded-full bg-primary text-primary-foreground">
+                          {activeFilterCount}
+                        </Badge>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-72 p-0">
+                    <div className="flex items-center justify-between px-4 py-3 border-b">
+                      <span className="text-sm font-semibold">Filters</span>
+                      {(pendingCategories.length > 0 || pendingStockModes.length > 0 || pendingScope !== "all") && (
+                        <button
+                          onClick={() => {
+                            setPendingCategories([]);
+                            setPendingStockModes([]);
+                            setPendingScope("all");
+                          }}
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          <X className="h-3 w-3" />
+                          Clear all
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="p-4 space-y-5">
+                      {/* Category */}
+                      {availableCategories.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Category</p>
+                          <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                            {availableCategories.map((cat) => (
+                              <label key={cat} className="flex items-center gap-2 cursor-pointer group">
+                                <Checkbox
+                                  checked={pendingCategories.includes(cat)}
+                                  onCheckedChange={() => toggleCategory(cat)}
+                                />
+                                <span className="text-sm group-hover:text-foreground transition-colors">{cat}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <Separator />
+
+                      {/* Stock Mode */}
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Stock Mode</p>
+                        <div className="space-y-1.5">
+                          {[
+                            { value: "in_stock", label: "Always In Stock" },
+                            { value: "stock_tracking", label: "Tracked" },
+                            { value: "out_of_stock", label: "Out of Stock" },
+                          ].map((mode) => (
+                            <label key={mode.value} className="flex items-center gap-2 cursor-pointer group">
+                              <Checkbox
+                                checked={pendingStockModes.includes(mode.value)}
+                                onCheckedChange={() => toggleStockMode(mode.value)}
+                              />
+                              <span className="text-sm group-hover:text-foreground transition-colors">{mode.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <Separator />
+
+                      {/* Scope */}
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Scope</p>
+                        <div className="flex gap-2">
+                          {(["all", "global", "local"] as const).map((s) => (
+                            <button
+                              key={s}
+                              onClick={() => setPendingScope(s)}
+                              className={cn(
+                                "flex-1 py-1.5 text-xs rounded-md border transition-colors capitalize",
+                                pendingScope === s
+                                  ? "bg-primary text-primary-foreground border-primary"
+                                  : "border-border hover:bg-muted"
+                              )}
+                            >
+                              {s}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Apply / Cancel */}
+                    <div className="flex gap-2 px-4 py-3 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={cancelFilters}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        onClick={applyFilters}
+                      >
+                        Apply Filters
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
           </CardHeader>
@@ -715,11 +945,21 @@ export default function InventoryPage() {
                   </div>
                   <h3 className="text-lg font-semibold mb-2">No items found</h3>
                   <p className="text-muted-foreground text-sm max-w-sm">
-                    {searchTerm
-                      ? "Try adjusting your search terms"
+                    {searchTerm || activeFilterCount > 0
+                      ? "Try adjusting your search or filters"
                       : "Get started by adding your first inventory item"}
                   </p>
-                  {!searchTerm && (
+                  {(searchTerm || activeFilterCount > 0) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-4"
+                      onClick={() => { setSearchTerm(""); clearFilters(); }}
+                    >
+                      Clear search & filters
+                    </Button>
+                  )}
+                  {!searchTerm && activeFilterCount === 0 && (
                     <Button
                       className="mt-4 gap-2"
                       onClick={() => setIsAddItemOpen(true)}
@@ -733,11 +973,41 @@ export default function InventoryPage() {
                 <div className="divide-y">
                   {/* Table Header */}
                   <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-muted/30 text-sm font-medium text-muted-foreground">
-                    <div className="col-span-4">Item</div>
-                    <div className="col-span-2">Stock</div>
-                    <div className="col-span-2">Status</div>
-                    <div className="col-span-2">Cost</div>
-                    <div className="col-span-2">Scope</div>
+                    {(
+                      [
+                        { label: "Item", field: "name" as const, span: "col-span-4" },
+                        { label: "Stock", field: "stock" as const, span: "col-span-2" },
+                        { label: "Status", field: null, span: "col-span-2" },
+                        { label: "Cost", field: "cost" as const, span: "col-span-2" },
+                        { label: "Scope", field: null, span: "col-span-2" },
+                      ] as { label: string; field: SortField | null; span: string }[]
+                    ).map(({ label, field, span }) =>
+                      field ? (
+                        <button
+                          key={label}
+                          onClick={() => handleSort(field)}
+                          className={cn(
+                            span,
+                            "flex items-center gap-1 hover:text-foreground transition-colors text-left"
+                          )}
+                        >
+                          {label}
+                          {sortField === field ? (
+                            sortDir === "asc" ? (
+                              <ChevronUp className="h-3.5 w-3.5 text-primary" />
+                            ) : (
+                              <ChevronDown className="h-3.5 w-3.5 text-primary" />
+                            )
+                          ) : (
+                            <ChevronsUpDown className="h-3.5 w-3.5 opacity-40" />
+                          )}
+                        </button>
+                      ) : (
+                        <div key={label} className={span}>
+                          {label}
+                        </div>
+                      )
+                    )}
                   </div>
 
                   {/* Table Rows */}
@@ -1013,15 +1283,6 @@ export default function InventoryPage() {
                       ? "Select a specific location to create purchase orders"
                       : "Create your first purchase order to restock inventory"}
                   </p>
-                  {!isAllLocations && (
-                    <Button
-                      className="mt-4 gap-2"
-                      onClick={() => setIsCreatePOOpen(true)}
-                    >
-                      <Plus className="h-4 w-4" />
-                      Create Order
-                    </Button>
-                  )}
                 </div>
               ) : (
                 <div className="divide-y">

@@ -8,6 +8,21 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { assertHQPermission } from '@/lib/admin/auth'
 import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
+import { revalidatePath } from 'next/cache'
+import { createClerkClient } from '@clerk/backend'
+import {
+  buildOnlineStoreReviewChecklist,
+  canHqEditStoreSetup,
+  extractLocationOnlineStoreReviewPacket,
+  extractMerchantOnlineStoreReviewPacket,
+  getDefaultStoreSlug,
+  normalizeOnlineStoreRequestStatus,
+  sendOnlineStoreDecisionEmail,
+  type LocationOnlineStoreReviewPacket,
+  type MerchantOnlineStoreReviewPacket,
+  type OnlineStoreReviewChecklist,
+} from '@/lib/online-store/setup-flow'
+import { uploadOrganizationDocument } from '@/lib/cdn/server'
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'dexaposai.com'
 
@@ -18,6 +33,41 @@ interface PaymentDeviceSummary {
   use_for_online_ordering: boolean
   is_active: boolean
   ftd_key_configured: boolean
+}
+
+function readMetadataString(
+  metadata: Record<string, unknown> | null | undefined,
+  key: string
+) {
+  const value = metadata?.[key]
+  return typeof value === 'string' && value.trim().length > 0
+    ? value.trim()
+    : null
+}
+
+async function getClerkOrganizationPublicMetadata(
+  clerkOrgId?: string | null
+): Promise<Record<string, unknown>> {
+  if (!clerkOrgId || !process.env.CLERK_SECRET_KEY) {
+    return {}
+  }
+
+  try {
+    const clerkClient = createClerkClient({
+      secretKey: process.env.CLERK_SECRET_KEY,
+    })
+    const organization = await clerkClient.organizations.getOrganization({
+      organizationId: clerkOrgId,
+    })
+
+    return (organization.publicMetadata as Record<string, unknown>) ?? {}
+  } catch (error) {
+    console.error(
+      '[HQ_ONLINE_ORDERING] Failed to load Clerk organization metadata:',
+      error
+    )
+    return {}
+  }
 }
 
 // ============================================================================
@@ -53,6 +103,17 @@ interface TipConfig {
 interface OnlineOrderingSettings {
   id?: string
   locationId: string
+  setupRequestStatus?: 'not_requested' | 'pending_review' | 'approved' | 'rejected' | 'setup_completed'
+  setupRequestedAt?: string | null
+  setupRequestedBy?: string | null
+  setupReviewedAt?: string | null
+  setupReviewedBy?: string | null
+  setupApprovedAt?: string | null
+  setupCompletedAt?: string | null
+  setupRejectionReason?: string | null
+  merchantReviewPacket?: MerchantOnlineStoreReviewPacket
+  locationReviewPacket?: LocationOnlineStoreReviewPacket
+  reviewChecklist?: OnlineStoreReviewChecklist
   enabled: boolean
   storeName: string
   storeSlug: string
@@ -161,6 +222,101 @@ async function getSelectedLocationPaymentDevice(locationId: string) {
   )
 }
 
+async function buildRequestedStoreSlug(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  locationName: string,
+  locationId: string
+) {
+  const baseSlug = getDefaultStoreSlug(locationName) || 'store'
+  const candidates = [baseSlug, `${baseSlug}-${locationId.slice(0, 8)}`]
+
+  for (const candidate of candidates) {
+    const { data: existing } = await supabase
+      .from('online_store_config')
+      .select('id')
+      .eq('slug', candidate)
+      .maybeSingle()
+
+    if (!existing) {
+      return candidate
+    }
+  }
+
+  return `${baseSlug}-${Date.now().toString().slice(-6)}`
+}
+
+async function getReviewContext(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  merchantId: string,
+  locationId: string
+) {
+  const [{ data: merchant }, { data: location }] = await Promise.all([
+    supabase
+      .from('merchants')
+      .select(
+        'id, name, owner_email, owner_first_name, owner_last_name, business_legal_name, dba_name, ein_last_four, public_metadata, clerk_org_id'
+      )
+      .eq('id', merchantId)
+      .single(),
+    supabase
+      .from('locations')
+      .select(
+        'id, name, phone, email, address_line1, city, state, postal_code, business_hours, public_metadata'
+      )
+      .eq('id', locationId)
+      .single(),
+  ])
+
+  const clerkMetadata = await getClerkOrganizationPublicMetadata(
+    merchant?.clerk_org_id
+  )
+
+  const merchantReviewSource = merchant
+    ? {
+        ...merchant,
+        public_metadata: {
+          ...((merchant.public_metadata as Record<string, unknown> | null) ?? {}),
+          ...(clerkMetadata ?? {}),
+        },
+        business_legal_name:
+          merchant.business_legal_name ??
+          readMetadataString(clerkMetadata, 'business_legal_name') ??
+          readMetadataString(clerkMetadata, 'legal_business_name'),
+        dba_name:
+          merchant.dba_name ??
+          readMetadataString(clerkMetadata, 'dba_name') ??
+          readMetadataString(clerkMetadata, 'business_name'),
+        owner_first_name:
+          merchant.owner_first_name ??
+          readMetadataString(clerkMetadata, 'owner_first_name'),
+        owner_last_name:
+          merchant.owner_last_name ??
+          readMetadataString(clerkMetadata, 'owner_last_name'),
+      }
+    : merchant
+
+  const merchantReviewPacket =
+    extractMerchantOnlineStoreReviewPacket(merchantReviewSource)
+  const locationReviewPacket = extractLocationOnlineStoreReviewPacket(location)
+  const reviewChecklist = buildOnlineStoreReviewChecklist(
+    merchantReviewPacket,
+    locationReviewPacket
+  )
+
+  return {
+    merchant: merchantReviewSource,
+    location,
+    merchantReviewPacket,
+    locationReviewPacket,
+    reviewChecklist,
+  }
+}
+
+function revalidateOnlineStorePaths(merchantId: string) {
+  revalidatePath(`/manage/merchants/${merchantId}`)
+  revalidatePath('/dashboard/online-ordering')
+}
+
 // ============================================================================
 // READ Operations
 // ============================================================================
@@ -173,16 +329,16 @@ export async function getAdminOnlineOrderingSettings(
     await assertHQPermission('hq.merchant.view')
 
     const supabase = createServerSupabaseClient()
+    const {
+      merchant,
+      location,
+      merchantReviewPacket,
+      locationReviewPacket,
+      reviewChecklist,
+    } = await getReviewContext(supabase, merchantId, locationId)
 
-    const { data: location, error: locError } = await supabase
-      .from('locations')
-      .select('id, name, phone, email, address_line1, city, state, postal_code, business_hours')
-      .eq('id', locationId)
-      .single()
-
-    if (locError) {
-      console.error('[getAdminOnlineOrderingSettings] Location error:', locError)
-      return { success: false, data: null, error: locError.message }
+    if (!location) {
+      return { success: false, data: null, error: 'Location not found' }
     }
 
     const { data: config, error: configError } = await supabase
@@ -201,6 +357,17 @@ export async function getAdminOnlineOrderingSettings(
 
     const settings: Partial<OnlineOrderingSettings> = {
       locationId,
+      setupRequestStatus: 'not_requested',
+      setupRequestedAt: null,
+      setupRequestedBy: null,
+      setupReviewedAt: null,
+      setupReviewedBy: null,
+      setupApprovedAt: null,
+      setupCompletedAt: null,
+      setupRejectionReason: null,
+      merchantReviewPacket,
+      locationReviewPacket,
+      reviewChecklist,
       storeName: location.name,
       phone: location.phone ?? '',
       email: location.email ?? '',
@@ -209,7 +376,18 @@ export async function getAdminOnlineOrderingSettings(
     }
 
     if (config) {
+      const setupRequestStatus = normalizeOnlineStoreRequestStatus(
+        config.setup_request_status
+      )
       settings.id = config.id
+      settings.setupRequestStatus = setupRequestStatus
+      settings.setupRequestedAt = config.setup_requested_at ?? null
+      settings.setupRequestedBy = config.setup_requested_by ?? null
+      settings.setupReviewedAt = config.setup_reviewed_at ?? null
+      settings.setupReviewedBy = config.setup_reviewed_by ?? null
+      settings.setupApprovedAt = config.setup_approved_at ?? null
+      settings.setupCompletedAt = config.setup_completed_at ?? null
+      settings.setupRejectionReason = config.setup_rejection_reason ?? null
       settings.enabled = config.is_active ?? false
       settings.storeName = config.store_name || settings.storeName
       settings.storeSlug = config.slug ?? ''
@@ -288,7 +466,9 @@ export async function getAdminMerchantOnlineOrderingOverview(merchantId: string)
 
     const { data: configs, error: configError } = await supabase
       .from('online_store_config')
-      .select('id, location_id, is_active, store_name, slug')
+      .select(
+        'id, location_id, is_active, store_name, slug, setup_request_status, setup_requested_at, setup_reviewed_at, setup_rejection_reason, setup_completed_at'
+      )
       .in('location_id', locationIds)
 
     if (configError) {
@@ -297,14 +477,33 @@ export async function getAdminMerchantOnlineOrderingOverview(merchantId: string)
 
     const configMap = new Map<
       string,
-      { id: string; location_id: string; is_active: boolean | null; store_name: string | null; slug: string | null }
+      {
+        id: string
+        location_id: string
+        is_active: boolean | null
+        store_name: string | null
+        slug: string | null
+        setup_request_status: string | null
+        setup_requested_at: string | null
+        setup_reviewed_at: string | null
+        setup_rejection_reason: string | null
+        setup_completed_at: string | null
+      }
     >(configs?.map((c) => [c.location_id, c]) || [])
     const result = locations?.map((loc) => {
       const config = configMap.get(loc.id)
+      const setupRequestStatus = normalizeOnlineStoreRequestStatus(
+        config?.setup_request_status
+      )
       return {
         locationId: loc.id,
         locationName: loc.name,
         hasOnlineStore: !!config,
+        setupRequestStatus,
+        setupRequestedAt: config?.setup_requested_at ?? null,
+        setupReviewedAt: config?.setup_reviewed_at ?? null,
+        setupCompletedAt: config?.setup_completed_at ?? null,
+        setupRejectionReason: config?.setup_rejection_reason ?? null,
         isEnabled: config?.is_active ?? false,
         storeName: config?.store_name || loc.name,
         storeSlug: config?.slug || null,
@@ -326,6 +525,274 @@ export async function getAdminMerchantOnlineOrderingOverview(merchantId: string)
 // WRITE Operations
 // ============================================================================
 
+export async function adminApproveOnlineStoreRequest(
+  merchantId: string,
+  locationId: string
+) {
+  try {
+    const { userId } = await assertHQPermission('hq.merchant.update')
+    const supabase = createServerSupabaseClient()
+
+    const [{ data: existingConfig }, { data: location }] = await Promise.all([
+      supabase
+        .from('online_store_config')
+        .select('id, slug, store_name, setup_request_status')
+        .eq('merchant_id', merchantId)
+        .eq('location_id', locationId)
+        .maybeSingle(),
+      supabase
+        .from('locations')
+        .select('id, name')
+        .eq('id', locationId)
+        .single(),
+    ])
+
+    if (!existingConfig) {
+      return { success: false, error: 'No online-store request exists for this location.' }
+    }
+
+    const status = normalizeOnlineStoreRequestStatus(existingConfig.setup_request_status)
+    if (status === 'approved' || status === 'setup_completed') {
+      return { success: true, error: null }
+    }
+
+    if (status !== 'pending_review') {
+      return {
+        success: false,
+        error: 'Only pending review requests can be approved.',
+      }
+    }
+
+    const now = new Date().toISOString()
+    const slug =
+      existingConfig.slug ||
+      (location
+        ? await buildRequestedStoreSlug(supabase, location.name, location.id)
+        : null)
+
+    const { error: updateError } = await supabase
+      .from('online_store_config')
+      .update({
+        slug,
+        setup_request_status: 'approved',
+        setup_reviewed_at: now,
+        setup_reviewed_by: userId ?? null,
+        setup_approved_at: now,
+        setup_rejection_reason: null,
+      })
+      .eq('id', existingConfig.id)
+
+    if (updateError) {
+      return { success: false, error: updateError.message }
+    }
+
+    await sendOnlineStoreDecisionEmail({
+      supabase,
+      merchantId,
+      locationName: location?.name ?? existingConfig.store_name ?? 'this location',
+      status: 'approved',
+    })
+
+    await LogAuditEvent({
+      merchantId,
+      action: 'HQ Admin Approved Online Store Request',
+      actionCategory: 'settings',
+      resourceType: 'online_store',
+      resourceId: locationId,
+      resourceName: location?.name || existingConfig.store_name || 'Location',
+      locationId,
+      metadata: {
+        reviewed_by_admin: userId,
+        new_status: 'approved',
+      },
+    })
+
+    revalidateOnlineStorePaths(merchantId)
+    return { success: true, error: null }
+  } catch (error) {
+    console.error('[adminApproveOnlineStoreRequest] Exception:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }
+  }
+}
+
+export async function adminRejectOnlineStoreRequest(
+  merchantId: string,
+  locationId: string,
+  reason: string
+) {
+  try {
+    const { userId } = await assertHQPermission('hq.merchant.update')
+    const supabase = createServerSupabaseClient()
+
+    const trimmedReason = reason.trim()
+    if (!trimmedReason) {
+      return { success: false, error: 'A rejection reason is required.' }
+    }
+
+    const [{ data: existingConfig }, { data: location }] = await Promise.all([
+      supabase
+        .from('online_store_config')
+        .select('id, store_name, setup_request_status')
+        .eq('merchant_id', merchantId)
+        .eq('location_id', locationId)
+        .maybeSingle(),
+      supabase
+        .from('locations')
+        .select('id, name')
+        .eq('id', locationId)
+        .single(),
+    ])
+
+    if (!existingConfig) {
+      return { success: false, error: 'No online-store request exists for this location.' }
+    }
+
+    const status = normalizeOnlineStoreRequestStatus(existingConfig.setup_request_status)
+    if (status !== 'pending_review') {
+      return {
+        success: false,
+        error: 'Only pending review requests can be rejected.',
+      }
+    }
+
+    const now = new Date().toISOString()
+    const { error: updateError } = await supabase
+      .from('online_store_config')
+      .update({
+        setup_request_status: 'rejected',
+        setup_reviewed_at: now,
+        setup_reviewed_by: userId ?? null,
+        setup_rejection_reason: trimmedReason,
+        setup_approved_at: null,
+      })
+      .eq('id', existingConfig.id)
+
+    if (updateError) {
+      return { success: false, error: updateError.message }
+    }
+
+    await sendOnlineStoreDecisionEmail({
+      supabase,
+      merchantId,
+      locationName: location?.name ?? existingConfig.store_name ?? 'this location',
+      status: 'rejected',
+      rejectionReason: trimmedReason,
+    })
+
+    await LogAuditEvent({
+      merchantId,
+      action: 'HQ Admin Rejected Online Store Request',
+      actionCategory: 'settings',
+      resourceType: 'online_store',
+      resourceId: locationId,
+      resourceName: location?.name || existingConfig.store_name || 'Location',
+      locationId,
+      metadata: {
+        reviewed_by_admin: userId,
+        new_status: 'rejected',
+        rejection_reason: trimmedReason,
+      },
+    })
+
+    revalidateOnlineStorePaths(merchantId)
+    return { success: true, error: null }
+  } catch (error) {
+    console.error('[adminRejectOnlineStoreRequest] Exception:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }
+  }
+}
+
+export async function adminUploadMerchantW9Pdf(
+  merchantId: string,
+  file: File
+): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    await assertHQPermission('hq.merchant.update')
+
+    if (!file) {
+      return { success: false, error: 'W-9 PDF is required' }
+    }
+
+    const isPdf =
+      file.type === 'application/pdf' ||
+      file.name.toLowerCase().endsWith('.pdf')
+
+    if (!isPdf) {
+      return { success: false, error: 'W-9 must be uploaded as a PDF' }
+    }
+
+    const supabase = createServerSupabaseClient()
+    const { data: merchant, error: merchantError } = await supabase
+      .from('merchants')
+      .select('id, clerk_org_id')
+      .eq('id', merchantId)
+      .single()
+
+    if (merchantError || !merchant?.clerk_org_id) {
+      return { success: false, error: 'Merchant organization not found' }
+    }
+
+    const uploadResult = await uploadOrganizationDocument(
+      file,
+      merchant.clerk_org_id,
+      'online-store-w9'
+    )
+
+    if (!uploadResult.success || !uploadResult.cdnUrl) {
+      return {
+        success: false,
+        error: uploadResult.error || 'Failed to upload W-9 PDF',
+      }
+    }
+
+    const clerkClient = createClerkClient({
+      secretKey: process.env.CLERK_SECRET_KEY!,
+    })
+    const organization = await clerkClient.organizations.getOrganization({
+      organizationId: merchant.clerk_org_id,
+    })
+    await clerkClient.organizations.updateOrganization(merchant.clerk_org_id, {
+      publicMetadata: {
+        ...(organization.publicMetadata as Record<string, unknown>),
+        online_store_w9_form_url: uploadResult.cdnUrl,
+        w9_form_url: uploadResult.cdnUrl,
+      },
+    })
+
+    await LogAuditEvent({
+      merchantId,
+      action: 'merchant.online_store.w9_uploaded',
+      actionCategory: 'settings',
+      resourceType: 'merchant',
+      resourceId: merchantId,
+      resourceName: merchantId,
+      metadata: {
+        source: 'adminUploadMerchantW9Pdf',
+        organizationId: merchant.clerk_org_id,
+      },
+    })
+
+    revalidateOnlineStorePaths(merchantId)
+
+    return {
+      success: true,
+      url: uploadResult.cdnUrl,
+    }
+  } catch (error) {
+    console.error('[adminUploadMerchantW9Pdf] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to upload W-9 PDF',
+    }
+  }
+}
+
 export async function adminSaveOnlineOrderingSettings(
   merchantId: string,
   locationId: string,
@@ -335,6 +802,27 @@ export async function adminSaveOnlineOrderingSettings(
     const { userId } = await assertHQPermission('hq.merchant.update')
 
     const supabase = createServerSupabaseClient()
+
+    const { data: existingConfig } = await supabase
+      .from('online_store_config')
+      .select('*')
+      .eq('merchant_id', merchantId)
+      .eq('location_id', locationId)
+      .maybeSingle()
+
+    if (!existingConfig) {
+      return {
+        success: false,
+        error: 'Merchant must request and HQ must approve online-store setup before configuration can be saved.',
+      }
+    }
+
+    if (!canHqEditStoreSetup(existingConfig.setup_request_status)) {
+      return {
+        success: false,
+        error: 'Approve the online-store request before editing storefront setup.',
+      }
+    }
 
     const locationUpdates: Record<string, unknown> = {}
     if (settings.phone !== undefined) locationUpdates.phone = settings.phone
@@ -355,17 +843,10 @@ export async function adminSaveOnlineOrderingSettings(
       }
     }
 
-    const { data: existingConfig } = await supabase
-      .from('online_store_config')
-      .select('*')
-      .eq('location_id', locationId)
-      .single()
-
     const existingPaymentDevice = await getSelectedLocationPaymentDevice(locationId)
 
     const configData: Record<string, unknown> = {
-      location_id: locationId,
-      merchant_id: merchantId,
+      updated_at: new Date().toISOString(),
     }
 
     if (settings.storeName !== undefined) configData.store_name = settings.storeName
@@ -432,73 +913,32 @@ export async function adminSaveOnlineOrderingSettings(
       }
     }
 
-    if (existingConfig) {
-      const { error: updateError } = await supabase
-        .from('online_store_config')
-        .update(configData)
-        .eq('id', existingConfig.id)
-
-      if (updateError) {
-        console.error('[adminSaveOnlineOrderingSettings] Config update error:', updateError)
-        return { success: false, error: updateError.message }
-      }
-    } else {
+    if (!configData.store_name) configData.store_name = existingConfig.store_name || 'Online Store'
+    if (!configData.slug) {
       const { data: location } = await supabase
         .from('locations')
-        .select('name')
+        .select('id, name')
         .eq('id', locationId)
         .single()
 
-      if (!configData.store_name) configData.store_name = location?.name || 'Online Store'
-      if (!configData.slug) {
-        configData.slug = (location?.name || 'store')
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-|-$/g, '')
-      }
+      configData.slug =
+        existingConfig.slug ||
+        (location ? await buildRequestedStoreSlug(supabase, location.name, location.id) : null)
+    }
 
-      const { data: newConfig, error: insertError } = await supabase
-        .from('online_store_config')
-        .insert(configData)
-        .select('id')
-        .single()
+    if (normalizeOnlineStoreRequestStatus(existingConfig.setup_request_status) === 'approved') {
+      configData.setup_request_status = 'setup_completed'
+      configData.setup_completed_at = new Date().toISOString()
+    }
 
-      if (insertError) {
-        console.error('[adminSaveOnlineOrderingSettings] Config insert error:', insertError)
-        return { success: false, error: insertError.message }
-      }
+    const { error: updateError } = await supabase
+      .from('online_store_config')
+      .update(configData)
+      .eq('id', existingConfig.id)
 
-      if (newConfig) {
-        await supabase.from('online_store_pages').insert([
-          {
-            store_config_id: newConfig.id,
-            page_type: 'home',
-            section_type: 'hero',
-            title: configData.store_name as string,
-            subtitle: 'Order online for pickup or delivery',
-            cta_text: 'Order Now',
-            cta_link: '/menu',
-            display_order: 0,
-            is_visible: true,
-          },
-          {
-            store_config_id: newConfig.id,
-            page_type: 'home',
-            section_type: 'hours',
-            title: 'Hours',
-            display_order: 1,
-            is_visible: true,
-          },
-          {
-            store_config_id: newConfig.id,
-            page_type: 'home',
-            section_type: 'location_map',
-            title: 'Find Us',
-            display_order: 2,
-            is_visible: true,
-          },
-        ])
-      }
+    if (updateError) {
+      console.error('[adminSaveOnlineOrderingSettings] Config update error:', updateError)
+      return { success: false, error: updateError.message }
     }
 
     if (shouldUpsertPaymentDevice && nextTpn) {
@@ -575,6 +1015,8 @@ export async function adminSaveOnlineOrderingSettings(
       }
     }
 
+    revalidateOnlineStorePaths(merchantId)
+
     return {
       success: true,
       error: null,
@@ -603,7 +1045,7 @@ export async function adminToggleOnlineStore(
 
     const { data: existingConfig } = await supabase
       .from('online_store_config')
-      .select('id, slug')
+      .select('id, slug, setup_request_status')
       .eq('location_id', locationId)
       .single()
 
@@ -611,6 +1053,14 @@ export async function adminToggleOnlineStore(
 
     if (!existingConfig) {
       return { success: false, error: 'Online store not configured for this location' }
+    }
+
+    if (!canHqEditStoreSetup(existingConfig.setup_request_status) ||
+      normalizeOnlineStoreRequestStatus(existingConfig.setup_request_status) !== 'setup_completed') {
+      return {
+        success: false,
+        error: 'Finish HQ storefront setup before enabling this branch store.',
+      }
     }
 
     const { error } = await supabase
@@ -657,6 +1107,7 @@ export async function adminToggleOnlineStore(
       }
     }
 
+    revalidateOnlineStorePaths(merchantId)
     return { success: true, error: null, domainWhitelistError, domainWhitelistSkipped }
   } catch (error) {
     console.error('[adminToggleOnlineStore] Exception:', error)

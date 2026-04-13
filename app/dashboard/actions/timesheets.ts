@@ -66,30 +66,30 @@ export async function GetTimesheets(
   try {
     const supabase = createServiceRoleClient();
 
-    const merchantId = await getMerchantIdFromClerkOrg(clerkOrgId);
-
     const from = startOfDay(new Date(filters.dateFrom)).toISOString();
     const to = endOfDay(new Date(filters.dateTo)).toISOString();
 
+    // Single query — filter through merchants!inner to avoid a separate merchant lookup round-trip
     let query = supabase
       .from("staff_shifts")
       .select(
         `
-                id, 
-                status, 
-                clock_in_time, 
-                clock_out_time, 
-                break_logs, 
-                hourly_rate_snapshot, 
+                id,
+                status,
+                clock_in_time,
+                clock_out_time,
+                break_logs,
+                hourly_rate_snapshot,
                 created_at,
                 merchant_id,
                 location_id,
                 staff_profile_id,
+                merchants!inner(clerk_org_id),
                 staff_profile:staff_profiles(first_name, last_name, avatar_url),
                 location:locations(name)
             `,
       )
-      .eq("merchant_id", merchantId)
+      .eq("merchants.clerk_org_id", clerkOrgId)
       .gte("clock_in_time", from)
       .lte("clock_in_time", to)
       .order("clock_in_time", { ascending: false });
@@ -127,19 +127,19 @@ export async function GetTimesheetResources(
   clerkOrgId: string,
 ): Promise<MutationResult<TimesheetResources>> {
   try {
-    const supabase = createServerSupabaseClient();
-    const merchantId = await getMerchantIdFromClerkOrg(clerkOrgId);
+    const supabase = createServiceRoleClient();
 
+    // Both queries run in parallel, each filtering via merchants!inner — no separate merchant lookup
     const [staffRes, locRes] = await Promise.all([
       supabase
         .from("staff_profiles")
-        .select("id, first_name, last_name, avatar_url")
-        .eq("merchant_id", merchantId)
+        .select("id, first_name, last_name, avatar_url, merchants!inner(clerk_org_id)")
+        .eq("merchants.clerk_org_id", clerkOrgId)
         .order("first_name", { ascending: true }),
       supabase
         .from("locations")
-        .select("id, name")
-        .eq("merchant_id", merchantId)
+        .select("id, name, merchants!inner(clerk_org_id)")
+        .eq("merchants.clerk_org_id", clerkOrgId)
         .order("name", { ascending: true }),
     ]);
 
@@ -149,8 +149,8 @@ export async function GetTimesheetResources(
     return {
       success: true,
       data: {
-        staff: staffRes.data || [],
-        locations: locRes.data || [],
+        staff: (staffRes.data || []).map(({ merchants: _, ...s }) => s) as TimesheetResources["staff"],
+        locations: (locRes.data || []).map(({ merchants: _, ...l }) => l) as TimesheetResources["locations"],
       },
     };
   } catch (error) {

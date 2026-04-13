@@ -6,6 +6,7 @@ const isInternalTeamRoutes = createRouteMatcher(['/manage(.*)'])
 const isMerchantRoutes = createRouteMatcher(['/dashboard(.*)'])
 const isStorefrontRoutes = createRouteMatcher(['/sites(.*)'])
 const isOrgSelectionRoute = createRouteMatcher(['/join-organization(.*)'])
+const isAcceptInvitationRoute = createRouteMatcher(['/accept-invitation(.*)'])
 
 function extractStoreSlug(hostname: string): string | null {
   const hostWithoutPort = hostname.split(':')[0];
@@ -138,7 +139,7 @@ export default clerkMiddleware(async (auth, req) => {
   // ── Standard Clerk auth flow (unchanged) ───────────────────────────
   const UserSession = await auth()
   const { userId, orgId } = await auth()
-  if (!UserSession.userId) {
+  if (!UserSession.userId || isAcceptInvitationRoute(req)) {
     return NextResponse.next();
   }
 
