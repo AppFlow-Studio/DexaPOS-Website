@@ -3,11 +3,11 @@
  * pricing-scope wording in the menu UI.
  *
  * The 5-level price cascade:
- *   L1 = Global base             (menu_items)
- *   L2 = Location base override  (location_item_overrides)
- *   L3 = Category (global)       (category_items)
- *   L4 = Location + Category     (location_category_item_overrides)
- *   L5 = Menu @ Location         (location_menu_item_overrides)
+ *   L1 = Global item base            (menu_items)
+ *   L2 = Global category item base   (category_items, no location scope)
+ *   L3 = Branch category item base   (location_category_item_overrides)
+ *   L4 = Global menu category base   (category_items in menu context, no location scope)
+ *   L5 = Branch menu category base   (location_menu_item_overrides)
  *
  * Merchants should NEVER see the word "Level" in UI copy. Always route
  * through scopeLabel() / affectsLabel().
@@ -15,10 +15,10 @@
 
 import {
   Globe,
-  Building2,
   Tag,
-  Layers,
+  Building2,
   BookOpen,
+  Layers,
   type LucideIcon,
 } from "lucide-react";
 
@@ -39,9 +39,9 @@ export interface ScopeContext {
  * Short label for the current scope (used in headers, badges).
  * Examples:
  *   {level:1} → "Everywhere"
- *   {level:2, locationName:"Downtown"} → "Downtown override"
- *   {level:3, categoryName:"Burgers"} → "Burgers category"
- *   {level:4, categoryName:"Burgers", locationName:"Downtown"} → "Burgers at Downtown"
+ *   {level:2, categoryName:"Burgers"} → "Burgers category"
+ *   {level:3, categoryName:"Burgers", locationName:"Downtown"} → "Burgers at Downtown"
+ *   {level:4, menuName:"Lunch", categoryName:"Burgers"} → "Lunch menu – Burgers"
  *   {level:5, menuName:"Lunch", locationName:"Downtown"} → "Lunch menu at Downtown"
  */
 export function scopeLabel(ctx: ScopeContext): string {
@@ -49,27 +49,28 @@ export function scopeLabel(ctx: ScopeContext): string {
     case 1:
       return "Everywhere";
     case 2:
-      return ctx.locationName
-        ? `${ctx.locationName} override`
-        : "Location override";
-    case 3:
       return ctx.categoryName
         ? `${ctx.categoryName} category`
         : "Category default";
+    case 3: {
+      const cat = ctx.categoryName || "this category";
+      const loc = ctx.locationName || "this branch";
+      return `${cat} at ${loc}`;
+    }
     case 4:
-      if (ctx.categoryName && ctx.locationName) {
-        return `${ctx.categoryName} at ${ctx.locationName}`;
+      if (ctx.menuName && ctx.categoryName) {
+        return `${ctx.menuName} menu – ${ctx.categoryName}`;
       }
-      if (ctx.locationName) return `${ctx.locationName} category`;
-      if (ctx.categoryName) return `${ctx.categoryName} at location`;
-      return "Category at location";
+      if (ctx.menuName) return `${ctx.menuName} menu`;
+      if (ctx.categoryName) return `${ctx.categoryName} (menu)`;
+      return "Menu category";
     case 5:
       if (ctx.menuName && ctx.locationName) {
         return `${ctx.menuName} menu at ${ctx.locationName}`;
       }
       if (ctx.menuName) return `${ctx.menuName} menu`;
       if (ctx.locationName) return `Menu at ${ctx.locationName}`;
-      return "Menu at location";
+      return "Branch menu";
   }
 }
 
@@ -82,7 +83,9 @@ export function scopeLabel(ctx: ScopeContext): string {
  * Used in AffectsTag next to Save buttons.
  * Examples:
  *   {level:1} → "all locations"
- *   {level:2, locationName:"Downtown"} → "Downtown only"
+ *   {level:2, categoryName:"Burgers"} → "Burgers category, all locations"
+ *   {level:3, categoryName:"Burgers", locationName:"Downtown"} → "Burgers category at Downtown only"
+ *   {level:4, menuName:"Lunch"} → "Lunch menu category, all locations"
  *   {level:5, menuName:"Lunch", locationName:"Downtown"} → "Lunch menu at Downtown only"
  */
 export function affectsLabel(ctx: ScopeContext): string {
@@ -90,21 +93,22 @@ export function affectsLabel(ctx: ScopeContext): string {
     case 1:
       return "all locations";
     case 2:
-      return ctx.locationName
-        ? `${ctx.locationName} only`
-        : "this location only";
-    case 3:
       return ctx.categoryName
         ? `${ctx.categoryName} category, all locations`
         : "this category, all locations";
-    case 4: {
+    case 3: {
       const cat = ctx.categoryName || "this category";
-      const loc = ctx.locationName || "this location";
-      return `${cat} at ${loc} only`;
+      const loc = ctx.locationName || "this branch";
+      return `${cat} category at ${loc} only`;
+    }
+    case 4: {
+      const menu = ctx.menuName || "this menu";
+      const cat = ctx.categoryName ? ` – ${ctx.categoryName}` : "";
+      return `${menu} menu${cat}, all locations`;
     }
     case 5: {
       const menu = ctx.menuName || "this menu";
-      const loc = ctx.locationName || "this location";
+      const loc = ctx.locationName || "this branch";
       return `${menu} menu at ${loc} only`;
     }
   }
@@ -119,21 +123,21 @@ export function scopeDescription(ctx: ScopeContext): string {
     case 1:
       return "Changes here apply everywhere by default.";
     case 2:
-      return ctx.locationName
-        ? `Changes here apply only at ${ctx.locationName}.`
-        : "Changes here apply only at this location.";
-    case 3:
       return ctx.categoryName
-        ? `Sets the default price for ${ctx.categoryName} across every location.`
+        ? `Sets the default price for ${ctx.categoryName} across every location and menu.`
         : "Sets the default price for this category across every location.";
-    case 4: {
+    case 3: {
       const cat = ctx.categoryName || "this category";
-      const loc = ctx.locationName || "this location";
-      return `Applies to ${cat} at ${loc} only.`;
+      const loc = ctx.locationName || "this branch";
+      return `Applies to ${cat} at ${loc} only. Overrides the global category price.`;
+    }
+    case 4: {
+      const menu = ctx.menuName || "this menu";
+      return `Sets the price for this item in the ${menu} menu across all locations.`;
     }
     case 5: {
       const menu = ctx.menuName || "this menu";
-      const loc = ctx.locationName || "this location";
+      const loc = ctx.locationName || "this branch";
       return `Applies to the ${menu} menu at ${loc} only.`;
     }
   }
@@ -148,13 +152,13 @@ export function scopeShortName(level: CascadeLevel): string {
     case 1:
       return "Global";
     case 2:
-      return "Location";
+      return "Global Category";
     case 3:
-      return "Category";
+      return "Branch Category";
     case 4:
-      return "Category @ Location";
+      return "Global Menu";
     case 5:
-      return "Menu @ Location";
+      return "Branch Menu";
   }
 }
 
@@ -167,13 +171,13 @@ export function scopeIcon(level: CascadeLevel): LucideIcon {
     case 1:
       return Globe;
     case 2:
-      return Building2;
-    case 3:
       return Tag;
+    case 3:
+      return Building2;
     case 4:
-      return Layers;
-    case 5:
       return BookOpen;
+    case 5:
+      return Layers;
   }
 }
 
@@ -186,11 +190,11 @@ export interface ScopeColor {
 
 /**
  * Tailwind classes for each scope level. Color hierarchy:
- *   emerald = safe-global (affects everything)
- *   blue    = safe-local (location-scoped)
- *   violet  = category default
- *   amber   = category+location
- *   rose    = menu+location (most specific)
+ *   emerald = safe-global (L1, affects everything)
+ *   violet  = category default (L2, global category)
+ *   blue    = branch-scoped (L3, branch category)
+ *   amber   = menu-global (L4, global menu)
+ *   rose    = branch menu (L5, most specific)
  */
 export function scopeColor(level: CascadeLevel): ScopeColor {
   switch (level) {
@@ -203,17 +207,17 @@ export function scopeColor(level: CascadeLevel): ScopeColor {
       };
     case 2:
       return {
-        text: "text-blue-700",
-        bg: "bg-blue-50",
-        border: "border-blue-200",
-        dot: "bg-blue-500",
-      };
-    case 3:
-      return {
         text: "text-violet-700",
         bg: "bg-violet-50",
         border: "border-violet-200",
         dot: "bg-violet-500",
+      };
+    case 3:
+      return {
+        text: "text-blue-700",
+        bg: "bg-blue-50",
+        border: "border-blue-200",
+        dot: "bg-blue-500",
       };
     case 4:
       return {
@@ -237,8 +241,8 @@ export function scopeColor(level: CascadeLevel): ScopeColor {
 // ============================================================================
 
 /**
- * Map the legacy `PriceSource` string enum from `types/menu.ts` to a
- * cascade level. Safe to import from UI components.
+ * Map the `price_source` string returned by DB RPCs to a cascade level.
+ * Safe to import from UI components.
  */
 export function priceSourceToLevel(
   src: string | null | undefined,
@@ -247,11 +251,11 @@ export function priceSourceToLevel(
     case "location_menu":
       return 5;
     case "location_category":
-      return 4;
+      return 3;  // old L4 → new L3 (branch category)
     case "category":
-      return 3;
+      return 2;  // old L3 → new L2 (global category)
     case "location_item":
-      return 2;
+      return 1;  // not a main level in the new hierarchy, treat as base
     case "base":
     default:
       return 1;
@@ -280,22 +284,22 @@ export function deriveScopeFromContext(args: {
     hasMenu = !!args.menuName,
   } = args;
 
-  // Menu + Category + Location -> L5
+  // L5: Branch Menu (menu + category + specific location)
   if (hasMenu && hasCategory && !isAllLocations) {
     return { level: 5, menuName, locationName, categoryName };
   }
-  // Category + Location -> L4
+  // L4: Global Menu (menu + category + all locations)
+  if (hasMenu && hasCategory && isAllLocations) {
+    return { level: 4, menuName, categoryName };
+  }
+  // L3: Branch Category (category + specific location, no menu)
   if (hasCategory && !isAllLocations) {
-    return { level: 4, categoryName, locationName };
+    return { level: 3, categoryName, locationName };
   }
-  // Category + All -> L3
+  // L2: Global Category (category + all locations, no menu)
   if (hasCategory && isAllLocations) {
-    return { level: 3, categoryName };
+    return { level: 2, categoryName };
   }
-  // Location only -> L2
-  if (!isAllLocations) {
-    return { level: 2, locationName };
-  }
-  // All -> L1
+  // L1: Global Base
   return { level: 1 };
 }

@@ -336,8 +336,12 @@ export default function MenuDetailPage() {
           null,
         level_2_modifier: priceLevels.level_2_modifier ?? null,
         level_2_modifier_type: null,
-        level_3_category: (item as any).custom_price ?? null,
-        level_3_category_cash: (item as any).custom_cash_price ?? null,
+        // L2: global category price (category_items WHERE menu_id IS NULL)
+        level_3_category: (item as any).custom_price ?? priceLevels.level_3_category ?? null,
+        level_3_category_cash: (item as any).custom_cash_price ?? priceLevels.level_3_category_cash ?? null,
+        // L4: global menu category price (category_items WHERE menu_id IS NOT NULL)
+        level_3_menu_category: priceLevels.level_3_menu_category ?? null,
+        level_3_menu_category_cash: priceLevels.level_3_menu_category_cash ?? null,
         level_4_location_category:
           (mi as any).location_category_override?.custom_price ??
           priceLevels.level_4_location_category ??
@@ -358,6 +362,7 @@ export default function MenuDetailPage() {
         level_1_delivery: priceLevels.level_1_delivery ?? null,
         level_2_location_item_delivery: priceLevels.level_2_location_item_delivery ?? null,
         level_3_category_delivery: priceLevels.level_3_category_delivery ?? null,
+        level_3_menu_category_delivery: priceLevels.level_3_menu_category_delivery ?? null,
         level_4_location_category_delivery: priceLevels.level_4_location_category_delivery ?? null,
         level_5_location_menu_delivery: priceLevels.level_5_location_menu_delivery ?? null,
       },
