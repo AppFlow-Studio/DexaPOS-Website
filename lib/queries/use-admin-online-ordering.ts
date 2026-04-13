@@ -108,10 +108,20 @@ export interface OnlineOrderingSettings {
   logoUrl?: string | null
   heroImageUrl?: string | null
   faviconUrl?: string | null
+  ogImageUrl?: string | null
   bannerText?: string | null
+  templateId?: 'classic' | 'bold' | 'minimal'
   primaryColor?: string
   secondaryColor?: string
-  headerStyle?: 'primary' | 'dark' | 'light'
+  accentColor?: string | null
+  backgroundColor?: string
+  textColor?: string
+  borderColor?: string | null
+  cardColor?: string | null
+  fontFamily?: string | null
+  headerStyle?: 'filled' | 'transparent' | 'outlined'
+  headerTextColor?: string | null
+  menuLayout?: 'cards' | 'sidebyside' | 'no-images'
   pickupEnabled?: boolean
   deliveryEnabled?: boolean
   preparationLeadTime?: number

@@ -1,6 +1,7 @@
 # Senior Handoff: Online Ordering, Dejavoo, and Storefront Access
 
 **Date:** 2026-04-11  
+**Last Updated:** 2026-04-14  
 **Audience:** Senior engineer / technical lead  
 **Purpose:** One-file status summary of what was implemented, what was verified, what is still blocked, and what needs confirmation on the Dejavoo side.
 
@@ -17,6 +18,7 @@ Implemented:
 - merchant setup requests are now gated by required packet completeness; when missing data is detected, the merchant sees a modal that shows only missing fields (text + file uploads) and cannot submit the request until complete
 - branch storefront disable is now enforced at middleware level with hard `404`
 - inactive-store API bypasses are now blocked in OTP, payment-init, and order-create paths
+- HQ admin Online Store UI again exposes the full set of existing `online_store_config` theme controls (template/menu layout/header style + expanded theme colors + operating hours)
 - Dejavoo configuration moved from a global/plaintext branch model toward a secure per-branch selected-device model
 - branch-specific FTD key resolution is working through Supabase Vault
 - checkout now carries `payment_device_id` through the payment flow
@@ -45,10 +47,9 @@ Merchant behavior now:
   - approved / setup in progress
   - rejected with reason
   - setup completed
-- after setup is completed, branch can only maintain:
-  - `TPN`
-  - FTD Ecom/TOP key
-  - tip configuration
+- after setup is completed, branch can only maintain **non-payment** storefront settings:
+  - store info / branding / ordering
+  - payment credentials (`TPN`, FTD key) and tips remain HQ-only
 
 HQ behavior now:
 
@@ -144,6 +145,23 @@ Files:
 - `supabase/functions/process-online-payment/index.ts`
 - `supabase/functions/create-online-order/index.ts`
 - `app/sites/auth-actions.ts`
+
+### 2.1.2 HQ Branding + Store Info Controls Restored
+
+The HQ Online Store settings UI previously only exposed primary/secondary colors. It now round-trips and renders the full set of theme/config columns that already exist on `online_store_config`:
+
+- template (`classic|bold|minimal`)
+- menu layout (`cards|sidebyside|no-images`)
+- header style (`filled|transparent|outlined`)
+- expanded theme colors (`accent|background|text|border|card|headerTextColor`)
+- font family (from `FONT_GOOGLE_URLS`)
+- operating hours editor (`HoursConfigModal`)
+- store description
+
+Files:
+
+- `app/manage/actions/admin-merchant/online-ordering.ts`
+- `app/manage/merchants/[merchantId]/components/OnlineStoreTab.tsx`
 
 ### 2.2 Secure multi-branch / multi-device Dejavoo model
 

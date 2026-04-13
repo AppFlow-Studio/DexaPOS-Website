@@ -30,6 +30,7 @@ import { uploadStoreImage } from "@/lib/storage/actions";
 import { useAuth } from "@clerk/nextjs";
 import { OrderOutTab } from "@/components/dashboard/orderout/OrderOutTab";
 import { useOrderOutStatus, useOnboardOrderOut } from "./hooks/useOrderOutStatus";
+import { FONT_GOOGLE_URLS } from "@/app/sites/lib/theme-utils";
 import {
   getOnlineStoreRequestRequirements,
   saveOnlineStoreRequestRequirements,
@@ -421,6 +422,40 @@ function CompletedSetupPanel({
             <CardContent className="space-y-6">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
+                  <Label>Template</Label>
+                  <select
+                    value={settings.templateId}
+                    onChange={(e) =>
+                      onUpdate({ templateId: e.target.value as any })
+                    }
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="classic">Classic</option>
+                    <option value="bold">Bold</option>
+                    <option value="minimal">Minimal</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Font</Label>
+                  <select
+                    value={settings.fontFamily || "DM Sans"}
+                    onChange={(e) => onUpdate({ fontFamily: e.target.value })}
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  >
+                    {Object.keys(FONT_GOOGLE_URLS).map((font) => (
+                      <option key={font} value={font}>
+                        {font}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    Font options are sourced from storefront supported Google Fonts.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
                   <Label>Primary Color</Label>
                   <div className="flex items-center gap-3">
                     <input
@@ -447,6 +482,55 @@ function CompletedSetupPanel({
                     <Input
                       value={settings.secondaryColor}
                       onChange={(e) => onUpdate({ secondaryColor: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-2">
+                  <Label>Accent Color</Label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={settings.accentColor || settings.primaryColor}
+                      onChange={(e) => onUpdate({ accentColor: e.target.value })}
+                      className="h-10 w-14 rounded border"
+                    />
+                    <Input
+                      value={settings.accentColor || ""}
+                      onChange={(e) => onUpdate({ accentColor: e.target.value })}
+                      placeholder="Optional"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Background</Label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={settings.backgroundColor}
+                      onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
+                      className="h-10 w-14 rounded border"
+                    />
+                    <Input
+                      value={settings.backgroundColor}
+                      onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Text</Label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={settings.textColor}
+                      onChange={(e) => onUpdate({ textColor: e.target.value })}
+                      className="h-10 w-14 rounded border"
+                    />
+                    <Input
+                      value={settings.textColor}
+                      onChange={(e) => onUpdate({ textColor: e.target.value })}
                     />
                   </div>
                 </div>
@@ -479,6 +563,37 @@ function CompletedSetupPanel({
                   {settings.heroImageUrl ? (
                     <p className="text-xs text-muted-foreground break-all">
                       Current: {settings.heroImageUrl}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Favicon</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleUpload("favicon", e.target.files?.[0] ?? null)}
+                    disabled={Boolean(uploading.favicon)}
+                  />
+                  {settings.faviconUrl ? (
+                    <p className="text-xs text-muted-foreground break-all">
+                      Current: {settings.faviconUrl}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="space-y-2">
+                  <Label>OG Image</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleUpload("og", e.target.files?.[0] ?? null)}
+                    disabled={Boolean(uploading.og)}
+                  />
+                  {settings.ogImageUrl ? (
+                    <p className="text-xs text-muted-foreground break-all">
+                      Current: {settings.ogImageUrl}
                     </p>
                   ) : null}
                 </div>
@@ -605,7 +720,7 @@ function CompletedSetupPanel({
                 <OrderOutTab
                   clerkOrgId={orgId}
                   locationId={selectedLocationId}
-                  orderOutStatus={(orderOutStatusResult as any) ?? null}
+                  orderOutStatus={(orderOutStatusResult as any)?.data ?? null}
                   showOnboardingForm={showOrderOutForm}
                   onShowOnboardingForm={setShowOrderOutForm}
                   onboardMutation={onboardMutation}

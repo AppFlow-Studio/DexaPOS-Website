@@ -171,6 +171,7 @@ interface OnlineOrderingSettings {
   storeName: string
   storeSlug: string
   storeUrl?: string
+  description?: string
   phone: string
   email: string
   address: string
@@ -186,10 +187,20 @@ interface OnlineOrderingSettings {
   logoUrl?: string | null
   heroImageUrl?: string | null
   faviconUrl?: string | null
+  ogImageUrl?: string | null
   bannerText?: string | null
+  templateId?: 'classic' | 'bold' | 'minimal'
   primaryColor?: string
   secondaryColor?: string
-  headerStyle?: 'primary' | 'dark' | 'light'
+  accentColor?: string | null
+  backgroundColor?: string
+  textColor?: string
+  borderColor?: string | null
+  cardColor?: string | null
+  fontFamily?: string | null
+  headerStyle?: 'filled' | 'transparent' | 'outlined'
+  headerTextColor?: string | null
+  menuLayout?: 'cards' | 'sidebyside' | 'no-images'
   pickupEnabled?: boolean
   deliveryEnabled?: boolean
   preparationLeadTime?: number
@@ -684,11 +695,23 @@ export async function getAdminOnlineOrderingSettings(
       settings.enabled = config.is_active ?? false
       settings.storeName = config.store_name || settings.storeName
       settings.storeSlug = config.slug ?? ''
+      settings.description = config.description ?? ''
       settings.logoUrl = config.logo_url
       settings.heroImageUrl = config.hero_image_url
       settings.faviconUrl = config.favicon_url
+      settings.ogImageUrl = config.og_image_url
+      settings.templateId = (config.template_id ?? 'classic') as OnlineOrderingSettings['templateId']
       settings.primaryColor = config.primary_color ?? '#2DD4BF'
       settings.secondaryColor = config.secondary_color ?? '#10b981'
+      settings.accentColor = config.accent_color ?? null
+      settings.backgroundColor = config.background_color ?? '#FFFFFF'
+      settings.textColor = config.text_color ?? '#111827'
+      settings.borderColor = config.border_color ?? null
+      settings.cardColor = config.card_color ?? null
+      settings.fontFamily = config.font_family ?? 'DM Sans'
+      settings.headerStyle = (config.header_style ?? 'filled') as OnlineOrderingSettings['headerStyle']
+      settings.headerTextColor = config.header_text_color ?? null
+      settings.menuLayout = (config.menu_layout ?? 'cards') as OnlineOrderingSettings['menuLayout']
       settings.phone = config.phone ?? settings.phone
       settings.email = config.email ?? settings.email
 
@@ -1147,11 +1170,23 @@ export async function adminSaveOnlineOrderingSettings(
       configData.slug = settings.storeSlug
     }
     if (settings.enabled !== undefined) configData.is_active = settings.enabled
+    if (settings.description !== undefined) configData.description = settings.description
     if (settings.logoUrl !== undefined) configData.logo_url = settings.logoUrl
     if (settings.heroImageUrl !== undefined) configData.hero_image_url = settings.heroImageUrl
     if (settings.faviconUrl !== undefined) configData.favicon_url = settings.faviconUrl
+    if (settings.ogImageUrl !== undefined) configData.og_image_url = settings.ogImageUrl
+    if (settings.templateId !== undefined) configData.template_id = settings.templateId
     if (settings.primaryColor !== undefined) configData.primary_color = settings.primaryColor
     if (settings.secondaryColor !== undefined) configData.secondary_color = settings.secondaryColor
+    if (settings.accentColor !== undefined) configData.accent_color = settings.accentColor
+    if (settings.backgroundColor !== undefined) configData.background_color = settings.backgroundColor
+    if (settings.textColor !== undefined) configData.text_color = settings.textColor
+    if (settings.borderColor !== undefined) configData.border_color = settings.borderColor
+    if (settings.cardColor !== undefined) configData.card_color = settings.cardColor
+    if (settings.fontFamily !== undefined) configData.font_family = settings.fontFamily
+    if (settings.headerStyle !== undefined) configData.header_style = settings.headerStyle
+    if (settings.headerTextColor !== undefined) configData.header_text_color = settings.headerTextColor
+    if (settings.menuLayout !== undefined) configData.menu_layout = settings.menuLayout
     if (settings.phone !== undefined) configData.phone = settings.phone
     if (settings.email !== undefined) configData.email = settings.email
     if (settings.operatingHours !== undefined) configData.operating_hours = settings.operatingHours
