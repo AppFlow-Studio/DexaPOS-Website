@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ChevronRight, ChevronLeft } from "lucide-react";
+import { ChevronRight, ChevronLeft, AlertCircle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +18,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import type { TipPoolConfigWithShares, Role } from "@/app/dashboard/actions/tips";
 
 interface TipPoolDialogProps {
@@ -34,13 +34,24 @@ export interface TipPoolFormData {
   name: string;
   description: string;
   distribution_method: "percentage" | "hours_weighted" | "equal_split" | "points";
-  tip_source: "charged_tips" | "all_tips" | "cash_only";
+  tip_source: "charged_tips" | "all_tips" | "cash_only" | "custom_percentage";
   source_percentage: number;
   contributing_role_codes: string[];
+  receiving_role_codes: string[];
   is_active: boolean;
   effective_date: string;
+  end_date: string | null;
   role_shares: { role_code: string; share_percentage?: number; points_per_hour?: number }[];
 }
+
+const TOTAL_STEPS = 4;
+
+const STEP_LABELS = [
+  "Basic Info",
+  "Contributing Roles",
+  "Receiving Roles",
+  "Share Config",
+];
 
 const defaultFormData: TipPoolFormData = {
   name: "",
@@ -49,8 +60,10 @@ const defaultFormData: TipPoolFormData = {
   tip_source: "charged_tips",
   source_percentage: 100,
   contributing_role_codes: [],
+  receiving_role_codes: [],
   is_active: true,
   effective_date: new Date().toISOString().split("T")[0],
+  end_date: null,
   role_shares: [],
 };
 
@@ -65,21 +78,23 @@ export function TipPoolDialog({
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState<TipPoolFormData>({ ...defaultFormData });
 
-  // Reset form when dialog opens/closes or pool changes
   useEffect(() => {
     if (!open) return;
 
     if (pool) {
-      // Editing: populate from pool data
+      // Extract receiving roles from existing role_shares
+      const receivingCodes = (pool.tip_pool_role_shares || []).map((s) => s.role_code);
       setFormData({
         name: pool.name,
         description: pool.description || "",
         distribution_method: pool.distribution_method,
-        tip_source: pool.tip_source,
+        tip_source: pool.tip_source as TipPoolFormData["tip_source"],
         source_percentage: pool.source_percentage,
         contributing_role_codes: pool.contributing_role_codes,
+        receiving_role_codes: receivingCodes,
         is_active: pool.is_active,
         effective_date: pool.effective_date,
+        end_date: (pool as any).end_date ?? null,
         role_shares: (pool.tip_pool_role_shares || []).map((share) => ({
           role_code: share.role_code,
           share_percentage: share.share_percentage ?? undefined,
@@ -87,7 +102,6 @@ export function TipPoolDialog({
         })),
       });
     } else {
-      // Creating: reset to defaults
       setFormData({
         ...defaultFormData,
         effective_date: new Date().toISOString().split("T")[0],
@@ -96,38 +110,40 @@ export function TipPoolDialog({
     setStep(1);
   }, [pool, open]);
 
-  const handleStepChange = (direction: number) => {
-    setStep(step + direction);
-  };
+  const set = (field: keyof TipPoolFormData, value: any) =>
+    setFormData((prev) => ({ ...prev, [field]: value }));
 
-  const handleBasicChange = (field: string, value: any) => {
-    setFormData({ ...formData, [field]: value });
-  };
-
-  const handleRoleToggle = (roleCode: string, checked: boolean) => {
-    const newCodes = checked
-      ? [...formData.contributing_role_codes, roleCode]
-      : formData.contributing_role_codes.filter((c) => c !== roleCode);
-
-    const newShares = formData.role_shares.filter((s) =>
-      newCodes.includes(s.role_code)
+  // --- Contributing role toggle ---
+  const toggleContributing = (code: string, checked: boolean) => {
+    set(
+      "contributing_role_codes",
+      checked
+        ? [...formData.contributing_role_codes, code]
+        : formData.contributing_role_codes.filter((c) => c !== code)
     );
+  };
 
-    if (checked) {
+  // --- Receiving role toggle ---
+  const toggleReceiving = (code: string, checked: boolean) => {
+    const newReceiving = checked
+      ? [...formData.receiving_role_codes, code]
+      : formData.receiving_role_codes.filter((c) => c !== code);
+
+    // Keep role_shares in sync with receiving_role_codes
+    let newShares = formData.role_shares.filter((s) => newReceiving.includes(s.role_code));
+    if (checked && !newShares.find((s) => s.role_code === code)) {
       newShares.push({
-        role_code: roleCode,
-        share_percentage:
-          formData.distribution_method === "percentage" ? 0 : undefined,
-        points_per_hour:
-          formData.distribution_method === "points" ? 0 : undefined,
+        role_code: code,
+        share_percentage: formData.distribution_method === "percentage" ? 0 : undefined,
+        points_per_hour: formData.distribution_method === "points" ? 0 : undefined,
       });
     }
 
-    setFormData({
-      ...formData,
-      contributing_role_codes: newCodes,
+    setFormData((prev) => ({
+      ...prev,
+      receiving_role_codes: newReceiving,
       role_shares: newShares,
-    });
+    }));
   };
 
   const handleShareChange = (
@@ -135,10 +151,26 @@ export function TipPoolDialog({
     field: "share_percentage" | "points_per_hour",
     value: number
   ) => {
-    const newShares = formData.role_shares.map((s) =>
-      s.role_code === roleCode ? { ...s, [field]: value } : s
-    );
-    setFormData({ ...formData, role_shares: newShares });
+    setFormData((prev) => ({
+      ...prev,
+      role_shares: prev.role_shares.map((s) =>
+        s.role_code === code ? { ...s, [field]: value } : s
+      ),
+    }));
+  };
+
+  // Fix: use correct variable in handleShareChange
+  const updateShare = (
+    roleCode: string,
+    field: "share_percentage" | "points_per_hour",
+    value: number
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      role_shares: prev.role_shares.map((s) =>
+        s.role_code === roleCode ? { ...s, [field]: value } : s
+      ),
+    }));
   };
 
   const totalPercentage = formData.role_shares.reduce(
@@ -146,44 +178,72 @@ export function TipPoolDialog({
     0
   );
 
-  const handleSubmit = () => {
-    if (step === 3) {
-      onSubmit(formData);
-    }
-  };
-
   const canProceed = () => {
-    if (step === 1) {
-      return formData.name.trim().length > 0;
+    switch (step) {
+      case 1:
+        return formData.name.trim().length > 0;
+      case 2:
+        return formData.contributing_role_codes.length > 0;
+      case 3:
+        return formData.receiving_role_codes.length > 0;
+      case 4:
+        if (formData.distribution_method === "percentage") {
+          return Math.abs(totalPercentage - 100) < 0.01;
+        }
+        return true;
+      default:
+        return true;
     }
-    if (step === 2) {
-      return formData.contributing_role_codes.length > 0;
-    }
-    return true;
   };
 
-  const getRoleName = (code: string) => {
-    return roles.find((r) => r.code === code)?.name || code;
-  };
+  const getRoleName = (code: string) => roles.find((r) => r.code === code)?.name || code;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            {pool ? "Edit Tip Pool" : "Create Tip Pool"} - Step {step} of 3
-          </DialogTitle>
-          <DialogDescription>
-            {step === 1 &&
-              "Configure the basic settings for this tip pool"}
-            {step === 2 &&
-              "Select which roles contribute to this pool"}
-            {step === 3 && "Set the tip distribution shares for each role"}
+          <DialogTitle>{pool ? "Edit Tip Pool" : "Create Tip Pool"}</DialogTitle>
+          <DialogDescription asChild>
+            <div className="space-y-2">
+              {/* Step progress */}
+              <div className="flex items-center gap-1 pt-1">
+                {STEP_LABELS.map((label, i) => {
+                  const num = i + 1;
+                  const isActive = num === step;
+                  const isDone = num < step;
+                  return (
+                    <div key={num} className="flex items-center gap-1">
+                      <div
+                        className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold ${
+                          isActive
+                            ? "bg-teal-500 text-white"
+                            : isDone
+                            ? "bg-teal-100 text-teal-700"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {num}
+                      </div>
+                      <span
+                        className={`text-xs hidden sm:block ${
+                          isActive ? "text-foreground font-medium" : "text-muted-foreground"
+                        }`}
+                      >
+                        {label}
+                      </span>
+                      {num < TOTAL_STEPS && (
+                        <ChevronRight className="w-3 h-3 text-muted-foreground mx-1" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
-          {/* STEP 1: BASIC INFO */}
+        <div className="space-y-5 py-2">
+          {/* ──────────── STEP 1: Basic Info ──────────── */}
           {step === 1 && (
             <div className="space-y-4">
               <div>
@@ -191,10 +251,8 @@ export function TipPoolDialog({
                 <Input
                   id="name"
                   value={formData.name}
-                  onChange={(e) =>
-                    handleBasicChange("name", e.target.value)
-                  }
-                  placeholder="e.g., Server Pool, Busser Pool"
+                  onChange={(e) => set("name", e.target.value)}
+                  placeholder="e.g., Front of House Pool, Bar Pool"
                   className="mt-1"
                 />
               </div>
@@ -204,11 +262,10 @@ export function TipPoolDialog({
                 <Textarea
                   id="description"
                   value={formData.description}
-                  onChange={(e) =>
-                    handleBasicChange("description", e.target.value)
-                  }
-                  placeholder="Optional description of the pool"
+                  onChange={(e) => set("description", e.target.value)}
+                  placeholder="Optional description"
                   className="mt-1"
+                  rows={2}
                 />
               </div>
 
@@ -216,44 +273,39 @@ export function TipPoolDialog({
                 <Label>Distribution Method *</Label>
                 <RadioGroup
                   value={formData.distribution_method}
-                  onValueChange={(value) =>
-                    handleBasicChange("distribution_method", value)
-                  }
+                  onValueChange={(v) => set("distribution_method", v)}
                   className="mt-2 space-y-2"
                 >
-                  <div className="flex items-center gap-2">
-                    <RadioGroupItem
-                      value="percentage"
-                      id="method-percentage"
-                    />
-                    <Label htmlFor="method-percentage" className="font-normal">
-                      Percentage-Based — Each role gets a fixed % of the pool
-                    </Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <RadioGroupItem
-                      value="hours_weighted"
-                      id="method-hours"
-                    />
-                    <Label htmlFor="method-hours" className="font-normal">
-                      Hours Weighted — Distributed proportionally by hours worked
-                    </Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <RadioGroupItem
-                      value="equal_split"
-                      id="method-equal"
-                    />
-                    <Label htmlFor="method-equal" className="font-normal">
-                      Equal Split — Divided equally among all eligible employees
-                    </Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <RadioGroupItem value="points" id="method-points" />
-                    <Label htmlFor="method-points" className="font-normal">
-                      Points-Based — Role points per hour × hours worked
-                    </Label>
-                  </div>
+                  {[
+                    {
+                      value: "percentage",
+                      label: "Percentage-Based",
+                      desc: "Each receiving role gets a fixed % of the pool",
+                    },
+                    {
+                      value: "hours_weighted",
+                      label: "Hours Weighted",
+                      desc: "Distributed proportionally by hours worked",
+                    },
+                    {
+                      value: "equal_split",
+                      label: "Equal Split",
+                      desc: "Divided equally among all eligible employees",
+                    },
+                    {
+                      value: "points",
+                      label: "Points-Based",
+                      desc: "Role points per hour × hours worked",
+                    },
+                  ].map((opt) => (
+                    <div key={opt.value} className="flex items-start gap-2">
+                      <RadioGroupItem value={opt.value} id={`method-${opt.value}`} className="mt-0.5" />
+                      <Label htmlFor={`method-${opt.value}`} className="font-normal cursor-pointer">
+                        <span className="font-medium">{opt.label}</span>
+                        <span className="text-muted-foreground"> — {opt.desc}</span>
+                      </Label>
+                    </div>
+                  ))}
                 </RadioGroup>
               </div>
 
@@ -261,37 +313,27 @@ export function TipPoolDialog({
                 <Label>Tip Source *</Label>
                 <RadioGroup
                   value={formData.tip_source}
-                  onValueChange={(value) =>
-                    handleBasicChange("tip_source", value)
-                  }
+                  onValueChange={(v) => set("tip_source", v)}
                   className="mt-2 space-y-2"
                 >
-                  <div className="flex items-center gap-2">
-                    <RadioGroupItem
-                      value="charged_tips"
-                      id="source-charged"
-                    />
-                    <Label htmlFor="source-charged" className="font-normal">
-                      Charged Tips Only
-                    </Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <RadioGroupItem value="all_tips" id="source-all" />
-                    <Label htmlFor="source-all" className="font-normal">
-                      All Tips (charged + cash)
-                    </Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <RadioGroupItem value="cash_only" id="source-cash" />
-                    <Label htmlFor="source-cash" className="font-normal">
-                      Cash Tips Only
-                    </Label>
-                  </div>
+                  {[
+                    { value: "charged_tips", label: "Charged Tips Only" },
+                    { value: "all_tips", label: "All Tips (charged + cash)" },
+                    { value: "cash_only", label: "Cash Tips Only" },
+                    { value: "custom_percentage", label: "Custom Percentage of Tips" },
+                  ].map((opt) => (
+                    <div key={opt.value} className="flex items-center gap-2">
+                      <RadioGroupItem value={opt.value} id={`source-${opt.value}`} />
+                      <Label htmlFor={`source-${opt.value}`} className="font-normal cursor-pointer">
+                        {opt.label}
+                      </Label>
+                    </div>
+                  ))}
                 </RadioGroup>
               </div>
 
               <div>
-                <Label htmlFor="source-pct">Source Percentage</Label>
+                <Label htmlFor="source-pct">Source Percentage (%)</Label>
                 <Input
                   id="source-pct"
                   type="number"
@@ -299,75 +341,97 @@ export function TipPoolDialog({
                   max="100"
                   step="0.01"
                   value={formData.source_percentage}
-                  onChange={(e) =>
-                    handleBasicChange(
-                      "source_percentage",
-                      parseFloat(e.target.value) || 0
-                    )
-                  }
-                  className="mt-1"
+                  onChange={(e) => set("source_percentage", parseFloat(e.target.value) || 0)}
+                  className="mt-1 w-32"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  What percentage of the selected tip source goes into the pool (100% = all)
+                  % of selected tip source that goes into the pool (100 = all)
                 </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="effective-date">Effective Date</Label>
+                  <Input
+                    id="effective-date"
+                    type="date"
+                    value={formData.effective_date}
+                    min={new Date().toISOString().split("T")[0]}
+                    onChange={(e) => {
+                      set("effective_date", e.target.value);
+                      // Clear end_date if it's now before the new effective date
+                      if (formData.end_date && e.target.value >= formData.end_date) {
+                        set("end_date", null);
+                      }
+                    }}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="end-date">End Date</Label>
+                  <Input
+                    id="end-date"
+                    type="date"
+                    value={formData.end_date || ""}
+                    min={(() => {
+                      const today = new Date().toISOString().split("T")[0];
+                      const d = new Date(formData.effective_date + "T00:00:00");
+                      d.setDate(d.getDate() + 1);
+                      const minFromEffective = d.toISOString().split("T")[0];
+                      return minFromEffective > today ? minFromEffective : today;
+                    })()}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val) { set("end_date", null); return; }
+                      const today = new Date().toISOString().split("T")[0];
+                      if (val < today) return;
+                      if (val <= formData.effective_date) return;
+                      set("end_date", val);
+                    }}
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Leave blank = no end date</p>
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="active"
                   checked={formData.is_active}
-                  onCheckedChange={(checked) =>
-                    handleBasicChange("is_active", checked)
-                  }
+                  onCheckedChange={(checked) => set("is_active", !!checked)}
                 />
-                <Label htmlFor="active" className="font-normal">
-                  Active
-                </Label>
-              </div>
-
-              <div>
-                <Label htmlFor="effective-date">Effective Date</Label>
-                <Input
-                  id="effective-date"
-                  type="date"
-                  value={formData.effective_date}
-                  onChange={(e) =>
-                    handleBasicChange("effective_date", e.target.value)
-                  }
-                  className="mt-1"
-                />
+                <Label htmlFor="active" className="font-normal cursor-pointer">Active</Label>
               </div>
             </div>
           )}
 
-          {/* STEP 2: CONTRIBUTING ROLES */}
+          {/* ──────────── STEP 2: Contributing Roles ──────────── */}
           {step === 2 && (
             <div className="space-y-4">
-              <Label>Select Contributing Roles *</Label>
-              <p className="text-sm text-muted-foreground">
-                These roles will contribute their tips into the pool
-              </p>
+              <div>
+                <Label className="text-base">Contributing Roles *</Label>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Select the roles whose tips go <strong>into</strong> this pool.
+                  These employees give up a portion of their tips to be pooled.
+                </p>
+              </div>
               <div className="space-y-2 max-h-64 overflow-y-auto border rounded-lg p-4">
                 {roles.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No roles available</p>
                 ) : (
                   roles.map((role) => (
-                    <div key={role.code} className="flex items-center gap-2">
+                    <div key={role.code} className="flex items-center gap-2 py-0.5">
                       <Checkbox
-                        id={`role-${role.code}`}
-                        checked={formData.contributing_role_codes.includes(
-                          role.code
-                        )}
-                        onCheckedChange={(checked) =>
-                          handleRoleToggle(role.code, !!checked)
-                        }
+                        id={`contrib-${role.code}`}
+                        checked={formData.contributing_role_codes.includes(role.code)}
+                        onCheckedChange={(checked) => toggleContributing(role.code, !!checked)}
                       />
                       <Label
-                        htmlFor={`role-${role.code}`}
+                        htmlFor={`contrib-${role.code}`}
                         className="font-normal cursor-pointer flex-1"
                       >
                         <span className="font-semibold text-sm">{role.code}</span>
-                        <span className="text-muted-foreground ml-2">- {role.name}</span>
+                        <span className="text-muted-foreground ml-2">— {role.name}</span>
                       </Label>
                     </div>
                   ))
@@ -379,92 +443,146 @@ export function TipPoolDialog({
             </div>
           )}
 
-          {/* STEP 3: ROLE SHARES */}
+          {/* ──────────── STEP 3: Receiving Roles ──────────── */}
           {step === 3 && (
             <div className="space-y-4">
-              <Label>Configure Role Shares</Label>
+              <div>
+                <Label className="text-base">Receiving Roles *</Label>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Select the roles that <strong>receive</strong> money from this pool.
+                  These can be different from the contributing roles.
+                </p>
+              </div>
+              {formData.contributing_role_codes.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  <span className="text-xs text-muted-foreground">Contributors:</span>
+                  {formData.contributing_role_codes.map((code) => (
+                    <Badge key={code} variant="secondary" className="text-xs">
+                      {code}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              <div className="space-y-2 max-h-64 overflow-y-auto border rounded-lg p-4">
+                {roles.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No roles available</p>
+                ) : (
+                  roles.map((role) => (
+                    <div key={role.code} className="flex items-center gap-2 py-0.5">
+                      <Checkbox
+                        id={`recv-${role.code}`}
+                        checked={formData.receiving_role_codes.includes(role.code)}
+                        onCheckedChange={(checked) => toggleReceiving(role.code, !!checked)}
+                      />
+                      <Label
+                        htmlFor={`recv-${role.code}`}
+                        className="font-normal cursor-pointer flex-1"
+                      >
+                        <span className="font-semibold text-sm">{role.code}</span>
+                        <span className="text-muted-foreground ml-2">— {role.name}</span>
+                      </Label>
+                    </div>
+                  ))
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {formData.receiving_role_codes.length} role(s) selected
+              </p>
+            </div>
+          )}
+
+          {/* ──────────── STEP 4: Share Config ──────────── */}
+          {step === 4 && (
+            <div className="space-y-4">
+              <div>
+                <Label className="text-base">Configure Receiving Shares</Label>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Set how the pooled amount is split among receiving roles.
+                </p>
+              </div>
 
               {formData.distribution_method === "percentage" && (
-                <Alert variant={Math.abs(totalPercentage - 100) < 0.01 ? "default" : "destructive"}>
+                <Alert
+                  variant={Math.abs(totalPercentage - 100) < 0.01 ? "default" : "destructive"}
+                >
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
                     Total: {totalPercentage.toFixed(1)}%
-                    {Math.abs(totalPercentage - 100) >= 0.01 && " — Must total 100% for correct distribution"}
-                    {Math.abs(totalPercentage - 100) < 0.01 && " ✓"}
+                    {Math.abs(totalPercentage - 100) >= 0.01
+                      ? " — Must total exactly 100%"
+                      : " ✓"}
                   </AlertDescription>
                 </Alert>
               )}
 
-              {["hours_weighted", "equal_split"].includes(formData.distribution_method) && (
+              {(formData.distribution_method === "hours_weighted" ||
+                formData.distribution_method === "equal_split") && (
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
                     {formData.distribution_method === "hours_weighted"
-                      ? "Tips will be distributed proportionally based on each employee's hours worked"
-                      : "Tips will be divided equally among all eligible employees"}
+                      ? "Tips are distributed proportionally by each employee's hours worked."
+                      : "Tips are divided equally among all eligible employees in the receiving roles."}
                   </AlertDescription>
                 </Alert>
               )}
 
-              <div className="space-y-3 max-h-64 overflow-y-auto">
+              <div className="space-y-3 max-h-72 overflow-y-auto">
                 {formData.role_shares.map((share) => (
                   <Card key={share.role_code} className="p-4">
-                    <p className="font-medium mb-2">
+                    <p className="font-medium mb-3">
                       <span className="font-bold">{share.role_code}</span>
-                      <span className="text-muted-foreground ml-2">— {getRoleName(share.role_code)}</span>
+                      <span className="text-muted-foreground ml-2">
+                        — {getRoleName(share.role_code)}
+                      </span>
                     </p>
                     {formData.distribution_method === "percentage" && (
-                      <div>
-                        <Label htmlFor={`share-${share.role_code}`} className="text-sm">
-                          Share Percentage
-                        </Label>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Input
-                            id={`share-${share.role_code}`}
-                            type="number"
-                            min="0"
-                            max="100"
-                            step="0.01"
-                            value={share.share_percentage ?? ""}
-                            onChange={(e) =>
-                              handleShareChange(
-                                share.role_code,
-                                "share_percentage",
-                                parseFloat(e.target.value) || 0
-                              )
-                            }
-                          />
-                          <span className="text-muted-foreground">%</span>
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={share.share_percentage ?? ""}
+                          onChange={(e) =>
+                            updateShare(
+                              share.role_code,
+                              "share_percentage",
+                              parseFloat(e.target.value) || 0
+                            )
+                          }
+                          className="w-24"
+                        />
+                        <span className="text-muted-foreground">%</span>
                       </div>
                     )}
                     {formData.distribution_method === "points" && (
-                      <div>
-                        <Label htmlFor={`share-${share.role_code}`} className="text-sm">
-                          Points per Hour
-                        </Label>
+                      <div className="flex items-center gap-2">
                         <Input
-                          id={`share-${share.role_code}`}
                           type="number"
                           min="0"
                           step="0.01"
                           value={share.points_per_hour ?? ""}
                           onChange={(e) =>
-                            handleShareChange(
+                            updateShare(
                               share.role_code,
                               "points_per_hour",
                               parseFloat(e.target.value) || 0
                             )
                           }
-                          className="mt-1"
+                          className="w-24"
                         />
+                        <span className="text-muted-foreground text-sm">pts / hr</span>
                       </div>
                     )}
-                    {["hours_weighted", "equal_split"].includes(
-                      formData.distribution_method
-                    ) && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Eligible for {formData.distribution_method === "hours_weighted" ? "hours-weighted" : "equal"} distribution
+                    {(formData.distribution_method === "hours_weighted" ||
+                      formData.distribution_method === "equal_split") && (
+                      <p className="text-sm text-muted-foreground">
+                        Eligible for{" "}
+                        {formData.distribution_method === "hours_weighted"
+                          ? "hours-weighted"
+                          : "equal"}{" "}
+                        distribution
                       </p>
                     )}
                   </Card>
@@ -474,14 +592,10 @@ export function TipPoolDialog({
           )}
         </div>
 
-        <DialogFooter className="flex justify-between">
+        <DialogFooter className="flex justify-between pt-4 border-t">
           <div>
             {step > 1 && (
-              <Button
-                variant="outline"
-                onClick={() => handleStepChange(-1)}
-                disabled={isLoading}
-              >
+              <Button variant="outline" onClick={() => setStep((s) => s - 1)} disabled={isLoading}>
                 <ChevronLeft className="w-4 h-4 mr-1" />
                 Back
               </Button>
@@ -489,23 +603,25 @@ export function TipPoolDialog({
           </div>
 
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
               Cancel
             </Button>
-            {step < 3 ? (
+            {step < TOTAL_STEPS ? (
               <Button
-                onClick={() => handleStepChange(1)}
+                onClick={() => setStep((s) => s + 1)}
                 disabled={!canProceed() || isLoading}
+                className="bg-teal-500 hover:bg-teal-600 text-white"
               >
                 Next
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             ) : (
               <Button
-                onClick={handleSubmit}
+                onClick={() => onSubmit(formData)}
                 disabled={!canProceed() || isLoading}
+                className="bg-teal-500 hover:bg-teal-600 text-white"
               >
-                {isLoading ? "Saving..." : pool ? "Update Pool" : "Create Pool"}
+                {isLoading ? "Saving…" : pool ? "Update Pool" : "Create Pool"}
               </Button>
             )}
           </div>
