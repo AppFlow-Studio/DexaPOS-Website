@@ -74,6 +74,7 @@ export interface OnlineOrderingSettings {
   // Ordering
   pickupEnabled: boolean;
   deliveryEnabled: boolean;
+  autoAcceptOrders: boolean;
   preparationLeadTime: number;
   futureOrderMaxDays: number;
   minimumOrderAmount: number;
@@ -194,6 +195,7 @@ const createDefaultSettings = (
 
   pickupEnabled: true,
   deliveryEnabled: false,
+  autoAcceptOrders: false,
   preparationLeadTime: 20,
   futureOrderMaxDays: 0,
   minimumOrderAmount: 0,
@@ -336,6 +338,7 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
           operatingHours: currentSettings.operatingHours,
           pickupEnabled: currentSettings.pickupEnabled,
           deliveryEnabled: currentSettings.deliveryEnabled,
+          autoAcceptOrders: currentSettings.autoAcceptOrders,
           preparationLeadTime: currentSettings.preparationLeadTime,
           futureOrderMaxDays: currentSettings.futureOrderMaxDays,
           minimumOrderAmount: currentSettings.minimumOrderAmount,
