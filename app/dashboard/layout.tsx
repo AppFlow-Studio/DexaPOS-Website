@@ -265,6 +265,10 @@ const navMain = [
         title: "Tips",
         url: "/dashboard/tips",
         icon: DollarSign,
+        items: [
+          { title: "Tip Distribution", url: "/dashboard/tips" },
+          { title: "My Tips", url: "/dashboard/tips/my-tips" },
+        ],
       },
     ],
   },
@@ -421,6 +425,46 @@ function MerchantSidebar() {
                                     isActive={isReportsActive}
                                     className="w-full"
                                   >
+                                    <menuItem.icon className="h-4 w-4" />
+                                    <span>{menuItem.title}</span>
+                                    <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+                                  </SidebarMenuButton>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent>
+                                  <SidebarMenuSub>
+                                    {/* @ts-ignore */}
+                                    {menuItem.items &&
+                                      menuItem.items.map((subItem) => (
+                                        <SidebarMenuSubItem key={subItem.title}>
+                                          <SidebarMenuSubButton
+                                            asChild
+                                            isActive={pathname === subItem.url}
+                                          >
+                                            <Link href={subItem.url}>
+                                              <span>{subItem.title}</span>
+                                            </Link>
+                                          </SidebarMenuSubButton>
+                                        </SidebarMenuSubItem>
+                                      ))}
+                                  </SidebarMenuSub>
+                                </CollapsibleContent>
+                              </Collapsible>
+                            </SidebarMenuItem>
+                          );
+                        }
+
+                        // Check if this is the Tips item that needs sub-menu
+                        if (menuItem.title === "Tips") {
+                          const isTipsActive =
+                            pathname === "/dashboard/tips" ||
+                            pathname.startsWith("/dashboard/tips/");
+                          const isTipsOpen = pathname.startsWith("/dashboard/tips");
+
+                          return (
+                            <SidebarMenuItem key={menuItem.title}>
+                              <Collapsible defaultOpen={isTipsOpen}>
+                                <CollapsibleTrigger asChild>
+                                  <SidebarMenuButton isActive={isTipsActive} className="w-full">
                                     <menuItem.icon className="h-4 w-4" />
                                     <span>{menuItem.title}</span>
                                     <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />

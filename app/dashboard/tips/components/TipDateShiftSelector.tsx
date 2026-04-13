@@ -1,5 +1,4 @@
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -7,7 +6,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card } from "@/components/ui/card";
+import { CalendarDays, Clock } from "lucide-react";
 
 interface TipDateShiftSelectorProps {
   date: string;
@@ -23,34 +22,32 @@ export function TipDateShiftSelector({
   onShiftChange,
 }: TipDateShiftSelectorProps) {
   return (
-    <Card className="p-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="date">Date</Label>
-          <Input
-            id="date"
-            type="date"
-            value={date}
-            onChange={(e) => onDateChange(e.target.value)}
-            className="mt-2"
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="shift">Shift Period</Label>
-          <Select value={shiftPeriod} onValueChange={onShiftChange}>
-            <SelectTrigger id="shift" className="mt-2">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="full_day">Full Day</SelectItem>
-              <SelectItem value="lunch">Lunch</SelectItem>
-              <SelectItem value="dinner">Dinner</SelectItem>
-              <SelectItem value="custom">Custom</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+    <div className="flex flex-wrap items-center gap-3 px-1 py-3 border-b">
+      <div className="flex items-center gap-2">
+        <CalendarDays className="w-4 h-4 text-muted-foreground shrink-0" />
+        <Input
+          id="date"
+          type="date"
+          value={date}
+          onChange={(e) => onDateChange(e.target.value)}
+          className="h-9 w-40 text-sm"
+        />
       </div>
-    </Card>
+
+      <div className="flex items-center gap-2">
+        <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+        <Select value={shiftPeriod} onValueChange={onShiftChange}>
+          <SelectTrigger id="shift" className="h-9 w-36 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="full_day">Full Day</SelectItem>
+            <SelectItem value="lunch">Lunch</SelectItem>
+            <SelectItem value="dinner">Dinner</SelectItem>
+            <SelectItem value="custom">Custom</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
   );
 }
