@@ -26,6 +26,8 @@ Implemented:
 - merchant online-store page no longer owns full storefront setup
 - merchant can:
   - request setup
+    - request is blocked until the merchant + location compliance packet is complete
+    - when missing data is detected, a modal shows only missing fields (text + file uploads)
   - see request status
   - maintain limited non-payment storefront details after HQ marks setup complete
 - merchant cannot view or edit:

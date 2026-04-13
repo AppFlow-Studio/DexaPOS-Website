@@ -80,16 +80,31 @@ export function buildThemeVars(theme: SiteThemeConfig | null | undefined) {
   const templateId = theme?.templateId || "classic";
   const defaults = TEMPLATE_DEFAULTS[templateId];
 
-  // Only the merchant's primary color is variable — everything else is fixed white/gray.
-  const primary = theme?.primaryColor || "#111827";
+  const isHex = (val: string | undefined | null) =>
+    typeof val === "string" && /^#[0-9a-fA-F]{6}$/.test(val.trim());
+
+  // Allow merchant overrides for the key theme colors.
+  const primary = isHex(theme?.primaryColor)
+    ? (theme?.primaryColor as string)
+    : "#111827";
   const primaryText = getContrastTextColor(primary);
 
-  // Fixed system palette — identical for all merchants.
-  const bg = "#FFFFFF";
-  const card = "#FFFFFF";
-  const text = "#111827";
-  const border = "#E5E7EB";
-  const textSecondary = "#6B7280";
+  const secondary = isHex(theme?.secondaryColor)
+    ? (theme?.secondaryColor as string)
+    : primary;
+  const accent = isHex(theme?.accentColor)
+    ? (theme?.accentColor as string)
+    : primary;
+
+  const bg = isHex(theme?.backgroundColor)
+    ? (theme?.backgroundColor as string)
+    : defaults.bg;
+  const card = defaults.card;
+  const text = isHex(theme?.textColor)
+    ? (theme?.textColor as string)
+    : defaults.text;
+  const border = defaults.border;
+  const textSecondary = defaults.textSecondary;
 
   // Header is always white with a gray bottom border.
   const headerBg = "#FFFFFF";
@@ -108,8 +123,8 @@ export function buildThemeVars(theme: SiteThemeConfig | null | undefined) {
   return {
     // --- Storefront-custom vars ---
     "--primary": primary,
-    "--secondary": primary,
-    "--accent": primary,
+    "--secondary": secondary,
+    "--accent": accent,
     "--bg": bg,
     "--card": card,
     "--text": text,
