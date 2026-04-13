@@ -34,6 +34,14 @@ import { cn } from "@/lib/utils";
 import type { TaxBreakdownRow } from "@/app/dashboard/reports/tax/types";
 import { exportToCsv, exportToPdf, formatReportDateRange } from "@/utils/export";
 
+// Exported so page.tsx can manage sort state at the top level
+export type SortKey = "createdAt" | "subtotal" | "taxAmount" | "taxRate" | "taxRefunded";
+export type SortDir = "asc" | "desc";
+
+// Columns sorted at the database level (correct across all pages).
+// taxRate and taxRefunded are computed/joined — sorted client-side on the current page.
+const DB_SORTED_COLS = new Set<SortKey>(["createdAt", "subtotal", "taxAmount"]);
+
 interface TaxBreakdownTableProps {
   data: TaxBreakdownRow[] | undefined;
   count: number;
@@ -47,6 +55,10 @@ interface TaxBreakdownTableProps {
   onFilterPaymentMethod: (v: string) => void;
   dateFrom: Date;
   dateTo: Date;
+  // Sort state is owned by the page so the hook re-fetches with server-side sort
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onSort: (key: SortKey) => void;
 }
 
 const ORDER_TYPES = [
@@ -87,14 +99,24 @@ function fmtPayment(method: string | null) {
   return method.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-type SortKey = "createdAt" | "subtotal" | "taxAmount" | "taxRate" | "taxRefunded";
-type SortDir = "asc" | "desc";
-
-function SortIcon({ col, active, dir }: { col: SortKey; active: SortKey; dir: SortDir }) {
-  if (col !== active) return <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/40 ml-1 shrink-0" />;
-  return dir === "asc"
-    ? <ArrowUp className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />
-    : <ArrowDown className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />;
+function SortIcon({
+  col,
+  active,
+  dir,
+}: {
+  col: SortKey;
+  active: SortKey;
+  dir: SortDir;
+}) {
+  if (col !== active)
+    return (
+      <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/40 ml-1 shrink-0" />
+    );
+  return dir === "asc" ? (
+    <ArrowUp className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />
+  ) : (
+    <ArrowDown className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />
+  );
 }
 
 const exportColumns = [
@@ -122,40 +144,56 @@ export function TaxBreakdownTable({
   onFilterPaymentMethod,
   dateFrom,
   dateTo,
+  sortKey,
+  sortDir,
+  onSort,
 }: TaxBreakdownTableProps) {
   const [isExporting, setIsExporting] = useState(false);
-  const [sortKey, setSortKey] = useState<SortKey>("createdAt");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const totalPages = Math.ceil(count / pageSize);
   const hasFilters = filterOrderType !== "all" || filterPaymentMethod !== "all";
 
-  function handleSort(key: SortKey) {
-    if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSortKey(key); setSortDir("desc"); }
-  }
-
-  // Client-side sort on current page
-  const sorted = data
-    ? [...data].sort((a, b) => {
-        const av = a[sortKey as keyof TaxBreakdownRow] ?? 0;
-        const bv = b[sortKey as keyof TaxBreakdownRow] ?? 0;
-        if (typeof av === "string" && typeof bv === "string")
-          return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
-        return sortDir === "asc" ? (av as number) - (bv as number) : (bv as number) - (av as number);
-      })
-    : data;
+  // DB-sortable columns are already ordered by the server.
+  // For computed columns (taxRate, taxRefunded), sort the current page in the
+  // client. This is intentional and limited to the current page.
+  const isClientSort = !DB_SORTED_COLS.has(sortKey);
+  const sorted =
+    isClientSort && data
+      ? [...data].sort((a, b) => {
+          const av = a[sortKey as keyof TaxBreakdownRow] ?? 0;
+          const bv = b[sortKey as keyof TaxBreakdownRow] ?? 0;
+          if (typeof av === "string" && typeof bv === "string")
+            return sortDir === "asc"
+              ? av.localeCompare(bv)
+              : bv.localeCompare(av);
+          return sortDir === "asc"
+            ? (av as number) - (bv as number)
+            : (bv as number) - (av as number);
+        })
+      : data;
 
   function handleExportCsv() {
     if (!data) return;
-    exportToCsv(data, exportColumns as any, `tax-breakdown-${formatReportDateRange(dateFrom, dateTo)}`);
+    exportToCsv(
+      data,
+      exportColumns as any,
+      `tax-breakdown-${formatReportDateRange(dateFrom, dateTo)}`
+    );
   }
 
   async function handleExportPdf() {
     if (!data) return;
     setIsExporting(true);
     try {
-      await exportToPdf(data, exportColumns as any, `Tax Breakdown - ${formatReportDateRange(dateFrom, dateTo)}`, undefined, undefined, dateFrom, dateTo);
+      await exportToPdf(
+        data,
+        exportColumns as any,
+        `Tax Breakdown - ${formatReportDateRange(dateFrom, dateTo)}`,
+        undefined,
+        undefined,
+        dateFrom,
+        dateTo
+      );
     } finally {
       setIsExporting(false);
     }
@@ -172,18 +210,25 @@ export function TaxBreakdownTable({
             </SelectTrigger>
             <SelectContent>
               {ORDER_TYPES.map((t) => (
-                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                <SelectItem key={t.value} value={t.value}>
+                  {t.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
 
-          <Select value={filterPaymentMethod} onValueChange={onFilterPaymentMethod}>
+          <Select
+            value={filterPaymentMethod}
+            onValueChange={onFilterPaymentMethod}
+          >
             <SelectTrigger className="h-9 w-44 text-sm rounded-lg bg-muted/40 border-0 focus:ring-1">
               <SelectValue placeholder="Payment method" />
             </SelectTrigger>
             <SelectContent>
               {PAYMENT_METHODS.map((m) => (
-                <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                <SelectItem key={m.value} value={m.value}>
+                  {m.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -193,7 +238,10 @@ export function TaxBreakdownTable({
               variant="ghost"
               size="sm"
               className="h-9 text-xs text-muted-foreground gap-1.5"
-              onClick={() => { onFilterOrderType("all"); onFilterPaymentMethod("all"); }}
+              onClick={() => {
+                onFilterOrderType("all");
+                onFilterPaymentMethod("all");
+              }}
             >
               <X className="h-3.5 w-3.5" />
               Clear
@@ -238,18 +286,22 @@ export function TaxBreakdownTable({
             <TableRow className="hover:bg-transparent border-b border-border/50">
               <TableHead
                 className="pl-5 text-xs font-semibold text-muted-foreground cursor-pointer select-none"
-                onClick={() => handleSort("createdAt")}
+                onClick={() => onSort("createdAt")}
               >
                 <div className="flex items-center">
                   Date
                   <SortIcon col="createdAt" active={sortKey} dir={sortDir} />
                 </div>
               </TableHead>
-              <TableHead className="text-xs font-semibold text-muted-foreground">Order #</TableHead>
-              <TableHead className="text-xs font-semibold text-muted-foreground">Type</TableHead>
+              <TableHead className="text-xs font-semibold text-muted-foreground">
+                Order #
+              </TableHead>
+              <TableHead className="text-xs font-semibold text-muted-foreground">
+                Type
+              </TableHead>
               <TableHead
                 className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right"
-                onClick={() => handleSort("subtotal")}
+                onClick={() => onSort("subtotal")}
               >
                 <div className="flex items-center justify-end">
                   Subtotal
@@ -258,31 +310,49 @@ export function TaxBreakdownTable({
               </TableHead>
               <TableHead
                 className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right"
-                onClick={() => handleSort("taxAmount")}
+                onClick={() => onSort("taxAmount")}
               >
                 <div className="flex items-center justify-end">
                   Tax
                   <SortIcon col="taxAmount" active={sortKey} dir={sortDir} />
                 </div>
               </TableHead>
+              {/* taxRate is a computed field — sort applies to current page only */}
               <TableHead
                 className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right"
-                onClick={() => handleSort("taxRate")}
+                onClick={() => onSort("taxRate")}
+                title="Sorting applies to the current page only"
               >
                 <div className="flex items-center justify-end">
                   Rate
                   <SortIcon col="taxRate" active={sortKey} dir={sortDir} />
+                  {sortKey === "taxRate" && (
+                    <span className="ml-1 text-[9px] text-muted-foreground/60 font-normal leading-none">
+                      pg
+                    </span>
+                  )}
                 </div>
               </TableHead>
-              <TableHead className="text-xs font-semibold text-muted-foreground">Payment</TableHead>
-              <TableHead className="text-xs font-semibold text-muted-foreground">Pricing</TableHead>
+              <TableHead className="text-xs font-semibold text-muted-foreground">
+                Payment
+              </TableHead>
+              <TableHead className="text-xs font-semibold text-muted-foreground">
+                Pricing
+              </TableHead>
+              {/* taxRefunded is a joined field — sort applies to current page only */}
               <TableHead
                 className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right pr-5"
-                onClick={() => handleSort("taxRefunded")}
+                onClick={() => onSort("taxRefunded")}
+                title="Sorting applies to the current page only"
               >
                 <div className="flex items-center justify-end">
                   Refunded
                   <SortIcon col="taxRefunded" active={sortKey} dir={sortDir} />
+                  {sortKey === "taxRefunded" && (
+                    <span className="ml-1 text-[9px] text-muted-foreground/60 font-normal leading-none">
+                      pg
+                    </span>
+                  )}
                 </div>
               </TableHead>
             </TableRow>
@@ -309,7 +379,10 @@ export function TaxBreakdownTable({
                     {hasFilters && (
                       <button
                         className="text-xs text-primary underline underline-offset-2"
-                        onClick={() => { onFilterOrderType("all"); onFilterPaymentMethod("all"); }}
+                        onClick={() => {
+                          onFilterOrderType("all");
+                          onFilterPaymentMethod("all");
+                        }}
                       >
                         Clear filters
                       </button>
@@ -319,7 +392,11 @@ export function TaxBreakdownTable({
               </TableRow>
             ) : (
               sorted.map((row) => {
-                const typeStyle = ORDER_TYPE_COLORS[row.orderType] ?? { bg: "bg-muted", text: "text-muted-foreground" };
+                const typeStyle =
+                  ORDER_TYPE_COLORS[row.orderType] ?? {
+                    bg: "bg-muted",
+                    text: "text-muted-foreground",
+                  };
                 return (
                   <TableRow
                     key={row.orderId}

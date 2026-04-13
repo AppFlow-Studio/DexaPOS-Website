@@ -119,8 +119,8 @@ export function PendingInvitesTable() {
 
               {/* Role */}
               <TableCell>
-                <Badge variant="secondary" className="text-xs">
-                  {formatRoleCode(invite.role_code)}
+                <Badge variant="secondary" className="text-xs font-mono">
+                  {invite.role_code}
                 </Badge>
               </TableCell>
 

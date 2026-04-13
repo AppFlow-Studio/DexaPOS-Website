@@ -55,21 +55,37 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
   const [sortKey, setSortKey] = useState<SortKey>("taxCollected");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
+  // Stable name→color map built once from the original data order (sorted by
+  // taxCollected desc from the server). Used by both the chart and the table so
+  // colors stay consistent regardless of how the user sorts the table rows.
+  const colorByCategory = useMemo(() => {
+    const map: Record<string, string> = {};
+    (data ?? []).forEach((row, i) => {
+      map[row.categoryName] = COLORS[i % COLORS.length];
+    });
+    return map;
+  }, [data]);
+
   const chartConfig = useMemo(() => {
     const cfg: Record<string, { label: string; color: string }> = {};
-    (data ?? []).forEach((row, i) => {
-      cfg[row.categoryName] = { label: row.categoryName, color: COLORS[i % COLORS.length] };
+    (data ?? []).forEach((row) => {
+      cfg[row.categoryName] = {
+        label: row.categoryName,
+        color: colorByCategory[row.categoryName] ?? COLORS[0],
+      };
     });
     return cfg;
-  }, [data]);
+  }, [data, colorByCategory]);
 
   const chartData = useMemo(
     () =>
       (data ?? []).slice(0, 10).map((row) => ({
+        // Truncated label for the X-axis; fullName used for color lookup
         category:
           row.categoryName.length > 14
             ? row.categoryName.slice(0, 13) + "…"
             : row.categoryName,
+        fullName: row.categoryName,
         taxCollected: row.taxCollected,
       })),
     [data]
@@ -181,8 +197,11 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
                 }
               />
               <Bar dataKey="taxCollected" radius={[6, 6, 0, 0]}>
-                {chartData.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                {chartData.map((entry) => (
+                  <Cell
+                    key={entry.fullName}
+                    fill={colorByCategory[entry.fullName] ?? COLORS[0]}
+                  />
                 ))}
               </Bar>
             </BarChart>
@@ -241,8 +260,10 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sorted.map((row, i) => {
-                const color = COLORS[i % COLORS.length];
+              {sorted.map((row) => {
+                // Use the stable name-keyed map so the dot color always matches
+                // the bar in the chart above, even after the user re-sorts rows.
+                const color = colorByCategory[row.categoryName] ?? COLORS[0];
                 const barPct = maxTax > 0 ? (row.taxCollected / maxTax) * 100 : 0;
                 return (
                   <TableRow
