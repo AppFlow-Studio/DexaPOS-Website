@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, MapPin, FlaskConical, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, MapPin, FlaskConical, ChevronDown, ChevronUp, Percent, Split } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -339,10 +339,9 @@ export default function TipsSettingsPage() {
       {/* TIP POOLS */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Tip Pools</h2>
+          <h2 className="text-lg font-semibold">Tip Pools</h2>
           <Button
             onClick={() => { setEditingPool(null); setIsPoolDialogOpen(true); }}
-            className="bg-teal-500 hover:bg-teal-600 text-white"
           >
             <Plus className="w-4 h-4 mr-2" />
             Add Tip Pool
@@ -356,10 +355,13 @@ export default function TipsSettingsPage() {
             ))}
           </div>
         ) : pools.length === 0 ? (
-          <Card className="p-8 text-center">
-            <p className="text-muted-foreground">No tip pools configured yet</p>
+          <Card className="p-10 text-center">
+            <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center mx-auto mb-3">
+              <Percent className="w-5 h-5 text-muted-foreground" />
+            </div>
+            <p className="font-medium text-foreground">No tip pools yet</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Create your first tip pool to get started
+              Create a pool to define how tips are shared across roles
             </p>
           </Card>
         ) : (
@@ -382,10 +384,9 @@ export default function TipsSettingsPage() {
       {/* TIP-OUT RULES */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Tip-Out Rules</h2>
+          <h2 className="text-lg font-semibold">Tip-Out Rules</h2>
           <Button
             onClick={() => { setEditingRule(null); setIsRuleDialogOpen(true); }}
-            className="bg-teal-500 hover:bg-teal-600 text-white"
           >
             <Plus className="w-4 h-4 mr-2" />
             Add Tip-Out Rule
@@ -399,10 +400,13 @@ export default function TipsSettingsPage() {
             ))}
           </div>
         ) : rules.length === 0 ? (
-          <Card className="p-8 text-center">
-            <p className="text-muted-foreground">No tip-out rules configured yet</p>
+          <Card className="p-10 text-center">
+            <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center mx-auto mb-3">
+              <Split className="w-5 h-5 text-muted-foreground" />
+            </div>
+            <p className="font-medium text-foreground">No tip-out rules yet</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Create tip-out rules to distribute tips between roles
+              Create rules to route a portion of tips from one role to another
             </p>
           </Card>
         ) : (

@@ -277,14 +277,21 @@ export function TipOutRuleDialog({
                 id="end-date"
                 type="date"
                 value={formData.end_date || ""}
-                min={
-                  (() => {
-                    const d = new Date(formData.effective_date + "T00:00:00");
-                    d.setDate(d.getDate() + 1);
-                    return d.toISOString().split("T")[0];
-                  })()
-                }
-                onChange={(e) => handleChange("end_date", e.target.value || null)}
+                min={(() => {
+                  const today = new Date().toISOString().split("T")[0];
+                  const d = new Date(formData.effective_date + "T00:00:00");
+                  d.setDate(d.getDate() + 1);
+                  const minFromEffective = d.toISOString().split("T")[0];
+                  return minFromEffective > today ? minFromEffective : today;
+                })()}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (!val) { handleChange("end_date", null); return; }
+                  const today = new Date().toISOString().split("T")[0];
+                  if (val < today) return;
+                  if (val <= formData.effective_date) return;
+                  handleChange("end_date", val);
+                }}
                 className="mt-1"
               />
               <p className="text-xs text-muted-foreground mt-1">Leave blank = no end date</p>
