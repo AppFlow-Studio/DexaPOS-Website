@@ -8,6 +8,8 @@ import {
   GetTipDistributionSession,
   GetTipDistributionHistory,
   UpdateManualAdjustment,
+  MarkTipDistributionExported,
+  GetMyTipHistory,
 } from "@/app/dashboard/actions/tips";
 
 // =====================================================
@@ -150,6 +152,69 @@ export function useApproveTipDistribution() {
     onError: (error: Error) => {
       toast.error(error.message || "Failed to approve distribution");
     },
+  });
+}
+
+// =====================================================
+// MARK AS EXPORTED
+// =====================================================
+
+export function useExportTipDistribution() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      clerkOrgId,
+      sessionId,
+      exportFormat,
+    }: {
+      clerkOrgId: string;
+      sessionId: string;
+      exportFormat: "csv" | "pdf";
+    }) => {
+      const result = await MarkTipDistributionExported(clerkOrgId, sessionId, exportFormat);
+      if (!result.success) throw new Error(result.error || "Failed to mark as exported");
+      return result;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["tip-distribution-session"],
+        refetchType: "active",
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["tip-distribution-history"],
+        refetchType: "active",
+      });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to record export");
+    },
+  });
+}
+
+// =====================================================
+// MY TIP HISTORY (Employee Self-Service)
+// =====================================================
+
+export function useMyTipHistory(
+  clerkOrgId: string | undefined,
+  locationId: string | undefined,
+  limitDays: number = 30
+) {
+  return useQuery({
+    queryKey: ["my-tip-history", clerkOrgId, locationId, limitDays],
+    queryFn: async () => {
+      if (!clerkOrgId) throw new Error("Missing clerkOrgId");
+      const result = await GetMyTipHistory(
+        clerkOrgId,
+        locationId !== "all" ? locationId : undefined,
+        limitDays
+      );
+      if (!result.success) throw new Error(result.error || "Failed to fetch tip history");
+      return result.data || [];
+    },
+    enabled: !!clerkOrgId,
+    staleTime: 60 * 1000,
   });
 }
 

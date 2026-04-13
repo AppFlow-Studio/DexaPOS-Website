@@ -83,14 +83,21 @@ export async function GetTaxSummary(
 
   const supabase = createServerSupabaseClient();
 
+  // End of day so orders placed after page-load time are always included
+  const dateToEOD = new Date(dateTo);
+  dateToEOD.setHours(23, 59, 59, 999);
+
   let ordersQuery = supabase
     .from("orders")
     .select("id, tax_amount, cash_tax_amount, payment_pricing_mode, subtotal")
     .eq("merchant_id", merchantId)
-    .eq("status", "completed")
+    // Include all paid/active statuses — tax is collected at payment time,
+    // not when the kitchen workflow finishes. Exclude only orders that were
+    // never paid (draft) or fully reversed (cancelled, void).
+    .not("status", "in", "(draft,cancelled,void)")
     .is("voided_at", null)
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lte("created_at", dateToEOD.toISOString());
 
   if (locationId && locationId !== "all") {
     ordersQuery = ordersQuery.eq("location_id", locationId);
@@ -107,7 +114,9 @@ export async function GetTaxSummary(
     (sum, o) => sum + resolveTaxAmount(o),
     0
   );
-  const taxableSales = (orders ?? []).reduce(
+
+  // Sum of all order subtotals — exempt amounts will be subtracted below
+  const totalOrderSubtotals = (orders ?? []).reduce(
     (sum, o) => sum + (o.subtotal ?? 0),
     0
   );
@@ -135,6 +144,11 @@ export async function GetTaxSummary(
     totalRefunds = Object.values(refundsByOrder).filter((v) => v > 0).length;
   }
 
+  // Fix: taxable sales = all order subtotals minus exempt item amounts.
+  // This ensures the "Taxable Sales" card and effectiveTaxRate use the
+  // correct denominator (genuinely taxable revenue only).
+  const taxableSales = Math.max(0, totalOrderSubtotals - taxExemptSales);
+
   const netTaxLiability = grossTaxCollected - taxRefunded;
   const effectiveTaxRate =
     taxableSales > 0
@@ -157,6 +171,13 @@ export async function GetTaxSummary(
 
 // ─── GetTaxBreakdown ──────────────────────────────────────────────────────────
 
+// Columns that can be sorted directly by the database
+const DB_SORT_COLS: Partial<Record<string, string>> = {
+  createdAt: "created_at",
+  subtotal: "subtotal",
+  taxAmount: "tax_amount",
+};
+
 export async function GetTaxBreakdown(
   clerkOrgId: string,
   locationId: string | null,
@@ -164,12 +185,45 @@ export async function GetTaxBreakdown(
   dateTo: Date,
   page = 0,
   pageSize = 50,
-  filters?: { orderType?: string; paymentMethod?: string }
+  filters?: { orderType?: string; paymentMethod?: string },
+  sortBy = "createdAt",
+  sortDir: "asc" | "desc" = "desc"
 ): Promise<{ data?: TaxBreakdownRow[]; count?: number; error?: string }> {
   const merchantId = await getMerchantId(clerkOrgId);
   if (!merchantId) return { error: "Merchant not found" };
 
   const supabase = createServerSupabaseClient();
+
+  // Fix: pre-filter by payment method at DB level BEFORE pagination so that
+  // the paginated count and rows are always correct for the active filter.
+  // Previously this was applied in JS after fetching, causing wrong counts
+  // and missing rows across pages.
+  let paymentFilteredIds: string[] | null = null;
+  if (filters?.paymentMethod) {
+    const { data: paymentRows } = await supabase
+      .from("order_payments")
+      .select("order_id")
+      .eq("payment_method", filters.paymentMethod)
+      .eq("is_voided", false)
+      .eq("status", "paid");
+
+    const uniqueIds = [...new Set((paymentRows ?? []).map((p) => p.order_id))];
+    // No orders match this payment method — return early with correct empty state
+    if (uniqueIds.length === 0) {
+      return { data: [], count: 0 };
+    }
+    paymentFilteredIds = uniqueIds;
+  }
+
+  // End of day so orders placed after page-load time are always included
+  const dateToEOD = new Date(dateTo);
+  dateToEOD.setHours(23, 59, 59, 999);
+
+  // Use DB-level sort for columns that map to real columns;
+  // computed columns (taxRate, taxRefunded) fall back to created_at and
+  // are sorted client-side in the component.
+  const dbSortCol = DB_SORT_COLS[sortBy] ?? "created_at";
+  const dbSortAsc = sortDir === "asc";
 
   let query = supabase
     .from("orders")
@@ -178,11 +232,11 @@ export async function GetTaxBreakdown(
       { count: "exact" }
     )
     .eq("merchant_id", merchantId)
-    .eq("status", "completed")
+    .not("status", "in", "(draft,cancelled,void)")
     .is("voided_at", null)
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString())
-    .order("created_at", { ascending: false })
+    .lte("created_at", dateToEOD.toISOString())
+    .order(dbSortCol, { ascending: dbSortAsc })
     .range(page * pageSize, (page + 1) * pageSize - 1);
 
   if (locationId && locationId !== "all") {
@@ -190,6 +244,9 @@ export async function GetTaxBreakdown(
   }
   if (filters?.orderType) {
     query = query.eq("order_type", filters.orderType);
+  }
+  if (paymentFilteredIds !== null) {
+    query = query.in("id", paymentFilteredIds);
   }
 
   const { data: orders, count, error } = await query;
@@ -200,6 +257,7 @@ export async function GetTaxBreakdown(
 
   const orderIds = (orders ?? []).map((o) => o.id);
 
+  // Fetch payment methods for display (not for filtering — that's handled above)
   const paymentMethodByOrder: Record<string, string | null> = {};
   if (orderIds.length > 0) {
     const { data: payments } = await supabase
@@ -218,7 +276,7 @@ export async function GetTaxBreakdown(
 
   const refundsByOrder = await buildRefundsByOrderMap(supabase, orderIds);
 
-  let rows: TaxBreakdownRow[] = (orders ?? []).map((o) => {
+  const rows: TaxBreakdownRow[] = (orders ?? []).map((o) => {
     const taxAmount = resolveTaxAmount(o);
     const taxRate =
       taxAmount > 0 && o.subtotal > 0
@@ -240,10 +298,6 @@ export async function GetTaxBreakdown(
     };
   });
 
-  if (filters?.paymentMethod) {
-    rows = rows.filter((r) => r.paymentMethod === filters.paymentMethod);
-  }
-
   return { data: rows, count: count ?? 0 };
 }
 
@@ -260,14 +314,20 @@ export async function GetTaxByCategory(
 
   const supabase = createServerSupabaseClient();
 
+  const dateToEOD = new Date(dateTo);
+  dateToEOD.setHours(23, 59, 59, 999);
+
+  // Fix: fetch pricing mode fields so we can resolve cash vs regular tax
+  // at the item level — previously item.tax_amount was used directly for
+  // all orders, which disagreed with the summary's resolveTaxAmount logic.
   let ordersQuery = supabase
     .from("orders")
-    .select("id")
+    .select("id, payment_pricing_mode, tax_amount, cash_tax_amount")
     .eq("merchant_id", merchantId)
-    .eq("status", "completed")
+    .not("status", "in", "(draft,cancelled,void)")
     .is("voided_at", null)
     .gte("created_at", dateFrom.toISOString())
-    .lte("created_at", dateTo.toISOString());
+    .lte("created_at", dateToEOD.toISOString());
 
   if (locationId && locationId !== "all") {
     ordersQuery = ordersQuery.eq("location_id", locationId);
@@ -279,9 +339,23 @@ export async function GetTaxByCategory(
   const orderIds = (orders ?? []).map((o) => o.id);
   if (orderIds.length === 0) return { data: [] };
 
+  // Build per-order pricing map for proportional cash tax scaling
+  const orderPricingMap: Record<
+    string,
+    { mode: string | null; taxAmount: number; cashTaxAmount: number | null }
+  > = {};
+  (orders ?? []).forEach((o) => {
+    orderPricingMap[o.id] = {
+      mode: o.payment_pricing_mode,
+      taxAmount: o.tax_amount ?? 0,
+      cashTaxAmount: o.cash_tax_amount,
+    };
+  });
+
+  // Include order_id so we can look up the pricing mode per item
   const { data: items, error: itemsError } = await supabase
     .from("order_items")
-    .select("category_name, subtotal, tax_amount, is_tax_exempt, is_voided")
+    .select("order_id, category_name, subtotal, tax_amount, is_tax_exempt, is_voided")
     .in("order_id", orderIds)
     .neq("is_voided", true);
 
@@ -300,8 +374,22 @@ export async function GetTaxByCategory(
     if (item.is_tax_exempt) {
       categoryMap[cat].taxExemptCount += 1;
     } else {
+      // Resolve effective item tax respecting cash pricing mode.
+      // When an order uses cash pricing, scale each item's tax proportionally
+      // by (order.cash_tax_amount / order.tax_amount) so category totals
+      // stay consistent with the summary's resolveTaxAmount logic.
+      const orderInfo = orderPricingMap[item.order_id];
+      let effectiveTax = item.tax_amount ?? 0;
+      if (
+        orderInfo?.mode === "cash" &&
+        orderInfo.cashTaxAmount != null &&
+        orderInfo.taxAmount > 0
+      ) {
+        effectiveTax =
+          effectiveTax * (orderInfo.cashTaxAmount / orderInfo.taxAmount);
+      }
       categoryMap[cat].taxableSales += item.subtotal ?? 0;
-      categoryMap[cat].taxCollected += item.tax_amount ?? 0;
+      categoryMap[cat].taxCollected += effectiveTax;
     }
   });
 
@@ -335,6 +423,9 @@ export async function GetTaxByLocation(
 
   const supabase = createServerSupabaseClient();
 
+  const dateToEOD = new Date(dateTo);
+  dateToEOD.setHours(23, 59, 59, 999);
+
   const [{ data: locations, error: locError }, { data: orders, error: ordersError }] =
     await Promise.all([
       supabase
@@ -347,10 +438,10 @@ export async function GetTaxByLocation(
           "id, location_id, tax_amount, cash_tax_amount, payment_pricing_mode, subtotal"
         )
         .eq("merchant_id", merchantId)
-        .eq("status", "completed")
+        .not("status", "in", "(draft,cancelled,void)")
         .is("voided_at", null)
         .gte("created_at", dateFrom.toISOString())
-        .lte("created_at", dateTo.toISOString()),
+        .lte("created_at", dateToEOD.toISOString()),
     ]);
 
   if (locError) return { error: locError.message };

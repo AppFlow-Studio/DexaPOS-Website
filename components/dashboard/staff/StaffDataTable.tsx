@@ -345,14 +345,9 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
         }
 
         return (
-          <div className="flex flex-col gap-1">
-            <span className="font-medium text-sm">
-              {primaryAssignment.role_name}
-            </span>
-            <Badge variant="outline" className="text-xs w-fit">
-              {primaryAssignment.role_code}
-            </Badge>
-          </div>
+          <Badge variant="outline" className="text-xs font-mono w-fit">
+            {primaryAssignment.role_code}
+          </Badge>
         );
       },
     },

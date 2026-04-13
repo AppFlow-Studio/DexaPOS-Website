@@ -14,7 +14,7 @@ export interface TipPoolConfig {
   name: string;
   description: string | null;
   distribution_method: "percentage" | "hours_weighted" | "equal_split" | "points";
-  tip_source: "charged_tips" | "all_tips" | "cash_only";
+  tip_source: "charged_tips" | "all_tips" | "cash_only" | "custom_percentage";
   source_percentage: number;
   contributing_role_codes: string[];
   is_active: boolean;
@@ -66,7 +66,7 @@ export interface TipDistributionSession {
   total_tip_outs: number;
   total_distributed: number;
   rounding_adjustment: number;
-  status: "draft" | "calculated" | "approved" | "exported" | "voided";
+  status: "draft" | "calculated" | "pending_approval" | "approved" | "exported" | "voided";
   calculated_at: string | null;
   calculated_by: string | null;
   approved_at: string | null;
@@ -92,6 +92,7 @@ export interface TipDistributionDetail {
   tip_out_given: number;
   tip_out_received: number;
   manual_adjustment: number;
+  adjustment_reason: string | null;
   net_tips: number;
   created_at: string;
   updated_at: string;
@@ -171,11 +172,12 @@ export async function CreateTipPoolConfig(
     name: string;
     description?: string;
     distribution_method: "percentage" | "hours_weighted" | "equal_split" | "points";
-    tip_source: "charged_tips" | "all_tips" | "cash_only";
+    tip_source: "charged_tips" | "all_tips" | "cash_only" | "custom_percentage";
     source_percentage: number;
     contributing_role_codes: string[];
     is_active?: boolean;
     effective_date?: string;
+    end_date?: string | null;
     role_shares: { role_code: string; share_percentage?: number; points_per_hour?: number }[];
   }
 ): Promise<{ success: boolean; data: TipPoolConfigWithShares | null; error: string | null }> {
@@ -199,6 +201,7 @@ export async function CreateTipPoolConfig(
         contributing_role_codes: input.contributing_role_codes,
         is_active: input.is_active !== false,
         effective_date: input.effective_date || new Date().toISOString().split("T")[0],
+        end_date: input.end_date ?? null,
       })
       .select()
       .single();
@@ -269,6 +272,7 @@ export async function UpdateTipPoolConfig(
     contributing_role_codes: string[];
     is_active: boolean;
     effective_date: string;
+    end_date: string | null;
     role_shares: { role_code: string; share_percentage?: number; points_per_hour?: number }[];
   }>
 ): Promise<{ success: boolean; data: TipPoolConfigWithShares | null; error: string | null }> {
@@ -288,6 +292,7 @@ export async function UpdateTipPoolConfig(
     if (input.contributing_role_codes)
       updateData.contributing_role_codes = input.contributing_role_codes;
     if (input.is_active !== undefined) updateData.is_active = input.is_active;
+    if ("end_date" in input) updateData.end_date = input.end_date ?? null;
 
     const { error: updateError } = await supabase
       .from("tip_pool_configs")
@@ -487,6 +492,7 @@ export async function CreateTipOutRule(
     tip_out_value: number;
     is_active?: boolean;
     effective_date?: string;
+    end_date?: string | null;
   }
 ): Promise<{ success: boolean; data: TipOutRule | null; error: string | null }> {
   try {
@@ -509,6 +515,7 @@ export async function CreateTipOutRule(
         tip_out_value: input.tip_out_value,
         is_active: input.is_active !== false,
         effective_date: input.effective_date || new Date().toISOString().split("T")[0],
+        end_date: input.end_date ?? null,
       })
       .select()
       .single();
@@ -546,6 +553,7 @@ export async function UpdateTipOutRule(
     tip_out_value: number;
     is_active: boolean;
     effective_date: string;
+    end_date: string | null;
   }>
 ): Promise<{ success: boolean; data: TipOutRule | null; error: string | null }> {
   try {
@@ -910,13 +918,224 @@ export async function GetRolesForMerchant(
 ): Promise<{ success: boolean; data: Role[] | null; error: string | null }> {
   try {
     const supabase = createServerSupabaseClient();
+    // Only return merchant-level roles — HQ/carrier/system roles must not appear
+    // in tip configuration or tip distribution UI
     const { data, error } = await supabase
       .from("roles")
       .select("code, name, level, organization_type")
+      .eq("organization_type", "merchant")
       .order("level", { ascending: false });
 
     if (error) return { success: false, data: null, error: error.message };
     return { success: true, data: (data as Role[]) || [], error: null };
+  } catch (err) {
+    return {
+      success: false,
+      data: null,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
+// =====================================================
+// TOGGLE TIP-OUT RULE
+// =====================================================
+
+export async function ToggleTipOutRule(
+  clerkOrgId: string,
+  ruleId: string,
+  isActive: boolean
+): Promise<{ success: boolean; error: string | null }> {
+  try {
+    const merchantId = await getMerchantId(clerkOrgId);
+    if (!merchantId) return { success: false, error: "Merchant not found" };
+
+    const supabase = createServerSupabaseClient();
+
+    const { data: rule } = await supabase
+      .from("tip_out_rules")
+      .select()
+      .eq("id", ruleId)
+      .single();
+
+    const { error } = await supabase
+      .from("tip_out_rules")
+      .update({ is_active: isActive })
+      .eq("id", ruleId);
+
+    if (error) return { success: false, error: error.message };
+
+    if (rule) {
+      await LogAuditEvent({
+        clerkOrgId,
+        locationId: rule.location_id,
+        action: `${isActive ? "Activated" : "Deactivated"} tip-out rule: ${rule.from_role_code} → ${rule.to_role_code}`,
+        actionCategory: "settings",
+        resourceType: "tip_out_rule",
+        resourceId: ruleId,
+        resourceName: `${rule.from_role_code} to ${rule.to_role_code}`,
+      });
+    }
+
+    return { success: true, error: null };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
+// =====================================================
+// MARK SESSION AS EXPORTED
+// =====================================================
+
+export async function MarkTipDistributionExported(
+  clerkOrgId: string,
+  sessionId: string,
+  exportFormat: "csv" | "pdf" = "csv"
+): Promise<{ success: boolean; error: string | null }> {
+  try {
+    const supabase = createServerSupabaseClient();
+
+    const { data: session } = await supabase
+      .from("tip_distribution_sessions")
+      .select("location_id, session_date, status")
+      .eq("id", sessionId)
+      .single();
+
+    if (!session) return { success: false, error: "Session not found" };
+
+    const { error } = await supabase
+      .from("tip_distribution_sessions")
+      .update({
+        status: "exported",
+        exported_at: new Date().toISOString(),
+        export_format: exportFormat,
+      })
+      .eq("id", sessionId);
+
+    if (error) return { success: false, error: error.message };
+
+    await LogAuditEvent({
+      clerkOrgId,
+      locationId: session.location_id,
+      action: `Exported tip distribution for ${session.session_date} as ${exportFormat.toUpperCase()}`,
+      actionCategory: "financial",
+      resourceType: "tip_distribution_session",
+      resourceId: sessionId,
+      resourceName: session.session_date,
+    });
+
+    return { success: true, error: null };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
+// =====================================================
+// EMPLOYEE SELF-SERVICE: MY TIP HISTORY
+// =====================================================
+
+export interface MyTipEntry {
+  session_id: string;
+  session_date: string;
+  shift_period: string;
+  session_status: string;
+  role_code: string;
+  hours_worked: number;
+  individual_tips_earned: number;
+  tip_pool_contributed: number;
+  tip_pool_received: number;
+  tip_out_given: number;
+  tip_out_received: number;
+  manual_adjustment: number;
+  net_tips: number;
+}
+
+export async function GetMyTipHistory(
+  clerkOrgId: string,
+  locationId?: string,
+  limitDays: number = 30
+): Promise<{ success: boolean; data: MyTipEntry[] | null; error: string | null }> {
+  try {
+    const merchantId = await getMerchantId(clerkOrgId);
+    if (!merchantId) return { success: false, data: null, error: "Merchant not found" };
+
+    const supabase = createServerSupabaseClient();
+
+    // Resolve current user's staff profile for this merchant
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData?.user) return { success: false, data: null, error: "Not authenticated" };
+
+    const { data: staffProfile } = await supabase
+      .from("staff_profiles")
+      .select("id")
+      .eq("merchant_id", merchantId)
+      .eq("user_id", authData.user.id)
+      .single();
+
+    if (!staffProfile) return { success: false, data: null, error: "Staff profile not found" };
+
+    const sinceDate = new Date();
+    sinceDate.setDate(sinceDate.getDate() - limitDays);
+
+    let query = supabase
+      .from("tip_distribution_details")
+      .select(
+        `
+        id,
+        role_code,
+        hours_worked,
+        individual_tips_earned,
+        tip_pool_contributed,
+        tip_pool_received,
+        tip_out_given,
+        tip_out_received,
+        manual_adjustment,
+        net_tips,
+        tip_distribution_sessions!inner(
+          id,
+          session_date,
+          shift_period,
+          status,
+          location_id
+        )
+      `
+      )
+      .eq("staff_profile_id", staffProfile.id)
+      .eq("tip_distribution_sessions.status", "approved")
+      .gte("tip_distribution_sessions.session_date", sinceDate.toISOString().split("T")[0])
+      .order("tip_distribution_sessions.session_date", { ascending: false });
+
+    if (locationId && locationId !== "all") {
+      query = query.eq("tip_distribution_sessions.location_id", locationId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) return { success: false, data: null, error: error.message };
+
+    const entries: MyTipEntry[] = (data || []).map((row: any) => ({
+      session_id: row.tip_distribution_sessions.id,
+      session_date: row.tip_distribution_sessions.session_date,
+      shift_period: row.tip_distribution_sessions.shift_period,
+      session_status: row.tip_distribution_sessions.status,
+      role_code: row.role_code,
+      hours_worked: row.hours_worked || 0,
+      individual_tips_earned: row.individual_tips_earned || 0,
+      tip_pool_contributed: row.tip_pool_contributed || 0,
+      tip_pool_received: row.tip_pool_received || 0,
+      tip_out_given: row.tip_out_given || 0,
+      tip_out_received: row.tip_out_received || 0,
+      manual_adjustment: row.manual_adjustment || 0,
+      net_tips: row.net_tips || 0,
+    }));
+
+    return { success: true, data: entries, error: null };
   } catch (err) {
     return {
       success: false,

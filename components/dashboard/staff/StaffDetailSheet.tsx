@@ -636,10 +636,7 @@ export function StaffDetailSheet({
                         ) : (
                           <div className="rounded-xl border bg-background/50 px-4 py-3">
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium">
-                                {primaryLocation.role_name}
-                              </span>
-                              <Badge variant="outline">{primaryLocation.role_code}</Badge>
+                              <Badge variant="outline" className="font-mono">{primaryLocation.role_code}</Badge>
                             </div>
                           </div>
                         )}
@@ -1053,8 +1050,8 @@ export function StaffDetailSheet({
                               </Badge>
                             )}
                           </div>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {assignment.role_name}
+                          <p className="mt-1 text-sm font-mono text-muted-foreground">
+                            {assignment.role_code}
                           </p>
                         </div>
 
