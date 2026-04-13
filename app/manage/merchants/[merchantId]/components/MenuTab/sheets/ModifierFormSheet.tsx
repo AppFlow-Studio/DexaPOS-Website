@@ -890,47 +890,35 @@ export function ModifierFormSheet({
                   )}
                 />
 
-                {/* Set Default - Only show if parent group is required */}
-                {form.watch("is_required") && (
-                  <FormField
-                    control={optionForm.control}
-                    name="is_default"
-                    render={({ field }) => (
-                      <FormItem className="flex items-center justify-between rounded-lg border p-4 bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base flex items-center gap-2">
-                            <Sparkles className="h-4 w-4 text-yellow-600" />
-                            Set as Default
-                          </FormLabel>
-                          <FormDescription>
-                            This option will be pre-selected when the modifier
-                            group is required
-                          </FormDescription>
-                        </div>
-                        <FormControl>
-                          <Switch
-                             checked={field.value}
-                             onCheckedChange={(checked) => {
-                               // Unset other defaults before setting this one
-                               if (checked) {
-                                 setOptions((prev) =>
-                                   prev.map((opt) => ({
-                                     ...opt,
-                                     is_default: false,
-                                   })),
-                                 );
-                               }
-                               field.onChange(checked);
-                             }}
-                             className={cn(
-                               "data-[state=checked]:bg-yellow-500",
-                             )}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                )}
+                {/* Set Default */}
+                <FormField
+                  control={optionForm.control}
+                  name="is_default"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between rounded-lg border p-4 bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-base flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-yellow-600" />
+                          Set as Default
+                        </FormLabel>
+                        <FormDescription>
+                          This option will be pre-selected automatically when ordering
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                           checked={field.value}
+                           onCheckedChange={(checked) => {
+                             field.onChange(checked);
+                           }}
+                           className={cn(
+                             "data-[state=checked]:bg-yellow-500",
+                           )}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
               </form>
             </Form>
 

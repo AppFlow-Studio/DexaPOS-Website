@@ -436,6 +436,12 @@ export async function DeleteModifierGroup(
     }
   }
 
+  // Remove references in order_item_modifiers before deleting the group
+  await supabase
+    .from("order_item_modifiers")
+    .delete()
+    .eq("modifier_group_id", modifierGroupId);
+
   // Delete the group (global groups can always be deleted, cascade to overrides)
   const { error } = await supabase
     .from("modifier_groups")
