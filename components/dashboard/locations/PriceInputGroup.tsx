@@ -106,7 +106,10 @@ export function PriceInputGroup({
     lastEditedRef.current = "cash";
     const num = cleaned === "" ? null : parseFloat(cleaned) || 0;
     onCashPriceChange(num);
-    if (isDual && !disabled && num !== null) {
+    // Only reverse-calc card from cash when card is empty/zero (new item entry).
+    // If the user already has a card price set, editing cash should NOT overwrite it —
+    // that prevents the infinite card↔cash recalc loop when working with L5 overrides.
+    if (isDual && !disabled && num !== null && (!price || price === 0)) {
       const rawCard = num * (1 + percentage / 100);
       const roundedCard = Math.round(rawCard * 100) / 100;
       onPriceChange(roundedCard);

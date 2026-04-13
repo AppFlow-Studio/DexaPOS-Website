@@ -1,136 +1,136 @@
 create extension if not exists "moddatetime" with schema "public";
 
-drop policy "Merchant admins can manage items in categories" on "public"."category_items";
+drop policy if exists "Merchant admins can manage items in categories" on "public"."category_items";
 
-drop policy "allow auth merchants to insert" on "public"."category_items";
+drop policy if exists "allow auth merchants to insert" on "public"."category_items";
 
-drop policy "allow auth merchants to update" on "public"."category_items";
+drop policy if exists "allow auth merchants to update" on "public"."category_items";
 
-drop policy "device_assignments_select_carrier" on "public"."device_assignments";
+drop policy if exists "device_assignments_select_carrier" on "public"."device_assignments";
 
-drop policy "device_assignments_select_hq" on "public"."device_assignments";
+drop policy if exists "device_assignments_select_hq" on "public"."device_assignments";
 
-drop policy "device_assignments_select_merchant" on "public"."device_assignments";
+drop policy if exists "device_assignments_select_merchant" on "public"."device_assignments";
 
-drop policy "device_config_history_select_carrier" on "public"."device_config_history";
+drop policy if exists "device_config_history_select_carrier" on "public"."device_config_history";
 
-drop policy "device_config_history_select_hq" on "public"."device_config_history";
+drop policy if exists "device_config_history_select_hq" on "public"."device_config_history";
 
-drop policy "device_config_history_select_merchant" on "public"."device_config_history";
+drop policy if exists "device_config_history_select_merchant" on "public"."device_config_history";
 
-drop policy "device_inventory_select_carrier" on "public"."device_inventory";
+drop policy if exists "device_inventory_select_carrier" on "public"."device_inventory";
 
-drop policy "device_inventory_select_hq" on "public"."device_inventory";
+drop policy if exists "device_inventory_select_hq" on "public"."device_inventory";
 
-drop policy "device_inventory_select_merchant" on "public"."device_inventory";
+drop policy if exists "device_inventory_select_merchant" on "public"."device_inventory";
 
-drop policy "Merchants can view their device login history" on "public"."device_login_history";
+drop policy if exists "Merchants can view their device login history" on "public"."device_login_history";
 
-drop policy "device_notes_select_carrier" on "public"."device_notes";
+drop policy if exists "device_notes_select_carrier" on "public"."device_notes";
 
-drop policy "device_notes_select_hq" on "public"."device_notes";
+drop policy if exists "device_notes_select_hq" on "public"."device_notes";
 
-drop policy "device_notes_select_merchant" on "public"."device_notes";
+drop policy if exists "device_notes_select_merchant" on "public"."device_notes";
 
-drop policy "inventory_items_all" on "public"."inventory_items";
+drop policy if exists "inventory_items_all" on "public"."inventory_items";
 
-drop policy "location_inventory_overrides_all" on "public"."location_inventory_overrides";
+drop policy if exists "location_inventory_overrides_all" on "public"."location_inventory_overrides";
 
-drop policy "location_inventory_stock_all" on "public"."location_inventory_stock";
+drop policy if exists "location_inventory_stock_all" on "public"."location_inventory_stock";
 
-drop policy "location_vendor_pricing_all" on "public"."location_vendor_pricing";
+drop policy if exists "location_vendor_pricing_all" on "public"."location_vendor_pricing";
 
-drop policy "location_vendors_all" on "public"."location_vendors";
+drop policy if exists "location_vendors_all" on "public"."location_vendors";
 
-drop policy "Allow insert for auth merchants" on "public"."menu_categories";
+drop policy if exists "Allow insert for auth merchants" on "public"."menu_categories";
 
-drop policy "Merchant Admins Can Update" on "public"."menu_categories";
+drop policy if exists "Merchant Admins Can Update" on "public"."menu_categories";
 
-drop policy "Merchant admins can manage menu item discounts" on "public"."menu_item_discounts";
+drop policy if exists "Merchant admins can manage menu item discounts" on "public"."menu_item_discounts";
 
-drop policy "read_access" on "public"."menu_item_discounts";
+drop policy if exists "read_access" on "public"."menu_item_discounts";
 
-drop policy "mbp_carrier_admin_read" on "public"."merchant_billing_profiles";
+drop policy if exists "mbp_carrier_admin_read" on "public"."merchant_billing_profiles";
 
-drop policy "mbp_hq_admin_all" on "public"."merchant_billing_profiles";
+drop policy if exists "mbp_hq_admin_all" on "public"."merchant_billing_profiles";
 
-drop policy "mbp_merchant_owner_rw" on "public"."merchant_billing_profiles";
+drop policy if exists "mbp_merchant_owner_rw" on "public"."merchant_billing_profiles";
 
-drop policy "Carriers can access their own merchants or if they are part of " on "public"."merchants";
+drop policy if exists "Carriers can access their own merchants or if they are part of " on "public"."merchants";
 
-drop policy "Enable delete access for authenticated users" on "public"."modifier_group_item_recipes";
+drop policy if exists "Enable delete access for authenticated users" on "public"."modifier_group_item_recipes";
 
-drop policy "Enable insert access for authenticated users" on "public"."modifier_group_item_recipes";
+drop policy if exists "Enable insert access for authenticated users" on "public"."modifier_group_item_recipes";
 
-drop policy "Enable read access for authenticated users" on "public"."modifier_group_item_recipes";
+drop policy if exists "Enable read access for authenticated users" on "public"."modifier_group_item_recipes";
 
-drop policy "Enable update access for authenticated users" on "public"."modifier_group_item_recipes";
+drop policy if exists "Enable update access for authenticated users" on "public"."modifier_group_item_recipes";
 
-drop policy "oo_sync_results_select_own" on "public"."orderout_menu_sync_results";
+drop policy if exists "oo_sync_results_select_own" on "public"."orderout_menu_sync_results";
 
-drop policy "merchant_select_orders" on "public"."orders";
+drop policy if exists "merchant_select_orders" on "public"."orders";
 
-drop policy "Merchants can view their terminals" on "public"."payment_terminals";
+drop policy if exists "Merchants can view their terminals" on "public"."payment_terminals";
 
-drop policy "purchase_order_items_all" on "public"."purchase_order_items";
+drop policy if exists "purchase_order_items_all" on "public"."purchase_order_items";
 
-drop policy "purchase_order_payments_all" on "public"."purchase_order_payments";
+drop policy if exists "purchase_order_payments_all" on "public"."purchase_order_payments";
 
-drop policy "purchase_orders_all" on "public"."purchase_orders";
+drop policy if exists "purchase_orders_all" on "public"."purchase_orders";
 
-drop policy "Manager can delete staff" on "public"."staff_profiles";
+drop policy if exists "Manager can delete staff" on "public"."staff_profiles";
 
-drop policy "staff_profiles_delete" on "public"."staff_profiles";
+drop policy if exists "staff_profiles_delete" on "public"."staff_profiles";
 
-drop policy "staff_profiles_insert" on "public"."staff_profiles";
+drop policy if exists "staff_profiles_insert" on "public"."staff_profiles";
 
-drop policy "staff_profiles_select" on "public"."staff_profiles";
+drop policy if exists "staff_profiles_select" on "public"."staff_profiles";
 
-drop policy "staff_profiles_update" on "public"."staff_profiles";
+drop policy if exists "staff_profiles_update" on "public"."staff_profiles";
 
-drop policy "Merchants can view their devices" on "public"."station_devices";
+drop policy if exists "Merchants can view their devices" on "public"."station_devices";
 
-drop policy "Users can view sessions for their merchant" on "public"."station_sessions";
+drop policy if exists "Users can view sessions for their merchant" on "public"."station_sessions";
 
-drop policy "Merchants can view their stations" on "public"."stations";
+drop policy if exists "Merchants can view their stations" on "public"."stations";
 
-drop policy "stock_update_log_all" on "public"."stock_update_log";
+drop policy if exists "stock_update_log_all" on "public"."stock_update_log";
 
-drop policy "admin_see_all_tickets" on "public"."support_tickets";
+drop policy if exists "admin_see_all_tickets" on "public"."support_tickets";
 
-drop policy "merchants_own_tickets" on "public"."support_tickets";
+drop policy if exists "merchants_own_tickets" on "public"."support_tickets";
 
-drop policy "vendor_items_all" on "public"."vendor_items";
+drop policy if exists "vendor_items_all" on "public"."vendor_items";
 
-drop policy "vendors_all" on "public"."vendors";
+drop policy if exists "vendors_all" on "public"."vendors";
 
-drop policy "Users can delete their own notes" on "public"."customer_notes";
+drop policy if exists "Users can delete their own notes" on "public"."customer_notes";
 
-drop policy "Users can insert notes for customers in their merchant" on "public"."customer_notes";
+drop policy if exists "Users can insert notes for customers in their merchant" on "public"."customer_notes";
 
-drop policy "Users can update their own notes" on "public"."customer_notes";
+drop policy if exists "Users can update their own notes" on "public"."customer_notes";
 
-drop policy "Users can view notes for customers in their merchant" on "public"."customer_notes";
+drop policy if exists "Users can view notes for customers in their merchant" on "public"."customer_notes";
 
-drop policy "lbp_carrier_admin_read" on "public"."location_banking_profiles";
+drop policy if exists "lbp_carrier_admin_read" on "public"."location_banking_profiles";
 
-drop policy "lbp_hq_admin_all" on "public"."location_banking_profiles";
+drop policy if exists "lbp_hq_admin_all" on "public"."location_banking_profiles";
 
-drop policy "lbp_merchant_owner_rw" on "public"."location_banking_profiles";
+drop policy if exists "lbp_merchant_owner_rw" on "public"."location_banking_profiles";
 
-drop policy "Merchants can delete their own campaigns" on "public"."marketing_campaigns";
+drop policy if exists "Merchants can delete their own campaigns" on "public"."marketing_campaigns";
 
-drop policy "Merchants can insert their own campaigns" on "public"."marketing_campaigns";
+drop policy if exists "Merchants can insert their own campaigns" on "public"."marketing_campaigns";
 
-drop policy "Merchants can update their own campaigns" on "public"."marketing_campaigns";
+drop policy if exists "Merchants can update their own campaigns" on "public"."marketing_campaigns";
 
-drop policy "Merchants can view their own campaigns" on "public"."marketing_campaigns";
+drop policy if exists "Merchants can view their own campaigns" on "public"."marketing_campaigns";
 
-drop policy "Users can insert recipients for their campaigns" on "public"."marketing_recipients";
+drop policy if exists "Users can insert recipients for their campaigns" on "public"."marketing_recipients";
 
-drop policy "Users can update recipients for their campaigns" on "public"."marketing_recipients";
+drop policy if exists "Users can update recipients for their campaigns" on "public"."marketing_recipients";
 
-drop policy "Users can view recipients for their campaigns" on "public"."marketing_recipients";
+drop policy if exists "Users can view recipients for their campaigns" on "public"."marketing_recipients";
 
 revoke delete on table "public"."orderout_menu_sync_results" from "anon";
 

@@ -66,6 +66,7 @@ import { AssignModifierToItem } from "@/app/dashboard/actions/item-assignments";
 import { GetMenuItems } from "@/app/dashboard/actions/menu-items";
 import { useLocationStore, useIsAllLocations } from "@/stores/location-store";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { useEffectivePricing } from "@/app/dashboard/hooks/useEffectivePricing";
 import { useModifierGroups } from "@/app/dashboard/hooks/useModifierGroups";
 import { ItemPreviewCard } from "@/components/dashboard/menu/ItemPreviewCard";
 
@@ -163,6 +164,7 @@ export function AddItemToCategoryWizard({
   const merchantId = propMerchantId || userInfo?.members?.[0]?.organizations?.merchants?.id || "";
   const selectedLocationId = propLocationId !== undefined ? propLocationId : locationStore.selectedLocationId;
   const isAllLocations = propIsAllLocations !== undefined ? propIsAllLocations : dashboardIsAllLocations;
+  const { pricingStrategy, dualPricingPercentage } = useEffectivePricing();
   const imageUpload = useMerchantCdnImageUpload({
     merchantId,
     category: "menu-items",
