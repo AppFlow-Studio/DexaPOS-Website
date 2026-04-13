@@ -272,6 +272,8 @@ alter table "public"."location_payment_devices" enable row level security;
   --     );
 
 
+
+
 alter table "public"."payment_credential_access_log" enable row level security;
 
 alter table "public"."device_heartbeats" add column "created_at" timestamp with time zone not null default now();
@@ -2124,7 +2126,47 @@ grant truncate on table "public"."payment_credential_access_log" to "service_rol
 
 grant update on table "public"."payment_credential_access_log" to "service_role";
 
+create table public.category_items (
+  id uuid not null default extensions.uuid_generate_v4 (),
+  menu_item_id uuid not null,
+  category_id uuid not null,
+  created_at timestamp with time zone not null default now(),
+  merchant_id uuid not null,
+  display_order integer null default 0,
+  custom_price numeric(10, 2) null,
+  custom_cash_price numeric(10, 2) null,
+  is_available boolean null default true,
+  is_featured boolean null default false,
+  updated_at timestamp with time zone null,
+  custom_delivery_price numeric null,
+  menu_id uuid null,
+  constraint category_items_pkey primary key (id),
+  constraint category_items_menu_id_fkey foreign KEY (menu_id) references menus (id) on delete CASCADE,
+  constraint menu_item_categories_category_id_fkey foreign KEY (category_id) references categories (id) on delete CASCADE,
+  constraint menu_item_categories_menu_item_id_fkey foreign KEY (menu_item_id) references menu_items (id) on delete CASCADE,
+  constraint menu_item_categories_merchant_id_fkey foreign KEY (merchant_id) references merchants (id) on delete CASCADE
+) TABLESPACE pg_default;
 
+create index IF not exists idx_category_items_display on public.category_items using btree (category_id, display_order) TABLESPACE pg_default;
+
+create index IF not exists idx_menu_item_categories_category_id on public.category_items using btree (category_id) TABLESPACE pg_default;
+
+create index IF not exists idx_menu_item_categories_menu_item_id on public.category_items using btree (menu_item_id) TABLESPACE pg_default;
+
+create index IF not exists idx_menu_item_categories_merchant on public.category_items using btree (merchant_id) TABLESPACE pg_default;
+
+create unique INDEX IF not exists category_items_item_cat_menu_idx on public.category_items using btree (menu_item_id, category_id, menu_id) TABLESPACE pg_default
+where
+  (menu_id is not null);
+
+create unique INDEX IF not exists category_items_item_cat_nomenu_idx on public.category_items using btree (menu_item_id, category_id) TABLESPACE pg_default
+where
+  (menu_id is null);
+
+create trigger update_category_items_updated_at BEFORE
+update on category_items for EACH row
+execute FUNCTION update_updated_at_column ();
+''
   create policy "grant all to merchant admins"
   on "public"."category_items"
   as permissive

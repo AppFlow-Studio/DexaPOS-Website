@@ -9,18 +9,21 @@
 --   L5 = Branch menu category base     (location_menu_item_overrides)
 -- =============================================================================
 
--- -- Step 1: Add menu_id column (nullable) to category_items
+-- Step 1: Add menu_id column (nullable) to category_items
 ALTER TABLE public.category_items
   ADD COLUMN IF NOT EXISTS menu_id uuid REFERENCES public.menus(id) ON DELETE CASCADE;
+
 -- Step 2: Partial unique indexes to differentiate L2 rows (no menu) from L4 rows (with menu)
 -- L2: one row per (item, category) globally
 CREATE UNIQUE INDEX IF NOT EXISTS category_items_item_cat_nomenu_idx
   ON public.category_items (menu_item_id, category_id)
   WHERE menu_id IS NULL;
+
 -- L4: one row per (item, category, menu)
 CREATE UNIQUE INDEX IF NOT EXISTS category_items_item_cat_menu_idx
   ON public.category_items (menu_item_id, category_id, menu_id)
   WHERE menu_id IS NOT NULL;
+
 -- =============================================================================
 -- Step 3: Update upsert_category_item_override to handle L4
 -- =============================================================================
@@ -316,6 +319,7 @@ BEGIN
     );
 END;
 $$;
+
 -- =============================================================================
 -- Step 4: Update get_menu_with_categories to expose L4 price
 -- Adds ci_menu join (menu-specific category_items) and level_3_menu_category field.
@@ -662,6 +666,7 @@ BEGIN
     RETURN result;
 END;
 $$;
+
 -- =============================================================================
 -- Step 5: Update reset_category_item_to_level to handle UI L4 reset
 -- =============================================================================
@@ -746,6 +751,7 @@ BEGIN
     );
 END;
 $$;
+
 -- Grants
 GRANT EXECUTE ON FUNCTION upsert_category_item_override(UUID, UUID, UUID, UUID, DECIMAL, DECIMAL, BOOLEAN, DECIMAL, TEXT, INTEGER, BOOLEAN, TEXT, INTEGER, DECIMAL) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_menu_with_categories(UUID, UUID) TO authenticated;
