@@ -22,9 +22,62 @@ import {
   type MerchantOnlineStoreReviewPacket,
   type OnlineStoreReviewChecklist,
 } from '@/lib/online-store/setup-flow'
-import { uploadOrganizationDocument } from '@/lib/cdn/server'
+import { uploadMerchantDocument, uploadOrganizationDocument } from '@/lib/cdn/server'
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'dexaposai.com'
+
+type MissingRequestFieldKey =
+  | 'legalBusinessName'
+  | 'dbaName'
+  | 'einTaxId'
+  | 'w9Form'
+  | 'ownerFirstName'
+  | 'ownerLastName'
+  | 'ownerDob'
+  | 'ownerSsn'
+  | 'ownerGovernmentId'
+  | 'bankName'
+  | 'accountHolderName'
+  | 'ddaAccountNumber'
+  | 'routingNumber'
+  | 'bankSupportDocument'
+
+type RequestPacketMissing = Record<MissingRequestFieldKey, boolean>
+
+export type AdminOnlineStoreRequestRequirementsResult = {
+  success: boolean
+  complete: boolean
+  missing: RequestPacketMissing
+  values: Partial<Record<MissingRequestFieldKey, string>>
+  error?: string
+}
+
+function emptyMissing(): RequestPacketMissing {
+  return {
+    legalBusinessName: false,
+    dbaName: false,
+    einTaxId: false,
+    w9Form: false,
+    ownerFirstName: false,
+    ownerLastName: false,
+    ownerDob: false,
+    ownerSsn: false,
+    ownerGovernmentId: false,
+    bankName: false,
+    accountHolderName: false,
+    ddaAccountNumber: false,
+    routingNumber: false,
+    bankSupportDocument: false,
+  }
+}
+
+function hasAnyMissing(missing: RequestPacketMissing): boolean {
+  return Object.values(missing).some(Boolean)
+}
+
+function normalizeDigits(value: string): string {
+  return value.replace(/\\D/g, '')
+}
 
 interface PaymentDeviceSummary {
   id: string
@@ -309,6 +362,246 @@ async function getReviewContext(
     merchantReviewPacket,
     locationReviewPacket,
     reviewChecklist,
+  }
+}
+
+export async function getAdminOnlineStoreRequestRequirements(
+  merchantId: string,
+  locationId: string
+): Promise<AdminOnlineStoreRequestRequirementsResult> {
+  try {
+    await assertHQPermission('hq.merchant.view')
+
+    const supabase = createServerSupabaseClient()
+    const { merchant, location, merchantReviewPacket, locationReviewPacket } =
+      await getReviewContext(supabase, merchantId, locationId)
+
+    const missing = emptyMissing()
+
+    if (!merchant || !location) {
+      missing.legalBusinessName = true
+      return {
+        success: false,
+        complete: false,
+        missing,
+        values: {},
+        error: 'Merchant/location not found',
+      }
+    }
+
+    // Granular merchant identity fields (first/last are stored separately)
+    const md =
+      (merchant.public_metadata as Record<string, unknown> | null) ?? {}
+    const ownerFirstName =
+      (typeof (merchant as any).owner_first_name === 'string' &&
+      (merchant as any).owner_first_name.trim().length > 0
+        ? (merchant as any).owner_first_name.trim()
+        : null) ??
+      readMetadataString(md, 'owner_first_name')
+    const ownerLastName =
+      (typeof (merchant as any).owner_last_name === 'string' &&
+      (merchant as any).owner_last_name.trim().length > 0
+        ? (merchant as any).owner_last_name.trim()
+        : null) ??
+      readMetadataString(md, 'owner_last_name')
+
+    if (!merchantReviewPacket?.legalBusinessName) missing.legalBusinessName = true
+    if (!merchantReviewPacket?.dbaName) missing.dbaName = true
+    if (!merchantReviewPacket?.einTaxId) missing.einTaxId = true
+    if (!merchantReviewPacket?.w9FormUrl) missing.w9Form = true
+
+    if (!ownerFirstName) missing.ownerFirstName = true
+    if (!ownerLastName) missing.ownerLastName = true
+    if (!merchantReviewPacket?.ownerDob) missing.ownerDob = true
+    if (!merchantReviewPacket?.ownerSsn) missing.ownerSsn = true
+    if (!merchantReviewPacket?.ownerGovernmentIdUrl) missing.ownerGovernmentId = true
+
+    if (!locationReviewPacket?.bankName) missing.bankName = true
+    if (!locationReviewPacket?.accountHolderName) missing.accountHolderName = true
+    if (!locationReviewPacket?.ddaAccountNumber) missing.ddaAccountNumber = true
+    if (!locationReviewPacket?.routingNumber) missing.routingNumber = true
+    if (!locationReviewPacket?.bankSupportDocumentUrl) missing.bankSupportDocument = true
+
+    const values: Partial<Record<MissingRequestFieldKey, string>> = {
+      legalBusinessName: merchantReviewPacket?.legalBusinessName ?? '',
+      dbaName: merchantReviewPacket?.dbaName ?? '',
+      einTaxId: merchantReviewPacket?.einTaxId ?? '',
+      ownerFirstName: ownerFirstName ?? '',
+      ownerLastName: ownerLastName ?? '',
+      ownerDob: merchantReviewPacket?.ownerDob ?? '',
+      ownerSsn: merchantReviewPacket?.ownerSsn ?? '',
+      bankName: locationReviewPacket?.bankName ?? '',
+      accountHolderName: locationReviewPacket?.accountHolderName ?? '',
+      ddaAccountNumber: locationReviewPacket?.ddaAccountNumber ?? '',
+      routingNumber: locationReviewPacket?.routingNumber ?? '',
+    }
+
+    return {
+      success: true,
+      complete: !hasAnyMissing(missing),
+      missing,
+      values,
+    }
+  } catch (error) {
+    const missing = emptyMissing()
+    missing.legalBusinessName = true
+    return {
+      success: false,
+      complete: false,
+      missing,
+      values: {},
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }
+  }
+}
+
+export async function adminSaveOnlineStoreRequestRequirements(formData: FormData): Promise<{
+  success: boolean
+  error?: string
+}> {
+  try {
+    await assertHQPermission('hq.merchant.update')
+
+    const merchantId = String(formData.get('merchantId') || '')
+    const locationId = String(formData.get('locationId') || '')
+
+    if (!merchantId || !locationId) {
+      return { success: false, error: 'merchantId and locationId are required' }
+    }
+
+    const supabase = createServerSupabaseClient()
+    const { data: merchant, error: merchantError } = await supabase
+      .from('merchants')
+      .select('id, clerk_org_id')
+      .eq('id', merchantId)
+      .single()
+
+    if (merchantError || !merchant?.clerk_org_id) {
+      return { success: false, error: 'Merchant organization not found' }
+    }
+
+    const organizationId = merchant.clerk_org_id as string
+
+    const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
+    const org = await clerkClient.organizations.getOrganization({ organizationId })
+    const currentMetadata = (org.publicMetadata as Record<string, unknown>) ?? {}
+    const metadataUpdates: Record<string, unknown> = { ...currentMetadata }
+
+    const readText = (key: string) => {
+      const raw = formData.get(key)
+      if (typeof raw !== 'string') return null
+      const trimmed = raw.trim()
+      return trimmed.length > 0 ? trimmed : null
+    }
+
+    const legalBusinessName = readText('legalBusinessName')
+    const dbaName = readText('dbaName')
+    const einTaxIdRaw = readText('einTaxId')
+    const ownerFirstName = readText('ownerFirstName')
+    const ownerLastName = readText('ownerLastName')
+    const ownerDob = readText('ownerDob')
+    const ownerSsnRaw = readText('ownerSsn')
+
+    const einTaxId = einTaxIdRaw ? normalizeDigits(einTaxIdRaw) : null
+    const ownerSsn = ownerSsnRaw ? normalizeDigits(ownerSsnRaw) : null
+
+    if (legalBusinessName) {
+      metadataUpdates.business_legal_name = legalBusinessName
+      metadataUpdates.legal_business_name = legalBusinessName
+    }
+    if (dbaName) {
+      metadataUpdates.dba_name = dbaName
+      metadataUpdates.business_name = dbaName
+    }
+    if (einTaxId) {
+      metadataUpdates.online_store_ein_tax_id = einTaxId
+      metadataUpdates.ein_tax_id = einTaxId
+      metadataUpdates.ein_last_four = einTaxId.slice(-4)
+    }
+    if (ownerFirstName) metadataUpdates.owner_first_name = ownerFirstName
+    if (ownerLastName) metadataUpdates.owner_last_name = ownerLastName
+    if (ownerDob) metadataUpdates.online_store_owner_dob = ownerDob
+    if (ownerSsn) metadataUpdates.online_store_owner_ssn = ownerSsn
+
+    const w9File = formData.get('w9FormFile')
+    const ownerIdFile = formData.get('ownerGovernmentIdFile')
+
+    if (w9File && typeof w9File !== 'string') {
+      const file = w9File as File
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+      if (!isPdf) return { success: false, error: 'W-9 must be uploaded as a PDF' }
+
+      const uploadResult = await uploadOrganizationDocument(file, organizationId, 'online-store-w9')
+      if (!uploadResult.success || !uploadResult.cdnUrl) {
+        return { success: false, error: uploadResult.error || 'Failed to upload W-9 PDF' }
+      }
+      metadataUpdates.online_store_w9_form_url = uploadResult.cdnUrl
+      metadataUpdates.w9_form_url = uploadResult.cdnUrl
+    }
+
+    if (ownerIdFile && typeof ownerIdFile !== 'string') {
+      const file = ownerIdFile as File
+      const uploadResult = await uploadOrganizationDocument(file, organizationId, 'online-store-owner-id')
+      if (!uploadResult.success || !uploadResult.cdnUrl) {
+        return { success: false, error: uploadResult.error || 'Failed to upload owner government ID' }
+      }
+      metadataUpdates.online_store_owner_government_id_url = uploadResult.cdnUrl
+    }
+
+    await clerkClient.organizations.updateOrganization(organizationId, {
+      publicMetadata: metadataUpdates,
+    })
+
+    // Location banking packet updates
+    const { data: location, error: locationError } = await supabase
+      .from('locations')
+      .select('id, merchant_id, public_metadata')
+      .eq('id', locationId)
+      .single()
+
+    if (locationError || !location) {
+      return { success: false, error: 'Location not found' }
+    }
+
+    const bankName = readText('bankName')
+    const accountHolderName = readText('accountHolderName')
+    const ddaAccountNumber = readText('ddaAccountNumber')
+    const routingNumber = readText('routingNumber')
+    const bankSupportFile = formData.get('bankSupportDocumentFile')
+
+    const locationMetadata = (location.public_metadata as Record<string, unknown> | null) ?? {}
+    const nextLocationMetadata: Record<string, unknown> = { ...locationMetadata }
+
+    if (bankName) nextLocationMetadata.online_store_bank_name = bankName
+    if (accountHolderName) nextLocationMetadata.online_store_account_holder_name = accountHolderName
+    if (ddaAccountNumber) nextLocationMetadata.online_store_bank_dda_account_number = ddaAccountNumber
+    if (routingNumber) nextLocationMetadata.online_store_bank_routing_number = routingNumber
+
+    if (bankSupportFile && typeof bankSupportFile !== 'string') {
+      const file = bankSupportFile as File
+      const uploadResult = await uploadMerchantDocument(file, merchantId, 'online-store-bank-support')
+      if (!uploadResult.success || !uploadResult.cdnUrl) {
+        return { success: false, error: uploadResult.error || 'Failed to upload bank support document' }
+      }
+      nextLocationMetadata.online_store_bank_support_document_url = uploadResult.cdnUrl
+    }
+
+    const { error: locationUpdateError } = await supabase
+      .from('locations')
+      .update({ public_metadata: nextLocationMetadata, updated_at: new Date().toISOString() })
+      .eq('id', locationId)
+
+    if (locationUpdateError) {
+      return { success: false, error: locationUpdateError.message }
+    }
+
+    revalidateOnlineStorePaths(merchantId)
+    return { success: true }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to save required information',
+    }
   }
 }
 

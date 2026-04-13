@@ -225,6 +225,15 @@ const createDefaultSettings = (
   facebookPixelId: "",
 });
 
+export type OnlineStoreSetupRequestResult =
+  | { success: true; status: "pending_review" }
+  | {
+      success: false;
+      error: string;
+      missing?: Record<string, boolean>;
+      values?: Record<string, string>;
+    };
+
 interface OnlineOrderingStore {
   settings: OnlineOrderingSettings[];
   isLoading: boolean;
@@ -238,7 +247,7 @@ interface OnlineOrderingStore {
   ) => void;
   saveSettings: (locationId: string) => Promise<void>;
   discardChanges: (locationId: string) => Promise<void>;
-  requestSetup: (locationId: string) => Promise<void>;
+  requestSetup: (locationId: string) => Promise<OnlineStoreSetupRequestResult>;
   isDirty: (locationId: string) => boolean;
 }
 
@@ -361,14 +370,20 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
     },
     requestSetup: async (locationId: string) => {
       try {
-        await requestOnlineOrderingSetup(locationId);
-        await get().loadSettings(locationId);
-        toast.success("Setup request submitted to HQ");
+        const result = await requestOnlineOrderingSetup(locationId);
+        if (result?.success) {
+          await get().loadSettings(locationId);
+          toast.success("Setup request submitted to HQ");
+          return result;
+        }
+        // Let the page decide how to render the missing-fields UI.
+        return result;
       } catch (error) {
         console.error("Failed to request setup:", error);
         toast.error(
           error instanceof Error ? error.message : "Failed to request setup"
         );
+        return { success: false, error: error instanceof Error ? error.message : "Failed to request setup" } as any;
       }
     },
 

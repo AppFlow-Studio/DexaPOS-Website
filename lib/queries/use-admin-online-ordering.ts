@@ -11,6 +11,8 @@ import {
   adminApproveOnlineStoreRequest,
   adminRejectOnlineStoreRequest,
   adminUploadMerchantW9Pdf,
+  getAdminOnlineStoreRequestRequirements,
+  adminSaveOnlineStoreRequestRequirements,
 } from '@/app/manage/actions/admin-merchant/online-ordering'
 
 // ============================================================================
@@ -176,6 +178,15 @@ export function useAdminOnlineOrderingSettings(merchantId: string, locationId: s
   })
 }
 
+export function useAdminOnlineStoreRequestRequirements(merchantId: string, locationId: string) {
+  return useQuery({
+    queryKey: [...adminKeys.merchants(), merchantId, 'online-ordering-requirements', locationId],
+    queryFn: () => getAdminOnlineStoreRequestRequirements(merchantId, locationId),
+    enabled: !!merchantId && !!locationId,
+    staleTime: 10 * 1000,
+  })
+}
+
 // ============================================================================
 // MUTATION HOOKS
 // ============================================================================
@@ -244,6 +255,18 @@ export function useAdminRetriggerDomainWhitelist() {
       merchantId: string
       locationId: string
     }) => adminRetriggerDomainWhitelist(merchantId, locationId),
+  })
+}
+
+export function useAdminSaveOnlineStoreRequestRequirements() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (formData: FormData) => adminSaveOnlineStoreRequestRequirements(formData),
+    onSuccess: (_result, _variables, _context) => {
+      // Caller should also refetch online-ordering settings, but this at least refreshes requirements.
+      // We don't know merchantId/locationId here without duplicating formData parsing, so callers should invalidate explicitly if needed.
+      queryClient.invalidateQueries({ queryKey: [...adminKeys.merchants()] })
+    },
   })
 }
 

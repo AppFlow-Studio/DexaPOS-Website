@@ -7,6 +7,7 @@
 
 - Merchant dashboard (`/dashboard/online-ordering`):
   - before HQ completion: show only `Request Setup` + request status states
+    - request button is blocked until the required merchant/location packet is complete (missing-only modal)
   - after HQ completion: allow editing only non-payment storefront details
   - payment device selection, TPN/FTD keys, and tipping are never visible
 - HQ admin (`/manage/merchants/... -> Online Store`):

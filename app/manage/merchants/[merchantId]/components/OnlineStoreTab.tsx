@@ -46,6 +46,8 @@ import {
     useAdminRejectOnlineStoreRequest,
     useAdminUploadMerchantW9Pdf,
     useAdminRetriggerDomainWhitelist,
+    useAdminOnlineStoreRequestRequirements,
+    useAdminSaveOnlineStoreRequestRequirements,
     type OnlineOrderingSettings,
     type LocationOnlineStoreOverview,
 } from '@/lib/queries/use-admin-online-ordering'
@@ -58,6 +60,7 @@ import { OrderOutOnboardingForm, type OnboardingFormData } from '@/components/da
 import { OrderOutStatusCard } from '@/components/dashboard/orderout/OrderOutStatusCard'
 import { AdminPushChannelsSection } from '@/components/dashboard/orderout/AdminPushChannelsSection'
 import { extractConnectedPlatforms } from '@/lib/orderout/helpers'
+import { MissingDataForm } from '@/components/online-store/MissingDataForm'
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000'
 
@@ -137,12 +140,17 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
         merchantId,
         selectedLocationId || ''
     )
+    const { data: requirementsData, refetch: refetchRequirements } = useAdminOnlineStoreRequestRequirements(
+        merchantId,
+        selectedLocationId || ''
+    )
 
     // Local state for editing
     const [localSettings, setLocalSettings] = useState<Partial<OnlineOrderingSettings> | null>(null)
     const [isDirty, setIsDirty] = useState(false)
     const [w9ViewerUrl, setW9ViewerUrl] = useState<string | null>(null)
     const w9UploadInputRef = useRef<HTMLInputElement>(null)
+    const [missingFormOpen, setMissingFormOpen] = useState(false)
 
     // Mutations
     const saveMutation = useAdminSaveOnlineOrderingSettings()
@@ -150,6 +158,7 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
     const rejectMutation = useAdminRejectOnlineStoreRequest()
     const uploadW9Mutation = useAdminUploadMerchantW9Pdf()
     const whitelistMutation = useAdminRetriggerDomainWhitelist()
+    const saveRequirementsMutation = useAdminSaveOnlineStoreRequestRequirements()
 
     // OrderOut
     const { data: orderOutData } = useAdminOrderOutStatus(merchantId)
@@ -712,6 +721,53 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                             ))}
                         </CardContent>
                     </Card>
+
+                    {requirementsData?.success && !requirementsData.complete ? (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Missing Packet Items</CardTitle>
+                                <CardDescription>
+                                    These fields are required before approval. Use the editor to fill only the missing items.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="flex items-center justify-between gap-4">
+                                <div className="text-sm text-muted-foreground">
+                                    {Object.values(requirementsData.missing).filter(Boolean).length} missing fields detected.
+                                </div>
+                                <Button onClick={() => setMissingFormOpen(true)} variant="outline">
+                                    Edit Missing Fields
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    ) : null}
+
+                    <MissingDataForm
+                        mode="admin"
+                        open={missingFormOpen}
+                        onOpenChange={setMissingFormOpen}
+                        title="Fill Missing Online Store Packet Fields"
+                        description="Each missing field can be edited and saved individually."
+                        locationId={selectedLocationId || ''}
+                        merchantId={merchantId}
+                        requirements={(requirementsData as any) ?? null}
+                        onSave={async (formData) => {
+                            formData.set('merchantId', merchantId)
+                            formData.set('locationId', selectedLocationId || '')
+                            const result = await saveRequirementsMutation.mutateAsync(formData)
+                            if (!result.success) {
+                                return { success: false, error: result.error || 'Failed to save' }
+                            }
+                            await Promise.all([refetchSettings(), refetchRequirements()])
+                            return { success: true }
+                        }}
+                        onRefresh={async () => {
+                            const refreshed = await refetchRequirements()
+                            return (refreshed.data as any) ?? { success: false, complete: false, missing: {}, values: {}, error: 'Failed to refresh' }
+                        }}
+                        onCompleted={async () => {
+                            await Promise.all([refetchSettings(), refetchRequirements()])
+                        }}
+                    />
 
                     {canEditStoreSetup ? (
                         <>

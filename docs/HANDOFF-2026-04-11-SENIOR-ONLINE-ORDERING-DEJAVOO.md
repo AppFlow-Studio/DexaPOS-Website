@@ -11,9 +11,10 @@ The online-ordering work is now in a materially better state than the original i
 Implemented:
 
 - HQ-owned online-store request/review/setup flow is now in place
-- merchant online-store page is request/status driven and limited to payment/tips after HQ completes setup
+- merchant online-store page is request/status driven and limited to non-payment settings after HQ completes setup (payment + tips remain HQ-only)
 - merchant and location onboarding now collect the compliance/banking fields required for HQ review
 - W-9, owner government ID, and branch bank support documents now upload through Bunny-backed document flows
+- merchant setup requests are now gated by required packet completeness; when missing data is detected, the merchant sees a modal that shows only missing fields (text + file uploads) and cannot submit the request until complete
 - branch storefront disable is now enforced at middleware level with hard `404`
 - inactive-store API bypasses are now blocked in OTP, payment-init, and order-create paths
 - Dejavoo configuration moved from a global/plaintext branch model toward a secure per-branch selected-device model
