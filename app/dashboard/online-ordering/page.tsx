@@ -507,6 +507,21 @@ function CompletedSetupPanel({
                 </div>
               </div>
 
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div>
+                  <p className="font-medium">Auto-Accept Orders</p>
+                  <p className="text-sm text-muted-foreground">
+                    Automatically accept incoming online orders and send them straight to the kitchen.
+                    When off, each order must be manually accepted from the POS first.
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.autoAcceptOrders}
+                  onCheckedChange={(checked) => onUpdate({ autoAcceptOrders: checked })}
+                  disabled={isSaving}
+                />
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="space-y-2">
                   <Label>Prep Time (minutes)</Label>

@@ -106,37 +106,30 @@ export function AddCategoryToMenuWizard({
     const availableCategories = React.useMemo(() => {
         let filtered = categoriesWithItems
 
-        // Merchant.owner + all locations + global menu: Show only global categories
-        if (isMerchantOwner && isAllLocations && isGlobalMenu) {
+        // Rule 1: Global menus can ONLY contain global categories (regardless of role/location).
+        // Adding a location-specific category to a global menu causes cross-location confusion.
+        if (isGlobalMenu) {
             filtered = filtered.filter(cat => cat.is_global === true)
         }
-        // Merchant.owner + all locations + location menu: Show global + location categories
-        else if (isMerchantOwner && isAllLocations && isLocationMenu) {
-            // Show all categories (global + location)
-            filtered = filtered
+        // Rule 2: Location menus — show global categories + categories belonging to the
+        // CURRENT location only (not other locations' categories).
+        else if (isLocationMenu) {
+            if (isAllLocations) {
+                // No location selected: show all categories (admin fallback)
+                filtered = filtered
+            } else {
+                // Location selected: global + this location's categories only
+                filtered = filtered.filter(cat =>
+                    cat.is_global === true ||
+                    cat.location_id === selectedLocationId
+                )
+            }
         }
-        // Merchant.owner + location scoped + global menu: Show all but disable add/remove
-        else if (isMerchantOwner && !isAllLocations && isGlobalMenu) {
-            // Show all categories but they're read-only
-            filtered = filtered
-        }
-        // Merchant.owner + location scoped + location menu: Show global + location scoped
-        else if (isMerchantOwner && !isAllLocations && isLocationMenu) {
+        // Rule 3: Unknown menu type — apply location filter defensively
+        else if (!isAllLocations) {
             filtered = filtered.filter(cat =>
                 cat.is_global === true ||
-                (cat.location_id === selectedLocationId || menu.location_id)
-            )
-        }
-        // Merchant.manager + location scoped + global menu: Show all but disable add/remove
-        else if (isMerchantManager && !isAllLocations && isGlobalMenu) {
-            // Show all categories but they're read-only
-            filtered = filtered
-        }
-        // Merchant.manager + location scoped + location menu: Show global + location scoped
-        else if (isMerchantManager && !isAllLocations && isLocationMenu) {
-            filtered = filtered.filter(cat =>
-                cat.is_global === true ||
-                (cat.location_id === selectedLocationId)
+                cat.location_id === selectedLocationId
             )
         }
 
@@ -144,7 +137,7 @@ export function AddCategoryToMenuWizard({
         filtered = filtered.filter(cat => !alreadyInMenu.has(cat.id))
 
         return filtered
-    }, [categoriesWithItems, isMerchantOwner, isMerchantManager, isAllLocations, isGlobalMenu, isLocationMenu, selectedLocationId, alreadyInMenu])
+    }, [categoriesWithItems, isAllLocations, isGlobalMenu, isLocationMenu, selectedLocationId, alreadyInMenu])
 
     // Filter categories by search query
     const filteredCategories = React.useMemo(() => {
