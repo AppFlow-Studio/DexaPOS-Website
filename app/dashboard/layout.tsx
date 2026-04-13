@@ -570,6 +570,17 @@ function MerchantSidebar() {
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={pathname.startsWith("/dashboard/settings/loyalty")}
+                    >
+                      <Link href="/dashboard/settings/loyalty">
+                        <Gift className="h-3 w-3" />
+                        <span>Loyalty</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
                 </SidebarMenuSub>
               </CollapsibleContent>
             </Collapsible>
@@ -724,7 +735,7 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
           )}
           <span
             className={cn(
-              "max-w-[150px] truncate transition-colors duration-200",
+              "max-w-37.5 truncate transition-colors duration-200",
               isAllLocations ? "text-muted-foreground" : "font-medium"
             )}
           >
