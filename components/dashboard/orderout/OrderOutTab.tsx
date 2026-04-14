@@ -144,19 +144,19 @@ export function OrderOutTab({
   // This one derivation unlocks every downstream gate — Setup Progress, the
   // Connected Channels grid, PushChannelsRowAction, and PushChannelsCard all
   // receive the union and treat it as "connected".
-  const verified = extractConnectedPlatforms(orderOutStatus?.data?.connectedChannels);
-  const confirmed = (orderOutStatus?.data?.channelsConfirmedByMerchant ?? []).map(
+  const verified = extractConnectedPlatforms(orderOutStatus?.connectedChannels);
+  const confirmed = (orderOutStatus?.channelsConfirmedByMerchant ?? []).map(
     (c) => c.toUpperCase()
   );
   const channels = Array.from(new Set([...verified, ...confirmed]));
 
-  const isOnboarded = !!orderOutStatus?.data?.hasRestaurant;
+  const isOnboarded = !!orderOutStatus?.hasRestaurant;
   console.log(isOnboarded)
-  const dashboardUrl = orderOutStatus?.data?.dashboardUrl || "https://dashboard.orderout.co";
+  const dashboardUrl = orderOutStatus?.dashboardUrl || "https://dashboard.orderout.co";
 
   // Determine setup progress
-  const hasAccount = !!orderOutStatus?.data?.hasAccount;
-  const hasRestaurant = !!orderOutStatus?.data?.hasRestaurant;
+  const hasAccount = !!orderOutStatus?.hasAccount;
+  const hasRestaurant = !!orderOutStatus?.hasRestaurant;
   const hasChannels = channels.length > 0;
   const hasSyncedMenus = syncedMenus.length > 0;
   const allSetupDone = hasAccount && hasRestaurant && hasChannels && hasSyncedMenus;

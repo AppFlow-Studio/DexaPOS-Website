@@ -100,12 +100,11 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
 
 
 
-CREATE TYPE "analytics"."aggregation_period" AS ENUM (
-    'hourly',
-    'daily',
-    'weekly',
-    'monthly'
-);
+DO $$ BEGIN
+    CREATE TYPE "analytics"."aggregation_period" AS ENUM ('hourly', 'daily', 'weekly', 'monthly');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
 
 ALTER TYPE "analytics"."aggregation_period" OWNER TO "postgres";

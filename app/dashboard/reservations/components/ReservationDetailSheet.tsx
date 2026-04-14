@@ -86,7 +86,7 @@ export default function ReservationDetailSheet({
     setDisplayedReservation(reservation);
   }, [reservation]);
 
-  if (!reservation) return null;
+  if (!reservation || !displayedReservation) return null;
 
   const handleStatusChange = (newStatus: Reservation["status"]) => {
     // Optimistically update the displayed reservation

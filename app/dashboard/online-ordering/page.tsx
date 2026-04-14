@@ -768,6 +768,14 @@ export default function OnlineOrderingPage() {
   const selectedLocation = useSelectedLocation();
   const isAllLocations = selectedLocationId === "all";
 
+  const [requirementsOpen, setRequirementsOpen] = useState(false);
+  const [requirementsMissing, setRequirementsMissing] = useState<Record<string, boolean> | null>(null);
+  const [requirementsDraft, setRequirementsDraft] = useState<Record<string, string>>({});
+  const [w9File, setW9File] = useState<File | null>(null);
+  const [ownerGovIdFile, setOwnerGovIdFile] = useState<File | null>(null);
+  const [bankSupportFile, setBankSupportFile] = useState<File | null>(null);
+  const [requirementsSaving, setRequirementsSaving] = useState(false);
+
   useEffect(() => {
     if (selectedLocationId && selectedLocationId !== "all") {
       loadSettings(selectedLocationId);
@@ -819,13 +827,6 @@ export default function OnlineOrderingPage() {
   }
 
   const status = currentSettings.setupRequestStatus;
-  const [requirementsOpen, setRequirementsOpen] = useState(false);
-  const [requirementsMissing, setRequirementsMissing] = useState<Record<string, boolean> | null>(null);
-  const [requirementsDraft, setRequirementsDraft] = useState<Record<string, string>>({});
-  const [w9File, setW9File] = useState<File | null>(null);
-  const [ownerGovIdFile, setOwnerGovIdFile] = useState<File | null>(null);
-  const [bankSupportFile, setBankSupportFile] = useState<File | null>(null);
-  const [requirementsSaving, setRequirementsSaving] = useState(false);
 
   async function openRequirements(locationId: string) {
     const req = await getOnlineStoreRequestRequirements(locationId);
