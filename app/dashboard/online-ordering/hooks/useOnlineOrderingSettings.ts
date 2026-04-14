@@ -54,7 +54,7 @@ export interface OnlineOrderingSettings {
   address: string;
 
   // Template & Branding
-  templateId: "classic" | "bold" | "minimal";
+  templateId: "classic" | "minimal";
   primaryColor: string;
   secondaryColor: string;
   accentColor: string | null;
@@ -338,6 +338,7 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
           backgroundColor: currentSettings.backgroundColor,
           textColor: currentSettings.textColor,
           fontFamily: currentSettings.fontFamily,
+          menuLayout: currentSettings.menuLayout,
           logoUrl: currentSettings.logoUrl,
           heroImageUrl: currentSettings.heroImageUrl,
           faviconUrl: currentSettings.faviconUrl,

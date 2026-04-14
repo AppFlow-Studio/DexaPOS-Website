@@ -1051,7 +1051,6 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                                 className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                                             >
                                                 <option value="classic">Classic</option>
-                                                <option value="bold">Bold</option>
                                                 <option value="minimal">Minimal</option>
                                             </select>
                                         </div>
