@@ -265,6 +265,10 @@ const navMain = [
         title: "Tips",
         url: "/dashboard/tips",
         icon: DollarSign,
+        items: [
+          { title: "Tip Distribution", url: "/dashboard/tips" },
+          { title: "My Tips", url: "/dashboard/tips/my-tips" },
+        ],
       },
     ],
   },
@@ -341,7 +345,7 @@ function MerchantSidebar() {
 
                           return (
                             <SidebarMenuItem key={menuItem.title}>
-                              <Collapsible defaultOpen={isOrdersOpen}>
+                              <Collapsible defaultOpen={isOrdersOpen} className="group">
                                 <CollapsibleTrigger asChild>
                                   <SidebarMenuButton
                                     isActive={isOrdersActive}
@@ -415,12 +419,52 @@ function MerchantSidebar() {
 
                           return (
                             <SidebarMenuItem key={menuItem.title}>
-                              <Collapsible defaultOpen={isReportsOpen}>
+                              <Collapsible defaultOpen={isReportsOpen} className="group">
                                 <CollapsibleTrigger asChild>
                                   <SidebarMenuButton
                                     isActive={isReportsActive}
                                     className="w-full"
                                   >
+                                    <menuItem.icon className="h-4 w-4" />
+                                    <span>{menuItem.title}</span>
+                                    <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+                                  </SidebarMenuButton>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent>
+                                  <SidebarMenuSub>
+                                    {/* @ts-ignore */}
+                                    {menuItem.items &&
+                                      menuItem.items.map((subItem) => (
+                                        <SidebarMenuSubItem key={subItem.title}>
+                                          <SidebarMenuSubButton
+                                            asChild
+                                            isActive={pathname === subItem.url}
+                                          >
+                                            <Link href={subItem.url}>
+                                              <span>{subItem.title}</span>
+                                            </Link>
+                                          </SidebarMenuSubButton>
+                                        </SidebarMenuSubItem>
+                                      ))}
+                                  </SidebarMenuSub>
+                                </CollapsibleContent>
+                              </Collapsible>
+                            </SidebarMenuItem>
+                          );
+                        }
+
+                        // Check if this is the Tips item that needs sub-menu
+                        if (menuItem.title === "Tips") {
+                          const isTipsActive =
+                            pathname === "/dashboard/tips" ||
+                            pathname.startsWith("/dashboard/tips/");
+                          const isTipsOpen = pathname.startsWith("/dashboard/tips");
+
+                          return (
+                            <SidebarMenuItem key={menuItem.title}>
+                              <Collapsible defaultOpen={isTipsOpen} className="group">
+                                <CollapsibleTrigger asChild>
+                                  <SidebarMenuButton isActive={isTipsActive} className="w-full">
                                     <menuItem.icon className="h-4 w-4" />
                                     <span>{menuItem.title}</span>
                                     <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
@@ -481,6 +525,7 @@ function MerchantSidebar() {
           <SidebarMenuItem>
             <Collapsible
               defaultOpen={pathname.startsWith("/dashboard/settings")}
+              className="group"
             >
               <CollapsibleTrigger asChild>
                 <SidebarMenuButton
@@ -567,6 +612,17 @@ function MerchantSidebar() {
                       <Link href="/dashboard/settings/tips">
                         <DollarSign className="h-3 w-3" />
                         <span>Tip Configuration</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={pathname.startsWith("/dashboard/settings/loyalty")}
+                    >
+                      <Link href="/dashboard/settings/loyalty">
+                        <Gift className="h-3 w-3" />
+                        <span>Loyalty</span>
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
@@ -724,7 +780,7 @@ function LocationIndicator({ userRole }: { userRole?: string }) {
           )}
           <span
             className={cn(
-              "max-w-[150px] truncate transition-colors duration-200",
+              "max-w-37.5 truncate transition-colors duration-200",
               isAllLocations ? "text-muted-foreground" : "font-medium"
             )}
           >

@@ -1543,6 +1543,14 @@ export default function CategoriesPage() {
           updated_at: c.updated_at,
         }))}
         modifierGroups={modifierGroups || []}
+        onOpenGlobalEdit={
+          editingItem
+            ? () => {
+                setIsItemSheetOpen(false);
+                router.push(`/dashboard/menu/items/${editingItem.id}/edit`);
+              }
+            : undefined
+        }
         onSuccess={() => {
           setIsItemSheetOpen(false);
           setEditingItem(null);

@@ -27,18 +27,24 @@ import {
 } from '@/components/ui/select'
 import { AddressAutocomplete } from '@/components/ui/address-autocomplete'
 import { ImagePlus, X } from 'lucide-react'
-import { createMerchantOnboarding, updateMerchantLogo } from '@/app/manage/actions/create-merchant-onboarding'
-import { uploadOrganizationLogo } from '@/lib/cdn/server'
+import {
+  createMerchantOnboarding,
+  updateMerchantLogo,
+  updateMerchantOnboardingMetadata,
+} from '@/app/manage/actions/create-merchant-onboarding'
+import { uploadOrganizationDocument, uploadOrganizationLogo } from '@/lib/cdn/server'
 
 const createMerchantSchema = z.object({
   businessLegalName: z.string().min(2, 'Business legal name is required.'),
   dbaName: z.string().optional(),
   businessType: z.enum(['llc', 'corporation', 'sole_proprietor', 'partnership', 'nonprofit']),
-  einLastFour: z.string().regex(/^[0-9]{4}$/, 'EIN must be exactly 4 digits.'),
+  einTaxId: z.string().regex(/^\d{2}-?\d{7}$/, 'EIN / Tax ID must be 9 digits.'),
   ownerFirstName: z.string().min(1, 'Owner first name is required.'),
   ownerLastName: z.string().min(1, 'Owner last name is required.'),
   ownerEmail: z.string().email('Valid owner email is required.'),
   ownerPhone: z.string().min(7, 'Owner phone is required.'),
+  ownerDob: z.string().min(1, 'Owner date of birth is required.'),
+  ownerSsn: z.string().regex(/^\d{3}-?\d{2}-?\d{4}$/, 'Owner SSN must be 9 digits.'),
   businessAddressLine1: z.string().min(1, 'Address line 1 is required.'),
   businessAddressLine2: z.string().optional(),
   businessCity: z.string().min(1, 'City is required.'),
@@ -56,6 +62,20 @@ type StepNumber = 1 | 2 | 3
 
 const ALLOWED_LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']
 const MAX_LOGO_SIZE = 5 * 1024 * 1024 // 5MB
+const MAX_DOCUMENT_SIZE = 10 * 1024 * 1024 // 10MB
+
+function formatEinTaxId(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 9)
+  if (digits.length <= 2) return digits
+  return `${digits.slice(0, 2)}-${digits.slice(2)}`
+}
+
+function formatSsn(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 9)
+  if (digits.length <= 3) return digits
+  if (digits.length <= 5) return `${digits.slice(0, 3)}-${digits.slice(3)}`
+  return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`
+}
 
 export function CreateMerchantWizard({}: CreateMerchantWizardProps) {
   const router = useRouter()
@@ -65,6 +85,10 @@ export function CreateMerchantWizard({}: CreateMerchantWizardProps) {
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const logoInputRef = useRef<HTMLInputElement>(null)
+  const [w9File, setW9File] = useState<File | null>(null)
+  const [ownerIdFile, setOwnerIdFile] = useState<File | null>(null)
+  const w9InputRef = useRef<HTMLInputElement>(null)
+  const ownerIdInputRef = useRef<HTMLInputElement>(null)
 
   const handleLogoSelect = (file: File | null) => {
     if (!file) return
@@ -87,6 +111,44 @@ export function CreateMerchantWizard({}: CreateMerchantWizardProps) {
     if (logoInputRef.current) logoInputRef.current.value = ''
   }
 
+  const handleDocumentSelect = (
+    file: File | null,
+    kind: 'w9' | 'ownerId'
+  ) => {
+    if (!file) return
+    const isPdf =
+      file.type === 'application/pdf' ||
+      file.name.toLowerCase().endsWith('.pdf')
+    const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp']
+    if (kind === 'w9' && !isPdf) {
+      toast.error('Signed W-9 must be uploaded as a PDF.')
+      return
+    }
+    if (kind !== 'w9' && !allowedTypes.includes(file.type)) {
+      toast.error('Invalid file type. Use PDF, PNG, JPG, or WEBP.')
+      return
+    }
+    if (file.size > MAX_DOCUMENT_SIZE) {
+      toast.error('File too large. Maximum size is 10MB.')
+      return
+    }
+    if (kind === 'w9') {
+      setW9File(file)
+      return
+    }
+    setOwnerIdFile(file)
+  }
+
+  const clearDocument = (kind: 'w9' | 'ownerId') => {
+    if (kind === 'w9') {
+      setW9File(null)
+      if (w9InputRef.current) w9InputRef.current.value = ''
+      return
+    }
+    setOwnerIdFile(null)
+    if (ownerIdInputRef.current) ownerIdInputRef.current.value = ''
+  }
+
   const form = useForm<CreateMerchantWizardValues>({
     resolver: zodResolver(createMerchantSchema),
     mode: 'onBlur',
@@ -94,11 +156,13 @@ export function CreateMerchantWizard({}: CreateMerchantWizardProps) {
       businessLegalName: '',
       dbaName: '',
       businessType: 'llc',
-      einLastFour: '',
+      einTaxId: '',
       ownerFirstName: '',
       ownerLastName: '',
       ownerEmail: '',
       ownerPhone: '',
+      ownerDob: '',
+      ownerSsn: '',
       businessAddressLine1: '',
       businessAddressLine2: '',
       businessCity: '',
@@ -110,12 +174,14 @@ export function CreateMerchantWizard({}: CreateMerchantWizardProps) {
 
   const stepFields = useMemo(
     () => ({
-      1: ['businessLegalName', 'businessType', 'einLastFour'] as const,
+      1: ['businessLegalName', 'businessType', 'einTaxId'] as const,
       2: [
         'ownerFirstName',
         'ownerLastName',
         'ownerEmail',
         'ownerPhone',
+        'ownerDob',
+        'ownerSsn',
         'businessAddressLine1',
         'businessCity',
         'businessState',
@@ -131,6 +197,16 @@ export function CreateMerchantWizard({}: CreateMerchantWizardProps) {
   const nextStep = async () => {
     const valid = await form.trigger(stepFields[step])
     if (!valid) return
+    if (step === 2) {
+      if (!w9File) {
+        toast.error('Signed W-9 is required.')
+        return
+      }
+      if (!ownerIdFile) {
+        toast.error('Owner government ID is required.')
+        return
+      }
+    }
     if (step < 3) setStep((step + 1) as 1 | 2 | 3)
   }
 
@@ -146,11 +222,13 @@ export function CreateMerchantWizard({}: CreateMerchantWizardProps) {
         businessLegalName: data.businessLegalName,
         dbaName: data.dbaName,
         businessType: data.businessType,
-        einLastFour: data.einLastFour,
+        einTaxId: data.einTaxId,
         ownerFirstName: data.ownerFirstName,
         ownerLastName: data.ownerLastName,
         ownerEmail: data.ownerEmail,
         ownerPhone: data.ownerPhone,
+        ownerDob: data.ownerDob,
+        ownerSsn: data.ownerSsn,
         businessAddress: {
           line1: data.businessAddressLine1,
           line2: data.businessAddressLine2,
@@ -174,6 +252,40 @@ export function CreateMerchantWizard({}: CreateMerchantWizardProps) {
           await updateMerchantLogo(result.organizationId, uploadResult.cdnUrl)
         } else if (!uploadResult.success) {
           toast.warning('Merchant created but logo upload failed: ' + (uploadResult.error || 'Unknown error'))
+        }
+      }
+
+      if (result.organizationId) {
+        const metadataUpdates: Record<string, unknown> = {}
+
+        if (w9File) {
+          const uploadResult = await uploadOrganizationDocument(
+            w9File,
+            result.organizationId,
+            'online-store-w9'
+          )
+          if (uploadResult.success && uploadResult.cdnUrl) {
+            metadataUpdates.online_store_w9_form_url = uploadResult.cdnUrl
+          } else if (!uploadResult.success) {
+            toast.warning('Merchant created but W-9 upload failed: ' + (uploadResult.error || 'Unknown error'))
+          }
+        }
+
+        if (ownerIdFile) {
+          const uploadResult = await uploadOrganizationDocument(
+            ownerIdFile,
+            result.organizationId,
+            'online-store-owner-id'
+          )
+          if (uploadResult.success && uploadResult.cdnUrl) {
+            metadataUpdates.online_store_owner_government_id_url = uploadResult.cdnUrl
+          } else if (!uploadResult.success) {
+            toast.warning('Merchant created but owner ID upload failed: ' + (uploadResult.error || 'Unknown error'))
+          }
+        }
+
+        if (Object.keys(metadataUpdates).length > 0) {
+          await updateMerchantOnboardingMetadata(result.organizationId, metadataUpdates)
         }
       }
 
@@ -269,12 +381,19 @@ export function CreateMerchantWizard({}: CreateMerchantWizardProps) {
 
                 <FormField
                   control={form.control}
-                  name="einLastFour"
+                  name="einTaxId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>EIN (Last 4)</FormLabel>
+                      <FormLabel>EIN / Tax ID</FormLabel>
                       <FormControl>
-                        <Input {...field} maxLength={4} inputMode="numeric" placeholder="4567" />
+                        <Input
+                          {...field}
+                          value={field.value}
+                          onChange={(event) => field.onChange(formatEinTaxId(event.target.value))}
+                          maxLength={10}
+                          inputMode="numeric"
+                          placeholder="12-3456789"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -402,6 +521,127 @@ export function CreateMerchantWizard({}: CreateMerchantWizardProps) {
                     </FormItem>
                   )}
                 />
+
+                <FormField
+                  control={form.control}
+                  name="ownerDob"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Owner DOB</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="date" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="ownerSsn"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Owner SSN</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          value={field.value}
+                          onChange={(event) => field.onChange(formatSsn(event.target.value))}
+                          placeholder="123-45-6789"
+                          maxLength={11}
+                          inputMode="numeric"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="md:col-span-2 grid gap-4 md:grid-cols-2">
+                  <div className="rounded-lg border p-4 space-y-3">
+                    <div>
+                      <Label>Signed W-9 Form (PDF)</Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Upload the signed W-9 that HQ will review before approving online-store setup.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => w9InputRef.current?.click()}
+                      >
+                        Choose File
+                      </Button>
+                      {w9File ? (
+                        <>
+                          <span className="text-sm text-muted-foreground truncate">{w9File.name}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-destructive hover:text-destructive"
+                            onClick={() => clearDocument('w9')}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">No file selected</span>
+                      )}
+                    </div>
+                    <input
+                      ref={w9InputRef}
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      className="hidden"
+                      onChange={(event) => handleDocumentSelect(event.target.files?.[0] || null, 'w9')}
+                    />
+                  </div>
+
+                  <div className="rounded-lg border p-4 space-y-3">
+                    <div>
+                      <Label>Government ID</Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Upload the owner government ID used for storefront compliance review.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => ownerIdInputRef.current?.click()}
+                      >
+                        Choose File
+                      </Button>
+                      {ownerIdFile ? (
+                        <>
+                          <span className="text-sm text-muted-foreground truncate">{ownerIdFile.name}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-destructive hover:text-destructive"
+                            onClick={() => clearDocument('ownerId')}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">No file selected</span>
+                      )}
+                    </div>
+                    <input
+                      ref={ownerIdInputRef}
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg,.webp"
+                      className="hidden"
+                      onChange={(event) => handleDocumentSelect(event.target.files?.[0] || null, 'ownerId')}
+                    />
+                  </div>
+                </div>
 
                 <FormField
                   control={form.control}
@@ -544,7 +784,7 @@ export function CreateMerchantWizard({}: CreateMerchantWizardProps) {
                       <span className="font-medium text-foreground">Type:</span> {values.businessType}
                     </p>
                     <p>
-                      <span className="font-medium text-foreground">EIN:</span> ****{values.einLastFour}
+                      <span className="font-medium text-foreground">EIN / Tax ID:</span> {values.einTaxId}
                     </p>
                     <p>
                       <span className="font-medium text-foreground">Owner:</span> {values.ownerFirstName}{' '}
@@ -552,6 +792,18 @@ export function CreateMerchantWizard({}: CreateMerchantWizardProps) {
                     </p>
                     <p>
                       <span className="font-medium text-foreground">Phone:</span> {values.ownerPhone}
+                    </p>
+                    <p>
+                      <span className="font-medium text-foreground">DOB:</span> {values.ownerDob}
+                    </p>
+                    <p>
+                      <span className="font-medium text-foreground">SSN:</span> •••-••-{values.ownerSsn.slice(-4)}
+                    </p>
+                    <p>
+                      <span className="font-medium text-foreground">Signed W-9:</span> {w9File?.name || 'Missing'}
+                    </p>
+                    <p>
+                      <span className="font-medium text-foreground">Government ID:</span> {ownerIdFile?.name || 'Missing'}
                     </p>
                     <p>
                       <span className="font-medium text-foreground">Address:</span>{' '}

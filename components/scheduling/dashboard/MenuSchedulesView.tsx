@@ -39,7 +39,6 @@ import {
   useDeleteScheduleMutation,
   useToggleScheduleActiveMutation,
 } from "@/app/dashboard/hooks/useLocationScopedSchedules";
-import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { useLocationStore } from "@/stores/location-store";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -53,8 +52,6 @@ type ScheduleWithSlots = SchedulesModel & {
 };
 
 export function MenuSchedulesView() {
-  const { data: userInfo } = useUserInfo();
-  // const clerkOrgId = userInfo?.members?.[0]?.organizations?.id
   const { selectedLocationId } = useLocationStore();
 
   const { data: schedules, isLoading } =

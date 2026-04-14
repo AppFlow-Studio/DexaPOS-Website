@@ -418,15 +418,22 @@ export async function getItemModifierGroups(menuItemId: string): Promise<
   Array<{ id: string; name: string; description: string | null }>
 > {
   if (!menuItemId) return [];
-  const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from("menu_item_modifier_groups")
-    .select("modifier_group_id, modifier_groups(id, name, description)")
-    .eq("menu_item_id", menuItemId);
-  if (error || !data) return [];
-  return (data as any[])
-    .map((row) => row.modifier_groups)
-    .filter(Boolean);
+  try {
+    // Use service role client — same reason as updateItemOverride:
+    // RLS on menu_item_modifier_groups blocks reads for location-scoped users,
+    // and Clerk auth() can throw when called outside a full request context.
+    const supabase = createServiceRoleClient();
+    const { data, error } = await supabase
+      .from("menu_item_modifier_groups")
+      .select("modifier_group_id, modifier_groups(id, name, description)")
+      .eq("menu_item_id", menuItemId);
+    if (error || !data) return [];
+    return (data as any[])
+      .map((row) => row.modifier_groups)
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 
 // ============================================================================
@@ -960,6 +967,11 @@ export async function updateItemOverride(
         {
           p_menu_item_id: params.menuItemId,
           p_category_id: params.categoryId || null,
+          // Pass menuId always: RPC now handles all four (location,menu) combinations:
+          //   (null,null)   = UI L2 global category → category_items WHERE menu_id IS NULL
+          //   (null,menuId) = UI L4 global menu cat → category_items WHERE menu_id = menuId
+          //   (locId,null)  = UI L3 branch category → location_category_item_overrides
+          //   (locId,menuId)= UI L5 branch menu     → location_menu_item_overrides
           p_menu_id: params.menuId || null,
           p_location_id: locationId || null,
           p_custom_price: params.price,

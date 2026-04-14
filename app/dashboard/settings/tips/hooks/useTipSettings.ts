@@ -12,6 +12,7 @@ import {
   CreateTipOutRule,
   UpdateTipOutRule,
   DeleteTipOutRule,
+  ToggleTipOutRule,
   GetRolesForMerchant,
 } from "@/app/dashboard/actions/tips";
 
@@ -263,6 +264,36 @@ export function useDeleteTipOutRule() {
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to delete tip-out rule");
+    },
+  });
+}
+
+export function useToggleTipOutRule() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      clerkOrgId,
+      ruleId,
+      isActive,
+    }: {
+      clerkOrgId: string;
+      ruleId: string;
+      isActive: boolean;
+    }) => {
+      const result = await ToggleTipOutRule(clerkOrgId, ruleId, isActive);
+      if (!result.success) throw new Error(result.error || "Failed to toggle tip-out rule");
+      return result;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["tip-out-rules"],
+        refetchType: "active",
+      });
+      toast.success("Tip-out rule updated");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to update tip-out rule");
     },
   });
 }

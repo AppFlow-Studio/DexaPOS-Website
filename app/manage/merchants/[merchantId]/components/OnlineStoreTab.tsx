@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -12,6 +12,8 @@ import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
 import {
     ArrowLeft,
     Globe,
@@ -41,9 +43,12 @@ import {
     useAdminOnlineOrderingOverview,
     useAdminOnlineOrderingSettings,
     useAdminSaveOnlineOrderingSettings,
-    useAdminToggleOnlineStore,
-    useAdminCreateOnlineStore,
+    useAdminApproveOnlineStoreRequest,
+    useAdminRejectOnlineStoreRequest,
+    useAdminUploadMerchantW9Pdf,
     useAdminRetriggerDomainWhitelist,
+    useAdminOnlineStoreRequestRequirements,
+    useAdminSaveOnlineStoreRequestRequirements,
     type OnlineOrderingSettings,
     type LocationOnlineStoreOverview,
 } from '@/lib/queries/use-admin-online-ordering'
@@ -56,6 +61,9 @@ import { OrderOutOnboardingForm, type OnboardingFormData } from '@/components/da
 import { OrderOutStatusCard } from '@/components/dashboard/orderout/OrderOutStatusCard'
 import { AdminPushChannelsSection } from '@/components/dashboard/orderout/AdminPushChannelsSection'
 import { extractConnectedPlatforms } from '@/lib/orderout/helpers'
+import { MissingDataForm } from '@/components/online-store/MissingDataForm'
+import { HoursConfigModal } from '@/app/dashboard/online-ordering/components/HoursConfigModal'
+import { FONT_GOOGLE_URLS } from '@/app/sites/lib/theme-utils'
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000'
 
@@ -65,6 +73,76 @@ function getStoreUrl(slug: string): string {
     const isDev = ROOT_DOMAIN.includes('localhost')
     if (isDev) return `http://${slug}.localhost:3000`
     return `https://${slug}.dexaposai.com`
+}
+
+function getRequestStatusLabel(status: LocationOnlineStoreOverview['setupRequestStatus']) {
+    switch (status) {
+        case 'pending_review':
+            return 'Pending Review'
+        case 'approved':
+            return 'Approved'
+        case 'rejected':
+            return 'Rejected'
+        case 'setup_completed':
+            return 'Setup Complete'
+        default:
+            return 'No Request'
+    }
+}
+
+function getRequestStatusDescription(status: LocationOnlineStoreOverview['setupRequestStatus']) {
+    switch (status) {
+        case 'pending_review':
+            return 'Awaiting HQ review'
+        case 'approved':
+            return 'Approved and waiting for HQ setup completion'
+        case 'rejected':
+            return 'Rejected and waiting for merchant resubmission'
+        case 'setup_completed':
+            return 'Storefront setup completed'
+        default:
+            return 'No branch request has been submitted yet'
+    }
+}
+
+function getRequestStatusBadgeVariant(status: LocationOnlineStoreOverview['setupRequestStatus']) {
+    switch (status) {
+        case 'rejected':
+            return 'destructive' as const
+        case 'approved':
+            return 'outline' as const
+        case 'setup_completed':
+            return 'default' as const
+        default:
+            return 'secondary' as const
+    }
+}
+
+function maskSensitiveValue(value?: string | null, keep = 4) {
+    if (!value) return 'Missing'
+    const visible = value.slice(-keep)
+    return `${'•'.repeat(Math.max(0, value.length - keep))}${visible}`
+}
+
+function createDefaultDaySchedule(enabled = false) {
+    return {
+        enabled,
+        from: '09:00',
+        to: '21:00',
+        is24Hours: false,
+    }
+}
+
+function createDefaultWeeklySchedule() {
+    return {
+        monday: createDefaultDaySchedule(true),
+        tuesday: createDefaultDaySchedule(true),
+        wednesday: createDefaultDaySchedule(true),
+        thursday: createDefaultDaySchedule(true),
+        friday: createDefaultDaySchedule(true),
+        saturday: createDefaultDaySchedule(true),
+        sunday: createDefaultDaySchedule(false),
+    }
 }
 
 interface OnlineStoreTabProps {
@@ -86,16 +164,26 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
         merchantId,
         selectedLocationId || ''
     )
+    const { data: requirementsData, refetch: refetchRequirements } = useAdminOnlineStoreRequestRequirements(
+        merchantId,
+        selectedLocationId || ''
+    )
 
     // Local state for editing
     const [localSettings, setLocalSettings] = useState<Partial<OnlineOrderingSettings> | null>(null)
     const [isDirty, setIsDirty] = useState(false)
+    const [w9ViewerUrl, setW9ViewerUrl] = useState<string | null>(null)
+    const w9UploadInputRef = useRef<HTMLInputElement>(null)
+    const [missingFormOpen, setMissingFormOpen] = useState(false)
+    const [hoursModalOpen, setHoursModalOpen] = useState(false)
 
     // Mutations
     const saveMutation = useAdminSaveOnlineOrderingSettings()
-    const toggleMutation = useAdminToggleOnlineStore()
-    const createMutation = useAdminCreateOnlineStore()
+    const approveMutation = useAdminApproveOnlineStoreRequest()
+    const rejectMutation = useAdminRejectOnlineStoreRequest()
+    const uploadW9Mutation = useAdminUploadMerchantW9Pdf()
     const whitelistMutation = useAdminRetriggerDomainWhitelist()
+    const saveRequirementsMutation = useAdminSaveOnlineStoreRequestRequirements()
 
     // OrderOut
     const { data: orderOutData } = useAdminOrderOutStatus(merchantId)
@@ -171,45 +259,83 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
         }
     }
 
-    // Create online store for a location
-    const handleCreateStore = async (locationId: string, locationName: string) => {
+    const handleApproveRequest = async () => {
+        if (!selectedLocationId) return
+
         try {
-            const result = await createMutation.mutateAsync({
+            const result = await approveMutation.mutateAsync({
                 merchantId,
-                locationId,
-                locationName,
+                locationId: selectedLocationId,
             })
 
             if (result.success) {
-                toast.success('Online store created')
-                setSelectedLocationId(locationId)
-            } else {
-                toast.error(result.error || 'Failed to create online store')
+                toast.success('Request approved. HQ setup can continue now.')
+                refetchSettings()
+                return
             }
-        } catch (error) {
-            toast.error('Failed to create online store')
+
+            toast.error(result.error || 'Failed to approve request')
+        } catch (_error) {
+            toast.error('Failed to approve request')
         }
     }
 
-    // Toggle store enabled/disabled
-    const handleToggleStore = async (locationId: string, enabled: boolean) => {
+    const handleW9Upload = async (file: File | null) => {
+        if (!file) return
+
+        const isPdf =
+            file.type === 'application/pdf' ||
+            file.name.toLowerCase().endsWith('.pdf')
+
+        if (!isPdf) {
+            toast.error('Signed W-9 must be uploaded as a PDF')
+            return
+        }
+
         try {
-            const result = await toggleMutation.mutateAsync({
+            const result = await uploadW9Mutation.mutateAsync({
                 merchantId,
-                locationId,
-                enabled,
+                file,
             })
 
             if (result.success) {
-                toast.success(`Online store ${enabled ? 'enabled' : 'disabled'}`)
-                if (result.domainWhitelistError) {
-                    toast.error(`Store updated, but domain whitelist failed: ${result.domainWhitelistError}`)
-                }
-            } else {
-                toast.error(result.error || 'Failed to toggle store')
+                toast.success('Signed W-9 uploaded')
+                refetchSettings()
+                return
             }
-        } catch (error) {
-            toast.error('Failed to toggle store')
+
+            toast.error(result.error || 'Failed to upload signed W-9')
+        } catch {
+            toast.error('Failed to upload signed W-9')
+        } finally {
+            if (w9UploadInputRef.current) {
+                w9UploadInputRef.current.value = ''
+            }
+        }
+    }
+
+    const handleRejectRequest = async () => {
+        if (!selectedLocationId) return
+
+        const reason = window.prompt('Enter a rejection reason for the merchant')
+        if (!reason) return
+
+        try {
+            const result = await rejectMutation.mutateAsync({
+                merchantId,
+                locationId: selectedLocationId,
+                reason,
+            })
+
+            if (result.success) {
+                toast.success('Request rejected and merchant notified.')
+                refetchSettings()
+                return
+            }
+
+            toast.error(result.error || 'Failed to reject request')
+        } catch (_error) {
+            toast.error('Failed to reject request')
         }
     }
 
@@ -244,6 +370,7 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                     )
                                     const hasStore = storeInfo?.hasOnlineStore ?? false
                                     const isEnabled = storeInfo?.isEnabled ?? false
+                                    const requestStatus = storeInfo?.setupRequestStatus ?? 'not_requested'
 
                                     const ooRest = orderOutStatus?.restaurants.find(
                                         (r) => r.locationId === location.id
@@ -258,11 +385,13 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                                 <div
                                                     className={cn(
                                                         'h-12 w-12 rounded-lg flex items-center justify-center',
-                                                        hasStore && isEnabled
+                                                        requestStatus === 'setup_completed' && isEnabled
                                                             ? 'bg-green-100 text-green-600 dark:bg-green-900/30'
-                                                            : hasStore
+                                                            : requestStatus === 'pending_review' || requestStatus === 'approved'
                                                               ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30'
-                                                              : 'bg-muted text-muted-foreground'
+                                                              : requestStatus === 'rejected'
+                                                                ? 'bg-red-100 text-red-600 dark:bg-red-900/30'
+                                                            : 'bg-muted text-muted-foreground'
                                                     )}
                                                 >
                                                     <Globe className="h-6 w-6" />
@@ -278,46 +407,57 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                                         )}
                                                     </h4>
                                                     <p className="text-sm text-muted-foreground">
-                                                        {hasStore
-                                                            ? isEnabled
-                                                                ? 'Online ordering active'
-                                                                : 'Online store configured (disabled)'
-                                                            : 'No online store configured'}
+                                                        {getRequestStatusDescription(requestStatus)}
                                                     </p>
+                                                    {storeInfo?.setupRejectionReason && requestStatus === 'rejected' ? (
+                                                        <p className="mt-1 text-xs text-muted-foreground">
+                                                            Reason: {storeInfo.setupRejectionReason}
+                                                        </p>
+                                                    ) : null}
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-3">
-                                                {hasStore && (
+                                                <Badge
+                                                    variant={getRequestStatusBadgeVariant(requestStatus)}
+                                                    className={
+                                                        requestStatus === 'setup_completed' && isEnabled
+                                                            ? 'bg-green-600'
+                                                            : ''
+                                                    }
+                                                >
+                                                    {getRequestStatusLabel(requestStatus)}
+                                                </Badge>
+                                                {requestStatus === 'setup_completed' && hasStore ? (
                                                     <>
-                                                        <Badge
-                                                            variant={isEnabled ? 'default' : 'secondary'}
-                                                            className={isEnabled ? 'bg-green-600' : ''}
-                                                        >
+                                                        <Badge variant={isEnabled ? 'default' : 'secondary'} className={isEnabled ? 'bg-green-600' : ''}>
                                                             {isEnabled ? 'Live' : 'Disabled'}
                                                         </Badge>
-                                                        <Switch
-                                                            checked={isEnabled}
-                                                            onCheckedChange={(enabled) =>
-                                                                handleToggleStore(location.id, enabled)
-                                                            }
-                                                            disabled={toggleMutation.isPending}
-                                                        />
                                                     </>
-                                                )}
+                                                ) : null}
                                                 <Button
                                                     variant={hasStore ? 'outline' : 'default'}
                                                     size="sm"
-                                                    onClick={() =>
-                                                        hasStore
-                                                            ? setSelectedLocationId(location.id)
-                                                            : handleCreateStore(location.id, location.name)
-                                                    }
-                                                    disabled={createMutation.isPending}
+                                                    onClick={() => setSelectedLocationId(location.id)}
                                                 >
-                                                    {hasStore ? (
+                                                    {requestStatus === 'pending_review' ? (
+                                                        <>
+                                                            <AlertTriangle className="h-4 w-4 mr-2" />
+                                                            Review Request
+                                                        </>
+                                                    ) : requestStatus === 'approved' ? (
                                                         <>
                                                             <Edit className="h-4 w-4 mr-2" />
-                                                            Configure
+                                                            Continue Setup
+                                                        </>
+                                                    ) : requestStatus === 'setup_completed' ? (
+                                                        <>
+                                                            <Edit className="h-4 w-4 mr-2" />
+                                                            Open Setup
+                                                        </>
+                                                    ) : requestStatus === 'rejected' ? (
+                                                        <>
+                                                            <AlertTriangle className="h-4 w-4 mr-2" />
+                                                            View Rejection
                                                         </>
                                                     ) : (
                                                         <>
@@ -341,6 +481,9 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
     // Find location name
     const selectedLocation = locations.find((l) => l.id === selectedLocationId)
     const storeUrl = localSettings?.storeSlug ? getStoreUrl(localSettings.storeSlug) : ''
+    const requestStatus = localSettings?.setupRequestStatus ?? 'not_requested'
+    const canEditStoreSetup =
+        requestStatus === 'approved' || requestStatus === 'setup_completed'
     const hasTpn = Boolean(localSettings?.ipospaysTpn?.trim())
     const hasFtdKey = Boolean(
         localSettings?.ipospaysFtdEcomKey?.trim() ||
@@ -351,6 +494,21 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
     // Render store configuration
     return (
         <div className="space-y-6">
+            <Dialog open={Boolean(w9ViewerUrl)} onOpenChange={(open) => !open && setW9ViewerUrl(null)}>
+                <DialogContent className="max-w-5xl">
+                    <DialogHeader>
+                        <DialogTitle>Signed W-9</DialogTitle>
+                    </DialogHeader>
+                    {w9ViewerUrl ? (
+                        <iframe
+                            title="Signed W-9 PDF"
+                            src={w9ViewerUrl}
+                            className="h-[75vh] w-full rounded-md border"
+                        />
+                    ) : null}
+                </DialogContent>
+            </Dialog>
+
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -361,11 +519,16 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                     <Separator orientation="vertical" className="h-6" />
                     <div>
                         <h3 className="font-semibold">{selectedLocation?.name || 'Location'}</h3>
-                        <p className="text-sm text-muted-foreground">Online Store Configuration</p>
+                        <div className="flex items-center gap-2">
+                            <p className="text-sm text-muted-foreground">Online Store Configuration</p>
+                            <Badge variant={getRequestStatusBadgeVariant(requestStatus)}>
+                                {getRequestStatusLabel(requestStatus)}
+                            </Badge>
+                        </div>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
-                    {isDirty && (
+                    {isDirty && canEditStoreSetup && (
                         <>
                             <Button variant="ghost" size="sm" onClick={handleDiscard} disabled={saveMutation.isPending}>
                                 <X className="h-4 w-4 mr-2" />
@@ -381,7 +544,7 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                             </Button>
                         </>
                     )}
-                    {localSettings?.enabled && localSettings?.storeSlug && (
+                    {localSettings?.enabled && localSettings?.storeSlug && requestStatus === 'setup_completed' && (
                         <Button variant="outline" size="sm" asChild>
                             <a href={storeUrl} target="_blank" rel="noopener noreferrer">
                                 <ExternalLink className="h-4 w-4 mr-2" />
@@ -405,6 +568,234 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                 </Card>
             ) : (
                 <>
+                    {requestStatus === 'not_requested' && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Awaiting Merchant Request</CardTitle>
+                                <CardDescription>
+                                    This location does not have an online-store setup request yet. Review details below, but branch setup should start from the merchant request flow.
+                                </CardDescription>
+                            </CardHeader>
+                        </Card>
+                    )}
+
+                    {requestStatus === 'pending_review' && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Review Request</CardTitle>
+                                <CardDescription>
+                                    Inspect the merchant and location packet below. Approve to unlock HQ setup, or reject and provide a reason that will be emailed to the merchant owner/admin.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="flex gap-3">
+                                <Button onClick={handleApproveRequest} disabled={approveMutation.isPending || rejectMutation.isPending}>
+                                    {approveMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
+                                    Approve
+                                </Button>
+                                <Button
+                                    variant="destructive"
+                                    onClick={handleRejectRequest}
+                                    disabled={approveMutation.isPending || rejectMutation.isPending}
+                                >
+                                    {rejectMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <X className="h-4 w-4 mr-2" />}
+                                    Reject
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {requestStatus === 'approved' && (
+                        <Card className="border-yellow-300/60">
+                            <CardHeader>
+                                <CardTitle>Request Approved</CardTitle>
+                                <CardDescription>
+                                    HQ can now complete storefront setup. The first successful save from this screen marks the request as setup completed.
+                                </CardDescription>
+                            </CardHeader>
+                        </Card>
+                    )}
+
+                    {requestStatus === 'rejected' && (
+                        <Card className="border-destructive/40">
+                            <CardHeader>
+                                <CardTitle>Request Rejected</CardTitle>
+                                <CardDescription>
+                                    The merchant must resubmit the request after addressing the rejection reason below.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="text-sm text-muted-foreground">
+                                {localSettings.setupRejectionReason || 'No rejection reason recorded.'}
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    <div className="grid gap-4 lg:grid-cols-2">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Merchant Review Packet</CardTitle>
+                                <CardDescription>Compliance fields collected during merchant onboarding.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3 text-sm">
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-muted-foreground">Legal Business Name</span>
+                                    <span>{localSettings.merchantReviewPacket?.legalBusinessName || 'Missing'}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-muted-foreground">DBA Name</span>
+                                    <span>{localSettings.merchantReviewPacket?.dbaName || 'Missing'}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-muted-foreground">EIN / Tax ID</span>
+                                    <span>{maskSensitiveValue(localSettings.merchantReviewPacket?.einTaxId)}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-muted-foreground">Owner</span>
+                                    <span>{localSettings.merchantReviewPacket?.ownerFullName || 'Missing'}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-muted-foreground">Owner SSN</span>
+                                    <span>{maskSensitiveValue(localSettings.merchantReviewPacket?.ownerSsn)}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-muted-foreground">Owner DOB</span>
+                                    <span>{localSettings.merchantReviewPacket?.ownerDob || 'Missing'}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-muted-foreground">Signed W-9</span>
+                                    {localSettings.merchantReviewPacket?.w9FormUrl ? (
+                                        <a className="text-primary underline" href={localSettings.merchantReviewPacket.w9FormUrl} target="_blank" rel="noreferrer">
+                                            View PDF
+                                        </a>
+                                    ) : (
+                                        <span>Missing</span>
+                                    )}
+                                </div>
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-muted-foreground">Government ID</span>
+                                    {localSettings.merchantReviewPacket?.ownerGovernmentIdUrl ? (
+                                        <a className="text-primary underline" href={localSettings.merchantReviewPacket.ownerGovernmentIdUrl} target="_blank" rel="noreferrer">
+                                            View Document
+                                        </a>
+                                    ) : (
+                                        <span>Missing</span>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Location Review Packet</CardTitle>
+                                <CardDescription>Banking and support documents collected for this branch.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3 text-sm">
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-muted-foreground">Bank Name</span>
+                                    <span>{localSettings.locationReviewPacket?.bankName || 'Missing'}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-muted-foreground">Account Holder</span>
+                                    <span>{localSettings.locationReviewPacket?.accountHolderName || 'Missing'}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-muted-foreground">DDA Account</span>
+                                    <span>{maskSensitiveValue(localSettings.locationReviewPacket?.ddaAccountNumber)}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-muted-foreground">Routing Number</span>
+                                    <span>{maskSensitiveValue(localSettings.locationReviewPacket?.routingNumber)}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-muted-foreground">Bank Letter / Voided Check</span>
+                                    {localSettings.locationReviewPacket?.bankSupportDocumentUrl ? (
+                                        <a className="text-primary underline" href={localSettings.locationReviewPacket.bankSupportDocumentUrl} target="_blank" rel="noreferrer">
+                                            View Document
+                                        </a>
+                                    ) : (
+                                        <span>Missing</span>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Review Checklist</CardTitle>
+                            <CardDescription>
+                                Required packet items before HQ should approve setup.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                            {([
+                                ['Legal Business Name', localSettings.reviewChecklist?.legalBusinessName],
+                                ['DBA Name', localSettings.reviewChecklist?.dbaName],
+                                ['EIN / Tax ID', localSettings.reviewChecklist?.einTaxId],
+                                ['Signed W-9', localSettings.reviewChecklist?.w9Form],
+                                ['Owner Identity', localSettings.reviewChecklist?.ownerIdentity],
+                                ['Government ID', localSettings.reviewChecklist?.ownerGovernmentId],
+                                ['Banking Info', localSettings.reviewChecklist?.bankingInfo],
+                                ['Bank Support Doc', localSettings.reviewChecklist?.bankSupportDocument],
+                            ] as Array<[string, boolean | undefined]>).map(([label, complete]) => (
+                                <div key={label} className="flex items-center justify-between rounded-md border p-3">
+                                    <span className="text-sm">{label}</span>
+                                    <Badge variant={complete ? 'default' : 'secondary'}>
+                                        {complete ? 'Ready' : 'Missing'}
+                                    </Badge>
+                                </div>
+                            ))}
+                        </CardContent>
+                    </Card>
+
+                    {requirementsData?.success && !requirementsData.complete ? (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Missing Packet Items</CardTitle>
+                                <CardDescription>
+                                    These fields are required before approval. Use the editor to fill only the missing items.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="flex items-center justify-between gap-4">
+                                <div className="text-sm text-muted-foreground">
+                                    {Object.values(requirementsData.missing).filter(Boolean).length} missing fields detected.
+                                </div>
+                                <Button onClick={() => setMissingFormOpen(true)} variant="outline">
+                                    Edit Missing Fields
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    ) : null}
+
+                    <MissingDataForm
+                        mode="admin"
+                        open={missingFormOpen}
+                        onOpenChange={setMissingFormOpen}
+                        title="Fill Missing Online Store Packet Fields"
+                        description="Each missing field can be edited and saved individually."
+                        locationId={selectedLocationId || ''}
+                        merchantId={merchantId}
+                        requirements={(requirementsData as any) ?? null}
+                        onSave={async (formData) => {
+                            formData.set('merchantId', merchantId)
+                            formData.set('locationId', selectedLocationId || '')
+                            const result = await saveRequirementsMutation.mutateAsync(formData)
+                            if (!result.success) {
+                                return { success: false, error: result.error || 'Failed to save' }
+                            }
+                            await Promise.all([refetchSettings(), refetchRequirements()])
+                            return { success: true }
+                        }}
+                        onRefresh={async () => {
+                            const refreshed = await refetchRequirements()
+                            return (refreshed.data as any) ?? { success: false, complete: false, missing: {}, values: {}, error: 'Failed to refresh' }
+                        }}
+                        onCompleted={async () => {
+                            await Promise.all([refetchSettings(), refetchRequirements()])
+                        }}
+                    />
+
+                    {canEditStoreSetup ? (
+                        <>
                     {/* Enable/Disable Toggle */}
                     <Card>
                         <CardContent className="pt-6">
@@ -581,6 +972,16 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                         />
                                     </div>
 
+                                    <div className="space-y-2">
+                                        <Label htmlFor="storeDescription">Store Description</Label>
+                                        <Textarea
+                                            id="storeDescription"
+                                            value={(localSettings.description as string) || ''}
+                                            onChange={(e) => updateSettings({ description: e.target.value })}
+                                            placeholder="Short description shown on the storefront."
+                                        />
+                                    </div>
+
                                     <div className="grid gap-4 sm:grid-cols-2">
                                         <div className="space-y-2">
                                             <Label htmlFor="phone">Phone Number</Label>
@@ -610,6 +1011,25 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                             </div>
                                         </div>
                                     </div>
+
+                                    <div className="rounded-lg border p-4">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div>
+                                                <p className="font-medium">Operating Hours</p>
+                                                <p className="text-sm text-muted-foreground">
+                                                    Storefront ordering hours (defaults to location business hours if unchanged).
+                                                </p>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setHoursModalOpen(true)}
+                                            >
+                                                Edit Hours
+                                            </Button>
+                                        </div>
+                                    </div>
                                 </CardContent>
                             </Card>
                         </TabsContent>
@@ -622,6 +1042,65 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                     <CardDescription>Customize the store's color scheme</CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-6">
+                                    <div className="grid gap-6 sm:grid-cols-2">
+                                        <div className="space-y-3">
+                                            <Label>Template</Label>
+                                            <select
+                                                value={(localSettings.templateId as any) || 'classic'}
+                                                onChange={(e) => updateSettings({ templateId: e.target.value as any })}
+                                                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                                            >
+                                                <option value="classic">Classic</option>
+                                                <option value="bold">Bold</option>
+                                                <option value="minimal">Minimal</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <Label>Font</Label>
+                                            <select
+                                                value={(localSettings.fontFamily as any) || 'DM Sans'}
+                                                onChange={(e) => updateSettings({ fontFamily: e.target.value })}
+                                                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                                            >
+                                                {Object.keys(FONT_GOOGLE_URLS).map((font) => (
+                                                    <option key={font} value={font}>
+                                                        {font}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <p className="text-xs text-muted-foreground">
+                                                Font options are sourced from storefront supported Google Fonts.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid gap-6 sm:grid-cols-2">
+                                        <div className="space-y-3">
+                                            <Label>Header Style</Label>
+                                            <select
+                                                value={(localSettings.headerStyle as any) || 'filled'}
+                                                onChange={(e) => updateSettings({ headerStyle: e.target.value as any })}
+                                                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                                            >
+                                                <option value="filled">Filled</option>
+                                                <option value="transparent">Transparent</option>
+                                                <option value="outlined">Outlined</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <Label>Menu Layout</Label>
+                                            <select
+                                                value={(localSettings.menuLayout as any) || 'cards'}
+                                                onChange={(e) => updateSettings({ menuLayout: e.target.value as any })}
+                                                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                                            >
+                                                <option value="cards">Cards</option>
+                                                <option value="sidebyside">Side-by-side</option>
+                                                <option value="no-images">No images</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
                                     <div className="grid gap-6 sm:grid-cols-2">
                                         <div className="space-y-3">
                                             <Label>Primary Color</Label>
@@ -657,6 +1136,112 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                         </div>
                                     </div>
 
+                                    <div className="grid gap-6 sm:grid-cols-3">
+                                        <div className="space-y-3">
+                                            <Label>Accent Color</Label>
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="color"
+                                                    value={(localSettings.accentColor as any) || localSettings.primaryColor || '#3b82f6'}
+                                                    onChange={(e) => updateSettings({ accentColor: e.target.value })}
+                                                    className="h-10 w-16 rounded-lg border cursor-pointer"
+                                                />
+                                                <Input
+                                                    value={(localSettings.accentColor as any) || ''}
+                                                    onChange={(e) => updateSettings({ accentColor: e.target.value || null })}
+                                                    className="w-28 font-mono text-sm"
+                                                    placeholder="Optional"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <Label>Background</Label>
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="color"
+                                                    value={(localSettings.backgroundColor as any) || '#FFFFFF'}
+                                                    onChange={(e) => updateSettings({ backgroundColor: e.target.value })}
+                                                    className="h-10 w-16 rounded-lg border cursor-pointer"
+                                                />
+                                                <Input
+                                                    value={(localSettings.backgroundColor as any) || '#FFFFFF'}
+                                                    onChange={(e) => updateSettings({ backgroundColor: e.target.value })}
+                                                    className="w-28 font-mono text-sm"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <Label>Text</Label>
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="color"
+                                                    value={(localSettings.textColor as any) || '#111827'}
+                                                    onChange={(e) => updateSettings({ textColor: e.target.value })}
+                                                    className="h-10 w-16 rounded-lg border cursor-pointer"
+                                                />
+                                                <Input
+                                                    value={(localSettings.textColor as any) || '#111827'}
+                                                    onChange={(e) => updateSettings({ textColor: e.target.value })}
+                                                    className="w-28 font-mono text-sm"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid gap-6 sm:grid-cols-3">
+                                        <div className="space-y-3">
+                                            <Label>Border (Optional)</Label>
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="color"
+                                                    value={(localSettings.borderColor as any) || '#E5E7EB'}
+                                                    onChange={(e) => updateSettings({ borderColor: e.target.value })}
+                                                    className="h-10 w-16 rounded-lg border cursor-pointer"
+                                                />
+                                                <Input
+                                                    value={(localSettings.borderColor as any) || ''}
+                                                    onChange={(e) => updateSettings({ borderColor: e.target.value || null })}
+                                                    className="w-28 font-mono text-sm"
+                                                    placeholder="Optional"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <Label>Card (Optional)</Label>
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="color"
+                                                    value={(localSettings.cardColor as any) || '#FFFFFF'}
+                                                    onChange={(e) => updateSettings({ cardColor: e.target.value })}
+                                                    className="h-10 w-16 rounded-lg border cursor-pointer"
+                                                />
+                                                <Input
+                                                    value={(localSettings.cardColor as any) || ''}
+                                                    onChange={(e) => updateSettings({ cardColor: e.target.value || null })}
+                                                    className="w-28 font-mono text-sm"
+                                                    placeholder="Optional"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <Label>Header Text (Optional)</Label>
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="color"
+                                                    value={(localSettings.headerTextColor as any) || (localSettings.textColor as any) || '#111827'}
+                                                    onChange={(e) => updateSettings({ headerTextColor: e.target.value })}
+                                                    className="h-10 w-16 rounded-lg border cursor-pointer"
+                                                />
+                                                <Input
+                                                    value={(localSettings.headerTextColor as any) || ''}
+                                                    onChange={(e) => updateSettings({ headerTextColor: e.target.value || null })}
+                                                    className="w-28 font-mono text-sm"
+                                                    placeholder="Optional"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <Separator />
 
                                     <div className="space-y-3">
@@ -674,6 +1259,15 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                 </CardContent>
                             </Card>
                         </TabsContent>
+
+                        <HoursConfigModal
+                            open={hoursModalOpen}
+                            onOpenChange={setHoursModalOpen}
+                            title="Operating Hours"
+                            description="These hours are used to determine when the storefront accepts new orders."
+                            schedule={(localSettings?.operatingHours as any) || createDefaultWeeklySchedule()}
+                            onSave={(schedule) => updateSettings({ operatingHours: schedule as any })}
+                        />
 
                         {/* Pickup & Delivery */}
                         <TabsContent value="ordering" className="space-y-6">
@@ -1209,6 +1803,8 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                             </Card>
                         </TabsContent>
                     </Tabs>
+                        </>
+                    ) : null}
                 </>
             )}
         </div>

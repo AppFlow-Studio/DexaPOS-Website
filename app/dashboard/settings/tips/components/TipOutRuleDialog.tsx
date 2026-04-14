@@ -41,6 +41,7 @@ export interface TipOutRuleFormData {
   tip_out_value: number;
   is_active: boolean;
   effective_date: string;
+  end_date: string | null;
 }
 
 const defaultFormData: TipOutRuleFormData = {
@@ -50,6 +51,7 @@ const defaultFormData: TipOutRuleFormData = {
   tip_out_value: 0,
   is_active: true,
   effective_date: new Date().toISOString().split("T")[0],
+  end_date: null,
 };
 
 export function TipOutRuleDialog({
@@ -74,11 +76,13 @@ export function TipOutRuleDialog({
         tip_out_value: rule.tip_out_value,
         is_active: rule.is_active,
         effective_date: rule.effective_date,
+        end_date: rule.end_date ?? null,
       });
     } else {
       setFormData({
         ...defaultFormData,
         effective_date: new Date().toISOString().split("T")[0],
+        end_date: null,
       });
     }
   }, [rule, open]);
@@ -249,17 +253,49 @@ export function TipOutRuleDialog({
             )}
           </div>
 
-          <div>
-            <Label htmlFor="effective-date">Effective Date</Label>
-            <Input
-              id="effective-date"
-              type="date"
-              value={formData.effective_date}
-              onChange={(e) =>
-                handleChange("effective_date", e.target.value)
-              }
-              className="mt-1"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="effective-date">Effective Date</Label>
+              <Input
+                id="effective-date"
+                type="date"
+                value={formData.effective_date}
+                min={new Date().toISOString().split("T")[0]}
+                onChange={(e) => {
+                  handleChange("effective_date", e.target.value);
+                  // Clear end_date if it's now before the new effective date
+                  if (formData.end_date && e.target.value >= formData.end_date) {
+                    handleChange("end_date", null);
+                  }
+                }}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="end-date">End Date</Label>
+              <Input
+                id="end-date"
+                type="date"
+                value={formData.end_date || ""}
+                min={(() => {
+                  const today = new Date().toISOString().split("T")[0];
+                  const d = new Date(formData.effective_date + "T00:00:00");
+                  d.setDate(d.getDate() + 1);
+                  const minFromEffective = d.toISOString().split("T")[0];
+                  return minFromEffective > today ? minFromEffective : today;
+                })()}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (!val) { handleChange("end_date", null); return; }
+                  const today = new Date().toISOString().split("T")[0];
+                  if (val < today) return;
+                  if (val <= formData.effective_date) return;
+                  handleChange("end_date", val);
+                }}
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Leave blank = no end date</p>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">

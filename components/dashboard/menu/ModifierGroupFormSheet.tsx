@@ -347,18 +347,6 @@ export function ModifierGroupFormSheet({
       return;
     }
 
-    // Validate: If group is required, at least one default option must be set
-    if (values.is_required && options.length > 0) {
-      const hasDefault = options.some((opt) => opt.is_default);
-      if (!hasDefault) {
-        toast.error("Default Option Required", {
-          description:
-            "Required modifier groups must have at least one option set as default.",
-        });
-        return;
-      }
-    }
-
     setIsSubmitting(true);
     try {
       if (editGroup) {
@@ -687,10 +675,12 @@ export function ModifierGroupFormSheet({
                                   type="button"
                                   role="switch"
                                   aria-checked={field.value}
-                                  onClick={() =>
-                                    canEditStructure &&
-                                    field.onChange(!field.value)
-                                  }
+                                  onClick={() => {
+                                    if (!canEditStructure) return;
+                                    const next = !field.value;
+                                    field.onChange(next);
+                                    if (!next) form.setValue("min_selections", 0);
+                                  }}
                                   disabled={!canEditStructure}
                                   className={cn(
                                     "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
@@ -724,7 +714,7 @@ export function ModifierGroupFormSheet({
                                   <Input
                                     type="number"
                                     min="0"
-                                    disabled={!canEditStructure}
+                                    disabled={!canEditStructure || !watchedValues.is_required}
                                     {...field}
                                     onChange={(e) =>
                                       field.onChange(
@@ -893,42 +883,40 @@ export function ModifierGroupFormSheet({
 
                               {canEditStructure ? (
                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  {/* Set Default Toggle - Only show if group is required */}
-                                  {watchedValues.is_required && (
-                                    <TooltipProvider>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button
-                                            type="button"
-                                            variant={
-                                              option.is_default
-                                                ? "default"
-                                                : "ghost"
-                                            }
-                                            size="sm"
-                                            onClick={() =>
-                                              handleToggleDefault(option.id)
-                                            }
-                                            className={cn(
-                                              option.is_default &&
-                                                "bg-yellow-500 hover:bg-yellow-600",
-                                            )}
-                                          >
-                                            <Sparkles className="h-4 w-4" />
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                          <p>
-                                            {option.is_default
-                                              ? "Remove default"
-                                              : (watchedValues.max_selections && watchedValues.max_selections > 1)
-                                                ? "Add as default"
-                                                : "Set as default"}
-                                          </p>
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
-                                  )}
+                                  {/* Set Default Toggle */}
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          type="button"
+                                          variant={
+                                            option.is_default
+                                              ? "default"
+                                              : "ghost"
+                                          }
+                                          size="sm"
+                                          onClick={() =>
+                                            handleToggleDefault(option.id)
+                                          }
+                                          className={cn(
+                                            option.is_default &&
+                                              "bg-yellow-500 hover:bg-yellow-600",
+                                          )}
+                                        >
+                                          <Sparkles className="h-4 w-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>
+                                          {option.is_default
+                                            ? "Remove default"
+                                            : (watchedValues.max_selections && watchedValues.max_selections > 1)
+                                              ? "Add as default"
+                                              : "Set as default"}
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
                                   <Button
                                     type="button"
                                     variant="ghost"
@@ -1262,57 +1250,56 @@ export function ModifierGroupFormSheet({
                   )}
                 />
 
-                {/* Set Default - Only show if parent group is required */}
-                {form.watch("is_required") && (
-                  <FormField
-                    control={optionForm.control}
-                    name="is_default"
-                    render={({ field }: { field: any }) => (
-                      <FormItem className="flex items-center justify-between rounded-lg border p-4 bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base flex items-center gap-2">
-                            <Sparkles className="h-4 w-4 text-yellow-600" />
-                            Set as Default
-                          </FormLabel>
-                          <FormDescription>
-                            This option will be pre-selected when the modifier
-                            group is required
-                          </FormDescription>
-                        </div>
-                        <FormControl>
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={field.value}
-                            onClick={() => {
-                              // Unset other defaults before setting this one
-                              if (!field.value) {
-                                setOptions((prev) =>
-                                  prev.map((opt) => ({
-                                    ...opt,
-                                    is_default: false,
-                                  })),
-                                );
-                              }
-                              field.onChange(!field.value);
-                            }}
+                {/* Set Default */}
+                <FormField
+                  control={optionForm.control}
+                  name="is_default"
+                  render={({ field }: { field: any }) => (
+                    <FormItem className="flex items-center justify-between rounded-lg border p-4 bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-base flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-yellow-600" />
+                          Set as Default
+                        </FormLabel>
+                        <FormDescription>
+                          This option will be pre-selected automatically when ordering
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={field.value}
+                          onClick={() => {
+                            const maxSel = form.getValues("max_selections");
+                            const isSingleSelect = maxSel !== null && maxSel !== undefined && maxSel <= 1;
+                            if (!field.value && isSingleSelect) {
+                              // Single-select: unset other defaults first
+                              setOptions((prev) =>
+                                prev.map((opt) => ({
+                                  ...opt,
+                                  is_default: false,
+                                })),
+                              );
+                            }
+                            field.onChange(!field.value);
+                          }}
+                          className={cn(
+                            "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                            field.value ? "bg-yellow-500" : "bg-muted",
+                          )}
+                        >
+                          <span
                             className={cn(
-                              "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                              field.value ? "bg-yellow-500" : "bg-muted",
+                              "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                              field.value ? "translate-x-6" : "translate-x-1",
                             )}
-                          >
-                            <span
-                              className={cn(
-                                "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                                field.value ? "translate-x-6" : "translate-x-1",
-                              )}
-                            />
-                          </button>
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                )}
+                          />
+                        </button>
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
               </form>
             </Form>
 

@@ -7,8 +7,12 @@ import {
   getAdminMerchantOnlineOrderingOverview,
   adminSaveOnlineOrderingSettings,
   adminToggleOnlineStore,
-  adminCreateOnlineStore,
   adminRetriggerDomainWhitelist,
+  adminApproveOnlineStoreRequest,
+  adminRejectOnlineStoreRequest,
+  adminUploadMerchantW9Pdf,
+  getAdminOnlineStoreRequestRequirements,
+  adminSaveOnlineStoreRequestRequirements,
 } from '@/app/manage/actions/admin-merchant/online-ordering'
 
 // ============================================================================
@@ -41,9 +45,50 @@ interface TipConfig {
   allowCustomTip: boolean
 }
 
+export interface MerchantOnlineStoreReviewPacket {
+  legalBusinessName: string | null
+  dbaName: string | null
+  einTaxId: string | null
+  w9FormUrl: string | null
+  ownerFullName: string | null
+  ownerSsn: string | null
+  ownerDob: string | null
+  ownerGovernmentIdUrl: string | null
+}
+
+export interface LocationOnlineStoreReviewPacket {
+  bankName: string | null
+  accountHolderName: string | null
+  ddaAccountNumber: string | null
+  routingNumber: string | null
+  bankSupportDocumentUrl: string | null
+}
+
+export interface OnlineStoreReviewChecklist {
+  legalBusinessName: boolean
+  dbaName: boolean
+  einTaxId: boolean
+  w9Form: boolean
+  ownerIdentity: boolean
+  ownerGovernmentId: boolean
+  bankingInfo: boolean
+  bankSupportDocument: boolean
+}
+
 export interface OnlineOrderingSettings {
   id?: string
   locationId: string
+  setupRequestStatus?: 'not_requested' | 'pending_review' | 'approved' | 'rejected' | 'setup_completed'
+  setupRequestedAt?: string | null
+  setupRequestedBy?: string | null
+  setupReviewedAt?: string | null
+  setupReviewedBy?: string | null
+  setupApprovedAt?: string | null
+  setupCompletedAt?: string | null
+  setupRejectionReason?: string | null
+  merchantReviewPacket?: MerchantOnlineStoreReviewPacket
+  locationReviewPacket?: LocationOnlineStoreReviewPacket
+  reviewChecklist?: OnlineStoreReviewChecklist
   enabled: boolean
   storeName: string
   storeSlug: string
@@ -63,10 +108,20 @@ export interface OnlineOrderingSettings {
   logoUrl?: string | null
   heroImageUrl?: string | null
   faviconUrl?: string | null
+  ogImageUrl?: string | null
   bannerText?: string | null
+  templateId?: 'classic' | 'bold' | 'minimal'
   primaryColor?: string
   secondaryColor?: string
-  headerStyle?: 'primary' | 'dark' | 'light'
+  accentColor?: string | null
+  backgroundColor?: string
+  textColor?: string
+  borderColor?: string | null
+  cardColor?: string | null
+  fontFamily?: string | null
+  headerStyle?: 'filled' | 'transparent' | 'outlined'
+  headerTextColor?: string | null
+  menuLayout?: 'cards' | 'sidebyside' | 'no-images'
   pickupEnabled?: boolean
   deliveryEnabled?: boolean
   preparationLeadTime?: number
@@ -95,6 +150,11 @@ export interface LocationOnlineStoreOverview {
   locationId: string
   locationName: string
   hasOnlineStore: boolean
+  setupRequestStatus: 'not_requested' | 'pending_review' | 'approved' | 'rejected' | 'setup_completed'
+  setupRequestedAt: string | null
+  setupReviewedAt: string | null
+  setupCompletedAt: string | null
+  setupRejectionReason: string | null
   isEnabled: boolean
   storeName: string
   storeSlug: string | null
@@ -125,6 +185,15 @@ export function useAdminOnlineOrderingSettings(merchantId: string, locationId: s
     queryFn: () => getAdminOnlineOrderingSettings(merchantId, locationId),
     enabled: !!merchantId && !!locationId,
     staleTime: 30 * 1000,
+  })
+}
+
+export function useAdminOnlineStoreRequestRequirements(merchantId: string, locationId: string) {
+  return useQuery({
+    queryKey: [...adminKeys.merchants(), merchantId, 'online-ordering-requirements', locationId],
+    queryFn: () => getAdminOnlineStoreRequestRequirements(merchantId, locationId),
+    enabled: !!merchantId && !!locationId,
+    staleTime: 10 * 1000,
   })
 }
 
@@ -187,22 +256,41 @@ export function useAdminToggleOnlineStore() {
   })
 }
 
-/**
- * Create/initialize online store for a location
- */
-export function useAdminCreateOnlineStore() {
+export function useAdminRetriggerDomainWhitelist() {
+  return useMutation({
+    mutationFn: ({
+      merchantId,
+      locationId,
+    }: {
+      merchantId: string
+      locationId: string
+    }) => adminRetriggerDomainWhitelist(merchantId, locationId),
+  })
+}
+
+export function useAdminSaveOnlineStoreRequestRequirements() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (formData: FormData) => adminSaveOnlineStoreRequestRequirements(formData),
+    onSuccess: (_result, _variables, _context) => {
+      // Caller should also refetch online-ordering settings, but this at least refreshes requirements.
+      // We don't know merchantId/locationId here without duplicating formData parsing, so callers should invalidate explicitly if needed.
+      queryClient.invalidateQueries({ queryKey: [...adminKeys.merchants()] })
+    },
+  })
+}
+
+export function useAdminApproveOnlineStoreRequest() {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: ({
       merchantId,
       locationId,
-      locationName,
     }: {
       merchantId: string
       locationId: string
-      locationName: string
-    }) => adminCreateOnlineStore(merchantId, locationId, locationName),
+    }) => adminApproveOnlineStoreRequest(merchantId, locationId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: [...adminKeys.merchants(), variables.merchantId, 'online-ordering'],
@@ -214,14 +302,48 @@ export function useAdminCreateOnlineStore() {
   })
 }
 
-export function useAdminRetriggerDomainWhitelist() {
+export function useAdminRejectOnlineStoreRequest() {
+  const queryClient = useQueryClient()
+
   return useMutation({
     mutationFn: ({
       merchantId,
       locationId,
+      reason,
     }: {
       merchantId: string
       locationId: string
-    }) => adminRetriggerDomainWhitelist(merchantId, locationId),
+      reason: string
+    }) => adminRejectOnlineStoreRequest(merchantId, locationId, reason),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'online-ordering'],
+      })
+      queryClient.invalidateQueries({
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'online-ordering-overview'],
+      })
+    },
+  })
+}
+
+export function useAdminUploadMerchantW9Pdf() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      merchantId,
+      file,
+    }: {
+      merchantId: string
+      file: File
+    }) => adminUploadMerchantW9Pdf(merchantId, file),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'online-ordering'],
+      })
+      queryClient.invalidateQueries({
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'online-ordering-overview'],
+      })
+    },
   })
 }

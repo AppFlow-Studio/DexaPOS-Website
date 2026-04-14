@@ -25,6 +25,7 @@ import {
     adminCreateLocation,
     adminGetMerchantClerkOrgId,
     adminGetManagerAssignableUsers,
+    adminUpdateLocation,
 } from '@/app/manage/actions/admin-merchant/locations'
 import {
     ApplyLocationManagerAssignment,
@@ -43,6 +44,7 @@ import {
     createLocationSchema
 } from '@/types/merchant_locations'
 import { useQueryClient } from '@tanstack/react-query'
+import { uploadMerchantDocument } from '@/lib/cdn/server'
 
 interface AdminCreateLocationWizardProps {
     merchantId: string
@@ -81,6 +83,7 @@ const initialFormData: LocationFormData = {
     routing_number: '',
     account_number: '',
     confirm_account_number: '',
+    bank_support_document_name: '',
     account_type: 'checking',
     payout_frequency: 'daily',
     payout_day_of_week: '1',
@@ -95,6 +98,19 @@ const initialFormData: LocationFormData = {
     uses_global_menu: true,
 }
 
+function buildOnlineStoreLocationMetadata(data: LocationFormData) {
+    return {
+        online_store_bank_name: data.bank_name || null,
+        online_store_account_holder_name: data.account_holder_name || null,
+        online_store_bank_routing_number: data.routing_number || null,
+        online_store_bank_dda_account_number: data.account_number || null,
+        bank_name: data.bank_name || null,
+        account_holder_name: data.account_holder_name || null,
+        routing_number: data.routing_number || null,
+        account_number: data.account_number || null,
+    }
+}
+
 export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCreateLocationWizardProps) {
     const router = useRouter()
     const queryClient = useQueryClient()
@@ -106,6 +122,7 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [showExitDialog, setShowExitDialog] = useState(false)
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+    const [bankSupportFile, setBankSupportFile] = useState<File | null>(null)
     const [managerCandidates, setManagerCandidates] = useState<ManagerAssignableUser[]>([])
     const [isLoadingManagerCandidates, setIsLoadingManagerCandidates] = useState(false)
     const [managerCandidatesError, setManagerCandidatesError] = useState<string | null>(null)
@@ -244,6 +261,9 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
                 ) {
                     newErrors.minimum_payout_amount = 'Minimum payout must be a valid amount'
                 }
+                if (!bankSupportFile) {
+                    newErrors.bank_support_document_name = 'Bank letter or voided check is required'
+                }
                 break
 
             case 5: {
@@ -364,7 +384,7 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
                 onboarding_step: 7,
                 onboarding_completed: true,
                 uses_global_menu: formData.uses_global_menu,
-                public_metadata: {},
+                public_metadata: buildOnlineStoreLocationMetadata(formData),
             })
 
             if (result.error) {
@@ -372,6 +392,29 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
                     description: result.error
                 })
                 return
+            }
+
+            if (result.data && bankSupportFile) {
+                const uploadResult = await uploadMerchantDocument(
+                    bankSupportFile,
+                    result.data.merchant_id,
+                    'online-store-bank-support'
+                )
+
+                if (uploadResult.success && uploadResult.cdnUrl) {
+                    await adminUpdateLocation(merchantId, result.data.id, {
+                        public_metadata: {
+                            ...(result.data.public_metadata || {}),
+                            ...buildOnlineStoreLocationMetadata(formData),
+                            online_store_bank_support_document_url: uploadResult.cdnUrl,
+                            bank_support_document_url: uploadResult.cdnUrl,
+                        },
+                    })
+                } else if (!uploadResult.success) {
+                    toast.warning('Location created but bank support document upload failed', {
+                        description: uploadResult.error || 'Unknown error',
+                    })
+                }
             }
 
             // Manager assignment (needs clerkOrgId)
@@ -468,6 +511,8 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
                         data={formData as LocationFormStep4}
                         onChange={updateFormData}
                         errors={errors}
+                        onBankSupportDocumentSelect={setBankSupportFile}
+                        onClearBankSupportDocument={() => setBankSupportFile(null)}
                     />
                 )
             case 5:

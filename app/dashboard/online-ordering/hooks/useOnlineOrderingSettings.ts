@@ -3,9 +3,17 @@
 import { create } from "zustand";
 import {
   getOnlineOrderingSettings,
+  requestOnlineOrderingSetup,
   saveOnlineOrderingSettings,
 } from "../actions";
 import { toast } from "sonner";
+
+export type OnlineStoreSetupStatus =
+  | "not_requested"
+  | "pending_review"
+  | "approved"
+  | "rejected"
+  | "setup_completed";
 
 export interface DaySchedule {
   enabled: boolean;
@@ -27,6 +35,14 @@ export interface WeeklySchedule {
 export interface OnlineOrderingSettings {
   id: string;
   locationId: string;
+  setupRequestStatus: OnlineStoreSetupStatus;
+  setupRequestedAt: string | null;
+  setupRequestedBy: string | null;
+  setupReviewedAt: string | null;
+  setupReviewedBy: string | null;
+  setupApprovedAt: string | null;
+  setupCompletedAt: string | null;
+  setupRejectionReason: string | null;
 
   // Identity
   enabled: boolean;
@@ -58,6 +74,7 @@ export interface OnlineOrderingSettings {
   // Ordering
   pickupEnabled: boolean;
   deliveryEnabled: boolean;
+  autoAcceptOrders: boolean;
   preparationLeadTime: number;
   futureOrderMaxDays: number;
   minimumOrderAmount: number;
@@ -141,6 +158,14 @@ const createDefaultSettings = (
 ): OnlineOrderingSettings => ({
   id: `temp_${locationId}`,
   locationId,
+  setupRequestStatus: "not_requested",
+  setupRequestedAt: null,
+  setupRequestedBy: null,
+  setupReviewedAt: null,
+  setupReviewedBy: null,
+  setupApprovedAt: null,
+  setupCompletedAt: null,
+  setupRejectionReason: null,
 
   enabled: false,
   storeName: locationName,
@@ -170,6 +195,7 @@ const createDefaultSettings = (
 
   pickupEnabled: true,
   deliveryEnabled: false,
+  autoAcceptOrders: false,
   preparationLeadTime: 20,
   futureOrderMaxDays: 0,
   minimumOrderAmount: 0,
@@ -201,6 +227,15 @@ const createDefaultSettings = (
   facebookPixelId: "",
 });
 
+export type OnlineStoreSetupRequestResult =
+  | { success: true; status: "pending_review" }
+  | {
+      success: false;
+      error: string;
+      missing?: Record<string, boolean>;
+      values?: Record<string, string>;
+    };
+
 interface OnlineOrderingStore {
   settings: OnlineOrderingSettings[];
   isLoading: boolean;
@@ -214,10 +249,7 @@ interface OnlineOrderingStore {
   ) => void;
   saveSettings: (locationId: string) => Promise<void>;
   discardChanges: (locationId: string) => Promise<void>;
-  createSettings: (
-    locationId: string,
-    locationName: string
-  ) => Promise<OnlineOrderingSettings>;
+  requestSetup: (locationId: string) => Promise<OnlineStoreSetupRequestResult>;
   isDirty: (locationId: string) => boolean;
 }
 
@@ -289,7 +321,40 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
 
       set({ isSaving: true });
       try {
-        await saveOnlineOrderingSettings(locationId, currentSettings);
+        // Merchant dashboard is intentionally restricted: no payment/tip changes.
+        // It can maintain non-payment storefront settings only after HQ completes setup.
+        await saveOnlineOrderingSettings(locationId, {
+          enabled: currentSettings.enabled,
+          storeName: currentSettings.storeName,
+          description: currentSettings.description,
+          phone: currentSettings.phone,
+          email: currentSettings.email,
+
+          // Branding
+          templateId: currentSettings.templateId,
+          primaryColor: currentSettings.primaryColor,
+          secondaryColor: currentSettings.secondaryColor,
+          accentColor: currentSettings.accentColor,
+          backgroundColor: currentSettings.backgroundColor,
+          textColor: currentSettings.textColor,
+          fontFamily: currentSettings.fontFamily,
+          logoUrl: currentSettings.logoUrl,
+          heroImageUrl: currentSettings.heroImageUrl,
+          faviconUrl: currentSettings.faviconUrl,
+          ogImageUrl: currentSettings.ogImageUrl,
+
+          // Ordering
+          operatingHours: currentSettings.operatingHours,
+          pickupEnabled: currentSettings.pickupEnabled,
+          deliveryEnabled: currentSettings.deliveryEnabled,
+          autoAcceptOrders: currentSettings.autoAcceptOrders,
+          preparationLeadTime: currentSettings.preparationLeadTime,
+          futureOrderMaxDays: currentSettings.futureOrderMaxDays,
+          minimumOrderAmount: currentSettings.minimumOrderAmount,
+          baseDeliveryFee: currentSettings.baseDeliveryFee,
+          freeDeliveryThreshold: currentSettings.freeDeliveryThreshold,
+          deliveryRadiusMiles: currentSettings.deliveryRadiusMiles,
+        });
         await get().loadSettings(locationId);
         toast.success("Settings saved");
       } catch (error) {
@@ -306,22 +371,23 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
       await get().loadSettings(locationId);
       toast.info("Changes discarded");
     },
-
-    createSettings: async (locationId: string, locationName: string) => {
-      const newSettings = createDefaultSettings(locationId, locationName);
-
-      set((state) => ({
-        settings: [...state.settings, newSettings],
-      }));
-
+    requestSetup: async (locationId: string) => {
       try {
-        await saveOnlineOrderingSettings(locationId, newSettings);
+        const result = await requestOnlineOrderingSetup(locationId);
+        if (result?.success) {
+          await get().loadSettings(locationId);
+          toast.success("Setup request submitted to HQ");
+          return result;
+        }
+        // Let the page decide how to render the missing-fields UI.
+        return result;
       } catch (error) {
-        console.error("Failed to create settings:", error);
-        toast.error("Failed to initialize settings");
+        console.error("Failed to request setup:", error);
+        toast.error(
+          error instanceof Error ? error.message : "Failed to request setup"
+        );
+        return { success: false, error: error instanceof Error ? error.message : "Failed to request setup" } as any;
       }
-
-      return newSettings;
     },
 
     isDirty: (locationId: string) => {
