@@ -346,7 +346,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
 
         return (
           <Badge variant="outline" className="text-xs font-mono w-fit">
-            {primaryAssignment.role_code}
+            {primaryAssignment.role_name || primaryAssignment.role_code || "-"}
           </Badge>
         );
       },

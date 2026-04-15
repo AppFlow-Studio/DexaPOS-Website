@@ -1092,7 +1092,21 @@ export function StaffDetailSheet({
                         />
                         <InfoRow
                           label="Assigned At"
-                          value={assignment.assigned_at || "-"}
+                          value={
+                            assignment.assigned_at
+                              ? new Date(assignment.assigned_at).toLocaleString(
+                                  "en-US",
+                                  {
+                                    month: "long",
+                                    day: "numeric",
+                                    year: "numeric",
+                                    hour: "numeric",
+                                    minute: "2-digit",
+                                    hour12: true,
+                                  }
+                                )
+                              : "-"
+                          }
                         />
                       </div>
                     </button>
@@ -1187,7 +1201,7 @@ function InfoRow({
       <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
         {label}
       </p>
-      <p className={cn("mt-1 text-sm font-medium", mono && "font-mono text-xs")}>
+      <p className={cn("mt-1 text-sm font-medium break-words", mono && "font-mono text-xs")}>
         {value}
       </p>
     </div>
