@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Globe, Clock3, CheckCircle2, AlertTriangle, Ban, ExternalLink, Building2, Store, Palette, Truck, Plug } from "lucide-react";
+import { Loader2, Globe, Clock3, CheckCircle2, AlertTriangle, Ban, ExternalLink, Building2, Store, Palette, Truck, Plug, LayoutTemplate, LayoutGrid, Columns2, ImageOff, Check } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
@@ -28,6 +28,7 @@ import {
 import { toast } from "sonner";
 import { uploadStoreImage } from "@/lib/storage/actions";
 import { useAuth } from "@clerk/nextjs";
+import { cn } from "@/lib/utils";
 import { OrderOutTab } from "@/components/dashboard/orderout/OrderOutTab";
 import { useOrderOutStatus, useOnboardOrderOut } from "./hooks/useOrderOutStatus";
 import { FONT_GOOGLE_URLS } from "@/app/sites/lib/theme-utils";
@@ -414,27 +415,99 @@ function CompletedSetupPanel({
         </TabsContent>
 
         <TabsContent value="branding" className="space-y-6">
+
+          {/* Store Template */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <LayoutTemplate className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <CardTitle>Store Template</CardTitle>
+                  <CardDescription>Choose the layout style for your online store</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-3">
+                {([
+                  { value: "classic", label: "Classic", description: "Clean layout with a traditional menu grid" },
+                  { value: "minimal", label: "Minimal", description: "Simple, text-focused with subtle accents" },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => onUpdate({ templateId: opt.value })}
+                    className={cn(
+                      "relative rounded-lg border-2 p-4 text-left transition-colors hover:border-primary/50",
+                      settings.templateId === opt.value
+                        ? "border-primary bg-primary/5"
+                        : "border-border bg-background"
+                    )}
+                  >
+                    {settings.templateId === opt.value && (
+                      <div className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary">
+                        <Check className="h-3 w-3 text-white" />
+                      </div>
+                    )}
+                    <p className="text-sm font-semibold">{opt.label}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{opt.description}</p>
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Menu Layout */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <LayoutGrid className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <CardTitle>Menu Layout</CardTitle>
+                  <CardDescription>How menu items are displayed on the ordering page</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-3 gap-3">
+                {([
+                  { value: "cards",      label: "Cards",       description: "Image on top, compact cards",    icon: LayoutGrid },
+                  { value: "sidebyside", label: "Side by Side", description: "Image on right, content on left", icon: Columns2 },
+                  { value: "no-images",  label: "No Images",   description: "List layout, text only",         icon: ImageOff },
+                ] as const).map(({ value, label, description, icon: Icon }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => onUpdate({ menuLayout: value })}
+                    className={cn(
+                      "relative rounded-lg border-2 p-4 text-left transition-colors hover:border-primary/50",
+                      settings.menuLayout === value
+                        ? "border-primary bg-primary/5"
+                        : "border-border bg-background"
+                    )}
+                  >
+                    {settings.menuLayout === value && (
+                      <div className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary">
+                        <Check className="h-3 w-3 text-white" />
+                      </div>
+                    )}
+                    <Icon className="mb-2 h-5 w-5 text-muted-foreground" />
+                    <p className="text-sm font-semibold">{label}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Colors, Font & Images */}
           <Card>
             <CardHeader>
               <CardTitle>Branding</CardTitle>
-              <CardDescription>Update your storefront theme and images (non-payment).</CardDescription>
+              <CardDescription>Colors, fonts, and store images.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Template</Label>
-                  <select
-                    value={settings.templateId}
-                    onChange={(e) =>
-                      onUpdate({ templateId: e.target.value as any })
-                    }
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                  >
-                    <option value="classic">Classic</option>
-                    <option value="bold">Bold</option>
-                    <option value="minimal">Minimal</option>
-                  </select>
-                </div>
                 <div className="space-y-2">
                   <Label>Font</Label>
                   <select
