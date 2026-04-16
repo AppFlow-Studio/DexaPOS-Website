@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { currentUser } from '@clerk/nextjs/server'
+import { auth } from '@clerk/nextjs/server'
 import {
   FloorPlan,
   FloorPlanObject,
@@ -11,6 +12,7 @@ import {
 } from '@/types/floor-plan'
 import { TableStatus } from '@/types/floor-plan'
 import { LogAuditEvent } from './audit-logs'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 
 /**
  * Server actions for floor plan operations
@@ -27,12 +29,60 @@ export async function InitializeFloorPlan (locationId: string) {
     }
   )
 
-  if (fpError) {
+  if (!fpError && Array.isArray(floorPlans) && floorPlans.length > 0) {
+    console.log('[InitializeFloorPlan] floorPlans', floorPlans)
+    return floorPlans as FloorPlan[]
+  }
+
+  // Fallback 1: direct table reads with authenticated client.
+  const { data: authBasePlans, error: authBasePlansError } = await supabase
+    .from('floor_plans')
+    .select(
+      'id, name, description, is_active, is_default, display_order, canvas_width, canvas_height, grid_size, background_color'
+    )
+    .eq('location_id', locationId)
+    .order('display_order', { ascending: true })
+
+  if (!authBasePlansError && authBasePlans && authBasePlans.length > 0) {
+    const floorPlanIds = authBasePlans.map(fp => fp.id)
+    const { data: authObjects, error: authObjectsError } = await supabase
+      .from('floor_plan_objects')
+      .select('*')
+      .in('floor_plan_id', floorPlanIds)
+
+    if (!authObjectsError) {
+      const objectsByFloorPlan = new Map<string, FloorPlanObject[]>()
+      for (const obj of (authObjects || []) as FloorPlanObject[]) {
+        const existing = objectsByFloorPlan.get(obj.floor_plan_id) || []
+        existing.push(obj)
+        objectsByFloorPlan.set(obj.floor_plan_id, existing)
+      }
+
+      return (authBasePlans as Array<Partial<FloorPlan> & { id: string }>).map(
+        fp => ({
+          id: fp.id,
+          name: fp.name || 'Floor Plan',
+          description: fp.description ?? null,
+          is_active: fp.is_active ?? true,
+          is_default: fp.is_default ?? false,
+          display_order: fp.display_order ?? 0,
+          table_count: 0,
+          total_capacity: 0,
+          canvas_width: fp.canvas_width,
+          canvas_height: fp.canvas_height,
+          grid_size: fp.grid_size,
+          background_color: fp.background_color,
+          objects: objectsByFloorPlan.get(fp.id) || []
+        })
+      )
+    }
+  }
+
+  if (fpError && authBasePlansError) {
     throw fpError
   }
 
-  console.log('[InitializeFloorPlan] floorPlans', floorPlans)
-  return floorPlans as FloorPlan[]
+  return [] as FloorPlan[]
 }
 
 export async function LoadFloorPlanStatus (floorPlanId: string) {
@@ -526,15 +576,73 @@ export async function LoadWaitlistAction (locationId: string) {
     p_location_id: locationId
   })
 
-  if (error) throw error
+  if (!error) {
+    return {
+      waitlist: (data?.waitlist || []) as WaitlistEntry[],
+      summary: (data?.summary || {
+        total_waiting: 0,
+        total_notified: 0,
+        avg_wait_time: 0
+      }) as {
+        total_waiting: number
+        total_notified: number
+        avg_wait_time: number
+      }
+    }
+  }
+
+  // Fallback with authenticated direct table reads when RPC auth context is unavailable.
+  const { data: rows, error: rowsError } = await supabase
+    .from('waitlist')
+    .select(
+      'id, party_name, party_size, phone, status, position_in_queue, quoted_wait_minutes, estimated_ready_at, actual_wait_minutes, preferred_section, seating_preference, notes, created_at, notified_at'
+    )
+    .eq('location_id', locationId)
+    .in('status', ['waiting', 'notified', 'arrived'])
+    .gte('created_at', new Date().toISOString().split('T')[0])
+    .order('position_in_queue', { ascending: true })
+
+  if (rowsError) throw rowsError
+
+  const now = Date.now()
+  const waitlist = (rows || []).map((row: any) => {
+    const createdAt = row.created_at ? new Date(row.created_at).getTime() : now
+    return {
+      id: row.id,
+      party_name: row.party_name,
+      party_size: row.party_size,
+      phone: row.phone,
+      status: row.status,
+      position: row.position_in_queue,
+      quoted_wait_minutes: row.quoted_wait_minutes,
+      estimated_ready_at: row.estimated_ready_at,
+      actual_wait_minutes: row.actual_wait_minutes,
+      preferred_section: row.preferred_section,
+      seating_preference: row.seating_preference,
+      notes: row.notes,
+      created_at: row.created_at,
+      notified_at: row.notified_at,
+      minutes_waiting: Math.floor((now - createdAt) / 60000)
+    }
+  }) as WaitlistEntry[]
+
+  const totalWaiting = waitlist.filter(w => w.status === 'waiting').length
+  const totalNotified = waitlist.filter(w => w.status === 'notified').length
+  const waited = waitlist
+    .map(w => w.actual_wait_minutes)
+    .filter((v): v is number => typeof v === 'number')
+  const avgWaitTime =
+    waited.length > 0
+      ? waited.reduce((acc, val) => acc + val, 0) / waited.length
+      : 0
 
   return {
-    waitlist: (data?.waitlist || []) as WaitlistEntry[],
-    summary: (data?.summary || {
-      total_waiting: 0,
-      total_notified: 0,
-      avg_wait_time: 0
-    }) as {
+    waitlist,
+    summary: {
+      total_waiting: totalWaiting,
+      total_notified: totalNotified,
+      avg_wait_time: avgWaitTime
+    } as {
       total_waiting: number
       total_notified: number
       avg_wait_time: number
@@ -583,12 +691,16 @@ export async function AddToWaitlistAction (
 
   if (error) throw error
 
+  const waitlistId = data.waitlist_id as string
+  const position = data.position as number
+  const quotedWait = (data.quoted_wait_minutes ?? null) as number | null
+
   // Log Audit Event
   await LogAuditEvent({
     action: `Added to Waitlist: ${params.partyName}`,
     actionCategory: 'waitlist',
     resourceType: 'waitlist_entry',
-    resourceId: data.waitlist_id,
+    resourceId: waitlistId,
     resourceName: params.partyName,
     locationId: locationId,
     metadata: {
@@ -601,11 +713,191 @@ export async function AddToWaitlistAction (
   })
 
   return {
-    waitlistId: data.waitlist_id,
-    position: data.position,
-    quotedWait: data.quoted_wait_minutes,
+    waitlistId,
+    position,
+    quotedWait,
     success: true
   }
+}
+
+export async function UpdateWaitlistEntryAction (
+  locationId: string,
+  waitlistId: string,
+  params: {
+    partyName?: string
+    partySize?: number
+    phone?: string
+    notes?: string
+    preferredSection?: string
+    seatingPreference?: string
+    quotedWaitMinutes?: number
+  }
+) {
+  const { userId, orgId } = await auth()
+
+  if (!userId || !orgId) {
+    throw new Error('Not authenticated')
+  }
+
+  const serviceRole = createServiceRoleClient()
+
+  const { data: merchant, error: merchantError } = await serviceRole
+    .from('merchants')
+    .select('id')
+    .eq('clerk_org_id', orgId)
+    .maybeSingle()
+
+  if (merchantError || !merchant?.id) {
+    throw merchantError ?? new Error('Merchant not found for organization')
+  }
+
+  const { data: location, error: locationError } = await serviceRole
+    .from('locations')
+    .select('id, merchant_id')
+    .eq('id', locationId)
+    .eq('merchant_id', merchant.id)
+    .maybeSingle()
+
+  if (locationError || !location) {
+    throw locationError ?? new Error('Location not found')
+  }
+
+  const { data: existing, error: existingError } = await serviceRole
+    .from('waitlist')
+    .select(
+      'id, status, party_name, party_size, phone, notes, preferred_section, seating_preference, quoted_wait_minutes, location_id, merchant_id'
+    )
+    .eq('id', waitlistId)
+    .eq('location_id', location.id)
+    .eq('merchant_id', merchant.id)
+    .maybeSingle()
+
+  if (existingError || !existing) {
+    throw existingError ?? new Error('Waitlist entry not found')
+  }
+
+  if (['seated', 'cancelled', 'no_show', 'expired'].includes(existing.status)) {
+    throw new Error('This waitlist entry can no longer be edited')
+  }
+
+  const updateData: Record<string, unknown> = {}
+  if (params.partyName !== undefined) updateData.party_name = params.partyName
+  if (params.partySize !== undefined) updateData.party_size = params.partySize
+  if (params.phone !== undefined) updateData.phone = params.phone || null
+  if (params.notes !== undefined) updateData.notes = params.notes || null
+  if (params.preferredSection !== undefined) {
+    updateData.preferred_section = params.preferredSection || null
+  }
+  if (params.seatingPreference !== undefined) {
+    updateData.seating_preference = params.seatingPreference || null
+  }
+  if (params.quotedWaitMinutes !== undefined) {
+    updateData.quoted_wait_minutes = params.quotedWaitMinutes
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    return existing as WaitlistEntry
+  }
+
+  const { data: updated, error: updateError } = await serviceRole
+    .from('waitlist')
+    .update(updateData)
+    .eq('id', waitlistId)
+    .eq('location_id', location.id)
+    .eq('merchant_id', merchant.id)
+    .neq('status', 'seated')
+    .neq('status', 'cancelled')
+    .neq('status', 'no_show')
+    .neq('status', 'expired')
+    .select(
+      'id, status, party_name, party_size, phone, notes, preferred_section, seating_preference, quoted_wait_minutes, location_id, merchant_id'
+    )
+    .maybeSingle()
+
+  if (updateError) throw updateError
+  if (!updated) throw new Error('Failed to update waitlist entry')
+
+  await LogAuditEvent({
+    merchantId: merchant.id,
+    locationId,
+    action: `Updated Waitlist Entry: ${updated.party_name}`,
+    actionCategory: 'waitlist',
+    resourceType: 'waitlist_entry',
+    resourceId: waitlistId,
+    resourceName: updated.party_name,
+    changes: {
+      before: existing as unknown as Record<string, unknown>,
+      after: updated as unknown as Record<string, unknown>
+    }
+  })
+
+  return updated as WaitlistEntry
+}
+
+export async function DeleteWaitlistEntryAction (
+  locationId: string,
+  waitlistId: string
+) {
+  const { userId, orgId } = await auth()
+
+  if (!userId || !orgId) {
+    throw new Error('Not authenticated')
+  }
+
+  const serviceRole = createServiceRoleClient()
+
+  const { data: merchant, error: merchantError } = await serviceRole
+    .from('merchants')
+    .select('id')
+    .eq('clerk_org_id', orgId)
+    .maybeSingle()
+
+  if (merchantError || !merchant?.id) {
+    throw merchantError ?? new Error('Merchant not found for organization')
+  }
+
+  const { data: entry, error: entryError } = await serviceRole
+    .from('waitlist')
+    .select(
+      'id, party_name, status, party_size, phone, notes, preferred_section, seating_preference, quoted_wait_minutes, location_id, merchant_id'
+    )
+    .eq('id', waitlistId)
+    .eq('location_id', locationId)
+    .eq('merchant_id', merchant.id)
+    .maybeSingle()
+
+  if (entryError || !entry) {
+    throw entryError ?? new Error('Waitlist entry not found')
+  }
+
+  if (entry.status === 'seated') {
+    throw new Error('Cannot delete a seated waitlist entry')
+  }
+
+  const { error: deleteError } = await serviceRole
+    .from('waitlist')
+    .delete()
+    .eq('id', waitlistId)
+    .eq('location_id', locationId)
+    .eq('merchant_id', merchant.id)
+
+  if (deleteError) throw deleteError
+
+  await LogAuditEvent({
+    merchantId: merchant.id,
+    locationId,
+    action: `Deleted Waitlist Entry: ${entry.party_name}`,
+    actionCategory: 'waitlist',
+    resourceType: 'waitlist_entry',
+    resourceId: waitlistId,
+    resourceName: entry.party_name,
+    severity: 'warning',
+    changes: {
+      before: entry as unknown as Record<string, unknown>
+    }
+  })
+
+  return { success: true }
 }
 
 export async function CreateReservationAction (
