@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { GetOrderFullHistory } from "@/app/dashboard/actions/order";
 
 export async function GET(
@@ -31,6 +32,7 @@ export async function GET(
         { status: 403 }
       );
     }
+    Sentry.captureException(error);
     console.error("[GET /api/orders/full-history/[orderId]]", error);
     return NextResponse.json(
       { error: "Internal server error" },
