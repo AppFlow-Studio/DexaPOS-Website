@@ -849,6 +849,27 @@ export function NewEditItemFormSheet({
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isResetting, setIsResetting] = React.useState(false);
   const [showAddModifier, setShowAddModifier] = React.useState(false);
+  const [categorySearch, setCategorySearch] = React.useState("");
+  const [categorySortDesc, setCategorySortDesc] = React.useState(false);
+
+  // Alphabetically sorted + search-filtered categories. Selected ones always
+  // appear at the top so the user never loses sight of what's assigned.
+  const displayedCategories = React.useMemo(() => {
+    const q = categorySearch.trim().toLowerCase();
+    const filtered = q
+      ? categories.filter((c) => c.name.toLowerCase().includes(q))
+      : [...categories];
+    filtered.sort((a, b) =>
+      categorySortDesc
+        ? b.name.localeCompare(a.name)
+        : a.name.localeCompare(b.name),
+    );
+    // Pin selected to the top
+    return [
+      ...filtered.filter((c) => selectedCategories.includes(c.id)),
+      ...filtered.filter((c) => !selectedCategories.includes(c.id)),
+    ];
+  }, [categories, categorySearch, categorySortDesc, selectedCategories]);
   const imageUpload = useMerchantCdnImageUpload({
     merchantId,
     category: "menu-items",
@@ -1046,15 +1067,20 @@ export function NewEditItemFormSheet({
       });
       imageUpload.reset(editItem.image || editItem.image_url || "");
 
-      // Support both old menu_item_categories and new category_items
+      // Support both old menu_item_categories and new category_items.
+      // category_items can arrive in two shapes:
+      //   1) { category_id, category?: { id, name } }   — full join row
+      //   2) { id, name }                               — simple RPC shape
       const categoryData =
         editItem.category_items || editItem.menu_item_categories;
       if (categoryData) {
         setSelectedCategories(
           categoryData
-            .map((c: any) => c.category_id || c.category?.id)
+            .map((c: any) => c.category_id || c.category?.id || c.id)
             .filter(Boolean),
         );
+      } else {
+        setSelectedCategories([]);
       }
       // Fetch modifier assignments directly from DB — bypasses any RPC/cache issues
       getItemModifierGroups(editItem.id).then((groups) => {
@@ -2299,30 +2325,66 @@ export function NewEditItemFormSheet({
                         </div>
                       ) : (
                         <div className="space-y-3">
-                          {/* Category grid */}
-                          <div className="flex flex-wrap gap-2">
-                            {categories.map((category) => (
-                              <button
-                                key={category.id}
-                                type="button"
-                                onClick={() => toggleCategory(category.id)}
-                                disabled={
-                                  !editingContext.canEditBaseFields &&
-                                  !!editItem
-                                }
-                                className={cn(
-                                  "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
-                                  "border hover:scale-105 active:scale-95",
-                                  "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
-                                  selectedCategories.includes(category.id)
-                                    ? "bg-primary text-primary-foreground border-primary shadow-md"
-                                    : "bg-background border-border hover:border-primary/50",
-                                )}
-                              >
-                                {category.name}
-                              </button>
-                            ))}
+                          {/* Search + sort toolbar */}
+                          <div className="flex items-center gap-2">
+                            <div className="relative flex-1">
+                              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <input
+                                type="text"
+                                placeholder="Search categories..."
+                                value={categorySearch}
+                                onChange={(e) => setCategorySearch(e.target.value)}
+                                className="w-full h-9 pl-9 pr-8 rounded-md border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                              />
+                              {categorySearch && (
+                                <button
+                                  type="button"
+                                  onClick={() => setCategorySearch("")}
+                                  className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground"
+                                >
+                                  <X className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setCategorySortDesc((v) => !v)}
+                              className="inline-flex items-center gap-1 h-9 px-3 rounded-md border bg-background text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                              title={`Sort ${categorySortDesc ? "Z → A" : "A → Z"}`}
+                            >
+                              {categorySortDesc ? "Z – A" : "A – Z"}
+                            </button>
                           </div>
+
+                          {displayedCategories.length === 0 ? (
+                            <div className="text-center py-4 text-xs text-muted-foreground">
+                              No categories match &ldquo;{categorySearch}&rdquo;
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              {displayedCategories.map((category) => (
+                                <button
+                                  key={category.id}
+                                  type="button"
+                                  onClick={() => toggleCategory(category.id)}
+                                  disabled={
+                                    !editingContext.canEditBaseFields &&
+                                    !!editItem
+                                  }
+                                  className={cn(
+                                    "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
+                                    "border hover:scale-105 active:scale-95",
+                                    "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
+                                    selectedCategories.includes(category.id)
+                                      ? "bg-primary text-primary-foreground border-primary shadow-md"
+                                      : "bg-background border-border hover:border-primary/50",
+                                  )}
+                                >
+                                  {category.name}
+                                </button>
+                              ))}
+                            </div>
+                          )}
 
                           {/* Skip option for new items */}
                           {!editItem && (
