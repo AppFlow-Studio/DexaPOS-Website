@@ -1,9 +1,15 @@
 'use client'
 
-import { ImageIcon, Loader2, Trash2, Upload } from 'lucide-react'
-import { useRef } from 'react'
+import { Crop, ImageIcon, Loader2, Trash2, Upload } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import {
+  CROPPABLE_MIME_TYPES,
+  ImageCropDialog,
+  urlToFile,
+} from '@/components/ui/image-crop-dialog'
 import { cn } from '@/lib/utils'
 
 interface CdnImageUploadFieldProps {
@@ -15,6 +21,22 @@ interface CdnImageUploadFieldProps {
   selectedFileName?: string | null
   uploadLabel?: string
   uploading?: boolean
+  /**
+   * Optional fixed aspect ratio for the pre-upload crop step (e.g. 1 for
+   * square, 4/3 for product shots). When omitted the crop dialog defaults to
+   * the image's natural aspect, so at zoom 1 the full image is kept untouched.
+   */
+  cropAspectRatio?: number
+  /**
+   * Title shown in the crop dialog header. Defaults to "Adjust your image".
+   */
+  cropDialogTitle?: string
+  /**
+   * When the upload field is rendered inside a Radix Dialog or BottomSheet,
+   * use `"high"` (default) so the crop dialog floats above it. Switch to
+   * `"default"` only for uploads rendered on a plain page.
+   */
+  cropDialogElevation?: 'default' | 'high'
 }
 
 const ACCEPTED_IMAGE_TYPES = '.jpg,.jpeg,.png,.webp,.gif,.svg'
@@ -28,12 +50,72 @@ export function CdnImageUploadField({
   selectedFileName,
   uploadLabel = 'Upload image',
   uploading = false,
+  cropAspectRatio,
+  cropDialogTitle,
+  cropDialogElevation = 'high',
 }: CdnImageUploadFieldProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [cropOpen, setCropOpen] = useState(false)
+  const [isLoadingForAdjust, setIsLoadingForAdjust] = useState(false)
 
   const openFilePicker = () => {
     if (disabled || uploading) return
     inputRef.current?.click()
+  }
+
+  const openAdjustDialog = async () => {
+    if (disabled || uploading || isLoadingForAdjust) return
+    if (!previewUrl) return
+
+    setIsLoadingForAdjust(true)
+    try {
+      const fileName = selectedFileName || inferFileNameFromUrl(previewUrl)
+      const file = await urlToFile(previewUrl, fileName)
+
+      if (!CROPPABLE_MIME_TYPES.has(file.type)) {
+        toast.error('This image format cannot be adjusted (GIF/SVG). Replace with a JPEG, PNG, or WebP to crop.')
+        return
+      }
+
+      setPendingFile(file)
+      setCropOpen(true)
+    } catch (error) {
+      console.error('Failed to load image for adjustment', { previewUrl, error })
+      const detail = error instanceof Error ? error.message : 'Unknown error'
+      toast.error(`Could not load image: ${detail}`)
+    } finally {
+      setIsLoadingForAdjust(false)
+    }
+  }
+
+  const handleFilePicked = (file: File | null) => {
+    if (!file) {
+      onFileSelect(null)
+      return
+    }
+
+    // GIFs and SVGs bypass the crop step — GIFs are animated, SVGs are vectors,
+    // neither can be usefully re-rasterised through a canvas.
+    if (!CROPPABLE_MIME_TYPES.has(file.type)) {
+      onFileSelect(file)
+      return
+    }
+
+    setPendingFile(file)
+    setCropOpen(true)
+  }
+
+  const handleCropConfirm = (croppedFile: File) => {
+    onFileSelect(croppedFile)
+    setPendingFile(null)
+  }
+
+  const handleCropOpenChange = (open: boolean) => {
+    setCropOpen(open)
+    if (!open) {
+      setPendingFile(null)
+    }
   }
 
   return (
@@ -45,8 +127,8 @@ export function CdnImageUploadField({
         disabled={disabled || uploading}
         onChange={(event) => {
           const file = event.target.files?.[0] || null
-          onFileSelect(file)
           event.currentTarget.value = ''
+          handleFilePicked(file)
         }}
         type="file"
       />
@@ -71,7 +153,21 @@ export function CdnImageUploadField({
 
             <div className="flex flex-wrap gap-2">
               <Button
-                disabled={disabled || uploading}
+                disabled={disabled || uploading || isLoadingForAdjust}
+                onClick={openAdjustDialog}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                {isLoadingForAdjust ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Crop className="mr-2 h-4 w-4" />
+                )}
+                Adjust
+              </Button>
+              <Button
+                disabled={disabled || uploading || isLoadingForAdjust}
                 onClick={openFilePicker}
                 size="sm"
                 type="button"
@@ -85,7 +181,7 @@ export function CdnImageUploadField({
                 Replace image
               </Button>
               <Button
-                disabled={disabled || uploading}
+                disabled={disabled || uploading || isLoadingForAdjust}
                 onClick={onClear}
                 size="sm"
                 type="button"
@@ -135,6 +231,29 @@ export function CdnImageUploadField({
           {helperText && <p>{helperText}</p>}
         </div>
       )}
+
+      <ImageCropDialog
+        file={pendingFile}
+        open={cropOpen}
+        onOpenChange={handleCropOpenChange}
+        onConfirm={handleCropConfirm}
+        aspectRatio={cropAspectRatio}
+        title={cropDialogTitle}
+        elevation={cropDialogElevation}
+      />
     </div>
   )
+}
+
+function inferFileNameFromUrl(url: string): string {
+  try {
+    if (url.startsWith('blob:') || url.startsWith('data:')) {
+      return 'image.png'
+    }
+    const pathname = new URL(url).pathname
+    const last = pathname.split('/').filter(Boolean).pop()
+    return last && last.length > 0 ? decodeURIComponent(last) : 'image.png'
+  } catch {
+    return 'image.png'
+  }
 }

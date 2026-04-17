@@ -79,8 +79,11 @@ export function PriceInputGroup({
     }
   }, [cashPrice]);
 
-  // On mount/dual mode: if we have card price but no cash, derive cash
+  // On mount/dual mode: if we have card price but no cash, derive cash.
+  // Skip when the user just explicitly cleared the cash field — otherwise
+  // deleting the last digit would snap back to a derived value.
   useEffect(() => {
+    if (lastEditedRef.current === "cash") return;
     if (isDual && price > 0 && (cashPrice === null || cashPrice === 0)) {
       const rawCash = price / (1 + percentage / 100);
       const roundedCash = Math.round(rawCash * 100) / 100;

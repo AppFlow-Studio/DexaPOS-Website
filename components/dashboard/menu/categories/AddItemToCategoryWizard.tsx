@@ -789,6 +789,8 @@ export function AddItemToCategoryWizard({
                             onPriceChange={(val) => form.setValue("price", val, { shouldValidate: true })}
                             onCashPriceChange={(val) => form.setValue("cash_price", val, { shouldValidate: true })}
                             label="Base Price"
+                            pricingStrategy={pricingStrategy}
+                            dualPricingPercentage={dualPricingPercentage}
                           />
                           <div className="flex gap-4 px-4">
                             <div className="flex-1">

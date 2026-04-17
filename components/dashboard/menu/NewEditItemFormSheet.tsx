@@ -1453,7 +1453,37 @@ export function NewEditItemFormSheet({
         <Form {...form}>
           <form
             id="item-form"
-            onSubmit={form.handleSubmit(onSubmit)}
+            onSubmit={form.handleSubmit(onSubmit, (errors) => {
+              const FIELD_LABELS: Record<string, string> = {
+                name: "Item Name",
+                description: "Description",
+                price: "Price",
+                cash_price: "Cash Price",
+                delivery_price: "Delivery Price",
+                image_url: "Image",
+                availability: "Availability",
+                allergens: "Allergens",
+                card_bg_color: "Card Background Color",
+                stock_tracking_mode: "Stock Tracking",
+                tax_category: "Tax Category",
+                is_tax_exempt: "Tax Exempt",
+                available_channels: "Available Channels",
+                prep_station_id: "Prep Station",
+              };
+              const messages = Object.entries(errors)
+                .map(([field, err]) => {
+                  const msg = (err as any)?.message;
+                  if (!msg) return null;
+                  return `${FIELD_LABELS[field] ?? field}: ${msg}`;
+                })
+                .filter(Boolean) as string[];
+              toast.error(editItem ? "Cannot update item" : "Cannot create item", {
+                description:
+                  messages.length > 0
+                    ? messages.join("\n")
+                    : "Please review the highlighted fields and try again.",
+              });
+            })}
             className="flex max-h-[min(92vh,960px)] flex-col"
           >
         <DialogHeader className="border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
@@ -2222,7 +2252,99 @@ export function NewEditItemFormSheet({
                       </CollapsibleContent>
                     </Collapsible>
 
-                    {/* SECTION 4: TAX & FEES (collapsible) */}
+                    {/* SECTION 4: CATEGORIES (collapsible) */}
+                    <Collapsible
+                      open={expandedSections.categories}
+                      onOpenChange={() => toggleSection("categories")}
+                      className="border-t pt-4 mt-6"
+                    >
+                      <CollapsibleTrigger asChild>
+                        <button type="button" className="flex items-center justify-between w-full group">
+                          <div className="flex items-center gap-2">
+                            <Tag className="h-4 w-4 text-blue-500" />
+                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Categories</span>
+                            {selectedCategories.length > 0 && (
+                              <Badge variant="secondary" className="text-xs">
+                                {selectedCategories.length}
+                              </Badge>
+                            )}
+                            {!editingContext.canEditBaseFields && editItem && (
+                              <Badge variant="outline" className="text-xs ml-auto">
+                                View Only
+                              </Badge>
+                            )}
+                          </div>
+                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.categories && "rotate-180")} />
+                        </button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-3 pt-4">
+                      {/* Suggestion for new items */}
+                      {!editItem &&
+                        selectedCategories.length === 0 &&
+                        categories.length > 0 && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                            <Info className="h-3 w-3 shrink-0" />
+                            Select a category to organize your menu. Without one, the item goes to "Uncategorized".
+                          </p>
+                        )}
+
+                      {categories.length === 0 ? (
+                        <div className="text-center py-6 text-muted-foreground text-sm border border-dashed rounded-lg">
+                          <Tag className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                          <p>No categories available</p>
+                          <p className="text-xs mt-1">
+                            Create categories first to organize your menu
+                            items.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {/* Category grid */}
+                          <div className="flex flex-wrap gap-2">
+                            {categories.map((category) => (
+                              <button
+                                key={category.id}
+                                type="button"
+                                onClick={() => toggleCategory(category.id)}
+                                disabled={
+                                  !editingContext.canEditBaseFields &&
+                                  !!editItem
+                                }
+                                className={cn(
+                                  "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
+                                  "border hover:scale-105 active:scale-95",
+                                  "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
+                                  selectedCategories.includes(category.id)
+                                    ? "bg-primary text-primary-foreground border-primary shadow-md"
+                                    : "bg-background border-border hover:border-primary/50",
+                                )}
+                              >
+                                {category.name}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Skip option for new items */}
+                          {!editItem && (
+                            <div className="pt-2 border-t">
+                              <button
+                                type="button"
+                                className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                                onClick={() => {
+                                  setSelectedCategories([]);
+                                }}
+                              >
+                                <X className="h-3 w-3" />
+                                Skip - Add to "Uncategorized"
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      </CollapsibleContent>
+                    </Collapsible>
+
+                    {/* SECTION 5: TAX & FEES (collapsible) */}
                     <Collapsible
                       open={expandedSections.tax}
                       onOpenChange={() => toggleSection("tax")}
@@ -2403,7 +2525,7 @@ export function NewEditItemFormSheet({
                       </CollapsibleContent>
                     </Collapsible>
 
-                    {/* SECTION 5: AVAILABILITY (collapsible) */}
+                    {/* SECTION 6: AVAILABILITY (collapsible) */}
                     <Collapsible
                       open={expandedSections.availability}
                       onOpenChange={() => toggleSection("availability")}
@@ -2598,99 +2720,7 @@ export function NewEditItemFormSheet({
                       </CollapsibleContent>
                     </Collapsible>
 
-                    {/* SECTION 5B: CATEGORIES (collapsible) */}
-                    <Collapsible
-                      open={expandedSections.categories}
-                      onOpenChange={() => toggleSection("categories")}
-                      className="border-t pt-4 mt-2"
-                    >
-                      <CollapsibleTrigger asChild>
-                        <button type="button" className="flex items-center justify-between w-full group">
-                          <div className="flex items-center gap-2">
-                            <Tag className="h-4 w-4 text-blue-500" />
-                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Categories</span>
-                            {selectedCategories.length > 0 && (
-                              <Badge variant="secondary" className="text-xs">
-                                {selectedCategories.length}
-                              </Badge>
-                            )}
-                            {!editingContext.canEditBaseFields && editItem && (
-                              <Badge variant="outline" className="text-xs ml-auto">
-                                View Only
-                              </Badge>
-                            )}
-                          </div>
-                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.categories && "rotate-180")} />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-3 pt-4">
-                      {/* Suggestion for new items */}
-                      {!editItem &&
-                        selectedCategories.length === 0 &&
-                        categories.length > 0 && (
-                          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                            <Info className="h-3 w-3 shrink-0" />
-                            Select a category to organize your menu. Without one, the item goes to "Uncategorized".
-                          </p>
-                        )}
-
-                      {categories.length === 0 ? (
-                        <div className="text-center py-6 text-muted-foreground text-sm border border-dashed rounded-lg">
-                          <Tag className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                          <p>No categories available</p>
-                          <p className="text-xs mt-1">
-                            Create categories first to organize your menu
-                            items.
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {/* Category grid */}
-                          <div className="flex flex-wrap gap-2">
-                            {categories.map((category) => (
-                              <button
-                                key={category.id}
-                                type="button"
-                                onClick={() => toggleCategory(category.id)}
-                                disabled={
-                                  !editingContext.canEditBaseFields &&
-                                  !!editItem
-                                }
-                                className={cn(
-                                  "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
-                                  "border hover:scale-105 active:scale-95",
-                                  "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
-                                  selectedCategories.includes(category.id)
-                                    ? "bg-primary text-primary-foreground border-primary shadow-md"
-                                    : "bg-background border-border hover:border-primary/50",
-                                )}
-                              >
-                                {category.name}
-                              </button>
-                            ))}
-                          </div>
-
-                          {/* Skip option for new items */}
-                          {!editItem && (
-                            <div className="pt-2 border-t">
-                              <button
-                                type="button"
-                                className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-                                onClick={() => {
-                                  setSelectedCategories([]);
-                                }}
-                              >
-                                <X className="h-3 w-3" />
-                                Skip - Add to "Uncategorized"
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      </CollapsibleContent>
-                    </Collapsible>
-
-                    {/* SECTION 5C: LOCATION BADGES (collapsible, edit-only, location-scoped) */}
+                    {/* SECTION 7: LOCATION BADGES (collapsible, edit-only, location-scoped) */}
                     {editItem && !isAllLocations && (
                     <Collapsible
                       open={expandedSections.locationBadges}
@@ -2735,7 +2765,7 @@ export function NewEditItemFormSheet({
                     </Collapsible>
                     )}
 
-                    {/* SECTION 6: RECIPE (collapsible, edit-only) */}
+                    {/* SECTION 8: RECIPE (collapsible, edit-only) */}
                     {editItem && (
                     <Collapsible
                       open={expandedSections.recipe}
