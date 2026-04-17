@@ -581,7 +581,7 @@ function mapConfigToSettings(
       ? `${location.address_line1 ?? ""}, ${location.city ?? ""}, ${location.state ?? ""} ${location.postal_code ?? ""}`
       : "",
 
-    templateId: config.template_id ?? "classic",
+    templateId: (config.template_id === "minimal" ? "minimal" : "classic") as "classic" | "minimal",
     primaryColor: config.primary_color ?? "#2DD4BF",
     secondaryColor: config.secondary_color ?? "#10b981",
     accentColor: config.accent_color ?? null,
@@ -887,6 +887,7 @@ export async function saveOnlineOrderingSettings(
   if (settings.backgroundColor !== undefined) configData.background_color = settings.backgroundColor;
   if (settings.textColor !== undefined) configData.text_color = settings.textColor;
   if (settings.fontFamily !== undefined) configData.font_family = settings.fontFamily;
+  if (settings.menuLayout !== undefined) configData.menu_layout = settings.menuLayout;
   if (settings.logoUrl !== undefined) configData.logo_url = settings.logoUrl;
   if (settings.heroImageUrl !== undefined) configData.hero_image_url = settings.heroImageUrl;
   if (settings.faviconUrl !== undefined) configData.favicon_url = settings.faviconUrl;

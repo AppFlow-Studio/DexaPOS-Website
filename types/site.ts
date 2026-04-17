@@ -5,7 +5,7 @@ export interface SiteThemeConfig {
   backgroundColor?: string;
   textColor?: string;
   fontFamily?: string;
-  templateId?: "classic" | "bold" | "minimal";
+  templateId?: "classic" | "minimal";
   heroImageUrl?: string | null;
   /** Optional ambient video for hero (e.g. steam, latte pour). Supports mp4, webm. */
   heroVideoUrl?: string | null;
@@ -149,7 +149,7 @@ export interface OnlineStoreConfig {
   custom_domain: string | null;
   store_name: string;
 
-  template_id: "classic" | "bold" | "minimal";
+  template_id: "classic" | "minimal";
   primary_color: string;
   secondary_color: string | null;
   accent_color: string | null;
