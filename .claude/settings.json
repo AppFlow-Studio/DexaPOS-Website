@@ -27,7 +27,11 @@
       "Bash(grep -A 50 \"CREATE TABLE public.online_store_config\" /c/Users/saleh/OneDrive*/Apps/Dexa/DexaPOS-Website/schema.sql)",
       "Bash(grep -n \"online_store_config\" /c/Users/saleh/OneDrive*/Apps/Dexa/DexaPOS-Website/schema.sql)",
       "Bash(grep -r \"auto_accept_orders\" /c/Users/saleh/OneDrive*/Apps/Dexa/DexaPOS-Website/utils/migrations/)",
-      "Bash(grep -r \"auto_accept\" /c/Users/saleh/OneDrive*/Apps/Dexa/DexaPOS-Website/supabase/migrations/)"
+      "Bash(grep -r \"auto_accept\" /c/Users/saleh/OneDrive*/Apps/Dexa/DexaPOS-Website/supabase/migrations/)",
+      "Bash(git -C \"c:/Users/saleh/OneDrive - Lebanese American University/Apps/Dexa/DexaPOS-Website\" log --oneline -10)",
+      "Bash(git -C \"c:/Users/saleh/OneDrive - Lebanese American University/Apps/Dexa/DexaPOS-Website\" show --name-only b79ef0f)",
+      "Bash(git -C \"c:/Users/saleh/OneDrive - Lebanese American University/Apps/Dexa/DexaPOS-Website\" diff HEAD~3 --name-only)",
+      "Bash(grep -E \"\\\\.tsx$|\\\\.ts$\")"
     ]
   },
   "hooks": {

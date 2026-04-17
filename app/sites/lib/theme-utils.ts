@@ -13,6 +13,11 @@ export const FONT_GOOGLE_URLS: Record<string, string> = {
   "Playfair Display": "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap",
 };
 
+// Templates available for selection in the admin UI.
+// "bold" is intentionally excluded — its rendering code is preserved but the template is disabled.
+export const AVAILABLE_TEMPLATES = ["classic", "minimal"] as const;
+export type AvailableTemplateId = (typeof AVAILABLE_TEMPLATES)[number];
+
 // Typography and geometry vary per template — colors do not.
 export const TEMPLATE_DEFAULTS = {
   classic: {
