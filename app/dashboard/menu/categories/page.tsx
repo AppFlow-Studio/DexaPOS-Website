@@ -1560,6 +1560,8 @@ export default function CategoriesPage() {
           image: c.image,
           created_at: c.created_at,
           updated_at: c.updated_at,
+          is_global: c.is_global,
+          location_name: c.location_name,
         }))}
         modifierGroups={modifierGroups || []}
         onOpenGlobalEdit={

@@ -276,7 +276,7 @@ interface NewEditItemFormSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   clerkOrgId: string | undefined;
-  categories?: CategoriesModel[];
+  categories?: (CategoriesModel & { is_global?: boolean; location_name?: string | null })[];
   modifierGroups?: (ModifierGroupsModel & {
     modifier_group_items: ModifierGroupItemsModel[];
   })[];
@@ -2372,7 +2372,7 @@ export function NewEditItemFormSheet({
                                     !!editItem
                                   }
                                   className={cn(
-                                    "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
+                                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all",
                                     "border hover:scale-105 active:scale-95",
                                     "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
                                     selectedCategories.includes(category.id)
@@ -2381,6 +2381,15 @@ export function NewEditItemFormSheet({
                                   )}
                                 >
                                   {category.name}
+                                  {category.is_global !== undefined && (
+                                    <span className="inline-flex items-center gap-0.5 text-[10px] opacity-70">
+                                      {category.is_global ? (
+                                        <Globe className="h-3 w-3" />
+                                      ) : (
+                                        <><MapPin className="h-3 w-3" />{category.location_name && <span>{category.location_name}</span>}</>
+                                      )}
+                                    </span>
+                                  )}
                                 </button>
                               ))}
                             </div>

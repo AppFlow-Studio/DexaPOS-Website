@@ -56,6 +56,10 @@ export async function GetModifierGroups(
                 id,
                 menu_item:menu_items(id, name, price)
             ),
+            category_modifier_groups(
+                id,
+                category:categories(id, name)
+            ),
             location_override:location_modifier_group_overrides!left(
                 id,
                 is_active,
@@ -420,23 +424,20 @@ export async function DeleteModifierGroup(
     }
   }
 
-  // If location-specific, check usage count
-  if (group?.location_id) {
-    const { data: usage } = await supabase
-      .from("menu_item_modifier_groups")
-      .select("id")
-      .eq("modifier_group_id", modifierGroupId);
+  // Clean up references before deleting the group
+  // Remove menu item assignments
+  await supabase
+    .from("menu_item_modifier_groups")
+    .delete()
+    .eq("modifier_group_id", modifierGroupId);
 
-    const count = usage?.length || 0;
+  // Remove category assignments
+  await supabase
+    .from("category_modifier_groups")
+    .delete()
+    .eq("modifier_group_id", modifierGroupId);
 
-    if (count && count > 0) {
-      return {
-        error: `Cannot delete: This location-specific modifier group is assigned to ${count} menu item(s). Please unassign it from all menu items first.`,
-      };
-    }
-  }
-
-  // Remove references in order_item_modifiers before deleting the group
+  // Remove references in order_item_modifiers
   await supabase
     .from("order_item_modifiers")
     .delete()

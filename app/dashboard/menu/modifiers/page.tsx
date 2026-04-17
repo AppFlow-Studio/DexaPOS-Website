@@ -27,6 +27,8 @@ import {
   Globe,
   MapPin,
   Filter,
+  ListPlus,
+  FolderPlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -34,6 +36,8 @@ import { useModifierGroups } from "@/app/dashboard/hooks/useModifierGroups";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { useSelectedLocation } from "@/stores/location-store";
 import { ModifierGroupFormSheet } from "@/components/dashboard/menu/ModifierGroupFormSheet";
+import { AssignModifierToItemsDialog } from "@/components/dashboard/menu/modifiers/AssignModifierToItemsDialog";
+import { AssignModifierToCategoryDialog } from "@/components/dashboard/menu/modifiers/AssignModifierToCategoryDialog";
 import {
   DeleteModifierGroup,
   CreateModifierGroupItem,
@@ -68,6 +72,10 @@ interface ModifierGroupWithItems extends ModifierGroupsModel {
   menu_item_modifier_groups?: Array<{
     id: string;
     menu_item?: { id: string; name: string };
+  }>;
+  category_modifier_groups?: Array<{
+    id: string;
+    category?: { id: string; name: string };
   }>;
   location_override?: Array<{
     id: string;
@@ -122,6 +130,8 @@ export default function ModifiersPage() {
   >({});
   const [groupSaving, setGroupSaving] = useState<Record<string, boolean>>({});
   const [deletingGroup, setDeletingGroup] = useState<string | null>(null);
+  const [assignItemsGroup, setAssignItemsGroup] = useState<ModifierGroupWithItems | null>(null);
+  const [assignCategoryGroup, setAssignCategoryGroup] = useState<ModifierGroupWithItems | null>(null);
   const [scopeFilter, setScopeFilter] = useState<"all" | "global" | "location">(
     "all",
   );
@@ -175,7 +185,18 @@ export default function ModifiersPage() {
   };
 
   const handleDeleteGroup = async (group: ModifierGroupWithItems) => {
-    if (!canEditStructure(group)) return;
+    if (!canEditStructure(group)) {
+      if (!isAllLocations && !group.location_id) {
+        toast.error("Cannot delete a global modifier group from a location view", {
+          description: "Switch to All Locations to delete this group.",
+        });
+      } else if (!isAllLocations && group.location_id && group.location_id !== selectedLocationId) {
+        toast.error("Cannot delete this modifier group from the current location", {
+          description: `Switch to the location that owns this group to delete it.`,
+        });
+      }
+      return;
+    }
     if (
       !confirm(
         `Delete "${group.name}"? This removes the group and its items. This cannot be undone.`,
@@ -718,6 +739,7 @@ export default function ModifiersPage() {
                 locationOverride?.is_active ?? group.is_active ?? true;
               const itemCount = group.modifier_group_items?.length || 0;
               const linkedCount = group.menu_item_modifier_groups?.length || 0;
+              const categoryCount = group.category_modifier_groups?.length || 0;
               const scopeBadge = group.location_id ? "Location" : "Global";
               return (
                 <div
@@ -769,6 +791,12 @@ export default function ModifiersPage() {
                               {linkedCount} item{linkedCount !== 1 ? "s" : ""}{" "}
                               linked
                             </Badge>
+                            {categoryCount > 0 && (
+                              <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">
+                                {categoryCount} categor{categoryCount !== 1 ? "ies" : "y"}{" "}
+                                linked
+                              </Badge>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -799,17 +827,38 @@ export default function ModifiersPage() {
                           size="sm"
                           disabled={!canEditStructure(group)}
                           onClick={() => handleEditGroup(group)}
+                          title="Edit"
                         >
                           <Edit3 className="h-4 w-4" />
                         </Button>
+                        {canEditStructure(group) && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setAssignItemsGroup(group)}
+                              title="Add to Items"
+                            >
+                              <ListPlus className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setAssignCategoryGroup(group)}
+                              title="Add to Category"
+                            >
+                              <FolderPlus className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-destructive"
-                          disabled={
-                            !canEditStructure(group) ||
-                            deletingGroup === group.id
-                          }
+                          className={cn(
+                            "text-destructive",
+                            !canEditStructure(group) && "opacity-50",
+                          )}
+                          disabled={deletingGroup === group.id}
                           onClick={() => handleDeleteGroup(group)}
                         >
                           {deletingGroup === group.id ? (
@@ -864,6 +913,43 @@ export default function ModifiersPage() {
         editGroup={editingGroup as any}
         onSuccess={handleSheetSuccess}
       />
+
+      {assignItemsGroup && (
+        <AssignModifierToItemsDialog
+          open={!!assignItemsGroup}
+          onOpenChange={(open) => {
+            if (!open) setAssignItemsGroup(null);
+          }}
+          modifierGroup={assignItemsGroup}
+          clerkOrgId={clerkOrgId}
+          locationId={selectedLocationId}
+          isAllLocations={isAllLocations}
+          onSuccess={() => {
+            setAssignItemsGroup(null);
+            queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
+          }}
+        />
+      )}
+
+      {assignCategoryGroup && (
+        <AssignModifierToCategoryDialog
+          open={!!assignCategoryGroup}
+          onOpenChange={(open) => {
+            if (!open) setAssignCategoryGroup(null);
+          }}
+          modifierGroup={assignCategoryGroup}
+          clerkOrgId={clerkOrgId}
+          locationId={selectedLocationId}
+          isAllLocations={isAllLocations}
+          onSuccess={() => {
+            setAssignCategoryGroup(null);
+            queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
+            queryClient.invalidateQueries({
+              queryKey: ["categories-with-items"],
+            });
+          }}
+        />
+      )}
     </div>
   );
 }
