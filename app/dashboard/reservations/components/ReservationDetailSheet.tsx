@@ -11,12 +11,13 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { Star, Loader2 } from 'lucide-react'
+import { Star, Loader2, Pencil } from 'lucide-react'
 import {
   useUpdateReservationStatus,
   useCancelReservation
 } from '@/app/dashboard/hooks/useReservations'
 import CancelReservationDialog from './CancelReservationDialog'
+import EditReservationDialog from './EditReservationDialog'
 import type { Reservation } from '@/types/floor-plan'
 
 const STATUS_COLORS: Record<Reservation['status'], string> = {
@@ -78,6 +79,7 @@ export default function ReservationDetailSheet ({
   date
 }: ReservationDetailSheetProps) {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [displayedReservation, setDisplayedReservation] = useState(reservation)
   const updateStatus = useUpdateReservationStatus(date)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -247,6 +249,15 @@ export default function ReservationDetailSheet ({
 
             {/* Actions */}
             <div className='space-y-3 mt-6'>
+              <Button
+                className='w-full'
+                variant='secondary'
+                onClick={() => setEditDialogOpen(true)}
+              >
+                <Pencil className='mr-2 h-4 w-4' />
+                Edit Reservation
+              </Button>
+
               {isTerminal ? (
                 <p className='text-sm text-muted-foreground'>
                   No further actions
@@ -292,6 +303,19 @@ export default function ReservationDetailSheet ({
         reservationId={reservation.id}
         partyName={reservation.party_name}
         date={date}
+      />
+
+      <EditReservationDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        reservation={displayedReservation}
+        date={date}
+        onSaved={updated => {
+          setDisplayedReservation(prev => {
+            if (!prev) return updated
+            return { ...prev, ...updated }
+          })
+        }}
       />
     </>
   )
