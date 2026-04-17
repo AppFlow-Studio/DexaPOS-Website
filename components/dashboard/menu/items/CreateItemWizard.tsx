@@ -55,6 +55,7 @@ import {
   AddItemToCategory,
   AssignModifierToItem,
 } from "@/app/dashboard/actions/item-assignments";
+import { CreateMenuItem } from "@/app/dashboard/actions/menu-items";
 import { useModifierGroups } from "@/app/dashboard/hooks/useModifierGroups";
 import { PriceInputGroup } from "@/components/dashboard/locations/PriceInputGroup";
 import { useEffectivePricing } from "@/app/dashboard/hooks/useEffectivePricing";
@@ -205,8 +206,16 @@ export function CreateItemWizard({
     }
   }, [imageUpload.reset, open]);
 
-  // Validation
-  const validate = () => {
+  // Field-label map for user-friendly toast messages
+  const FIELD_LABELS: Record<string, string> = {
+    name: "Name",
+    description: "Description",
+    price: "Price",
+    cashPrice: "Cash Price",
+  };
+
+  // Validation — returns the errors map so callers can surface details immediately
+  const validate = (): Record<string, string> => {
     const newErrors: Record<string, string> = {};
 
     if (!name || name.trim().length < 2) {
@@ -224,12 +233,9 @@ export function CreateItemWizard({
     if (cashPrice !== null && cashPrice < 0) {
       newErrors.cashPrice = "Cash price must be positive";
     }
-    if (selectedCategories.size === 0) {
-      newErrors.categories = "Please select at least one category";
-    }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return newErrors;
   };
 
   const handleToggleCategory = React.useCallback((categoryId: string) => {
@@ -259,8 +265,12 @@ export function CreateItemWizard({
   const handleCreateItem = async () => {
     let uploadedAsset: { cdnUrl: string; storagePath: string } | undefined;
 
-    if (!validate()) {
-      toast.error("Please fix the errors in the form");
+    const validationErrors = validate();
+    if (Object.keys(validationErrors).length > 0) {
+      const details = Object.entries(validationErrors)
+        .map(([field, msg]) => `${FIELD_LABELS[field] ?? field}: ${msg}`)
+        .join("\n");
+      toast.error("Cannot create item", { description: details });
       return;
     }
 
@@ -283,6 +293,34 @@ export function CreateItemWizard({
       let successCount = 0;
       let errorCount = 0;
       let createdItemId: string | null = null;
+
+      // No category selected — create the item in the library without a category assignment
+      if (categoryIds.length === 0) {
+        const result = await CreateMenuItem(
+          clerkOrgId,
+          {
+            name: name.trim(),
+            description: description.trim() || undefined,
+            price,
+            cash_price: cashPrice ?? undefined,
+            image: resolvedImage.value || undefined,
+            availability,
+            allergens: allergens.length > 0 ? allergens : undefined,
+            card_bg_color: cardBgColor || undefined,
+            stock_tracking_mode: stockTrackingMode as
+              | "in_stock"
+              | "out_of_stock"
+              | "quantity",
+          },
+          isAllLocations ? null : selectedLocationId,
+        );
+        if (result.error) {
+          errorCount++;
+        } else {
+          successCount++;
+          createdItemId = (result as any).data?.id ?? null;
+        }
+      }
 
       // Create item in first category, then add to others
       for (let i = 0; i < categoryIds.length; i++) {
@@ -349,19 +387,20 @@ export function CreateItemWizard({
       }
 
       if (successCount > 0) {
-        toast.success(
-          `Item created and added to ${successCount} categor${
-            successCount !== 1 ? "ies" : "y"
-          }`,
-          {
-            description:
-              errorCount > 0
-                ? `${errorCount} category assignment${
-                    errorCount !== 1 ? "s" : ""
-                  } failed`
-                : undefined,
-          },
-        );
+        const successMessage =
+          categoryIds.length === 0
+            ? "Item created"
+            : `Item created and added to ${successCount} categor${
+                successCount !== 1 ? "ies" : "y"
+              }`;
+        toast.success(successMessage, {
+          description:
+            errorCount > 0
+              ? `${errorCount} category assignment${
+                  errorCount !== 1 ? "s" : ""
+                } failed`
+              : undefined,
+        });
       } else {
         if (uploadedAsset) {
           await imageUpload
@@ -450,6 +489,10 @@ export function CreateItemWizard({
                     value="modifiers"
                     className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2 shrink-0"
                   >Modifiers</TabsTrigger>
+                  <TabsTrigger
+                    value="categories"
+                    className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2 shrink-0"
+                  >Categories</TabsTrigger>
                   <TabsTrigger
                     value="recipe"
                     className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2 shrink-0"
@@ -887,8 +930,10 @@ export function CreateItemWizard({
                     </Select>
                     <p className="text-xs text-muted-foreground">How should inventory be tracked for this item?</p>
                   </div>
+                </TabsContent>
 
-                  {/* Category Selection */}
+                {/* CATEGORIES TAB */}
+                <TabsContent value="categories" className="space-y-6 mt-0">
                   <div className="space-y-4 rounded-xl border border-border/70 bg-background p-4">
                     <div className="flex items-center gap-2">
                       <Tag className="h-4 w-4 text-blue-500" />
@@ -901,19 +946,10 @@ export function CreateItemWizard({
                     </div>
 
                     {selectedCategories.size === 0 && accessibleCategories.length > 0 && (
-                      <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
-                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                        <div className="space-y-1">
-                          <p className="font-medium text-amber-800">Select at least one category</p>
-                          <p className="text-xs text-amber-700">
-                            New items need a category before save.
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {errors.categories && (
-                      <p className="text-sm text-red-500">{errors.categories}</p>
+                      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <AlertCircle className="h-3 w-3 shrink-0" />
+                        Optional — without one, the item goes to &ldquo;Uncategorized&rdquo;.
+                      </p>
                     )}
 
                     {accessibleCategories.length === 0 ? (

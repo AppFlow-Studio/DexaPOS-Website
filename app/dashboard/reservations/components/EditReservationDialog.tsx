@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -23,11 +23,8 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertTriangle, Loader2 } from 'lucide-react'
-import { useCreateReservation } from '@/app/dashboard/hooks/useReservations'
-import { detectReservationConflict } from '@/lib/reservations/conflict-detection'
-import type { ConflictResult } from '@/lib/reservations/conflict-detection'
+import { Loader2 } from 'lucide-react'
+import { useUpdateReservation } from '@/app/dashboard/hooks/useReservations'
 import type { Reservation } from '@/types/floor-plan'
 
 const schema = z.object({
@@ -35,8 +32,8 @@ const schema = z.object({
   partySize: z.number().int().min(1).max(20),
   phone: z.string().min(7, 'Valid phone required'),
   email: z.string().email('Invalid email').or(z.literal('')).optional(),
-  reservationDate: z.string(),
-  reservationTime: z.string(),
+  reservationDate: z.string().min(1, 'Date required'),
+  reservationTime: z.string().min(1, 'Time required'),
   durationMinutes: z.number().int().min(15).max(480),
   isVip: z.boolean().default(false),
   preferredSection: z.string().optional(),
@@ -47,25 +44,31 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-interface CreateReservationDialogProps {
+interface EditReservationDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  defaultDate: string
-  existingReservations: Reservation[]
+  reservation: Reservation | null
+  date: string
+  onSaved?: (updatedReservation: Reservation) => void
 }
 
-export default function CreateReservationDialog ({
+function normalizeTimeValue (time: string | undefined): string {
+  if (!time) return '19:00'
+  const parts = time.split(':')
+  if (parts.length >= 2) {
+    return `${parts[0]}:${parts[1]}`
+  }
+  return time
+}
+
+export default function EditReservationDialog ({
   open,
   onOpenChange,
-  defaultDate,
-  existingReservations
-}: CreateReservationDialogProps) {
-  const [conflictWarning, setConflictWarning] = useState<ConflictResult | null>(
-    null
-  )
-  const [forceCreate, setForceCreate] = useState(false)
-
-  const mutation = useCreateReservation(defaultDate)
+  reservation,
+  date,
+  onSaved
+}: EditReservationDialogProps) {
+  const mutation = useUpdateReservation(date)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -74,7 +77,7 @@ export default function CreateReservationDialog ({
       partySize: 2,
       phone: '',
       email: '',
-      reservationDate: defaultDate,
+      reservationDate: date,
       reservationTime: '19:00',
       durationMinutes: 90,
       isVip: false,
@@ -85,73 +88,58 @@ export default function CreateReservationDialog ({
     }
   })
 
-  const onSubmit = async (values: FormValues) => {
-    if (!forceCreate) {
-      const conflict = detectReservationConflict(
-        {
-          reservationDate: values.reservationDate,
-          reservationTime: values.reservationTime,
-          durationMinutes: values.durationMinutes,
-          assignedTableIds: []
-        },
-        existingReservations
-      )
-      if (conflict) {
-        setConflictWarning(conflict)
-        return
-      }
-    }
+  useEffect(() => {
+    if (!open || !reservation) return
 
-    await mutation.mutateAsync({
-      partyName: values.partyName,
-      partySize: values.partySize,
-      phone: values.phone,
-      email: values.email || undefined,
-      reservationDate: values.reservationDate,
-      reservationTime: values.reservationTime,
-      durationMinutes: values.durationMinutes,
-      isVip: values.isVip,
-      preferredSection: values.preferredSection || undefined,
-      seatingPreference: values.seatingPreference || undefined,
-      notes: values.notes,
-      specialRequests: values.specialRequests || undefined
+    form.reset({
+      partyName: reservation.party_name,
+      partySize: reservation.party_size,
+      phone: reservation.phone,
+      email: reservation.email ?? '',
+      reservationDate: reservation.reservation_date ?? date,
+      reservationTime: normalizeTimeValue(reservation.reservation_time),
+      durationMinutes: reservation.duration_minutes ?? 90,
+      isVip: reservation.is_vip,
+      preferredSection: reservation.preferred_section ?? '',
+      seatingPreference: reservation.seating_preference ?? '',
+      notes: reservation.notes ?? '',
+      specialRequests: reservation.special_requests ?? ''
     })
+  }, [open, reservation, date, form])
+
+  const onSubmit = async (values: FormValues) => {
+    if (!reservation) return
+
+    const updated = await mutation.mutateAsync({
+      reservationId: reservation.id,
+      params: {
+        partyName: values.partyName,
+        partySize: values.partySize,
+        phone: values.phone,
+        email: values.email || undefined,
+        reservationDate: values.reservationDate,
+        reservationTime: values.reservationTime,
+        durationMinutes: values.durationMinutes,
+        isVip: values.isVip,
+        preferredSection: values.preferredSection || undefined,
+        seatingPreference: values.seatingPreference || undefined,
+        notes: values.notes || undefined,
+        specialRequests: values.specialRequests || undefined
+      }
+    })
+
+    onSaved?.(updated as Reservation)
     onOpenChange(false)
-    form.reset()
-    setConflictWarning(null)
-    setForceCreate(false)
   }
 
-  const handleCreateAnyway = () => {
-    setForceCreate(true)
-    setConflictWarning(null)
-    form.handleSubmit(onSubmit)()
-  }
-
-  const handleClose = (open: boolean) => {
-    if (!open) {
-      form.reset()
-      setConflictWarning(null)
-      setForceCreate(false)
-    }
-    onOpenChange(open)
-  }
+  if (!reservation) return null
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className='w-[calc(100vw-2rem)] max-w-md max-h-[90vh] overflow-y-auto'>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className='max-w-md max-h-[90vh] overflow-y-auto'>
         <DialogHeader>
-          <DialogTitle>New Reservation</DialogTitle>
+          <DialogTitle>Edit Reservation</DialogTitle>
         </DialogHeader>
-
-        {conflictWarning && (
-          <Alert variant='destructive'>
-            <AlertTriangle className='h-4 w-4' />
-            <AlertDescription>
-              Table conflict: {conflictWarning.reason}. You can proceed anyway.
-            </AlertDescription>
-          </Alert>
-        )}
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-4'>
@@ -330,7 +318,7 @@ export default function CreateReservationDialog ({
                 <FormItem>
                   <FormLabel>Notes</FormLabel>
                   <FormControl>
-                    <Textarea className='resize-none' rows={2} {...field} />
+                    <Textarea rows={2} className='resize-none' {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -344,43 +332,21 @@ export default function CreateReservationDialog ({
                 <FormItem>
                   <FormLabel>Special Requests</FormLabel>
                   <FormControl>
-                    <Textarea className='resize-none' rows={2} {...field} />
+                    <Textarea rows={2} className='resize-none' {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            {conflictWarning ? (
-              <DialogFooter className='gap-2'>
-                <Button
-                  type='button'
-                  variant='outline'
-                  onClick={() => setConflictWarning(null)}
-                >
-                  Go Back
-                </Button>
-                <Button
-                  type='button'
-                  onClick={handleCreateAnyway}
-                  disabled={mutation.isPending}
-                >
-                  {mutation.isPending && (
-                    <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                  )}
-                  Create Anyway
-                </Button>
-              </DialogFooter>
-            ) : (
-              <DialogFooter>
-                <Button type='submit' disabled={mutation.isPending}>
-                  {mutation.isPending && (
-                    <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                  )}
-                  Create Reservation
-                </Button>
-              </DialogFooter>
-            )}
+            <DialogFooter>
+              <Button type='submit' disabled={mutation.isPending}>
+                {mutation.isPending && (
+                  <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                )}
+                Save Changes
+              </Button>
+            </DialogFooter>
           </form>
         </Form>
       </DialogContent>
