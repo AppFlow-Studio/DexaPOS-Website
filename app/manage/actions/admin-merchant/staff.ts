@@ -120,14 +120,59 @@ export async function adminResetStaffPin(
 // BULK RESET PINS
 // ============================================================================
 /**
- * Bulk reset PINs for all active staff at a merchant/location
+ * Bulk reset PINs for all active staff at a merchant/location.
+ * When customPin is provided, applies that same PIN to every staff member
+ * (iterates per-member rather than using the RPC generator).
  */
 export async function adminBulkResetPins(
   merchantId: string,
-  locationId?: string | null
+  locationId?: string | null,
+  customPin?: string,
 ): Promise<{ success: boolean; results?: BulkPinResetResult[]; error?: string }> {
   await assertHQPermission('hq.merchant.manage_team')
 
+  if (customPin !== undefined && !/^\d{4,6}$/.test(customPin)) {
+    return { success: false, error: 'Custom PIN must be 4–6 digits' }
+  }
+
+  // When a custom PIN is requested, iterate per-member (same approach as merchant BulkResetPINs)
+  if (customPin) {
+    const allStaff = await getAdminMerchantStaff(merchantId, locationId)
+    const results: BulkPinResetResult[] = []
+    const errors: string[] = []
+
+    for (const member of allStaff) {
+      if (!member.overall_is_active) continue
+      const primary =
+        member.location_assignments.find((a) => a.is_primary) ||
+        member.location_assignments[0]
+      if (!primary || !member.staff_profile_id) {
+        errors.push(`${member.display_name}: missing location or profile ID`)
+        continue
+      }
+      const res = await adminResetStaffPin(
+        merchantId,
+        member.staff_profile_id,
+        primary.location_id,
+        customPin,
+      )
+      if (res.success && res.pin) {
+        results.push({
+          staff_profile_id: member.staff_profile_id,
+          staff_name: member.display_name,
+          new_pin: res.pin,
+        })
+      } else {
+        errors.push(`${member.display_name}: ${res.error || 'failed'}`)
+      }
+    }
+
+    if (errors.length) console.warn('[adminBulkResetPins] partial errors:', errors)
+    revalidatePath(`/manage/merchants/${merchantId}`)
+    return { success: true, results }
+  }
+
+  // Default: use RPC to generate random PINs
   const supabase = createServerSupabaseClient()
 
   const { data, error } = await supabase.rpc('admin_bulk_reset_pins', {
@@ -678,4 +723,130 @@ export async function getAdminMerchantStaffStats(merchantId: string): Promise<{
     clerkUsers: staff.filter((s: Record<string, unknown>) => s.account_type === 'clerk').length,
     posOnlyUsers: staff.filter((s: Record<string, unknown>) => s.account_type === 'pos_only').length,
   }
+}
+
+// ============================================================================
+// RESET STAFF PASSWORD
+// ============================================================================
+
+function generateSecurePassword(length = 12): string {
+  const charset =
+    'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*'
+  let password = ''
+  for (let i = 0; i < length; i++) {
+    password += charset.charAt(Math.floor(Math.random() * charset.length))
+  }
+  return password
+}
+
+/**
+ * Reset the dashboard login password for a single Clerk staff member.
+ * Only applies to staff with account_type === 'clerk'.
+ */
+export async function adminResetStaffPassword(
+  merchantId: string,
+  clerkUserId: string,
+  customPassword?: string,
+): Promise<{ success: boolean; password?: string; error?: string }> {
+  await assertHQPermission('hq.merchant.manage_team')
+
+  if (customPassword !== undefined && customPassword.length < 8) {
+    return { success: false, error: 'Password must be at least 8 characters' }
+  }
+
+  const password = customPassword || generateSecurePassword(12)
+
+  try {
+    const clerk = await clerkClient()
+    await clerk.users.updateUser(clerkUserId, { password })
+  } catch (err) {
+    console.error('[adminResetStaffPassword] Clerk error:', err)
+    return { success: false, error: 'Failed to update password in Clerk' }
+  }
+
+  await logAdminAction('MERCHANT_STAFF_PASSWORD_RESET', {
+    merchantId,
+    resourceType: 'staff_member',
+    resourceId: clerkUserId,
+    metadata: {
+      custom_password_used: Boolean(customPassword),
+      source: 'adminResetStaffPassword',
+    },
+  })
+
+  revalidatePath(`/manage/merchants/${merchantId}`)
+  return { success: true, password }
+}
+
+// ============================================================================
+// BULK RESET STAFF PASSWORDS
+// ============================================================================
+
+export type BulkPasswordResetResult = {
+  clerk_user_id: string
+  staff_name: string
+  email: string
+  new_password: string
+}
+
+/**
+ * Bulk reset dashboard passwords for all active Clerk staff at a merchant/location.
+ */
+export async function adminBulkResetPasswords(
+  merchantId: string,
+  locationId?: string | null,
+): Promise<{
+  success: boolean
+  results?: BulkPasswordResetResult[]
+  errors?: string[]
+  error?: string
+}> {
+  await assertHQPermission('hq.merchant.manage_team')
+
+  const allStaff = await getAdminMerchantStaff(merchantId, locationId)
+  const clerkStaff = allStaff.filter(
+    (s) => s.account_type === 'clerk' && s.clerk_user_id && s.overall_is_active,
+  )
+
+  if (clerkStaff.length === 0) {
+    return { success: false, error: 'No active dashboard users found at this location' }
+  }
+
+  const results: BulkPasswordResetResult[] = []
+  const errors: string[] = []
+
+  const clerk = await clerkClient()
+
+  for (const member of clerkStaff) {
+    const newPassword = generateSecurePassword(12)
+    try {
+      await clerk.users.updateUser(member.clerk_user_id!, { password: newPassword })
+      results.push({
+        clerk_user_id: member.clerk_user_id!,
+        staff_name: member.display_name,
+        email: member.email || '',
+        new_password: newPassword,
+      })
+    } catch (err) {
+      console.error(`[adminBulkResetPasswords] Failed for ${member.display_name}:`, err)
+      errors.push(`${member.display_name}: Failed to reset password`)
+    }
+  }
+
+  if (results.length > 0) {
+    await logAdminAction('MERCHANT_STAFF_PASSWORD_RESET', {
+      merchantId,
+      locationId: locationId || null,
+      resourceType: 'staff_member',
+      resourceName: `bulk_password_reset_${new Date().toISOString()}`,
+      metadata: {
+        bulk_reset: true,
+        staff_count: results.length,
+        source: 'adminBulkResetPasswords',
+      },
+    })
+  }
+
+  revalidatePath(`/manage/merchants/${merchantId}`)
+  return { success: true, results, errors }
 }

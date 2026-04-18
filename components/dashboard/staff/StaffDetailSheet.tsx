@@ -28,6 +28,8 @@ import { UnifiedStaffMember, EmploymentType } from "@/types/staff";
 import { RolesModel } from "@/types/db-modles";
 import { cn } from "@/lib/utils";
 import {
+  Eye,
+  EyeOff,
   Mail,
   Phone,
   MapPin,
@@ -46,11 +48,13 @@ import {
   ChevronRight,
   Shield,
 } from "lucide-react";
+import { CredentialToast } from "@/components/ui/credential-toast";
 import { LocationAssignmentSheet } from "./LocationAssignmentSheet";
 import {
   useDeactivateStaff,
   useReactivateStaff,
   useResetStaffPIN,
+  useResetStaffPassword,
   useUpdateStaffAssignment,
   useUpgradePOSToClerk,
   useDemoteClerkToPOS,
@@ -81,6 +85,7 @@ export function StaffDetailSheet({
   const deactivateStaff = useDeactivateStaff();
   const reactivateStaff = useReactivateStaff();
   const resetPIN = useResetStaffPIN();
+  const resetPassword = useResetStaffPassword();
   const updateAssignment = useUpdateStaffAssignment();
   const upgradePOSToClerk = useUpgradePOSToClerk();
   const demoteClerkToPOS = useDemoteClerkToPOS();
@@ -116,6 +121,16 @@ export function StaffDetailSheet({
   // Upgrade mode state
   const [showUpgradeDialog, setShowUpgradeDialog] = React.useState(false);
   const [upgradeEmail, setUpgradeEmail] = React.useState<string>("");
+
+  // Custom PIN state
+  const [customPinInput, setCustomPinInput] = React.useState("");
+  const [showCustomPin, setShowCustomPin] = React.useState(false);
+
+  // Password reset state (Clerk users only)
+  const [generatedPassword, setGeneratedPassword] = React.useState<string | null>(null);
+  const [customPasswordInput, setCustomPasswordInput] = React.useState("");
+  const [showCustomPassword, setShowCustomPassword] = React.useState(false);
+  const [showPasswordValue, setShowPasswordValue] = React.useState(false);
 
   // Location assignment sheet state
   const [selectedAssignmentLocationId, setSelectedAssignmentLocationId] =
@@ -233,6 +248,55 @@ export function StaffDetailSheet({
       memberId: staff.member_id,
       locationId: primaryLocation.location_id,
     });
+  };
+
+  const handleSetCustomPin = () => {
+    if (!primaryLocation) {
+      toast.error("No primary location found");
+      return;
+    }
+    if (!/^\d{4,6}$/.test(customPinInput)) {
+      toast.error("PIN must be 4–6 digits");
+      return;
+    }
+    resetPIN.mutate(
+      { memberId: staff.member_id, locationId: primaryLocation.location_id, newPin: customPinInput },
+      {
+        onSuccess: (result) => {
+          if (result.error) { toast.error(result.error); return; }
+          setShowCustomPin(false);
+          setCustomPinInput("");
+          const pin = result.data?.pin;
+          if (pin) {
+            toast.custom(
+              (t) => React.createElement(CredentialToast, { pin, duration: 15, onDismiss: () => toast.dismiss(t) }),
+              { duration: 15000, position: "top-center" }
+            );
+          }
+        },
+      }
+    );
+  };
+
+  const handleResetPassword = (custom?: string) => {
+    resetPassword.mutate(
+      { memberId: staff.member_id, customPassword: custom || undefined },
+      {
+        onSuccess: (result) => {
+          if (result.error) { toast.error(result.error); return; }
+          const pw = result.data?.password;
+          if (pw) {
+            setGeneratedPassword(pw);
+            setShowCustomPassword(false);
+            setCustomPasswordInput("");
+            toast.custom(
+              (t) => React.createElement(CredentialToast, { password: pw, duration: 15, onDismiss: () => toast.dismiss(t) }),
+              { duration: 15000, position: "top-center" }
+            );
+          }
+        },
+      }
+    );
   };
 
   const handleSaveChanges = () => {
@@ -802,6 +866,41 @@ export function StaffDetailSheet({
                       }
                     />
 
+                    {/* Custom PIN input */}
+                    {primaryLocation && (
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          onClick={() => { setShowCustomPin((v) => !v); setCustomPinInput(""); }}
+                        >
+                          <KeyRound className="h-3 w-3" />
+                          {showCustomPin ? "Cancel custom PIN" : "Set custom PIN"}
+                        </button>
+                        {showCustomPin && (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="text"
+                              inputMode="numeric"
+                              pattern="\d{4,6}"
+                              maxLength={6}
+                              placeholder="4–6 digit PIN"
+                              value={customPinInput}
+                              onChange={(e) => setCustomPinInput(e.target.value.replace(/\D/g, ""))}
+                              className="h-8 w-36 font-mono text-sm"
+                            />
+                            <Button
+                              size="sm"
+                              onClick={handleSetCustomPin}
+                              disabled={resetPIN.isPending || customPinInput.length < 4}
+                            >
+                              Set PIN
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <Separator />
 
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -820,6 +919,78 @@ export function StaffDetailSheet({
                     </div>
                   </div>
                 </section>
+
+                {/* Dashboard Password — Clerk users only */}
+                {staff.is_clerk_user && (
+                  <section className="rounded-2xl border bg-card p-5">
+                    <div className="mb-4">
+                      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                        Dashboard Password
+                      </h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Reset the password used to log in to the web dashboard.
+                      </p>
+                    </div>
+                    <div className="space-y-4">
+                      {generatedPassword && (
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">New Password</Label>
+                          <div className="relative">
+                            <Input
+                              readOnly
+                              value={showPasswordValue ? generatedPassword : "•".repeat(generatedPassword.length)}
+                              className="font-mono text-sm pr-10"
+                            />
+                            <button
+                              type="button"
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                              onClick={() => setShowPasswordValue((v) => !v)}
+                            >
+                              {showPasswordValue ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleResetPassword()}
+                          disabled={resetPassword.isPending}
+                        >
+                          <Lock className="h-3.5 w-3.5 mr-1.5" />
+                          {resetPassword.isPending ? "Resetting…" : "Reset Password"}
+                        </Button>
+                        <button
+                          type="button"
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          onClick={() => { setShowCustomPassword((v) => !v); setCustomPasswordInput(""); }}
+                        >
+                          {showCustomPassword ? "Cancel" : "Set custom password"}
+                        </button>
+                      </div>
+                      {showCustomPassword && (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="text"
+                            placeholder="Min 8 characters"
+                            value={customPasswordInput}
+                            onChange={(e) => setCustomPasswordInput(e.target.value)}
+                            className="h-8 font-mono text-sm"
+                          />
+                          <Button
+                            size="sm"
+                            onClick={() => handleResetPassword(customPasswordInput)}
+                            disabled={resetPassword.isPending || customPasswordInput.length < 8}
+                          >
+                            Set
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                )}
+
                 {!staff.is_clerk_user && (
                   <section className="rounded-2xl border bg-card p-5">
                     <div className="mb-4">

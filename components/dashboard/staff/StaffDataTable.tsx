@@ -70,6 +70,7 @@ import {
   X,
 } from "lucide-react";
 import { UnifiedStaffMember, BulkPinResetResult } from "@/types/staff";
+import { BulkPasswordResetResult } from "@/app/dashboard/actions/unified-staff";
 import { RolesModel } from "@/types/db-modles";
 import {
   useUpdateStaffAssignment,
@@ -80,6 +81,7 @@ import {
   useDemoteClerkToPOS,
   useBulkDeactivateStaff,
   useBulkResetPINs,
+  useBulkResetPasswords,
   useBulkAssignRole,
 } from "@/app/dashboard/hooks/useStaff";
 import { GetMerchantRoles } from "@/app/dashboard/actions/staff-invite";
@@ -119,7 +121,12 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
   const [bulkRoleCode, setBulkRoleCode] = React.useState("");
   const [bulkPinResultsOpen, setBulkPinResultsOpen] = React.useState(false);
   const [bulkPinResults, setBulkPinResults] = React.useState<BulkPinResetResult[]>([]);
+  const [bulkPinCustomPin, setBulkPinCustomPin] = React.useState("");
+  const [bulkPinConfirmOpen, setBulkPinConfirmOpen] = React.useState(false);
   const [bulkConfirmDeactivateOpen, setBulkConfirmDeactivateOpen] = React.useState(false);
+  const [bulkPasswordResultsOpen, setBulkPasswordResultsOpen] = React.useState(false);
+  const [bulkPasswordResults, setBulkPasswordResults] = React.useState<BulkPasswordResetResult[]>([]);
+  const [bulkPasswordConfirmOpen, setBulkPasswordConfirmOpen] = React.useState(false);
   const [availableRoles, setAvailableRoles] = React.useState<RolesModel[]>([]);
 
   const updateAssignment = useUpdateStaffAssignment();
@@ -130,6 +137,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
   const demoteClerk = useDemoteClerkToPOS();
   const bulkDeactivate = useBulkDeactivateStaff();
   const bulkResetPINs = useBulkResetPINs();
+  const bulkResetPasswords = useBulkResetPasswords();
   const bulkAssignRole = useBulkAssignRole();
 
   // Selected member IDs derived from rowSelection
@@ -161,12 +169,42 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
   };
 
   const handleBulkResetPINs = () => {
-    bulkResetPINs.mutate(selectedMemberIds, {
+    setBulkPinConfirmOpen(true);
+  };
+
+  const handleConfirmBulkResetPINs = () => {
+    if (bulkPinCustomPin && !/^\d{4,6}$/.test(bulkPinCustomPin)) {
+      toast.error("Custom PIN must be 4–6 digits");
+      return;
+    }
+    bulkResetPINs.mutate(
+      { memberIds: selectedMemberIds, customPin: bulkPinCustomPin || undefined },
+      {
+        onSuccess: (result) => {
+          if (result.data?.results) {
+            setBulkPinResults(result.data.results);
+            setBulkPinResultsOpen(true);
+          }
+          setBulkPinConfirmOpen(false);
+          setBulkPinCustomPin("");
+          setRowSelection({});
+        },
+      }
+    );
+  };
+
+  const handleBulkResetPasswords = () => {
+    setBulkPasswordConfirmOpen(true);
+  };
+
+  const handleConfirmBulkResetPasswords = () => {
+    bulkResetPasswords.mutate(selectedMemberIds, {
       onSuccess: (result) => {
-        if (result.data?.results) {
-          setBulkPinResults(result.data.results);
-          setBulkPinResultsOpen(true);
+        if (result.data?.results && result.data.results.length > 0) {
+          setBulkPasswordResults(result.data.results);
+          setBulkPasswordResultsOpen(true);
         }
+        setBulkPasswordConfirmOpen(false);
         setRowSelection({});
       },
     });
@@ -659,7 +697,16 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
             disabled={bulkResetPINs.isPending}
           >
             <KeyRound className="mr-2 h-4 w-4" />
-            {bulkResetPINs.isPending ? "Resetting..." : "Bulk PIN Reset"}
+            {bulkResetPINs.isPending ? "Resetting…" : "Bulk PIN Reset"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleBulkResetPasswords}
+            disabled={bulkResetPasswords.isPending}
+          >
+            <Lock className="mr-2 h-4 w-4" />
+            {bulkResetPasswords.isPending ? "Resetting…" : "Reset Passwords"}
           </Button>
           <Button
             variant="outline"
@@ -908,6 +955,126 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
                 ? "Assigning..."
                 : `Assign to ${selectedCount} Staff`}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk PIN Reset — Confirm + Custom PIN Dialog */}
+      <Dialog open={bulkPinConfirmOpen} onOpenChange={(open) => { setBulkPinConfirmOpen(open); if (!open) setBulkPinCustomPin(""); }}>
+        <DialogContent className="sm:max-w-105">
+          <DialogHeader>
+            <DialogTitle>Bulk PIN Reset</DialogTitle>
+            <DialogDescription>
+              Reset PINs for {selectedCount} selected staff member(s).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                Custom PIN <span className="font-normal text-muted-foreground">(optional)</span>
+              </Label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                pattern="\d{4,6}"
+                maxLength={6}
+                placeholder="Leave blank to auto-generate"
+                value={bulkPinCustomPin}
+                onChange={(e) => setBulkPinCustomPin(e.target.value.replace(/\D/g, ""))}
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground">
+                If set, all selected staff will receive this same PIN.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkPinConfirmOpen(false)} disabled={bulkResetPINs.isPending}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmBulkResetPINs} disabled={bulkResetPINs.isPending}>
+              {bulkResetPINs.isPending ? "Resetting…" : "Reset PINs"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Password Reset — Confirm Dialog */}
+      <Dialog open={bulkPasswordConfirmOpen} onOpenChange={setBulkPasswordConfirmOpen}>
+        <DialogContent className="sm:max-w-105">
+          <DialogHeader>
+            <DialogTitle>Bulk Reset Passwords</DialogTitle>
+            <DialogDescription>
+              Reset dashboard passwords for {selectedCount} selected staff member(s).
+              POS-only staff without dashboard accounts will be skipped.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkPasswordConfirmOpen(false)} disabled={bulkResetPasswords.isPending}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmBulkResetPasswords} disabled={bulkResetPasswords.isPending}>
+              {bulkResetPasswords.isPending ? "Resetting…" : "Reset Passwords"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Password Reset Results Dialog */}
+      <Dialog
+        open={bulkPasswordResultsOpen}
+        onOpenChange={(open) => {
+          setBulkPasswordResultsOpen(open);
+          if (!open) setBulkPasswordResults([]);
+        }}
+      >
+        <DialogContent className="sm:max-w-135">
+          <DialogHeader>
+            <DialogTitle>Password Reset Results</DialogTitle>
+            <DialogDescription>
+              New passwords for {bulkPasswordResults.length} dashboard user(s). Share them securely — these are shown only once.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[300px] overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Staff Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead className="text-right">New Password</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {bulkPasswordResults.map((result) => (
+                  <TableRow key={result.member_id}>
+                    <TableCell className="font-medium">{result.staff_name}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{result.email || "—"}</TableCell>
+                    <TableCell className="text-right font-mono">{result.new_password}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter className="gap-3">
+            <Button
+              variant="outline"
+              onClick={() => {
+                const csv = ["Name,Email,Password", ...bulkPasswordResults.map((r) => `"${r.staff_name}","${r.email}","${r.new_password}"`)].join("\n");
+                const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `password-reset-${new Date().toISOString().split("T")[0]}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+              }}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Download CSV
+            </Button>
+            <Button onClick={() => setBulkPasswordResultsOpen(false)}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

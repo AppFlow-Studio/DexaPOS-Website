@@ -2172,9 +2172,13 @@ export async function BulkDeactivateStaff(
  */
 export async function BulkResetPINs(
   memberIds: string[],
+  customPin?: string,
 ): Promise<
   StaffActionResponse<{ results: BulkPinResetResult[]; errors: string[] }>
 > {
+  if (customPin !== undefined && !/^\d{4,6}$/.test(customPin)) {
+    return { error: "Custom PIN must be 4–6 digits" };
+  }
   if (!memberIds.length) return { error: "No members provided" };
 
   const supabase = createServerSupabaseClient();
@@ -2227,8 +2231,8 @@ export async function BulkResetPINs(
         continue;
       }
 
-      // Generate one PIN, apply to all locations
-      const newPin = Math.floor(1000 + Math.random() * 9000).toString();
+      // Use custom PIN or generate one; apply to all locations
+      const newPin = customPin || Math.floor(1000 + Math.random() * 9000).toString();
       const { error: updateError } = await supabase
         .from("location_members")
         .update({
@@ -2345,4 +2349,158 @@ export async function BulkAssignRole(
   }
 
   return { data: { updated, errors } };
+}
+
+// ============================================================================
+// RESET STAFF PASSWORD (Clerk users only)
+// ============================================================================
+
+/**
+ * Reset the dashboard login password for a single Clerk staff member.
+ */
+export async function ResetStaffPassword(
+  memberId: string,
+  customPassword?: string,
+): Promise<StaffActionResponse<{ password: string }>> {
+  if (customPassword !== undefined && customPassword.length < 8) {
+    return { error: "Password must be at least 8 characters" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  try {
+    // Look up member to get user_id and org
+    const { data: member } = await supabase
+      .from("members")
+      .select("user_id, staff_profile_id, organization_id")
+      .eq("id", memberId)
+      .single();
+
+    if (!member) return { error: "Member not found" };
+    // members.user_id IS the Clerk user ID (users.id = Clerk user ID)
+    if (!member.user_id) {
+      return { error: "This staff member does not have a dashboard account" };
+    }
+
+    const clerkUserId = member.user_id;
+
+    // Get staff name from staff profile
+    let staffName = "Staff Member";
+    if (member.staff_profile_id) {
+      const { data: sp } = await supabase
+        .from("staff_profiles")
+        .select("first_name, last_name")
+        .eq("id", member.staff_profile_id)
+        .single();
+      if (sp) staffName = `${sp.first_name} ${sp.last_name}`.trim() || staffName;
+    }
+
+    const password = customPassword || generateSecurePassword(12);
+
+    const clerk = await clerkClient();
+    await clerk.users.updateUser(clerkUserId, { password });
+
+    if (member.organization_id) {
+      await LogAuditEvent({
+        clerkOrgId: member.organization_id,
+        action: `Staff Password Reset: ${staffName}`,
+        actionCategory: "staff",
+        resourceType: "staff_member",
+        resourceId: member.staff_profile_id || member.user_id || memberId,
+        resourceName: staffName,
+        changes: { reason: "Manual Reset via Dashboard" },
+        metadata: { custom_password_used: Boolean(customPassword) },
+      });
+    }
+
+    revalidatePath("/dashboard/staff");
+    return { data: { password } };
+  } catch (error) {
+    console.error("[ResetStaffPassword] Error:", error);
+    return { error: "Failed to reset password" };
+  }
+}
+
+// ============================================================================
+// BULK RESET STAFF PASSWORDS (Clerk users only)
+// ============================================================================
+
+export type BulkPasswordResetResult = {
+  member_id: string;
+  staff_name: string;
+  email: string;
+  new_password: string;
+};
+
+/**
+ * Bulk reset dashboard passwords for selected Clerk staff members.
+ * Non-Clerk members in the list are skipped and reported in errors.
+ */
+export async function BulkResetPasswords(
+  memberIds: string[],
+): Promise<
+  StaffActionResponse<{ results: BulkPasswordResetResult[]; errors: string[] }>
+> {
+  if (!memberIds.length) return { error: "No members provided" };
+
+  const supabase = createServerSupabaseClient();
+  const results: BulkPasswordResetResult[] = [];
+  const errors: string[] = [];
+
+  const clerk = await clerkClient();
+
+  for (const memberId of memberIds) {
+    try {
+      const { data: member } = await supabase
+        .from("members")
+        .select("user_id, staff_profile_id, organization_id")
+        .eq("id", memberId)
+        .single();
+
+      if (!member) {
+        errors.push(`${memberId}: Member not found`);
+        continue;
+      }
+
+      // members.user_id IS the Clerk user ID (users.id = Clerk user ID)
+      if (!member.user_id) {
+        errors.push(`${memberId}: POS-only staff — no dashboard account`);
+        continue;
+      }
+
+      const clerkUserId = member.user_id;
+
+      // Get name and email from staff profile
+      let staffName = "Staff Member";
+      let email = "";
+      if (member.staff_profile_id) {
+        const { data: sp } = await supabase
+          .from("staff_profiles")
+          .select("first_name, last_name, email")
+          .eq("id", member.staff_profile_id)
+          .single();
+        if (sp) {
+          staffName = `${sp.first_name} ${sp.last_name}`.trim() || staffName;
+          email = sp.email || "";
+        }
+      }
+
+      const newPassword = generateSecurePassword(12);
+
+      await clerk.users.updateUser(clerkUserId, { password: newPassword });
+
+      results.push({
+        member_id: memberId,
+        staff_name: staffName,
+        email,
+        new_password: newPassword,
+      });
+    } catch (err) {
+      console.error(`[BulkResetPasswords] Error for ${memberId}:`, err);
+      errors.push(`${memberId}: Unexpected error`);
+    }
+  }
+
+  revalidatePath("/dashboard/staff");
+  return { data: { results, errors } };
 }

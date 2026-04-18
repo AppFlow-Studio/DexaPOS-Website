@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useAdminBulkResetPins } from '@/lib/queries/use-admin-staff'
+import { useAdminBulkResetPasswords } from '@/lib/queries/use-admin-staff'
 import {
   Dialog,
   DialogContent,
@@ -27,14 +27,12 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { AlertTriangle, Download, Loader2, Key, CheckCircle } from 'lucide-react'
-import type { BulkPinResetResult } from '@/types/staff'
+import { AlertTriangle, Download, Loader2, Lock, CheckCircle } from 'lucide-react'
+import type { BulkPasswordResetResult } from '@/app/manage/actions/admin-merchant/staff'
 import type { LocationSummary } from '@/types/merchant'
 
-interface BulkPinResetDialogProps {
+interface BulkPasswordResetDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   merchantId: string
@@ -44,24 +42,22 @@ interface BulkPinResetDialogProps {
 
 type DialogStep = 'confirm' | 'results'
 
-export function BulkPinResetDialog({
+export function BulkPasswordResetDialog({
   open,
   onOpenChange,
   merchantId,
   merchantName,
   locations,
-}: BulkPinResetDialogProps) {
+}: BulkPasswordResetDialogProps) {
   const [step, setStep] = useState<DialogStep>('confirm')
   const [locationFilter, setLocationFilter] = useState<string>('all')
-  const [customPin, setCustomPin] = useState('')
-  const [results, setResults] = useState<BulkPinResetResult[]>([])
+  const [results, setResults] = useState<BulkPasswordResetResult[]>([])
 
-  const bulkResetMutation = useAdminBulkResetPins()
+  const bulkResetMutation = useAdminBulkResetPasswords()
 
   const resetDialog = () => {
     setStep('confirm')
     setLocationFilter('all')
-    setCustomPin('')
     setResults([])
   }
 
@@ -71,34 +67,36 @@ export function BulkPinResetDialog({
   }
 
   const handleConfirmReset = async () => {
-    if (customPin && !/^\d{4,6}$/.test(customPin)) {
-      toast.error('Custom PIN must be 4–6 digits')
-      return
-    }
     try {
       const result = await bulkResetMutation.mutateAsync({
         merchantId,
         locationId: locationFilter !== 'all' ? locationFilter : null,
-        customPin: customPin || undefined,
       })
 
       if (result.success && result.results) {
         setResults(result.results)
         setStep('results')
-        toast.success(`${result.results.length} PIN(s) reset successfully`)
+        const errCount = result.errors?.length ?? 0
+        if (errCount > 0) {
+          toast.warning(
+            `${result.results.length} password(s) reset, ${errCount} failed`,
+          )
+        } else {
+          toast.success(`${result.results.length} password(s) reset successfully`)
+        }
       } else {
-        toast.error(result.error || 'Failed to reset PINs')
+        toast.error(result.error || 'Failed to reset passwords')
       }
     } catch {
-      toast.error('Failed to reset PINs')
+      toast.error('Failed to reset passwords')
     }
   }
 
   const handleExportCSV = () => {
     if (results.length === 0) return
 
-    const headers = ['Staff Name', 'New PIN']
-    const rows = results.map((r) => [r.staff_name, r.new_pin])
+    const headers = ['Staff Name', 'Email', 'New Password']
+    const rows = results.map((r) => [r.staff_name, r.email, r.new_password])
 
     const csvContent = [
       headers.join(','),
@@ -109,7 +107,7 @@ export function BulkPinResetDialog({
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `pin-reset-${merchantName.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.csv`
+    link.download = `password-reset-${merchantName.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.csv`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -130,27 +128,26 @@ export function BulkPinResetDialog({
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Key className="h-5 w-5" />
-                Bulk Reset PINs
+                <Lock className="h-5 w-5" />
+                Bulk Reset Passwords
               </DialogTitle>
               <DialogDescription>
-                Reset PINs for all active staff members at {merchantName}.
+                Reset dashboard login passwords for all active Clerk staff at{' '}
+                {merchantName}.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 py-4">
-              {/* Warning */}
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Warning</AlertTitle>
                 <AlertDescription>
-                  This action will invalidate all existing PINs for the selected
-                  location(s). Staff members will need to use their new PINs to
-                  access the POS system.
+                  This will invalidate current passwords and sign all affected staff
+                  out of their active sessions. Only dashboard (Clerk) users are
+                  affected — POS-only staff are skipped.
                 </AlertDescription>
               </Alert>
 
-              {/* Location Filter */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">Filter by Location</label>
                 <Select value={locationFilter} onValueChange={setLocationFilter}>
@@ -169,28 +166,8 @@ export function BulkPinResetDialog({
                   </SelectContent>
                 </Select>
                 <p className="text-sm text-muted-foreground">
-                  PINs will be reset for all active staff at: {selectedLocationName}
-                </p>
-              </div>
-
-              {/* Optional Custom PIN */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">
-                  Custom PIN{' '}
-                  <span className="font-normal text-muted-foreground">(optional)</span>
-                </Label>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="\d{4,6}"
-                  maxLength={6}
-                  placeholder="Leave blank to auto-generate"
-                  value={customPin}
-                  onChange={(e) => setCustomPin(e.target.value.replace(/\D/g, ''))}
-                  className="font-mono"
-                />
-                <p className="text-xs text-muted-foreground">
-                  If set, all staff will receive this same 4–6 digit PIN.
+                  Passwords will be reset for all active dashboard users at:{' '}
+                  {selectedLocationName}
                 </p>
               </div>
             </div>
@@ -207,7 +184,7 @@ export function BulkPinResetDialog({
                 {bulkResetMutation.isPending && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                Reset All PINs
+                Reset All Passwords
               </Button>
             </DialogFooter>
           </>
@@ -216,38 +193,41 @@ export function BulkPinResetDialog({
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-green-500" />
-                PINs Reset Successfully
+                Passwords Reset Successfully
               </DialogTitle>
               <DialogDescription>
-                {results.length} staff member(s) have been assigned new PINs.
+                {results.length} staff member(s) have been assigned new passwords.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 py-4">
-              {/* Warning about one-time display */}
               <Alert>
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Important</AlertTitle>
                 <AlertDescription>
-                  Save or export these PINs securely before closing this dialog.
+                  These passwords are shown only once. Export or securely share them
+                  with staff before closing.
                 </AlertDescription>
               </Alert>
 
-              {/* Results Table */}
               <div className="max-h-64 overflow-y-auto border rounded-md">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Staff Name</TableHead>
-                      <TableHead className="text-right">New PIN</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead className="text-right">New Password</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {results.map((result) => (
-                      <TableRow key={result.staff_profile_id}>
-                        <TableCell>{result.staff_name}</TableCell>
-                        <TableCell className="text-right font-mono font-bold text-lg">
-                          {result.new_pin}
+                      <TableRow key={result.clerk_user_id}>
+                        <TableCell className="font-medium">{result.staff_name}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {result.email || '—'}
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-bold">
+                          {result.new_password}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -255,12 +235,7 @@ export function BulkPinResetDialog({
                 </Table>
               </div>
 
-              {/* Export Button */}
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={handleExportCSV}
-              >
+              <Button variant="outline" className="w-full" onClick={handleExportCSV}>
                 <Download className="mr-2 h-4 w-4" />
                 Export as CSV
               </Button>
