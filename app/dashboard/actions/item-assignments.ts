@@ -39,6 +39,24 @@ export async function AddItemToCategory(
     return { error: error.message };
   }
 
+  // Auto-propagate category-level modifier groups to the new item
+  const { data: categoryModifiers } = await supabase
+    .from("category_modifier_groups")
+    .select("modifier_group_id")
+    .eq("category_id", categoryId);
+
+  if (categoryModifiers?.length) {
+    const upserts = categoryModifiers.map((cm) => ({
+      menu_item_id: menuItemId,
+      modifier_group_id: cm.modifier_group_id,
+      merchant_id: merchantId,
+    }));
+    // Batch upsert — duplicates are silently skipped
+    await supabase
+      .from("menu_item_modifier_groups")
+      .upsert(upserts, { onConflict: "menu_item_id,modifier_group_id" });
+  }
+
   // Fetch category and item names for user-friendly audit log
   const [categoryResult, itemResult] = await Promise.all([
     supabase.from("categories").select("name").eq("id", categoryId).single(),
@@ -63,6 +81,7 @@ export async function AddItemToCategory(
       display_order: displayOrder,
       custom_price: customPrice,
       is_featured: isFeatured,
+      auto_propagated_modifiers: categoryModifiers?.length || 0,
     },
   });
 

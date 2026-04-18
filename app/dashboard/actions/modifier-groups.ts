@@ -56,6 +56,17 @@ export async function GetModifierGroups(
                 id,
                 menu_item:menu_items(id, name, price)
             ),
+            location_item_modifier_groups(
+                id,
+                location_id,
+                location:locations(id, name),
+                menu_item:menu_items(id, name, price)
+            ),
+            category_modifier_groups(
+                id,
+                location_id,
+                category:categories(id, name)
+            ),
             location_override:location_modifier_group_overrides!left(
                 id,
                 is_active,
@@ -77,6 +88,16 @@ export async function GetModifierGroups(
     query = query.eq(
       "modifier_group_items.location_modifier_item_overrides.location_id",
       locationId,
+    );
+    // Filter location-scoped item assignments to this location only
+    query = query.eq(
+      "location_item_modifier_groups.location_id",
+      locationId,
+    );
+    // Filter category-modifier assignments: global + this location
+    query = query.or(
+      `location_id.is.null,location_id.eq.${locationId}`,
+      { referencedTable: "category_modifier_groups" },
     );
   }
 
@@ -420,23 +441,20 @@ export async function DeleteModifierGroup(
     }
   }
 
-  // If location-specific, check usage count
-  if (group?.location_id) {
-    const { data: usage } = await supabase
-      .from("menu_item_modifier_groups")
-      .select("id")
-      .eq("modifier_group_id", modifierGroupId);
+  // Clean up references before deleting the group
+  // Remove menu item assignments
+  await supabase
+    .from("menu_item_modifier_groups")
+    .delete()
+    .eq("modifier_group_id", modifierGroupId);
 
-    const count = usage?.length || 0;
+  // Remove category assignments
+  await supabase
+    .from("category_modifier_groups")
+    .delete()
+    .eq("modifier_group_id", modifierGroupId);
 
-    if (count && count > 0) {
-      return {
-        error: `Cannot delete: This location-specific modifier group is assigned to ${count} menu item(s). Please unassign it from all menu items first.`,
-      };
-    }
-  }
-
-  // Remove references in order_item_modifiers before deleting the group
+  // Remove references in order_item_modifiers
   await supabase
     .from("order_item_modifiers")
     .delete()

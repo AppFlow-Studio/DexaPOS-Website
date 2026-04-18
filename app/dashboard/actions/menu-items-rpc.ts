@@ -414,23 +414,50 @@ export async function getItemsForLocationFlat(
 // Direct query — not dependent on the RPC including modifier_groups.
 // ============================================================================
 
-export async function getItemModifierGroups(menuItemId: string): Promise<
-  Array<{ id: string; name: string; description: string | null }>
+export async function getItemModifierGroups(
+  menuItemId: string,
+  locationId?: string | null,
+): Promise<
+  Array<{ id: string; name: string; description: string | null; source?: "global" | "location" }>
 > {
   if (!menuItemId) return [];
   try {
-    // Use service role client — same reason as updateItemOverride:
-    // RLS on menu_item_modifier_groups blocks reads for location-scoped users,
-    // and Clerk auth() can throw when called outside a full request context.
     const supabase = createServiceRoleClient();
-    const { data, error } = await supabase
+
+    // 1. Global assignments
+    const { data: globalData } = await supabase
       .from("menu_item_modifier_groups")
       .select("modifier_group_id, modifier_groups(id, name, description)")
       .eq("menu_item_id", menuItemId);
-    if (error || !data) return [];
-    return (data as any[])
+
+    const globalGroups = (globalData as any[] || [])
       .map((row) => row.modifier_groups)
-      .filter(Boolean);
+      .filter(Boolean)
+      .map((g: any) => ({ ...g, source: "global" as const }));
+
+    // 2. Location-specific assignments (if location provided)
+    if (locationId && locationId !== "all") {
+      const { data: locationData } = await supabase
+        .from("location_item_modifier_groups")
+        .select("modifier_group_id, modifier_groups:modifier_groups(id, name, description)")
+        .eq("menu_item_id", menuItemId)
+        .eq("location_id", locationId);
+
+      const locationGroups = (locationData as any[] || [])
+        .map((row) => row.modifier_groups)
+        .filter(Boolean)
+        .map((g: any) => ({ ...g, source: "location" as const }));
+
+      // Merge and deduplicate (global takes precedence)
+      const globalIds = new Set(globalGroups.map((g: any) => g.id));
+      const combined = [
+        ...globalGroups,
+        ...locationGroups.filter((g: any) => !globalIds.has(g.id)),
+      ];
+      return combined;
+    }
+
+    return globalGroups;
   } catch {
     return [];
   }
