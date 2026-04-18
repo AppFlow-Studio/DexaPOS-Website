@@ -20,6 +20,7 @@ import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 interface RuntimeTablesViewProps {
   locationId: string
@@ -43,8 +44,11 @@ export function RuntimeTablesView ({
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false)
 
   const { data: userInfo } = useUserInfo()
-  const { data: floorPlans, isLoading: isLoadingFloorPlans } =
-    useFloorPlans(locationId)
+  const {
+    data: floorPlans,
+    isLoading: isLoadingFloorPlans,
+    error: floorPlansError
+  } = useFloorPlans(locationId)
   // IMPORTANT: This hook fetches the tables WITH sessions (runtime status)
   // This will automatically refetch when activeFloorPlanId changes
   const {
@@ -164,6 +168,36 @@ export function RuntimeTablesView ({
         </div>
         <div className='flex-1 p-4'>
           <Skeleton className='h-full w-full' />
+        </div>
+      </div>
+    )
+  }
+
+  if (floorPlansError) {
+    return (
+      <div className='flex flex-col h-screen max-h-[90vh] rounded-lg shadow-xl overflow-hidden bg-background'>
+        {onBack && (
+          <div className='flex items-center gap-4 p-4 border-b bg-background'>
+            <button
+              onClick={onBack}
+              className='flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors'
+            >
+              ← Back
+            </button>
+            {location && (
+              <span className='text-sm font-semibold text-foreground'>
+                {location.name}
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className='p-6'>
+          <Alert variant='destructive'>
+            <AlertDescription>
+              Problem fetching floor plans. Please refresh and try again.
+            </AlertDescription>
+          </Alert>
         </div>
       </div>
     )

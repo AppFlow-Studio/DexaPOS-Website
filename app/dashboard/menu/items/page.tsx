@@ -1092,7 +1092,7 @@ export default function MenuItemsPage() {
     // If the RPC didn't return modifier_groups, fetch them directly
     let itemWithModifiers = item;
     if (!item.modifier_groups || item.modifier_groups.length === 0) {
-      const groups = await getItemModifierGroups(item.id);
+      const groups = await getItemModifierGroups(item.id, isAllLocations ? null : selectedLocationId);
       if (groups.length > 0) {
         itemWithModifiers = {
           ...item,
@@ -1755,6 +1755,8 @@ export default function MenuItemsPage() {
           image: c.image,
           created_at: c.created_at,
           updated_at: c.updated_at,
+          is_global: c.is_global,
+          location_name: c.location_name,
         }))}
         modifierGroups={modifierGroups}
         onSuccess={() => {

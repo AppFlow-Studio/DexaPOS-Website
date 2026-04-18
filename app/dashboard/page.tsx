@@ -248,6 +248,7 @@ export default function MerchantDashboardPage() {
       }),
       sales: item.net_sales,
     }));
+
   }, [kpis7Days]);
 
   // Chart configuration

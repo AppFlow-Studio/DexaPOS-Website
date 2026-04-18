@@ -111,6 +111,7 @@ import {
   updateItemOverride,
   UpdateItemParams,
   FlatItem,
+  getItemModifierGroups,
 } from "@/app/dashboard/actions/menu-items-rpc";
 import {
   GetItemIsPopular,
@@ -138,16 +139,19 @@ interface PriceLevels {
   level_2_location_item_cash?: number | null;
   level_2_modifier: number | null;
   level_2_modifier_type: "add" | "percent" | null;
-  level_3_category: number | null; // NEW: Category price
+  level_3_category: number | null;           // UI L2: Global category price
   level_3_category_cash?: number | null;
-  level_4_location_category: number | null; // NEW: Location + Category
+  level_3_menu_category: number | null;      // UI L4: Global menu category price (new)
+  level_3_menu_category_cash?: number | null;
+  level_4_location_category: number | null;  // UI L3: Branch category price
   level_4_location_category_cash?: number | null;
-  level_5_location_menu: number | null; // NEW: Location + Menu + Category
+  level_5_location_menu: number | null;      // UI L5: Branch menu price
   level_5_location_menu_cash?: number | null;
   // Delivery pricing
   level_1_delivery: number | null;
   level_2_location_item_delivery?: number | null;
   level_3_category_delivery?: number | null;
+  level_3_menu_category_delivery?: number | null;
   level_4_location_category_delivery?: number | null;
   level_5_location_menu_delivery?: number | null;
 }
@@ -272,7 +276,7 @@ interface NewEditItemFormSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   clerkOrgId: string | undefined;
-  categories?: CategoriesModel[];
+  categories?: (CategoriesModel & { is_global?: boolean; location_name?: string | null })[];
   modifierGroups?: (ModifierGroupsModel & {
     modifier_group_items: ModifierGroupItemsModel[];
   })[];
@@ -297,6 +301,8 @@ interface NewEditItemFormSheetProps {
    * dedicated edit page instead.
    */
   mode?: "full" | "inline-price";
+  /** Called when the user clicks "Open Global Edit". Should navigate to /dashboard/menu/items/[id]/edit */
+  onOpenGlobalEdit?: () => void;
 }
 
 // Form schema
@@ -385,87 +391,74 @@ function getEditingContext(
     };
   }
 
-  // Items Library + Location Selected + No Category = Level 2 (Location Item Override)
-  if (!menuId && !categoryId && !isAllLocations) {
-    return {
-      level: 2,
-      table: "location_item_overrides",
-      description:
-        "Editing location pricing. This price applies to ALL menus at this location.",
-      canEditBaseFields: false,
-      priceLabel: "Location Base Price",
-      resetToLevel: 1,
-      resetLabel: "Reset to Global",
-    };
-  }
-
-  // Category context + All Locations = Level 3 (Category Price)
+  // Level 2: Global Category Base (category, no menu, all locations)
   if (categoryId && isAllLocations && !menuId) {
     return {
-      level: 3,
+      level: 2,
       table: "category_items",
       description:
         "Editing category-specific pricing. This price applies at all locations for this category.",
       canEditBaseFields: false,
       priceLabel: "Category Price",
-      resetToLevel: 1,
+      resetToLevel: 1,   // RPC target: 1 = clears category_items, back to global base
       resetLabel: "Reset to Base Price",
     };
   }
 
-  // Category context + Location Selected = Level 4 (Location + Category)
+  // Level 3: Branch Category Base (category, no menu, specific location)
   if (categoryId && !isAllLocations && !menuId) {
     return {
-      level: 4,
+      level: 3,
       table: "location_category_item_overrides",
       description:
-        "Editing location category pricing. This price applies to this category at this location.",
+        "Editing branch category pricing. This price applies to this category at this branch only.",
       canEditBaseFields: false,
-      priceLabel: "Location Category Price",
-      resetToLevel: 3,
+      priceLabel: "Branch Category Price",
+      resetToLevel: 3,   // RPC target: 3 = clears location_category (old L4), keeps category_items (old L3 = new L2)
       resetLabel: "Reset to Category Price",
     };
   }
 
-  // Menu + Category + All Locations = Level 3 (Category in menu context)
+  // Level 4: Global Menu Category Base (menu + category, all locations / global menu)
   if (menuId && categoryId && isAllLocations) {
     return {
-      level: 3,
+      level: 4,
       table: "category_items",
       description:
-        "Editing category pricing for this menu. This price applies at all locations.",
+        "Editing menu category pricing. This price applies to all locations in this menu.",
       canEditBaseFields: false,
-      priceLabel: "Category Price",
-      resetToLevel: 1,
+      priceLabel: "Menu Category Price",
+      resetToLevel: 1,   // RPC target: 1 = clears category_items, back to global base
       resetLabel: "Reset to Base Price",
     };
   }
 
-  // Menu + Category + Location (Location-owned menu) = Level 5
-  if (menuId && categoryId && !isAllLocations && isMenuLocationOwned) {
+  // Level 5: Branch Menu Category Base (menu + category + specific location)
+  if (menuId && categoryId && !isAllLocations) {
     return {
       level: 5,
       table: "location_menu_item_overrides",
-      description:
-        "Editing your location's menu. You have full control over this pricing.",
+      description: isMenuLocationOwned
+        ? "Editing your location's menu. You have full control over this pricing."
+        : "Editing this menu at your branch only. Other branches are not affected.",
       canEditBaseFields: false,
-      priceLabel: "Your Menu Price",
-      resetToLevel: 4,
-      resetLabel: "Reset to Location Category",
+      priceLabel: isMenuLocationOwned ? "Your Menu Price" : "Branch Menu Price",
+      resetToLevel: 4,   // RPC target: 4 = clears location_menu (old L5), keeps location_category (old L4 = new L3)
+      resetLabel: "Reset to Branch Category",
     };
   }
 
-  // Menu + Category + Location (Global Menu) = Level 5 (Location + Menu + Category)
-  if (menuId && categoryId && !isAllLocations && !isMenuLocationOwned) {
+  // Items Library + specific location + no category = no cascade level (treat as L1 display)
+  if (!menuId && !categoryId && !isAllLocations) {
     return {
-      level: 5,
-      table: "location_menu_item_overrides",
+      level: 1,
+      table: "menu_items",
       description:
-        "Editing this menu at your location only. Other locations are not affected.",
+        "Editing item. Switch to 'All Locations' to edit the global base price.",
       canEditBaseFields: false,
-      priceLabel: "Location Menu Price",
-      resetToLevel: 4,
-      resetLabel: "Reset to Location Category",
+      priceLabel: "Base Price",
+      resetToLevel: null,
+      resetLabel: null,
     };
   }
 
@@ -772,6 +765,7 @@ export function NewEditItemFormSheet({
   menuName,
   isMenuLocationOwned = false,
   mode = "full",
+  onOpenGlobalEdit,
 }: NewEditItemFormSheetProps) {
   const queryClient = useQueryClient();
 
@@ -855,6 +849,27 @@ export function NewEditItemFormSheet({
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isResetting, setIsResetting] = React.useState(false);
   const [showAddModifier, setShowAddModifier] = React.useState(false);
+  const [categorySearch, setCategorySearch] = React.useState("");
+  const [categorySortDesc, setCategorySortDesc] = React.useState(false);
+
+  // Alphabetically sorted + search-filtered categories. Selected ones always
+  // appear at the top so the user never loses sight of what's assigned.
+  const displayedCategories = React.useMemo(() => {
+    const q = categorySearch.trim().toLowerCase();
+    const filtered = q
+      ? categories.filter((c) => c.name.toLowerCase().includes(q))
+      : [...categories];
+    filtered.sort((a, b) =>
+      categorySortDesc
+        ? b.name.localeCompare(a.name)
+        : a.name.localeCompare(b.name),
+    );
+    // Pin selected to the top
+    return [
+      ...filtered.filter((c) => selectedCategories.includes(c.id)),
+      ...filtered.filter((c) => !selectedCategories.includes(c.id)),
+    ];
+  }, [categories, categorySearch, categorySortDesc, selectedCategories]);
   const imageUpload = useMerchantCdnImageUpload({
     merchantId,
     category: "menu-items",
@@ -921,20 +936,7 @@ export function NewEditItemFormSheet({
           cashPrice: levels?.level_1_cash ?? editItem.cash_price,
           deliveryPrice: l1Delivery,
         };
-      case 2: // Location Item Override
-        return {
-          price:
-            levels?.level_2_location_item ??
-            levels?.level_1_base ??
-            editItem.price,
-          cashPrice:
-            levels?.level_2_location_item_cash ??
-            levels?.level_1_cash ??
-            editItem.cash_price,
-          deliveryPrice:
-            levels?.level_2_location_item_delivery ?? l1Delivery,
-        };
-      case 3: // Category Price
+      case 2: // Global Category Base → reads from category_items (level_3_category in DB)
         return {
           price:
             levels?.level_3_category ?? levels?.level_1_base ?? editItem.price,
@@ -942,50 +944,67 @@ export function NewEditItemFormSheet({
             levels?.level_3_category_cash ??
             levels?.level_1_cash ??
             editItem.cash_price,
-          deliveryPrice:
-            levels?.level_3_category_delivery ?? l1Delivery,
+          deliveryPrice: levels?.level_3_category_delivery ?? l1Delivery,
         };
-      case 4: // Location + Category
+      case 3: // Branch Category Base → reads from location_category_item_overrides (level_4 in DB)
         return {
           price:
             levels?.level_4_location_category ??
             levels?.level_3_category ??
-            levels?.level_2_location_item ??
             levels?.level_1_base ??
             editItem.price,
           cashPrice:
             levels?.level_4_location_category_cash ??
             levels?.level_3_category_cash ??
-            levels?.level_2_location_item_cash ??
             levels?.level_1_cash ??
             editItem.cash_price,
           deliveryPrice:
             levels?.level_4_location_category_delivery ??
             levels?.level_3_category_delivery ??
-            levels?.level_2_location_item_delivery ??
             l1Delivery,
         };
-      case 5: // Location + Menu + Category
+      case 4: // Global Menu Category Base → category_items WHERE menu_id IS NOT NULL
+        // If an L4 override exists, show it; otherwise inherit from L2 → L1
+        return {
+          price:
+            levels?.level_3_menu_category ??
+            levels?.level_3_category ??
+            levels?.level_1_base ??
+            editItem.effective_price ??
+            editItem.price,
+          cashPrice:
+            levels?.level_3_menu_category_cash ??
+            levels?.level_3_category_cash ??
+            levels?.level_1_cash ??
+            editItem.effective_cash_price ??
+            editItem.cash_price,
+          deliveryPrice:
+            levels?.level_3_menu_category_delivery ??
+            levels?.level_3_category_delivery ??
+            l1Delivery,
+        };
+      case 5: // Branch Menu Category Base → location_menu_item_overrides
+        // Cascade: L5 → L4(menu) → L3(branch cat) → L2(category) → L1
         return {
           price:
             levels?.level_5_location_menu ??
+            levels?.level_3_menu_category ??
             levels?.level_4_location_category ??
             levels?.level_3_category ??
-            levels?.level_2_location_item ??
             levels?.level_1_base ??
             editItem.price,
           cashPrice:
             levels?.level_5_location_menu_cash ??
+            levels?.level_3_menu_category_cash ??
             levels?.level_4_location_category_cash ??
             levels?.level_3_category_cash ??
-            levels?.level_2_location_item_cash ??
             levels?.level_1_cash ??
             editItem.cash_price,
           deliveryPrice:
             levels?.level_5_location_menu_delivery ??
+            levels?.level_3_menu_category_delivery ??
             levels?.level_4_location_category_delivery ??
             levels?.level_3_category_delivery ??
-            levels?.level_2_location_item_delivery ??
             l1Delivery,
         };
       default:
@@ -1017,6 +1036,7 @@ export function NewEditItemFormSheet({
 
   // Reset form when editItem or context changes
   React.useEffect(() => {
+    let cancelled = false;
     if (editItem) {
       const { price, cashPrice, deliveryPrice } = getPriceForContext();
 
@@ -1047,29 +1067,31 @@ export function NewEditItemFormSheet({
       });
       imageUpload.reset(editItem.image || editItem.image_url || "");
 
-      // Support both old menu_item_categories and new category_items
+      // Support both old menu_item_categories and new category_items.
+      // category_items can arrive in two shapes:
+      //   1) { category_id, category?: { id, name } }   — full join row
+      //   2) { id, name }                               — simple RPC shape
       const categoryData =
         editItem.category_items || editItem.menu_item_categories;
       if (categoryData) {
         setSelectedCategories(
           categoryData
-            .map((c: any) => c.category_id || c.category?.id)
+            .map((c: any) => c.category_id || c.category?.id || c.id)
             .filter(Boolean),
         );
+      } else {
+        setSelectedCategories([]);
       }
-      if (editItem.menu_item_modifier_groups) {
-        setSelectedModifiers(
-          editItem.menu_item_modifier_groups
-            .map((m: any) => {
-              // Handle different data structures:
-              // 1. { modifier_group_id: "xxx" } - assignment record
-              // 2. { modifier_group: { id: "xxx" } } - nested group
-              // 3. { id: "xxx", name: "..." } - the group itself
-              return m.modifier_group_id || m.modifier_group?.id || m.id;
-            })
-            .filter(Boolean),
-        );
-      }
+      // Fetch modifier assignments directly from DB — bypasses any RPC/cache issues
+      // Pass locationId to include location-scoped modifier assignments
+      getItemModifierGroups(editItem.id, isAllLocations ? null : selectedLocationId).then((groups) => {
+        if (cancelled) return;
+        const ids = groups.map((g: any) => g.id);
+        setSelectedModifiers(ids);
+        if (ids.length > 0) {
+          setExpandedSections((prev) => ({ ...prev, modifiers: true }));
+        }
+      });
     } else {
       form.reset({
         name: "",
@@ -1088,6 +1110,7 @@ export function NewEditItemFormSheet({
       setSelectedCategories([]);
       setSelectedModifiers([]);
     }
+    return () => { cancelled = true; };
   }, [editItem, form, getPriceForContext, imageUpload.reset]);
 
   const watchedValues = form.watch();
@@ -1149,12 +1172,12 @@ export function NewEditItemFormSheet({
         return;
       }
 
-      const levelLabels = {
+      // Labels keyed by OLD RPC target level (what resetToLevel maps to internally)
+      const levelLabels: Record<number, string> = {
         1: "global base",
-        2: "location base",
-        3: "category",
-        4: "location category",
-        5: "menu",
+        3: "global category",   // old L3 = new L2
+        4: "branch category",   // old L4 = new L3
+        5: "branch menu",
       };
       toast.success("Reset Successful", {
         description: `Item now uses ${
@@ -1285,10 +1308,10 @@ export function NewEditItemFormSheet({
       const contextName = menuName || categoryName || "menu";
       const levelMessages: Record<number, string> = {
         1: `"${itemName}" updated globally`,
-        2: `"${itemName}" location pricing updated for ${currentLocationName}`,
-        3: `"${itemName}" category pricing updated for "${contextName}"`,
-        4: `"${itemName}" location + category pricing updated at ${currentLocationName}`,
-        5: `"${itemName}" menu pricing updated`,
+        2: `"${itemName}" category pricing updated for "${contextName}"`,
+        3: `"${itemName}" branch category pricing updated at ${currentLocationName}`,
+        4: `"${itemName}" menu category pricing updated for "${menuName || contextName}"`,
+        5: `"${itemName}" branch menu pricing updated at ${currentLocationName}`,
       };
 
       toast.success(editItem ? "Item Updated" : "Item Created", {
@@ -1300,6 +1323,7 @@ export function NewEditItemFormSheet({
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-item", editItem?.id] });
       queryClient.invalidateQueries({ queryKey: ["menus"] });
+      queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
 
       form.reset();
       setSelectedCategories([]);
@@ -1353,57 +1377,60 @@ export function NewEditItemFormSheet({
           isActive={levels.level_1_base !== null}
         />
 
-        {/* Level 2 - Location Item (only if location selected) */}
-        {!isAllLocations && (
-          <PriceLevelRow
-            level={2}
-            label="Location Base"
-            icon={<Building2 className="h-3 w-3" />}
-            price={levels.level_2_location_item}
-            cashPrice={levels.level_2_location_item_cash}
-            deliveryPrice={levels.level_2_location_item_delivery}
-            modifier={levels.level_2_modifier}
-            modifierType={levels.level_2_modifier_type}
-            isCurrentLevel={currentLevel === 2}
-            isActive={
-              levels.level_2_location_item !== null ||
-              levels.level_2_modifier !== null
-            }
-            isOverride
-          />
-        )}
-
-        {/* Level 3 - Category Price */}
+        {/* Level 2 - Global Category Base (shown whenever there's a category context) */}
         {categoryId && (
           <PriceLevelRow
-            level={3}
+            level={2}
             label={`Category: ${categoryName || "Current"}`}
             icon={<Tag className="h-3 w-3" />}
             price={levels.level_3_category}
             cashPrice={levels.level_3_category_cash}
             deliveryPrice={levels.level_3_category_delivery}
-            isCurrentLevel={currentLevel === 3}
-            isActive={levels.level_3_category !== null}
+            isCurrentLevel={currentLevel === 2}
+            isActive={
+              levels.level_3_category !== null ||
+              levels.level_3_category_cash !== null ||
+              levels.level_3_category_delivery !== null
+            }
             isOverride
           />
         )}
 
-        {/* Level 4 - Location + Category */}
-        {categoryId && !isAllLocations && (
+        {/* Level 3 - Branch Category Base (shown when specific location selected, OR in menu context as prior level) */}
+        {categoryId && (!isAllLocations || menuId) && (
           <PriceLevelRow
-            level={4}
-            label="Location + Category"
-            icon={<MapPin className="h-3 w-3" />}
+            level={3}
+            label={`Branch Category: ${categoryName || "Current"}`}
+            icon={<Building2 className="h-3 w-3" />}
             price={levels.level_4_location_category}
             cashPrice={levels.level_4_location_category_cash}
             deliveryPrice={levels.level_4_location_category_delivery}
-            isCurrentLevel={currentLevel === 4}
+            isCurrentLevel={currentLevel === 3}
             isActive={levels.level_4_location_category !== null}
             isOverride
           />
         )}
 
-        {/* Level 5 - Location + Menu + Category */}
+        {/* Level 4 - Global Menu Category Base (menu + category, shown in both L4 and L5 contexts) */}
+        {menuId && categoryId && (
+          <PriceLevelRow
+            level={4}
+            label={`Menu: ${menuName || "Current"}`}
+            icon={<MenuIcon className="h-3 w-3" />}
+            price={levels.level_3_menu_category}
+            cashPrice={levels.level_3_menu_category_cash}
+            deliveryPrice={levels.level_3_menu_category_delivery}
+            isCurrentLevel={currentLevel === 4}
+            isActive={
+              levels.level_3_menu_category !== null ||
+              levels.level_3_menu_category_cash !== null ||
+              levels.level_3_menu_category_delivery !== null
+            }
+            isOverride
+          />
+        )}
+
+        {/* Level 5 - Branch Menu Category Base (menu + category + specific location) */}
         {menuId && categoryId && !isAllLocations && (
           <PriceLevelRow
             level={5}
@@ -1453,7 +1480,37 @@ export function NewEditItemFormSheet({
         <Form {...form}>
           <form
             id="item-form"
-            onSubmit={form.handleSubmit(onSubmit)}
+            onSubmit={form.handleSubmit(onSubmit, (errors) => {
+              const FIELD_LABELS: Record<string, string> = {
+                name: "Item Name",
+                description: "Description",
+                price: "Price",
+                cash_price: "Cash Price",
+                delivery_price: "Delivery Price",
+                image_url: "Image",
+                availability: "Availability",
+                allergens: "Allergens",
+                card_bg_color: "Card Background Color",
+                stock_tracking_mode: "Stock Tracking",
+                tax_category: "Tax Category",
+                is_tax_exempt: "Tax Exempt",
+                available_channels: "Available Channels",
+                prep_station_id: "Prep Station",
+              };
+              const messages = Object.entries(errors)
+                .map(([field, err]) => {
+                  const msg = (err as any)?.message;
+                  if (!msg) return null;
+                  return `${FIELD_LABELS[field] ?? field}: ${msg}`;
+                })
+                .filter(Boolean) as string[];
+              toast.error(editItem ? "Cannot update item" : "Cannot create item", {
+                description:
+                  messages.length > 0
+                    ? messages.join("\n")
+                    : "Please review the highlighted fields and try again.",
+              });
+            })}
             className="flex max-h-[min(92vh,960px)] flex-col"
           >
         <DialogHeader className="border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
@@ -1485,16 +1542,10 @@ export function NewEditItemFormSheet({
                   )}
                 >
                   {editingContext.level === 1 && <Globe className="h-3 w-3" />}
-                  {editingContext.level === 2 && (
-                    <Building2 className="h-3 w-3" />
-                  )}
-                  {editingContext.level === 3 && (
-                    <MenuIcon className="h-3 w-3" />
-                  )}
-                  {editingContext.level === 4 && <MapPin className="h-3 w-3" />}
-                  {editingContext.level === 5 && (
-                    <Sparkles className="h-3 w-3" />
-                  )}
+                  {editingContext.level === 2 && <Tag className="h-3 w-3" />}
+                  {editingContext.level === 3 && <Building2 className="h-3 w-3" />}
+                  {editingContext.level === 4 && <MenuIcon className="h-3 w-3" />}
+                  {editingContext.level === 5 && <MapPin className="h-3 w-3" />}
                   Level {editingContext.level}
                 </Badge>
 
@@ -1561,6 +1612,7 @@ export function NewEditItemFormSheet({
                 <DisabledFieldBanner
                   locationName={currentLocationName}
                   className="mb-4"
+                  onOpenGlobal={onOpenGlobalEdit}
                 />
               )}
 
@@ -1739,6 +1791,7 @@ export function NewEditItemFormSheet({
                       {/* Price Inputs */}
                       <div className="space-y-2">
                           <PriceInputGroup
+                              key={editItem?.id ?? "new"}
                               price={form.watch("price") || 0}
                               cashPrice={form.watch("cash_price") ?? null}
                               onPriceChange={(val) => form.setValue("price", val, { shouldValidate: true })}
@@ -2005,7 +2058,7 @@ export function NewEditItemFormSheet({
 
                                           {/* Info */}
                                           <div className="flex-1 min-w-0">
-                                            <div className="font-medium text-sm flex items-center gap-2">
+                                            <div className="font-medium text-sm flex items-center gap-2 flex-wrap">
                                               {group.name}
                                               {group.is_required && (
                                                 <Badge
@@ -2015,6 +2068,21 @@ export function NewEditItemFormSheet({
                                                   Required
                                                 </Badge>
                                               )}
+                                              {group.source === "location" ? (
+                                                <Badge
+                                                  variant="outline"
+                                                  className="text-[10px] h-4 px-1.5 gap-0.5 bg-blue-50 text-blue-700 border-blue-200"
+                                                >
+                                                  This Location
+                                                </Badge>
+                                              ) : !isAllLocations ? (
+                                                <Badge
+                                                  variant="outline"
+                                                  className="text-[10px] h-4 px-1.5 gap-0.5 bg-emerald-50 text-emerald-700 border-emerald-200"
+                                                >
+                                                  Global
+                                                </Badge>
+                                              ) : null}
                                             </div>
                                             <div className="text-xs text-muted-foreground">
                                               {group.modifier_group_items
@@ -2215,9 +2283,9 @@ export function NewEditItemFormSheet({
 
                             {!canManageModifierLinks && (
                               <div className="text-xs text-muted-foreground bg-muted/40 border rounded-md p-2">
-                                Global item in location view: modifier links are
-                                read-only. You can override price/active for
-                                options above.
+                                Modifier links are managed from the Modifiers page.
+                                Use &quot;Add to Item&quot; or &quot;Add to Category&quot; buttons there
+                                to assign modifiers globally or at this location.
                               </div>
                             )}
                           </>
@@ -2226,7 +2294,144 @@ export function NewEditItemFormSheet({
                       </CollapsibleContent>
                     </Collapsible>
 
-                    {/* SECTION 4: TAX & FEES (collapsible) */}
+                    {/* SECTION 4: CATEGORIES (collapsible) */}
+                    <Collapsible
+                      open={expandedSections.categories}
+                      onOpenChange={() => toggleSection("categories")}
+                      className="border-t pt-4 mt-6"
+                    >
+                      <CollapsibleTrigger asChild>
+                        <button type="button" className="flex items-center justify-between w-full group">
+                          <div className="flex items-center gap-2">
+                            <Tag className="h-4 w-4 text-blue-500" />
+                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Categories</span>
+                            {selectedCategories.length > 0 && (
+                              <Badge variant="secondary" className="text-xs">
+                                {selectedCategories.length}
+                              </Badge>
+                            )}
+                            {!editingContext.canEditBaseFields && editItem && (
+                              <Badge variant="outline" className="text-xs ml-auto">
+                                View Only
+                              </Badge>
+                            )}
+                          </div>
+                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.categories && "rotate-180")} />
+                        </button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-3 pt-4">
+                      {/* Suggestion for new items */}
+                      {!editItem &&
+                        selectedCategories.length === 0 &&
+                        categories.length > 0 && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                            <Info className="h-3 w-3 shrink-0" />
+                            Select a category to organize your menu. Without one, the item goes to "Uncategorized".
+                          </p>
+                        )}
+
+                      {categories.length === 0 ? (
+                        <div className="text-center py-6 text-muted-foreground text-sm border border-dashed rounded-lg">
+                          <Tag className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                          <p>No categories available</p>
+                          <p className="text-xs mt-1">
+                            Create categories first to organize your menu
+                            items.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {/* Search + sort toolbar */}
+                          <div className="flex items-center gap-2">
+                            <div className="relative flex-1">
+                              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <input
+                                type="text"
+                                placeholder="Search categories..."
+                                value={categorySearch}
+                                onChange={(e) => setCategorySearch(e.target.value)}
+                                className="w-full h-9 pl-9 pr-8 rounded-md border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                              />
+                              {categorySearch && (
+                                <button
+                                  type="button"
+                                  onClick={() => setCategorySearch("")}
+                                  className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground"
+                                >
+                                  <X className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setCategorySortDesc((v) => !v)}
+                              className="inline-flex items-center gap-1 h-9 px-3 rounded-md border bg-background text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                              title={`Sort ${categorySortDesc ? "Z → A" : "A → Z"}`}
+                            >
+                              {categorySortDesc ? "Z – A" : "A – Z"}
+                            </button>
+                          </div>
+
+                          {displayedCategories.length === 0 ? (
+                            <div className="text-center py-4 text-xs text-muted-foreground">
+                              No categories match &ldquo;{categorySearch}&rdquo;
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              {displayedCategories.map((category) => (
+                                <button
+                                  key={category.id}
+                                  type="button"
+                                  onClick={() => toggleCategory(category.id)}
+                                  disabled={
+                                    !editingContext.canEditBaseFields &&
+                                    !!editItem
+                                  }
+                                  className={cn(
+                                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all",
+                                    "border hover:scale-105 active:scale-95",
+                                    "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
+                                    selectedCategories.includes(category.id)
+                                      ? "bg-primary text-primary-foreground border-primary shadow-md"
+                                      : "bg-background border-border hover:border-primary/50",
+                                  )}
+                                >
+                                  {category.name}
+                                  {category.is_global !== undefined && (
+                                    <span className="inline-flex items-center gap-0.5 text-[10px] opacity-70">
+                                      {category.is_global ? (
+                                        <Globe className="h-3 w-3" />
+                                      ) : (
+                                        <><MapPin className="h-3 w-3" />{category.location_name && <span>{category.location_name}</span>}</>
+                                      )}
+                                    </span>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Skip option for new items */}
+                          {!editItem && (
+                            <div className="pt-2 border-t">
+                              <button
+                                type="button"
+                                className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                                onClick={() => {
+                                  setSelectedCategories([]);
+                                }}
+                              >
+                                <X className="h-3 w-3" />
+                                Skip - Add to "Uncategorized"
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      </CollapsibleContent>
+                    </Collapsible>
+
+                    {/* SECTION 5: TAX & FEES (collapsible) */}
                     <Collapsible
                       open={expandedSections.tax}
                       onOpenChange={() => toggleSection("tax")}
@@ -2407,7 +2612,7 @@ export function NewEditItemFormSheet({
                       </CollapsibleContent>
                     </Collapsible>
 
-                    {/* SECTION 5: AVAILABILITY (collapsible) */}
+                    {/* SECTION 6: AVAILABILITY (collapsible) */}
                     <Collapsible
                       open={expandedSections.availability}
                       onOpenChange={() => toggleSection("availability")}
@@ -2602,99 +2807,7 @@ export function NewEditItemFormSheet({
                       </CollapsibleContent>
                     </Collapsible>
 
-                    {/* SECTION 5B: CATEGORIES (collapsible) */}
-                    <Collapsible
-                      open={expandedSections.categories}
-                      onOpenChange={() => toggleSection("categories")}
-                      className="border-t pt-4 mt-2"
-                    >
-                      <CollapsibleTrigger asChild>
-                        <button type="button" className="flex items-center justify-between w-full group">
-                          <div className="flex items-center gap-2">
-                            <Tag className="h-4 w-4 text-blue-500" />
-                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Categories</span>
-                            {selectedCategories.length > 0 && (
-                              <Badge variant="secondary" className="text-xs">
-                                {selectedCategories.length}
-                              </Badge>
-                            )}
-                            {!editingContext.canEditBaseFields && editItem && (
-                              <Badge variant="outline" className="text-xs ml-auto">
-                                View Only
-                              </Badge>
-                            )}
-                          </div>
-                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.categories && "rotate-180")} />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-3 pt-4">
-                      {/* Suggestion for new items */}
-                      {!editItem &&
-                        selectedCategories.length === 0 &&
-                        categories.length > 0 && (
-                          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                            <Info className="h-3 w-3 shrink-0" />
-                            Select a category to organize your menu. Without one, the item goes to "Uncategorized".
-                          </p>
-                        )}
-
-                      {categories.length === 0 ? (
-                        <div className="text-center py-6 text-muted-foreground text-sm border border-dashed rounded-lg">
-                          <Tag className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                          <p>No categories available</p>
-                          <p className="text-xs mt-1">
-                            Create categories first to organize your menu
-                            items.
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {/* Category grid */}
-                          <div className="flex flex-wrap gap-2">
-                            {categories.map((category) => (
-                              <button
-                                key={category.id}
-                                type="button"
-                                onClick={() => toggleCategory(category.id)}
-                                disabled={
-                                  !editingContext.canEditBaseFields &&
-                                  !!editItem
-                                }
-                                className={cn(
-                                  "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
-                                  "border hover:scale-105 active:scale-95",
-                                  "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
-                                  selectedCategories.includes(category.id)
-                                    ? "bg-primary text-primary-foreground border-primary shadow-md"
-                                    : "bg-background border-border hover:border-primary/50",
-                                )}
-                              >
-                                {category.name}
-                              </button>
-                            ))}
-                          </div>
-
-                          {/* Skip option for new items */}
-                          {!editItem && (
-                            <div className="pt-2 border-t">
-                              <button
-                                type="button"
-                                className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-                                onClick={() => {
-                                  setSelectedCategories([]);
-                                }}
-                              >
-                                <X className="h-3 w-3" />
-                                Skip - Add to "Uncategorized"
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      </CollapsibleContent>
-                    </Collapsible>
-
-                    {/* SECTION 5C: LOCATION BADGES (collapsible, edit-only, location-scoped) */}
+                    {/* SECTION 7: LOCATION BADGES (collapsible, edit-only, location-scoped) */}
                     {editItem && !isAllLocations && (
                     <Collapsible
                       open={expandedSections.locationBadges}
@@ -2739,7 +2852,7 @@ export function NewEditItemFormSheet({
                     </Collapsible>
                     )}
 
-                    {/* SECTION 6: RECIPE (collapsible, edit-only) */}
+                    {/* SECTION 8: RECIPE (collapsible, edit-only) */}
                     {editItem && (
                     <Collapsible
                       open={expandedSections.recipe}

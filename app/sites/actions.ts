@@ -37,7 +37,7 @@ function mapStoreConfigToSite(config: any): Site {
     backgroundColor: config.background_color,
     textColor: config.text_color,
     fontFamily: config.font_family,
-    templateId: config.template_id,
+    templateId: (config.template_id === "minimal" ? "minimal" : "classic") as "classic" | "minimal",
     heroImageUrl: config.hero_image_url,
     faviconUrl: config.favicon_url,
     headerStyle: config.header_style,
@@ -253,6 +253,7 @@ function mapRpcMenuToStorefront(rpcMenu: any): StorefrontMenu | null {
                   price: Number(opt.price_modifier) || 0,
                   is_active: true,
                   display_order: 0,
+                  is_default: opt.is_default ?? false,
                 })),
             }));
 

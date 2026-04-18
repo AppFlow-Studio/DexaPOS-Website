@@ -1,150 +1,150 @@
-import React from "react";
+import React from 'react'
 
 interface TableSquare8ChairProps {
-  darkMode?: boolean;
-  color?: string;
-  chairColor?: string;
-  width?: number;
-  height?: number;
+  darkMode?: boolean
+  color?: string
+  chairColor?: string
+  width?: number
+  height?: number
 }
 
 const TableSquare8Chair: React.FC<TableSquare8ChairProps> = ({
   darkMode = false,
-  color = "#2DD4BF",
+  color = '#2DD4BF',
   width = 208,
   height = 97,
   ...props
 }) => {
-  const strokeOpacity = darkMode ? 0.5 : 0.35;
-  const fillOpacity = darkMode ? 0.12 : 0.08;
+  const lightStroke = '#94A3B8'
+  const chairStrokeOpacity = darkMode ? 0.5 : 0.7
 
   return (
     <svg
       width={width}
       height={height}
-      viewBox="0 0 208 97"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
+      viewBox='0 0 208 97'
+      fill='none'
+      xmlns='http://www.w3.org/2000/svg'
       {...props}
     >
       {/* Chairs - top */}
       <rect
-        x="28"
-        y="1"
-        width="40"
-        height="12"
-        rx="3"
+        x='28'
+        y='1'
+        width='40'
+        height='12'
+        rx='3'
         fill={color}
-        fillOpacity={fillOpacity}
-        stroke={color}
-        strokeWidth="1"
-        strokeOpacity={strokeOpacity}
+        fillOpacity={darkMode ? 0.12 : 0.85}
+        stroke={darkMode ? color : lightStroke}
+        strokeWidth='1'
+        strokeOpacity={chairStrokeOpacity}
       />
       <rect
-        x="84"
-        y="1"
-        width="40"
-        height="12"
-        rx="3"
+        x='84'
+        y='1'
+        width='40'
+        height='12'
+        rx='3'
         fill={color}
-        fillOpacity={fillOpacity}
-        stroke={color}
-        strokeWidth="1"
-        strokeOpacity={strokeOpacity}
+        fillOpacity={darkMode ? 0.12 : 0.85}
+        stroke={darkMode ? color : lightStroke}
+        strokeWidth='1'
+        strokeOpacity={chairStrokeOpacity}
       />
       <rect
-        x="140"
-        y="1"
-        width="40"
-        height="12"
-        rx="3"
+        x='140'
+        y='1'
+        width='40'
+        height='12'
+        rx='3'
         fill={color}
-        fillOpacity={fillOpacity}
-        stroke={color}
-        strokeWidth="1"
-        strokeOpacity={strokeOpacity}
+        fillOpacity={darkMode ? 0.12 : 0.85}
+        stroke={darkMode ? color : lightStroke}
+        strokeWidth='1'
+        strokeOpacity={chairStrokeOpacity}
       />
 
       {/* Chairs - bottom */}
       <rect
-        x="28"
-        y="84"
-        width="40"
-        height="12"
-        rx="3"
+        x='28'
+        y='84'
+        width='40'
+        height='12'
+        rx='3'
         fill={color}
-        fillOpacity={fillOpacity}
-        stroke={color}
-        strokeWidth="1"
-        strokeOpacity={strokeOpacity}
+        fillOpacity={darkMode ? 0.12 : 0.85}
+        stroke={darkMode ? color : lightStroke}
+        strokeWidth='1'
+        strokeOpacity={chairStrokeOpacity}
       />
       <rect
-        x="84"
-        y="84"
-        width="40"
-        height="12"
-        rx="3"
+        x='84'
+        y='84'
+        width='40'
+        height='12'
+        rx='3'
         fill={color}
-        fillOpacity={fillOpacity}
-        stroke={color}
-        strokeWidth="1"
-        strokeOpacity={strokeOpacity}
+        fillOpacity={darkMode ? 0.12 : 0.85}
+        stroke={darkMode ? color : lightStroke}
+        strokeWidth='1'
+        strokeOpacity={chairStrokeOpacity}
       />
       <rect
-        x="140"
-        y="84"
-        width="40"
-        height="12"
-        rx="3"
+        x='140'
+        y='84'
+        width='40'
+        height='12'
+        rx='3'
         fill={color}
-        fillOpacity={fillOpacity}
-        stroke={color}
-        strokeWidth="1"
-        strokeOpacity={strokeOpacity}
+        fillOpacity={darkMode ? 0.12 : 0.85}
+        stroke={darkMode ? color : lightStroke}
+        strokeWidth='1'
+        strokeOpacity={chairStrokeOpacity}
       />
 
       {/* Side chairs */}
       <rect
-        x="1"
-        y="29"
-        width="12"
-        height="39"
-        rx="3"
+        x='1'
+        y='29'
+        width='12'
+        height='39'
+        rx='3'
         fill={color}
-        fillOpacity={fillOpacity}
-        stroke={color}
-        strokeWidth="1"
-        strokeOpacity={strokeOpacity}
+        fillOpacity={darkMode ? 0.12 : 0.85}
+        stroke={darkMode ? color : lightStroke}
+        strokeWidth='1'
+        strokeOpacity={chairStrokeOpacity}
       />
 
       <rect
-        x="195"
-        y="29"
-        width="12"
-        height="39"
-        rx="3"
+        x='195'
+        y='29'
+        width='12'
+        height='39'
+        rx='3'
         fill={color}
-        fillOpacity={fillOpacity}
-        stroke={color}
-        strokeWidth="1"
-        strokeOpacity={strokeOpacity}
+        fillOpacity={darkMode ? 0.12 : 0.85}
+        stroke={darkMode ? color : lightStroke}
+        strokeWidth='1'
+        strokeOpacity={chairStrokeOpacity}
       />
 
       {/* Table surface */}
       <rect
-        x="13"
-        y="13"
-        width="182"
-        height="71"
-        rx="6"
+        x='13'
+        y='13'
+        width='182'
+        height='71'
+        rx='6'
         fill={color}
-        fillOpacity={darkMode ? 0.18 : 0.1}
-        stroke={color}
-        strokeWidth="1.5"
-        strokeOpacity={darkMode ? 0.8 : 0.4}
+        fillOpacity={darkMode ? 0.18 : 0.88}
+        stroke={darkMode ? color : lightStroke}
+        strokeWidth='1.5'
+        strokeOpacity={darkMode ? 0.8 : 0.75}
       />
     </svg>
-  );
-};
+  )
+}
 
-export default TableSquare8Chair;
+export default TableSquare8Chair

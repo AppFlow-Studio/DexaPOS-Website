@@ -13,6 +13,13 @@ import {
   getDefaultStoreSlug,
   normalizeOnlineStoreRequestStatus,
 } from "@/lib/online-store/setup-flow";
+import {
+  buildOnlineStoreReviewChecklist,
+  extractLocationOnlineStoreReviewPacket,
+  extractMerchantOnlineStoreReviewPacket,
+} from "@/lib/online-store/setup-flow";
+import { createClerkClient } from "@clerk/backend";
+import { uploadMerchantDocument, uploadOrganizationDocument } from "@/lib/cdn/server";
 
 // ─── Dejavoo Management API ───────────────────────────────────────────────────
 // These env vars must be set in your deployment environment.
@@ -31,6 +38,103 @@ interface PaymentDeviceSummary {
   use_for_online_ordering: boolean;
   is_active: boolean;
   ftd_key_configured: boolean;
+}
+
+type MissingRequestFieldKey =
+  | "legalBusinessName"
+  | "dbaName"
+  | "einTaxId"
+  | "w9Form"
+  | "ownerFirstName"
+  | "ownerLastName"
+  | "ownerDob"
+  | "ownerSsn"
+  | "ownerGovernmentId"
+  | "bankName"
+  | "accountHolderName"
+  | "ddaAccountNumber"
+  | "routingNumber"
+  | "bankSupportDocument";
+
+type RequestPacketMissing = Record<MissingRequestFieldKey, boolean>;
+
+export interface OnlineStoreRequestRequirementsResult {
+  success: boolean;
+  complete: boolean;
+  missing: RequestPacketMissing;
+  values: Partial<Record<MissingRequestFieldKey, string>>;
+  error?: string;
+}
+
+function emptyMissing(): RequestPacketMissing {
+  return {
+    legalBusinessName: false,
+    dbaName: false,
+    einTaxId: false,
+    w9Form: false,
+    ownerFirstName: false,
+    ownerLastName: false,
+    ownerDob: false,
+    ownerSsn: false,
+    ownerGovernmentId: false,
+    bankName: false,
+    accountHolderName: false,
+    ddaAccountNumber: false,
+    routingNumber: false,
+    bankSupportDocument: false,
+  };
+}
+
+function hasAnyMissing(missing: RequestPacketMissing): boolean {
+  return Object.values(missing).some(Boolean);
+}
+
+function normalizeDigits(value: string): string {
+  return value.replace(/\\D/g, "");
+}
+
+function readString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function readFormText(formData: FormData, key: string): string | null {
+  const raw = formData.get(key);
+  return readString(raw);
+}
+
+function readFormFile(formData: FormData, key: string): File | null {
+  const raw = formData.get(key);
+  if (!raw) return null;
+  if (typeof raw === "string") return null;
+  return raw as File;
+}
+
+async function getClerkOrgPublicMetadata(organizationId: string | null) {
+  if (!organizationId) return null;
+  try {
+    const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
+    const org = await clerk.organizations.getOrganization({ organizationId });
+    return (org.publicMetadata as Record<string, unknown> | null) ?? null;
+  } catch (err) {
+    console.warn("[ONLINE_ORDERING] Failed to read Clerk org metadata:", err);
+    return null;
+  }
+}
+
+async function assertMerchantOrgAdmin(userId: string | null, organizationId: string | null) {
+  if (!userId || !organizationId) throw new Error("Unauthorized");
+  const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
+  const memberships = await clerk.organizations.getOrganizationMembershipList({
+    organizationId,
+    limit: 100,
+  });
+  const membership = memberships.data.find((m) => m.publicUserData?.userId === userId);
+  const role = membership?.role ?? "";
+  if (role !== "org:admin" && role !== "org:owner") {
+    throw new Error("Only merchant admins can submit an online-store setup request.");
+  }
 }
 
 async function getLocationPaymentDevices(locationId: string) {
@@ -79,6 +183,324 @@ async function buildRequestedStoreSlug(
   }
 
   return `${baseSlug}-${Date.now().toString().slice(-6)}`;
+}
+
+async function computeOnlineStoreRequestRequirements(
+  locationId: string
+): Promise<OnlineStoreRequestRequirementsResult> {
+  const supabase = createServerSupabaseClient();
+  const { userId, orgId } = await auth();
+
+  const missing = emptyMissing();
+
+  if (!userId || !orgId) {
+    missing.legalBusinessName = true;
+    return {
+      success: false,
+      complete: false,
+      missing,
+      values: {},
+      error: "Unauthorized",
+    };
+  }
+
+  await assertMerchantOrgAdmin(userId, orgId);
+
+  const { data: location, error: locationError } = await supabase
+    .from("locations")
+    .select("id, name, merchant_id, public_metadata")
+    .eq("id", locationId)
+    .single();
+
+  if (locationError || !location) {
+    missing.legalBusinessName = true;
+    return {
+      success: false,
+      complete: false,
+      missing,
+      values: {},
+      error: "Location not found",
+    };
+  }
+
+  const { data: merchant, error: merchantError } = await supabase
+    .from("merchants")
+    .select(
+      "id, name, clerk_org_id, owner_first_name, owner_last_name, business_legal_name, dba_name, ein_last_four, public_metadata"
+    )
+    .eq("id", location.merchant_id)
+    .single();
+
+  if (merchantError || !merchant) {
+    missing.legalBusinessName = true;
+    return {
+      success: false,
+      complete: false,
+      missing,
+      values: {},
+      error: "Merchant not found",
+    };
+  }
+
+  if (merchant.clerk_org_id && merchant.clerk_org_id !== orgId) {
+    missing.legalBusinessName = true;
+    return {
+      success: false,
+      complete: false,
+      missing,
+      values: {},
+      error: "Unauthorized",
+    };
+  }
+
+  const clerkMetadata = await getClerkOrgPublicMetadata(
+    (merchant.clerk_org_id as string | null) ?? null
+  );
+
+  const merchantReviewSource = {
+    ...merchant,
+    public_metadata: {
+      ...(((merchant.public_metadata as Record<string, unknown> | null) ?? {})),
+      ...((clerkMetadata ?? {})),
+    },
+  };
+
+  const merchantPacket = extractMerchantOnlineStoreReviewPacket(
+    merchantReviewSource as any
+  );
+  const locationPacket = extractLocationOnlineStoreReviewPacket(location as any);
+
+  // Keep the checklist build for parity with HQ logic (even if we compute granular missing).
+  buildOnlineStoreReviewChecklist(merchantPacket, locationPacket);
+
+  if (!merchantPacket.legalBusinessName) missing.legalBusinessName = true;
+  if (!merchantPacket.dbaName) missing.dbaName = true;
+  if (!merchantPacket.einTaxId) missing.einTaxId = true;
+  if (!merchantPacket.w9FormUrl) missing.w9Form = true;
+
+  const md =
+    (merchantReviewSource.public_metadata as Record<string, unknown> | null) ??
+    {};
+  const ownerFirstName =
+    readString((merchant as any).owner_first_name) ??
+    readString(md.owner_first_name) ??
+    null;
+  const ownerLastName =
+    readString((merchant as any).owner_last_name) ??
+    readString(md.owner_last_name) ??
+    null;
+
+  if (!ownerFirstName) missing.ownerFirstName = true;
+  if (!ownerLastName) missing.ownerLastName = true;
+  if (!merchantPacket.ownerDob) missing.ownerDob = true;
+  if (!merchantPacket.ownerSsn) missing.ownerSsn = true;
+  if (!merchantPacket.ownerGovernmentIdUrl) missing.ownerGovernmentId = true;
+
+  if (!locationPacket.bankName) missing.bankName = true;
+  if (!locationPacket.accountHolderName) missing.accountHolderName = true;
+  if (!locationPacket.ddaAccountNumber) missing.ddaAccountNumber = true;
+  if (!locationPacket.routingNumber) missing.routingNumber = true;
+  if (!locationPacket.bankSupportDocumentUrl) missing.bankSupportDocument = true;
+
+  const values: Partial<Record<MissingRequestFieldKey, string>> = {
+    legalBusinessName: merchantPacket.legalBusinessName ?? "",
+    dbaName: merchantPacket.dbaName ?? "",
+    einTaxId: merchantPacket.einTaxId ?? "",
+    ownerFirstName: ownerFirstName ?? "",
+    ownerLastName: ownerLastName ?? "",
+    ownerDob: merchantPacket.ownerDob ?? "",
+    ownerSsn: merchantPacket.ownerSsn ?? "",
+    bankName: locationPacket.bankName ?? "",
+    accountHolderName: locationPacket.accountHolderName ?? "",
+    ddaAccountNumber: locationPacket.ddaAccountNumber ?? "",
+    routingNumber: locationPacket.routingNumber ?? "",
+  };
+
+  const complete = !hasAnyMissing(missing);
+
+  return {
+    success: true,
+    complete,
+    missing,
+    values,
+  };
+}
+
+export async function getOnlineStoreRequestRequirements(
+  locationId: string
+): Promise<OnlineStoreRequestRequirementsResult> {
+  return await computeOnlineStoreRequestRequirements(locationId);
+}
+
+export async function saveOnlineStoreRequestRequirements(formData: FormData) {
+  try {
+    const supabase = createServerSupabaseClient();
+    const { userId, orgId } = await auth();
+    const locationId = readFormText(formData, "locationId");
+
+    if (!userId || !orgId) {
+      return { success: false, error: "Unauthorized" };
+    }
+    if (!locationId) {
+      return { success: false, error: "locationId is required" };
+    }
+
+    await assertMerchantOrgAdmin(userId, orgId);
+
+    const { data: location, error: locationError } = await supabase
+      .from("locations")
+      .select("id, merchant_id, public_metadata")
+      .eq("id", locationId)
+      .single();
+
+    if (locationError || !location) {
+      return { success: false, error: "Location not found" };
+    }
+
+    const { data: merchant, error: merchantError } = await supabase
+      .from("merchants")
+      .select("id, clerk_org_id")
+      .eq("id", location.merchant_id)
+      .single();
+
+    if (merchantError || !merchant) {
+      return { success: false, error: "Merchant not found" };
+    }
+
+    const organizationId = (merchant.clerk_org_id as string | null) ?? null;
+    if (!organizationId || organizationId !== orgId) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const businessLegalName = readFormText(formData, "legalBusinessName");
+    const dbaName = readFormText(formData, "dbaName");
+    const einTaxIdRaw = readFormText(formData, "einTaxId");
+    const ownerFirstName = readFormText(formData, "ownerFirstName");
+    const ownerLastName = readFormText(formData, "ownerLastName");
+    const ownerDob = readFormText(formData, "ownerDob");
+    const ownerSsnRaw = readFormText(formData, "ownerSsn");
+
+    const einTaxId = einTaxIdRaw ? normalizeDigits(einTaxIdRaw) : null;
+    const ownerSsn = ownerSsnRaw ? normalizeDigits(ownerSsnRaw) : null;
+
+    const w9File = readFormFile(formData, "w9FormFile");
+    const ownerGovIdFile = readFormFile(formData, "ownerGovernmentIdFile");
+
+    if (w9File && w9File.type !== "application/pdf") {
+      return { success: false, error: "W-9 must be uploaded as a PDF" };
+    }
+
+    const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
+    const org = await clerk.organizations.getOrganization({ organizationId });
+    const currentMetadata =
+      (org.publicMetadata as Record<string, unknown> | null) ?? {};
+    const metadataUpdates: Record<string, unknown> = { ...currentMetadata };
+
+    if (businessLegalName) {
+      metadataUpdates.business_legal_name = businessLegalName;
+      metadataUpdates.legal_business_name = businessLegalName;
+    }
+    if (dbaName) {
+      metadataUpdates.dba_name = dbaName;
+      metadataUpdates.business_name = dbaName;
+    }
+    if (einTaxId) {
+      metadataUpdates.online_store_ein_tax_id = einTaxId;
+      metadataUpdates.ein_tax_id = einTaxId;
+      metadataUpdates.ein_last_four = einTaxId.slice(-4);
+    }
+    if (ownerFirstName) metadataUpdates.owner_first_name = ownerFirstName;
+    if (ownerLastName) metadataUpdates.owner_last_name = ownerLastName;
+    if (ownerDob) metadataUpdates.online_store_owner_dob = ownerDob;
+    if (ownerSsn) metadataUpdates.online_store_owner_ssn = ownerSsn;
+
+    if (w9File) {
+      const uploadResult = await uploadOrganizationDocument(
+        w9File,
+        organizationId,
+        "online-store-w9"
+      );
+      if (!uploadResult.success || !uploadResult.cdnUrl) {
+        return {
+          success: false,
+          error: uploadResult.error || "Failed to upload W-9 PDF",
+        };
+      }
+      metadataUpdates.online_store_w9_form_url = uploadResult.cdnUrl;
+    }
+
+    if (ownerGovIdFile) {
+      const uploadResult = await uploadOrganizationDocument(
+        ownerGovIdFile,
+        organizationId,
+        "online-store-owner-id"
+      );
+      if (!uploadResult.success || !uploadResult.cdnUrl) {
+        return {
+          success: false,
+          error: uploadResult.error || "Failed to upload owner government ID",
+        };
+      }
+      metadataUpdates.online_store_owner_government_id_url = uploadResult.cdnUrl;
+    }
+
+    await clerk.organizations.updateOrganization(organizationId, {
+      publicMetadata: metadataUpdates,
+    });
+
+    const bankName = readFormText(formData, "bankName");
+    const accountHolderName = readFormText(formData, "accountHolderName");
+    const ddaAccountNumber = readFormText(formData, "ddaAccountNumber");
+    const routingNumber = readFormText(formData, "routingNumber");
+    const bankSupportFile = readFormFile(formData, "bankSupportDocumentFile");
+
+    const locationMetadata =
+      (location.public_metadata as Record<string, unknown> | null) ?? {};
+    const nextLocationMetadata: Record<string, unknown> = { ...locationMetadata };
+
+    if (bankName) nextLocationMetadata.online_store_bank_name = bankName;
+    if (accountHolderName)
+      nextLocationMetadata.online_store_account_holder_name = accountHolderName;
+    if (ddaAccountNumber)
+      nextLocationMetadata.online_store_bank_dda_account_number = ddaAccountNumber;
+    if (routingNumber)
+      nextLocationMetadata.online_store_bank_routing_number = routingNumber;
+
+    if (bankSupportFile) {
+      const uploadResult = await uploadMerchantDocument(
+        bankSupportFile,
+        location.merchant_id,
+        "online-store-bank-support"
+      );
+      if (!uploadResult.success || !uploadResult.cdnUrl) {
+        return {
+          success: false,
+          error: uploadResult.error || "Failed to upload bank support document",
+        };
+      }
+      nextLocationMetadata.online_store_bank_support_document_url = uploadResult.cdnUrl;
+    }
+
+    const { error: locationUpdateError } = await supabase
+      .from("locations")
+      .update({
+        public_metadata: nextLocationMetadata,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", locationId);
+
+    if (locationUpdateError) {
+      return { success: false, error: locationUpdateError.message };
+    }
+
+    revalidatePath("/dashboard/online-ordering");
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to save information",
+    };
+  }
 }
 
 /**
@@ -159,7 +581,7 @@ function mapConfigToSettings(
       ? `${location.address_line1 ?? ""}, ${location.city ?? ""}, ${location.state ?? ""} ${location.postal_code ?? ""}`
       : "",
 
-    templateId: config.template_id ?? "classic",
+    templateId: (config.template_id === "minimal" ? "minimal" : "classic") as "classic" | "minimal",
     primaryColor: config.primary_color ?? "#2DD4BF",
     secondaryColor: config.secondary_color ?? "#10b981",
     accentColor: config.accent_color ?? null,
@@ -176,6 +598,7 @@ function mapConfigToSettings(
 
     pickupEnabled: config.accepts_pickup ?? true,
     deliveryEnabled: config.accepts_delivery ?? false,
+    autoAcceptOrders: config.auto_accept_orders ?? false,
     minimumOrderAmount: config.min_order_cents
       ? config.min_order_cents / 100
       : 0,
@@ -271,6 +694,16 @@ export async function getOnlineOrderingSettings(
 export async function requestOnlineOrderingSetup(locationId: string) {
   const supabase = createServerSupabaseClient();
   const { userId } = await auth();
+
+  const requirements = await computeOnlineStoreRequestRequirements(locationId);
+  if (!requirements.success || !requirements.complete) {
+    return {
+      success: false,
+      error: requirements.error || "Missing required information",
+      missing: requirements.missing,
+      values: requirements.values,
+    };
+  }
 
   const { data: location, error: locationError } = await supabase
     .from("locations")
@@ -454,6 +887,7 @@ export async function saveOnlineOrderingSettings(
   if (settings.backgroundColor !== undefined) configData.background_color = settings.backgroundColor;
   if (settings.textColor !== undefined) configData.text_color = settings.textColor;
   if (settings.fontFamily !== undefined) configData.font_family = settings.fontFamily;
+  if (settings.menuLayout !== undefined) configData.menu_layout = settings.menuLayout;
   if (settings.logoUrl !== undefined) configData.logo_url = settings.logoUrl;
   if (settings.heroImageUrl !== undefined) configData.hero_image_url = settings.heroImageUrl;
   if (settings.faviconUrl !== undefined) configData.favicon_url = settings.faviconUrl;
@@ -465,6 +899,7 @@ export async function saveOnlineOrderingSettings(
   // Ordering
   if (settings.pickupEnabled !== undefined) configData.accepts_pickup = Boolean(settings.pickupEnabled);
   if (settings.deliveryEnabled !== undefined) configData.accepts_delivery = Boolean(settings.deliveryEnabled);
+  if (settings.autoAcceptOrders !== undefined) configData.auto_accept_orders = Boolean(settings.autoAcceptOrders);
   if (settings.preparationLeadTime !== undefined) configData.estimated_prep_minutes = Number(settings.preparationLeadTime) || 0;
   if (settings.futureOrderMaxDays !== undefined) configData.max_future_order_days = Number(settings.futureOrderMaxDays) || 0;
   if (settings.minimumOrderAmount !== undefined) configData.min_order_cents = Math.round(Number(settings.minimumOrderAmount || 0) * 100);

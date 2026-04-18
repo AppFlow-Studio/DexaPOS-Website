@@ -13,15 +13,29 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Globe, Clock3, CheckCircle2, AlertTriangle, Ban, ExternalLink, Building2, Store, Palette, Truck, Plug } from "lucide-react";
+import { Loader2, Globe, Clock3, CheckCircle2, AlertTriangle, Ban, ExternalLink, Building2, Store, Palette, Truck, Plug, LayoutTemplate, LayoutGrid, Columns2, ImageOff, Check } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { uploadStoreImage } from "@/lib/storage/actions";
 import { useAuth } from "@clerk/nextjs";
+import { cn } from "@/lib/utils";
 import { OrderOutTab } from "@/components/dashboard/orderout/OrderOutTab";
 import { useOrderOutStatus, useOnboardOrderOut } from "./hooks/useOrderOutStatus";
+import { FONT_GOOGLE_URLS } from "@/app/sites/lib/theme-utils";
+import {
+  getOnlineStoreRequestRequirements,
+  saveOnlineStoreRequestRequirements,
+} from "./actions";
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "localhost:3000";
 
@@ -72,7 +86,7 @@ function StatusCard({
   status: OnlineStoreSetupStatus;
   settings: OnlineOrderingSettings;
   locationName: string;
-  onRequestSetup: () => void;
+  onRequestSetup: () => Promise<void>;
   isLoading: boolean;
 }) {
   if (status === "not_requested") {
@@ -401,12 +415,118 @@ function CompletedSetupPanel({
         </TabsContent>
 
         <TabsContent value="branding" className="space-y-6">
+
+          {/* Store Template */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <LayoutTemplate className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <CardTitle>Store Template</CardTitle>
+                  <CardDescription>Choose the layout style for your online store</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-3">
+                {([
+                  { value: "classic", label: "Classic", description: "Clean layout with a traditional menu grid" },
+                  { value: "minimal", label: "Minimal", description: "Simple, text-focused with subtle accents" },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => onUpdate({ templateId: opt.value })}
+                    className={cn(
+                      "relative rounded-lg border-2 p-4 text-left transition-colors hover:border-primary/50",
+                      settings.templateId === opt.value
+                        ? "border-primary bg-primary/5"
+                        : "border-border bg-background"
+                    )}
+                  >
+                    {settings.templateId === opt.value && (
+                      <div className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary">
+                        <Check className="h-3 w-3 text-white" />
+                      </div>
+                    )}
+                    <p className="text-sm font-semibold">{opt.label}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{opt.description}</p>
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Menu Layout */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <LayoutGrid className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <CardTitle>Menu Layout</CardTitle>
+                  <CardDescription>How menu items are displayed on the ordering page</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-3 gap-3">
+                {([
+                  { value: "cards",      label: "Cards",       description: "Image on top, compact cards",    icon: LayoutGrid },
+                  { value: "sidebyside", label: "Side by Side", description: "Image on right, content on left", icon: Columns2 },
+                  { value: "no-images",  label: "No Images",   description: "List layout, text only",         icon: ImageOff },
+                ] as const).map(({ value, label, description, icon: Icon }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => onUpdate({ menuLayout: value })}
+                    className={cn(
+                      "relative rounded-lg border-2 p-4 text-left transition-colors hover:border-primary/50",
+                      settings.menuLayout === value
+                        ? "border-primary bg-primary/5"
+                        : "border-border bg-background"
+                    )}
+                  >
+                    {settings.menuLayout === value && (
+                      <div className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary">
+                        <Check className="h-3 w-3 text-white" />
+                      </div>
+                    )}
+                    <Icon className="mb-2 h-5 w-5 text-muted-foreground" />
+                    <p className="text-sm font-semibold">{label}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Colors, Font & Images */}
           <Card>
             <CardHeader>
               <CardTitle>Branding</CardTitle>
-              <CardDescription>Update your storefront theme and images (non-payment).</CardDescription>
+              <CardDescription>Colors, fonts, and store images.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Font</Label>
+                  <select
+                    value={settings.fontFamily || "DM Sans"}
+                    onChange={(e) => onUpdate({ fontFamily: e.target.value })}
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  >
+                    {Object.keys(FONT_GOOGLE_URLS).map((font) => (
+                      <option key={font} value={font}>
+                        {font}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    Font options are sourced from storefront supported Google Fonts.
+                  </p>
+                </div>
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Primary Color</Label>
@@ -440,6 +560,55 @@ function CompletedSetupPanel({
                 </div>
               </div>
 
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-2">
+                  <Label>Accent Color</Label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={settings.accentColor || settings.primaryColor}
+                      onChange={(e) => onUpdate({ accentColor: e.target.value })}
+                      className="h-10 w-14 rounded border"
+                    />
+                    <Input
+                      value={settings.accentColor || ""}
+                      onChange={(e) => onUpdate({ accentColor: e.target.value })}
+                      placeholder="Optional"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Background</Label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={settings.backgroundColor}
+                      onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
+                      className="h-10 w-14 rounded border"
+                    />
+                    <Input
+                      value={settings.backgroundColor}
+                      onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Text</Label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={settings.textColor}
+                      onChange={(e) => onUpdate({ textColor: e.target.value })}
+                      className="h-10 w-14 rounded border"
+                    />
+                    <Input
+                      value={settings.textColor}
+                      onChange={(e) => onUpdate({ textColor: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Logo</Label>
@@ -467,6 +636,37 @@ function CompletedSetupPanel({
                   {settings.heroImageUrl ? (
                     <p className="text-xs text-muted-foreground break-all">
                       Current: {settings.heroImageUrl}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Favicon</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleUpload("favicon", e.target.files?.[0] ?? null)}
+                    disabled={Boolean(uploading.favicon)}
+                  />
+                  {settings.faviconUrl ? (
+                    <p className="text-xs text-muted-foreground break-all">
+                      Current: {settings.faviconUrl}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="space-y-2">
+                  <Label>OG Image</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleUpload("og", e.target.files?.[0] ?? null)}
+                    disabled={Boolean(uploading.og)}
+                  />
+                  {settings.ogImageUrl ? (
+                    <p className="text-xs text-muted-foreground break-all">
+                      Current: {settings.ogImageUrl}
                     </p>
                   ) : null}
                 </div>
@@ -505,6 +705,21 @@ function CompletedSetupPanel({
                     disabled={isSaving}
                   />
                 </div>
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div>
+                  <p className="font-medium">Auto-Accept Orders</p>
+                  <p className="text-sm text-muted-foreground">
+                    Automatically accept incoming online orders and send them straight to the kitchen.
+                    When off, each order must be manually accepted from the POS first.
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.autoAcceptOrders}
+                  onCheckedChange={(checked) => onUpdate({ autoAcceptOrders: checked })}
+                  disabled={isSaving}
+                />
               </div>
 
               <div className="grid gap-4 sm:grid-cols-3">
@@ -593,7 +808,7 @@ function CompletedSetupPanel({
                 <OrderOutTab
                   clerkOrgId={orgId}
                   locationId={selectedLocationId}
-                  orderOutStatus={(orderOutStatusResult as any) ?? null}
+                  orderOutStatus={(orderOutStatusResult as any)?.data ?? null}
                   showOnboardingForm={showOrderOutForm}
                   onShowOnboardingForm={setShowOrderOutForm}
                   onboardMutation={onboardMutation}
@@ -625,6 +840,14 @@ export default function OnlineOrderingPage() {
   const { selectedLocationId } = useLocationStore();
   const selectedLocation = useSelectedLocation();
   const isAllLocations = selectedLocationId === "all";
+
+  const [requirementsOpen, setRequirementsOpen] = useState(false);
+  const [requirementsMissing, setRequirementsMissing] = useState<Record<string, boolean> | null>(null);
+  const [requirementsDraft, setRequirementsDraft] = useState<Record<string, string>>({});
+  const [w9File, setW9File] = useState<File | null>(null);
+  const [ownerGovIdFile, setOwnerGovIdFile] = useState<File | null>(null);
+  const [bankSupportFile, setBankSupportFile] = useState<File | null>(null);
+  const [requirementsSaving, setRequirementsSaving] = useState(false);
 
   useEffect(() => {
     if (selectedLocationId && selectedLocationId !== "all") {
@@ -678,6 +901,89 @@ export default function OnlineOrderingPage() {
 
   const status = currentSettings.setupRequestStatus;
 
+  async function openRequirements(locationId: string) {
+    const req = await getOnlineStoreRequestRequirements(locationId);
+    if (!req.success) {
+      toast.error(req.error || "Failed to load required fields");
+      return;
+    }
+    setRequirementsMissing(req.missing);
+    setRequirementsDraft((req.values as any) || {});
+    setW9File(null);
+    setOwnerGovIdFile(null);
+    setBankSupportFile(null);
+    setRequirementsOpen(true);
+  }
+
+  async function handleRequestSetup(locationId: string) {
+    const result = await requestSetup(locationId);
+    if ((result as any)?.success) return;
+
+    const missing = (result as any)?.missing as Record<string, boolean> | undefined;
+    if (missing && Object.values(missing).some(Boolean)) {
+      await openRequirements(locationId);
+      return;
+    }
+
+    toast.error((result as any)?.error || "Failed to request setup");
+  }
+
+  async function handleSaveRequirements(locationId: string) {
+    setRequirementsSaving(true);
+    try {
+      const formData = new FormData();
+      formData.set("locationId", locationId);
+
+      const textKeys = [
+        "legalBusinessName",
+        "dbaName",
+        "einTaxId",
+        "ownerFirstName",
+        "ownerLastName",
+        "ownerDob",
+        "ownerSsn",
+        "bankName",
+        "accountHolderName",
+        "ddaAccountNumber",
+        "routingNumber",
+      ] as const;
+
+      for (const key of textKeys) {
+        const val = requirementsDraft[key] ?? "";
+        if (val.trim().length > 0) formData.set(key, val);
+      }
+
+      if (w9File) formData.set("w9FormFile", w9File);
+      if (ownerGovIdFile) formData.set("ownerGovernmentIdFile", ownerGovIdFile);
+      if (bankSupportFile) formData.set("bankSupportDocumentFile", bankSupportFile);
+
+      const saveResult = await saveOnlineStoreRequestRequirements(formData);
+      if (!saveResult.success) {
+        toast.error(saveResult.error || "Failed to save required information");
+        return;
+      }
+
+      const req = await getOnlineStoreRequestRequirements(locationId);
+      if (!req.success) {
+        toast.error(req.error || "Failed to refresh requirements");
+        return;
+      }
+
+      if (req.complete) {
+        setRequirementsOpen(false);
+        setRequirementsMissing(null);
+        toast.success("Information saved. Submitting request...");
+        await handleRequestSetup(locationId);
+      } else {
+        setRequirementsMissing(req.missing);
+        setRequirementsDraft((req.values as any) || {});
+        toast.error("Some required fields are still missing.");
+      }
+    } finally {
+      setRequirementsSaving(false);
+    }
+  }
+
   if (status !== "setup_completed") {
     return (
       <div className="space-y-6">
@@ -692,9 +998,209 @@ export default function OnlineOrderingPage() {
           status={status}
           settings={currentSettings}
           locationName={selectedLocation.name}
-          onRequestSetup={() => requestSetup(selectedLocationId)}
-          isLoading={isSaving}
+          onRequestSetup={() => handleRequestSetup(selectedLocationId)}
+          isLoading={isSaving || requirementsSaving}
         />
+
+        <Dialog open={requirementsOpen} onOpenChange={setRequirementsOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Complete Required Info</DialogTitle>
+              <DialogDescription>
+                HQ requires these details before they can approve online-store setup. Only missing fields are shown.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              {requirementsMissing?.legalBusinessName ? (
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Legal Business Name</Label>
+                  <Input
+                    value={requirementsDraft.legalBusinessName || ""}
+                    onChange={(e) =>
+                      setRequirementsDraft((prev) => ({ ...prev, legalBusinessName: e.target.value }))
+                    }
+                    placeholder="Legal business name"
+                  />
+                </div>
+              ) : null}
+
+              {requirementsMissing?.dbaName ? (
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>DBA Name</Label>
+                  <Input
+                    value={requirementsDraft.dbaName || ""}
+                    onChange={(e) =>
+                      setRequirementsDraft((prev) => ({ ...prev, dbaName: e.target.value }))
+                    }
+                    placeholder="Doing business as"
+                  />
+                </div>
+              ) : null}
+
+              {requirementsMissing?.einTaxId ? (
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>EIN / Tax ID</Label>
+                  <Input
+                    value={requirementsDraft.einTaxId || ""}
+                    onChange={(e) =>
+                      setRequirementsDraft((prev) => ({ ...prev, einTaxId: e.target.value }))
+                    }
+                    placeholder="9 digits"
+                  />
+                </div>
+              ) : null}
+
+              {requirementsMissing?.w9Form ? (
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Signed W-9 (PDF only)</Label>
+                  <Input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={(e) => setW9File(e.target.files?.[0] ?? null)}
+                  />
+                </div>
+              ) : null}
+
+              {requirementsMissing?.ownerFirstName ? (
+                <div className="space-y-2">
+                  <Label>Owner First Name</Label>
+                  <Input
+                    value={requirementsDraft.ownerFirstName || ""}
+                    onChange={(e) =>
+                      setRequirementsDraft((prev) => ({ ...prev, ownerFirstName: e.target.value }))
+                    }
+                  />
+                </div>
+              ) : null}
+
+              {requirementsMissing?.ownerLastName ? (
+                <div className="space-y-2">
+                  <Label>Owner Last Name</Label>
+                  <Input
+                    value={requirementsDraft.ownerLastName || ""}
+                    onChange={(e) =>
+                      setRequirementsDraft((prev) => ({ ...prev, ownerLastName: e.target.value }))
+                    }
+                  />
+                </div>
+              ) : null}
+
+              {requirementsMissing?.ownerDob ? (
+                <div className="space-y-2">
+                  <Label>Owner DOB</Label>
+                  <Input
+                    type="date"
+                    value={requirementsDraft.ownerDob || ""}
+                    onChange={(e) =>
+                      setRequirementsDraft((prev) => ({ ...prev, ownerDob: e.target.value }))
+                    }
+                  />
+                </div>
+              ) : null}
+
+              {requirementsMissing?.ownerSsn ? (
+                <div className="space-y-2">
+                  <Label>Owner SSN</Label>
+                  <Input
+                    value={requirementsDraft.ownerSsn || ""}
+                    onChange={(e) =>
+                      setRequirementsDraft((prev) => ({ ...prev, ownerSsn: e.target.value }))
+                    }
+                    placeholder="9 digits"
+                  />
+                </div>
+              ) : null}
+
+              {requirementsMissing?.ownerGovernmentId ? (
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Owner Government ID (PDF/PNG/JPG/WebP)</Label>
+                  <Input
+                    type="file"
+                    accept="application/pdf,image/png,image/jpeg,image/webp"
+                    onChange={(e) => setOwnerGovIdFile(e.target.files?.[0] ?? null)}
+                  />
+                </div>
+              ) : null}
+
+              {requirementsMissing?.bankName ? (
+                <div className="space-y-2">
+                  <Label>Bank Name</Label>
+                  <Input
+                    value={requirementsDraft.bankName || ""}
+                    onChange={(e) =>
+                      setRequirementsDraft((prev) => ({ ...prev, bankName: e.target.value }))
+                    }
+                  />
+                </div>
+              ) : null}
+
+              {requirementsMissing?.accountHolderName ? (
+                <div className="space-y-2">
+                  <Label>Account Holder Name</Label>
+                  <Input
+                    value={requirementsDraft.accountHolderName || ""}
+                    onChange={(e) =>
+                      setRequirementsDraft((prev) => ({ ...prev, accountHolderName: e.target.value }))
+                    }
+                  />
+                </div>
+              ) : null}
+
+              {requirementsMissing?.ddaAccountNumber ? (
+                <div className="space-y-2">
+                  <Label>DDA Account Number</Label>
+                  <Input
+                    value={requirementsDraft.ddaAccountNumber || ""}
+                    onChange={(e) =>
+                      setRequirementsDraft((prev) => ({ ...prev, ddaAccountNumber: e.target.value }))
+                    }
+                  />
+                </div>
+              ) : null}
+
+              {requirementsMissing?.routingNumber ? (
+                <div className="space-y-2">
+                  <Label>Routing Number</Label>
+                  <Input
+                    value={requirementsDraft.routingNumber || ""}
+                    onChange={(e) =>
+                      setRequirementsDraft((prev) => ({ ...prev, routingNumber: e.target.value }))
+                    }
+                  />
+                </div>
+              ) : null}
+
+              {requirementsMissing?.bankSupportDocument ? (
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Bank Letter / Voided Check (PDF/PNG/JPG/WebP)</Label>
+                  <Input
+                    type="file"
+                    accept="application/pdf,image/png,image/jpeg,image/webp"
+                    onChange={(e) => setBankSupportFile(e.target.files?.[0] ?? null)}
+                  />
+                </div>
+              ) : null}
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setRequirementsOpen(false)}
+                disabled={requirementsSaving}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => handleSaveRequirements(selectedLocationId)}
+                disabled={requirementsSaving}
+              >
+                {requirementsSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Save & Continue
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }

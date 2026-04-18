@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Info, ArrowLeftRight } from "lucide-react";
 import { useSelectedLocation } from "@/stores/location-store";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
   Tooltip,
@@ -56,6 +57,9 @@ export function PriceInputGroup({
   const isDual = pricingStrategy === "dual";
   const percentage = Number(startDualPercentage);
 
+  // Toggle: when ON, editing cash auto-calculates card at the dual pricing %
+  const [autoCalcCard, setAutoCalcCard] = useState(true);
+
   // Local string state so the user can type freely (e.g. "1." mid-entry)
   const [cardDisplay, setCardDisplay] = useState(price > 0 ? String(price) : "");
   const [cashDisplay, setCashDisplay] = useState(cashPrice != null ? String(cashPrice) : "");
@@ -75,8 +79,11 @@ export function PriceInputGroup({
     }
   }, [cashPrice]);
 
-  // On mount/dual mode: if we have card price but no cash, derive cash
+  // On mount/dual mode: if we have card price but no cash, derive cash.
+  // Skip when the user just explicitly cleared the cash field — otherwise
+  // deleting the last digit would snap back to a derived value.
   useEffect(() => {
+    if (lastEditedRef.current === "cash") return;
     if (isDual && price > 0 && (cashPrice === null || cashPrice === 0)) {
       const rawCash = price / (1 + percentage / 100);
       const roundedCash = Math.round(rawCash * 100) / 100;
@@ -106,7 +113,10 @@ export function PriceInputGroup({
     lastEditedRef.current = "cash";
     const num = cleaned === "" ? null : parseFloat(cleaned) || 0;
     onCashPriceChange(num);
-    if (isDual && !disabled && num !== null) {
+    // Only reverse-calc card from cash when card is empty/zero (new item entry).
+    // If the user already has a card price set, editing cash should NOT overwrite it —
+    // that prevents the infinite card↔cash recalc loop when working with L5 overrides.
+    if (isDual && !disabled && num !== null && (autoCalcCard || !price || price === 0)) {
       const rawCard = num * (1 + percentage / 100);
       const roundedCard = Math.round(rawCard * 100) / 100;
       onPriceChange(roundedCard);
@@ -182,9 +192,22 @@ export function PriceInputGroup({
       </div>
 
       {isDual && (
-        <p className="text-[11px] text-muted-foreground mt-2">
-          * Edit either price — the other is auto-calculated at {percentage}%.
-        </p>
+        <div className="flex items-center justify-between mt-2">
+          <p className="text-[11px] text-muted-foreground">
+            * Edit either price — the other is auto-calculated at {percentage}%.
+          </p>
+          <div className="flex items-center gap-2">
+            <label htmlFor="auto-calc-toggle" className="text-[11px] text-muted-foreground whitespace-nowrap">
+              Apply {percentage}% to card
+            </label>
+            <Switch
+              id="auto-calc-toggle"
+              checked={autoCalcCard}
+              onCheckedChange={setAutoCalcCard}
+              disabled={disabled}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

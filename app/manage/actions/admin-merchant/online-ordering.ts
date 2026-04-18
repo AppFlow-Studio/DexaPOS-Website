@@ -22,9 +22,62 @@ import {
   type MerchantOnlineStoreReviewPacket,
   type OnlineStoreReviewChecklist,
 } from '@/lib/online-store/setup-flow'
-import { uploadOrganizationDocument } from '@/lib/cdn/server'
+import { uploadMerchantDocument, uploadOrganizationDocument } from '@/lib/cdn/server'
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'dexaposai.com'
+
+type MissingRequestFieldKey =
+  | 'legalBusinessName'
+  | 'dbaName'
+  | 'einTaxId'
+  | 'w9Form'
+  | 'ownerFirstName'
+  | 'ownerLastName'
+  | 'ownerDob'
+  | 'ownerSsn'
+  | 'ownerGovernmentId'
+  | 'bankName'
+  | 'accountHolderName'
+  | 'ddaAccountNumber'
+  | 'routingNumber'
+  | 'bankSupportDocument'
+
+type RequestPacketMissing = Record<MissingRequestFieldKey, boolean>
+
+export type AdminOnlineStoreRequestRequirementsResult = {
+  success: boolean
+  complete: boolean
+  missing: RequestPacketMissing
+  values: Partial<Record<MissingRequestFieldKey, string>>
+  error?: string
+}
+
+function emptyMissing(): RequestPacketMissing {
+  return {
+    legalBusinessName: false,
+    dbaName: false,
+    einTaxId: false,
+    w9Form: false,
+    ownerFirstName: false,
+    ownerLastName: false,
+    ownerDob: false,
+    ownerSsn: false,
+    ownerGovernmentId: false,
+    bankName: false,
+    accountHolderName: false,
+    ddaAccountNumber: false,
+    routingNumber: false,
+    bankSupportDocument: false,
+  }
+}
+
+function hasAnyMissing(missing: RequestPacketMissing): boolean {
+  return Object.values(missing).some(Boolean)
+}
+
+function normalizeDigits(value: string): string {
+  return value.replace(/\\D/g, '')
+}
 
 interface PaymentDeviceSummary {
   id: string
@@ -118,6 +171,7 @@ interface OnlineOrderingSettings {
   storeName: string
   storeSlug: string
   storeUrl?: string
+  description?: string
   phone: string
   email: string
   address: string
@@ -133,10 +187,20 @@ interface OnlineOrderingSettings {
   logoUrl?: string | null
   heroImageUrl?: string | null
   faviconUrl?: string | null
+  ogImageUrl?: string | null
   bannerText?: string | null
+  templateId?: 'classic' | 'bold' | 'minimal'
   primaryColor?: string
   secondaryColor?: string
-  headerStyle?: 'primary' | 'dark' | 'light'
+  accentColor?: string | null
+  backgroundColor?: string
+  textColor?: string
+  borderColor?: string | null
+  cardColor?: string | null
+  fontFamily?: string | null
+  headerStyle?: 'filled' | 'transparent' | 'outlined'
+  headerTextColor?: string | null
+  menuLayout?: 'cards' | 'sidebyside' | 'no-images'
   pickupEnabled?: boolean
   deliveryEnabled?: boolean
   preparationLeadTime?: number
@@ -312,6 +376,246 @@ async function getReviewContext(
   }
 }
 
+export async function getAdminOnlineStoreRequestRequirements(
+  merchantId: string,
+  locationId: string
+): Promise<AdminOnlineStoreRequestRequirementsResult> {
+  try {
+    await assertHQPermission('hq.merchant.view')
+
+    const supabase = createServerSupabaseClient()
+    const { merchant, location, merchantReviewPacket, locationReviewPacket } =
+      await getReviewContext(supabase, merchantId, locationId)
+
+    const missing = emptyMissing()
+
+    if (!merchant || !location) {
+      missing.legalBusinessName = true
+      return {
+        success: false,
+        complete: false,
+        missing,
+        values: {},
+        error: 'Merchant/location not found',
+      }
+    }
+
+    // Granular merchant identity fields (first/last are stored separately)
+    const md =
+      (merchant.public_metadata as Record<string, unknown> | null) ?? {}
+    const ownerFirstName =
+      (typeof (merchant as any).owner_first_name === 'string' &&
+      (merchant as any).owner_first_name.trim().length > 0
+        ? (merchant as any).owner_first_name.trim()
+        : null) ??
+      readMetadataString(md, 'owner_first_name')
+    const ownerLastName =
+      (typeof (merchant as any).owner_last_name === 'string' &&
+      (merchant as any).owner_last_name.trim().length > 0
+        ? (merchant as any).owner_last_name.trim()
+        : null) ??
+      readMetadataString(md, 'owner_last_name')
+
+    if (!merchantReviewPacket?.legalBusinessName) missing.legalBusinessName = true
+    if (!merchantReviewPacket?.dbaName) missing.dbaName = true
+    if (!merchantReviewPacket?.einTaxId) missing.einTaxId = true
+    if (!merchantReviewPacket?.w9FormUrl) missing.w9Form = true
+
+    if (!ownerFirstName) missing.ownerFirstName = true
+    if (!ownerLastName) missing.ownerLastName = true
+    if (!merchantReviewPacket?.ownerDob) missing.ownerDob = true
+    if (!merchantReviewPacket?.ownerSsn) missing.ownerSsn = true
+    if (!merchantReviewPacket?.ownerGovernmentIdUrl) missing.ownerGovernmentId = true
+
+    if (!locationReviewPacket?.bankName) missing.bankName = true
+    if (!locationReviewPacket?.accountHolderName) missing.accountHolderName = true
+    if (!locationReviewPacket?.ddaAccountNumber) missing.ddaAccountNumber = true
+    if (!locationReviewPacket?.routingNumber) missing.routingNumber = true
+    if (!locationReviewPacket?.bankSupportDocumentUrl) missing.bankSupportDocument = true
+
+    const values: Partial<Record<MissingRequestFieldKey, string>> = {
+      legalBusinessName: merchantReviewPacket?.legalBusinessName ?? '',
+      dbaName: merchantReviewPacket?.dbaName ?? '',
+      einTaxId: merchantReviewPacket?.einTaxId ?? '',
+      ownerFirstName: ownerFirstName ?? '',
+      ownerLastName: ownerLastName ?? '',
+      ownerDob: merchantReviewPacket?.ownerDob ?? '',
+      ownerSsn: merchantReviewPacket?.ownerSsn ?? '',
+      bankName: locationReviewPacket?.bankName ?? '',
+      accountHolderName: locationReviewPacket?.accountHolderName ?? '',
+      ddaAccountNumber: locationReviewPacket?.ddaAccountNumber ?? '',
+      routingNumber: locationReviewPacket?.routingNumber ?? '',
+    }
+
+    return {
+      success: true,
+      complete: !hasAnyMissing(missing),
+      missing,
+      values,
+    }
+  } catch (error) {
+    const missing = emptyMissing()
+    missing.legalBusinessName = true
+    return {
+      success: false,
+      complete: false,
+      missing,
+      values: {},
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }
+  }
+}
+
+export async function adminSaveOnlineStoreRequestRequirements(formData: FormData): Promise<{
+  success: boolean
+  error?: string
+}> {
+  try {
+    await assertHQPermission('hq.merchant.update')
+
+    const merchantId = String(formData.get('merchantId') || '')
+    const locationId = String(formData.get('locationId') || '')
+
+    if (!merchantId || !locationId) {
+      return { success: false, error: 'merchantId and locationId are required' }
+    }
+
+    const supabase = createServerSupabaseClient()
+    const { data: merchant, error: merchantError } = await supabase
+      .from('merchants')
+      .select('id, clerk_org_id')
+      .eq('id', merchantId)
+      .single()
+
+    if (merchantError || !merchant?.clerk_org_id) {
+      return { success: false, error: 'Merchant organization not found' }
+    }
+
+    const organizationId = merchant.clerk_org_id as string
+
+    const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
+    const org = await clerkClient.organizations.getOrganization({ organizationId })
+    const currentMetadata = (org.publicMetadata as Record<string, unknown>) ?? {}
+    const metadataUpdates: Record<string, unknown> = { ...currentMetadata }
+
+    const readText = (key: string) => {
+      const raw = formData.get(key)
+      if (typeof raw !== 'string') return null
+      const trimmed = raw.trim()
+      return trimmed.length > 0 ? trimmed : null
+    }
+
+    const legalBusinessName = readText('legalBusinessName')
+    const dbaName = readText('dbaName')
+    const einTaxIdRaw = readText('einTaxId')
+    const ownerFirstName = readText('ownerFirstName')
+    const ownerLastName = readText('ownerLastName')
+    const ownerDob = readText('ownerDob')
+    const ownerSsnRaw = readText('ownerSsn')
+
+    const einTaxId = einTaxIdRaw ? normalizeDigits(einTaxIdRaw) : null
+    const ownerSsn = ownerSsnRaw ? normalizeDigits(ownerSsnRaw) : null
+
+    if (legalBusinessName) {
+      metadataUpdates.business_legal_name = legalBusinessName
+      metadataUpdates.legal_business_name = legalBusinessName
+    }
+    if (dbaName) {
+      metadataUpdates.dba_name = dbaName
+      metadataUpdates.business_name = dbaName
+    }
+    if (einTaxId) {
+      metadataUpdates.online_store_ein_tax_id = einTaxId
+      metadataUpdates.ein_tax_id = einTaxId
+      metadataUpdates.ein_last_four = einTaxId.slice(-4)
+    }
+    if (ownerFirstName) metadataUpdates.owner_first_name = ownerFirstName
+    if (ownerLastName) metadataUpdates.owner_last_name = ownerLastName
+    if (ownerDob) metadataUpdates.online_store_owner_dob = ownerDob
+    if (ownerSsn) metadataUpdates.online_store_owner_ssn = ownerSsn
+
+    const w9File = formData.get('w9FormFile')
+    const ownerIdFile = formData.get('ownerGovernmentIdFile')
+
+    if (w9File && typeof w9File !== 'string') {
+      const file = w9File as File
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+      if (!isPdf) return { success: false, error: 'W-9 must be uploaded as a PDF' }
+
+      const uploadResult = await uploadOrganizationDocument(file, organizationId, 'online-store-w9')
+      if (!uploadResult.success || !uploadResult.cdnUrl) {
+        return { success: false, error: uploadResult.error || 'Failed to upload W-9 PDF' }
+      }
+      metadataUpdates.online_store_w9_form_url = uploadResult.cdnUrl
+      metadataUpdates.w9_form_url = uploadResult.cdnUrl
+    }
+
+    if (ownerIdFile && typeof ownerIdFile !== 'string') {
+      const file = ownerIdFile as File
+      const uploadResult = await uploadOrganizationDocument(file, organizationId, 'online-store-owner-id')
+      if (!uploadResult.success || !uploadResult.cdnUrl) {
+        return { success: false, error: uploadResult.error || 'Failed to upload owner government ID' }
+      }
+      metadataUpdates.online_store_owner_government_id_url = uploadResult.cdnUrl
+    }
+
+    await clerkClient.organizations.updateOrganization(organizationId, {
+      publicMetadata: metadataUpdates,
+    })
+
+    // Location banking packet updates
+    const { data: location, error: locationError } = await supabase
+      .from('locations')
+      .select('id, merchant_id, public_metadata')
+      .eq('id', locationId)
+      .single()
+
+    if (locationError || !location) {
+      return { success: false, error: 'Location not found' }
+    }
+
+    const bankName = readText('bankName')
+    const accountHolderName = readText('accountHolderName')
+    const ddaAccountNumber = readText('ddaAccountNumber')
+    const routingNumber = readText('routingNumber')
+    const bankSupportFile = formData.get('bankSupportDocumentFile')
+
+    const locationMetadata = (location.public_metadata as Record<string, unknown> | null) ?? {}
+    const nextLocationMetadata: Record<string, unknown> = { ...locationMetadata }
+
+    if (bankName) nextLocationMetadata.online_store_bank_name = bankName
+    if (accountHolderName) nextLocationMetadata.online_store_account_holder_name = accountHolderName
+    if (ddaAccountNumber) nextLocationMetadata.online_store_bank_dda_account_number = ddaAccountNumber
+    if (routingNumber) nextLocationMetadata.online_store_bank_routing_number = routingNumber
+
+    if (bankSupportFile && typeof bankSupportFile !== 'string') {
+      const file = bankSupportFile as File
+      const uploadResult = await uploadMerchantDocument(file, merchantId, 'online-store-bank-support')
+      if (!uploadResult.success || !uploadResult.cdnUrl) {
+        return { success: false, error: uploadResult.error || 'Failed to upload bank support document' }
+      }
+      nextLocationMetadata.online_store_bank_support_document_url = uploadResult.cdnUrl
+    }
+
+    const { error: locationUpdateError } = await supabase
+      .from('locations')
+      .update({ public_metadata: nextLocationMetadata, updated_at: new Date().toISOString() })
+      .eq('id', locationId)
+
+    if (locationUpdateError) {
+      return { success: false, error: locationUpdateError.message }
+    }
+
+    revalidateOnlineStorePaths(merchantId)
+    return { success: true }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to save required information',
+    }
+  }
+}
+
 function revalidateOnlineStorePaths(merchantId: string) {
   revalidatePath(`/manage/merchants/${merchantId}`)
   revalidatePath('/dashboard/online-ordering')
@@ -391,11 +695,23 @@ export async function getAdminOnlineOrderingSettings(
       settings.enabled = config.is_active ?? false
       settings.storeName = config.store_name || settings.storeName
       settings.storeSlug = config.slug ?? ''
+      settings.description = config.description ?? ''
       settings.logoUrl = config.logo_url
       settings.heroImageUrl = config.hero_image_url
       settings.faviconUrl = config.favicon_url
+      settings.ogImageUrl = config.og_image_url
+      settings.templateId = (config.template_id ?? 'classic') as OnlineOrderingSettings['templateId']
       settings.primaryColor = config.primary_color ?? '#2DD4BF'
       settings.secondaryColor = config.secondary_color ?? '#10b981'
+      settings.accentColor = config.accent_color ?? null
+      settings.backgroundColor = config.background_color ?? '#FFFFFF'
+      settings.textColor = config.text_color ?? '#111827'
+      settings.borderColor = config.border_color ?? null
+      settings.cardColor = config.card_color ?? null
+      settings.fontFamily = config.font_family ?? 'DM Sans'
+      settings.headerStyle = (config.header_style ?? 'filled') as OnlineOrderingSettings['headerStyle']
+      settings.headerTextColor = config.header_text_color ?? null
+      settings.menuLayout = (config.menu_layout ?? 'cards') as OnlineOrderingSettings['menuLayout']
       settings.phone = config.phone ?? settings.phone
       settings.email = config.email ?? settings.email
 
@@ -854,11 +1170,23 @@ export async function adminSaveOnlineOrderingSettings(
       configData.slug = settings.storeSlug
     }
     if (settings.enabled !== undefined) configData.is_active = settings.enabled
+    if (settings.description !== undefined) configData.description = settings.description
     if (settings.logoUrl !== undefined) configData.logo_url = settings.logoUrl
     if (settings.heroImageUrl !== undefined) configData.hero_image_url = settings.heroImageUrl
     if (settings.faviconUrl !== undefined) configData.favicon_url = settings.faviconUrl
+    if (settings.ogImageUrl !== undefined) configData.og_image_url = settings.ogImageUrl
+    if (settings.templateId !== undefined) configData.template_id = settings.templateId
     if (settings.primaryColor !== undefined) configData.primary_color = settings.primaryColor
     if (settings.secondaryColor !== undefined) configData.secondary_color = settings.secondaryColor
+    if (settings.accentColor !== undefined) configData.accent_color = settings.accentColor
+    if (settings.backgroundColor !== undefined) configData.background_color = settings.backgroundColor
+    if (settings.textColor !== undefined) configData.text_color = settings.textColor
+    if (settings.borderColor !== undefined) configData.border_color = settings.borderColor
+    if (settings.cardColor !== undefined) configData.card_color = settings.cardColor
+    if (settings.fontFamily !== undefined) configData.font_family = settings.fontFamily
+    if (settings.headerStyle !== undefined) configData.header_style = settings.headerStyle
+    if (settings.headerTextColor !== undefined) configData.header_text_color = settings.headerTextColor
+    if (settings.menuLayout !== undefined) configData.menu_layout = settings.menuLayout
     if (settings.phone !== undefined) configData.phone = settings.phone
     if (settings.email !== undefined) configData.email = settings.email
     if (settings.operatingHours !== undefined) configData.operating_hours = settings.operatingHours

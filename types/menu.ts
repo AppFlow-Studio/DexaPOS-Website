@@ -130,6 +130,9 @@ export interface ModifierGroup {
   // Group availability (The SQL resolves Global vs Location Override)
   is_active: boolean;
 
+  // Assignment source: "global" = menu_item_modifier_groups, "location" = location_item_modifier_groups
+  source?: "global" | "location";
+
   items: ModifierItem[];
 }
 

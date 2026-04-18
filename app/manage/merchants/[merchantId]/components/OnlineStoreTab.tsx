@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
 import {
     ArrowLeft,
     Globe,
@@ -46,6 +47,8 @@ import {
     useAdminRejectOnlineStoreRequest,
     useAdminUploadMerchantW9Pdf,
     useAdminRetriggerDomainWhitelist,
+    useAdminOnlineStoreRequestRequirements,
+    useAdminSaveOnlineStoreRequestRequirements,
     type OnlineOrderingSettings,
     type LocationOnlineStoreOverview,
 } from '@/lib/queries/use-admin-online-ordering'
@@ -58,6 +61,9 @@ import { OrderOutOnboardingForm, type OnboardingFormData } from '@/components/da
 import { OrderOutStatusCard } from '@/components/dashboard/orderout/OrderOutStatusCard'
 import { AdminPushChannelsSection } from '@/components/dashboard/orderout/AdminPushChannelsSection'
 import { extractConnectedPlatforms } from '@/lib/orderout/helpers'
+import { MissingDataForm } from '@/components/online-store/MissingDataForm'
+import { HoursConfigModal } from '@/app/dashboard/online-ordering/components/HoursConfigModal'
+import { FONT_GOOGLE_URLS } from '@/app/sites/lib/theme-utils'
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000'
 
@@ -118,6 +124,27 @@ function maskSensitiveValue(value?: string | null, keep = 4) {
     return `${'•'.repeat(Math.max(0, value.length - keep))}${visible}`
 }
 
+function createDefaultDaySchedule(enabled = false) {
+    return {
+        enabled,
+        from: '09:00',
+        to: '21:00',
+        is24Hours: false,
+    }
+}
+
+function createDefaultWeeklySchedule() {
+    return {
+        monday: createDefaultDaySchedule(true),
+        tuesday: createDefaultDaySchedule(true),
+        wednesday: createDefaultDaySchedule(true),
+        thursday: createDefaultDaySchedule(true),
+        friday: createDefaultDaySchedule(true),
+        saturday: createDefaultDaySchedule(true),
+        sunday: createDefaultDaySchedule(false),
+    }
+}
+
 interface OnlineStoreTabProps {
     merchantId: string
     merchantName: string
@@ -137,12 +164,18 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
         merchantId,
         selectedLocationId || ''
     )
+    const { data: requirementsData, refetch: refetchRequirements } = useAdminOnlineStoreRequestRequirements(
+        merchantId,
+        selectedLocationId || ''
+    )
 
     // Local state for editing
     const [localSettings, setLocalSettings] = useState<Partial<OnlineOrderingSettings> | null>(null)
     const [isDirty, setIsDirty] = useState(false)
     const [w9ViewerUrl, setW9ViewerUrl] = useState<string | null>(null)
     const w9UploadInputRef = useRef<HTMLInputElement>(null)
+    const [missingFormOpen, setMissingFormOpen] = useState(false)
+    const [hoursModalOpen, setHoursModalOpen] = useState(false)
 
     // Mutations
     const saveMutation = useAdminSaveOnlineOrderingSettings()
@@ -150,6 +183,7 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
     const rejectMutation = useAdminRejectOnlineStoreRequest()
     const uploadW9Mutation = useAdminUploadMerchantW9Pdf()
     const whitelistMutation = useAdminRetriggerDomainWhitelist()
+    const saveRequirementsMutation = useAdminSaveOnlineStoreRequestRequirements()
 
     // OrderOut
     const { data: orderOutData } = useAdminOrderOutStatus(merchantId)
@@ -713,6 +747,53 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                         </CardContent>
                     </Card>
 
+                    {requirementsData?.success && !requirementsData.complete ? (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Missing Packet Items</CardTitle>
+                                <CardDescription>
+                                    These fields are required before approval. Use the editor to fill only the missing items.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="flex items-center justify-between gap-4">
+                                <div className="text-sm text-muted-foreground">
+                                    {Object.values(requirementsData.missing).filter(Boolean).length} missing fields detected.
+                                </div>
+                                <Button onClick={() => setMissingFormOpen(true)} variant="outline">
+                                    Edit Missing Fields
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    ) : null}
+
+                    <MissingDataForm
+                        mode="admin"
+                        open={missingFormOpen}
+                        onOpenChange={setMissingFormOpen}
+                        title="Fill Missing Online Store Packet Fields"
+                        description="Each missing field can be edited and saved individually."
+                        locationId={selectedLocationId || ''}
+                        merchantId={merchantId}
+                        requirements={(requirementsData as any) ?? null}
+                        onSave={async (formData) => {
+                            formData.set('merchantId', merchantId)
+                            formData.set('locationId', selectedLocationId || '')
+                            const result = await saveRequirementsMutation.mutateAsync(formData)
+                            if (!result.success) {
+                                return { success: false, error: result.error || 'Failed to save' }
+                            }
+                            await Promise.all([refetchSettings(), refetchRequirements()])
+                            return { success: true }
+                        }}
+                        onRefresh={async () => {
+                            const refreshed = await refetchRequirements()
+                            return (refreshed.data as any) ?? { success: false, complete: false, missing: {}, values: {}, error: 'Failed to refresh' }
+                        }}
+                        onCompleted={async () => {
+                            await Promise.all([refetchSettings(), refetchRequirements()])
+                        }}
+                    />
+
                     {canEditStoreSetup ? (
                         <>
                     {/* Enable/Disable Toggle */}
@@ -891,6 +972,16 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                         />
                                     </div>
 
+                                    <div className="space-y-2">
+                                        <Label htmlFor="storeDescription">Store Description</Label>
+                                        <Textarea
+                                            id="storeDescription"
+                                            value={(localSettings.description as string) || ''}
+                                            onChange={(e) => updateSettings({ description: e.target.value })}
+                                            placeholder="Short description shown on the storefront."
+                                        />
+                                    </div>
+
                                     <div className="grid gap-4 sm:grid-cols-2">
                                         <div className="space-y-2">
                                             <Label htmlFor="phone">Phone Number</Label>
@@ -920,6 +1011,25 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                             </div>
                                         </div>
                                     </div>
+
+                                    <div className="rounded-lg border p-4">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div>
+                                                <p className="font-medium">Operating Hours</p>
+                                                <p className="text-sm text-muted-foreground">
+                                                    Storefront ordering hours (defaults to location business hours if unchanged).
+                                                </p>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setHoursModalOpen(true)}
+                                            >
+                                                Edit Hours
+                                            </Button>
+                                        </div>
+                                    </div>
                                 </CardContent>
                             </Card>
                         </TabsContent>
@@ -932,6 +1042,64 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                     <CardDescription>Customize the store's color scheme</CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-6">
+                                    <div className="grid gap-6 sm:grid-cols-2">
+                                        <div className="space-y-3">
+                                            <Label>Template</Label>
+                                            <select
+                                                value={(localSettings.templateId as any) || 'classic'}
+                                                onChange={(e) => updateSettings({ templateId: e.target.value as any })}
+                                                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                                            >
+                                                <option value="classic">Classic</option>
+                                                <option value="minimal">Minimal</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <Label>Font</Label>
+                                            <select
+                                                value={(localSettings.fontFamily as any) || 'DM Sans'}
+                                                onChange={(e) => updateSettings({ fontFamily: e.target.value })}
+                                                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                                            >
+                                                {Object.keys(FONT_GOOGLE_URLS).map((font) => (
+                                                    <option key={font} value={font}>
+                                                        {font}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <p className="text-xs text-muted-foreground">
+                                                Font options are sourced from storefront supported Google Fonts.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid gap-6 sm:grid-cols-2">
+                                        <div className="space-y-3">
+                                            <Label>Header Style</Label>
+                                            <select
+                                                value={(localSettings.headerStyle as any) || 'filled'}
+                                                onChange={(e) => updateSettings({ headerStyle: e.target.value as any })}
+                                                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                                            >
+                                                <option value="filled">Filled</option>
+                                                <option value="transparent">Transparent</option>
+                                                <option value="outlined">Outlined</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <Label>Menu Layout</Label>
+                                            <select
+                                                value={(localSettings.menuLayout as any) || 'cards'}
+                                                onChange={(e) => updateSettings({ menuLayout: e.target.value as any })}
+                                                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                                            >
+                                                <option value="cards">Cards</option>
+                                                <option value="sidebyside">Side-by-side</option>
+                                                <option value="no-images">No images</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
                                     <div className="grid gap-6 sm:grid-cols-2">
                                         <div className="space-y-3">
                                             <Label>Primary Color</Label>
@@ -967,6 +1135,112 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                         </div>
                                     </div>
 
+                                    <div className="grid gap-6 sm:grid-cols-3">
+                                        <div className="space-y-3">
+                                            <Label>Accent Color</Label>
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="color"
+                                                    value={(localSettings.accentColor as any) || localSettings.primaryColor || '#3b82f6'}
+                                                    onChange={(e) => updateSettings({ accentColor: e.target.value })}
+                                                    className="h-10 w-16 rounded-lg border cursor-pointer"
+                                                />
+                                                <Input
+                                                    value={(localSettings.accentColor as any) || ''}
+                                                    onChange={(e) => updateSettings({ accentColor: e.target.value || null })}
+                                                    className="w-28 font-mono text-sm"
+                                                    placeholder="Optional"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <Label>Background</Label>
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="color"
+                                                    value={(localSettings.backgroundColor as any) || '#FFFFFF'}
+                                                    onChange={(e) => updateSettings({ backgroundColor: e.target.value })}
+                                                    className="h-10 w-16 rounded-lg border cursor-pointer"
+                                                />
+                                                <Input
+                                                    value={(localSettings.backgroundColor as any) || '#FFFFFF'}
+                                                    onChange={(e) => updateSettings({ backgroundColor: e.target.value })}
+                                                    className="w-28 font-mono text-sm"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <Label>Text</Label>
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="color"
+                                                    value={(localSettings.textColor as any) || '#111827'}
+                                                    onChange={(e) => updateSettings({ textColor: e.target.value })}
+                                                    className="h-10 w-16 rounded-lg border cursor-pointer"
+                                                />
+                                                <Input
+                                                    value={(localSettings.textColor as any) || '#111827'}
+                                                    onChange={(e) => updateSettings({ textColor: e.target.value })}
+                                                    className="w-28 font-mono text-sm"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid gap-6 sm:grid-cols-3">
+                                        <div className="space-y-3">
+                                            <Label>Border (Optional)</Label>
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="color"
+                                                    value={(localSettings.borderColor as any) || '#E5E7EB'}
+                                                    onChange={(e) => updateSettings({ borderColor: e.target.value })}
+                                                    className="h-10 w-16 rounded-lg border cursor-pointer"
+                                                />
+                                                <Input
+                                                    value={(localSettings.borderColor as any) || ''}
+                                                    onChange={(e) => updateSettings({ borderColor: e.target.value || null })}
+                                                    className="w-28 font-mono text-sm"
+                                                    placeholder="Optional"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <Label>Card (Optional)</Label>
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="color"
+                                                    value={(localSettings.cardColor as any) || '#FFFFFF'}
+                                                    onChange={(e) => updateSettings({ cardColor: e.target.value })}
+                                                    className="h-10 w-16 rounded-lg border cursor-pointer"
+                                                />
+                                                <Input
+                                                    value={(localSettings.cardColor as any) || ''}
+                                                    onChange={(e) => updateSettings({ cardColor: e.target.value || null })}
+                                                    className="w-28 font-mono text-sm"
+                                                    placeholder="Optional"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <Label>Header Text (Optional)</Label>
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="color"
+                                                    value={(localSettings.headerTextColor as any) || (localSettings.textColor as any) || '#111827'}
+                                                    onChange={(e) => updateSettings({ headerTextColor: e.target.value })}
+                                                    className="h-10 w-16 rounded-lg border cursor-pointer"
+                                                />
+                                                <Input
+                                                    value={(localSettings.headerTextColor as any) || ''}
+                                                    onChange={(e) => updateSettings({ headerTextColor: e.target.value || null })}
+                                                    className="w-28 font-mono text-sm"
+                                                    placeholder="Optional"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <Separator />
 
                                     <div className="space-y-3">
@@ -984,6 +1258,15 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                                 </CardContent>
                             </Card>
                         </TabsContent>
+
+                        <HoursConfigModal
+                            open={hoursModalOpen}
+                            onOpenChange={setHoursModalOpen}
+                            title="Operating Hours"
+                            description="These hours are used to determine when the storefront accepts new orders."
+                            schedule={(localSettings?.operatingHours as any) || createDefaultWeeklySchedule()}
+                            onSave={(schedule) => updateSettings({ operatingHours: schedule as any })}
+                        />
 
                         {/* Pickup & Delivery */}
                         <TabsContent value="ordering" className="space-y-6">

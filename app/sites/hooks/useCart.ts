@@ -53,7 +53,9 @@ export const useCart = create<CartStore>()(
             (acc, mod) => acc + mod.price,
             0
           );
-          const unitPrice = item.price + modifiersPrice;
+          // Use delivery_price for the online store (falls back to card price if not set)
+          const basePrice = item.delivery_price ?? item.price;
+          const unitPrice = basePrice + modifiersPrice;
 
           // Generate a signature for comparison
           // We assume modifiers are sorted or stable enough for JSON stringify comparison for now

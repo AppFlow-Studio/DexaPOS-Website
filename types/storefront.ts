@@ -4,6 +4,7 @@ export interface StorefrontModifierOption {
   price: number;
   is_active: boolean;
   display_order: number;
+  is_default?: boolean;
 }
 
 export interface StorefrontModifierGroup {

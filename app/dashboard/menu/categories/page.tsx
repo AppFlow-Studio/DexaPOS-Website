@@ -153,6 +153,7 @@ export default function CategoriesPage() {
   const currentLocation = locations?.find((l) => l.id === selectedLocationId);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [categorySortDesc, setCategorySortDesc] = useState(false);
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
   const [editingCategory, setEditingCategory] =
     useState<CategoryWithItems | null>(null);
@@ -211,11 +212,18 @@ export default function CategoriesPage() {
   const menusList = Array.isArray(menus) ? menus : [];
   const isLoading = loadingCategoriesWithItems;
 
-  const filteredCategories = categoriesList.filter(
-    (category) =>
-      category.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      category.description?.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  const filteredCategories = categoriesList
+    .filter(
+      (category) =>
+        category.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        category.description?.toLowerCase().includes(searchTerm.toLowerCase()),
+    )
+    .slice()
+    .sort((a, b) =>
+      categorySortDesc
+        ? b.name.localeCompare(a.name)
+        : a.name.localeCompare(b.name),
+    );
 
   // Stats from RPC data
   const totalItems = categoriesList.reduce(
@@ -751,14 +759,25 @@ export default function CategoriesPage() {
                 Click a category to see its items
               </CardDescription>
             </div>
-            <div className="relative">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search categories..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 w-64"
-              />
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search categories..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8 w-64"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setCategorySortDesc((v) => !v)}
+                title={`Sort ${categorySortDesc ? "Z → A" : "A → Z"}`}
+              >
+                {categorySortDesc ? "Z – A" : "A – Z"}
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -1541,8 +1560,18 @@ export default function CategoriesPage() {
           image: c.image,
           created_at: c.created_at,
           updated_at: c.updated_at,
+          is_global: c.is_global,
+          location_name: c.location_name,
         }))}
         modifierGroups={modifierGroups || []}
+        onOpenGlobalEdit={
+          editingItem
+            ? () => {
+                setIsItemSheetOpen(false);
+                router.push(`/dashboard/menu/items/${editingItem.id}/edit`);
+              }
+            : undefined
+        }
         onSuccess={() => {
           setIsItemSheetOpen(false);
           setEditingItem(null);

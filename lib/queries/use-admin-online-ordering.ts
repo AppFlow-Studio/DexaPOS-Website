@@ -11,6 +11,8 @@ import {
   adminApproveOnlineStoreRequest,
   adminRejectOnlineStoreRequest,
   adminUploadMerchantW9Pdf,
+  getAdminOnlineStoreRequestRequirements,
+  adminSaveOnlineStoreRequestRequirements,
 } from '@/app/manage/actions/admin-merchant/online-ordering'
 
 // ============================================================================
@@ -106,10 +108,20 @@ export interface OnlineOrderingSettings {
   logoUrl?: string | null
   heroImageUrl?: string | null
   faviconUrl?: string | null
+  ogImageUrl?: string | null
   bannerText?: string | null
+  templateId?: 'classic' | 'bold' | 'minimal'
   primaryColor?: string
   secondaryColor?: string
-  headerStyle?: 'primary' | 'dark' | 'light'
+  accentColor?: string | null
+  backgroundColor?: string
+  textColor?: string
+  borderColor?: string | null
+  cardColor?: string | null
+  fontFamily?: string | null
+  headerStyle?: 'filled' | 'transparent' | 'outlined'
+  headerTextColor?: string | null
+  menuLayout?: 'cards' | 'sidebyside' | 'no-images'
   pickupEnabled?: boolean
   deliveryEnabled?: boolean
   preparationLeadTime?: number
@@ -173,6 +185,15 @@ export function useAdminOnlineOrderingSettings(merchantId: string, locationId: s
     queryFn: () => getAdminOnlineOrderingSettings(merchantId, locationId),
     enabled: !!merchantId && !!locationId,
     staleTime: 30 * 1000,
+  })
+}
+
+export function useAdminOnlineStoreRequestRequirements(merchantId: string, locationId: string) {
+  return useQuery({
+    queryKey: [...adminKeys.merchants(), merchantId, 'online-ordering-requirements', locationId],
+    queryFn: () => getAdminOnlineStoreRequestRequirements(merchantId, locationId),
+    enabled: !!merchantId && !!locationId,
+    staleTime: 10 * 1000,
   })
 }
 
@@ -244,6 +265,18 @@ export function useAdminRetriggerDomainWhitelist() {
       merchantId: string
       locationId: string
     }) => adminRetriggerDomainWhitelist(merchantId, locationId),
+  })
+}
+
+export function useAdminSaveOnlineStoreRequestRequirements() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (formData: FormData) => adminSaveOnlineStoreRequestRequirements(formData),
+    onSuccess: (_result, _variables, _context) => {
+      // Caller should also refetch online-ordering settings, but this at least refreshes requirements.
+      // We don't know merchantId/locationId here without duplicating formData parsing, so callers should invalidate explicitly if needed.
+      queryClient.invalidateQueries({ queryKey: [...adminKeys.merchants()] })
+    },
   })
 }
 

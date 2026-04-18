@@ -823,7 +823,8 @@ export default function MenuItemDetailPage() {
                 </Badge>
               </CardTitle>
               <CardDescription>
-                Customization options available for this item
+                Customization options available for this item.
+                {!isAllLocations && " Showing both global and location-specific modifiers."}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -861,7 +862,7 @@ export default function MenuItemDetailPage() {
                                     <Layers className="h-5 w-5 text-purple-500" />
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                    <div className="font-semibold flex items-center gap-2">
+                                    <div className="font-semibold flex items-center gap-2 flex-wrap">
                                       {group.name}
                                       {group.is_required && (
                                         <Badge
@@ -869,6 +870,23 @@ export default function MenuItemDetailPage() {
                                           className="text-xs"
                                         >
                                           Required
+                                        </Badge>
+                                      )}
+                                      {(group as any).source === "location" ? (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[10px] gap-1 bg-blue-50 text-blue-700 border-blue-200"
+                                        >
+                                          <MapPin className="h-2.5 w-2.5" />
+                                          This Location
+                                        </Badge>
+                                      ) : (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[10px] gap-1 bg-emerald-50 text-emerald-700 border-emerald-200"
+                                        >
+                                          <Globe className="h-2.5 w-2.5" />
+                                          All Locations
                                         </Badge>
                                       )}
                                     </div>

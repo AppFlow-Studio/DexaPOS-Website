@@ -54,7 +54,7 @@ export interface OnlineOrderingSettings {
   address: string;
 
   // Template & Branding
-  templateId: "classic" | "bold" | "minimal";
+  templateId: "classic" | "minimal";
   primaryColor: string;
   secondaryColor: string;
   accentColor: string | null;
@@ -74,6 +74,7 @@ export interface OnlineOrderingSettings {
   // Ordering
   pickupEnabled: boolean;
   deliveryEnabled: boolean;
+  autoAcceptOrders: boolean;
   preparationLeadTime: number;
   futureOrderMaxDays: number;
   minimumOrderAmount: number;
@@ -194,6 +195,7 @@ const createDefaultSettings = (
 
   pickupEnabled: true,
   deliveryEnabled: false,
+  autoAcceptOrders: false,
   preparationLeadTime: 20,
   futureOrderMaxDays: 0,
   minimumOrderAmount: 0,
@@ -225,6 +227,15 @@ const createDefaultSettings = (
   facebookPixelId: "",
 });
 
+export type OnlineStoreSetupRequestResult =
+  | { success: true; status: "pending_review" }
+  | {
+      success: false;
+      error: string;
+      missing?: Record<string, boolean>;
+      values?: Record<string, string>;
+    };
+
 interface OnlineOrderingStore {
   settings: OnlineOrderingSettings[];
   isLoading: boolean;
@@ -238,7 +249,7 @@ interface OnlineOrderingStore {
   ) => void;
   saveSettings: (locationId: string) => Promise<void>;
   discardChanges: (locationId: string) => Promise<void>;
-  requestSetup: (locationId: string) => Promise<void>;
+  requestSetup: (locationId: string) => Promise<OnlineStoreSetupRequestResult>;
   isDirty: (locationId: string) => boolean;
 }
 
@@ -327,6 +338,7 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
           backgroundColor: currentSettings.backgroundColor,
           textColor: currentSettings.textColor,
           fontFamily: currentSettings.fontFamily,
+          menuLayout: currentSettings.menuLayout,
           logoUrl: currentSettings.logoUrl,
           heroImageUrl: currentSettings.heroImageUrl,
           faviconUrl: currentSettings.faviconUrl,
@@ -336,6 +348,7 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
           operatingHours: currentSettings.operatingHours,
           pickupEnabled: currentSettings.pickupEnabled,
           deliveryEnabled: currentSettings.deliveryEnabled,
+          autoAcceptOrders: currentSettings.autoAcceptOrders,
           preparationLeadTime: currentSettings.preparationLeadTime,
           futureOrderMaxDays: currentSettings.futureOrderMaxDays,
           minimumOrderAmount: currentSettings.minimumOrderAmount,
@@ -361,14 +374,20 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
     },
     requestSetup: async (locationId: string) => {
       try {
-        await requestOnlineOrderingSetup(locationId);
-        await get().loadSettings(locationId);
-        toast.success("Setup request submitted to HQ");
+        const result = await requestOnlineOrderingSetup(locationId);
+        if (result?.success) {
+          await get().loadSettings(locationId);
+          toast.success("Setup request submitted to HQ");
+          return result;
+        }
+        // Let the page decide how to render the missing-fields UI.
+        return result;
       } catch (error) {
         console.error("Failed to request setup:", error);
         toast.error(
           error instanceof Error ? error.message : "Failed to request setup"
         );
+        return { success: false, error: error instanceof Error ? error.message : "Failed to request setup" } as any;
       }
     },
 

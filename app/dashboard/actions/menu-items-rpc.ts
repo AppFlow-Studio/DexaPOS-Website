@@ -414,19 +414,53 @@ export async function getItemsForLocationFlat(
 // Direct query — not dependent on the RPC including modifier_groups.
 // ============================================================================
 
-export async function getItemModifierGroups(menuItemId: string): Promise<
-  Array<{ id: string; name: string; description: string | null }>
+export async function getItemModifierGroups(
+  menuItemId: string,
+  locationId?: string | null,
+): Promise<
+  Array<{ id: string; name: string; description: string | null; source?: "global" | "location" }>
 > {
   if (!menuItemId) return [];
-  const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from("menu_item_modifier_groups")
-    .select("modifier_group_id, modifier_groups(id, name, description)")
-    .eq("menu_item_id", menuItemId);
-  if (error || !data) return [];
-  return (data as any[])
-    .map((row) => row.modifier_groups)
-    .filter(Boolean);
+  try {
+    const supabase = createServiceRoleClient();
+
+    // 1. Global assignments
+    const { data: globalData } = await supabase
+      .from("menu_item_modifier_groups")
+      .select("modifier_group_id, modifier_groups(id, name, description)")
+      .eq("menu_item_id", menuItemId);
+
+    const globalGroups = (globalData as any[] || [])
+      .map((row) => row.modifier_groups)
+      .filter(Boolean)
+      .map((g: any) => ({ ...g, source: "global" as const }));
+
+    // 2. Location-specific assignments (if location provided)
+    if (locationId && locationId !== "all") {
+      const { data: locationData } = await supabase
+        .from("location_item_modifier_groups")
+        .select("modifier_group_id, modifier_groups:modifier_groups(id, name, description)")
+        .eq("menu_item_id", menuItemId)
+        .eq("location_id", locationId);
+
+      const locationGroups = (locationData as any[] || [])
+        .map((row) => row.modifier_groups)
+        .filter(Boolean)
+        .map((g: any) => ({ ...g, source: "location" as const }));
+
+      // Merge and deduplicate (global takes precedence)
+      const globalIds = new Set(globalGroups.map((g: any) => g.id));
+      const combined = [
+        ...globalGroups,
+        ...locationGroups.filter((g: any) => !globalIds.has(g.id)),
+      ];
+      return combined;
+    }
+
+    return globalGroups;
+  } catch {
+    return [];
+  }
 }
 
 // ============================================================================
@@ -960,6 +994,11 @@ export async function updateItemOverride(
         {
           p_menu_item_id: params.menuItemId,
           p_category_id: params.categoryId || null,
+          // Pass menuId always: RPC now handles all four (location,menu) combinations:
+          //   (null,null)   = UI L2 global category → category_items WHERE menu_id IS NULL
+          //   (null,menuId) = UI L4 global menu cat → category_items WHERE menu_id = menuId
+          //   (locId,null)  = UI L3 branch category → location_category_item_overrides
+          //   (locId,menuId)= UI L5 branch menu     → location_menu_item_overrides
           p_menu_id: params.menuId || null,
           p_location_id: locationId || null,
           p_custom_price: params.price,

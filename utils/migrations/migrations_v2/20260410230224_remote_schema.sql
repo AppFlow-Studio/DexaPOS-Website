@@ -1,136 +1,136 @@
 create extension if not exists "moddatetime" with schema "public";
 
-drop policy "Merchant admins can manage items in categories" on "public"."category_items";
+drop policy if exists "Merchant admins can manage items in categories" on "public"."category_items";
 
-drop policy "allow auth merchants to insert" on "public"."category_items";
+drop policy if exists "allow auth merchants to insert" on "public"."category_items";
 
-drop policy "allow auth merchants to update" on "public"."category_items";
+drop policy if exists "allow auth merchants to update" on "public"."category_items";
 
-drop policy "device_assignments_select_carrier" on "public"."device_assignments";
+drop policy if exists "device_assignments_select_carrier" on "public"."device_assignments";
 
-drop policy "device_assignments_select_hq" on "public"."device_assignments";
+drop policy if exists "device_assignments_select_hq" on "public"."device_assignments";
 
-drop policy "device_assignments_select_merchant" on "public"."device_assignments";
+drop policy if exists "device_assignments_select_merchant" on "public"."device_assignments";
 
-drop policy "device_config_history_select_carrier" on "public"."device_config_history";
+drop policy if exists "device_config_history_select_carrier" on "public"."device_config_history";
 
-drop policy "device_config_history_select_hq" on "public"."device_config_history";
+drop policy if exists "device_config_history_select_hq" on "public"."device_config_history";
 
-drop policy "device_config_history_select_merchant" on "public"."device_config_history";
+drop policy if exists "device_config_history_select_merchant" on "public"."device_config_history";
 
-drop policy "device_inventory_select_carrier" on "public"."device_inventory";
+drop policy if exists "device_inventory_select_carrier" on "public"."device_inventory";
 
-drop policy "device_inventory_select_hq" on "public"."device_inventory";
+drop policy if exists "device_inventory_select_hq" on "public"."device_inventory";
 
-drop policy "device_inventory_select_merchant" on "public"."device_inventory";
+drop policy if exists "device_inventory_select_merchant" on "public"."device_inventory";
 
-drop policy "Merchants can view their device login history" on "public"."device_login_history";
+drop policy if exists "Merchants can view their device login history" on "public"."device_login_history";
 
-drop policy "device_notes_select_carrier" on "public"."device_notes";
+drop policy if exists "device_notes_select_carrier" on "public"."device_notes";
 
-drop policy "device_notes_select_hq" on "public"."device_notes";
+drop policy if exists "device_notes_select_hq" on "public"."device_notes";
 
-drop policy "device_notes_select_merchant" on "public"."device_notes";
+drop policy if exists "device_notes_select_merchant" on "public"."device_notes";
 
-drop policy "inventory_items_all" on "public"."inventory_items";
+drop policy if exists "inventory_items_all" on "public"."inventory_items";
 
-drop policy "location_inventory_overrides_all" on "public"."location_inventory_overrides";
+drop policy if exists "location_inventory_overrides_all" on "public"."location_inventory_overrides";
 
-drop policy "location_inventory_stock_all" on "public"."location_inventory_stock";
+drop policy if exists "location_inventory_stock_all" on "public"."location_inventory_stock";
 
-drop policy "location_vendor_pricing_all" on "public"."location_vendor_pricing";
+drop policy if exists "location_vendor_pricing_all" on "public"."location_vendor_pricing";
 
-drop policy "location_vendors_all" on "public"."location_vendors";
+drop policy if exists "location_vendors_all" on "public"."location_vendors";
 
-drop policy "Allow insert for auth merchants" on "public"."menu_categories";
+drop policy if exists "Allow insert for auth merchants" on "public"."menu_categories";
 
-drop policy "Merchant Admins Can Update" on "public"."menu_categories";
+drop policy if exists "Merchant Admins Can Update" on "public"."menu_categories";
 
-drop policy "Merchant admins can manage menu item discounts" on "public"."menu_item_discounts";
+drop policy if exists "Merchant admins can manage menu item discounts" on "public"."menu_item_discounts";
 
-drop policy "read_access" on "public"."menu_item_discounts";
+drop policy if exists "read_access" on "public"."menu_item_discounts";
 
-drop policy "mbp_carrier_admin_read" on "public"."merchant_billing_profiles";
+drop policy if exists "mbp_carrier_admin_read" on "public"."merchant_billing_profiles";
 
-drop policy "mbp_hq_admin_all" on "public"."merchant_billing_profiles";
+drop policy if exists "mbp_hq_admin_all" on "public"."merchant_billing_profiles";
 
-drop policy "mbp_merchant_owner_rw" on "public"."merchant_billing_profiles";
+drop policy if exists "mbp_merchant_owner_rw" on "public"."merchant_billing_profiles";
 
-drop policy "Carriers can access their own merchants or if they are part of " on "public"."merchants";
+drop policy if exists "Carriers can access their own merchants or if they are part of " on "public"."merchants";
 
-drop policy "Enable delete access for authenticated users" on "public"."modifier_group_item_recipes";
+drop policy if exists "Enable delete access for authenticated users" on "public"."modifier_group_item_recipes";
 
-drop policy "Enable insert access for authenticated users" on "public"."modifier_group_item_recipes";
+drop policy if exists "Enable insert access for authenticated users" on "public"."modifier_group_item_recipes";
 
-drop policy "Enable read access for authenticated users" on "public"."modifier_group_item_recipes";
+drop policy if exists "Enable read access for authenticated users" on "public"."modifier_group_item_recipes";
 
-drop policy "Enable update access for authenticated users" on "public"."modifier_group_item_recipes";
+drop policy if exists "Enable update access for authenticated users" on "public"."modifier_group_item_recipes";
 
-drop policy "oo_sync_results_select_own" on "public"."orderout_menu_sync_results";
+drop policy if exists "oo_sync_results_select_own" on "public"."orderout_menu_sync_results";
 
-drop policy "merchant_select_orders" on "public"."orders";
+drop policy if exists "merchant_select_orders" on "public"."orders";
 
-drop policy "Merchants can view their terminals" on "public"."payment_terminals";
+drop policy if exists "Merchants can view their terminals" on "public"."payment_terminals";
 
-drop policy "purchase_order_items_all" on "public"."purchase_order_items";
+drop policy if exists "purchase_order_items_all" on "public"."purchase_order_items";
 
-drop policy "purchase_order_payments_all" on "public"."purchase_order_payments";
+drop policy if exists "purchase_order_payments_all" on "public"."purchase_order_payments";
 
-drop policy "purchase_orders_all" on "public"."purchase_orders";
+drop policy if exists "purchase_orders_all" on "public"."purchase_orders";
 
-drop policy "Manager can delete staff" on "public"."staff_profiles";
+drop policy if exists "Manager can delete staff" on "public"."staff_profiles";
 
-drop policy "staff_profiles_delete" on "public"."staff_profiles";
+drop policy if exists "staff_profiles_delete" on "public"."staff_profiles";
 
-drop policy "staff_profiles_insert" on "public"."staff_profiles";
+drop policy if exists "staff_profiles_insert" on "public"."staff_profiles";
 
-drop policy "staff_profiles_select" on "public"."staff_profiles";
+drop policy if exists "staff_profiles_select" on "public"."staff_profiles";
 
-drop policy "staff_profiles_update" on "public"."staff_profiles";
+drop policy if exists "staff_profiles_update" on "public"."staff_profiles";
 
-drop policy "Merchants can view their devices" on "public"."station_devices";
+drop policy if exists "Merchants can view their devices" on "public"."station_devices";
 
-drop policy "Users can view sessions for their merchant" on "public"."station_sessions";
+drop policy if exists "Users can view sessions for their merchant" on "public"."station_sessions";
 
-drop policy "Merchants can view their stations" on "public"."stations";
+drop policy if exists "Merchants can view their stations" on "public"."stations";
 
-drop policy "stock_update_log_all" on "public"."stock_update_log";
+drop policy if exists "stock_update_log_all" on "public"."stock_update_log";
 
-drop policy "admin_see_all_tickets" on "public"."support_tickets";
+drop policy if exists "admin_see_all_tickets" on "public"."support_tickets";
 
-drop policy "merchants_own_tickets" on "public"."support_tickets";
+drop policy if exists "merchants_own_tickets" on "public"."support_tickets";
 
-drop policy "vendor_items_all" on "public"."vendor_items";
+drop policy if exists "vendor_items_all" on "public"."vendor_items";
 
-drop policy "vendors_all" on "public"."vendors";
+drop policy if exists "vendors_all" on "public"."vendors";
 
-drop policy "Users can delete their own notes" on "public"."customer_notes";
+drop policy if exists "Users can delete their own notes" on "public"."customer_notes";
 
-drop policy "Users can insert notes for customers in their merchant" on "public"."customer_notes";
+drop policy if exists "Users can insert notes for customers in their merchant" on "public"."customer_notes";
 
-drop policy "Users can update their own notes" on "public"."customer_notes";
+drop policy if exists "Users can update their own notes" on "public"."customer_notes";
 
-drop policy "Users can view notes for customers in their merchant" on "public"."customer_notes";
+drop policy if exists "Users can view notes for customers in their merchant" on "public"."customer_notes";
 
-drop policy "lbp_carrier_admin_read" on "public"."location_banking_profiles";
+drop policy if exists "lbp_carrier_admin_read" on "public"."location_banking_profiles";
 
-drop policy "lbp_hq_admin_all" on "public"."location_banking_profiles";
+drop policy if exists "lbp_hq_admin_all" on "public"."location_banking_profiles";
 
-drop policy "lbp_merchant_owner_rw" on "public"."location_banking_profiles";
+drop policy if exists "lbp_merchant_owner_rw" on "public"."location_banking_profiles";
 
-drop policy "Merchants can delete their own campaigns" on "public"."marketing_campaigns";
+drop policy if exists "Merchants can delete their own campaigns" on "public"."marketing_campaigns";
 
-drop policy "Merchants can insert their own campaigns" on "public"."marketing_campaigns";
+drop policy if exists "Merchants can insert their own campaigns" on "public"."marketing_campaigns";
 
-drop policy "Merchants can update their own campaigns" on "public"."marketing_campaigns";
+drop policy if exists "Merchants can update their own campaigns" on "public"."marketing_campaigns";
 
-drop policy "Merchants can view their own campaigns" on "public"."marketing_campaigns";
+drop policy if exists "Merchants can view their own campaigns" on "public"."marketing_campaigns";
 
-drop policy "Users can insert recipients for their campaigns" on "public"."marketing_recipients";
+drop policy if exists "Users can insert recipients for their campaigns" on "public"."marketing_recipients";
 
-drop policy "Users can update recipients for their campaigns" on "public"."marketing_recipients";
+drop policy if exists "Users can update recipients for their campaigns" on "public"."marketing_recipients";
 
-drop policy "Users can view recipients for their campaigns" on "public"."marketing_recipients";
+drop policy if exists "Users can view recipients for their campaigns" on "public"."marketing_recipients";
 
 revoke delete on table "public"."orderout_menu_sync_results" from "anon";
 
@@ -272,6 +272,8 @@ alter table "public"."location_payment_devices" enable row level security;
   --     );
 
 
+
+
 alter table "public"."payment_credential_access_log" enable row level security;
 
 alter table "public"."device_heartbeats" add column "created_at" timestamp with time zone not null default now();
@@ -328,99 +330,99 @@ alter table "public"."settlement_batches" alter column "refund_amount" set data 
 
 alter table "public"."settlement_batches" alter column "tip_amount" set data type numeric(10,2) using "tip_amount"::numeric(10,2);
 
-CREATE UNIQUE INDEX device_heartbeats_station_id_key ON public.device_heartbeats USING btree (station_id);
+CREATE UNIQUE INDEX IF NOT EXISTS device_heartbeats_station_id_key ON public.device_heartbeats USING btree (station_id);
 
-CREATE INDEX idx_kds_displays_location_id ON public.kds_displays USING btree (location_id);
+CREATE INDEX IF NOT EXISTS idx_kds_displays_location_id ON public.kds_displays USING btree (location_id);
 
-CREATE INDEX idx_kds_displays_merchant_id ON public.kds_displays USING btree (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_kds_displays_merchant_id ON public.kds_displays USING btree (merchant_id);
 
-CREATE INDEX idx_kds_item_status_bumped_by ON public.kds_item_status USING btree (bumped_by);
+CREATE INDEX IF NOT EXISTS idx_kds_item_status_bumped_by ON public.kds_item_status USING btree (bumped_by);
 
-CREATE INDEX idx_kds_item_status_order_item_id ON public.kds_item_status USING btree (order_item_id);
+CREATE INDEX IF NOT EXISTS idx_kds_item_status_order_item_id ON public.kds_item_status USING btree (order_item_id);
 
-CREATE INDEX idx_location_payment_devices_carrier ON public.location_payment_devices USING btree (carrier_id);
+CREATE INDEX IF NOT EXISTS idx_location_payment_devices_carrier ON public.location_payment_devices USING btree (carrier_id);
 
-CREATE INDEX idx_location_payment_devices_location ON public.location_payment_devices USING btree (merchant_id, location_id);
+CREATE INDEX IF NOT EXISTS idx_location_payment_devices_location ON public.location_payment_devices USING btree (merchant_id, location_id);
 
-CREATE INDEX idx_order_courses_fired_by ON public.order_courses USING btree (fired_by);
+CREATE INDEX IF NOT EXISTS idx_order_courses_fired_by ON public.order_courses USING btree (fired_by);
 
-CREATE INDEX idx_order_discounts_applied_by_staff_id ON public.order_discounts USING btree (applied_by_staff_profiles_id);
+CREATE INDEX IF NOT EXISTS idx_order_discounts_applied_by_staff_id ON public.order_discounts USING btree (applied_by_staff_profiles_id);
 
-CREATE INDEX idx_order_discounts_approved_by_staff_id ON public.order_discounts USING btree (approved_by_staff_profiles_id);
+CREATE INDEX IF NOT EXISTS idx_order_discounts_approved_by_staff_id ON public.order_discounts USING btree (approved_by_staff_profiles_id);
 
-CREATE INDEX idx_order_discounts_voided_by ON public.order_discounts USING btree (voided_by);
+CREATE INDEX IF NOT EXISTS idx_order_discounts_voided_by ON public.order_discounts USING btree (voided_by);
 
-CREATE INDEX idx_order_item_modifiers_modifier_group_id ON public.order_item_modifiers USING btree (modifier_group_id);
+CREATE INDEX IF NOT EXISTS idx_order_item_modifiers_modifier_group_id ON public.order_item_modifiers USING btree (modifier_group_id);
 
-CREATE INDEX idx_order_item_modifiers_modifier_item_id ON public.order_item_modifiers USING btree (modifier_item_id);
+CREATE INDEX IF NOT EXISTS idx_order_item_modifiers_modifier_item_id ON public.order_item_modifiers USING btree (modifier_item_id);
 
-CREATE INDEX idx_order_items_assigned_to_staff_id ON public.order_items USING btree (assigned_to_staff_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_assigned_to_staff_id ON public.order_items USING btree (assigned_to_staff_id);
 
-CREATE INDEX idx_order_items_discount_applied_by ON public.order_items USING btree (discount_applied_by);
+CREATE INDEX IF NOT EXISTS idx_order_items_discount_applied_by ON public.order_items USING btree (discount_applied_by);
 
-CREATE INDEX idx_order_items_discount_approved_by ON public.order_items USING btree (discount_approved_by);
+CREATE INDEX IF NOT EXISTS idx_order_items_discount_approved_by ON public.order_items USING btree (discount_approved_by);
 
-CREATE INDEX idx_order_items_discount_id ON public.order_items USING btree (discount_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_discount_id ON public.order_items USING btree (discount_id);
 
-CREATE INDEX idx_order_items_location_exclusive_item_id ON public.order_items USING btree (location_exclusive_item_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_location_exclusive_item_id ON public.order_items USING btree (location_exclusive_item_id);
 
-CREATE INDEX idx_order_items_selected_size_id ON public.order_items USING btree (selected_size_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_selected_size_id ON public.order_items USING btree (selected_size_id);
 
-CREATE INDEX idx_order_items_voided_by ON public.order_items USING btree (voided_by);
+CREATE INDEX IF NOT EXISTS idx_order_items_voided_by ON public.order_items USING btree (voided_by);
 
-CREATE INDEX idx_order_payments_initiated_by ON public.order_payments USING btree (initiated_by);
+CREATE INDEX IF NOT EXISTS idx_order_payments_initiated_by ON public.order_payments USING btree (initiated_by);
 
-CREATE INDEX idx_order_payments_location_id ON public.order_payments USING btree (location_id);
+CREATE INDEX IF NOT EXISTS idx_order_payments_location_id ON public.order_payments USING btree (location_id);
 
-CREATE INDEX idx_order_payments_parent_payment_id ON public.order_payments USING btree (parent_payment_id);
+CREATE INDEX IF NOT EXISTS idx_order_payments_parent_payment_id ON public.order_payments USING btree (parent_payment_id);
 
-CREATE INDEX idx_order_payments_processed_by_staff_id ON public.order_payments USING btree (processed_by_staff_id);
+CREATE INDEX IF NOT EXISTS idx_order_payments_processed_by_staff_id ON public.order_payments USING btree (processed_by_staff_id);
 
-CREATE INDEX idx_order_payments_processed_by_user_id ON public.order_payments USING btree (processed_by_user_id);
+CREATE INDEX IF NOT EXISTS idx_order_payments_processed_by_user_id ON public.order_payments USING btree (processed_by_user_id);
 
-CREATE INDEX idx_order_payments_refunded_by ON public.order_payments USING btree (refunded_by);
+CREATE INDEX IF NOT EXISTS idx_order_payments_refunded_by ON public.order_payments USING btree (refunded_by);
 
-CREATE INDEX idx_order_payments_returned_by ON public.order_payments USING btree (returned_by);
+CREATE INDEX IF NOT EXISTS idx_order_payments_returned_by ON public.order_payments USING btree (returned_by);
 
-CREATE INDEX idx_order_payments_settlement_batch ON public.order_payments USING btree (settlement_batch_id) WHERE (settlement_batch_id IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_order_payments_settlement_batch ON public.order_payments USING btree (settlement_batch_id) WHERE (settlement_batch_id IS NOT NULL);
 
-CREATE INDEX idx_order_payments_tip_adjusted_by ON public.order_payments USING btree (tip_adjusted_by);
+CREATE INDEX IF NOT EXISTS idx_order_payments_tip_adjusted_by ON public.order_payments USING btree (tip_adjusted_by);
 
-CREATE INDEX idx_order_payments_unsettled_terminal ON public.order_payments USING btree (terminal_id, status) WHERE ((is_settled = false) AND (settlement_batch_id IS NULL));
+CREATE INDEX IF NOT EXISTS idx_order_payments_unsettled_terminal ON public.order_payments USING btree (terminal_id, status) WHERE ((is_settled = false) AND (settlement_batch_id IS NULL));
 
-CREATE INDEX idx_order_payments_voided_by ON public.order_payments USING btree (voided_by);
+CREATE INDEX IF NOT EXISTS idx_order_payments_voided_by ON public.order_payments USING btree (voided_by);
 
-CREATE INDEX idx_order_refund_items_order_payment_item_id ON public.order_refund_items USING btree (order_payment_item_id);
+CREATE INDEX IF NOT EXISTS idx_order_refund_items_order_payment_item_id ON public.order_refund_items USING btree (order_payment_item_id);
 
-CREATE INDEX idx_order_status_history_changed_by_staff_id ON public.order_status_history USING btree (changed_by_staff_id);
+CREATE INDEX IF NOT EXISTS idx_order_status_history_changed_by_staff_id ON public.order_status_history USING btree (changed_by_staff_id);
 
-CREATE INDEX idx_order_status_history_changed_by_user_id ON public.order_status_history USING btree (changed_by_user_id);
+CREATE INDEX IF NOT EXISTS idx_order_status_history_changed_by_user_id ON public.order_status_history USING btree (changed_by_user_id);
 
-CREATE INDEX idx_orders_assigned_server_id ON public.orders USING btree (assigned_server_id);
+CREATE INDEX IF NOT EXISTS idx_orders_assigned_server_id ON public.orders USING btree (assigned_server_id);
 
-CREATE INDEX idx_orders_created_by_staff_id ON public.orders USING btree (created_by_staff_id);
+CREATE INDEX IF NOT EXISTS idx_orders_created_by_staff_id ON public.orders USING btree (created_by_staff_id);
 
-CREATE INDEX idx_orders_created_by_user_id ON public.orders USING btree (created_by_user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_created_by_user_id ON public.orders USING btree (created_by_user_id);
 
-CREATE INDEX idx_orders_station_id ON public.orders USING btree (station_id);
+CREATE INDEX IF NOT EXISTS idx_orders_station_id ON public.orders USING btree (station_id);
 
-CREATE INDEX idx_orders_voided_by ON public.orders USING btree (voided_by);
+CREATE INDEX IF NOT EXISTS idx_orders_voided_by ON public.orders USING btree (voided_by);
 
-CREATE INDEX idx_payment_credential_access_log_device_called_at ON public.payment_credential_access_log USING btree (device_id, called_at DESC);
+CREATE INDEX IF NOT EXISTS idx_payment_credential_access_log_device_called_at ON public.payment_credential_access_log USING btree (device_id, called_at DESC);
 
-CREATE INDEX idx_printers_merchant_id ON public.printers USING btree (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_printers_merchant_id ON public.printers USING btree (merchant_id);
 
-CREATE INDEX idx_settlement_batches_terminal_status ON public.settlement_batches USING btree (payment_terminal_id, status) WHERE (payment_terminal_id IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_settlement_batches_terminal_status ON public.settlement_batches USING btree (payment_terminal_id, status) WHERE (payment_terminal_id IS NOT NULL);
 
-CREATE INDEX idx_stations_deactivated_by ON public.stations USING btree (deactivated_by);
+CREATE INDEX IF NOT EXISTS idx_stations_deactivated_by ON public.stations USING btree (deactivated_by);
 
-CREATE UNIQUE INDEX location_payment_devices_location_tpn_key ON public.location_payment_devices USING btree (location_id, tpn);
+CREATE UNIQUE INDEX IF NOT EXISTS location_payment_devices_location_tpn_key ON public.location_payment_devices USING btree (location_id, tpn);
 
-CREATE UNIQUE INDEX location_payment_devices_one_online_per_location ON public.location_payment_devices USING btree (location_id) WHERE ((use_for_online_ordering = true) AND (is_active = true));
+CREATE UNIQUE INDEX IF NOT EXISTS location_payment_devices_one_online_per_location ON public.location_payment_devices USING btree (location_id) WHERE ((use_for_online_ordering = true) AND (is_active = true));
 
-CREATE UNIQUE INDEX location_payment_devices_pkey ON public.location_payment_devices USING btree (id);
+CREATE UNIQUE INDEX IF NOT EXISTS location_payment_devices_pkey ON public.location_payment_devices USING btree (id);
 
-CREATE UNIQUE INDEX payment_credential_access_log_pkey ON public.payment_credential_access_log USING btree (id);
+CREATE UNIQUE INDEX IF NOT EXISTS payment_credential_access_log_pkey ON public.payment_credential_access_log USING btree (id);
 
 alter table "public"."location_payment_devices" add constraint "location_payment_devices_pkey" PRIMARY KEY using index "location_payment_devices_pkey";
 
@@ -2124,7 +2126,47 @@ grant truncate on table "public"."payment_credential_access_log" to "service_rol
 
 grant update on table "public"."payment_credential_access_log" to "service_role";
 
+create table public.category_items (
+  id uuid not null default extensions.uuid_generate_v4 (),
+  menu_item_id uuid not null,
+  category_id uuid not null,
+  created_at timestamp with time zone not null default now(),
+  merchant_id uuid not null,
+  display_order integer null default 0,
+  custom_price numeric(10, 2) null,
+  custom_cash_price numeric(10, 2) null,
+  is_available boolean null default true,
+  is_featured boolean null default false,
+  updated_at timestamp with time zone null,
+  custom_delivery_price numeric null,
+  menu_id uuid null,
+  constraint category_items_pkey primary key (id),
+  constraint category_items_menu_id_fkey foreign KEY (menu_id) references menus (id) on delete CASCADE,
+  constraint menu_item_categories_category_id_fkey foreign KEY (category_id) references categories (id) on delete CASCADE,
+  constraint menu_item_categories_menu_item_id_fkey foreign KEY (menu_item_id) references menu_items (id) on delete CASCADE,
+  constraint menu_item_categories_merchant_id_fkey foreign KEY (merchant_id) references merchants (id) on delete CASCADE
+) TABLESPACE pg_default;
 
+create index IF not exists idx_category_items_display on public.category_items using btree (category_id, display_order) TABLESPACE pg_default;
+
+create index IF not exists idx_menu_item_categories_category_id on public.category_items using btree (category_id) TABLESPACE pg_default;
+
+create index IF not exists idx_menu_item_categories_menu_item_id on public.category_items using btree (menu_item_id) TABLESPACE pg_default;
+
+create index IF not exists idx_menu_item_categories_merchant on public.category_items using btree (merchant_id) TABLESPACE pg_default;
+
+create unique INDEX IF not exists category_items_item_cat_menu_idx on public.category_items using btree (menu_item_id, category_id, menu_id) TABLESPACE pg_default
+where
+  (menu_id is not null);
+
+create unique INDEX IF not exists category_items_item_cat_nomenu_idx on public.category_items using btree (menu_item_id, category_id) TABLESPACE pg_default
+where
+  (menu_id is null);
+
+create trigger update_category_items_updated_at BEFORE
+update on category_items for EACH row
+execute FUNCTION update_updated_at_column ();
+''
   create policy "grant all to merchant admins"
   on "public"."category_items"
   as permissive
