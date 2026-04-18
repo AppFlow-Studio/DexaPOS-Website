@@ -15,10 +15,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Loader2, CheckCircle2 } from "lucide-react";
+import { Search, Loader2, CheckCircle2, Globe, MapPin, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GetMenuItems } from "@/app/dashboard/actions/menu-items";
-import { AssignModifierToItems } from "@/app/dashboard/actions/modifier-assignments";
+import {
+  AssignModifierToItems,
+  GetLocationModifierItemIds,
+} from "@/app/dashboard/actions/modifier-assignments";
 import { MenuItemsModel } from "@/types/db-modles";
 
 interface ModifierGroupForAssignment {
@@ -55,11 +58,12 @@ export function AssignModifierToItemsDialog({
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [allItems, setAllItems] = useState<MenuItemsModel[]>([]);
+  const [locationAssignedIds, setLocationAssignedIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // IDs of items that already have this modifier group assigned
-  const alreadyAssignedIds = useMemo(() => {
+  // IDs of items that have this modifier group assigned GLOBALLY
+  const globalAssignedIds = useMemo(() => {
     return new Set(
       modifierGroup.menu_item_modifier_groups
         ?.map((g) => g.menu_item?.id)
@@ -67,7 +71,12 @@ export function AssignModifierToItemsDialog({
     );
   }, [modifierGroup.menu_item_modifier_groups]);
 
-  // Load items when dialog opens
+  // Combined: all items already assigned (global + location)
+  const allAssignedIds = useMemo(() => {
+    return new Set([...globalAssignedIds, ...locationAssignedIds]);
+  }, [globalAssignedIds, locationAssignedIds]);
+
+  // Load items + location assignments when dialog opens
   useEffect(() => {
     if (!open || !clerkOrgId) return;
 
@@ -75,15 +84,22 @@ export function AssignModifierToItemsDialog({
     setSelectedIds(new Set());
     setSearchTerm("");
 
-    GetMenuItems(
-      clerkOrgId,
-      isAllLocations ? null : locationId,
-    )
-      .then((items) => {
+    const promises: Promise<any>[] = [
+      GetMenuItems(clerkOrgId, isAllLocations ? null : locationId),
+    ];
+
+    // Also fetch location-scoped assignments if viewing a specific location
+    if (!isAllLocations && locationId) {
+      promises.push(GetLocationModifierItemIds(modifierGroup.id, locationId));
+    }
+
+    Promise.all(promises)
+      .then(([items, locItemIds]) => {
         setAllItems(items || []);
+        setLocationAssignedIds(new Set(locItemIds || []));
       })
       .finally(() => setIsLoading(false));
-  }, [open, clerkOrgId, locationId, isAllLocations]);
+  }, [open, clerkOrgId, locationId, isAllLocations, modifierGroup.id]);
 
   const filteredItems = useMemo(() => {
     const term = searchTerm.toLowerCase();
@@ -95,7 +111,7 @@ export function AssignModifierToItemsDialog({
   }, [allItems, searchTerm]);
 
   const toggleItem = (itemId: string) => {
-    if (alreadyAssignedIds.has(itemId)) return;
+    if (allAssignedIds.has(itemId)) return;
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(itemId)) {
@@ -124,10 +140,11 @@ export function AssignModifierToItemsDialog({
         return;
       }
 
+      const scope = isAllLocations ? "globally" : "at this location";
       const msg =
         result.skippedCount && result.skippedCount > 0
-          ? `Assigned to ${result.assignedCount} item(s) (${result.skippedCount} already had it)`
-          : `Assigned to ${result.assignedCount} item(s)`;
+          ? `Assigned ${scope} to ${result.assignedCount} item(s) (${result.skippedCount} already had it)`
+          : `Assigned ${scope} to ${result.assignedCount} item(s)`;
       toast.success(msg);
 
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
@@ -150,10 +167,27 @@ export function AssignModifierToItemsDialog({
             Add &quot;{modifierGroup.name}&quot; to Items
           </DialogTitle>
           <DialogDescription>
-            Select items to assign this modifier group to. Items already
-            assigned are shown as checked.
+            Select items to assign this modifier group to.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Scope context banner */}
+        {!isAllLocations ? (
+          <div className="flex items-start gap-2 p-2.5 bg-blue-50 text-blue-800 rounded-lg text-xs border border-blue-100">
+            <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <span>
+              Assignments from this view apply <strong>only to this location</strong>.
+              Items assigned globally will show at all locations.
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-start gap-2 p-2.5 bg-emerald-50 text-emerald-800 rounded-lg text-xs border border-emerald-100">
+            <Globe className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <span>
+              Assignments from this view apply <strong>to all locations</strong>.
+            </span>
+          </div>
+        )}
 
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -177,7 +211,9 @@ export function AssignModifierToItemsDialog({
             </div>
           ) : (
             filteredItems.map((item) => {
-              const isAssigned = alreadyAssignedIds.has(item.id);
+              const isGlobalAssigned = globalAssignedIds.has(item.id);
+              const isLocationAssigned = locationAssignedIds.has(item.id);
+              const isAssigned = isGlobalAssigned || isLocationAssigned;
               const isSelected = selectedIds.has(item.id);
 
               return (
@@ -214,13 +250,22 @@ export function AssignModifierToItemsDialog({
                         ${Number(item.price).toFixed(2)}
                       </span>
                     )}
-                    {isAssigned && (
+                    {isGlobalAssigned && (
                       <Badge
                         variant="outline"
                         className="text-[10px] gap-1 bg-emerald-50 text-emerald-700 border-emerald-200"
                       >
-                        <CheckCircle2 className="h-2.5 w-2.5" />
-                        Assigned
+                        <Globe className="h-2.5 w-2.5" />
+                        Global
+                      </Badge>
+                    )}
+                    {isLocationAssigned && !isGlobalAssigned && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] gap-1 bg-blue-50 text-blue-700 border-blue-200"
+                      >
+                        <MapPin className="h-2.5 w-2.5" />
+                        Location
                       </Badge>
                     )}
                   </div>
@@ -234,7 +279,7 @@ export function AssignModifierToItemsDialog({
           <div className="flex-1 text-sm text-muted-foreground">
             {selectedIds.size > 0
               ? `${selectedIds.size} item(s) selected`
-              : `${alreadyAssignedIds.size} already assigned`}
+              : `${allAssignedIds.size} already assigned`}
           </div>
           <Button
             variant="outline"

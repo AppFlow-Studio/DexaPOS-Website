@@ -1083,7 +1083,8 @@ export function NewEditItemFormSheet({
         setSelectedCategories([]);
       }
       // Fetch modifier assignments directly from DB — bypasses any RPC/cache issues
-      getItemModifierGroups(editItem.id).then((groups) => {
+      // Pass locationId to include location-scoped modifier assignments
+      getItemModifierGroups(editItem.id, isAllLocations ? null : selectedLocationId).then((groups) => {
         if (cancelled) return;
         const ids = groups.map((g: any) => g.id);
         setSelectedModifiers(ids);
@@ -2057,7 +2058,7 @@ export function NewEditItemFormSheet({
 
                                           {/* Info */}
                                           <div className="flex-1 min-w-0">
-                                            <div className="font-medium text-sm flex items-center gap-2">
+                                            <div className="font-medium text-sm flex items-center gap-2 flex-wrap">
                                               {group.name}
                                               {group.is_required && (
                                                 <Badge
@@ -2067,6 +2068,21 @@ export function NewEditItemFormSheet({
                                                   Required
                                                 </Badge>
                                               )}
+                                              {group.source === "location" ? (
+                                                <Badge
+                                                  variant="outline"
+                                                  className="text-[10px] h-4 px-1.5 gap-0.5 bg-blue-50 text-blue-700 border-blue-200"
+                                                >
+                                                  This Location
+                                                </Badge>
+                                              ) : !isAllLocations ? (
+                                                <Badge
+                                                  variant="outline"
+                                                  className="text-[10px] h-4 px-1.5 gap-0.5 bg-emerald-50 text-emerald-700 border-emerald-200"
+                                                >
+                                                  Global
+                                                </Badge>
+                                              ) : null}
                                             </div>
                                             <div className="text-xs text-muted-foreground">
                                               {group.modifier_group_items
@@ -2267,9 +2283,9 @@ export function NewEditItemFormSheet({
 
                             {!canManageModifierLinks && (
                               <div className="text-xs text-muted-foreground bg-muted/40 border rounded-md p-2">
-                                Global item in location view: modifier links are
-                                read-only. You can override price/active for
-                                options above.
+                                Modifier links are managed from the Modifiers page.
+                                Use &quot;Add to Item&quot; or &quot;Add to Category&quot; buttons there
+                                to assign modifiers globally or at this location.
                               </div>
                             )}
                           </>

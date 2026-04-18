@@ -56,8 +56,15 @@ export async function GetModifierGroups(
                 id,
                 menu_item:menu_items(id, name, price)
             ),
+            location_item_modifier_groups(
+                id,
+                location_id,
+                location:locations(id, name),
+                menu_item:menu_items(id, name, price)
+            ),
             category_modifier_groups(
                 id,
+                location_id,
                 category:categories(id, name)
             ),
             location_override:location_modifier_group_overrides!left(
@@ -81,6 +88,16 @@ export async function GetModifierGroups(
     query = query.eq(
       "modifier_group_items.location_modifier_item_overrides.location_id",
       locationId,
+    );
+    // Filter location-scoped item assignments to this location only
+    query = query.eq(
+      "location_item_modifier_groups.location_id",
+      locationId,
+    );
+    // Filter category-modifier assignments: global + this location
+    query = query.or(
+      `location_id.is.null,location_id.eq.${locationId}`,
+      { referencedTable: "category_modifier_groups" },
     );
   }
 

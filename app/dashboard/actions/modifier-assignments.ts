@@ -22,31 +22,65 @@ export async function AssignModifierToItems(
   }
 
   const supabase = createServerSupabaseClient();
+  const isLocationScoped = !!locationId && locationId !== "all";
 
-  // Get count of existing assignments to calculate skip count
-  const { data: existing } = await supabase
-    .from("menu_item_modifier_groups")
-    .select("menu_item_id")
-    .eq("modifier_group_id", modifierGroupId)
-    .in("menu_item_id", menuItemIds);
+  // Check existing assignments in BOTH tables to avoid duplicates
+  const [{ data: globalExisting }, { data: locationExisting }] = await Promise.all([
+    supabase
+      .from("menu_item_modifier_groups")
+      .select("menu_item_id")
+      .eq("modifier_group_id", modifierGroupId)
+      .in("menu_item_id", menuItemIds),
+    isLocationScoped
+      ? supabase
+          .from("location_item_modifier_groups")
+          .select("menu_item_id")
+          .eq("modifier_group_id", modifierGroupId)
+          .eq("location_id", locationId)
+          .in("menu_item_id", menuItemIds)
+      : Promise.resolve({ data: [] as { menu_item_id: string }[] }),
+  ]);
 
-  const existingSet = new Set(existing?.map((e) => e.menu_item_id) || []);
+  const existingSet = new Set([
+    ...(globalExisting?.map((e) => e.menu_item_id) || []),
+    ...(locationExisting?.map((e) => e.menu_item_id) || []),
+  ]);
   const newItemIds = menuItemIds.filter((id) => !existingSet.has(id));
 
   if (newItemIds.length > 0) {
-    const rows = newItemIds.map((menuItemId) => ({
-      menu_item_id: menuItemId,
-      modifier_group_id: modifierGroupId,
-      merchant_id: merchantId,
-    }));
+    if (isLocationScoped) {
+      // Location scope → insert into location_item_modifier_groups
+      const rows = newItemIds.map((menuItemId) => ({
+        location_id: locationId,
+        menu_item_id: menuItemId,
+        modifier_group_id: modifierGroupId,
+        merchant_id: merchantId,
+      }));
 
-    const { error } = await supabase
-      .from("menu_item_modifier_groups")
-      .upsert(rows, { onConflict: "menu_item_id,modifier_group_id" });
+      const { error } = await supabase
+        .from("location_item_modifier_groups")
+        .upsert(rows, { onConflict: "location_id,menu_item_id,modifier_group_id" });
 
-    if (error) {
-      console.error("Error assigning modifier to items:", error);
-      return { error: error.message };
+      if (error) {
+        console.error("Error assigning modifier to items (location):", error);
+        return { error: error.message };
+      }
+    } else {
+      // Global scope → insert into menu_item_modifier_groups
+      const rows = newItemIds.map((menuItemId) => ({
+        menu_item_id: menuItemId,
+        modifier_group_id: modifierGroupId,
+        merchant_id: merchantId,
+      }));
+
+      const { error } = await supabase
+        .from("menu_item_modifier_groups")
+        .upsert(rows, { onConflict: "menu_item_id,modifier_group_id" });
+
+      if (error) {
+        console.error("Error assigning modifier to items:", error);
+        return { error: error.message };
+      }
     }
   }
 
@@ -107,22 +141,37 @@ export async function AssignModifierToCategory(
   }
 
   const supabase = createServerSupabaseClient();
+  const isLocationScoped = !!locationId && locationId !== "all";
 
-  // 1. Upsert into category_modifier_groups
-  const { error: categoryError } = await supabase
+  // 1. Check if this category-modifier assignment already exists at the correct scope
+  let existingQuery = supabase
     .from("category_modifier_groups")
-    .upsert(
-      {
+    .select("id")
+    .eq("category_id", categoryId)
+    .eq("modifier_group_id", modifierGroupId);
+
+  if (isLocationScoped) {
+    existingQuery = existingQuery.eq("location_id", locationId!);
+  } else {
+    existingQuery = existingQuery.is("location_id", null);
+  }
+
+  const { data: existingAssignment } = await existingQuery.maybeSingle();
+
+  if (!existingAssignment) {
+    const { error: categoryError } = await supabase
+      .from("category_modifier_groups")
+      .insert({
         category_id: categoryId,
         modifier_group_id: modifierGroupId,
         merchant_id: merchantId,
-      },
-      { onConflict: "category_id,modifier_group_id" },
-    );
+        location_id: isLocationScoped ? locationId : null,
+      });
 
-  if (categoryError) {
-    console.error("Error assigning modifier to category:", categoryError);
-    return { error: categoryError.message };
+    if (categoryError) {
+      console.error("Error assigning modifier to category:", categoryError);
+      return { error: categoryError.message };
+    }
   }
 
   // 2. Get all items in this category
@@ -136,26 +185,49 @@ export async function AssignModifierToCategory(
   if (categoryItems?.length) {
     const menuItemIds = categoryItems.map((ci) => ci.menu_item_id);
 
-    // Batch upsert — duplicates silently skipped
-    const rows = menuItemIds.map((menuItemId) => ({
-      menu_item_id: menuItemId,
-      modifier_group_id: modifierGroupId,
-      merchant_id: merchantId,
-    }));
+    if (isLocationScoped) {
+      // Location scope → propagate to location_item_modifier_groups
+      const rows = menuItemIds.map((menuItemId) => ({
+        location_id: locationId,
+        menu_item_id: menuItemId,
+        modifier_group_id: modifierGroupId,
+        merchant_id: merchantId,
+      }));
 
-    const { error: itemError } = await supabase
-      .from("menu_item_modifier_groups")
-      .upsert(rows, { onConflict: "menu_item_id,modifier_group_id" });
+      const { error: itemError } = await supabase
+        .from("location_item_modifier_groups")
+        .upsert(rows, { onConflict: "location_id,menu_item_id,modifier_group_id" });
 
-    if (itemError) {
-      console.error("Error propagating modifier to items:", itemError);
-      // Category assignment succeeded but propagation failed — partial success
-      return {
-        success: true,
-        categoryAssigned: true,
-        itemsAffected: 0,
-        warning: "Category assigned but failed to propagate to items: " + itemError.message,
-      };
+      if (itemError) {
+        console.error("Error propagating modifier to items (location):", itemError);
+        return {
+          success: true,
+          categoryAssigned: true,
+          itemsAffected: 0,
+          warning: "Category assigned but failed to propagate to items: " + itemError.message,
+        };
+      }
+    } else {
+      // Global scope → propagate to menu_item_modifier_groups
+      const rows = menuItemIds.map((menuItemId) => ({
+        menu_item_id: menuItemId,
+        modifier_group_id: modifierGroupId,
+        merchant_id: merchantId,
+      }));
+
+      const { error: itemError } = await supabase
+        .from("menu_item_modifier_groups")
+        .upsert(rows, { onConflict: "menu_item_id,modifier_group_id" });
+
+      if (itemError) {
+        console.error("Error propagating modifier to items:", itemError);
+        return {
+          success: true,
+          categoryAssigned: true,
+          itemsAffected: 0,
+          warning: "Category assigned but failed to propagate to items: " + itemError.message,
+        };
+      }
     }
 
     itemsAffected = menuItemIds.length;
@@ -230,12 +302,22 @@ export async function RemoveModifierFromCategory(
   const categoryName = categoryResult.data?.name || "Unknown Category";
   const merchantId = modifierResult.data?.merchant_id;
 
-  // 1. Delete the category_modifier_groups record
-  const { error: deleteError } = await supabase
+  const isLocationScoped = !!locationId && locationId !== "all";
+
+  // 1. Delete the category_modifier_groups record (scope-aware)
+  let deleteQuery = supabase
     .from("category_modifier_groups")
     .delete()
     .eq("category_id", categoryId)
     .eq("modifier_group_id", modifierGroupId);
+
+  if (isLocationScoped) {
+    deleteQuery = deleteQuery.eq("location_id", locationId!);
+  } else {
+    deleteQuery = deleteQuery.is("location_id", null);
+  }
+
+  const { error: deleteError } = await deleteQuery;
 
   if (deleteError) {
     console.error("Error removing modifier from category:", deleteError);
@@ -279,18 +361,25 @@ export async function RemoveModifierFromCategory(
     const itemsToRemove = itemIdsInCategory.filter((id) => !protectedItemIds.has(id));
 
     if (itemsToRemove.length > 0) {
-      const { error: removeError } = await supabase
+      // Remove from global assignments
+      const { error: removeGlobalError } = await supabase
         .from("menu_item_modifier_groups")
         .delete()
         .eq("modifier_group_id", modifierGroupId)
         .in("menu_item_id", itemsToRemove);
 
-      if (removeError) {
-        console.error("Error removing modifier from items:", removeError);
-        return {
-          success: true,
-          warning: "Category unlinked but failed to remove from some items: " + removeError.message,
-        };
+      if (removeGlobalError) {
+        console.error("Error removing modifier from items (global):", removeGlobalError);
+      }
+
+      // Also remove from location-scoped assignments
+      if (locationId && locationId !== "all") {
+        await supabase
+          .from("location_item_modifier_groups")
+          .delete()
+          .eq("modifier_group_id", modifierGroupId)
+          .eq("location_id", locationId)
+          .in("menu_item_id", itemsToRemove);
       }
 
       itemsRemoved = itemsToRemove.length;
@@ -325,23 +414,35 @@ export async function RemoveModifierFromCategory(
  * Get all categories that have a specific modifier group assigned.
  * Used by the category picker dialog to show already-assigned state.
  */
-export async function GetModifierGroupCategories(modifierGroupId: string) {
+export async function GetModifierGroupCategories(
+  modifierGroupId: string,
+  locationId?: string | null,
+) {
   if (!modifierGroupId) {
     return [];
   }
 
   const supabase = createServerSupabaseClient();
+  const isLocationScoped = !!locationId && locationId !== "all";
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("category_modifier_groups")
     .select(
       `
       id,
       category_id,
+      location_id,
       category:categories(id, name)
     `,
     )
     .eq("modifier_group_id", modifierGroupId);
+
+  // Filter by scope: at a specific location, show global + this location's assignments
+  if (isLocationScoped) {
+    query = query.or(`location_id.is.null,location_id.eq.${locationId}`);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("Error getting modifier group categories:", error);
@@ -352,5 +453,33 @@ export async function GetModifierGroupCategories(modifierGroupId: string) {
     id: row.id,
     category_id: row.category_id,
     category_name: row.category?.name || "Unknown Category",
+    location_id: row.location_id as string | null,
+    source: row.location_id ? ("location" as const) : ("global" as const),
   }));
+}
+
+/**
+ * Get location-scoped item assignments for a modifier group at a specific location.
+ * Returns item IDs that have this modifier assigned at the location level.
+ */
+export async function GetLocationModifierItemIds(
+  modifierGroupId: string,
+  locationId: string,
+) {
+  if (!modifierGroupId || !locationId) return [];
+
+  const supabase = createServerSupabaseClient();
+
+  const { data, error } = await supabase
+    .from("location_item_modifier_groups")
+    .select("menu_item_id")
+    .eq("modifier_group_id", modifierGroupId)
+    .eq("location_id", locationId);
+
+  if (error) {
+    console.error("Error getting location modifier item IDs:", error);
+    return [];
+  }
+
+  return (data || []).map((row) => row.menu_item_id);
 }

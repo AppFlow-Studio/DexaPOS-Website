@@ -73,8 +73,15 @@ interface ModifierGroupWithItems extends ModifierGroupsModel {
     id: string;
     menu_item?: { id: string; name: string };
   }>;
+  location_item_modifier_groups?: Array<{
+    id: string;
+    location_id: string;
+    location?: { id: string; name: string };
+    menu_item?: { id: string; name: string };
+  }>;
   category_modifier_groups?: Array<{
     id: string;
+    location_id?: string | null;
     category?: { id: string; name: string };
   }>;
   location_override?: Array<{
@@ -169,6 +176,13 @@ export default function ModifiersPage() {
 
   const canEditStructure = (group: ModifierGroupWithItems) =>
     isAllLocations || group.location_id === selectedLocationId;
+
+  // Can assign a modifier group to items/categories — more permissive than canEditStructure.
+  // Allows assigning global groups from a location view (creates location-scoped assignment).
+  const canAssignGroup = (group: ModifierGroupWithItems) =>
+    isAllLocations ||
+    !group.location_id ||
+    group.location_id === selectedLocationId;
 
   const canOverrideOnly = (group: ModifierGroupWithItems) =>
     !isAllLocations && !group.location_id;
@@ -738,9 +752,20 @@ export default function ModifiersPage() {
               const effectiveIsActive =
                 locationOverride?.is_active ?? group.is_active ?? true;
               const itemCount = group.modifier_group_items?.length || 0;
-              const linkedCount = group.menu_item_modifier_groups?.length || 0;
+              const globalLinkedCount = group.menu_item_modifier_groups?.length || 0;
+              const locationLinkedCount = group.location_item_modifier_groups?.length || 0;
               const categoryCount = group.category_modifier_groups?.length || 0;
               const scopeBadge = group.location_id ? "Location" : "Global";
+
+              // Build location breakdown for "All Locations" view
+              const locationBreakdown = isAllLocations && locationLinkedCount > 0
+                ? group.location_item_modifier_groups!.reduce<Record<string, { name: string; count: number }>>((acc, entry) => {
+                    const locName = entry.location?.name || "Unknown";
+                    if (!acc[entry.location_id]) acc[entry.location_id] = { name: locName, count: 0 };
+                    acc[entry.location_id].count++;
+                    return acc;
+                  }, {})
+                : null;
               return (
                 <div
                   key={group.id}
@@ -787,10 +812,23 @@ export default function ModifiersPage() {
                             <Badge variant="outline" className="text-[10px]">
                               {itemCount} option{itemCount !== 1 ? "s" : ""}
                             </Badge>
-                            <Badge variant="outline" className="text-[10px]">
-                              {linkedCount} item{linkedCount !== 1 ? "s" : ""}{" "}
-                              linked
-                            </Badge>
+                            {globalLinkedCount > 0 && (
+                              <Badge variant="outline" className="text-[10px] gap-1 bg-emerald-50 text-emerald-700 border-emerald-200">
+                                <Globe className="h-2.5 w-2.5" />
+                                {globalLinkedCount} item{globalLinkedCount !== 1 ? "s" : ""}
+                              </Badge>
+                            )}
+                            {locationLinkedCount > 0 && (
+                              <Badge variant="outline" className="text-[10px] gap-1 bg-blue-50 text-blue-700 border-blue-200">
+                                <MapPin className="h-2.5 w-2.5" />
+                                {locationLinkedCount} item{locationLinkedCount !== 1 ? "s" : ""} (location)
+                              </Badge>
+                            )}
+                            {globalLinkedCount === 0 && locationLinkedCount === 0 && (
+                              <Badge variant="outline" className="text-[10px]">
+                                0 items linked
+                              </Badge>
+                            )}
                             {categoryCount > 0 && (
                               <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">
                                 {categoryCount} categor{categoryCount !== 1 ? "ies" : "y"}{" "}
@@ -831,7 +869,7 @@ export default function ModifiersPage() {
                         >
                           <Edit3 className="h-4 w-4" />
                         </Button>
-                        {canEditStructure(group) && (
+                        {canAssignGroup(group) && (
                           <>
                             <Button
                               variant="ghost"
@@ -893,6 +931,69 @@ export default function ModifiersPage() {
                           )}
                         </div>
                         {renderNewItemForm(group)}
+
+                        {/* Linked Items Breakdown */}
+                        {(globalLinkedCount > 0 || locationLinkedCount > 0) && (
+                          <div className="space-y-2 border-t pt-3">
+                            <div className="text-sm font-semibold text-muted-foreground">
+                              Linked Items ({globalLinkedCount + locationLinkedCount})
+                            </div>
+
+                            {/* Global assignments */}
+                            {globalLinkedCount > 0 && (
+                              <div className="space-y-1">
+                                <div className="text-xs font-medium text-emerald-700 flex items-center gap-1">
+                                  <Globe className="h-3 w-3" /> Global ({globalLinkedCount})
+                                </div>
+                                <div className="flex flex-wrap gap-1 pl-4">
+                                  {group.menu_item_modifier_groups?.map((link) => (
+                                    <Badge key={link.id} variant="outline" className="text-[10px]">
+                                      {link.menu_item?.name || "Unknown"}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Location-scoped assignments */}
+                            {locationLinkedCount > 0 && !isAllLocations && (
+                              <div className="space-y-1">
+                                <div className="text-xs font-medium text-blue-700 flex items-center gap-1">
+                                  <MapPin className="h-3 w-3" /> This Location ({locationLinkedCount})
+                                </div>
+                                <div className="flex flex-wrap gap-1 pl-4">
+                                  {group.location_item_modifier_groups?.map((link) => (
+                                    <Badge key={link.id} variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">
+                                      {link.menu_item?.name || "Unknown"}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* All Locations view — show per-location breakdown */}
+                            {locationLinkedCount > 0 && isAllLocations && locationBreakdown && (
+                              <div className="space-y-2">
+                                {Object.entries(locationBreakdown).map(([locId, info]) => (
+                                  <div key={locId} className="space-y-1">
+                                    <div className="text-xs font-medium text-blue-700 flex items-center gap-1">
+                                      <MapPin className="h-3 w-3" /> {info.name} ({info.count})
+                                    </div>
+                                    <div className="flex flex-wrap gap-1 pl-4">
+                                      {group.location_item_modifier_groups
+                                        ?.filter((link) => link.location_id === locId)
+                                        .map((link) => (
+                                          <Badge key={link.id} variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">
+                                            {link.menu_item?.name || "Unknown"}
+                                          </Badge>
+                                        ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

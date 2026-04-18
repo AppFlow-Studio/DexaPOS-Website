@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Loader2, Info, CheckCircle2 } from "lucide-react";
+import { Search, Loader2, Info, CheckCircle2, Globe, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GetCategories } from "@/app/dashboard/actions/categories";
 import {
@@ -45,6 +45,8 @@ interface CategoryAssignment {
   id: string;
   category_id: string;
   category_name: string;
+  location_id: string | null;
+  source: "global" | "location";
 }
 
 export function AssignModifierToCategoryDialog({
@@ -81,7 +83,7 @@ export function AssignModifierToCategoryDialog({
 
     Promise.all([
       GetCategories(clerkOrgId),
-      GetModifierGroupCategories(modifierGroup.id),
+      GetModifierGroupCategories(modifierGroup.id, isAllLocations ? null : locationId),
     ])
       .then(([categories, assignments]) => {
         setAllCategories(categories || []);
@@ -211,14 +213,26 @@ export function AssignModifierToCategoryDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-start gap-2 p-2.5 bg-blue-50 text-blue-800 rounded-lg text-xs border border-blue-100">
-          <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-          <span>
-            Assigning to a category applies this modifier to all current and
-            future items in the category. Removing will also remove from items
-            (unless covered by another category).
-          </span>
-        </div>
+        {/* Scope context banner */}
+        {!isAllLocations ? (
+          <div className="flex items-start gap-2 p-2.5 bg-blue-50 text-blue-800 rounded-lg text-xs border border-blue-100">
+            <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <span>
+              Assigning from this location view will apply modifiers{" "}
+              <strong>only at this location</strong>. Items in the category get
+              location-scoped assignments. Removing also cleans up location assignments.
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-start gap-2 p-2.5 bg-emerald-50 text-emerald-800 rounded-lg text-xs border border-emerald-100">
+            <Globe className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <span>
+              Assigning to a category applies this modifier to all current and
+              future items <strong>at all locations</strong>. Removing also removes
+              from items (unless covered by another category).
+            </span>
+          </div>
+        )}
 
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -288,15 +302,28 @@ export function AssignModifierToCategoryDialog({
                         Global
                       </Badge>
                     )}
-                    {isAssigned && !isMarkedForRemoval && (
-                      <Badge
-                        variant="outline"
-                        className="text-[10px] gap-1 bg-emerald-50 text-emerald-700 border-emerald-200"
-                      >
-                        <CheckCircle2 className="h-2.5 w-2.5" />
-                        Assigned
-                      </Badge>
-                    )}
+                    {isAssigned && !isMarkedForRemoval && (() => {
+                      const assignment = existingAssignments.find((a) => a.category_id === category.id);
+                      const isGlobalAssignment = assignment?.source === "global";
+                      return (
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[10px] gap-1",
+                            isGlobalAssignment
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : "bg-blue-50 text-blue-700 border-blue-200",
+                          )}
+                        >
+                          {isGlobalAssignment ? (
+                            <Globe className="h-2.5 w-2.5" />
+                          ) : (
+                            <MapPin className="h-2.5 w-2.5" />
+                          )}
+                          {isGlobalAssignment ? "Global" : "This Location"}
+                        </Badge>
+                      );
+                    })()}
                     {isMarkedForRemoval && (
                       <Badge
                         variant="outline"

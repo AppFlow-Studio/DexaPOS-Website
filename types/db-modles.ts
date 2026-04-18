@@ -534,6 +534,18 @@ export interface CategoryModifierGroupsModel {
     updated_at: string | null
 }
 
+// Location-Scoped Modifier Group Assignments (location can assign modifiers to items independently)
+export interface LocationItemModifierGroupsModel {
+    id: string
+    location_id: string // FK to locations table
+    menu_item_id: string // FK to menu_items table
+    modifier_group_id: string // FK to modifier_groups table
+    merchant_id: string // FK to merchants table
+    display_order: number | null
+    created_at: string
+    updated_at: string | null
+}
+
 // Location Modifier Group Overrides
 export interface LocationModifierGroupOverridesModel {
     id: string
