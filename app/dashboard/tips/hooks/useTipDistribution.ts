@@ -10,10 +10,17 @@ import {
   UpdateManualAdjustment,
   MarkTipDistributionExported,
   GetMyTipHistory,
+  GetTodayTipSummary,
+  GetTodayShifts,
+  VoidTipDistribution,
+  GetNeedsApprovalSessions,
+  GetTipDistributionSessionById,
+  ExportTipDistribution,
+  GetSessionExports,
 } from "@/app/dashboard/actions/tips";
 
 // =====================================================
-// DISTRIBUTION SESSION
+// DISTRIBUTION SESSION (by location + date + shift)
 // =====================================================
 
 export function useTipDistributionSession(
@@ -43,22 +50,140 @@ export function useTipDistributionSession(
 }
 
 // =====================================================
+// DISTRIBUTION SESSION (by ID — for review screen)
+// =====================================================
+
+export function useTipDistributionSessionById(
+  clerkOrgId: string | undefined,
+  sessionId: string | undefined
+) {
+  return useQuery({
+    queryKey: ["tip-distribution-session-by-id", clerkOrgId, sessionId],
+    queryFn: async () => {
+      if (!clerkOrgId || !sessionId) return null;
+      const result = await GetTipDistributionSessionById(clerkOrgId, sessionId);
+      if (!result.success) throw new Error(result.error || "Failed to fetch session");
+      return result.data;
+    },
+    enabled: !!clerkOrgId && !!sessionId,
+    staleTime: 10 * 1000,
+  });
+}
+
+// =====================================================
 // DISTRIBUTION HISTORY
 // =====================================================
 
 export function useTipDistributionHistory(
   clerkOrgId: string | undefined,
-  locationId: string | undefined
+  locationId: string | undefined,
+  limit?: number,
+  statusFilter?: string[],
+  dateFrom?: string,
+  dateTo?: string
 ) {
   return useQuery({
-    queryKey: ["tip-distribution-history", clerkOrgId, locationId],
+    queryKey: ["tip-distribution-history", clerkOrgId, locationId, statusFilter, dateFrom, dateTo],
     queryFn: async () => {
       if (!clerkOrgId || !locationId) throw new Error("Missing required parameters");
-      const result = await GetTipDistributionHistory(clerkOrgId, locationId);
+      const result = await GetTipDistributionHistory(
+        clerkOrgId,
+        locationId,
+        limit,
+        statusFilter,
+        dateFrom,
+        dateTo
+      );
       if (!result.success) throw new Error(result.error || "Failed to fetch history");
       return result.data || [];
     },
     enabled: !!clerkOrgId && !!locationId && locationId !== "all",
+    staleTime: 30 * 1000,
+  });
+}
+
+// =====================================================
+// NEEDS APPROVAL SESSIONS
+// =====================================================
+
+export function useNeedsApprovalSessions(
+  clerkOrgId: string | undefined,
+  locationId: string | undefined
+) {
+  return useQuery({
+    queryKey: ["needs-approval-sessions", clerkOrgId, locationId],
+    queryFn: async () => {
+      if (!clerkOrgId || !locationId) throw new Error("Missing required parameters");
+      const result = await GetNeedsApprovalSessions(clerkOrgId, locationId);
+      if (!result.success) throw new Error(result.error || "Failed to fetch sessions");
+      return result.data || [];
+    },
+    enabled: !!clerkOrgId && !!locationId && locationId !== "all",
+    staleTime: 30 * 1000,
+  });
+}
+
+// =====================================================
+// TODAY TAB — LIVE DATA (30s polling)
+// =====================================================
+
+export function useTodayTipSummary(
+  clerkOrgId: string | undefined,
+  locationId: string | undefined,
+  date: string
+) {
+  return useQuery({
+    queryKey: ["today-tip-summary", clerkOrgId, locationId, date],
+    queryFn: async () => {
+      if (!clerkOrgId || !locationId) throw new Error("Missing required parameters");
+      const result = await GetTodayTipSummary(clerkOrgId, locationId, date);
+      if (!result.success) throw new Error(result.error || "Failed to fetch today summary");
+      return result.data;
+    },
+    enabled: !!clerkOrgId && !!locationId && locationId !== "all",
+    staleTime: 10 * 1000,
+    refetchInterval: 30 * 1000,
+    refetchIntervalInBackground: false,
+  });
+}
+
+export function useTodayShifts(
+  clerkOrgId: string | undefined,
+  locationId: string | undefined,
+  date: string
+) {
+  return useQuery({
+    queryKey: ["today-shifts", clerkOrgId, locationId, date],
+    queryFn: async () => {
+      if (!clerkOrgId || !locationId) throw new Error("Missing required parameters");
+      const result = await GetTodayShifts(clerkOrgId, locationId, date);
+      if (!result.success) throw new Error(result.error || "Failed to fetch today shifts");
+      return result.data || [];
+    },
+    enabled: !!clerkOrgId && !!locationId && locationId !== "all",
+    staleTime: 10 * 1000,
+    refetchInterval: 30 * 1000,
+    refetchIntervalInBackground: false,
+  });
+}
+
+// =====================================================
+// SESSION EXPORTS (payroll export history)
+// =====================================================
+
+export function useSessionExports(
+  clerkOrgId: string | undefined,
+  sessionId: string | undefined
+) {
+  return useQuery({
+    queryKey: ["session-exports", clerkOrgId, sessionId],
+    queryFn: async () => {
+      if (!clerkOrgId || !sessionId) throw new Error("Missing required parameters");
+      const result = await GetSessionExports(clerkOrgId, sessionId);
+      if (!result.success) throw new Error(result.error || "Failed to fetch exports");
+      return result.data || [];
+    },
+    enabled: !!clerkOrgId && !!sessionId,
     staleTime: 30 * 1000,
   });
 }
@@ -95,20 +220,24 @@ export function useCalculateTipDistribution() {
       return result.data;
     },
     onSuccess: async (_data, variables) => {
-      await queryClient.invalidateQueries({
-        queryKey: [
-          "tip-distribution-session",
-          variables.clerkOrgId,
-          variables.locationId,
-          variables.sessionDate,
-          variables.shiftPeriod,
-        ],
-        refetchType: "active",
-      });
-      await queryClient.invalidateQueries({
-        queryKey: ["tip-distribution-history", variables.clerkOrgId, variables.locationId],
-        refetchType: "active",
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["tip-distribution-session", variables.clerkOrgId, variables.locationId, variables.sessionDate, variables.shiftPeriod],
+          refetchType: "active",
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["tip-distribution-history", variables.clerkOrgId, variables.locationId],
+          refetchType: "active",
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["needs-approval-sessions", variables.clerkOrgId, variables.locationId],
+          refetchType: "active",
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["today-tip-summary", variables.clerkOrgId, variables.locationId],
+          refetchType: "active",
+        }),
+      ]);
       toast.success("Tips calculated successfully");
     },
     onError: (error: Error) => {
@@ -139,14 +268,12 @@ export function useApproveTipDistribution() {
       return result;
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["tip-distribution-session"],
-        refetchType: "active",
-      });
-      await queryClient.invalidateQueries({
-        queryKey: ["tip-distribution-history"],
-        refetchType: "active",
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["tip-distribution-session"], refetchType: "active" }),
+        queryClient.invalidateQueries({ queryKey: ["tip-distribution-session-by-id"], refetchType: "active" }),
+        queryClient.invalidateQueries({ queryKey: ["tip-distribution-history"], refetchType: "active" }),
+        queryClient.invalidateQueries({ queryKey: ["needs-approval-sessions"], refetchType: "active" }),
+      ]);
       toast.success("Distribution approved successfully");
     },
     onError: (error: Error) => {
@@ -156,7 +283,81 @@ export function useApproveTipDistribution() {
 }
 
 // =====================================================
-// MARK AS EXPORTED
+// VOID DISTRIBUTION
+// =====================================================
+
+export function useVoidTipDistribution() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      clerkOrgId,
+      sessionId,
+      reason,
+      voidedBy,
+    }: {
+      clerkOrgId: string;
+      sessionId: string;
+      reason: string;
+      voidedBy: string | null;
+    }) => {
+      const result = await VoidTipDistribution(clerkOrgId, sessionId, reason, voidedBy);
+      if (!result.success) throw new Error(result.error || "Failed to void distribution");
+      return result;
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["tip-distribution-session-by-id"], refetchType: "active" }),
+        queryClient.invalidateQueries({ queryKey: ["tip-distribution-session"], refetchType: "active" }),
+        queryClient.invalidateQueries({ queryKey: ["needs-approval-sessions"], refetchType: "active" }),
+        queryClient.invalidateQueries({ queryKey: ["tip-distribution-history"], refetchType: "active" }),
+      ]);
+      toast.success("Distribution voided");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to void distribution");
+    },
+  });
+}
+
+// =====================================================
+// EXPORT DISTRIBUTION (via RPC + tip_payroll_exports)
+// =====================================================
+
+export function useExportTipDistributionV2() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      clerkOrgId,
+      sessionId,
+      destination,
+      exportedBy,
+    }: {
+      clerkOrgId: string;
+      sessionId: string;
+      destination: "gusto" | "adp" | "csv";
+      exportedBy: string | null;
+    }) => {
+      const result = await ExportTipDistribution(clerkOrgId, sessionId, destination, exportedBy);
+      if (!result.success) throw new Error(result.error || "Failed to export distribution");
+      return result.data;
+    },
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["session-exports", variables.clerkOrgId, variables.sessionId],
+        refetchType: "active",
+      });
+      toast.success(`Export to ${variables.destination} initiated`);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to export distribution");
+    },
+  });
+}
+
+// =====================================================
+// LEGACY EXPORT (kept for current page.tsx until PR4 cleanup)
 // =====================================================
 
 export function useExportTipDistribution() {
@@ -242,10 +443,10 @@ export function useManualAdjustment() {
       return result;
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["tip-distribution-session"],
-        refetchType: "active",
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["tip-distribution-session"], refetchType: "active" }),
+        queryClient.invalidateQueries({ queryKey: ["tip-distribution-session-by-id"], refetchType: "active" }),
+      ]);
       toast.success("Adjustment saved");
     },
     onError: (error: Error) => {
