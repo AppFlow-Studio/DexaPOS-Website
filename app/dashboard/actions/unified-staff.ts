@@ -307,47 +307,51 @@ export async function CreatePOSStaff(
       return { error: "Failed to create member record" };
     }
 
-    // 5. Create location assignments
-    const locationAssignments = formData.location_ids.map((locationId) => ({
-      location_id: locationId,
-      merchant_id: merchant.id,
-      user_id: null, // POS staff has no user_id
-      staff_profile_id: staffProfile.id,
-      role_code: formData.role_code,
-      is_primary_location: locationId === formData.primary_location_id,
-      is_active: true,
-      pin_plain: pinCode,
-      pin_hashed: null,
-      pin_code: pinCode,
-      hourly_rate: formData.hourly_rate,
-      employment_type: formData.employment_type,
-    }));
+    // 5. Create location assignments (skip if merchant has no locations yet)
+    if (formData.location_ids.length > 0) {
+      const locationAssignments = formData.location_ids.map((locationId) => ({
+        location_id: locationId,
+        merchant_id: merchant.id,
+        user_id: null, // POS staff has no user_id
+        staff_profile_id: staffProfile.id,
+        role_code: formData.role_code,
+        is_primary_location: locationId === formData.primary_location_id,
+        is_active: true,
+        pin_plain: pinCode,
+        pin_hashed: null,
+        pin_code: pinCode,
+        hourly_rate: formData.hourly_rate,
+        employment_type: formData.employment_type,
+      }));
 
-    const { error: assignmentError } = await supabase
-      .from("location_members")
-      .insert(locationAssignments);
+      const { error: assignmentError } = await supabase
+        .from("location_members")
+        .insert(locationAssignments);
 
-    if (assignmentError) {
-      console.error(
-        "[CreatePOSStaff] Failed to create assignments:",
-        assignmentError,
-      );
-      // Rollback
-      await supabase.from("members").delete().eq("id", member.id);
-      await supabase.from("staff_profiles").delete().eq("id", staffProfile.id);
-      return { error: "Failed to create location assignments" };
+      if (assignmentError) {
+        console.error(
+          "[CreatePOSStaff] Failed to create assignments:",
+          assignmentError,
+        );
+        // Rollback
+        await supabase.from("members").delete().eq("id", member.id);
+        await supabase.from("staff_profiles").delete().eq("id", staffProfile.id);
+        return { error: "Failed to create location assignments" };
+      }
     }
 
     // Revalidate staff page
     revalidatePath("/dashboard/staff");
 
     // Fetch location names for audit log
-    const { data: locationData } = await supabase
-      .from("locations")
-      .select("name")
-      .in("id", formData.location_ids);
-
-    const locationNames = locationData?.map((l) => l.name) || [];
+    const locationNames: string[] = [];
+    if (formData.location_ids.length > 0) {
+      const { data: locationData } = await supabase
+        .from("locations")
+        .select("name")
+        .in("id", formData.location_ids);
+      locationNames.push(...(locationData?.map((l) => l.name) ?? []));
+    }
 
     // Log audit event
     await LogAuditEvent({
@@ -587,35 +591,37 @@ export async function CreateClerkUserDirectly(
       return { error: "Failed to create member record" };
     }
 
-    // 7. Eagerly create location_members records
-    const locationMembersData = resolvedLocationIds.map((locationId) => ({
-      location_id: locationId,
-      merchant_id: merchantId,
-      user_id: clerkUser.id,
-      staff_profile_id: staffProfile.id,
-      role_code: formData.role_code,
-      is_primary_location: locationId === formData.primary_location_id,
-      is_active: true,
-      pin_plain: pinCode,
-      pin_hashed: null,
-      pin_code: pinCode,
-      hourly_rate: formData.hourly_rate,
-      employment_type: formData.employment_type,
-    }));
+    // 7. Eagerly create location_members records (skip if merchant has no locations yet)
+    if (resolvedLocationIds.length > 0) {
+      const locationMembersData = resolvedLocationIds.map((locationId) => ({
+        location_id: locationId,
+        merchant_id: merchantId,
+        user_id: clerkUser.id,
+        staff_profile_id: staffProfile.id,
+        role_code: formData.role_code,
+        is_primary_location: locationId === formData.primary_location_id,
+        is_active: true,
+        pin_plain: pinCode,
+        pin_hashed: null,
+        pin_code: pinCode,
+        hourly_rate: formData.hourly_rate,
+        employment_type: formData.employment_type,
+      }));
 
-    const { error: assignmentError } = await supabase
-      .from("location_members")
-      .insert(locationMembersData);
+      const { error: assignmentError } = await supabase
+        .from("location_members")
+        .insert(locationMembersData);
 
-    if (assignmentError) {
-      console.error(
-        "[CreateClerkUserDirectly] Failed to create location assignments:",
-        assignmentError,
-      );
-      await supabase.from("members").delete().eq("id", member.id);
-      await supabase.from("staff_profiles").delete().eq("id", staffProfile.id);
-      await clerk.users.deleteUser(clerkUser.id);
-      return { error: "Failed to create location assignments" };
+      if (assignmentError) {
+        console.error(
+          "[CreateClerkUserDirectly] Failed to create location assignments:",
+          assignmentError,
+        );
+        await supabase.from("members").delete().eq("id", member.id);
+        await supabase.from("staff_profiles").delete().eq("id", staffProfile.id);
+        await clerk.users.deleteUser(clerkUser.id);
+        return { error: "Failed to create location assignments" };
+      }
     }
 
     revalidatePath("/dashboard/staff");

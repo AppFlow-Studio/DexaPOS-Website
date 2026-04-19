@@ -92,7 +92,7 @@ export const inviteStaffSchema = z
     role_code: z.string().min(1, "Role is required"),
     location_ids: z
       .array(z.string().uuid())
-      .min(1, "At least one location required"),
+      .min(0),
     primary_location_id: z.string().uuid().nullable(),
     auto_generate_pin: z.boolean(),
     pin_code: z
