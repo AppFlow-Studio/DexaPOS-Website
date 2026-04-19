@@ -15,6 +15,8 @@ import type {
   AdminCreateStaffResult,
   AdminCreateClerkStaffData,
   AdminCreateClerkStaffResult,
+  AdminInviteClerkStaffData,
+  AdminInviteClerkStaffResult,
 } from '@/types/staff'
 
 // ============================================================================
@@ -688,6 +690,187 @@ export async function adminCreateClerkStaff(
     success: true,
     staffProfileId: staffProfile.id,
     tempPassword,
+    generatedPin,
+  }
+}
+
+// ============================================================================
+// ADMIN INVITE CLERK STAFF (email invitation flow)
+// ============================================================================
+/**
+ * Send a Clerk organization invitation for a merchant staff member.
+ * The invited user sets their own password via the email link.
+ */
+export async function adminInviteClerkStaff(
+  merchantId: string,
+  data: AdminInviteClerkStaffData
+): Promise<AdminInviteClerkStaffResult> {
+  const { userId: adminUserId } = await assertHQPermission('hq.merchant.manage_team')
+
+  const srClient = createServiceRoleClient()
+
+  // 1. Look up merchant to get clerk_org_id
+  const { data: merchant, error: merchantError } = await srClient
+    .from('merchants')
+    .select('id, clerk_org_id')
+    .eq('id', merchantId)
+    .single()
+
+  if (merchantError || !merchant?.clerk_org_id) {
+    return { success: false, error: 'Merchant not found or missing Clerk org' }
+  }
+
+  const clerkOrgId = merchant.clerk_org_id
+
+  // 2. Optionally generate PIN
+  let pinCode: string | null = null
+  let generatedPin: string | undefined
+
+  if (data.autoGeneratePin) {
+    generatedPin = Math.floor(1000 + Math.random() * 9000).toString()
+    pinCode = generatedPin
+  } else if (data.pin) {
+    if (!/^\d{4,6}$/.test(data.pin)) {
+      return { success: false, error: 'PIN must be 4–6 digits' }
+    }
+    pinCode = data.pin
+  }
+
+  // 3. Build location assignments metadata (embedded in invitation publicMetadata)
+  const locationAssignments = data.locationIds.map((locationId) => ({
+    locationId,
+    roleCode: data.roleCode,
+    isPrimaryLocation: locationId === data.primaryLocationId,
+    hourlyRate: data.hourlyRate,
+    employmentType: data.employmentType,
+    ...(pinCode ? { pinCode } : {}),
+  }))
+
+  // 4. Create Clerk org invitation
+  //    Clerk requires inviterUserId to be an org:admin of that org.
+  //    HQ admins are not org members, so find one who is, or temporarily promote someone.
+  const clerk = await clerkClient()
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+
+  let inviterUserId: string | null = null
+  let temporarilyPromoted = false
+  let promotedUserId: string | null = null
+
+  try {
+    const memberships = await clerk.organizations.getOrganizationMembershipList({
+      organizationId: clerkOrgId,
+      limit: 50,
+    })
+    const adminMember = memberships.data.find((m) => m.role === 'org:admin')
+    if (adminMember?.publicUserData?.userId) {
+      inviterUserId = adminMember.publicUserData.userId
+    } else if (memberships.data.length > 0) {
+      // No org:admin — temporarily promote the first member
+      const firstMember = memberships.data[0]
+      if (firstMember?.publicUserData?.userId) {
+        promotedUserId = firstMember.publicUserData.userId
+        await clerk.organizations.updateOrganizationMembership({
+          organizationId: clerkOrgId,
+          userId: promotedUserId,
+          role: 'org:admin',
+        })
+        inviterUserId = promotedUserId
+        temporarilyPromoted = true
+      }
+    }
+  } catch {
+    // Non-fatal — inviterUserId stays null; Clerk may still accept without it
+  }
+
+  if (!inviterUserId) {
+    return { success: false, error: 'No eligible inviter found in this merchant org' }
+  }
+
+  let invitation: Awaited<ReturnType<typeof clerk.organizations.createOrganizationInvitation>> | undefined
+  try {
+    invitation = await clerk.organizations.createOrganizationInvitation({
+      organizationId: clerkOrgId,
+      inviterUserId,
+      emailAddress: data.email,
+      role: 'org:member',
+      ...(appUrl && {
+        redirectUrl: `${appUrl}/accept-invitation?email=${encodeURIComponent(data.email)}&firstName=${encodeURIComponent(data.firstName)}&lastName=${encodeURIComponent(data.lastName)}`,
+      }),
+      publicMetadata: {
+        creationType: 'invitation',
+        roleCode: data.roleCode,
+        organizationId: clerkOrgId,
+        merchantId,
+        locationAssignments,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        phone: data.phone,
+      },
+    })
+  } finally {
+    if (temporarilyPromoted && promotedUserId) {
+      try {
+        await clerk.organizations.updateOrganizationMembership({
+          organizationId: clerkOrgId,
+          userId: promotedUserId,
+          role: 'org:member',
+        })
+      } catch {
+        // Non-fatal
+      }
+    }
+  }
+
+  if (!invitation?.id) {
+    return { success: false, error: 'Failed to create Clerk invitation' }
+  }
+
+  // 5. Store invite in location_invites for tracking
+  const { error: inviteError } = await srClient.from('location_invites').insert({
+    merchant_id: merchantId,
+    location_id: null,
+    invited_by_user_id: adminUserId,
+    email: data.email,
+    first_name: data.firstName,
+    last_name: data.lastName,
+    phone: data.phone ?? null,
+    role_code: data.roleCode,
+    invite_type: 'clerk',
+    clerk_invite_id: invitation.id,
+    hourly_rate: data.hourlyRate ?? null,
+    location_assignments: locationAssignments,
+    status: 'pending',
+  })
+
+  if (inviteError) {
+    console.error('[adminInviteClerkStaff] Failed to store invite tracking:', inviteError)
+    // Non-fatal — invitation was sent; just warn
+  }
+
+  // 6. Audit log
+  await logAdminAction('MERCHANT_STAFF_INVITED', {
+    merchantId,
+    resourceType: 'staff_invite',
+    resourceId: invitation.id,
+    resourceName: `${data.firstName} ${data.lastName}`,
+    changes: {
+      after: {
+        email: data.email,
+        role_code: data.roleCode,
+        location_ids: data.locationIds,
+      },
+    },
+    metadata: {
+      hq_admin_id: adminUserId,
+      source: 'adminInviteClerkStaff',
+    },
+  })
+
+  revalidatePath(`/manage/merchants/${merchantId}`)
+
+  return {
+    success: true,
+    inviteId: invitation.id,
     generatedPin,
   }
 }

@@ -321,3 +321,30 @@ export interface AdminCreateClerkStaffResult {
   generatedPin?: string;
   error?: string;
 }
+
+/**
+ * Data for inviting a Clerk dashboard user via the HQ admin interface (email invite flow)
+ */
+export interface AdminInviteClerkStaffData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  locationIds: string[];
+  primaryLocationId: string;
+  roleCode: string;
+  hourlyRate?: number;
+  employmentType: EmploymentType;
+  autoGeneratePin?: boolean;
+  pin?: string;
+}
+
+/**
+ * Admin invite Clerk staff result
+ */
+export interface AdminInviteClerkStaffResult {
+  success: boolean;
+  inviteId?: string;
+  generatedPin?: string;
+  error?: string;
+}
