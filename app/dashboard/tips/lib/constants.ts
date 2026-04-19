@@ -14,8 +14,8 @@ export const SHIFT_LABELS: Record<string, string> = {
   custom:   "Custom",
 };
 
-export function formatMoney(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
+export function formatMoney(dollars: number): string {
+  return `$${dollars.toFixed(2)}`;
 }
 
 export function formatDate(dateStr: string): string {
