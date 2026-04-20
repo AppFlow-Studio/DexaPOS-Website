@@ -30,6 +30,47 @@ const STATUS_STYLES: Record<string, string> = {
   downloaded: "bg-blue-100 text-blue-700 border-blue-200",
 };
 
+function downloadCSVFromPayload(payload: any) {
+  const session = payload?.session || {};
+  const rows = payload?.rows || [];
+  if (rows.length === 0) return;
+
+  const headers = [
+    "Employee", "Role", "Hours", "Charged Tips", "Cash Tips",
+    "Pool Contributed", "Pool Received", "Tip-Out Given", "Tip-Out Received",
+    "Adjustment", "Net Tips",
+  ];
+
+  const csvRows = rows.map((r: any) => [
+    r.staff_name || "",
+    r.role_code || "",
+    (r.hours_worked ?? 0).toFixed(1),
+    `$${(r.charged_tips ?? 0).toFixed(2)}`,
+    `$${(r.cash_tips ?? 0).toFixed(2)}`,
+    `$${(r.tip_pool_contributed ?? 0).toFixed(2)}`,
+    `$${(r.tip_pool_received ?? 0).toFixed(2)}`,
+    `$${(r.tip_out_given ?? 0).toFixed(2)}`,
+    `$${(r.tip_out_received ?? 0).toFixed(2)}`,
+    `$${(r.manual_adjustment ?? 0).toFixed(2)}`,
+    `$${(r.net_tips ?? 0).toFixed(2)}`,
+  ]);
+
+  const csv = [
+    headers.join(","),
+    ...csvRows.map((row: string[]) => row.map((cell) => `"${cell}"`).join(",")),
+  ].join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `tip-distribution-${session.session_date || "export"}-${session.shift_period || "full_day"}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+}
+
 export function ExportHistoryPanel({
   clerkOrgId,
   sessionId,
@@ -44,12 +85,17 @@ export function ExportHistoryPanel({
   const canExport = sessionStatus === "approved";
 
   const handleExport = (destination: "csv" | "gusto" | "adp") => {
-    exportMutation.mutate({
-      clerkOrgId,
-      sessionId,
-      destination,
-      exportedBy: null,
-    });
+    exportMutation.mutate(
+      { clerkOrgId, sessionId, destination, exportedBy: null },
+      {
+        onSuccess: (data) => {
+          // For CSV: trigger browser download from the returned payload
+          if (destination === "csv" && data?.payload) {
+            downloadCSVFromPayload(data.payload);
+          }
+        },
+      }
+    );
   };
 
   return (
@@ -123,26 +169,41 @@ export function ExportHistoryPanel({
                 </span>
               </div>
 
-              {exp.status === "failed" && exp.error_message && (
-                <span className="text-xs text-red-600 max-w-[200px] truncate">
-                  {exp.error_message}
-                </span>
-              )}
+              <div className="flex items-center gap-1">
+                {/* Re-download CSV from stored payload */}
+                {exp.destination === "csv" && exp.payload && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => downloadCSVFromPayload(exp.payload)}
+                    className="h-7 text-xs"
+                  >
+                    <Download className="w-3 h-3 mr-1" />
+                    Download
+                  </Button>
+                )}
 
-              {exp.status === "failed" && canExport && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() =>
-                    handleExport(exp.destination as "csv" | "gusto" | "adp")
-                  }
-                  disabled={exportMutation.isPending}
-                  className="h-7 text-xs"
-                >
-                  <RefreshCw className="w-3 h-3 mr-1" />
-                  Retry
-                </Button>
-              )}
+                {exp.status === "failed" && exp.error_message && (
+                  <span className="text-xs text-red-600 max-w-[200px] truncate mr-1">
+                    {exp.error_message}
+                  </span>
+                )}
+
+                {exp.status === "failed" && canExport && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      handleExport(exp.destination as "csv" | "gusto" | "adp")
+                    }
+                    disabled={exportMutation.isPending}
+                    className="h-7 text-xs"
+                  >
+                    <RefreshCw className="w-3 h-3 mr-1" />
+                    Retry
+                  </Button>
+                )}
+              </div>
             </div>
           ))}
         </div>

@@ -3,18 +3,24 @@
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
-import { MapPin, ChevronRight } from "lucide-react";
+import { MapPin, ChevronRight, CheckCircle2, ArrowRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
+import { formatMoney } from "./lib/constants";
 import {
+  useLatestSessionCutoff,
   useTodayTipSummary,
   useTodayShifts,
   useCalculateTipDistribution,
   useNeedsApprovalSessions,
   useVoidTipDistribution,
+  useOrphanedShifts,
+  useUnclosedDays,
+  useForceClockOut,
 } from "./hooks/useTipDistribution";
 import { TodayHeader } from "./components/TodayHeader";
 import { ActiveShiftsPanel } from "./components/ActiveShiftsPanel";
@@ -23,6 +29,8 @@ import { CloseOutDialog } from "./components/CloseOutDialog";
 import { NeedsApprovalTable } from "./components/NeedsApprovalTable";
 import { HistoryTable } from "./components/HistoryTable";
 import { VoidDialog } from "./components/VoidDialog";
+import { AttentionBanner } from "./components/AttentionBanner";
+import { ProjectedDistributionPanel } from "./components/ProjectedDistributionPanel";
 import type { TipDistributionSession } from "@/app/dashboard/actions/tips";
 
 export default function TipsPage() {
@@ -35,21 +43,31 @@ export default function TipsPage() {
   const locationId = selectedLocationId !== "all" ? selectedLocationId : undefined;
 
   const [closeOutOpen, setCloseOutOpen] = useState(false);
+  const [closeOutTargetDate, setCloseOutTargetDate] = useState<string | undefined>(undefined);
   const [voidDialogOpen, setVoidDialogOpen] = useState(false);
   const [voidingSession, setVoidingSession] = useState<TipDistributionSession | null>(null);
 
-  // Today tab data
+  // Check for previous approved session today (for multi-session scoping)
+  const { data: lastCutoff } = useLatestSessionCutoff(clerkOrgId, locationId, todayDate);
+  const afterCutoff = lastCutoff?.cutoffAt ?? null;
+
+  // Today tab data — scoped after previous session cutoff
   const { data: summary, isLoading: summaryLoading } = useTodayTipSummary(
-    clerkOrgId, locationId, todayDate
+    clerkOrgId, locationId, todayDate, afterCutoff
   );
   const { data: shifts = [], isLoading: shiftsLoading } = useTodayShifts(
-    clerkOrgId, locationId, todayDate
+    clerkOrgId, locationId, todayDate, afterCutoff
   );
 
   // Needs Approval tab data
   const { data: needsApproval = [], isLoading: approvalLoading } = useNeedsApprovalSessions(
     clerkOrgId, locationId
   );
+
+  // Orphan detection
+  const { data: orphanedShifts = [] } = useOrphanedShifts(clerkOrgId, locationId);
+  const { data: unclosedDays = [] } = useUnclosedDays(clerkOrgId, locationId);
+  const forceClockOutMutation = useForceClockOut();
 
   const calculateMutation = useCalculateTipDistribution();
   const voidMutation = useVoidTipDistribution();
@@ -66,23 +84,39 @@ export default function TipsPage() {
 
   // Handlers
   const handleCloseOut = () => {
+    const targetDate = closeOutTargetDate || todayDate;
     calculateMutation.mutate(
       {
         clerkOrgId: clerkOrgId!,
         locationId: selectedLocationId!,
-        sessionDate: todayDate,
+        sessionDate: targetDate,
         shiftPeriod: "full_day",
         staffProfileId: null,
       },
       {
         onSuccess: (data) => {
           setCloseOutOpen(false);
+          setCloseOutTargetDate(undefined);
           if (data?.session_id) {
             router.push(`/dashboard/tips/${data.session_id}`);
           }
         },
       }
     );
+  };
+
+  const handleCloseOutDay = (date: string) => {
+    setCloseOutTargetDate(date);
+    setCloseOutOpen(true);
+  };
+
+  const handleForceClockOut = (shiftId: string, clockOutTime: string, cashTips: number) => {
+    forceClockOutMutation.mutate({
+      clerkOrgId: clerkOrgId!,
+      shiftId,
+      clockOutTime,
+      cashTipsDeclared: cashTips,
+    });
   };
 
   const handleVoidFromApproval = (session: TipDistributionSession) => {
@@ -153,6 +187,15 @@ export default function TipsPage() {
         </p>
       </div>
 
+      {/* ATTENTION BANNER — orphaned shifts + unclosed days */}
+      <AttentionBanner
+        orphanedShifts={orphanedShifts}
+        unclosedDays={unclosedDays}
+        onForceClockOut={handleForceClockOut}
+        onCloseOutDay={handleCloseOutDay}
+        isForceClockOutLoading={forceClockOutMutation.isPending}
+      />
+
       {/* TABS */}
       <Tabs defaultValue="today">
         <TabsList>
@@ -181,22 +224,41 @@ export default function TipsPage() {
             isClosingOut={calculateMutation.isPending}
           />
 
+          {/* Previous session banner */}
+          {lastCutoff && (
+            <Card className="p-3 border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-900/30">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-600" />
+                  <div className="text-sm">
+                    <span className="font-medium text-green-800 dark:text-green-200">
+                      Session {lastCutoff.sequenceNumber} closed
+                    </span>
+                    <span className="text-green-700 dark:text-green-300 ml-1">
+                      — {formatMoney(lastCutoff.totalDistributed)} distributed
+                    </span>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-green-700 hover:text-green-800 h-7 text-xs"
+                  onClick={() => router.push(`/dashboard/tips/${lastCutoff.sessionId}`)}
+                >
+                  View <ArrowRight className="w-3 h-3 ml-1" />
+                </Button>
+              </div>
+            </Card>
+          )}
+
           <ActiveShiftsPanel shifts={shifts} isLoading={shiftsLoading} />
 
-          {/* Projected Distribution placeholder */}
-          <section className="space-y-3">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Projected Distribution
-            </h3>
-            <Card className="p-6 text-center border-dashed">
-              <p className="text-sm text-muted-foreground">
-                Live projection will be available after the preview calculation RPC is implemented.
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Use &quot;Close Out & Calculate&quot; to see the final distribution.
-              </p>
-            </Card>
-          </section>
+          {/* Projected Distribution */}
+          <ProjectedDistributionPanel
+            clerkOrgId={clerkOrgId}
+            locationId={locationId}
+            sessionDate={todayDate}
+          />
 
           <ConfigSummaryPanel clerkOrgId={clerkOrgId} locationId={locationId} />
         </TabsContent>
@@ -219,10 +281,14 @@ export default function TipsPage() {
       {/* DIALOGS */}
       <CloseOutDialog
         open={closeOutOpen}
-        onOpenChange={setCloseOutOpen}
+        onOpenChange={(open) => {
+          setCloseOutOpen(open);
+          if (!open) setCloseOutTargetDate(undefined);
+        }}
         undeclaredStaff={undeclaredStaff}
         onConfirm={handleCloseOut}
         isLoading={calculateMutation.isPending}
+        targetDate={closeOutTargetDate}
       />
 
       <VoidDialog

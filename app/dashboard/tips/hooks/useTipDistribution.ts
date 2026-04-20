@@ -17,6 +17,13 @@ import {
   GetTipDistributionSessionById,
   ExportTipDistribution,
   GetSessionExports,
+  GetLatestSessionCutoff,
+  GetOrphanedShifts,
+  GetUnclosedDays,
+  ForceClockOutShift,
+  CheckSessionReconciliation,
+  AcknowledgeReconciliation,
+  PreviewTipDistribution,
 } from "@/app/dashboard/actions/tips";
 
 // =====================================================
@@ -130,13 +137,14 @@ export function useNeedsApprovalSessions(
 export function useTodayTipSummary(
   clerkOrgId: string | undefined,
   locationId: string | undefined,
-  date: string
+  date: string,
+  afterCutoff?: string | null
 ) {
   return useQuery({
-    queryKey: ["today-tip-summary", clerkOrgId, locationId, date],
+    queryKey: ["today-tip-summary", clerkOrgId, locationId, date, afterCutoff],
     queryFn: async () => {
       if (!clerkOrgId || !locationId) throw new Error("Missing required parameters");
-      const result = await GetTodayTipSummary(clerkOrgId, locationId, date);
+      const result = await GetTodayTipSummary(clerkOrgId, locationId, date, afterCutoff);
       if (!result.success) throw new Error(result.error || "Failed to fetch today summary");
       return result.data;
     },
@@ -150,13 +158,14 @@ export function useTodayTipSummary(
 export function useTodayShifts(
   clerkOrgId: string | undefined,
   locationId: string | undefined,
-  date: string
+  date: string,
+  afterCutoff?: string | null
 ) {
   return useQuery({
-    queryKey: ["today-shifts", clerkOrgId, locationId, date],
+    queryKey: ["today-shifts", clerkOrgId, locationId, date, afterCutoff],
     queryFn: async () => {
       if (!clerkOrgId || !locationId) throw new Error("Missing required parameters");
-      const result = await GetTodayShifts(clerkOrgId, locationId, date);
+      const result = await GetTodayShifts(clerkOrgId, locationId, date, afterCutoff);
       if (!result.success) throw new Error(result.error || "Failed to fetch today shifts");
       return result.data || [];
     },
@@ -164,6 +173,149 @@ export function useTodayShifts(
     staleTime: 10 * 1000,
     refetchInterval: 30 * 1000,
     refetchIntervalInBackground: false,
+  });
+}
+
+// =====================================================
+// LATEST SESSION CUTOFF (for multi-session scoping)
+// =====================================================
+
+export function useLatestSessionCutoff(
+  clerkOrgId: string | undefined,
+  locationId: string | undefined,
+  date: string
+) {
+  return useQuery({
+    queryKey: ["latest-session-cutoff", clerkOrgId, locationId, date],
+    queryFn: async () => {
+      if (!clerkOrgId || !locationId) return null;
+      const result = await GetLatestSessionCutoff(clerkOrgId, locationId, date);
+      if (!result.success) throw new Error(result.error || "Failed to fetch session cutoff");
+      return result.data;
+    },
+    enabled: !!clerkOrgId && !!locationId && locationId !== "all",
+    staleTime: 10 * 1000,
+  });
+}
+
+// =====================================================
+// ORPHANED SHIFTS + UNCLOSED DAYS
+// =====================================================
+
+export function useOrphanedShifts(
+  clerkOrgId: string | undefined,
+  locationId: string | undefined
+) {
+  return useQuery({
+    queryKey: ["orphaned-shifts", clerkOrgId, locationId],
+    queryFn: async () => {
+      if (!clerkOrgId || !locationId) return [];
+      const result = await GetOrphanedShifts(clerkOrgId, locationId);
+      if (!result.success) throw new Error(result.error || "Failed to fetch orphaned shifts");
+      return result.data || [];
+    },
+    enabled: !!clerkOrgId && !!locationId && locationId !== "all",
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useUnclosedDays(
+  clerkOrgId: string | undefined,
+  locationId: string | undefined
+) {
+  return useQuery({
+    queryKey: ["unclosed-days", clerkOrgId, locationId],
+    queryFn: async () => {
+      if (!clerkOrgId || !locationId) return [];
+      const result = await GetUnclosedDays(clerkOrgId, locationId);
+      if (!result.success) throw new Error(result.error || "Failed to fetch unclosed days");
+      return result.data || [];
+    },
+    enabled: !!clerkOrgId && !!locationId && locationId !== "all",
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useForceClockOut() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      clerkOrgId,
+      shiftId,
+      clockOutTime,
+      cashTipsDeclared,
+    }: {
+      clerkOrgId: string;
+      shiftId: string;
+      clockOutTime: string;
+      cashTipsDeclared: number;
+    }) => {
+      const result = await ForceClockOutShift(clerkOrgId, shiftId, clockOutTime, cashTipsDeclared);
+      if (!result.success) throw new Error(result.error || "Failed to force clock-out");
+      return result;
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["orphaned-shifts"], refetchType: "active" }),
+        queryClient.invalidateQueries({ queryKey: ["unclosed-days"], refetchType: "active" }),
+        queryClient.invalidateQueries({ queryKey: ["today-shifts"], refetchType: "active" }),
+        queryClient.invalidateQueries({ queryKey: ["today-tip-summary"], refetchType: "active" }),
+      ]);
+      toast.success("Shift clocked out");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to clock out shift");
+    },
+  });
+}
+
+// =====================================================
+// LATE TIP RECONCILIATION
+// =====================================================
+
+export function useSessionReconciliation(
+  clerkOrgId: string | undefined,
+  sessionId: string | undefined
+) {
+  return useQuery({
+    queryKey: ["session-reconciliation", clerkOrgId, sessionId],
+    queryFn: async () => {
+      if (!clerkOrgId || !sessionId) return null;
+      const result = await CheckSessionReconciliation(clerkOrgId, sessionId);
+      if (!result.success) throw new Error(result.error || "Failed to check reconciliation");
+      return result.data;
+    },
+    enabled: !!clerkOrgId && !!sessionId,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useAcknowledgeReconciliation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      clerkOrgId,
+      sessionId,
+    }: {
+      clerkOrgId: string;
+      sessionId: string;
+    }) => {
+      const result = await AcknowledgeReconciliation(clerkOrgId, sessionId);
+      if (!result.success) throw new Error(result.error || "Failed to acknowledge");
+      return result;
+    },
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["session-reconciliation", variables.clerkOrgId, variables.sessionId],
+        refetchType: "active",
+      });
+      toast.success("Reconciliation acknowledged");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to acknowledge reconciliation");
+    },
   });
 }
 
@@ -243,6 +395,30 @@ export function useCalculateTipDistribution() {
     onError: (error: Error) => {
       toast.error(error.message || "Failed to calculate tips");
     },
+  });
+}
+
+// =====================================================
+// PREVIEW DISTRIBUTION (non-destructive)
+// =====================================================
+
+export function usePreviewTipDistribution(
+  clerkOrgId: string | undefined,
+  locationId: string | undefined,
+  sessionDate: string | undefined,
+  shiftPeriod: string = "full_day"
+) {
+  return useQuery({
+    queryKey: ["preview-tip-distribution", clerkOrgId, locationId, sessionDate, shiftPeriod],
+    queryFn: async () => {
+      if (!clerkOrgId || !locationId || !sessionDate) return null;
+      const result = await PreviewTipDistribution(clerkOrgId, locationId, sessionDate, shiftPeriod);
+      if (!result.success) throw new Error(result.error || "Failed to preview distribution");
+      return result.data;
+    },
+    enabled: !!clerkOrgId && !!locationId && !!sessionDate && locationId !== "all",
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000, // Auto-refresh every 60s for live projection
   });
 }
 

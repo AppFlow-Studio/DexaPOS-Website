@@ -71,14 +71,18 @@ export function ShiftCard({ shift }: ShiftCardProps) {
       {/* Stats grid */}
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Charged tips</span>
+          <span className="text-muted-foreground">Card tips</span>
           <span className="font-medium">{formatMoney(shift.chargedTips)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Cash tips (orders)</span>
+          <span className="font-medium">{formatMoney(shift.cashPaymentTips)}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">Gross sales</span>
           <span className="font-medium">{formatMoney(shift.grossSales)}</span>
         </div>
-        <div className="flex justify-between col-span-2">
+        <div className="flex justify-between">
           <span className="text-muted-foreground">Cash declared</span>
           {clockedOutWithoutDeclaring ? (
             <Badge

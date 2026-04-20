@@ -68,6 +68,7 @@ import {
   Download,
   Copy,
   X,
+  Filter,
 } from "lucide-react";
 import { UnifiedStaffMember, BulkPinResetResult } from "@/types/staff";
 import { RolesModel } from "@/types/db-modles";
@@ -103,6 +104,8 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
     React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
   const [globalFilter, setGlobalFilter] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState<"all" | "active" | "inactive">("active");
+  const [roleFilter, setRoleFilter] = React.useState<string>("all");
 
   const [selectedStaff, setSelectedStaff] =
     React.useState<UnifiedStaffMember | null>(null);
@@ -138,6 +141,35 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
   }, [rowSelection]);
 
   const selectedCount = selectedMemberIds.length;
+
+  // Derive unique roles from staff data for the role filter
+  const uniqueRoles = React.useMemo(() => {
+    const roleMap = new Map<string, string>();
+    data.forEach((staff) => {
+      const primary = staff.location_assignments?.find((a) => a.is_primary);
+      if (primary?.role_code && primary?.role_name) {
+        roleMap.set(primary.role_code, primary.role_name);
+      }
+    });
+    return Array.from(roleMap.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [data]);
+
+  // Pre-filter data by status and role before passing to table
+  const filteredData = React.useMemo(() => {
+    let result = data;
+    if (statusFilter !== "all") {
+      result = result.filter((staff) =>
+        statusFilter === "active" ? staff.overall_is_active : !staff.overall_is_active
+      );
+    }
+    if (roleFilter !== "all") {
+      result = result.filter((staff) => {
+        const primary = staff.location_assignments?.find((a) => a.is_primary);
+        return primary?.role_code === roleFilter;
+      });
+    }
+    return result;
+  }, [data, statusFilter, roleFilter]);
 
   // Load roles when bulk role dialog opens
   React.useEffect(() => {
@@ -601,7 +633,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
   ];
 
   const table = useReactTable({
-    data,
+    data: filteredData,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -624,8 +656,8 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
 
   return (
     <div className="space-y-4">
-      {/* Search */}
-      <div className="flex items-center gap-2">
+      {/* Search & Filters */}
+      <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -635,6 +667,47 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
             className="pl-9"
           />
         </div>
+        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | "active" | "inactive")}>
+          <SelectTrigger className="w-[140px]">
+            <Filter className="mr-2 h-4 w-4" />
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={roleFilter} onValueChange={setRoleFilter}>
+          <SelectTrigger className="w-[180px]">
+            <Shield className="mr-2 h-4 w-4" />
+            <SelectValue placeholder="Role" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Roles</SelectItem>
+            {uniqueRoles.map(([code, name]) => (
+              <SelectItem key={code} value={code}>
+                {name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {(statusFilter !== "active" || roleFilter !== "all") && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setStatusFilter("active");
+              setRoleFilter("all");
+            }}
+          >
+            <X className="mr-1 h-4 w-4" />
+            Clear filters
+          </Button>
+        )}
+        <span className="text-sm text-muted-foreground ml-auto">
+          {filteredData.length} of {data.length} staff
+        </span>
       </div>
 
       {/* Bulk Action Bar */}

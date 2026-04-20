@@ -45,6 +45,7 @@ import {
   Info,
 } from "lucide-react";
 import { GetMerchantRoles } from "@/app/dashboard/actions/staff-invite";
+import { CheckPinAvailability } from "@/app/dashboard/actions/unified-staff";
 import { RolesModel, LocationsModel } from "@/types/db-modles";
 import { useLocations } from "@/app/dashboard/hooks/useLocations";
 import { useQuery } from "@tanstack/react-query";
@@ -161,6 +162,8 @@ export function InviteUserWizard({
   const [enablePosAccess, setEnablePosAccess] = React.useState(false); // For Clerk accounts
   const [autoGeneratePin, setAutoGeneratePin] = React.useState(true);
   const [pinCode, setPinCode] = React.useState("");
+  const [pinError, setPinError] = React.useState("");
+  const [pinChecking, setPinChecking] = React.useState(false);
   const [hourlyRate, setHourlyRate] = React.useState<string>("");
   const [employmentType, setEmploymentType] =
     React.useState<EmploymentType | null>(null);
@@ -188,10 +191,32 @@ export function InviteUserWizard({
       setEnablePosAccess(false);
       setAutoGeneratePin(true);
       setPinCode("");
+      setPinError("");
+      setPinChecking(false);
       setHourlyRate("");
       setEmploymentType(null);
     }
   }, [open]);
+
+  // Debounced PIN availability check
+  React.useEffect(() => {
+    setPinError("");
+    if (autoGeneratePin || pinCode.length !== 4 || selectedLocationIds.size === 0) {
+      return;
+    }
+    setPinChecking(true);
+    const timeout = setTimeout(() => {
+      CheckPinAvailability(pinCode, Array.from(selectedLocationIds)).then((result) => {
+        setPinChecking(false);
+        if (!result.available) {
+          setPinError(`This PIN is already taken at ${result.conflictLocationName}`);
+        }
+      }).catch(() => {
+        setPinChecking(false);
+      });
+    }, 400);
+    return () => clearTimeout(timeout);
+  }, [pinCode, autoGeneratePin, selectedLocationIds]);
 
   // Determine which steps to show based on staff type
   const STEPS = staffType === "clerk" ? CLERK_STEPS : POS_STEPS;
@@ -217,6 +242,8 @@ export function InviteUserWizard({
       case "locations":
         return selectedLocationIds.size > 0;
       case "pos_config":
+        // Block if PIN conflict detected or still checking
+        if (!autoGeneratePin && (pinError || pinChecking)) return false;
         // For POS staff, PIN is required
         if (staffType === "pos") {
           if (!autoGeneratePin && !pinCode.trim()) return false;
@@ -992,10 +1019,23 @@ export function InviteUserWizard({
                                       setPinCode(value);
                                     }
                                   }}
+                                  className={pinError ? "border-red-500 focus-visible:ring-red-500" : ""}
                                 />
-                                <p className="text-xs text-muted-foreground">
-                                  Must be 4 digits
-                                </p>
+                                {pinChecking && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Checking PIN availability...
+                                  </p>
+                                )}
+                                {pinError && (
+                                  <p className="text-xs text-red-600">
+                                    {pinError}
+                                  </p>
+                                )}
+                                {!pinError && !pinChecking && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Must be 4 digits
+                                  </p>
+                                )}
                               </div>
                             )}
 

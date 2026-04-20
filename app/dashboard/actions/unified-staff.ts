@@ -62,6 +62,34 @@ async function checkPinConflict(
 }
 
 /**
+ * Public server action: checks if a PIN is available at the given locations.
+ * Used for real-time validation in the staff creation wizard.
+ */
+export async function CheckPinAvailability(
+  pin: string,
+  locationIds: string[],
+  excludeStaffProfileId?: string | null,
+): Promise<{ available: boolean; conflictLocationName?: string }> {
+  if (!pin || pin.length !== 4 || locationIds.length === 0) {
+    return { available: true };
+  }
+  const supabase = createServerSupabaseClient();
+  const conflictLocationId = await checkPinConflict(supabase, pin, locationIds, excludeStaffProfileId);
+  if (!conflictLocationId) {
+    return { available: true };
+  }
+  const { data: loc } = await supabase
+    .from("locations")
+    .select("name")
+    .eq("id", conflictLocationId)
+    .single();
+  return {
+    available: false,
+    conflictLocationName: loc?.name ?? "another location",
+  };
+}
+
+/**
  * Resolves the final set of location IDs for a staff creation request.
  * Owner / admin roles are automatically provisioned to EVERY merchant location.
  */

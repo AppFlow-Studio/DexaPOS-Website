@@ -15,7 +15,11 @@ import {
   useApproveTipDistribution,
   useVoidTipDistribution,
   useManualAdjustment,
+  useSessionReconciliation,
+  useAcknowledgeReconciliation,
+  useCalculateTipDistribution,
 } from "../hooks/useTipDistribution";
+import { formatMoney } from "../lib/constants";
 import { TipSummaryCard } from "../components/TipSummaryCard";
 import { TipDistributionTable } from "../components/TipDistributionTable";
 import { ManualAdjustmentDialog } from "../components/ManualAdjustmentDialog";
@@ -43,6 +47,44 @@ export default function SessionReviewPage() {
   const approveMutation = useApproveTipDistribution();
   const voidMutation = useVoidTipDistribution();
   const adjustMutation = useManualAdjustment();
+  const calculateMutation = useCalculateTipDistribution();
+
+  // Late tip reconciliation check (only for approved sessions)
+  const { data: reconciliation } = useSessionReconciliation(clerkOrgId, sessionId);
+  const acknowledgeMutation = useAcknowledgeReconciliation();
+
+  const handleRecalculateForLateTips = () => {
+    if (!session) return;
+    // Void current session, then recalculate
+    voidMutation.mutate(
+      {
+        clerkOrgId: clerkOrgId!,
+        sessionId,
+        reason: "Recalculating to include late-arriving tips",
+        voidedBy: null,
+      },
+      {
+        onSuccess: () => {
+          calculateMutation.mutate(
+            {
+              clerkOrgId: clerkOrgId!,
+              locationId: session.location_id,
+              sessionDate: session.session_date,
+              shiftPeriod: session.shift_period,
+              staffProfileId: null,
+            },
+            {
+              onSuccess: (data) => {
+                if (data?.session_id) {
+                  router.push(`/dashboard/tips/${data.session_id}`);
+                }
+              },
+            }
+          );
+        },
+      }
+    );
+  };
 
   const handleApprove = () => {
     approveMutation.mutate({
@@ -78,40 +120,6 @@ export default function SessionReviewPage() {
       amount,
       reason,
     });
-  };
-
-  // CSV export (client-side file generation)
-  const handleDownloadCSV = () => {
-    if (!session) return;
-    const headers = [
-      "Employee", "Role", "Hours", "Own Tips", "Pool In", "Pool Out",
-      "Tip-Out In", "Tip-Out Out", "Adjustment", "Net Tips",
-    ];
-    const rows = session.tip_distribution_details.map((d) => [
-      d.staff_profiles.display_name || `${d.staff_profiles.first_name} ${d.staff_profiles.last_name}`,
-      d.role_code,
-      (d.hours_worked || 0).toFixed(1),
-      `$${d.individual_tips_earned.toFixed(2)}`,
-      `$${d.tip_pool_received.toFixed(2)}`,
-      `$${d.tip_pool_contributed.toFixed(2)}`,
-      `$${d.tip_out_received.toFixed(2)}`,
-      `$${d.tip_out_given.toFixed(2)}`,
-      `$${d.manual_adjustment.toFixed(2)}`,
-      `$${d.net_tips.toFixed(2)}`,
-    ]);
-    const csv = [
-      headers.join(","),
-      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
-    ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `tip-distribution-${session.session_date}-${session.shift_period}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
   };
 
   const statusCfg = session
@@ -184,7 +192,14 @@ export default function SessionReviewPage() {
       {/* HEADER */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">{sessionDateFormatted}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold">{sessionDateFormatted}</h1>
+            {session.sequence_number > 1 && (
+              <Badge variant="outline" className="text-xs font-mono">
+                #{session.sequence_number}
+              </Badge>
+            )}
+          </div>
           <div className="flex items-center gap-2 mt-1">
             <Badge variant="secondary" className="text-xs">
               {SHIFT_LABELS[session.shift_period] || session.shift_period}
@@ -196,6 +211,12 @@ export default function SessionReviewPage() {
               >
                 {statusCfg.label}
               </Badge>
+            )}
+            {session.data_start_after && session.data_cutoff_at && (
+              <span className="text-xs text-muted-foreground">
+                {format(new Date(session.data_start_after), "h:mm a")} —{" "}
+                {format(new Date(session.data_cutoff_at), "h:mm a")}
+              </span>
             )}
             {session.calculated_at && (
               <span className="text-xs text-muted-foreground">
@@ -244,6 +265,53 @@ export default function SessionReviewPage() {
                 Voided {format(new Date(session.voided_at), "MMM d, yyyy 'at' h:mm a")}
               </p>
             )}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* LATE TIP RECONCILIATION ALERT */}
+      {reconciliation?.needsReconciliation && !isVoided && (
+        <Alert className="border-amber-300 bg-amber-50 dark:bg-amber-950/20">
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          <AlertDescription className="text-amber-800 dark:text-amber-200">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="font-medium">
+                  {formatMoney(Math.abs(reconciliation.delta))} in tips arrived after this session was closed
+                </p>
+                {reconciliation.latePayments.length > 0 && (
+                  <ul className="text-sm mt-1 space-y-0.5">
+                    {reconciliation.latePayments.slice(0, 5).map((p, i) => (
+                      <li key={i}>
+                        Order: +{formatMoney(p.tipAmount)} tip captured{" "}
+                        {format(new Date(p.capturedAt), "h:mm a")}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  onClick={() => acknowledgeMutation.mutate({ clerkOrgId: clerkOrgId!, sessionId })}
+                  disabled={acknowledgeMutation.isPending}
+                >
+                  Acknowledge
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white"
+                  onClick={handleRecalculateForLateTips}
+                  disabled={voidMutation.isPending || calculateMutation.isPending}
+                >
+                  {voidMutation.isPending || calculateMutation.isPending
+                    ? "Recalculating..."
+                    : "Recalculate to include"}
+                </Button>
+              </div>
+            </div>
           </AlertDescription>
         </Alert>
       )}

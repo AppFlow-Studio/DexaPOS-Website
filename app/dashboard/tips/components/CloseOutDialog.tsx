@@ -20,6 +20,7 @@ interface CloseOutDialogProps {
   undeclaredStaff: TodayShift[];
   onConfirm: () => void;
   isLoading: boolean;
+  targetDate?: string;
 }
 
 export function CloseOutDialog({
@@ -28,14 +29,22 @@ export function CloseOutDialog({
   undeclaredStaff,
   onConfirm,
   isLoading,
+  targetDate,
 }: CloseOutDialogProps) {
+  const dateLabel = targetDate
+    ? new Date(targetDate + "T00:00:00").toLocaleDateString(undefined, {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+      })
+    : "today";
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Close Out & Calculate Tips</AlertDialogTitle>
           <AlertDialogDescription>
-            This will calculate the final tip distribution for today based on
+            This will calculate the final tip distribution for {dateLabel} based on
             current data. You can still edit or void it before approving.
           </AlertDialogDescription>
         </AlertDialogHeader>

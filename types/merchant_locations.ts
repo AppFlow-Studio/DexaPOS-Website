@@ -339,6 +339,7 @@ export const createLocationSchema = z.object({
   is_active: z.boolean().default(true),
   is_accepting_orders: z.boolean().default(true),
   business_hours: businessHoursSchema.default({}),
+  business_day_end_hour: z.number().int().min(0).max(23).default(0),
   ein: z
     .string()
     .regex(/^\d{2}-?\d{7}$/, 'EIN must be 9 digits (with optional dash)')
