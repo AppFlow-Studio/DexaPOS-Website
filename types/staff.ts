@@ -92,7 +92,7 @@ export const inviteStaffSchema = z
     role_code: z.string().min(1, "Role is required"),
     location_ids: z
       .array(z.string().uuid())
-      .min(1, "At least one location required"),
+      .min(0),
     primary_location_id: z.string().uuid().nullable(),
     auto_generate_pin: z.boolean(),
     pin_code: z
@@ -318,6 +318,33 @@ export interface AdminCreateClerkStaffResult {
   success: boolean;
   staffProfileId?: string;
   tempPassword?: string;
+  generatedPin?: string;
+  error?: string;
+}
+
+/**
+ * Data for inviting a Clerk dashboard user via the HQ admin interface (email invite flow)
+ */
+export interface AdminInviteClerkStaffData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  locationIds: string[];
+  primaryLocationId: string;
+  roleCode: string;
+  hourlyRate?: number;
+  employmentType: EmploymentType;
+  autoGeneratePin?: boolean;
+  pin?: string;
+}
+
+/**
+ * Admin invite Clerk staff result
+ */
+export interface AdminInviteClerkStaffResult {
+  success: boolean;
+  inviteId?: string;
   generatedPin?: string;
   error?: string;
 }

@@ -84,6 +84,7 @@ import type { MerchantInfoModel } from '@/types/db-modles'
 import type { MerchantDetails } from '@/types/merchant'
 import { AdminCreateStaffWizard } from './AdminCreateStaffWizard'
 import { BulkPinResetDialog } from './BulkPinResetDialog'
+import { BulkPasswordResetDialog } from './BulkPasswordResetDialog'
 import { AdminStaffDetailSheet } from './AdminStaffDetailSheet'
 
 interface StaffTabProps {
@@ -107,6 +108,7 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
   // Dialog state
   const [showCreateDialog, setShowCreateDialog] = React.useState(false)
   const [showBulkPinDialog, setShowBulkPinDialog] = React.useState(false)
+  const [showBulkPasswordDialog, setShowBulkPasswordDialog] = React.useState(false)
   const [bulkConfirmOpen, setBulkConfirmOpen] = React.useState(false)
   const [selectedStaffId, setSelectedStaffId] = React.useState<string | null>(null)
   const [detailOpen, setDetailOpen] = React.useState(false)
@@ -516,6 +518,10 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
               <Key className="h-4 w-4 mr-2" />
               Bulk Reset PINs
             </Button>
+            <Button variant="outline" onClick={() => setShowBulkPasswordDialog(true)}>
+              <Lock className="h-4 w-4 mr-2" />
+              Bulk Reset Passwords
+            </Button>
             <Button onClick={() => setShowCreateDialog(true)}>
               <UserPlus className="h-4 w-4 mr-2" />
               Add Staff
@@ -626,6 +632,15 @@ export function StaffTab({ merchantInfo, merchantDetails, refetchMerchantInfo }:
       <BulkPinResetDialog
         open={showBulkPinDialog}
         onOpenChange={setShowBulkPinDialog}
+        merchantId={merchantId}
+        merchantName={merchantInfo?.name || 'Merchant'}
+        locations={locations}
+      />
+
+      {/* Bulk Password Reset Dialog */}
+      <BulkPasswordResetDialog
+        open={showBulkPasswordDialog}
+        onOpenChange={setShowBulkPasswordDialog}
         merchantId={merchantId}
         merchantName={merchantInfo?.name || 'Merchant'}
         locations={locations}

@@ -6,15 +6,18 @@ import {
   getAdminMerchantStaff,
   adminResetStaffPin,
   adminBulkResetPins,
+  adminResetStaffPassword,
+  adminBulkResetPasswords,
   adminToggleStaffStatus,
   adminCreateStaff,
   adminCreateClerkStaff,
+  adminInviteClerkStaff,
   getMerchantLocationsForStaff,
   getMerchantStaffRoles,
   getAdminMerchantStaffStats,
   adminBulkDeactivateStaff,
 } from '@/app/manage/actions/admin-merchant/staff'
-import type { AdminCreateStaffData, AdminCreateClerkStaffData } from '@/types/staff'
+import type { AdminCreateStaffData, AdminCreateClerkStaffData, AdminInviteClerkStaffData } from '@/types/staff'
 
 // ============================================================================
 // QUERY HOOKS
@@ -107,10 +110,12 @@ export function useAdminBulkResetPins() {
     mutationFn: ({
       merchantId,
       locationId,
+      customPin,
     }: {
       merchantId: string
       locationId?: string | null
-    }) => adminBulkResetPins(merchantId, locationId),
+      customPin?: string
+    }) => adminBulkResetPins(merchantId, locationId, customPin),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: adminKeys.merchantStaff(variables.merchantId),
@@ -182,6 +187,74 @@ export function useAdminBulkDeactivateStaff() {
       staffProfileIds: string[]
     }) => adminBulkDeactivateStaff(merchantId, staffProfileIds),
     onSuccess: (result, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: adminKeys.merchantStaff(variables.merchantId),
+      })
+    },
+  })
+}
+
+/**
+ * Reset dashboard password for a single Clerk staff member (HQ)
+ */
+export function useAdminResetStaffPassword() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      merchantId,
+      clerkUserId,
+      customPassword,
+    }: {
+      merchantId: string
+      clerkUserId: string
+      customPassword?: string
+    }) => adminResetStaffPassword(merchantId, clerkUserId, customPassword),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: adminKeys.merchantStaff(variables.merchantId),
+      })
+    },
+  })
+}
+
+/**
+ * Bulk reset dashboard passwords for all active Clerk staff at a merchant/location (HQ)
+ */
+export function useAdminBulkResetPasswords() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      merchantId,
+      locationId,
+    }: {
+      merchantId: string
+      locationId?: string | null
+    }) => adminBulkResetPasswords(merchantId, locationId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: adminKeys.merchantStaff(variables.merchantId),
+      })
+    },
+  })
+}
+
+/**
+ * Invite a Clerk dashboard user for a merchant via email (admin)
+ */
+export function useAdminInviteClerkStaff() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      merchantId,
+      data,
+    }: {
+      merchantId: string
+      data: AdminInviteClerkStaffData
+    }) => adminInviteClerkStaff(merchantId, data),
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: adminKeys.merchantStaff(variables.merchantId),
       })
