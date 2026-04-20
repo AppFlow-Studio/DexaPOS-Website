@@ -368,7 +368,7 @@ export async function adminCalculateTipDistribution(
     await assertHQPermission('hq.merchant.update')
     const supabase = createServerSupabaseClient()
 
-    const { data, error } = await supabase.rpc('calculate_tip_distribution', {
+    const { data, error } = await supabase.rpc('calculate_tip_distribution_v2', {
       p_location_id: locationId,
       p_merchant_id: merchantId,
       p_session_date: sessionDate,

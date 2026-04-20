@@ -1,6 +1,7 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { LogAuditEvent } from "./audit-logs";
 
 // =====================================================
@@ -14,12 +15,14 @@ export interface TipPoolConfig {
   name: string;
   description: string | null;
   distribution_method: "percentage" | "hours_weighted" | "equal_split" | "points";
-  tip_source: "charged_tips" | "all_tips" | "cash_only" | "custom_percentage";
+  tip_source: "charged_tips" | "all_tips" | "cash_only";
   source_percentage: number;
   contributing_role_codes: string[];
   is_active: boolean;
   effective_date: string;
   end_date: string | null;
+  priority: number;
+  policy_interval: "full_workday" | "by_shift" | "order";
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -73,6 +76,12 @@ export interface TipDistributionSession {
   approved_by: string | null;
   approval_notes: string | null;
   config_snapshot: any;
+  voided_at: string | null;
+  voided_by: string | null;
+  void_reason: string | null;
+  data_start_after: string | null;
+  data_cutoff_at: string | null;
+  sequence_number: number;
   created_at: string;
   updated_at: string;
 }
@@ -91,6 +100,7 @@ export interface TipDistributionDetail {
   tip_pool_received: number;
   tip_out_given: number;
   tip_out_received: number;
+  tip_out_clipped: number;
   manual_adjustment: number;
   adjustment_reason: string | null;
   net_tips: number;
@@ -120,6 +130,40 @@ export interface Role {
   organization_type: string;
 }
 
+export interface TodaySummary {
+  totalPayments: number;
+  totalTipsCollected: number;
+  staffClockedIn: number;
+  totalHoursWorked: number;
+}
+
+export interface TodayShift {
+  id: string;
+  staffProfileId: string;
+  staffName: string;
+  avatarUrl: string | null;
+  roleCode: string;
+  clockInTime: string;
+  clockOutTime: string | null;
+  declaredCashTips: number;
+  tipsDeclaredAt: string | null;
+  chargedTips: number;
+  cashPaymentTips: number;
+  grossSales: number;
+  hoursWorked: number;
+}
+
+export interface TipPayrollExport {
+  id: string;
+  session_id: string;
+  destination: "gusto" | "adp" | "csv";
+  status: "pending" | "sent" | "failed" | "downloaded";
+  exported_by: string | null;
+  exported_at: string;
+  error_message: string | null;
+  payload: any;
+}
+
 // =====================================================
 // HELPERS
 // =====================================================
@@ -132,6 +176,43 @@ async function getMerchantId(clerkOrgId: string): Promise<string | null> {
     .eq("clerk_org_id", clerkOrgId)
     .single();
   return merchant?.id || null;
+}
+
+/**
+ * Compute UTC start/end bounds for a given date in a given timezone.
+ * e.g. date="2026-04-19", tz="America/New_York" →
+ *   start = "2026-04-19T04:00:00.000Z" (midnight ET in UTC)
+ *   end   = "2026-04-20T03:59:59.999Z" (11:59:59 PM ET in UTC)
+ */
+/**
+ * Compute UTC start/end bounds for a business day in a given timezone.
+ * @param date - "YYYY-MM-DD" calendar date
+ * @param tz - IANA timezone (e.g. "America/New_York")
+ * @param endHour - Hour (0-23) when business day ends. 0 = midnight (default).
+ *                  4 = "Monday" runs Mon 4 AM → Tue 4 AM.
+ */
+function getDateBoundsUTC(date: string, tz: string, endHour: number = 0): { start: string; end: string } {
+  const probe = new Date(`${date}T12:00:00Z`);
+  const localStr = probe.toLocaleString("en-US", { timeZone: tz });
+  const localDate = new Date(localStr);
+  const offsetMs = localDate.getTime() - probe.getTime();
+
+  // Business day start = date + endHour in local timezone → UTC
+  const startLocal = new Date(`${date}T00:00:00`);
+  startLocal.setHours(startLocal.getHours() + endHour);
+  const startUTC = new Date(startLocal.getTime() - offsetMs);
+
+  // Business day end = next date + endHour in local timezone → UTC (minus 1ms)
+  const nextDate = new Date(`${date}T00:00:00`);
+  nextDate.setDate(nextDate.getDate() + 1);
+  nextDate.setHours(nextDate.getHours() + endHour);
+  nextDate.setMilliseconds(nextDate.getMilliseconds() - 1);
+  const endUTC = new Date(nextDate.getTime() - offsetMs);
+
+  return {
+    start: startUTC.toISOString(),
+    end: endUTC.toISOString(),
+  };
 }
 
 // =====================================================
@@ -152,7 +233,8 @@ export async function GetTipPoolConfigs(
       .select("*, tip_pool_role_shares(*)")
       .eq("merchant_id", merchantId)
       .eq("location_id", locationId)
-      .order("created_at", { ascending: false });
+      .order("priority", { ascending: true })
+      .order("created_at", { ascending: true });
 
     if (error) return { success: false, data: null, error: error.message };
     return { success: true, data: (data as TipPoolConfigWithShares[]) || [], error: null };
@@ -172,13 +254,15 @@ export async function CreateTipPoolConfig(
     name: string;
     description?: string;
     distribution_method: "percentage" | "hours_weighted" | "equal_split" | "points";
-    tip_source: "charged_tips" | "all_tips" | "cash_only" | "custom_percentage";
+    tip_source: "charged_tips" | "all_tips" | "cash_only";
     source_percentage: number;
     contributing_role_codes: string[];
     is_active?: boolean;
     effective_date?: string;
     end_date?: string | null;
-    role_shares: { role_code: string; share_percentage?: number; points_per_hour?: number }[];
+    priority?: number;
+    policy_interval?: "full_workday" | "by_shift" | "order";
+    role_shares: { role_code: string; share_percentage?: number; points_per_hour?: number; is_eligible?: boolean }[];
   }
 ): Promise<{ success: boolean; data: TipPoolConfigWithShares | null; error: string | null }> {
   try {
@@ -202,6 +286,8 @@ export async function CreateTipPoolConfig(
         is_active: input.is_active !== false,
         effective_date: input.effective_date || new Date().toISOString().split("T")[0],
         end_date: input.end_date ?? null,
+        priority: input.priority ?? 100,
+        policy_interval: input.policy_interval ?? "full_workday",
       })
       .select()
       .single();
@@ -216,7 +302,7 @@ export async function CreateTipPoolConfig(
       role_code: share.role_code,
       share_percentage: share.share_percentage ?? null,
       points_per_hour: share.points_per_hour ?? null,
-      is_eligible: true,
+      is_eligible: share.is_eligible !== false,
     }));
 
     if (shareInserts.length > 0) {
@@ -273,7 +359,9 @@ export async function UpdateTipPoolConfig(
     is_active: boolean;
     effective_date: string;
     end_date: string | null;
-    role_shares: { role_code: string; share_percentage?: number; points_per_hour?: number }[];
+    priority: number;
+    policy_interval: string;
+    role_shares: { role_code: string; share_percentage?: number; points_per_hour?: number; is_eligible?: boolean }[];
   }>
 ): Promise<{ success: boolean; data: TipPoolConfigWithShares | null; error: string | null }> {
   try {
@@ -293,6 +381,8 @@ export async function UpdateTipPoolConfig(
       updateData.contributing_role_codes = input.contributing_role_codes;
     if (input.is_active !== undefined) updateData.is_active = input.is_active;
     if ("end_date" in input) updateData.end_date = input.end_date ?? null;
+    if (input.priority !== undefined) updateData.priority = input.priority;
+    if (input.policy_interval) updateData.policy_interval = input.policy_interval;
 
     const { error: updateError } = await supabase
       .from("tip_pool_configs")
@@ -314,7 +404,7 @@ export async function UpdateTipPoolConfig(
         role_code: share.role_code,
         share_percentage: share.share_percentage ?? null,
         points_per_hour: share.points_per_hour ?? null,
-        is_eligible: true,
+        is_eligible: share.is_eligible !== false,
       }));
 
       if (shareInserts.length > 0) {
@@ -659,7 +749,7 @@ export async function CalculateTipDistribution(
 
     const supabase = createServerSupabaseClient();
 
-    const { data, error } = await supabase.rpc("calculate_tip_distribution", {
+    const { data, error } = await supabase.rpc("calculate_tip_distribution_v2", {
       p_location_id: locationId,
       p_merchant_id: merchantId,
       p_session_date: sessionDate,
@@ -690,6 +780,72 @@ export async function CalculateTipDistribution(
       },
       error: null,
     };
+  } catch (err) {
+    return {
+      success: false,
+      data: null,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
+// ============================================================================
+// PREVIEW TIP DISTRIBUTION (non-destructive)
+// ============================================================================
+
+export interface PreviewDistributionDetail {
+  staff_name: string;
+  role_code: string;
+  hours_worked: number;
+  gross_sales: number;
+  charged_tips: number;
+  cash_tips: number;
+  individual_tips_earned: number;
+  tip_pool_contributed: number;
+  tip_pool_received: number;
+  tip_out_given: number;
+  tip_out_received: number;
+  tip_out_clipped: number;
+  net_tips: number;
+}
+
+export interface PreviewDistributionResult {
+  success: boolean;
+  total_collected: number;
+  total_distributed: number;
+  total_tips_pooled: number;
+  total_tip_outs: number;
+  details: PreviewDistributionDetail[];
+}
+
+export async function PreviewTipDistribution(
+  clerkOrgId: string,
+  locationId: string,
+  sessionDate: string,
+  shiftPeriod: string = "full_day"
+): Promise<{
+  success: boolean;
+  data: PreviewDistributionResult | null;
+  error: string | null;
+}> {
+  try {
+    const merchantId = await getMerchantId(clerkOrgId);
+    if (!merchantId) return { success: false, data: null, error: "Merchant not found" };
+
+    const supabase = createServerSupabaseClient();
+
+    const { data, error } = await supabase.rpc("preview_tip_distribution", {
+      p_location_id: locationId,
+      p_merchant_id: merchantId,
+      p_session_date: sessionDate,
+      p_shift_period: shiftPeriod,
+    });
+
+    if (error) {
+      return { success: false, data: null, error: error.message };
+    }
+
+    return { success: true, data: data as PreviewDistributionResult, error: null };
   } catch (err) {
     return {
       success: false,
@@ -789,19 +945,34 @@ export async function GetTipDistributionSession(
 export async function GetTipDistributionHistory(
   clerkOrgId: string,
   locationId: string,
-  limit: number = 20
+  limit: number = 20,
+  statusFilter?: string[],
+  dateFrom?: string,
+  dateTo?: string
 ): Promise<{ success: boolean; data: TipDistributionSession[] | null; error: string | null }> {
   try {
     const merchantId = await getMerchantId(clerkOrgId);
     if (!merchantId) return { success: false, data: null, error: "Merchant not found" };
 
     const supabase = createServerSupabaseClient();
-    const { data, error } = await supabase
+    let query = supabase
       .from("tip_distribution_sessions")
       .select()
       .eq("location_id", locationId)
       .order("session_date", { ascending: false })
       .limit(limit);
+
+    if (statusFilter && statusFilter.length > 0) {
+      query = query.in("status", statusFilter);
+    }
+    if (dateFrom) {
+      query = query.gte("session_date", dateFrom);
+    }
+    if (dateTo) {
+      query = query.lte("session_date", dateTo);
+    }
+
+    const { data, error } = await query;
 
     if (error) return { success: false, data: null, error: error.message };
     return { success: true, data: (data as TipDistributionSession[]) || [], error: null };
@@ -904,6 +1075,933 @@ export async function UpdateManualAdjustment(
   } catch (err) {
     return {
       success: false,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
+// =====================================================
+// TODAY TAB — LIVE TIP DATA
+// =====================================================
+
+export async function GetTodayTipSummary(
+  clerkOrgId: string,
+  locationId: string,
+  date: string,
+  afterCutoff?: string | null
+): Promise<{ success: boolean; data: TodaySummary | null; error: string | null }> {
+  try {
+    const merchantId = await getMerchantId(clerkOrgId);
+    if (!merchantId) return { success: false, data: null, error: "Merchant not found" };
+
+    // Use service role to bypass RLS on staff_shifts and order_payments
+    const supabase = createServiceRoleClient();
+
+    // Get location timezone
+    const { data: loc } = await supabase
+      .from("locations")
+      .select("timezone, business_day_end_hour")
+      .eq("id", locationId)
+      .single();
+    const tz = loc?.timezone || "UTC";
+    const endHour = loc?.business_day_end_hour || 0;
+
+    // Compute timezone-aware date bounds, scoped by afterCutoff if a prior session exists
+    const bounds = getDateBoundsUTC(date, tz, endHour);
+    const windowStart = afterCutoff || bounds.start;
+
+    // Order payments within the window
+    let totalPayments = 0;
+    let totalTipsCollected = 0;
+
+    const { data: payments } = await supabase
+      .from("order_payments")
+      .select("tip_amount, orders!inner(location_id, created_at, status)")
+      .eq("orders.location_id", locationId)
+      .eq("status", "captured")
+      .gte("orders.created_at", windowStart)
+      .lte("orders.created_at", bounds.end);
+
+    if (payments) {
+      const filtered = payments.filter((p: any) =>
+        p.orders.status !== "cancelled" && p.orders.status !== "void" && p.orders.status !== "refunded"
+      );
+      totalPayments = filtered.length;
+      totalTipsCollected = filtered.reduce((sum: number, p: any) => sum + (p.tip_amount || 0), 0);
+    }
+
+    // Staff shifts within the window, or still clocked in from today
+    let shiftSummaryQuery = supabase
+      .from("staff_shifts")
+      .select("clock_in_time, clock_out_time")
+      .eq("location_id", locationId)
+      .eq("merchant_id", merchantId)
+      .gte("clock_in_time", bounds.start)
+      .lte("clock_in_time", bounds.end);
+
+    if (afterCutoff) {
+      shiftSummaryQuery = shiftSummaryQuery.or(`clock_in_time.gte.${afterCutoff},clock_out_time.is.null`);
+    }
+
+    const { data: shifts } = await shiftSummaryQuery;
+
+    let staffClockedIn = 0;
+    let totalHoursWorked = 0;
+
+    if (shifts) {
+      const now = new Date();
+      for (const s of shifts) {
+        const clockIn = new Date(s.clock_in_time);
+        const clockOut = s.clock_out_time ? new Date(s.clock_out_time) : now;
+        totalHoursWorked += (clockOut.getTime() - clockIn.getTime()) / 3600000;
+
+        if (!s.clock_out_time) staffClockedIn++;
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        totalPayments,
+        totalTipsCollected,
+        staffClockedIn,
+        totalHoursWorked: Math.round(totalHoursWorked * 10) / 10,
+      },
+      error: null,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      data: null,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
+export async function GetTodayShifts(
+  clerkOrgId: string,
+  locationId: string,
+  date: string,
+  afterCutoff?: string | null
+): Promise<{ success: boolean; data: TodayShift[] | null; error: string | null }> {
+  try {
+    const merchantId = await getMerchantId(clerkOrgId);
+    if (!merchantId) return { success: false, data: null, error: "Merchant not found" };
+
+    // Use service role to bypass RLS on staff_shifts
+    const supabase = createServiceRoleClient();
+
+    // Get location timezone
+    const { data: loc } = await supabase
+      .from("locations")
+      .select("timezone, business_day_end_hour")
+      .eq("id", locationId)
+      .single();
+    const tz = loc?.timezone || "UTC";
+    const endHour = loc?.business_day_end_hour || 0;
+    const bounds = getDateBoundsUTC(date, tz, endHour);
+    const windowStart = afterCutoff || bounds.start;
+
+    // Fetch shifts with staff profile + declared cash tips
+    // When afterCutoff is set: include shifts started in current window OR still clocked in from today
+    let shiftQuery = supabase
+      .from("staff_shifts")
+      .select(`
+        id,
+        clock_in_time,
+        clock_out_time,
+        declared_cash_tips,
+        tips_declared_at,
+        staff_profile_id,
+        staff_profiles(id, first_name, last_name, display_name, avatar_url)
+      `)
+      .eq("location_id", locationId)
+      .eq("merchant_id", merchantId)
+      .gte("clock_in_time", bounds.start)
+      .lte("clock_in_time", bounds.end);
+
+    if (afterCutoff) {
+      shiftQuery = shiftQuery.or(`clock_in_time.gte.${afterCutoff},clock_out_time.is.null`);
+    }
+
+    const { data: shifts, error: shiftErr } = await shiftQuery.order("clock_in_time", { ascending: true });
+
+    if (shiftErr) return { success: false, data: null, error: shiftErr.message };
+
+    const todayShifts = shifts || [];
+
+    // Get role codes from location_members
+    const staffIds = todayShifts.map((s: any) => s.staff_profile_id);
+    const { data: members } = await supabase
+      .from("location_members")
+      .select("staff_profile_id, role_code")
+      .eq("location_id", locationId)
+      .in("staff_profile_id", staffIds.length > 0 ? staffIds : ["__none__"]);
+
+    const roleMap: Record<string, string> = {};
+    for (const m of members || []) {
+      roleMap[m.staff_profile_id] = m.role_code;
+    }
+
+    // Query orders + payments within the window
+    // Attribution: assigned_server_id (primary) → created_by_staff_id (fallback)
+    const { data: orders, error: ordersErr } = await supabase
+      .from("orders")
+      .select("id, subtotal, status, assigned_server_id, created_by_staff_id, created_at, order_payments(tip_amount, status, payment_method)")
+      .eq("location_id", locationId)
+      .gte("created_at", windowStart)
+      .lte("created_at", bounds.end);
+
+    const tipsMap: Record<string, { chargedTips: number; cashPaymentTips: number; grossSales: number }> = {};
+    const excludeStatuses = ["cancelled", "void", "refunded"];
+
+    for (const o of (orders || [])) {
+      if (excludeStatuses.includes(o.status)) continue;
+
+      const serverId = o.assigned_server_id || o.created_by_staff_id;
+      if (!serverId || !staffIds.includes(serverId)) continue;
+
+      if (!tipsMap[serverId]) tipsMap[serverId] = { chargedTips: 0, cashPaymentTips: 0, grossSales: 0 };
+      tipsMap[serverId].grossSales += o.subtotal || 0;
+
+      for (const p of (o.order_payments || [])) {
+        if (p.status === "captured" && p.tip_amount) {
+          if (p.payment_method === "cash") {
+            tipsMap[serverId].cashPaymentTips += p.tip_amount;
+          } else {
+            tipsMap[serverId].chargedTips += p.tip_amount;
+          }
+        }
+      }
+    }
+
+    const now = new Date();
+    const result: TodayShift[] = todayShifts.map((s: any) => {
+      const sp = s.staff_profiles;
+      const clockIn = new Date(s.clock_in_time);
+      const clockOut = s.clock_out_time ? new Date(s.clock_out_time) : now;
+      const hours = Math.round(((clockOut.getTime() - clockIn.getTime()) / 3600000) * 10) / 10;
+      const tips = tipsMap[s.staff_profile_id] || { chargedTips: 0, cashPaymentTips: 0, grossSales: 0 };
+
+      return {
+        id: s.id,
+        staffProfileId: s.staff_profile_id,
+        staffName: sp?.display_name || `${sp?.first_name || ""} ${sp?.last_name || ""}`.trim() || "Unknown",
+        avatarUrl: sp?.avatar_url || null,
+        roleCode: roleMap[s.staff_profile_id] || "unknown",
+        clockInTime: s.clock_in_time,
+        clockOutTime: s.clock_out_time,
+        declaredCashTips: s.declared_cash_tips || 0,
+        tipsDeclaredAt: s.tips_declared_at || null,
+        chargedTips: tips.chargedTips,
+        cashPaymentTips: tips.cashPaymentTips,
+        grossSales: tips.grossSales,
+        hoursWorked: hours,
+      };
+    });
+
+    return { success: true, data: result, error: null };
+  } catch (err) {
+    return {
+      success: false,
+      data: null,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
+// =====================================================
+// ORPHANED SHIFTS + UNCLOSED DAYS
+// =====================================================
+
+export interface OrphanedShift {
+  id: string;
+  staffName: string;
+  avatarUrl: string | null;
+  roleCode: string;
+  clockInTime: string;
+  shiftDate: string;
+  hoursSinceClockIn: number;
+  suggestedClockOut: string;
+}
+
+export interface UnclosedDay {
+  date: string;
+  orderCount: number;
+  shiftCount: number;
+  totalTips: number;
+  hasOrphanedShifts: boolean;
+}
+
+export async function GetOrphanedShifts(
+  clerkOrgId: string,
+  locationId: string
+): Promise<{ success: boolean; data: OrphanedShift[] | null; error: string | null }> {
+  try {
+    const merchantId = await getMerchantId(clerkOrgId);
+    if (!merchantId) return { success: false, data: null, error: "Merchant not found" };
+
+    const supabase = createServiceRoleClient();
+
+    // Get location timezone
+    const { data: loc } = await supabase
+      .from("locations")
+      .select("timezone, business_day_end_hour")
+      .eq("id", locationId)
+      .single();
+    const tz = loc?.timezone || "UTC";
+    const endHour = loc?.business_day_end_hour || 0;
+
+    const bounds = getDateBoundsUTC(new Date().toISOString().split("T")[0], tz, endHour);
+
+    // Shifts that are still "clocked in" but started before today
+    const { data: shifts, error } = await supabase
+      .from("staff_shifts")
+      .select(`
+        id, clock_in_time, staff_profile_id,
+        staff_profiles(first_name, last_name, display_name, avatar_url)
+      `)
+      .eq("location_id", locationId)
+      .eq("merchant_id", merchantId)
+      .is("clock_out_time", null)
+      .lt("clock_in_time", bounds.start)
+      .order("clock_in_time", { ascending: true });
+
+    if (error) return { success: false, data: null, error: error.message };
+
+    // Get role codes
+    const staffIds = (shifts || []).map((s: any) => s.staff_profile_id);
+    const { data: members } = await supabase
+      .from("location_members")
+      .select("staff_profile_id, role_code")
+      .eq("location_id", locationId)
+      .in("staff_profile_id", staffIds.length > 0 ? staffIds : ["__none__"]);
+
+    const roleMap: Record<string, string> = {};
+    for (const m of members || []) roleMap[m.staff_profile_id] = m.role_code;
+
+    const now = new Date();
+    const result: OrphanedShift[] = (shifts || []).map((s: any) => {
+      const sp = s.staff_profiles;
+      const clockIn = new Date(s.clock_in_time);
+      const hoursSince = (now.getTime() - clockIn.getTime()) / 3600000;
+      // Suggest clock_in + 8 hours, capped to end of clock-in day
+      const suggested = new Date(clockIn.getTime() + 8 * 3600000);
+      // Business date: subtract endHour so a 2 AM shift with endHour=4 maps to previous day
+      const adjusted = new Date(clockIn.getTime() - endHour * 3600000);
+      const shiftDate = adjusted.toLocaleDateString("en-CA", { timeZone: tz });
+
+      return {
+        id: s.id,
+        staffName: sp?.display_name || `${sp?.first_name || ""} ${sp?.last_name || ""}`.trim() || "Unknown",
+        avatarUrl: sp?.avatar_url || null,
+        roleCode: roleMap[s.staff_profile_id] || "unknown",
+        clockInTime: s.clock_in_time,
+        shiftDate,
+        hoursSinceClockIn: Math.round(hoursSince * 10) / 10,
+        suggestedClockOut: suggested.toISOString(),
+      };
+    });
+
+    return { success: true, data: result, error: null };
+  } catch (err) {
+    return { success: false, data: null, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
+export async function GetUnclosedDays(
+  clerkOrgId: string,
+  locationId: string,
+  lookbackDays: number = 7
+): Promise<{ success: boolean; data: UnclosedDay[] | null; error: string | null }> {
+  try {
+    const merchantId = await getMerchantId(clerkOrgId);
+    if (!merchantId) return { success: false, data: null, error: "Merchant not found" };
+
+    const supabase = createServiceRoleClient();
+
+    const { data: loc } = await supabase
+      .from("locations")
+      .select("timezone, business_day_end_hour")
+      .eq("id", locationId)
+      .single();
+    const tz = loc?.timezone || "UTC";
+    const endHour = loc?.business_day_end_hour || 0;
+
+    // Business day "today" — at 3 AM with endHour=4, "today" is still yesterday
+    const nowAdjusted = new Date(Date.now() - endHour * 3600000);
+    const today = nowAdjusted.toLocaleDateString("en-CA", { timeZone: tz });
+
+    // Get dates that have approved sessions (these are "closed")
+    const sinceDate = new Date();
+    sinceDate.setDate(sinceDate.getDate() - lookbackDays);
+    const sinceDateStr = sinceDate.toISOString().split("T")[0];
+
+    const { data: closedSessions } = await supabase
+      .from("tip_distribution_sessions")
+      .select("session_date")
+      .eq("location_id", locationId)
+      .eq("status", "approved")
+      .gte("session_date", sinceDateStr);
+
+    const closedDates = new Set((closedSessions || []).map((s: any) => s.session_date));
+
+    // Get orders in the lookback window
+    const lookbackBounds = getDateBoundsUTC(sinceDateStr, tz, endHour);
+    const todayBounds = getDateBoundsUTC(today, tz, endHour);
+
+    const { data: orders } = await supabase
+      .from("orders")
+      .select("created_at, subtotal, order_payments(tip_amount, status)")
+      .eq("location_id", locationId)
+      .gte("created_at", lookbackBounds.start)
+      .lt("created_at", todayBounds.start); // exclude today
+
+    // Get shifts in the lookback window
+    const { data: shifts } = await supabase
+      .from("staff_shifts")
+      .select("clock_in_time, clock_out_time")
+      .eq("location_id", locationId)
+      .eq("merchant_id", merchantId)
+      .gte("clock_in_time", lookbackBounds.start)
+      .lt("clock_in_time", todayBounds.start);
+
+    // Helper: get business date for a UTC timestamp
+    // Subtracts endHour so a 2 AM event with endHour=4 maps to the previous calendar day
+    const getBusinessDate = (utcStr: string) => {
+      const d = new Date(utcStr);
+      const adjusted = new Date(d.getTime() - endHour * 3600000);
+      return adjusted.toLocaleDateString("en-CA", { timeZone: tz });
+    };
+
+    // Aggregate by business date
+    const dayMap: Record<string, { orderCount: number; shiftCount: number; totalTips: number; hasOrphanedShifts: boolean }> = {};
+
+    for (const o of (orders || [])) {
+      const d = getBusinessDate(o.created_at);
+      if (d === today || closedDates.has(d)) continue;
+      if (!dayMap[d]) dayMap[d] = { orderCount: 0, shiftCount: 0, totalTips: 0, hasOrphanedShifts: false };
+      dayMap[d].orderCount++;
+      for (const p of (o.order_payments || [])) {
+        if (p.status === "captured") dayMap[d].totalTips += p.tip_amount || 0;
+      }
+    }
+
+    for (const s of (shifts || [])) {
+      const d = getBusinessDate(s.clock_in_time);
+      if (d === today || closedDates.has(d)) continue;
+      if (!dayMap[d]) dayMap[d] = { orderCount: 0, shiftCount: 0, totalTips: 0, hasOrphanedShifts: false };
+      dayMap[d].shiftCount++;
+      if (!s.clock_out_time) dayMap[d].hasOrphanedShifts = true;
+    }
+
+    // Sort chronologically (oldest first for sequential close-out enforcement)
+    const result: UnclosedDay[] = Object.entries(dayMap)
+      .map(([date, stats]) => ({ date, ...stats }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return { success: true, data: result, error: null };
+  } catch (err) {
+    return { success: false, data: null, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
+export async function ForceClockOutShift(
+  clerkOrgId: string,
+  shiftId: string,
+  clockOutTime: string,
+  cashTipsDeclared: number = 0
+): Promise<{ success: boolean; error: string | null }> {
+  try {
+    const merchantId = await getMerchantId(clerkOrgId);
+    if (!merchantId) return { success: false, error: "Merchant not found" };
+
+    const supabase = createServiceRoleClient();
+
+    // Get shift for audit + validation
+    const { data: shift } = await supabase
+      .from("staff_shifts")
+      .select("id, clock_in_time, location_id, staff_profile_id, staff_profiles(first_name, last_name)")
+      .eq("id", shiftId)
+      .single();
+
+    if (!shift) return { success: false, error: "Shift not found" };
+
+    // Validate clock_out_time is after clock_in_time
+    if (new Date(clockOutTime) <= new Date(shift.clock_in_time)) {
+      return { success: false, error: "Clock-out time must be after clock-in time" };
+    }
+
+    // Update shift: clock_out_time + status in one operation
+    const { error: updateErr } = await supabase
+      .from("staff_shifts")
+      .update({
+        clock_out_time: clockOutTime,
+        status: "completed",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", shiftId);
+
+    if (updateErr) return { success: false, error: updateErr.message };
+
+    // Declare cash tips if provided
+    if (cashTipsDeclared > 0) {
+      const { error: declareErr } = await supabase
+        .from("staff_shifts")
+        .update({
+          declared_cash_tips: cashTipsDeclared,
+          tips_declared_at: new Date().toISOString(),
+        })
+        .eq("id", shiftId);
+
+      if (declareErr) return { success: false, error: declareErr.message };
+    }
+
+    const staffName = (shift as any).staff_profiles?.first_name
+      ? `${(shift as any).staff_profiles.first_name} ${(shift as any).staff_profiles.last_name}`
+      : "Unknown";
+
+    await LogAuditEvent({
+      clerkOrgId,
+      locationId: shift.location_id,
+      action: `Force clocked out orphaned shift for ${staffName}`,
+      actionCategory: "settings",
+      resourceType: "staff_shift",
+      resourceId: shiftId,
+      resourceName: staffName,
+      changes: { after: { clock_out_time: clockOutTime, cash_tips: cashTipsDeclared } as any },
+    });
+
+    return { success: true, error: null };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
+// =====================================================
+// VOID / EXPORT / SESSION BY ID
+// =====================================================
+
+export async function VoidTipDistribution(
+  clerkOrgId: string,
+  sessionId: string,
+  reason: string,
+  voidedBy: string | null = null
+): Promise<{ success: boolean; error: string | null }> {
+  try {
+    const merchantId = await getMerchantId(clerkOrgId);
+    if (!merchantId) return { success: false, error: "Merchant not found" };
+
+    const supabase = createServerSupabaseClient();
+
+    const { data, error } = await supabase.rpc("void_tip_distribution", {
+      p_session_id: sessionId,
+      p_reason: reason,
+      p_voided_by: voidedBy,
+    });
+
+    if (error) return { success: false, error: error.message };
+
+    // Get session for audit
+    const { data: session } = await supabase
+      .from("tip_distribution_sessions")
+      .select("location_id, session_date")
+      .eq("id", sessionId)
+      .single();
+
+    if (session) {
+      await LogAuditEvent({
+        clerkOrgId,
+        locationId: session.location_id,
+        action: `Voided tip distribution for ${session.session_date}: ${reason}`,
+        actionCategory: "financial",
+        resourceType: "tip_distribution_session",
+        resourceId: sessionId,
+        resourceName: session.session_date,
+      });
+    }
+
+    return { success: true, error: null };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
+export async function GetNeedsApprovalSessions(
+  clerkOrgId: string,
+  locationId: string
+): Promise<{ success: boolean; data: TipDistributionSession[] | null; error: string | null }> {
+  try {
+    const merchantId = await getMerchantId(clerkOrgId);
+    if (!merchantId) return { success: false, data: null, error: "Merchant not found" };
+
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase
+      .from("tip_distribution_sessions")
+      .select()
+      .eq("location_id", locationId)
+      .eq("status", "calculated")
+      .order("session_date", { ascending: false });
+
+    if (error) return { success: false, data: null, error: error.message };
+    return { success: true, data: (data as TipDistributionSession[]) || [], error: null };
+  } catch (err) {
+    return {
+      success: false,
+      data: null,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
+export interface LatestSessionCutoff {
+  cutoffAt: string;
+  sequenceNumber: number;
+  sessionId: string;
+  status: string;
+  totalDistributed: number;
+}
+
+export async function GetLatestSessionCutoff(
+  clerkOrgId: string,
+  locationId: string,
+  date: string
+): Promise<{ success: boolean; data: LatestSessionCutoff | null; error: string | null }> {
+  try {
+    const merchantId = await getMerchantId(clerkOrgId);
+    if (!merchantId) return { success: false, data: null, error: "Merchant not found" };
+
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase
+      .from("tip_distribution_sessions")
+      .select("id, status, data_cutoff_at, sequence_number, total_distributed")
+      .eq("location_id", locationId)
+      .eq("session_date", date)
+      .eq("status", "approved")
+      .order("sequence_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) return { success: false, data: null, error: error.message };
+    if (!data || !data.data_cutoff_at) return { success: true, data: null, error: null };
+
+    return {
+      success: true,
+      data: {
+        cutoffAt: data.data_cutoff_at,
+        sequenceNumber: data.sequence_number,
+        sessionId: data.id,
+        status: data.status,
+        totalDistributed: data.total_distributed || 0,
+      },
+      error: null,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      data: null,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
+export async function GetTipDistributionSessionById(
+  clerkOrgId: string,
+  sessionId: string
+): Promise<{ success: boolean; data: TipSessionWithDetails | null; error: string | null }> {
+  try {
+    const merchantId = await getMerchantId(clerkOrgId);
+    if (!merchantId) return { success: false, data: null, error: "Merchant not found" };
+
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase
+      .from("tip_distribution_sessions")
+      .select(`
+        *,
+        tip_distribution_details(
+          *,
+          staff_profiles(id, first_name, last_name, display_name)
+        )
+      `)
+      .eq("id", sessionId)
+      .single();
+
+    if (error) return { success: false, data: null, error: error.message };
+
+    // Verify merchant access
+    if (data && data.merchant_id !== merchantId) {
+      return { success: false, data: null, error: "Not authorized" };
+    }
+
+    return { success: true, data: data as TipSessionWithDetails, error: null };
+  } catch (err) {
+    return {
+      success: false,
+      data: null,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
+export async function ExportTipDistribution(
+  clerkOrgId: string,
+  sessionId: string,
+  destination: "gusto" | "adp" | "csv",
+  exportedBy: string | null = null
+): Promise<{ success: boolean; data: { export_id: string; payload: any } | null; error: string | null }> {
+  try {
+    const merchantId = await getMerchantId(clerkOrgId);
+    if (!merchantId) return { success: false, data: null, error: "Merchant not found" };
+
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase.rpc("export_tip_distribution", {
+      p_session_id: sessionId,
+      p_destination: destination,
+      p_exported_by: exportedBy,
+    });
+
+    if (error) return { success: false, data: null, error: error.message };
+
+    const { data: session } = await supabase
+      .from("tip_distribution_sessions")
+      .select("location_id, session_date")
+      .eq("id", sessionId)
+      .single();
+
+    if (session) {
+      await LogAuditEvent({
+        clerkOrgId,
+        locationId: session.location_id,
+        action: `Exported tip distribution for ${session.session_date} to ${destination}`,
+        actionCategory: "financial",
+        resourceType: "tip_distribution_session",
+        resourceId: sessionId,
+        resourceName: session.session_date,
+      });
+    }
+
+    return {
+      success: true,
+      data: { export_id: data.export_id, payload: data.payload },
+      error: null,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      data: null,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
+export async function GetSessionExports(
+  clerkOrgId: string,
+  sessionId: string
+): Promise<{ success: boolean; data: TipPayrollExport[] | null; error: string | null }> {
+  try {
+    const merchantId = await getMerchantId(clerkOrgId);
+    if (!merchantId) return { success: false, data: null, error: "Merchant not found" };
+
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase
+      .from("tip_payroll_exports")
+      .select("id, session_id, destination, status, exported_by, exported_at, error_message, payload")
+      .eq("session_id", sessionId)
+      .order("exported_at", { ascending: false });
+
+    if (error) return { success: false, data: null, error: error.message };
+    return { success: true, data: (data as TipPayrollExport[]) || [], error: null };
+  } catch (err) {
+    return {
+      success: false,
+      data: null,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
+// =====================================================
+// LATE TIP RECONCILIATION
+// =====================================================
+
+export interface ReconciliationResult {
+  needsReconciliation: boolean;
+  delta: number;
+  sessionTotal: number;
+  currentTotal: number;
+  latePayments: { orderId: string; tipAmount: number; capturedAt: string }[];
+}
+
+export async function CheckSessionReconciliation(
+  clerkOrgId: string,
+  sessionId: string
+): Promise<{ success: boolean; data: ReconciliationResult | null; error: string | null }> {
+  try {
+    const merchantId = await getMerchantId(clerkOrgId);
+    if (!merchantId) return { success: false, data: null, error: "Merchant not found" };
+
+    const supabase = createServiceRoleClient();
+
+    // Get the session with its time window
+    const { data: session } = await supabase
+      .from("tip_distribution_sessions")
+      .select("id, total_tips_collected, data_start_after, data_cutoff_at, location_id, session_date, status, reconciliation_acknowledged_at")
+      .eq("id", sessionId)
+      .single();
+
+    if (!session) return { success: false, data: null, error: "Session not found" };
+
+    // Skip if not approved or already acknowledged
+    if (session.status !== "approved" || session.reconciliation_acknowledged_at) {
+      return { success: true, data: { needsReconciliation: false, delta: 0, sessionTotal: session.total_tips_collected, currentTotal: session.total_tips_collected, latePayments: [] }, error: null };
+    }
+
+    // Get location timezone + end hour for day bounds
+    const { data: loc } = await supabase
+      .from("locations")
+      .select("timezone, business_day_end_hour")
+      .eq("id", session.location_id)
+      .single();
+    const tz = loc?.timezone || "UTC";
+    const endHour = loc?.business_day_end_hour || 0;
+
+    // Compute the time window this session covers
+    const bounds = getDateBoundsUTC(session.session_date, tz, endHour);
+    const windowStart = session.data_start_after || bounds.start;
+    const windowEnd = session.data_cutoff_at || bounds.end;
+
+    // Query current tip totals from order_payments in this window
+    const { data: payments } = await supabase
+      .from("order_payments")
+      .select("tip_amount, initiated_at, order_id, orders!inner(location_id, created_at, status)")
+      .eq("orders.location_id", session.location_id)
+      .eq("status", "captured")
+      .gte("orders.created_at", windowStart)
+      .lte("orders.created_at", windowEnd);
+
+    const validPayments = (payments || []).filter((p: any) =>
+      p.orders.status !== "cancelled" && p.orders.status !== "void" && p.orders.status !== "refunded"
+    );
+
+    const currentTotal = validPayments.reduce((sum: number, p: any) => sum + (p.tip_amount || 0), 0);
+    const delta = currentTotal - session.total_tips_collected;
+
+    // Find specific late payments (captured after the session's cutoff)
+    const latePayments = session.data_cutoff_at
+      ? validPayments
+          .filter((p: any) => p.initiated_at && new Date(p.initiated_at) > new Date(session.data_cutoff_at))
+          .map((p: any) => ({
+            orderId: p.order_id,
+            tipAmount: p.tip_amount || 0,
+            capturedAt: p.initiated_at,
+          }))
+      : [];
+
+    return {
+      success: true,
+      data: {
+        needsReconciliation: Math.abs(delta) > 0.005,
+        delta,
+        sessionTotal: session.total_tips_collected,
+        currentTotal,
+        latePayments,
+      },
+      error: null,
+    };
+  } catch (err) {
+    return { success: false, data: null, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
+export async function AcknowledgeReconciliation(
+  clerkOrgId: string,
+  sessionId: string
+): Promise<{ success: boolean; error: string | null }> {
+  try {
+    const merchantId = await getMerchantId(clerkOrgId);
+    if (!merchantId) return { success: false, error: "Merchant not found" };
+
+    const supabase = createServerSupabaseClient();
+    const { error } = await supabase
+      .from("tip_distribution_sessions")
+      .update({ reconciliation_acknowledged_at: new Date().toISOString() })
+      .eq("id", sessionId);
+
+    if (error) return { success: false, error: error.message };
+    return { success: true, error: null };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
+// =====================================================
+// VALIDATION RPCs
+// =====================================================
+
+export async function ValidateTipPoolConfig(
+  clerkOrgId: string,
+  configId: string
+): Promise<{
+  success: boolean;
+  data: { valid: boolean; issues: { code: string; message: string; severity: string }[] } | null;
+  error: string | null;
+}> {
+  try {
+    const merchantId = await getMerchantId(clerkOrgId);
+    if (!merchantId) return { success: false, data: null, error: "Merchant not found" };
+
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase.rpc("validate_tip_pool_config", {
+      p_config_id: configId,
+    });
+
+    if (error) return { success: false, data: null, error: error.message };
+    return { success: true, data: data as any, error: null };
+  } catch (err) {
+    return {
+      success: false,
+      data: null,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
+export async function CheckForReciprocalTipOutRule(
+  clerkOrgId: string,
+  locationId: string,
+  fromRoleCode: string,
+  toRoleCode: string,
+  excludeRuleId?: string
+): Promise<{ success: boolean; data: TipOutRule | null; error: string | null }> {
+  try {
+    const merchantId = await getMerchantId(clerkOrgId);
+    if (!merchantId) return { success: false, data: null, error: "Merchant not found" };
+
+    const supabase = createServerSupabaseClient();
+
+    let query = supabase
+      .from("tip_out_rules")
+      .select()
+      .eq("location_id", locationId)
+      .eq("from_role_code", toRoleCode)
+      .eq("to_role_code", fromRoleCode)
+      .eq("is_active", true);
+
+    if (excludeRuleId) {
+      query = query.neq("id", excludeRuleId);
+    }
+
+    const { data, error } = await query.maybeSingle();
+
+    if (error) return { success: false, data: null, error: error.message };
+    return { success: true, data: (data as TipOutRule) ?? null, error: null };
+  } catch (err) {
+    return {
+      success: false,
+      data: null,
       error: err instanceof Error ? err.message : "Unknown error",
     };
   }
