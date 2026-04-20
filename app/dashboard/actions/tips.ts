@@ -1,6 +1,7 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { LogAuditEvent } from "./audit-logs";
 
 // =====================================================
@@ -170,6 +171,34 @@ async function getMerchantId(clerkOrgId: string): Promise<string | null> {
     .eq("clerk_org_id", clerkOrgId)
     .single();
   return merchant?.id || null;
+}
+
+/**
+ * Compute UTC start/end bounds for a given date in a given timezone.
+ * e.g. date="2026-04-19", tz="America/New_York" →
+ *   start = "2026-04-19T04:00:00.000Z" (midnight ET in UTC)
+ *   end   = "2026-04-20T03:59:59.999Z" (11:59:59 PM ET in UTC)
+ */
+function getDateBoundsUTC(date: string, tz: string): { start: string; end: string } {
+  // Create a date object at midnight in the target timezone
+  // by using the Intl API to find the UTC offset
+  const probe = new Date(`${date}T12:00:00Z`); // noon UTC as a safe probe
+  const localStr = probe.toLocaleString("en-US", { timeZone: tz });
+  const localDate = new Date(localStr);
+  const offsetMs = localDate.getTime() - probe.getTime();
+
+  // Start of day in target timezone, converted to UTC
+  const startLocal = new Date(`${date}T00:00:00`);
+  const startUTC = new Date(startLocal.getTime() - offsetMs);
+
+  // End of day in target timezone, converted to UTC
+  const endLocal = new Date(`${date}T23:59:59.999`);
+  const endUTC = new Date(endLocal.getTime() - offsetMs);
+
+  return {
+    start: startUTC.toISOString(),
+    end: endUTC.toISOString(),
+  };
 }
 
 // =====================================================
@@ -984,7 +1013,8 @@ export async function GetTodayTipSummary(
     const merchantId = await getMerchantId(clerkOrgId);
     if (!merchantId) return { success: false, data: null, error: "Merchant not found" };
 
-    const supabase = createServerSupabaseClient();
+    // Use service role to bypass RLS on staff_shifts and order_payments
+    const supabase = createServiceRoleClient();
 
     // Get location timezone
     const { data: loc } = await supabase
@@ -994,44 +1024,37 @@ export async function GetTodayTipSummary(
       .single();
     const tz = loc?.timezone || "UTC";
 
-    // Order payments summary for the date (timezone-aware)
-    const { data: paymentData, error: payErr } = await supabase.rpc("get_today_payment_summary", {
-      p_location_id: locationId,
-      p_date: date,
-      p_timezone: tz,
-    }).maybeSingle();
+    // Compute timezone-aware date bounds for DB queries
+    const bounds = getDateBoundsUTC(date, tz);
 
-    // Fallback: query directly if RPC doesn't exist
+    // Order payments for the date
     let totalPayments = 0;
     let totalTipsCollected = 0;
 
-    if (payErr) {
-      // Direct query fallback
-      const { data: payments } = await supabase
-        .from("order_payments")
-        .select("tip_amount, orders!inner(location_id, created_at, status)")
-        .eq("orders.location_id", locationId)
-        .eq("status", "captured");
+    const { data: payments } = await supabase
+      .from("order_payments")
+      .select("tip_amount, orders!inner(location_id, created_at, status)")
+      .eq("orders.location_id", locationId)
+      .eq("status", "captured")
+      .gte("orders.created_at", bounds.start)
+      .lte("orders.created_at", bounds.end);
 
-      if (payments) {
-        const filtered = payments.filter((p: any) => {
-          const orderDate = new Date(p.orders.created_at).toLocaleDateString("en-CA", { timeZone: tz });
-          return orderDate === date && p.orders.status !== "cancelled" && p.orders.status !== "void" && p.orders.status !== "refunded";
-        });
-        totalPayments = filtered.length;
-        totalTipsCollected = filtered.reduce((sum: number, p: any) => sum + (p.tip_amount || 0), 0);
-      }
-    } else if (paymentData) {
-      totalPayments = paymentData.payment_count || 0;
-      totalTipsCollected = paymentData.total_tips || 0;
+    if (payments) {
+      const filtered = payments.filter((p: any) =>
+        p.orders.status !== "cancelled" && p.orders.status !== "void" && p.orders.status !== "refunded"
+      );
+      totalPayments = filtered.length;
+      totalTipsCollected = filtered.reduce((sum: number, p: any) => sum + (p.tip_amount || 0), 0);
     }
 
-    // Staff shifts for the date
+    // Staff shifts for the date (clock_in within the day's bounds)
     const { data: shifts } = await supabase
       .from("staff_shifts")
       .select("clock_in_time, clock_out_time")
       .eq("location_id", locationId)
-      .eq("merchant_id", merchantId);
+      .eq("merchant_id", merchantId)
+      .gte("clock_in_time", bounds.start)
+      .lte("clock_in_time", bounds.end);
 
     let staffClockedIn = 0;
     let totalHoursWorked = 0;
@@ -1039,9 +1062,6 @@ export async function GetTodayTipSummary(
     if (shifts) {
       const now = new Date();
       for (const s of shifts) {
-        const clockInDate = new Date(s.clock_in_time).toLocaleDateString("en-CA", { timeZone: tz });
-        if (clockInDate !== date) continue;
-
         const clockIn = new Date(s.clock_in_time);
         const clockOut = s.clock_out_time ? new Date(s.clock_out_time) : now;
         totalHoursWorked += (clockOut.getTime() - clockIn.getTime()) / 3600000;
@@ -1078,7 +1098,8 @@ export async function GetTodayShifts(
     const merchantId = await getMerchantId(clerkOrgId);
     if (!merchantId) return { success: false, data: null, error: "Merchant not found" };
 
-    const supabase = createServerSupabaseClient();
+    // Use service role to bypass RLS on staff_shifts
+    const supabase = createServiceRoleClient();
 
     // Get location timezone
     const { data: loc } = await supabase
@@ -1087,8 +1108,9 @@ export async function GetTodayShifts(
       .eq("id", locationId)
       .single();
     const tz = loc?.timezone || "UTC";
+    const bounds = getDateBoundsUTC(date, tz);
 
-    // Fetch shifts with staff profile + declared cash tips
+    // Fetch shifts with staff profile + declared cash tips (clock_in within today's bounds)
     const { data: shifts, error: shiftErr } = await supabase
       .from("staff_shifts")
       .select(`
@@ -1102,15 +1124,13 @@ export async function GetTodayShifts(
       `)
       .eq("location_id", locationId)
       .eq("merchant_id", merchantId)
+      .gte("clock_in_time", bounds.start)
+      .lte("clock_in_time", bounds.end)
       .order("clock_in_time", { ascending: true });
 
     if (shiftErr) return { success: false, data: null, error: shiftErr.message };
 
-    // Filter to the requested date using timezone
-    const todayShifts = (shifts || []).filter((s: any) => {
-      const clockInDate = new Date(s.clock_in_time).toLocaleDateString("en-CA", { timeZone: tz });
-      return clockInDate === date;
-    });
+    const todayShifts = shifts || [];
 
     // Get role codes from location_members
     const staffIds = todayShifts.map((s: any) => s.staff_profile_id);
@@ -1125,20 +1145,32 @@ export async function GetTodayShifts(
       roleMap[m.staff_profile_id] = m.role_code;
     }
 
-    // Get pre-aggregated tips/sales from employee_daily_tips (may be stale but good enough for live view)
-    const { data: dailyTips } = await supabase
-      .from("employee_daily_tips")
-      .select("staff_profile_id, charged_tips, gross_sales")
+    // Query orders + payments for today (timezone-aware bounds)
+    // Attribution: assigned_server_id (primary) → created_by_staff_id (fallback)
+    const { data: orders, error: ordersErr } = await supabase
+      .from("orders")
+      .select("id, subtotal, status, assigned_server_id, created_by_staff_id, created_at, order_payments(tip_amount, status)")
       .eq("location_id", locationId)
-      .eq("shift_date", date)
-      .in("staff_profile_id", staffIds.length > 0 ? staffIds : ["__none__"]);
+      .gte("created_at", bounds.start)
+      .lte("created_at", bounds.end);
 
     const tipsMap: Record<string, { chargedTips: number; grossSales: number }> = {};
-    for (const t of dailyTips || []) {
-      tipsMap[t.staff_profile_id] = {
-        chargedTips: t.charged_tips || 0,
-        grossSales: t.gross_sales || 0,
-      };
+    const excludeStatuses = ["cancelled", "void", "refunded"];
+
+    for (const o of (orders || [])) {
+      if (excludeStatuses.includes(o.status)) continue;
+
+      const serverId = o.assigned_server_id || o.created_by_staff_id;
+      if (!serverId || !staffIds.includes(serverId)) continue;
+
+      if (!tipsMap[serverId]) tipsMap[serverId] = { chargedTips: 0, grossSales: 0 };
+      tipsMap[serverId].grossSales += o.subtotal || 0;
+
+      for (const p of (o.order_payments || [])) {
+        if (p.status === "captured") {
+          tipsMap[serverId].chargedTips += p.tip_amount || 0;
+        }
+      }
     }
 
     const now = new Date();
