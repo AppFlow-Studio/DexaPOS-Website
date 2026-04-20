@@ -26,12 +26,19 @@ import {
   validateDeliveryZone,
   validateMinimumOrder,
 } from './validators.ts'
+import {
+  authenticateIPOS,
+  chargePaymentToken,
+  extractProcessorDetails,
+} from './ipospays.ts'
 // ============================================================================
 // ENV
 // ============================================================================
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const DEJAVOO_IPOS_API_KEY = Deno.env.get('DEJAVOO_IPOS_API_KEY') ?? ''
+const DEJAVOO_IPOS_SECRET_KEY = Deno.env.get('DEJAVOO_IPOS_SECRET_KEY') ?? ''
 // ============================================================================
 // REQUEST TYPES
 // ============================================================================
@@ -595,16 +602,98 @@ Deno.serve(async (req: Request): Promise<Response> => {
     p_auto_accept: storeConfig.auto_accept_orders ?? false,
   }
 
-  // ---- Step 10+: TEST MODE — Skip live payment, call RPC directly ----
-  // Guest session insert is best-effort only; order can still be created without a row
-  // in online_order_sessions (e.g. RLS/constraint issues) as long as storeConfig is resolved.
+  // ---- Step 10: Charge card payment via iPOS ----
+  let iposChargeDetails: {
+    transactionId: string
+    transactionNumber: string   // 4-digit invoice number from processor
+    processorReferenceId: string // transactionReferenceId echoed back by processor
+    rrn: string                 // retrieval reference number e.g. #219313501821
+    authCode: string            // approval code e.g. TAS164
+    batchNumber: string
+    responseCode: string
+    responseMessage: string
+    cardType: string
+    cardLastFour: string
+  } | null = null
+
+  if (!payCashInStore && body.payment_token_id) {
+    if (!DEJAVOO_IPOS_API_KEY || !DEJAVOO_IPOS_SECRET_KEY) {
+      logError('PAYMENT', 'iPOS API credentials not configured', { storeConfigId })
+      return errorResponse(
+        'Payment service is not configured. Please contact support.',
+        'payment_not_configured',
+        503
+      )
+    }
+
+    logEvent('PAYMENT', 'Authenticating with iPOS', { referenceId: transactionReferenceId })
+    const authResult = await authenticateIPOS(DEJAVOO_IPOS_API_KEY, DEJAVOO_IPOS_SECRET_KEY)
+    if (!authResult.success) {
+      logError('PAYMENT_AUTH', 'iPOS authentication failed', authResult.error)
+      return errorResponse(
+        'Payment service authentication failed. Please try again.',
+        'payment_auth_failed',
+        502
+      )
+    }
+
+    logEvent('PAYMENT', 'Charging payment token via iPOS', {
+      tpn: effectiveIposTpn,
+      referenceId: transactionReferenceId,
+      totalCents,
+    })
+
+    const chargeResult = await chargePaymentToken(
+      { token: authResult.token, apiKey: DEJAVOO_IPOS_API_KEY, secretKey: DEJAVOO_IPOS_SECRET_KEY },
+      {
+        tpn: effectiveIposTpn!,
+        referenceId: transactionReferenceId,
+        amountCents: totalCents,
+        paymentTokenId: body.payment_token_id,
+      }
+    )
+
+    if (!chargeResult.success) {
+      logError('PAYMENT_CHARGE', 'iPOS card charge declined', chargeResult)
+      return errorResponse(
+        chargeResult.error || 'Your card was declined. Please try a different card.',
+        'payment_declined',
+        402,
+        { responseCode: chargeResult.responseCode, responseMessage: chargeResult.responseMessage }
+      )
+    }
+
+    const details = extractProcessorDetails(chargeResult.rawResponse)
+    iposChargeDetails = {
+      transactionId: chargeResult.transactionId || details.transactionId,
+      transactionNumber: details.transactionNumber,
+      processorReferenceId: details.transactionReferenceId,
+      rrn: details.rrn,
+      authCode: details.authCode,
+      batchNumber: details.batchNumber,
+      responseCode: chargeResult.responseCode,
+      responseMessage: chargeResult.responseMessage,
+      cardType: details.cardType || body.payment_card_type || '',
+      cardLastFour: details.cardLastFour || body.payment_card_last_four || '',
+    }
+
+    logEvent('PAYMENT', 'Card charged successfully', {
+      transactionId: iposChargeDetails.transactionId,
+      transactionNumber: iposChargeDetails.transactionNumber,
+      rrn: iposChargeDetails.rrn,
+      authCode: iposChargeDetails.authCode,
+      responseCode: iposChargeDetails.responseCode,
+    })
+  }
+
+  // ---- Step 11: Create order via RPC ----
   if (!session) {
     logEvent('SESSION', 'Proceeding without persisted session row (guest insert failed or skipped)', {
       storeConfigId,
     })
   }
 
-  logEvent('TEST_MODE', 'Bypassing live payment — calling process_online_order RPC directly', {
+  logEvent('ORDER', 'Creating order via process_online_order RPC', {
     totalCents,
     referenceId: transactionReferenceId,
     payCashInStore,
@@ -660,6 +749,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .eq('id', session.id)
   }
 
+  // ---- Step 12: Update payment record with real transaction details ----
   const paymentUpdatePayload = payCashInStore
     ? {
         payment_method: 'cash',
@@ -684,44 +774,47 @@ Deno.serve(async (req: Request): Promise<Response> => {
         dejavoo_response_message: null,
         dejavoo_batch_number: null,
         dejavoo_invoice_number: null,
-      metadata: {
-        source: 'online_order',
-        provider: 'website',
-        provider_order_id: transactionReferenceId,
-        payment_status_from_source: 'PENDING_CASH_IN_STORE',
-        payment_device_id: paymentDevice?.id ?? null,
-        payment_device_tpn: paymentDevice?.tpn ?? effectiveIposTpn ?? null,
-      },
-    }
-  : {
+        metadata: {
+          source: 'online_order',
+          provider: 'website',
+          provider_order_id: transactionReferenceId,
+          payment_status_from_source: 'PENDING_CASH_IN_STORE',
+          payment_device_id: paymentDevice?.id ?? null,
+          payment_device_tpn: paymentDevice?.tpn ?? effectiveIposTpn ?? null,
+        },
+      }
+    : {
         payment_method: 'card',
         status: 'captured',
         terminal_type: 'dejavoo',
-        card_type: body.payment_card_type || 'Visa',
-        card_last_four: body.payment_card_last_four || '0000',
-        transaction_id: transactionReferenceId,
-        reference_number: transactionReferenceId,
-        authorization_code: null,
-        auth_code: null,
-        rrn: null,
-        result_code: null,
-        result_message: 'TEST MODE - payment bypassed',
-        batch_number: null,
+        card_type: iposChargeDetails?.cardType || body.payment_card_type || null,
+        card_last_four: iposChargeDetails?.cardLastFour || body.payment_card_last_four || null,
+        // processor's unique transaction ID (displayed as TXN.# on POS)
+        transaction_id: iposChargeDetails?.transactionId || null,
+        // processor's echoed-back transactionReferenceId (displayed as REF ID on POS)
+        reference_number: iposChargeDetails?.processorReferenceId || transactionReferenceId,
+        authorization_code: iposChargeDetails?.authCode || null,
+        auth_code: iposChargeDetails?.authCode || null,
+        // RRN — retrieval reference number e.g. #219313501821
+        rrn: iposChargeDetails?.rrn || null,
+        result_code: iposChargeDetails?.responseCode || null,
+        result_message: iposChargeDetails?.responseMessage || null,
+        batch_number: iposChargeDetails?.batchNumber || null,
         approved_at: new Date().toISOString(),
         captured_at: new Date().toISOString(),
         processor_name: 'iPOSPays',
         processor_response: null,
         terminal_response: null,
-        dejavoo_response_code: null,
-        dejavoo_response_message: null,
-        dejavoo_batch_number: null,
-        dejavoo_invoice_number: null,
+        dejavoo_response_code: iposChargeDetails?.responseCode || null,
+        dejavoo_response_message: iposChargeDetails?.responseMessage || null,
+        dejavoo_batch_number: iposChargeDetails?.batchNumber || null,
+        // 4-digit processor invoice/transaction number from Dejavoo
+        dejavoo_invoice_number: iposChargeDetails?.transactionNumber || null,
         metadata: {
           source: 'online_order',
           provider: 'website',
           provider_order_id: transactionReferenceId,
-          payment_status_from_source: 'TEST_MODE_CAPTURED',
-          payment_bypass: true,
+          payment_status_from_source: 'CAPTURED',
           payment_device_id: paymentDevice?.id ?? null,
           payment_device_tpn: paymentDevice?.tpn ?? effectiveIposTpn ?? null,
         },
@@ -771,6 +864,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       data: paymentUpdateData,
     })
   }
+
   // Link order to customer if session has customer_id
   if (session?.customer_id) {
     await supabase
@@ -779,11 +873,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .eq('id', orderResult.order_id)
   }
 
-  logEvent('ORDER', 'Order created successfully (test mode — no live payment)', {
+  logEvent('ORDER', 'Order created successfully', {
     orderId: orderResult.order_id,
     orderNumber: orderResult.order_number,
     displayNumber: orderResult.display_number,
     payCashInStore,
+    charged: !!iposChargeDetails,
   })
 
   const autoAccepted: boolean = storeConfig.auto_accept_orders ?? false
