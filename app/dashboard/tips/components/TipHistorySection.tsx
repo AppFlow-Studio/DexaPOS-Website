@@ -60,8 +60,8 @@ function formatDate(dateStr: string) {
   });
 }
 
-function formatMoney(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`;
+function formatMoney(amount: number) {
+  return `$${amount.toFixed(2)}`;
 }
 
 export function TipHistorySection({

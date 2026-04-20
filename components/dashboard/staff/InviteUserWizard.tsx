@@ -45,6 +45,7 @@ import {
   Info,
 } from "lucide-react";
 import { GetMerchantRoles } from "@/app/dashboard/actions/staff-invite";
+import { CheckPinAvailability } from "@/app/dashboard/actions/unified-staff";
 import { RolesModel, LocationsModel } from "@/types/db-modles";
 import { useLocations } from "@/app/dashboard/hooks/useLocations";
 import { useQuery } from "@tanstack/react-query";
@@ -161,6 +162,8 @@ export function InviteUserWizard({
   const [enablePosAccess, setEnablePosAccess] = React.useState(false); // For Clerk accounts
   const [autoGeneratePin, setAutoGeneratePin] = React.useState(true);
   const [pinCode, setPinCode] = React.useState("");
+  const [pinError, setPinError] = React.useState("");
+  const [pinChecking, setPinChecking] = React.useState(false);
   const [hourlyRate, setHourlyRate] = React.useState<string>("");
   const [employmentType, setEmploymentType] =
     React.useState<EmploymentType | null>(null);
@@ -188,10 +191,32 @@ export function InviteUserWizard({
       setEnablePosAccess(false);
       setAutoGeneratePin(true);
       setPinCode("");
+      setPinError("");
+      setPinChecking(false);
       setHourlyRate("");
       setEmploymentType(null);
     }
   }, [open]);
+
+  // Debounced PIN availability check
+  React.useEffect(() => {
+    setPinError("");
+    if (autoGeneratePin || pinCode.length !== 4 || selectedLocationIds.size === 0) {
+      return;
+    }
+    setPinChecking(true);
+    const timeout = setTimeout(() => {
+      CheckPinAvailability(pinCode, Array.from(selectedLocationIds)).then((result) => {
+        setPinChecking(false);
+        if (!result.available) {
+          setPinError(`This PIN is already taken at ${result.conflictLocationName}`);
+        }
+      }).catch(() => {
+        setPinChecking(false);
+      });
+    }, 400);
+    return () => clearTimeout(timeout);
+  }, [pinCode, autoGeneratePin, selectedLocationIds]);
 
   // Determine which steps to show based on staff type
   const STEPS = staffType === "clerk" ? CLERK_STEPS : POS_STEPS;
@@ -215,8 +240,11 @@ export function InviteUserWizard({
       case "role":
         return !!selectedRoleCode;
       case "locations":
-        return selectedLocationIds.size > 0;
+        // Allow proceeding if no locations exist yet (staff created without assignment)
+        return locations.length === 0 || selectedLocationIds.size > 0;
       case "pos_config":
+        // Block if PIN conflict detected or still checking
+        if (!autoGeneratePin && (pinError || pinChecking)) return false;
         // For POS staff, PIN is required
         if (staffType === "pos") {
           if (!autoGeneratePin && !pinCode.trim()) return false;
@@ -846,9 +874,16 @@ export function InviteUserWizard({
                       )}
                       <div className="space-y-2">
                         {locations.length === 0 ? (
-                          <div className="text-center py-8 text-muted-foreground">
-                            <Building2 className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                            <p>No locations available</p>
+                          <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+                            <Building2 className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                            <div>
+                              <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                                No locations set up yet
+                              </p>
+                              <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+                                This staff member will be added to your merchant account without a location assignment. You can assign them to a location once you create one.
+                              </p>
+                            </div>
                           </div>
                         ) : (
                           locations.map((location) => {
@@ -992,10 +1027,23 @@ export function InviteUserWizard({
                                       setPinCode(value);
                                     }
                                   }}
+                                  className={pinError ? "border-red-500 focus-visible:ring-red-500" : ""}
                                 />
-                                <p className="text-xs text-muted-foreground">
-                                  Must be 4 digits
-                                </p>
+                                {pinChecking && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Checking PIN availability...
+                                  </p>
+                                )}
+                                {pinError && (
+                                  <p className="text-xs text-red-600">
+                                    {pinError}
+                                  </p>
+                                )}
+                                {!pinError && !pinChecking && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Must be 4 digits
+                                  </p>
+                                )}
                               </div>
                             )}
 
@@ -1193,9 +1241,15 @@ export function InviteUserWizard({
                       {/* Locations */}
                       <div>
                         <div className="text-sm font-medium mb-3">
-                          Assigning to {selectedLocations.length} location
-                          {selectedLocations.length !== 1 ? "s" : ""}
+                          {selectedLocations.length === 0
+                            ? "No location assignment"
+                            : `Assigning to ${selectedLocations.length} location${selectedLocations.length !== 1 ? "s" : ""}`}
                         </div>
+                        {selectedLocations.length === 0 && (
+                          <p className="text-sm text-muted-foreground">
+                            Staff will be added to the merchant account. Assign a location after creating one.
+                          </p>
+                        )}
                         <div className="space-y-2">
                           {selectedLocations.map((location) => {
                             const isPrimary = primaryLocationId === location.id;

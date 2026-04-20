@@ -36,7 +36,7 @@ export function ManualAdjustmentDialog({
   // Pre-fill with current adjustment when dialog opens
   useEffect(() => {
     if (open && detail) {
-      const currentAdj = detail.manual_adjustment / 100;
+      const currentAdj = detail.manual_adjustment;
       setAmount(currentAdj !== 0 ? currentAdj.toString() : "");
       setReason("");
     } else if (!open) {
@@ -55,13 +55,12 @@ export function ManualAdjustmentDialog({
 
   const previewNetTips = detail
     ? (
-        (detail.individual_tips_earned -
-          detail.tip_pool_contributed +
-          detail.tip_pool_received -
-          detail.tip_out_given +
-          detail.tip_out_received +
-          (parseFloat(amount) || 0) * 100) /
-        100
+        detail.individual_tips_earned -
+        detail.tip_pool_contributed +
+        detail.tip_pool_received -
+        detail.tip_out_given +
+        detail.tip_out_received +
+        (parseFloat(amount) || 0)
       ).toFixed(2)
     : "0.00";
 
@@ -90,7 +89,7 @@ export function ManualAdjustmentDialog({
               <div>
                 <p className="text-xs text-muted-foreground">Current Net Tips</p>
                 <p className="font-semibold text-base">
-                  ${(detail.net_tips / 100).toFixed(2)}
+                  ${detail.net_tips.toFixed(2)}
                 </p>
               </div>
               <div>

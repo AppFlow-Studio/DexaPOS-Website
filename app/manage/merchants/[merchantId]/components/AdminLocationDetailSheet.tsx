@@ -31,6 +31,7 @@ import {
   Globe,
   Loader2,
   MapPin,
+  Moon,
   Power,
   Save,
   Settings,
@@ -98,6 +99,17 @@ const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
   const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours
   const ampm = hours < 12 ? 'AM' : 'PM'
   return { value, label: `${hour12}:${minutes.toString().padStart(2, '0')} ${ampm}` }
+})
+
+// Overnight close times: 12:00 AM – 6:00 AM (next day), 30-min steps
+const OVERNIGHT_CLOSE_OPTIONS = Array.from({ length: 13 }, (_, i) => {
+  const totalMinutes = i * 30
+  const h = Math.floor(totalMinutes / 60)
+  const m = totalMinutes % 60
+  const value = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
+  const hour12 = h === 0 ? 12 : h
+  const label = `${hour12}:${m.toString().padStart(2, '0')} AM (next day)`
+  return { value, label }
 })
 
 export function AdminLocationDetailSheet({
@@ -498,24 +510,56 @@ export function AdminLocationDetailSheet({
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {DAYS.map(({ key, label }) => {
-                    const day = hours[key] || DEFAULT_BUSINESS_HOURS[key] || { open: '09:00', close: '17:00', is_closed: false }
+                    const day = hours[key] || DEFAULT_BUSINESS_HOURS[key] || { open: '09:00', close: '17:00', is_closed: false, is_overnight: false }
+                    const isOvernight = day.is_overnight ?? false
+                    const closeOptions = isOvernight ? OVERNIGHT_CLOSE_OPTIONS : TIME_OPTIONS
+
+                    const handleOvernightToggle = (checked: boolean) => {
+                      if (checked) {
+                        const keepClose = day.close <= '06:00' ? day.close : '02:00'
+                        handleHourChange(key, { is_overnight: true, close: keepClose })
+                      } else {
+                        handleHourChange(key, { is_overnight: false, close: '23:00' })
+                      }
+                    }
+
                     return (
                       <div key={key} className={cn('rounded-xl border p-4', day.is_closed && 'bg-muted/40')}>
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                           <div className="flex items-center gap-3">
-                            <div className="w-24 text-sm font-medium">{label}</div>
+                            <div className="flex items-center gap-2 w-32 shrink-0">
+                              <span className="text-sm font-medium">{label}</span>
+                              {isOvernight && !day.is_closed && (
+                                <Badge variant="outline" className="text-xs text-orange-600 border-orange-300 bg-orange-50 gap-1 px-1.5">
+                                  <Moon className="h-2.5 w-2.5" />
+                                  Overnight
+                                </Badge>
+                              )}
+                            </div>
                             <Switch checked={!day.is_closed} onCheckedChange={(checked) => handleHourChange(key, { is_closed: !checked })} />
                             <span className="text-sm text-muted-foreground">{day.is_closed ? 'Closed' : 'Open'}</span>
                           </div>
-                          <div className={cn('flex flex-col gap-2 sm:flex-row', day.is_closed && 'pointer-events-none opacity-40')}>
+                          <div className={cn('flex flex-col gap-2 sm:flex-row sm:items-center', day.is_closed && 'pointer-events-none opacity-40')}>
                             <Select value={day.open} onValueChange={(value) => handleHourChange(key, { open: value })} disabled={day.is_closed}>
                               <SelectTrigger className="w-full sm:w-40"><SelectValue /></SelectTrigger>
                               <SelectContent>{TIME_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
                             </Select>
+                            <span className="text-sm text-muted-foreground text-center">to</span>
                             <Select value={day.close} onValueChange={(value) => handleHourChange(key, { close: value })} disabled={day.is_closed}>
-                              <SelectTrigger className="w-full sm:w-40"><SelectValue /></SelectTrigger>
-                              <SelectContent>{TIME_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+                              <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
+                              <SelectContent>{closeOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
                             </Select>
+                            <div className="flex items-center gap-1.5">
+                              <Switch
+                                id={`overnight-${key}`}
+                                checked={isOvernight}
+                                onCheckedChange={handleOvernightToggle}
+                                disabled={day.is_closed}
+                              />
+                              <Label htmlFor={`overnight-${key}`} className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+                                Closes next day
+                              </Label>
+                            </div>
                           </div>
                         </div>
                       </div>

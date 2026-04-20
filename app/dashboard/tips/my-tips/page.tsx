@@ -39,8 +39,8 @@ const RANGE_OPTIONS = [
   { label: "Last 90 days", value: 90 },
 ];
 
-function fmt(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`;
+function fmt(amount: number) {
+  return `$${amount.toFixed(2)}`;
 }
 
 function fmtDate(dateStr: string) {
