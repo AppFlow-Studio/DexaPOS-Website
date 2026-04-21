@@ -789,12 +789,23 @@ export default function MenuDetailPage() {
   const handleMoveCategoryUp = (index: number) => {
     if (index === 0) return;
 
-    const newOrder = [...reorderedCategories];
-    const temp = newOrder[index];
-    newOrder[index] = newOrder[index - 1];
-    newOrder[index - 1] = temp;
+    // index is relative to visible (active-only) categories — resolve to full list positions
+    const currentVisible = hasCategoryOrderChanges
+      ? reorderedCategories.filter((c) => c.is_active)
+      : sortedCategories.filter((c) => c.is_active);
 
-    // Update display_order values
+    if (index >= currentVisible.length) return;
+
+    const categoryToMove = currentVisible[index];
+    const categoryAbove = currentVisible[index - 1];
+
+    const idxInFull = reorderedCategories.findIndex((c) => c.category_id === categoryToMove.category_id);
+    const idxAboveInFull = reorderedCategories.findIndex((c) => c.category_id === categoryAbove.category_id);
+
+    if (idxInFull === -1 || idxAboveInFull === -1) return;
+
+    const newOrder = reorderedCategories.map((c) => ({ ...c }));
+    [newOrder[idxAboveInFull], newOrder[idxInFull]] = [newOrder[idxInFull], newOrder[idxAboveInFull]];
     newOrder.forEach((category, idx) => {
       category.display_order = idx + 1;
     });
@@ -804,14 +815,23 @@ export default function MenuDetailPage() {
   };
 
   const handleMoveCategoryDown = (index: number) => {
-    if (index === reorderedCategories.length - 1) return;
+    // index is relative to visible (active-only) categories — resolve to full list positions
+    const currentVisible = hasCategoryOrderChanges
+      ? reorderedCategories.filter((c) => c.is_active)
+      : sortedCategories.filter((c) => c.is_active);
 
-    const newOrder = [...reorderedCategories];
-    const temp = newOrder[index];
-    newOrder[index] = newOrder[index + 1];
-    newOrder[index + 1] = temp;
+    if (index >= currentVisible.length - 1) return;
 
-    // Update display_order values
+    const categoryToMove = currentVisible[index];
+    const categoryBelow = currentVisible[index + 1];
+
+    const idxInFull = reorderedCategories.findIndex((c) => c.category_id === categoryToMove.category_id);
+    const idxBelowInFull = reorderedCategories.findIndex((c) => c.category_id === categoryBelow.category_id);
+
+    if (idxInFull === -1 || idxBelowInFull === -1) return;
+
+    const newOrder = reorderedCategories.map((c) => ({ ...c }));
+    [newOrder[idxInFull], newOrder[idxBelowInFull]] = [newOrder[idxBelowInFull], newOrder[idxInFull]];
     newOrder.forEach((category, idx) => {
       category.display_order = idx + 1;
     });
