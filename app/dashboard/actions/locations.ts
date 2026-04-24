@@ -204,6 +204,8 @@ export async function UpdateLocation(
     updateData.is_accepting_orders = data.is_accepting_orders;
   if (data.business_hours !== undefined)
     updateData.business_hours = data.business_hours;
+  if (data.business_day_end_hour !== undefined)
+    updateData.business_day_end_hour = data.business_day_end_hour;
   if (data.ein !== undefined) updateData.ein = data.ein || null;
   if (data.tax_id !== undefined) updateData.tax_id = data.tax_id || null;
   if (data.sales_tax_rate !== undefined) updateData.sales_tax_rate = data.sales_tax_rate;

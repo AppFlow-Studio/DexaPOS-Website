@@ -55,14 +55,20 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
     const [isEditing, setIsEditing] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
 
-    // Initialize business hours with defaults for missing days
+    // Initialize business hours with defaults for missing days.
+    // Normalizes DB format {from, to, enabled} → component format {open, close, is_closed}
     const initializeHours = (): BusinessHours => {
         const hours = { ...DEFAULT_BUSINESS_HOURS }
         if (location.business_hours) {
             Object.keys(location.business_hours).forEach((day) => {
                 const dayKey = day as keyof BusinessHours
-                if (location.business_hours[dayKey]) {
-                    hours[dayKey] = location.business_hours[dayKey]
+                const raw = location.business_hours[dayKey] as any
+                if (!raw) return
+                // Handle both formats: {open, close, is_closed} and {from, to, enabled}
+                hours[dayKey] = {
+                    open: raw.open || raw.from || '09:00',
+                    close: raw.close || raw.to || '17:00',
+                    is_closed: raw.is_closed ?? (raw.enabled === false),
                 }
             })
         }
@@ -108,9 +114,42 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
     const handleSave = async () => {
         setIsSaving(true)
 
+        // Derive business_day_end_hour from the latest closing time.
+        // If any day closes past midnight (close < open, e.g. 02:00 with open 18:00),
+        // that close hour becomes the business day end hour for the tip system.
+        let latestCloseAfterMidnight = 0
+        DAYS_OF_WEEK.forEach(({ key }) => {
+            const day = businessHours[key as keyof BusinessHours]
+            if (!day || day.is_closed || !day.open || !day.close) return
+            const openH = parseInt(day.open.split(':')[0])
+            const closeH = parseInt(day.close.split(':')[0])
+            // close < open means it wraps past midnight (e.g. open 18:00, close 02:00)
+            if (closeH < openH && closeH > latestCloseAfterMidnight) {
+                latestCloseAfterMidnight = closeH
+            }
+        })
+
+        // Convert component format {open, close, is_closed} back to DB format {from, to, enabled}
+        const dbHours: Record<string, any> = {}
+        DAYS_OF_WEEK.forEach(({ key }) => {
+            const day = businessHours[key as keyof BusinessHours]
+            if (!day) return
+            dbHours[key] = {
+                from: day.open,
+                to: day.close,
+                enabled: !day.is_closed,
+                is24Hours: false,
+                // Also keep the component-format fields for backward compat
+                open: day.open,
+                close: day.close,
+                is_closed: day.is_closed,
+            }
+        })
+
         try {
             const result = await UpdateLocation(location.id, {
-                business_hours: businessHours
+                business_hours: dbHours as any,
+                business_day_end_hour: latestCloseAfterMidnight,
             })
 
             if (result.error) {
@@ -325,8 +364,8 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
                         <div className="grid grid-cols-7 gap-1">
                             {DAYS_OF_WEEK.map(({ key, short }) => {
                                 const hours = getDayHours(key)
-                                const openHour = parseInt(hours.open.split(':')[0])
-                                const closeHour = parseInt(hours.close.split(':')[0])
+                                const openHour = hours.open ? parseInt(hours.open.split(':')[0]) : 9
+                                const closeHour = hours.close ? parseInt(hours.close.split(':')[0]) : 17
                                 const duration = hours.is_closed ? 0 : closeHour - openHour
 
                                 return (

@@ -12,6 +12,7 @@ import {
   InviteClerkStaff,
   UpdateStaffLocationAssignment,
   ResetStaffPIN,
+  ResetStaffPassword,
   DeactivateStaffMember,
   ReactivateStaffMember,
   UpgradePOSStaffToClerk,
@@ -23,6 +24,7 @@ import {
   RemoveStaffFromLocation,
   BulkDeactivateStaff,
   BulkResetPINs,
+  BulkResetPasswords,
   BulkAssignRole,
 } from "../actions/unified-staff";
 import {
@@ -683,7 +685,8 @@ export function useBulkResetPINs() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (memberIds: string[]) => BulkResetPINs(memberIds),
+    mutationFn: ({ memberIds, customPin }: { memberIds: string[]; customPin?: string }) =>
+      BulkResetPINs(memberIds, customPin),
     onSuccess: (result) => {
       if (result.error) {
         toast.error("Bulk PIN reset failed", { description: result.error });
@@ -750,6 +753,62 @@ export function useBulkAssignRole() {
         description: "An unexpected error occurred",
       });
       console.error("Bulk assign role error:", error);
+    },
+  });
+}
+
+/**
+ * Reset dashboard password for a single Clerk staff member
+ */
+export function useResetStaffPassword() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      memberId,
+      customPassword,
+    }: {
+      memberId: string;
+      customPassword?: string;
+    }) => ResetStaffPassword(memberId, customPassword),
+    onSuccess: (result) => {
+      if (result.error) {
+        toast.error("Failed to reset password", { description: result.error });
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ["unified-staff"] });
+      queryClient.invalidateQueries({ queryKey: ["staff-member"] });
+    },
+    onError: () => {
+      toast.error("Failed to reset password");
+    },
+  });
+}
+
+/**
+ * Bulk reset dashboard passwords for selected Clerk staff members
+ */
+export function useBulkResetPasswords() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (memberIds: string[]) => BulkResetPasswords(memberIds),
+    onSuccess: (result) => {
+      if (result.error) {
+        toast.error("Bulk password reset failed", { description: result.error });
+        return;
+      }
+      const { results, errors } = result.data!;
+      if (errors.length > 0) {
+        toast.warning(`Reset ${results.length} password(s), ${errors.length} failed`);
+      } else {
+        toast.success(`Reset ${results.length} password(s) successfully`);
+      }
+      queryClient.invalidateQueries({ queryKey: ["unified-staff"] });
+      queryClient.invalidateQueries({ queryKey: ["staff-member"] });
+    },
+    onError: () => {
+      toast.error("Bulk password reset failed");
     },
   });
 }

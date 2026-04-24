@@ -14,6 +14,8 @@ import {
   DeleteTipOutRule,
   ToggleTipOutRule,
   GetRolesForMerchant,
+  ValidateTipPoolConfig,
+  CheckForReciprocalTipOutRule,
 } from "@/app/dashboard/actions/tips";
 
 // =====================================================
@@ -313,5 +315,52 @@ export function useRoles(clerkOrgId: string | undefined) {
     },
     enabled: !!clerkOrgId,
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+// =====================================================
+// VALIDATION
+// =====================================================
+
+export function useValidateTipPoolConfig() {
+  return useMutation({
+    mutationFn: async ({
+      clerkOrgId,
+      configId,
+    }: {
+      clerkOrgId: string;
+      configId: string;
+    }) => {
+      const result = await ValidateTipPoolConfig(clerkOrgId, configId);
+      if (!result.success) throw new Error(result.error || "Failed to validate pool config");
+      return result.data;
+    },
+    // No success toast — calling code handles the result
+  });
+}
+
+export function useCheckReciprocity(
+  clerkOrgId: string | undefined,
+  locationId: string | undefined,
+  fromRoleCode: string,
+  toRoleCode: string,
+  excludeRuleId?: string
+) {
+  return useQuery({
+    queryKey: ["tip-out-reciprocity", clerkOrgId, locationId, fromRoleCode, toRoleCode, excludeRuleId],
+    queryFn: async () => {
+      if (!clerkOrgId || !locationId) throw new Error("Missing required parameters");
+      const result = await CheckForReciprocalTipOutRule(
+        clerkOrgId,
+        locationId,
+        fromRoleCode,
+        toRoleCode,
+        excludeRuleId
+      );
+      if (!result.success) throw new Error(result.error || "Failed to check reciprocity");
+      return result.data;
+    },
+    enabled: !!clerkOrgId && !!locationId && !!fromRoleCode && !!toRoleCode && fromRoleCode !== toRoleCode,
+    staleTime: 10 * 1000,
   });
 }
