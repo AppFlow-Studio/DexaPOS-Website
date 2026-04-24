@@ -183,10 +183,10 @@ Legacy fallback still supported:
 
 Whitelist automation:
 
-- prefers `DEJAVOO_MANAGEMENT_API_KEY` when present
-- otherwise falls back to `DEJAVOO_IPOS_API_KEY` for the external whitelist API header
-- optional override:
-  - `DEJAVOO_MANAGEMENT_API_URL`
+- uses `DEJAVOO_IPOS_API_KEY`
+- optional URL override:
+  - `DEJAVOO_EXTERNAL_API_URL`
+- optional allow-list extension:
   - `DEJAVOO_DEFAULT_ALLOWED_DOMAINS`
 
 ## How To Test

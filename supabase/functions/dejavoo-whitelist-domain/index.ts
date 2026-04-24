@@ -1,14 +1,15 @@
 // ============================================================================
 // dejavoo-whitelist-domain Edge Function
 // ============================================================================
-// Calls Dejavoo/iPOS external API to whitelist/update a storefront origin for a
-// TPN. The payload is merged with default and previously-synced domains so we
-// do not overwrite the entire allow-list when a new storefront origin is added.
+// Calls the Dejavoo/iPOS external API to whitelist/update a storefront origin
+// for a TPN. The payload is merged with default and previously-synced domains
+// so we do not overwrite the entire allow-list when a new storefront origin is
+// added.
 // ============================================================================
 
-const DEJAVOO_MANAGEMENT_API_KEY = Deno.env.get('DEJAVOO_MANAGEMENT_API_KEY') ?? ''
 const DEJAVOO_IPOS_API_KEY = Deno.env.get('DEJAVOO_IPOS_API_KEY') ?? ''
-const DEJAVOO_MANAGEMENT_API_URL =
+const DEJAVOO_EXTERNAL_API_URL =
+  Deno.env.get('DEJAVOO_EXTERNAL_API_URL') ||
   Deno.env.get('DEJAVOO_MANAGEMENT_API_URL') ||
   ((Deno.env.get('NEXT_PUBLIC_ROOT_DOMAIN') || '').includes('localhost')
     ? 'https://externalapi.ipospays.tech'
@@ -121,23 +122,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
       normalizedStoreDomain,
     ])
 
-    const rawAuthorizationKey =
-      DEJAVOO_MANAGEMENT_API_KEY.trim() || DEJAVOO_IPOS_API_KEY.trim()
-    const authorizationHeader = buildAuthorizationHeader(rawAuthorizationKey)
+    const authorizationHeader = buildAuthorizationHeader(DEJAVOO_IPOS_API_KEY)
 
     if (!authorizationHeader) {
-      console.warn(
-        '[DEJAVOO_WHITELIST_FN] Missing whitelist API key - skipping automatic sync'
+      console.error('[DEJAVOO_WHITELIST_FN] Missing DEJAVOO_IPOS_API_KEY')
+      return jsonResponse(
+        {
+          success: false,
+          error: 'Automatic whitelist requires DEJAVOO_IPOS_API_KEY.',
+        },
+        500,
       )
-      return jsonResponse({
-        success: true,
-        skipped: true,
-        domain: normalizedStoreDomain,
-        allowedDomains,
-      })
     }
 
-    const response = await fetch(`${DEJAVOO_MANAGEMENT_API_URL}/v3/tpn/parameters`, {
+    const response = await fetch(`${DEJAVOO_EXTERNAL_API_URL}/v3/tpn/parameters`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
