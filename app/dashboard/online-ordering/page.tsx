@@ -609,67 +609,56 @@ function CompletedSetupPanel({
                 </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Logo</Label>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleUpload("logo", e.target.files?.[0] ?? null)}
-                    disabled={Boolean(uploading.logo)}
-                  />
-                  {settings.logoUrl ? (
-                    <p className="text-xs text-muted-foreground break-all">
-                      Current: {settings.logoUrl}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Hero Image</Label>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleUpload("hero", e.target.files?.[0] ?? null)}
-                    disabled={Boolean(uploading.hero)}
-                  />
-                  {settings.heroImageUrl ? (
-                    <p className="text-xs text-muted-foreground break-all">
-                      Current: {settings.heroImageUrl}
-                    </p>
-                  ) : null}
-                </div>
+              {/* Row 1: Logo, Favicon, OG Image — uniform 80×80 */}
+              <div className="grid grid-cols-3 gap-4">
+                {(
+                  [
+                    { key: "logo",    label: "Logo",     url: settings.logoUrl,    assetType: "logo"    },
+                    { key: "favicon", label: "Favicon",  url: settings.faviconUrl, assetType: "favicon" },
+                    { key: "og",      label: "OG Image", url: settings.ogImageUrl, assetType: "og"      },
+                  ] as const
+                ).map(({ key, label, url, assetType }) => (
+                  <div key={key} className="space-y-2">
+                    <Label>{label}</Label>
+                    {url ? (
+                      <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-lg border bg-muted">
+                        <img src={url} alt={`${label} preview`} className="h-full w-full object-contain" />
+                      </div>
+                    ) : (
+                      <div className="flex h-20 w-20 items-center justify-center rounded-lg border bg-muted text-xs text-muted-foreground">
+                        None
+                      </div>
+                    )}
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleUpload(assetType, e.target.files?.[0] ?? null)}
+                      disabled={Boolean(uploading[key])}
+                    />
+                    {uploading[key] && <p className="text-xs text-muted-foreground">Uploading…</p>}
+                  </div>
+                ))}
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Favicon</Label>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleUpload("favicon", e.target.files?.[0] ?? null)}
-                    disabled={Boolean(uploading.favicon)}
-                  />
-                  {settings.faviconUrl ? (
-                    <p className="text-xs text-muted-foreground break-all">
-                      Current: {settings.faviconUrl}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="space-y-2">
-                  <Label>OG Image</Label>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleUpload("og", e.target.files?.[0] ?? null)}
-                    disabled={Boolean(uploading.og)}
-                  />
-                  {settings.ogImageUrl ? (
-                    <p className="text-xs text-muted-foreground break-all">
-                      Current: {settings.ogImageUrl}
-                    </p>
-                  ) : null}
-                </div>
+              {/* Row 2: Hero Image — full width, taller */}
+              <div className="space-y-2">
+                <Label>Hero Image</Label>
+                {settings.heroImageUrl ? (
+                  <div className="overflow-hidden rounded-lg border bg-muted">
+                    <img src={settings.heroImageUrl} alt="Hero preview" className="h-48 w-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="flex h-48 items-center justify-center rounded-lg border bg-muted text-sm text-muted-foreground">
+                    No hero image
+                  </div>
+                )}
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleUpload("hero", e.target.files?.[0] ?? null)}
+                  disabled={Boolean(uploading.hero)}
+                />
+                {uploading.hero && <p className="text-xs text-muted-foreground">Uploading…</p>}
               </div>
             </CardContent>
           </Card>
