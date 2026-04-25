@@ -34,6 +34,12 @@
       "Bash(grep -E \"\\\\.tsx$|\\\\.ts$\")",
       "Bash(xargs grep *)",
       "Read(//c/Users/HP i5/Desktop/**)"
+      "Bash(curl -s \"http://ein-l-mirasi.localhost:3000\")",
+      "Bash(node -e ' *)",
+      "Bash(curl -s \"http://localhost:3000/dashboard\")"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\saleh\\OneDrive - Lebanese American University\\Apps\\Dexa\\DexaPOS-Website\\app\\sites\\[slug]"
     ]
   },
   "hooks": {
