@@ -1,118 +1,187 @@
 // ============================================================================
 // dejavoo-whitelist-domain Edge Function
 // ============================================================================
-// Calls Dejavoo Management API to whitelist/update a storefront domain for a
-// TPN. This function intentionally does not require JWT auth and should be
-// invoked from trusted backend flows.
+// Calls the Dejavoo/iPOS external API to whitelist/update a storefront origin
+// for a TPN. The payload is merged with default and previously-synced domains
+// so we do not overwrite the entire allow-list when a new storefront origin is
+// added.
 // ============================================================================
 
-const DEJAVOO_MANAGEMENT_API_KEY = Deno.env.get("DEJAVOO_MANAGEMENT_API_KEY") ?? "";
-const DEJAVOO_MANAGEMENT_API_URL =
-  Deno.env.get("DEJAVOO_MANAGEMENT_API_URL") || "https://externalapi.ipospays.com";
-const ROOT_DOMAIN = Deno.env.get("NEXT_PUBLIC_ROOT_DOMAIN") || "dexaposai.com";
+const DEJAVOO_IPOS_API_KEY = Deno.env.get('DEJAVOO_IPOS_API_KEY') ?? ''
+const DEJAVOO_EXTERNAL_API_URL =
+  Deno.env.get('DEJAVOO_EXTERNAL_API_URL') ||
+  Deno.env.get('DEJAVOO_MANAGEMENT_API_URL') ||
+  ((Deno.env.get('NEXT_PUBLIC_ROOT_DOMAIN') || '').includes('localhost')
+    ? 'https://externalapi.ipospays.tech'
+    : 'https://externalapi.ipospays.com')
+const ROOT_DOMAIN = Deno.env.get('NEXT_PUBLIC_ROOT_DOMAIN') || 'dexaposai.com'
+const DEFAULT_ALLOWED_DOMAINS = parseDomainList(
+  Deno.env.get('DEJAVOO_DEFAULT_ALLOWED_DOMAINS') ??
+    'https://payment.ipospays.tech,https://payment.ipospays.com'
+)
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json", ...corsHeaders },
-  });
+    headers: { 'Content-Type': 'application/json', ...corsHeaders },
+  })
+}
+
+function normalizeOrigin(value: string): string | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  try {
+    return new URL(trimmed).origin
+  } catch {
+    return trimmed.replace(/\/+$/, '')
+  }
+}
+
+function parseDomainList(raw: string | string[]): string[] {
+  const values = Array.isArray(raw)
+    ? raw
+    : raw
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean)
+
+  return Array.from(
+    new Set(
+      values
+        .map((value) => normalizeOrigin(value))
+        .filter((value): value is string => Boolean(value))
+    )
+  )
+}
+
+function buildAuthorizationHeader(rawKey: string): string {
+  const trimmed = rawKey.trim()
+  if (!trimmed) return ''
+  if (/^(api[- ]?key|bearer)\s+/i.test(trimmed)) return trimmed
+  return `API KEY ${trimmed}`
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
   }
 
-  if (req.method !== "POST") {
-    return jsonResponse({ success: false, error: "Method not allowed" }, 405);
+  if (req.method !== 'POST') {
+    return jsonResponse({ success: false, error: 'Method not allowed' }, 405)
   }
 
   try {
-    let body: { tpn?: string; storeSlug?: string; storeDomain?: string };
+    let body: {
+      tpn?: string
+      storeSlug?: string
+      storeDomain?: string
+      existingDomains?: string[]
+    }
     try {
-      body = await req.json();
+      body = await req.json()
     } catch {
-      return jsonResponse({ success: false, error: "Invalid JSON body" }, 400);
+      return jsonResponse({ success: false, error: 'Invalid JSON body' }, 400)
     }
 
-    const tpn = body.tpn?.trim();
-    const storeSlug = body.storeSlug?.trim();
+    const tpn = body.tpn?.trim()
+    const storeSlug = body.storeSlug?.trim()
 
     if (!tpn) {
-      return jsonResponse({ success: false, error: "tpn is required" }, 400);
+      return jsonResponse({ success: false, error: 'tpn is required' }, 400)
     }
 
-    let storeDomain = body.storeDomain?.trim();
+    let storeDomain = body.storeDomain?.trim()
     if (!storeDomain) {
       if (!storeSlug) {
         return jsonResponse(
-          { success: false, error: "storeDomain or storeSlug is required" },
+          { success: false, error: 'storeDomain or storeSlug is required' },
           400,
-        );
+        )
       }
-      const isDev = ROOT_DOMAIN.includes("localhost");
+      const isDev = ROOT_DOMAIN.includes('localhost')
       storeDomain = isDev
         ? `http://${storeSlug}.localhost:3000`
-        : `https://${storeSlug}.${ROOT_DOMAIN}`;
+        : `https://${storeSlug}.${ROOT_DOMAIN}`
     }
 
-    if (!DEJAVOO_MANAGEMENT_API_KEY) {
-      console.warn("[DEJAVOO_WHITELIST_FN] Missing DEJAVOO_MANAGEMENT_API_KEY - skipping");
-      return jsonResponse({ success: true, skipped: true });
+    const normalizedStoreDomain = normalizeOrigin(storeDomain)
+    if (!normalizedStoreDomain) {
+      return jsonResponse({ success: false, error: 'Invalid store domain' }, 400)
     }
 
-    const response = await fetch(`${DEJAVOO_MANAGEMENT_API_URL}/v3/tpn/parameters`, {
-      method: "POST",
+    const allowedDomains = parseDomainList([
+      ...DEFAULT_ALLOWED_DOMAINS,
+      ...(body.existingDomains ?? []),
+      normalizedStoreDomain,
+    ])
+
+    const authorizationHeader = buildAuthorizationHeader(DEJAVOO_IPOS_API_KEY)
+
+    if (!authorizationHeader) {
+      console.error('[DEJAVOO_WHITELIST_FN] Missing DEJAVOO_IPOS_API_KEY')
+      return jsonResponse(
+        {
+          success: false,
+          error: 'Automatic whitelist requires DEJAVOO_IPOS_API_KEY.',
+        },
+        500,
+      )
+    }
+
+    const response = await fetch(`${DEJAVOO_EXTERNAL_API_URL}/v3/tpn/parameters`, {
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
-        Authorization: DEJAVOO_MANAGEMENT_API_KEY,
+        'Content-Type': 'application/json',
+        Authorization: authorizationHeader,
       },
       body: JSON.stringify({
         tpn,
-        allowedDomains: [storeDomain],
+        allowedDomains,
       }),
-    });
+    })
 
-    const responseText = await response.text();
-    let data: Record<string, unknown> = {};
+    const responseText = await response.text()
+    let data: Record<string, unknown> = {}
     try {
-      data = JSON.parse(responseText);
+      data = JSON.parse(responseText)
     } catch {
       // ignore non-json payloads
     }
 
     if (!response.ok) {
-      console.error("[DEJAVOO_WHITELIST_FN] Failed:", response.status, responseText);
+      console.error('[DEJAVOO_WHITELIST_FN] Failed:', response.status, responseText)
       return jsonResponse(
         {
           success: false,
           error: `Dejavoo domain whitelist failed (${response.status}): ${
-            (data as { message?: string }).message || responseText || "Unknown error"
+            (data as { message?: string }).message || responseText || 'Unknown error'
           }`,
         },
         502,
-      );
+      )
     }
 
     return jsonResponse({
       success: true,
-      domain: storeDomain,
+      domain: normalizedStoreDomain,
+      allowedDomains,
       response: data,
-    });
+    })
   } catch (error) {
-    console.error("[DEJAVOO_WHITELIST_FN] Unhandled error:", error);
+    console.error('[DEJAVOO_WHITELIST_FN] Unhandled error:', error)
     return jsonResponse(
       {
         success: false,
         error: `Domain whitelist network error: ${String(error)}`,
       },
       500,
-    );
+    )
   }
-});
+})

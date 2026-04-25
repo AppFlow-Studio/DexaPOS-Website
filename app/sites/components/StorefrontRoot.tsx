@@ -17,8 +17,6 @@ export function StorefrontRoot({
   templateId,
   className = "min-h-screen overflow-x-clip",
 }: StorefrontRootProps) {
-  // Dark mode is disabled on the storefront — always light.
-  // DarkModeContext.Provider is kept so any child that calls useDarkMode() compiles cleanly.
   const noopToggle = () => {};
 
   return (

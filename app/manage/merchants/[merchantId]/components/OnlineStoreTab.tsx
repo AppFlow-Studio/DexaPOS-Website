@@ -198,7 +198,7 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
         try {
             const result = await whitelistMutation.mutateAsync({ merchantId, locationId: selectedLocationId })
             if (result.skipped) {
-                toast.info('Dejavoo whitelist API key is not configured, request was skipped')
+                toast.info('Dejavoo whitelist request was skipped')
                 return
             }
             if (result.success) {
