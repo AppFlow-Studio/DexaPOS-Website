@@ -27,6 +27,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import { AlertTriangle, Download, Loader2, Key, CheckCircle } from 'lucide-react'
 import type { BulkPinResetResult } from '@/types/staff'
@@ -51,6 +53,7 @@ export function BulkPinResetDialog({
 }: BulkPinResetDialogProps) {
   const [step, setStep] = useState<DialogStep>('confirm')
   const [locationFilter, setLocationFilter] = useState<string>('all')
+  const [customPin, setCustomPin] = useState('')
   const [results, setResults] = useState<BulkPinResetResult[]>([])
 
   const bulkResetMutation = useAdminBulkResetPins()
@@ -58,6 +61,7 @@ export function BulkPinResetDialog({
   const resetDialog = () => {
     setStep('confirm')
     setLocationFilter('all')
+    setCustomPin('')
     setResults([])
   }
 
@@ -67,10 +71,15 @@ export function BulkPinResetDialog({
   }
 
   const handleConfirmReset = async () => {
+    if (customPin && !/^\d{4,6}$/.test(customPin)) {
+      toast.error('Custom PIN must be 4–6 digits')
+      return
+    }
     try {
       const result = await bulkResetMutation.mutateAsync({
         merchantId,
         locationId: locationFilter !== 'all' ? locationFilter : null,
+        customPin: customPin || undefined,
       })
 
       if (result.success && result.results) {
@@ -161,6 +170,27 @@ export function BulkPinResetDialog({
                 </Select>
                 <p className="text-sm text-muted-foreground">
                   PINs will be reset for all active staff at: {selectedLocationName}
+                </p>
+              </div>
+
+              {/* Optional Custom PIN */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">
+                  Custom PIN{' '}
+                  <span className="font-normal text-muted-foreground">(optional)</span>
+                </Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="\d{4,6}"
+                  maxLength={6}
+                  placeholder="Leave blank to auto-generate"
+                  value={customPin}
+                  onChange={(e) => setCustomPin(e.target.value.replace(/\D/g, ''))}
+                  className="font-mono"
+                />
+                <p className="text-xs text-muted-foreground">
+                  If set, all staff will receive this same 4–6 digit PIN.
                 </p>
               </div>
             </div>

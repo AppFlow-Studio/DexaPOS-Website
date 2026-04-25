@@ -59,9 +59,10 @@ export interface BusinessHours {
 }
 
 export interface DayHours {
-  open: string;  // "09:00" format
-  close: string; // "22:00" format
+  open: string;         // "09:00" format
+  close: string;        // "22:00" format, or "02:00" when is_overnight is true
   is_closed: boolean;
+  is_overnight?: boolean; // true = close time is on the next calendar day
 }
 
 // ----------------------------------------------------------------------------
@@ -287,9 +288,10 @@ export const dayHoursSchema = z.object({
   open: timeSchema,
   close: timeSchema,
   is_closed: z.boolean(),
+  is_overnight: z.boolean().optional().default(false),
 }).refine(
-  (data) => data.is_closed || data.open < data.close || data.close === '00:00',
-  { message: 'Close time must be after open time (or use 00:00 for midnight)' }
+  (data) => data.is_closed || data.is_overnight || data.open < data.close,
+  { message: 'Close time must be after open time (or enable overnight for next-day close)' }
 );
 
 export const businessHoursSchema = z.object({
@@ -339,6 +341,7 @@ export const createLocationSchema = z.object({
   is_active: z.boolean().default(true),
   is_accepting_orders: z.boolean().default(true),
   business_hours: businessHoursSchema.default({}),
+  business_day_end_hour: z.number().int().min(0).max(23).default(0),
   ein: z
     .string()
     .regex(/^\d{2}-?\d{7}$/, 'EIN must be 9 digits (with optional dash)')

@@ -1,7 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { ChevronRight, ChevronLeft, AlertCircle } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import {
+  AlertCircle,
+  Lock,
+  X,
+  Plus,
+  Clock,
+  CalendarDays,
+  ShoppingCart,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -10,15 +18,41 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Card } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
+import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import type { TipPoolConfigWithShares, Role } from "@/app/dashboard/actions/tips";
 
 interface TipPoolDialogProps {
@@ -26,6 +60,7 @@ interface TipPoolDialogProps {
   onOpenChange: (open: boolean) => void;
   pool?: TipPoolConfigWithShares | null;
   roles: Role[];
+  poolCount: number;
   isLoading?: boolean;
   onSubmit: (data: TipPoolFormData) => void;
 }
@@ -34,24 +69,21 @@ export interface TipPoolFormData {
   name: string;
   description: string;
   distribution_method: "percentage" | "hours_weighted" | "equal_split" | "points";
-  tip_source: "charged_tips" | "all_tips" | "cash_only" | "custom_percentage";
+  tip_source: "charged_tips" | "all_tips" | "cash_only";
   source_percentage: number;
   contributing_role_codes: string[];
-  receiving_role_codes: string[];
   is_active: boolean;
   effective_date: string;
   end_date: string | null;
-  role_shares: { role_code: string; share_percentage?: number; points_per_hour?: number }[];
+  priority: number;
+  policy_interval: "full_workday" | "by_shift" | "order";
+  role_shares: {
+    role_code: string;
+    share_percentage?: number;
+    points_per_hour?: number;
+    is_eligible: boolean;
+  }[];
 }
-
-const TOTAL_STEPS = 4;
-
-const STEP_LABELS = [
-  "Basic Info",
-  "Contributing Roles",
-  "Receiving Roles",
-  "Share Config",
-];
 
 const defaultFormData: TipPoolFormData = {
   name: "",
@@ -60,10 +92,11 @@ const defaultFormData: TipPoolFormData = {
   tip_source: "charged_tips",
   source_percentage: 100,
   contributing_role_codes: [],
-  receiving_role_codes: [],
   is_active: true,
   effective_date: new Date().toISOString().split("T")[0],
   end_date: null,
+  priority: 100,
+  policy_interval: "full_workday",
   role_shares: [],
 };
 
@@ -72,33 +105,41 @@ export function TipPoolDialog({
   onOpenChange,
   pool,
   roles,
+  poolCount,
   isLoading,
   onSubmit,
 }: TipPoolDialogProps) {
-  const [step, setStep] = useState(1);
   const [formData, setFormData] = useState<TipPoolFormData>({ ...defaultFormData });
+  const [showUnderWarning, setShowUnderWarning] = useState(false);
 
   useEffect(() => {
     if (!open) return;
 
     if (pool) {
-      // Extract receiving roles from existing role_shares
-      const receivingCodes = (pool.tip_pool_role_shares || []).map((s) => s.role_code);
+      // Handle legacy custom_percentage → map to all_tips
+      let tipSource = pool.tip_source as TipPoolFormData["tip_source"];
+      if ((pool.tip_source as string) === "custom_percentage") {
+        tipSource = "all_tips";
+        toast.info("This pool was using a legacy tip source. It has been updated to 'All Tips'.");
+      }
+
       setFormData({
         name: pool.name,
         description: pool.description || "",
         distribution_method: pool.distribution_method,
-        tip_source: pool.tip_source as TipPoolFormData["tip_source"],
+        tip_source: tipSource,
         source_percentage: pool.source_percentage,
-        contributing_role_codes: pool.contributing_role_codes,
-        receiving_role_codes: receivingCodes,
+        contributing_role_codes: pool.contributing_role_codes || [],
         is_active: pool.is_active,
         effective_date: pool.effective_date,
         end_date: (pool as any).end_date ?? null,
+        priority: (pool as any).priority ?? 100,
+        policy_interval: (pool as any).policy_interval ?? "full_workday",
         role_shares: (pool.tip_pool_role_shares || []).map((share) => ({
           role_code: share.role_code,
           share_percentage: share.share_percentage ?? undefined,
           points_per_hour: share.points_per_hour ?? undefined,
+          is_eligible: share.is_eligible,
         })),
       });
     } else {
@@ -107,63 +148,50 @@ export function TipPoolDialog({
         effective_date: new Date().toISOString().split("T")[0],
       });
     }
-    setStep(1);
+    setShowUnderWarning(false);
   }, [pool, open]);
 
-  const set = (field: keyof TipPoolFormData, value: any) =>
+  const set = <K extends keyof TipPoolFormData>(field: K, value: TipPoolFormData[K]) =>
     setFormData((prev) => ({ ...prev, [field]: value }));
 
-  // --- Contributing role toggle ---
-  const toggleContributing = (code: string, checked: boolean) => {
+  // ─── Contributing role toggle ─────────────────────────────
+  const toggleContributing = (code: string) => {
     set(
       "contributing_role_codes",
-      checked
-        ? [...formData.contributing_role_codes, code]
-        : formData.contributing_role_codes.filter((c) => c !== code)
+      formData.contributing_role_codes.includes(code)
+        ? formData.contributing_role_codes.filter((c) => c !== code)
+        : [...formData.contributing_role_codes, code]
     );
   };
 
-  // --- Receiving role toggle ---
-  const toggleReceiving = (code: string, checked: boolean) => {
-    const newReceiving = checked
-      ? [...formData.receiving_role_codes, code]
-      : formData.receiving_role_codes.filter((c) => c !== code);
-
-    // Keep role_shares in sync with receiving_role_codes
-    let newShares = formData.role_shares.filter((s) => newReceiving.includes(s.role_code));
-    if (checked && !newShares.find((s) => s.role_code === code)) {
-      newShares.push({
-        role_code: code,
-        share_percentage: formData.distribution_method === "percentage" ? 0 : undefined,
-        points_per_hour: formData.distribution_method === "points" ? 0 : undefined,
-      });
-    }
-
+  // ─── Role shares management ───────────────────────────────
+  const addRoleShare = (code: string) => {
+    if (formData.role_shares.find((s) => s.role_code === code)) return;
     setFormData((prev) => ({
       ...prev,
-      receiving_role_codes: newReceiving,
-      role_shares: newShares,
+      role_shares: [
+        ...prev.role_shares,
+        {
+          role_code: code,
+          share_percentage: prev.distribution_method === "percentage" ? 0 : undefined,
+          points_per_hour: prev.distribution_method === "points" ? 0 : undefined,
+          is_eligible: true,
+        },
+      ],
     }));
   };
 
-  const handleShareChange = (
-    roleCode: string,
-    field: "share_percentage" | "points_per_hour",
-    value: number
-  ) => {
+  const removeRoleShare = (code: string) => {
     setFormData((prev) => ({
       ...prev,
-      role_shares: prev.role_shares.map((s) =>
-        s.role_code === code ? { ...s, [field]: value } : s
-      ),
+      role_shares: prev.role_shares.filter((s) => s.role_code !== code),
     }));
   };
 
-  // Fix: use correct variable in handleShareChange
   const updateShare = (
     roleCode: string,
-    field: "share_percentage" | "points_per_hour",
-    value: number
+    field: "share_percentage" | "points_per_hour" | "is_eligible",
+    value: number | boolean
   ) => {
     setFormData((prev) => ({
       ...prev,
@@ -173,94 +201,116 @@ export function TipPoolDialog({
     }));
   };
 
-  const totalPercentage = formData.role_shares.reduce(
-    (sum, s) => sum + (s.share_percentage || 0),
-    0
+  // When distribution method changes, reset share values but keep roles
+  const handleMethodChange = (method: TipPoolFormData["distribution_method"]) => {
+    setFormData((prev) => ({
+      ...prev,
+      distribution_method: method,
+      role_shares: prev.role_shares.map((s) => ({
+        role_code: s.role_code,
+        share_percentage: method === "percentage" ? 0 : undefined,
+        points_per_hour: method === "points" ? 0 : undefined,
+        is_eligible: true,
+      })),
+    }));
+  };
+
+  // ─── Computed values ──────────────────────────────────────
+  const totalPercentage = useMemo(
+    () =>
+      formData.role_shares
+        .filter((s) => s.is_eligible)
+        .reduce((sum, s) => sum + (s.share_percentage || 0), 0),
+    [formData.role_shares]
   );
 
-  const canProceed = () => {
-    switch (step) {
-      case 1:
-        return formData.name.trim().length > 0;
-      case 2:
-        return formData.contributing_role_codes.length > 0;
-      case 3:
-        return formData.receiving_role_codes.length > 0;
-      case 4:
-        if (formData.distribution_method === "percentage") {
-          return Math.abs(totalPercentage - 100) < 0.01;
-        }
-        return true;
-      default:
-        return true;
-    }
-  };
+  const availableReceivingRoles = useMemo(
+    () => roles.filter((r) => !formData.role_shares.find((s) => s.role_code === r.code)),
+    [roles, formData.role_shares]
+  );
 
   const getRoleName = (code: string) => roles.find((r) => r.code === code)?.name || code;
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{pool ? "Edit Tip Pool" : "Create Tip Pool"}</DialogTitle>
-          <DialogDescription asChild>
-            <div className="space-y-2">
-              {/* Step progress */}
-              <div className="flex items-center gap-1 pt-1">
-                {STEP_LABELS.map((label, i) => {
-                  const num = i + 1;
-                  const isActive = num === step;
-                  const isDone = num < step;
-                  return (
-                    <div key={num} className="flex items-center gap-1">
-                      <div
-                        className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold ${
-                          isActive
-                            ? "bg-teal-500 text-white"
-                            : isDone
-                            ? "bg-teal-100 text-teal-700"
-                            : "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {num}
-                      </div>
-                      <span
-                        className={`text-xs hidden sm:block ${
-                          isActive ? "text-foreground font-medium" : "text-muted-foreground"
-                        }`}
-                      >
-                        {label}
-                      </span>
-                      {num < TOTAL_STEPS && (
-                        <ChevronRight className="w-3 h-3 text-muted-foreground mx-1" />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </DialogDescription>
-        </DialogHeader>
+  // ─── Validation ───────────────────────────────────────────
+  const validationErrors = useMemo(() => {
+    const errors: Record<string, string> = {};
+    if (!formData.name.trim()) errors.name = "Pool name is required";
+    if (formData.contributing_role_codes.length === 0)
+      errors.contributing = "Select at least one contributing role";
+    if (formData.role_shares.filter((s) => s.is_eligible).length === 0)
+      errors.role_shares = "Select at least one receiving role";
+    if (formData.distribution_method === "percentage" && totalPercentage > 100.01)
+      errors.share_total = `Share percentages total ${totalPercentage.toFixed(1)}%, must be ≤ 100%`;
+    if (formData.distribution_method === "points") {
+      const missingPoints = formData.role_shares.filter(
+        (s) => s.is_eligible && (!s.points_per_hour || s.points_per_hour <= 0)
+      );
+      if (missingPoints.length > 0)
+        errors.points = "All eligible roles must have points_per_hour > 0";
+    }
+    if (formData.source_percentage <= 0 || formData.source_percentage > 100)
+      errors.source_percentage = "Source percentage must be between 1 and 100";
+    return errors;
+  }, [formData, totalPercentage]);
 
-        <div className="space-y-5 py-2">
-          {/* ──────────── STEP 1: Basic Info ──────────── */}
-          {step === 1 && (
-            <div className="space-y-4">
+  const isValid = Object.keys(validationErrors).length === 0;
+
+  const handleSubmit = () => {
+    if (!isValid) return;
+    // Check for percentage under warning
+    if (
+      formData.distribution_method === "percentage" &&
+      totalPercentage < 99.99
+    ) {
+      setShowUnderWarning(true);
+      return;
+    }
+    onSubmit(formData);
+  };
+
+  const confirmUnderWarning = () => {
+    setShowUnderWarning(false);
+    onSubmit(formData);
+  };
+
+  const showPriority = poolCount >= 2 || (pool && poolCount >= 1);
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{pool ? "Edit Tip Pool" : "Create Tip Pool"}</DialogTitle>
+            <DialogDescription>
+              Configure how tips are collected and distributed among staff roles
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-2">
+            {/* ────── SECTION 1: BASICS ────── */}
+            <section className="space-y-4">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Basics
+              </h3>
+
               <div>
-                <Label htmlFor="name">Pool Name *</Label>
+                <Label htmlFor="pool-name">Pool Name *</Label>
                 <Input
-                  id="name"
+                  id="pool-name"
                   value={formData.name}
                   onChange={(e) => set("name", e.target.value)}
                   placeholder="e.g., Front of House Pool, Bar Pool"
-                  className="mt-1"
+                  className={cn("mt-1", validationErrors.name && "border-red-500")}
                 />
+                {validationErrors.name && (
+                  <p className="text-xs text-red-500 mt-1">{validationErrors.name}</p>
+                )}
               </div>
 
               <div>
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="pool-desc">Description</Label>
                 <Textarea
-                  id="description"
+                  id="pool-desc"
                   value={formData.description}
                   onChange={(e) => set("description", e.target.value)}
                   placeholder="Optional description"
@@ -269,97 +319,29 @@ export function TipPoolDialog({
                 />
               </div>
 
-              <div>
-                <Label>Distribution Method *</Label>
-                <RadioGroup
-                  value={formData.distribution_method}
-                  onValueChange={(v) => set("distribution_method", v)}
-                  className="mt-2 space-y-2"
-                >
-                  {[
-                    {
-                      value: "percentage",
-                      label: "Percentage-Based",
-                      desc: "Each receiving role gets a fixed % of the pool",
-                    },
-                    {
-                      value: "hours_weighted",
-                      label: "Hours Weighted",
-                      desc: "Distributed proportionally by hours worked",
-                    },
-                    {
-                      value: "equal_split",
-                      label: "Equal Split",
-                      desc: "Divided equally among all eligible employees",
-                    },
-                    {
-                      value: "points",
-                      label: "Points-Based",
-                      desc: "Role points per hour × hours worked",
-                    },
-                  ].map((opt) => (
-                    <div key={opt.value} className="flex items-start gap-2">
-                      <RadioGroupItem value={opt.value} id={`method-${opt.value}`} className="mt-0.5" />
-                      <Label htmlFor={`method-${opt.value}`} className="font-normal cursor-pointer">
-                        <span className="font-medium">{opt.label}</span>
-                        <span className="text-muted-foreground"> — {opt.desc}</span>
-                      </Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </div>
-
-              <div>
-                <Label>Tip Source *</Label>
-                <RadioGroup
-                  value={formData.tip_source}
-                  onValueChange={(v) => set("tip_source", v)}
-                  className="mt-2 space-y-2"
-                >
-                  {[
-                    { value: "charged_tips", label: "Charged Tips Only" },
-                    { value: "all_tips", label: "All Tips (charged + cash)" },
-                    { value: "cash_only", label: "Cash Tips Only" },
-                    { value: "custom_percentage", label: "Custom Percentage of Tips" },
-                  ].map((opt) => (
-                    <div key={opt.value} className="flex items-center gap-2">
-                      <RadioGroupItem value={opt.value} id={`source-${opt.value}`} />
-                      <Label htmlFor={`source-${opt.value}`} className="font-normal cursor-pointer">
-                        {opt.label}
-                      </Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </div>
-
-              <div>
-                <Label htmlFor="source-pct">Source Percentage (%)</Label>
-                <Input
-                  id="source-pct"
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.01"
-                  value={formData.source_percentage}
-                  onChange={(e) => set("source_percentage", parseFloat(e.target.value) || 0)}
-                  className="mt-1 w-32"
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="pool-active">Active</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Inactive pools are skipped during distribution
+                  </p>
+                </div>
+                <Switch
+                  id="pool-active"
+                  checked={formData.is_active}
+                  onCheckedChange={(checked) => set("is_active", checked)}
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  % of selected tip source that goes into the pool (100 = all)
-                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="effective-date">Effective Date</Label>
+                  <Label htmlFor="pool-eff-date">Effective Date</Label>
                   <Input
-                    id="effective-date"
+                    id="pool-eff-date"
                     type="date"
                     value={formData.effective_date}
-                    min={new Date().toISOString().split("T")[0]}
                     onChange={(e) => {
                       set("effective_date", e.target.value);
-                      // Clear end_date if it's now before the new effective date
                       if (formData.end_date && e.target.value >= formData.end_date) {
                         set("end_date", null);
                       }
@@ -368,25 +350,14 @@ export function TipPoolDialog({
                   />
                 </div>
                 <div>
-                  <Label htmlFor="end-date">End Date</Label>
+                  <Label htmlFor="pool-end-date">End Date</Label>
                   <Input
-                    id="end-date"
+                    id="pool-end-date"
                     type="date"
                     value={formData.end_date || ""}
-                    min={(() => {
-                      const today = new Date().toISOString().split("T")[0];
-                      const d = new Date(formData.effective_date + "T00:00:00");
-                      d.setDate(d.getDate() + 1);
-                      const minFromEffective = d.toISOString().split("T")[0];
-                      return minFromEffective > today ? minFromEffective : today;
-                    })()}
+                    min={formData.effective_date}
                     onChange={(e) => {
-                      const val = e.target.value;
-                      if (!val) { set("end_date", null); return; }
-                      const today = new Date().toISOString().split("T")[0];
-                      if (val < today) return;
-                      if (val <= formData.effective_date) return;
-                      set("end_date", val);
+                      set("end_date", e.target.value || null);
                     }}
                     className="mt-1"
                   />
@@ -394,239 +365,456 @@ export function TipPoolDialog({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="active"
-                  checked={formData.is_active}
-                  onCheckedChange={(checked) => set("is_active", !!checked)}
-                />
-                <Label htmlFor="active" className="font-normal cursor-pointer">Active</Label>
-              </div>
-            </div>
-          )}
+              {showPriority && (
+                <div>
+                  <Label htmlFor="pool-priority">Priority</Label>
+                  <Input
+                    id="pool-priority"
+                    type="number"
+                    min="1"
+                    max="999"
+                    value={formData.priority}
+                    onChange={(e) =>
+                      set("priority", parseInt(e.target.value) || 100)
+                    }
+                    className="mt-1 w-28"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Lower runs first. Default 100. Pools with the same priority run in creation order.
+                  </p>
+                </div>
+              )}
+            </section>
 
-          {/* ──────────── STEP 2: Contributing Roles ──────────── */}
-          {step === 2 && (
-            <div className="space-y-4">
-              <div>
-                <Label className="text-base">Contributing Roles *</Label>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Select the roles whose tips go <strong>into</strong> this pool.
-                  These employees give up a portion of their tips to be pooled.
-                </p>
-              </div>
-              <div className="space-y-2 max-h-64 overflow-y-auto border rounded-lg p-4">
-                {roles.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No roles available</p>
-                ) : (
-                  roles.map((role) => (
-                    <div key={role.code} className="flex items-center gap-2 py-0.5">
-                      <Checkbox
-                        id={`contrib-${role.code}`}
-                        checked={formData.contributing_role_codes.includes(role.code)}
-                        onCheckedChange={(checked) => toggleContributing(role.code, !!checked)}
-                      />
-                      <Label
-                        htmlFor={`contrib-${role.code}`}
-                        className="font-normal cursor-pointer flex-1"
-                      >
-                        <span className="font-semibold text-sm">{role.code}</span>
-                        <span className="text-muted-foreground ml-2">— {role.name}</span>
-                      </Label>
+            <Separator />
+
+            {/* ────── SECTION 2: POLICY INTERVAL ────── */}
+            <section className="space-y-4">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Policy Interval
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                How tips are grouped for distribution
+              </p>
+
+              <TooltipProvider>
+                <div className="grid grid-cols-3 gap-3">
+                  {/* Full Workday */}
+                  <button
+                    type="button"
+                    onClick={() => set("policy_interval", "full_workday")}
+                    className={cn(
+                      "relative rounded-lg border-2 p-4 text-left transition-all",
+                      formData.policy_interval === "full_workday"
+                        ? "border-teal-500 bg-teal-500/5"
+                        : "border-border hover:border-muted-foreground/30"
+                    )}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <CalendarDays className="w-4 h-4 text-teal-500" />
+                      <span className="text-sm font-semibold">Full Workday</span>
                     </div>
-                  ))
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Tips are pooled between employees that work the same day.
+                    </p>
+                    <Badge className="mt-2 bg-teal-500/10 text-teal-600 border-teal-500/30 text-[10px]">
+                      Most common setup
+                    </Badge>
+                  </button>
+
+                  {/* By Shift — disabled */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div
+                        className="relative rounded-lg border-2 border-border p-4 text-left opacity-50 cursor-not-allowed"
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <Clock className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm font-semibold text-muted-foreground">By Shift</span>
+                          <Lock className="w-3.5 h-3.5 text-muted-foreground ml-auto" />
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          Tips are pooled by employees that work the same service (i.e. breakfast, lunch, dinner).
+                        </p>
+                        <Badge variant="outline" className="mt-2 text-[10px]">
+                          Coming soon
+                        </Badge>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Available in a future release — Full Workday works for most restaurants right now.</p>
+                    </TooltipContent>
+                  </Tooltip>
+
+                  {/* Order — disabled */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div
+                        className="relative rounded-lg border-2 border-border p-4 text-left opacity-50 cursor-not-allowed"
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <ShoppingCart className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm font-semibold text-muted-foreground">Order</span>
+                          <Lock className="w-3.5 h-3.5 text-muted-foreground ml-auto" />
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          Uses the exact time a check is opened.
+                        </p>
+                        <Badge variant="outline" className="mt-2 text-[10px]">
+                          Coming soon
+                        </Badge>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Available in a future release — Full Workday works for most restaurants right now.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </TooltipProvider>
+            </section>
+
+            <Separator />
+
+            {/* ────── SECTION 3: TIP SOURCE ────── */}
+            <section className="space-y-4">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Tip Source
+              </h3>
+
+              <RadioGroup
+                value={formData.tip_source}
+                onValueChange={(v) => set("tip_source", v as TipPoolFormData["tip_source"])}
+                className="space-y-2"
+              >
+                {[
+                  { value: "charged_tips", label: "Charged Tips Only", desc: "Credit/debit card tips" },
+                  { value: "all_tips", label: "All Tips", desc: "Charged + declared cash tips" },
+                  { value: "cash_only", label: "Cash Only", desc: "Declared cash tips only" },
+                ].map((opt) => (
+                  <div key={opt.value} className="flex items-start gap-2">
+                    <RadioGroupItem value={opt.value} id={`src-${opt.value}`} className="mt-0.5" />
+                    <Label htmlFor={`src-${opt.value}`} className="font-normal cursor-pointer">
+                      <span className="font-medium">{opt.label}</span>
+                      <span className="text-muted-foreground"> — {opt.desc}</span>
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+
+              <div className="space-y-2">
+                <Label>
+                  Source Percentage: {formData.source_percentage}%
+                </Label>
+                <div className="flex items-center gap-3">
+                  <Slider
+                    value={[formData.source_percentage]}
+                    onValueChange={([v]) => set("source_percentage", v)}
+                    min={1}
+                    max={100}
+                    step={1}
+                    className="flex-1"
+                  />
+                  <Input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={formData.source_percentage}
+                    onChange={(e) =>
+                      set("source_percentage", Math.min(100, Math.max(1, parseInt(e.target.value) || 1)))
+                    }
+                    className="w-20"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  % of this source going into the pool. 100 = all tips from the selected source.
+                </p>
+                {validationErrors.source_percentage && (
+                  <p className="text-xs text-red-500">{validationErrors.source_percentage}</p>
                 )}
               </div>
-              <p className="text-sm text-muted-foreground">
-                {formData.contributing_role_codes.length} role(s) selected
-              </p>
-            </div>
-          )}
+            </section>
 
-          {/* ──────────── STEP 3: Receiving Roles ──────────── */}
-          {step === 3 && (
-            <div className="space-y-4">
+            <Separator />
+
+            {/* ────── SECTION 4: DISTRIBUTION & ROLE SHARES ────── */}
+            <section className="space-y-4">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Distribution & Role Shares
+              </h3>
+
+              {/* Distribution Method */}
               <div>
-                <Label className="text-base">Receiving Roles *</Label>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Select the roles that <strong>receive</strong> money from this pool.
-                  These can be different from the contributing roles.
-                </p>
+                <Label>Distribution Method</Label>
+                <Select
+                  value={formData.distribution_method}
+                  onValueChange={(v) => handleMethodChange(v as TipPoolFormData["distribution_method"])}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percentage">
+                      Percentage — Each role gets a fixed % of the pool
+                    </SelectItem>
+                    <SelectItem value="equal_split">
+                      Equal Split — Divided equally among eligible employees
+                    </SelectItem>
+                    <SelectItem value="hours_weighted">
+                      Hours Weighted — Proportional to hours worked
+                    </SelectItem>
+                    <SelectItem value="points">
+                      Points — Role points per hour x hours worked
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              {formData.contributing_role_codes.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  <span className="text-xs text-muted-foreground">Contributors:</span>
+
+              {/* Contributing Roles */}
+              <div>
+                <Label>Contributing Roles *</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Roles whose tips go <strong>into</strong> this pool
+                </p>
+
+                {/* Selected contributing roles as pills */}
+                <div className="flex flex-wrap gap-1.5 mb-2">
                   {formData.contributing_role_codes.map((code) => (
-                    <Badge key={code} variant="secondary" className="text-xs">
-                      {code}
+                    <Badge
+                      key={code}
+                      variant="secondary"
+                      className="text-xs gap-1 pr-1"
+                    >
+                      {code} · {getRoleName(code)}
+                      <button
+                        type="button"
+                        onClick={() => toggleContributing(code)}
+                        className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
                     </Badge>
                   ))}
                 </div>
-              )}
-              <div className="space-y-2 max-h-64 overflow-y-auto border rounded-lg p-4">
-                {roles.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No roles available</p>
-                ) : (
-                  roles.map((role) => (
-                    <div key={role.code} className="flex items-center gap-2 py-0.5">
-                      <Checkbox
-                        id={`recv-${role.code}`}
-                        checked={formData.receiving_role_codes.includes(role.code)}
-                        onCheckedChange={(checked) => toggleReceiving(role.code, !!checked)}
-                      />
-                      <Label
-                        htmlFor={`recv-${role.code}`}
-                        className="font-normal cursor-pointer flex-1"
-                      >
-                        <span className="font-semibold text-sm">{role.code}</span>
-                        <span className="text-muted-foreground ml-2">— {role.name}</span>
-                      </Label>
-                    </div>
-                  ))
+
+                {/* Add contributing role dropdown */}
+                {roles.filter((r) => !formData.contributing_role_codes.includes(r.code)).length > 0 && (
+                  <Select onValueChange={(v) => toggleContributing(v)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Add contributing role..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roles
+                        .filter((r) => !formData.contributing_role_codes.includes(r.code))
+                        .map((role) => (
+                          <SelectItem key={role.code} value={role.code}>
+                            {role.code} — {role.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {validationErrors.contributing && (
+                  <p className="text-xs text-red-500 mt-1">{validationErrors.contributing}</p>
                 )}
               </div>
-              <p className="text-sm text-muted-foreground">
-                {formData.receiving_role_codes.length} role(s) selected
-              </p>
-            </div>
-          )}
 
-          {/* ──────────── STEP 4: Share Config ──────────── */}
-          {step === 4 && (
-            <div className="space-y-4">
+              {/* Role Shares Table */}
               <div>
-                <Label className="text-base">Configure Receiving Shares</Label>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Set how the pooled amount is split among receiving roles.
+                <Label>Receiving Roles & Shares *</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Roles that <strong>receive</strong> from this pool and how it's split
                 </p>
-              </div>
 
-              {formData.distribution_method === "percentage" && (
-                <Alert
-                  variant={Math.abs(totalPercentage - 100) < 0.01 ? "default" : "destructive"}
-                >
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    Total: {totalPercentage.toFixed(1)}%
-                    {Math.abs(totalPercentage - 100) >= 0.01
-                      ? " — Must total exactly 100%"
-                      : " ✓"}
-                  </AlertDescription>
-                </Alert>
-              )}
+                {validationErrors.role_shares && (
+                  <Alert variant="destructive" className="mb-2">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{validationErrors.role_shares}</AlertDescription>
+                  </Alert>
+                )}
 
-              {(formData.distribution_method === "hours_weighted" ||
-                formData.distribution_method === "equal_split") && (
-                <Alert>
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    {formData.distribution_method === "hours_weighted"
-                      ? "Tips are distributed proportionally by each employee's hours worked."
-                      : "Tips are divided equally among all eligible employees in the receiving roles."}
-                  </AlertDescription>
-                </Alert>
-              )}
+                {formData.role_shares.length > 0 && (
+                  <div className="rounded-lg border divide-y">
+                    {formData.role_shares.map((share) => (
+                      <div
+                        key={share.role_code}
+                        className="flex items-center gap-3 px-3 py-2.5"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium">{share.role_code}</span>
+                          <span className="text-xs text-muted-foreground ml-1.5">
+                            · {getRoleName(share.role_code)}
+                          </span>
+                        </div>
 
-              <div className="space-y-3 max-h-72 overflow-y-auto">
-                {formData.role_shares.map((share) => (
-                  <Card key={share.role_code} className="p-4">
-                    <p className="font-medium mb-3">
-                      <span className="font-bold">{share.role_code}</span>
-                      <span className="text-muted-foreground ml-2">
-                        — {getRoleName(share.role_code)}
-                      </span>
-                    </p>
+                        {/* Percentage method: % input */}
+                        {formData.distribution_method === "percentage" && (
+                          <div className="flex items-center gap-1.5">
+                            <Input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              value={share.share_percentage ?? ""}
+                              onChange={(e) =>
+                                updateShare(
+                                  share.role_code,
+                                  "share_percentage",
+                                  parseFloat(e.target.value) || 0
+                                )
+                              }
+                              className="w-20 h-8 text-sm"
+                            />
+                            <span className="text-sm text-muted-foreground">%</span>
+                          </div>
+                        )}
+
+                        {/* Points method: points_per_hour input */}
+                        {formData.distribution_method === "points" && (
+                          <div className="flex items-center gap-1.5">
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={share.points_per_hour ?? ""}
+                              onChange={(e) =>
+                                updateShare(
+                                  share.role_code,
+                                  "points_per_hour",
+                                  parseFloat(e.target.value) || 0
+                                )
+                              }
+                              className={cn(
+                                "w-20 h-8 text-sm",
+                                validationErrors.points &&
+                                  share.is_eligible &&
+                                  (!share.points_per_hour || share.points_per_hour <= 0) &&
+                                  "border-red-500"
+                              )}
+                            />
+                            <span className="text-xs text-muted-foreground">pts/hr</span>
+                          </div>
+                        )}
+
+                        {/* Equal split / hours weighted: just eligibility info */}
+                        {(formData.distribution_method === "equal_split" ||
+                          formData.distribution_method === "hours_weighted") && (
+                          <span className="text-xs text-muted-foreground">
+                            {formData.distribution_method === "hours_weighted"
+                              ? "Hours-weighted"
+                              : "Equal share"}
+                          </span>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => removeRoleShare(share.role_code)}
+                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+
+                    {/* Percentage total footer */}
                     {formData.distribution_method === "percentage" && (
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.01"
-                          value={share.share_percentage ?? ""}
-                          onChange={(e) =>
-                            updateShare(
-                              share.role_code,
-                              "share_percentage",
-                              parseFloat(e.target.value) || 0
-                            )
-                          }
-                          className="w-24"
-                        />
-                        <span className="text-muted-foreground">%</span>
+                      <div className="flex items-center justify-between px-3 py-2 bg-muted/30">
+                        <span className="text-sm font-medium">Total</span>
+                        <span
+                          className={cn(
+                            "text-sm font-bold tabular-nums",
+                            totalPercentage > 100.01
+                              ? "text-red-500"
+                              : totalPercentage < 99.99
+                              ? "text-amber-500"
+                              : "text-green-600"
+                          )}
+                        >
+                          {totalPercentage.toFixed(1)}%
+                          {totalPercentage > 100.01 && (
+                            <span className="font-normal ml-1">
+                              — over by {(totalPercentage - 100).toFixed(1)}%
+                            </span>
+                          )}
+                          {totalPercentage < 99.99 && totalPercentage > 0 && (
+                            <span className="font-normal ml-1">
+                              — {(100 - totalPercentage).toFixed(1)}% unallocated
+                            </span>
+                          )}
+                        </span>
                       </div>
                     )}
-                    {formData.distribution_method === "points" && (
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={share.points_per_hour ?? ""}
-                          onChange={(e) =>
-                            updateShare(
-                              share.role_code,
-                              "points_per_hour",
-                              parseFloat(e.target.value) || 0
-                            )
-                          }
-                          className="w-24"
-                        />
-                        <span className="text-muted-foreground text-sm">pts / hr</span>
-                      </div>
-                    )}
-                    {(formData.distribution_method === "hours_weighted" ||
-                      formData.distribution_method === "equal_split") && (
-                      <p className="text-sm text-muted-foreground">
-                        Eligible for{" "}
-                        {formData.distribution_method === "hours_weighted"
-                          ? "hours-weighted"
-                          : "equal"}{" "}
-                        distribution
-                      </p>
-                    )}
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+                  </div>
+                )}
 
-        <DialogFooter className="flex justify-between pt-4 border-t">
-          <div>
-            {step > 1 && (
-              <Button variant="outline" onClick={() => setStep((s) => s - 1)} disabled={isLoading}>
-                <ChevronLeft className="w-4 h-4 mr-1" />
-                Back
-              </Button>
-            )}
+                {validationErrors.share_total && (
+                  <p className="text-xs text-red-500 mt-1">{validationErrors.share_total}</p>
+                )}
+
+                {validationErrors.points && (
+                  <p className="text-xs text-red-500 mt-1">{validationErrors.points}</p>
+                )}
+
+                {/* Add receiving role */}
+                {availableReceivingRoles.length > 0 && (
+                  <div className="mt-2">
+                    <Select onValueChange={(v) => addRoleShare(v)}>
+                      <SelectTrigger className="w-full">
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add receiving role...</span>
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableReceivingRoles.map((role) => (
+                          <SelectItem key={role.code} value={role.code}>
+                            {role.code} — {role.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            </section>
           </div>
 
-          <div className="flex gap-2">
+          <DialogFooter className="pt-4 border-t">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
               Cancel
             </Button>
-            {step < TOTAL_STEPS ? (
-              <Button
-                onClick={() => setStep((s) => s + 1)}
-                disabled={!canProceed() || isLoading}
-                className="bg-teal-500 hover:bg-teal-600 text-white"
-              >
-                Next
-                <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
-            ) : (
-              <Button
-                onClick={() => onSubmit(formData)}
-                disabled={!canProceed() || isLoading}
-                className="bg-teal-500 hover:bg-teal-600 text-white"
-              >
-                {isLoading ? "Saving…" : pool ? "Update Pool" : "Create Pool"}
-              </Button>
-            )}
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            <Button
+              onClick={handleSubmit}
+              disabled={!isValid || isLoading}
+              className="bg-teal-500 hover:bg-teal-600 text-white"
+            >
+              {isLoading ? "Saving..." : pool ? "Update Pool" : "Create Pool"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Under-100% confirmation dialog */}
+      <AlertDialog open={showUnderWarning} onOpenChange={setShowUnderWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unallocated Pool Share</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your pool shares add up to {totalPercentage.toFixed(1)}%. The remaining{" "}
+              {(100 - totalPercentage).toFixed(1)}% will not be distributed to any role. Save anyway?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Go Back</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmUnderWarning}
+              className="bg-teal-500 hover:bg-teal-600 text-white"
+            >
+              Save Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

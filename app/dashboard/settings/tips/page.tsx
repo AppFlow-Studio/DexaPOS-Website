@@ -30,7 +30,9 @@ import {
   useDeleteTipOutRule,
   useToggleTipOutRule,
   useRoles,
+  useValidateTipPoolConfig,
 } from "./hooks/useTipSettings";
+import { toast } from "sonner";
 import { TipPoolDialog, type TipPoolFormData } from "./components/TipPoolDialog";
 import { TipOutRuleDialog, type TipOutRuleFormData } from "./components/TipOutRuleDialog";
 import { PoolCard } from "./components/PoolCard";
@@ -49,47 +51,86 @@ function PreviewPanel({
   roles: Role[];
 }) {
   const [open, setOpen] = useState(false);
-  // Per-role: {roleCode -> {tips, hours, sales}}
-  const [inputs, setInputs] = useState<Record<string, { tips: number; hours: number; sales: number }>>({});
+  // Per-role: {roleCode -> {chargedTips, cashTips, hours, sales}}
+  const [inputs, setInputs] = useState<
+    Record<string, { chargedTips: number; cashTips: number; hours: number; sales: number }>
+  >({});
 
-  const setInput = (code: string, field: "tips" | "hours" | "sales", value: number) => {
+  const setInput = (code: string, field: "chargedTips" | "cashTips" | "hours" | "sales", value: number) => {
     setInputs((prev) => ({
       ...prev,
-      [code]: { ...{ tips: 0, hours: 0, sales: 0 }, ...(prev[code] || {}), [field]: value },
+      [code]: { chargedTips: 0, cashTips: 0, hours: 0, sales: 0, ...(prev[code] || {}), [field]: value },
     }));
   };
 
   const today = new Date().toISOString().split("T")[0];
 
+  // Filter to active pools — already sorted by priority ASC, created_at ASC from server query
   const activePools = pools.filter(
-    (p) => p.is_active && p.effective_date <= today && (!( p as any).end_date || (p as any).end_date >= today)
+    (p) =>
+      p.is_active &&
+      p.effective_date <= today &&
+      (!(p as any).end_date || (p as any).end_date >= today)
   );
+
   const activeRules = rules.filter(
     (r) => r.is_active && r.effective_date <= today && (!r.end_date || r.end_date >= today)
   );
 
   // Simulate calculation
-  const simulation: Record<string, {
-    own: number; poolContrib: number; poolRecv: number; tipOutGiven: number; tipOutRecv: number; net: number;
-  }> = {};
+  const simulation: Record<
+    string,
+    {
+      own: number;
+      poolContrib: number;
+      poolRecv: number;
+      tipOutGiven: number;
+      tipOutRecv: number;
+      tipOutClipped: number;
+      net: number;
+    }
+  > = {};
 
   for (const code of Object.keys(inputs)) {
-    simulation[code] = { own: inputs[code].tips, poolContrib: 0, poolRecv: 0, tipOutGiven: 0, tipOutRecv: 0, net: 0 };
+    const emp = inputs[code];
+    const totalTips = emp.chargedTips + emp.cashTips;
+    simulation[code] = {
+      own: totalTips,
+      poolContrib: 0,
+      poolRecv: 0,
+      tipOutGiven: 0,
+      tipOutRecv: 0,
+      tipOutClipped: 0,
+      net: 0,
+    };
   }
 
+  // Pool contributions & distribution (priority-ordered)
   for (const pool of activePools) {
     let poolAmount = 0;
     for (const code of pool.contributing_role_codes) {
       const emp = inputs[code];
       if (!emp) continue;
-      const contrib = emp.tips * (pool.source_percentage / 100);
+
+      // Differentiate tip source
+      let tipBase: number;
+      if (pool.tip_source === "charged_tips") {
+        tipBase = emp.chargedTips;
+      } else if (pool.tip_source === "cash_only") {
+        tipBase = emp.cashTips;
+      } else {
+        // all_tips
+        tipBase = emp.chargedTips + emp.cashTips;
+      }
+
+      const contrib = tipBase * (pool.source_percentage / 100);
       if (simulation[code]) simulation[code].poolContrib += contrib;
       poolAmount += contrib;
     }
 
     for (const share of pool.tip_pool_role_shares) {
       const code = share.role_code;
-      if (!simulation[code]) continue;
+      if (!simulation[code] || !share.is_eligible) continue;
 
       if (pool.distribution_method === "percentage" && share.share_percentage != null) {
         simulation[code].poolRecv += poolAmount * (share.share_percentage / 100);
@@ -102,8 +143,13 @@ function PreviewPanel({
         const totalHours = pool.tip_pool_role_shares
           .filter((s) => s.is_eligible && inputs[s.role_code])
           .reduce((sum, s) => sum + (inputs[s.role_code]?.hours || 0), 0);
-        if (totalHours > 0) simulation[code].poolRecv += poolAmount * ((inputs[code].hours || 0) / totalHours);
-      } else if (pool.distribution_method === "points" && share.points_per_hour != null && inputs[code]) {
+        if (totalHours > 0)
+          simulation[code].poolRecv += poolAmount * ((inputs[code].hours || 0) / totalHours);
+      } else if (
+        pool.distribution_method === "points" &&
+        share.points_per_hour != null &&
+        inputs[code]
+      ) {
         const totalPoints = pool.tip_pool_role_shares
           .filter((s) => s.is_eligible && inputs[s.role_code])
           .reduce((sum, s) => sum + (inputs[s.role_code]?.hours || 0) * (s.points_per_hour || 0), 0);
@@ -115,26 +161,41 @@ function PreviewPanel({
     }
   }
 
+  // Tip-out rules with clipping
   for (const rule of activeRules) {
     const giverInput = inputs[rule.from_role_code];
     if (!giverInput || !simulation[rule.from_role_code]) continue;
-    let given = 0;
-    if (rule.tip_out_type === "percentage_of_tips") given = giverInput.tips * (rule.tip_out_value / 100);
-    else if (rule.tip_out_type === "percentage_of_sales") given = giverInput.sales * (rule.tip_out_value / 100);
-    else given = rule.tip_out_value;
 
-    simulation[rule.from_role_code].tipOutGiven += given;
+    let given = 0;
+    if (rule.tip_out_type === "percentage_of_tips") {
+      given = (giverInput.chargedTips + giverInput.cashTips) * (rule.tip_out_value / 100);
+    } else if (rule.tip_out_type === "percentage_of_sales") {
+      given = giverInput.sales * (rule.tip_out_value / 100);
+    } else {
+      given = rule.tip_out_value;
+    }
+
+    // Non-negative floor: can't give more than what you have remaining
+    const giver = simulation[rule.from_role_code];
+    const remaining = giver.own - giver.poolContrib + giver.poolRecv - giver.tipOutGiven;
+    const capped = Math.max(0, Math.min(given, remaining));
+    const clipped = given - capped;
+
+    giver.tipOutGiven += capped;
+    giver.tipOutClipped += clipped;
 
     if (simulation[rule.to_role_code]) {
-      simulation[rule.to_role_code].tipOutRecv += given;
+      simulation[rule.to_role_code].tipOutRecv += capped;
     }
   }
 
+  // Net calculation
   for (const code of Object.keys(simulation)) {
     const s = simulation[code];
     s.net = s.own - s.poolContrib + s.poolRecv - s.tipOutGiven + s.tipOutRecv;
   }
 
+  const hasClipping = Object.values(simulation).some((s) => s.tipOutClipped > 0);
   const fmt = (n: number) => `$${n.toFixed(2)}`;
 
   return (
@@ -153,30 +214,44 @@ function PreviewPanel({
       {open && (
         <Card className="p-5 space-y-5">
           <p className="text-sm text-muted-foreground">
-            Enter hypothetical amounts per role to see how tips would be distributed
-            with your current configuration.
+            Enter hypothetical amounts per role to see how tips would be distributed with your
+            current configuration.
           </p>
 
           {roles.length === 0 ? (
             <p className="text-sm text-muted-foreground">No roles available.</p>
           ) : (
             <div className="space-y-3">
-              <div className="grid grid-cols-4 gap-2 text-xs font-medium text-muted-foreground pb-1 border-b">
+              <div className="grid grid-cols-5 gap-2 text-xs font-medium text-muted-foreground pb-1 border-b">
                 <span>Role</span>
-                <span>Tips Earned ($)</span>
+                <span>Charged Tips ($)</span>
+                <span>Cash Tips ($)</span>
                 <span>Hours Worked</span>
                 <span>Gross Sales ($)</span>
               </div>
               {roles.map((role) => (
-                <div key={role.code} className="grid grid-cols-4 gap-2 items-center">
+                <div key={role.code} className="grid grid-cols-5 gap-2 items-center">
                   <Label className="text-sm font-medium">{role.code}</Label>
                   <Input
                     type="number"
                     min="0"
                     step="0.01"
                     placeholder="0.00"
-                    value={inputs[role.code]?.tips || ""}
-                    onChange={(e) => setInput(role.code, "tips", parseFloat(e.target.value) || 0)}
+                    value={inputs[role.code]?.chargedTips || ""}
+                    onChange={(e) =>
+                      setInput(role.code, "chargedTips", parseFloat(e.target.value) || 0)
+                    }
+                    className="h-8 text-sm"
+                  />
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={inputs[role.code]?.cashTips || ""}
+                    onChange={(e) =>
+                      setInput(role.code, "cashTips", parseFloat(e.target.value) || 0)
+                    }
                     className="h-8 text-sm"
                   />
                   <Input
@@ -185,7 +260,9 @@ function PreviewPanel({
                     step="0.5"
                     placeholder="0"
                     value={inputs[role.code]?.hours || ""}
-                    onChange={(e) => setInput(role.code, "hours", parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      setInput(role.code, "hours", parseFloat(e.target.value) || 0)
+                    }
                     className="h-8 text-sm"
                   />
                   <Input
@@ -194,7 +271,9 @@ function PreviewPanel({
                     step="0.01"
                     placeholder="0.00"
                     value={inputs[role.code]?.sales || ""}
-                    onChange={(e) => setInput(role.code, "sales", parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      setInput(role.code, "sales", parseFloat(e.target.value) || 0)
+                    }
                     className="h-8 text-sm"
                   />
                 </div>
@@ -215,6 +294,7 @@ function PreviewPanel({
                       <th className="text-right pb-2">Pool In</th>
                       <th className="text-right pb-2">T-Out Given</th>
                       <th className="text-right pb-2">T-Out Recv</th>
+                      {hasClipping && <th className="text-right pb-2">Clipped</th>}
                       <th className="text-right pb-2 font-bold text-foreground">Net</th>
                     </tr>
                   </thead>
@@ -223,16 +303,26 @@ function PreviewPanel({
                       <tr key={code} className="border-b last:border-0">
                         <td className="py-1.5 font-medium">{code}</td>
                         <td className="text-right py-1.5">{fmt(s.own)}</td>
-                        <td className="text-right py-1.5 text-red-600">−{fmt(s.poolContrib)}</td>
-                        <td className="text-right py-1.5 text-green-600">+{fmt(s.poolRecv)}</td>
-                        <td className="text-right py-1.5 text-red-600">−{fmt(s.tipOutGiven)}</td>
-                        <td className="text-right py-1.5 text-green-600">+{fmt(s.tipOutRecv)}</td>
+                        <td className="text-right py-1.5 text-red-600">{s.poolContrib > 0 ? `−${fmt(s.poolContrib)}` : fmt(0)}</td>
+                        <td className="text-right py-1.5 text-green-600">{s.poolRecv > 0 ? `+${fmt(s.poolRecv)}` : fmt(0)}</td>
+                        <td className="text-right py-1.5 text-red-600">{s.tipOutGiven > 0 ? `−${fmt(s.tipOutGiven)}` : fmt(0)}</td>
+                        <td className="text-right py-1.5 text-green-600">{s.tipOutRecv > 0 ? `+${fmt(s.tipOutRecv)}` : fmt(0)}</td>
+                        {hasClipping && (
+                          <td className="text-right py-1.5 text-amber-600">
+                            {s.tipOutClipped > 0 ? fmt(s.tipOutClipped) : "—"}
+                          </td>
+                        )}
                         <td className="text-right py-1.5 font-bold">{fmt(s.net)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+              {hasClipping && (
+                <p className="text-xs text-amber-600 mt-1">
+                  Clipped: tip-out amounts were reduced to prevent net tips going below zero.
+                </p>
+              )}
             </div>
           )}
         </Card>
@@ -281,13 +371,56 @@ export default function TipsSettingsPage() {
   // Roles (merchant-only, HQ roles filtered server-side)
   const { data: roles = [] } = useRoles(clerkOrgId);
 
+  // Post-save validation
+  const validateMutation = useValidateTipPoolConfig();
+
+  const runPostSaveValidation = (poolId: string) => {
+    if (!clerkOrgId) return;
+    validateMutation.mutate(
+      { clerkOrgId, configId: poolId },
+      {
+        onSuccess: (data) => {
+          if (!data) return;
+          const warnings = data.issues?.filter((i: any) => i.severity === "warning") || [];
+          if (warnings.length > 0) {
+            toast.warning(
+              `Pool saved with warnings: ${warnings.map((w: any) => w.message).join("; ")}`,
+              { duration: 8000 }
+            );
+          }
+          const errors = data.issues?.filter((i: any) => i.severity === "error") || [];
+          if (errors.length > 0) {
+            toast.error(
+              `Pool config issues detected: ${errors.map((e: any) => e.message).join("; ")}`,
+              { duration: 8000 }
+            );
+          }
+        },
+      }
+    );
+  };
+
   // Pool handlers
   const handleCreatePool = (data: TipPoolFormData) =>
-    createPoolMutation.mutate({ clerkOrgId: clerkOrgId!, locationId: selectedLocationId!, input: data });
+    createPoolMutation.mutate(
+      { clerkOrgId: clerkOrgId!, locationId: selectedLocationId!, input: data },
+      {
+        onSuccess: (result) => {
+          if (result?.id) runPostSaveValidation(result.id);
+        },
+      }
+    );
 
   const handleUpdatePool = (data: TipPoolFormData) => {
     if (editingPool)
-      updatePoolMutation.mutate({ clerkOrgId: clerkOrgId!, configId: editingPool.id, input: data });
+      updatePoolMutation.mutate(
+        { clerkOrgId: clerkOrgId!, configId: editingPool.id, input: data },
+        {
+          onSuccess: () => {
+            runPostSaveValidation(editingPool.id);
+          },
+        }
+      );
   };
 
   // Rule handlers
@@ -371,6 +504,7 @@ export default function TipsSettingsPage() {
                 key={pool.id}
                 pool={pool}
                 roles={roles}
+                poolCount={pools.length}
                 onEdit={(p) => { setEditingPool(p); setIsPoolDialogOpen(true); }}
                 onDelete={setPoolToDelete}
                 onToggle={(id, active) => togglePoolMutation.mutate({ clerkOrgId: clerkOrgId!, configId: id, isActive: active })}
@@ -435,6 +569,7 @@ export default function TipsSettingsPage() {
         onOpenChange={(open) => { if (!open) closePoolDialog(); else setIsPoolDialogOpen(true); }}
         pool={editingPool}
         roles={roles}
+        poolCount={pools.length}
         isLoading={createPoolMutation.isPending || updatePoolMutation.isPending}
         onSubmit={editingPool ? handleUpdatePool : handleCreatePool}
       />
@@ -444,8 +579,11 @@ export default function TipsSettingsPage() {
         onOpenChange={(open) => { if (!open) closeRuleDialog(); else setIsRuleDialogOpen(true); }}
         rule={editingRule}
         roles={roles}
+        existingRules={rules}
+        clerkOrgId={clerkOrgId}
         isLoading={createRuleMutation.isPending || updateRuleMutation.isPending}
         onSubmit={editingRule ? handleUpdateRule : handleCreateRule}
+        onDeactivateRule={(ruleId) => toggleRuleMutation.mutate({ clerkOrgId: clerkOrgId!, ruleId, isActive: false })}
       />
 
       {/* DELETE POOL */}
