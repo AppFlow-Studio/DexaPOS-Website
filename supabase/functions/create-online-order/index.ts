@@ -77,6 +77,9 @@ interface CreateOnlineOrderRequest {
   customer_name?: string
   customer_phone?: string
   customer_email?: string
+  // Client-supplied idempotency key. Header `Idempotency-Key` takes precedence over this.
+  // Reused across retries of the same logical order so the server dedupes.
+  transaction_reference_id?: string
 }
 
 // ============================================================================
@@ -85,7 +88,7 @@ interface CreateOnlineOrderRequest {
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, idempotency-key',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
@@ -180,6 +183,47 @@ Deno.serve(async (req: Request): Promise<Response> => {
   })
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+  // ---- Step 1.5: Idempotency short-circuit ----
+  // If the client supplied a key (header preferred, body field as fallback) and we already
+  // created an order for that key, return the existing order immediately. This prevents
+  // duplicate orders from network retries, customer "Place Order" double-clicks, and POS
+  // tablet offline-queue replays. Backed by the partial unique index on
+  // online_orders(provider, provider_order_id) — see migration 20260425010000.
+  const clientIdempotencyKey =
+    req.headers.get('idempotency-key') ?? body.transaction_reference_id ?? null
+
+  if (clientIdempotencyKey) {
+    const { data: existing } = await supabase
+      .from('online_orders')
+      .select('order_id')
+      .eq('provider', 'website')
+      .eq('provider_order_id', clientIdempotencyKey)
+      .maybeSingle()
+
+    if (existing?.order_id) {
+      const { data: ord } = await supabase
+        .from('orders')
+        .select('order_number, display_number')
+        .eq('id', existing.order_id)
+        .maybeSingle()
+
+      logEvent('IDEMPOTENT', 'Returning existing order for replayed request', {
+        key: clientIdempotencyKey,
+        orderId: existing.order_id,
+      })
+
+      return successResponse({
+        requires_redirect: false,
+        order_id: existing.order_id,
+        order_number: ord?.order_number ?? null,
+        display_number: ord?.display_number ?? null,
+        estimated_time: null,
+        auto_accepted: false,
+        idempotent: true,
+      })
+    }
+  }
 
   // ---- Step 2: Load session (if authenticated) + store config ----
   let session: any = null
@@ -555,8 +599,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   // ---- Step 9: Build frozen order data (RPC params snapshot) ----
+  // Idempotency key precedence: client header → client body field → server-generated.
+  // Server-generated fallback is UUID-suffixed so two concurrent guest requests in the
+  // same millisecond cannot collide on the unique index.
   const sessionPrefix = session?.id ? session.id.slice(0, 8) : 'guest'
-  const transactionReferenceId = `dexa-${sessionPrefix}-${Date.now()}`
+  const transactionReferenceId =
+    clientIdempotencyKey ?? `dexa-${sessionPrefix}-${crypto.randomUUID()}`
 
   const deliveryAddr = body.delivery_address
     ? buildDeliveryAddress(
@@ -621,6 +669,41 @@ Deno.serve(async (req: Request): Promise<Response> => {
   )
 
   if (rpcError) {
+    // Race-condition fallback: two concurrent retries with the same client key both
+    // missed the Step 1.5 SELECT, both proceeded to insert, the second hit the unique
+    // index. Treat as idempotent success — refetch and return the existing order.
+    if (rpcError.code === '23505' && clientIdempotencyKey) {
+      const { data: existing } = await supabase
+        .from('online_orders')
+        .select('order_id')
+        .eq('provider', 'website')
+        .eq('provider_order_id', clientIdempotencyKey)
+        .maybeSingle()
+
+      if (existing?.order_id) {
+        const { data: ord } = await supabase
+          .from('orders')
+          .select('order_number, display_number')
+          .eq('id', existing.order_id)
+          .maybeSingle()
+
+        logEvent('IDEMPOTENT', 'Returning existing order after unique-violation race', {
+          key: clientIdempotencyKey,
+          orderId: existing.order_id,
+        })
+
+        return successResponse({
+          requires_redirect: false,
+          order_id: existing.order_id,
+          order_number: ord?.order_number ?? null,
+          display_number: ord?.display_number ?? null,
+          estimated_time: null,
+          auto_accepted: false,
+          idempotent: true,
+        })
+      }
+    }
+
     logError('RPC', 'process_online_order failed', rpcError)
     return errorResponse(
       'Failed to create order. Please try again.',
