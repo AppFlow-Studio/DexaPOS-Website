@@ -31,7 +31,9 @@
       "Bash(git -C \"c:/Users/saleh/OneDrive - Lebanese American University/Apps/Dexa/DexaPOS-Website\" log --oneline -10)",
       "Bash(git -C \"c:/Users/saleh/OneDrive - Lebanese American University/Apps/Dexa/DexaPOS-Website\" show --name-only b79ef0f)",
       "Bash(git -C \"c:/Users/saleh/OneDrive - Lebanese American University/Apps/Dexa/DexaPOS-Website\" diff HEAD~3 --name-only)",
-      "Bash(grep -E \"\\\\.tsx$|\\\\.ts$\")"
+      "Bash(grep -E \"\\\\.tsx$|\\\\.ts$\")",
+      "Bash(xargs grep *)",
+      "Read(//c/Users/HP i5/Desktop/**)"
     ]
   },
   "hooks": {

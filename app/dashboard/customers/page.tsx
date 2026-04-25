@@ -5,9 +5,10 @@ import { CustomerList } from "./components/CustomerList";
 import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Plus } from "lucide-react";
+import { Search, Plus, Megaphone } from "lucide-react";
 import { CustomerProfileSheet } from "./components/CustomerProfileSheet";
 import { CreateCustomerDialog } from "./components/CreateCustomerDialog";
+import { CreateCampaignDialog } from "./components/campaigns/CreateCampaignDialog";
 import type { CustomerListItem } from "@/types/customer";
 import { getCustomerDisplayName } from "@/types/customer";
 
@@ -18,6 +19,7 @@ export default function CustomersPage() {
     useState<CustomerListItem | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isCampaignOpen, setIsCampaignOpen] = useState(false);
 
   // Filter customers based on search term
   const filteredData = useMemo(() => {
@@ -59,6 +61,10 @@ export default function CustomersPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
+          <Button variant="outline" onClick={() => setIsCampaignOpen(true)}>
+            <Megaphone className="h-4 w-4 mr-2" />
+            Create Campaign
+          </Button>
           <Button onClick={() => setIsCreateOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             New Customer
@@ -81,6 +87,11 @@ export default function CustomersPage() {
       <CreateCustomerDialog
         open={isCreateOpen}
         onOpenChange={setIsCreateOpen}
+      />
+
+      <CreateCampaignDialog
+        open={isCampaignOpen}
+        onOpenChange={setIsCampaignOpen}
       />
     </div>
   );

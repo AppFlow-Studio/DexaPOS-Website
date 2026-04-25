@@ -10,6 +10,7 @@ import {
   GetMerchantMarketingCampaigns,
   DeleteMarketingCampaign,
   CreateMarketingCampaign,
+  CreateAndSendCampaign,
   GetMarketingCampaignRecipients,
   SendCampaignNow,
 } from "@/app/dashboard/actions/marketing";
@@ -179,6 +180,26 @@ export function useMarketingCampaignRecipients(campaignId: string | null) {
       campaignId ? GetMarketingCampaignRecipients(campaignId) : Promise.resolve([]),
     enabled: !!campaignId,
     staleTime: 1000 * 60 * 5,
+  });
+}
+
+/**
+ * Mutation: Create and send a campaign in one round trip
+ */
+export function useCreateAndSendCampaign() {
+  const { data: userInfo } = useUserInfo();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (variables: Omit<Parameters<typeof CreateAndSendCampaign>[0], "merchantId">) =>
+      CreateAndSendCampaign({
+        ...variables,
+        merchantId: userInfo?.members?.[0]?.organizations?.merchants?.id || "",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["merchant-marketing-campaigns"] });
+      queryClient.invalidateQueries({ queryKey: ["marketing-campaign-stats"] });
+    },
   });
 }
 

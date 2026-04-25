@@ -30,7 +30,6 @@ const DAYS_OF_WEEK = [
     { key: 'sunday',    label: 'Sunday',    short: 'Sun' },
 ] as const
 
-// Same-day options: 00:00 – 23:30 in 30-min steps
 const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
     const h = Math.floor(i / 2)
     const m = (i % 2) * 30
@@ -40,7 +39,6 @@ const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
     return { value, label: `${hour12}:${m.toString().padStart(2, '0')} ${ampm}` }
 })
 
-// Overnight close options: 00:00 – 06:00 (next day) in 30-min steps
 const OVERNIGHT_CLOSE_OPTIONS = Array.from({ length: 13 }, (_, i) => {
     const totalMinutes = i * 30
     const h = Math.floor(totalMinutes / 60)
@@ -103,7 +101,6 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
     const handleSave = async () => {
         setIsSaving(true)
 
-        // Track latest overnight close for the tip system's business_day_end_hour
         let latestCloseAfterMidnight = 0
         DAYS_OF_WEEK.forEach(({ key }) => {
             const day = businessHours[key as keyof BusinessHours]
@@ -172,14 +169,14 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
     return (
         <div className="space-y-4">
             <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                     <div>
                         <CardTitle className="text-base">Business Hours</CardTitle>
                         <CardDescription>Set when this location is open for business</CardDescription>
                     </div>
                     {!isEditing && (
                         <Button variant="ghost" size="sm" onClick={handleStartEdit}>
-                            <Edit className="h-4 w-4 mr-1" />
+                            <Edit className="h-4 w-4 mr-1.5" />
                             Edit
                         </Button>
                     )}
@@ -187,16 +184,16 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
 
                 <CardContent>
                     {isEditing ? (
-                        <div className="space-y-3 animate-in fade-in duration-200">
+                        <div className="space-y-2 animate-in fade-in duration-200">
                             {/* Toolbar */}
-                            <div className="flex justify-end">
+                            <div className="flex justify-end mb-3">
                                 <Button variant="outline" size="sm" onClick={handleCopyToAll} className="gap-1.5">
                                     <Copy className="h-3.5 w-3.5" />
                                     Copy Monday to all
                                 </Button>
                             </div>
 
-                            {/* Day rows — matches AdminLocationDetailSheet layout exactly */}
+                            {/* Day rows — two-line layout: toggle row + time row */}
                             {DAYS_OF_WEEK.map(({ key, label }) => {
                                 const day = getDayHours(key)
                                 const isOvernight = day.is_overnight ?? false
@@ -212,67 +209,88 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
                                 }
 
                                 return (
-                                    <div key={key} className={cn('rounded-xl border p-4', day.is_closed && 'bg-muted/40')}>
-                                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                                            {/* Left: day name + open/closed toggle */}
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex items-center gap-2 w-32 shrink-0">
-                                                    <span className="text-sm font-medium">{label}</span>
-                                                    {isOvernight && !day.is_closed && (
-                                                        <Badge variant="outline" className="text-xs text-orange-600 border-orange-300 bg-orange-50 gap-1 px-1.5">
-                                                            <Moon className="h-2.5 w-2.5" />
-                                                            Overnight
-                                                        </Badge>
-                                                    )}
-                                                </div>
-                                                <Switch
-                                                    checked={!day.is_closed}
-                                                    onCheckedChange={(checked) => handleDayChange(key, { is_closed: !checked })}
-                                                />
-                                                <span className="text-sm text-muted-foreground">
+                                    <div
+                                        key={key}
+                                        className={cn(
+                                            'rounded-xl border px-4 py-3 transition-colors',
+                                            day.is_closed ? 'bg-muted/40' : 'bg-card'
+                                        )}
+                                    >
+                                        {/* Row 1: day name + open/closed toggle */}
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm font-semibold w-24 shrink-0">
+                                                    {label}
+                                                </span>
+                                                {isOvernight && !day.is_closed && (
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="text-[10px] text-orange-600 border-orange-300 bg-orange-50 gap-1 px-1.5 h-5"
+                                                    >
+                                                        <Moon className="h-2.5 w-2.5" />
+                                                        Overnight
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs text-muted-foreground">
                                                     {day.is_closed ? 'Closed' : 'Open'}
                                                 </span>
+                                                <Switch
+                                                    checked={!day.is_closed}
+                                                    onCheckedChange={(checked) =>
+                                                        handleDayChange(key, { is_closed: !checked })
+                                                    }
+                                                />
                                             </div>
+                                        </div>
 
-                                            {/* Right: time pickers + overnight toggle */}
-                                            <div className={cn(
-                                                'flex flex-col gap-2 sm:flex-row sm:items-center',
-                                                day.is_closed && 'pointer-events-none opacity-40'
-                                            )}>
+                                        {/* Row 2: time pickers — only when open */}
+                                        {!day.is_closed && (
+                                            <div className="mt-3 flex items-center gap-2 flex-wrap">
                                                 <Select
                                                     value={day.open}
-                                                    onValueChange={(value) => handleDayChange(key, { open: value })}
-                                                    disabled={day.is_closed}
+                                                    onValueChange={(value) =>
+                                                        handleDayChange(key, { open: value })
+                                                    }
                                                 >
-                                                    <SelectTrigger className="w-full sm:w-40"><SelectValue /></SelectTrigger>
+                                                    <SelectTrigger className="flex-1 min-w-27.5 h-8 text-sm">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
                                                     <SelectContent>
                                                         {TIME_OPTIONS.map((opt) => (
-                                                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                                            <SelectItem key={opt.value} value={opt.value}>
+                                                                {opt.label}
+                                                            </SelectItem>
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
 
-                                                <span className="text-sm text-muted-foreground text-center">to</span>
+                                                <span className="text-xs text-muted-foreground shrink-0">to</span>
 
                                                 <Select
                                                     value={day.close}
-                                                    onValueChange={(value) => handleDayChange(key, { close: value })}
-                                                    disabled={day.is_closed}
+                                                    onValueChange={(value) =>
+                                                        handleDayChange(key, { close: value })
+                                                    }
                                                 >
-                                                    <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
+                                                    <SelectTrigger className="flex-1 min-w-27.5 h-8 text-sm">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
                                                     <SelectContent>
                                                         {closeOptions.map((opt) => (
-                                                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                                            <SelectItem key={opt.value} value={opt.value}>
+                                                                {opt.label}
+                                                            </SelectItem>
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
 
-                                                <div className="flex items-center gap-1.5">
+                                                <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                                                     <Switch
                                                         id={`overnight-${key}`}
                                                         checked={isOvernight}
                                                         onCheckedChange={handleOvernightToggle}
-                                                        disabled={day.is_closed}
                                                     />
                                                     <Label
                                                         htmlFor={`overnight-${key}`}
@@ -282,13 +300,13 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
                                                     </Label>
                                                 </div>
                                             </div>
-                                        </div>
+                                        )}
                                     </div>
                                 )
                             })}
 
-                            {/* Actions */}
-                            <div className="flex items-center gap-2 pt-1">
+                            {/* Save / Cancel */}
+                            <div className="flex items-center gap-2 pt-2">
                                 <Button onClick={handleSave} disabled={isSaving} size="sm">
                                     {isSaving
                                         ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
@@ -311,15 +329,16 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
                                         key={key}
                                         className="flex items-center justify-between py-2.5 border-b last:border-0"
                                     >
-                                        <div className="flex items-center gap-2 w-32 shrink-0">
-                                            <span className="text-sm font-medium">{label}</span>
-                                        </div>
+                                        <span className="text-sm font-medium w-28 shrink-0">{label}</span>
                                         {day.is_closed ? (
                                             <Badge variant="secondary" className="text-xs">Closed</Badge>
                                         ) : (
                                             <div className="flex items-center gap-2">
                                                 {day.is_overnight && (
-                                                    <Badge variant="outline" className="text-xs text-orange-600 border-orange-300 bg-orange-50 gap-1 px-1.5">
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="text-xs text-orange-600 border-orange-300 bg-orange-50 gap-1 px-1.5"
+                                                    >
                                                         <Moon className="h-2.5 w-2.5" />
                                                         Overnight
                                                     </Badge>
@@ -338,7 +357,7 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
                 </CardContent>
             </Card>
 
-            {/* Weekly visual preview */}
+            {/* Weekly visual overview */}
             {!isEditing && (
                 <Card>
                     <CardHeader className="pb-2">
@@ -353,8 +372,6 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
                                 const closeHour = day.close ? parseInt(day.close.split(':')[0]) : 17
                                 const isOvernight = day.is_overnight ?? false
 
-                                // For overnight: bar runs from openHour → midnight (overflow hidden)
-                                // plus a second segment from midnight → closeHour at the top
                                 const topPct = (openHour / 24) * 100
                                 const heightPct = isOvernight
                                     ? ((24 - openHour) / 24) * 100
@@ -367,7 +384,6 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
                                         <div className="h-24 bg-muted rounded relative overflow-hidden">
                                             {!day.is_closed && (
                                                 <>
-                                                    {/* Main block (open → midnight or open → close) */}
                                                     <div
                                                         className={cn(
                                                             'absolute left-0 right-0 rounded',
@@ -375,7 +391,6 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
                                                         )}
                                                         style={{ top: `${topPct}%`, height: `${heightPct}%` }}
                                                     />
-                                                    {/* Overnight wrap segment (midnight → close next day) */}
                                                     {isOvernight && (
                                                         <div
                                                             className="absolute left-0 right-0 top-0 rounded bg-orange-400/40"

@@ -176,8 +176,10 @@ export default function MenuDetailPage() {
     clerkOrgId,
     selectedLocationId || ""
   );
-  const canUploadToOrderOut =
-    !isAllLocations && !!orderOutStatus?.data?.hasRestaurant;
+  const hasOrderOutRestaurant = !!orderOutStatus?.data?.hasRestaurant;
+  // Show the tab whenever a specific location is selected so users get guidance
+  // even before they've connected OrderOut.
+  const showOrderOutTab = !isAllLocations;
 
   // Sync status for OrderOut tab indicator
   const { data: syncStatusResult } = useOrderOutMenuSync(
@@ -193,7 +195,7 @@ export default function MenuDetailPage() {
   const syncData = syncStatusResult?.data;
   const diffData = diffResult?.data ?? null;
   const orderOutTabDot = (() => {
-    if (!canUploadToOrderOut || !syncData?.lastSync) return null;
+    if (!hasOrderOutRestaurant || !syncData?.lastSync) return null;
     if (syncData.lastSync.status === "failed") return "red";
     if (diffData?.hasChanges) return "amber";
     if (syncData.lastSync.status === "success") return "green";
@@ -1099,7 +1101,7 @@ export default function MenuDetailPage() {
             )}
           </TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
-          {canUploadToOrderOut && (
+          {showOrderOutTab && (
             <TabsTrigger value="orderout" className="flex items-center gap-1.5">
               OrderOut
               {orderOutTabDot && (
@@ -1218,13 +1220,14 @@ export default function MenuDetailPage() {
           />
         </TabsContent>
 
-        {canUploadToOrderOut && (
+        {showOrderOutTab && (
           <TabsContent value="orderout" className="space-y-4">
             <MenuOrderOutTab
               menuId={menuId}
               locationId={selectedLocationId || ""}
               clerkOrgId={clerkOrgId}
               menuName={menu.name}
+              isConfigured={hasOrderOutRestaurant}
             />
           </TabsContent>
         )}
