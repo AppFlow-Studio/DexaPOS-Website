@@ -44,6 +44,6 @@ ADM-006-007-STATUS.md
 
 # clerk configuration (can include secrets)
 /.clerk/
-
+.mcp.json
 # Sentry Config File
 .env.sentry-build-plugin

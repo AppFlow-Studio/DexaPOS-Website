@@ -33,7 +33,11 @@
       "Bash(git -C \"c:/Users/saleh/OneDrive - Lebanese American University/Apps/Dexa/DexaPOS-Website\" diff HEAD~3 --name-only)",
       "Bash(grep -E \"\\\\.tsx$|\\\\.ts$\")",
       "Bash(xargs grep *)",
-      "Read(//c/Users/HP i5/Desktop/**)"
+      "Read(//c/Users/HP i5/Desktop/**)",
+      "mcp__supabase__execute_sql"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\HP i5\\Desktop\\mdptech\\DexaPOS-website\\DexaPOS-Website\\tasks"
     ]
   },
   "hooks": {
