@@ -18,6 +18,7 @@ import {
   BottomSheetTitle,
   BottomSheetTrigger,
   BottomSheetBody,
+  BottomSheetFooter,
 } from "@/components/ui/bottom-sheet";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -79,14 +80,18 @@ export function MenuItemPicker({
             )}
           </Button>
         </BottomSheetTrigger>
-        <BottomSheetContent height="auto" className="sm:max-w-md mx-auto">
+
+        {/* Fixed-height sheet so the flex layout + footer are always visible */}
+        <BottomSheetContent height="95" className="sm:max-w-md mx-auto">
           <BottomSheetHeader>
             <BottomSheetTitle>{label}</BottomSheetTitle>
           </BottomSheetHeader>
-          <BottomSheetBody className="mt-4">
+
+          {/* Scrollable body — CommandList has no inner scroll; the body handles it */}
+          <BottomSheetBody className="flex-1 overflow-y-auto">
             <Command>
               <CommandInput placeholder="Search menu items" />
-              <CommandList className="max-h-[50vh]">
+              <CommandList className="max-h-none overflow-visible">
                 <CommandEmpty>{emptyLabel}</CommandEmpty>
                 <CommandGroup>
                   {options.map((opt) => {
@@ -110,47 +115,56 @@ export function MenuItemPicker({
               </CommandList>
             </Command>
 
-          {selected.length > 0 && (
-            <div className="mt-4 pt-4 border-t">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium">
-                  Selected ({selected.length})
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onChange([])}
-                  className="h-7 text-xs"
-                >
-                  Clear all
-                </Button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {selected.map((opt) => (
-                  <Badge
-                    key={opt.id}
-                    variant="secondary"
-                    className="gap-1 pr-1"
+            {selected.length > 0 && (
+              <div className="mt-4 pt-4 border-t">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">
+                    Selected ({selected.length})
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onChange([])}
+                    className="h-7 text-xs"
                   >
-                    {opt.name}
-                    <button
-                      type="button"
-                      className="ml-1 rounded-full hover:bg-muted p-0.5"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleValue(opt.id);
-                      }}
+                    Clear all
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {selected.map((opt) => (
+                    <Badge
+                      key={opt.id}
+                      variant="secondary"
+                      className="gap-1 pr-1"
                     >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
+                      {opt.name}
+                      <button
+                        type="button"
+                        className="ml-1 rounded-full hover:bg-muted p-0.5"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleValue(opt.id);
+                        }}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
           </BottomSheetBody>
+
+          {/* Always-visible footer with Done button */}
+          <BottomSheetFooter>
+            <Button className="w-full" onClick={() => setOpen(false)}>
+              Done
+            </Button>
+          </BottomSheetFooter>
         </BottomSheetContent>
       </BottomSheet>
+
+      {/* Selected chips below the trigger button */}
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {selected.map((opt) => (

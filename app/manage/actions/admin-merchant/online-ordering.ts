@@ -25,6 +25,11 @@ import {
 import { uploadMerchantDocument, uploadOrganizationDocument } from '@/lib/cdn/server'
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'dexaposai.com'
+const SUPABASE_FUNCTIONS_URL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1`
+const SUPABASE_FUNCTIONS_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ??
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+  ''
 
 type MissingRequestFieldKey =
   | 'legalBusinessName'
@@ -83,6 +88,8 @@ interface PaymentDeviceSummary {
   id: string
   device_label: string | null
   tpn: string
+  whitelist_origins?: string[] | null
+  whitelist_synced_at?: string | null
   use_for_online_ordering: boolean
   is_active: boolean
   ftd_key_configured: boolean
@@ -225,12 +232,51 @@ interface OnlineOrderingSettings {
   convenienceFeeFlat?: number
 }
 
+async function getMerchantExternalMerchantId(
+  merchantId: string
+): Promise<string | null> {
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from('merchants')
+    .select('external_merchant_id')
+    .eq('id', merchantId)
+    .single()
+
+  if (error) {
+    console.error(
+      '[HQ_DEJAVOO_WHITELIST] Failed to read merchants.external_merchant_id:',
+      error
+    )
+    return null
+  }
+  const value = (data as { external_merchant_id?: string | null } | null)
+    ?.external_merchant_id
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
+}
+
+type WhitelistResult = {
+  success: boolean
+  error?: string
+  skipped?: 'missing_merchant_id' | true
+  domain?: string
+  allowedDomains?: string[]
+}
+
 async function whitelistDejavooDomain(
-  tpn: string,
-  storeSlug: string
-): Promise<{ success: boolean; error?: string; skipped?: boolean; domain?: string }> {
-  if (!tpn || !storeSlug) {
-    return { success: false, error: 'TPN and store slug are required' }
+  externalMerchantId: string | null,
+  storeSlug: string,
+  existingDomains: string[] = []
+): Promise<WhitelistResult> {
+  if (!externalMerchantId) {
+    return {
+      success: false,
+      skipped: 'missing_merchant_id',
+      error:
+        'Dejavoo Merchant ID is not configured for this merchant. Set it in the Online Store tab before enabling the storefront.',
+    }
+  }
+  if (!storeSlug) {
+    return { success: false, error: 'Store slug is required' }
   }
 
   const isDev = ROOT_DOMAIN.includes('localhost')
@@ -238,28 +284,73 @@ async function whitelistDejavooDomain(
     ? `http://${storeSlug}.localhost:3000`
     : `https://${storeSlug}.${ROOT_DOMAIN}`
 
-  const supabase = createServerSupabaseClient()
-  const { data, error } = await supabase.functions.invoke(
-    'dejavoo-whitelist-domain',
-    {
-      body: { tpn, storeSlug, storeDomain },
-    }
-  )
-
-  if (error) {
-    console.error('[HQ_DEJAVOO_WHITELIST] Edge invoke error:', error)
+  if (!SUPABASE_FUNCTIONS_URL || !SUPABASE_FUNCTIONS_KEY) {
     return {
       success: false,
-      error: `Domain whitelist invoke error: ${error.message}`,
+      error: 'Supabase function URL/key is not configured for whitelist sync.',
     }
   }
 
-  const result = (data || {}) as { success?: boolean; skipped?: boolean; error?: string }
-  return {
-    success: Boolean(result.success),
-    skipped: result.skipped,
-    error: result.error,
-    domain: storeDomain,
+  try {
+    const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/dejavoo-whitelist-domain`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_FUNCTIONS_KEY,
+        Authorization: `Bearer ${SUPABASE_FUNCTIONS_KEY}`,
+      },
+      body: JSON.stringify({
+        merchantId: externalMerchantId,
+        storeSlug,
+        storeDomain,
+        existingDomains,
+      }),
+      cache: 'no-store',
+    })
+
+    const responseText = await response.text()
+    let result: {
+      success?: boolean
+      skipped?: 'missing_merchant_id' | true
+      error?: string
+      allowedDomains?: string[]
+    } = {}
+
+    try {
+      result = responseText ? JSON.parse(responseText) : {}
+    } catch {
+      result = {}
+    }
+
+    if (!response.ok) {
+      console.error('[HQ_DEJAVOO_WHITELIST] Edge HTTP error:', response.status, responseText)
+      return {
+        success: false,
+        skipped: result.skipped,
+        error:
+          result.error ||
+          `Domain whitelist failed (${response.status})${responseText ? `: ${responseText}` : ''}`,
+      }
+    }
+
+    return {
+      success: Boolean(result.success),
+      skipped: result.skipped,
+      error: result.error,
+      domain: storeDomain,
+      allowedDomains: Array.isArray(result.allowedDomains)
+        ? result.allowedDomains.filter(
+            (value): value is string =>
+              typeof value === 'string' && value.trim().length > 0
+          )
+        : undefined,
+    }
+  } catch (error) {
+    console.error('[HQ_DEJAVOO_WHITELIST] Edge fetch error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Domain whitelist invoke error',
+    }
   }
 }
 
@@ -284,6 +375,27 @@ async function getSelectedLocationPaymentDevice(locationId: string) {
     devices.find((device) => device.is_active) ??
     null
   )
+}
+
+async function persistPaymentDeviceWhitelist(
+  deviceId: string,
+  allowedDomains: string[]
+) {
+  if (!deviceId || allowedDomains.length === 0) return
+
+  const supabase = createServerSupabaseClient()
+  const { error } = await supabase
+    .from('location_payment_devices')
+    .update({
+      whitelist_origins: allowedDomains,
+      whitelist_synced_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', deviceId)
+
+  if (error) {
+    console.error('[HQ_ONLINE_ORDERING] Failed to persist whitelist metadata:', error)
+  }
 }
 
 async function buildRequestedStoreSlug(
@@ -1326,14 +1438,21 @@ export async function adminSaveOnlineOrderingSettings(
       },
     })
 
+    const refreshedPaymentDevice = await getSelectedLocationPaymentDevice(locationId)
     const finalSlug = (configData.slug as string | undefined) ?? existingConfig?.slug ?? ''
-    const finalTpn = nextTpn
+    const finalTpn = refreshedPaymentDevice?.tpn ?? nextTpn
     const shouldWhitelist = Boolean((tpnIsChanging || slugIsChanging) && finalTpn && finalSlug)
 
     let domainWhitelistError: string | undefined
     let domainWhitelistSkipped = false
     if (shouldWhitelist) {
-      const whitelistResult = await whitelistDejavooDomain(finalTpn as string, finalSlug)
+      const externalMerchantId = await getMerchantExternalMerchantId(merchantId)
+      const previousOrigins = refreshedPaymentDevice?.whitelist_origins ?? []
+      const whitelistResult = await whitelistDejavooDomain(
+        externalMerchantId,
+        finalSlug,
+        previousOrigins
+      )
       if (!whitelistResult.success && !whitelistResult.skipped) {
         domainWhitelistError = whitelistResult.error || 'Domain whitelist failed'
         console.error('[adminSaveOnlineOrderingSettings] Domain whitelist failed:', domainWhitelistError)
@@ -1341,6 +1460,38 @@ export async function adminSaveOnlineOrderingSettings(
       if (whitelistResult.skipped) {
         domainWhitelistSkipped = true
       }
+      if (whitelistResult.success && refreshedPaymentDevice?.id && whitelistResult.allowedDomains?.length) {
+        // Keep persistPaymentDeviceWhitelist in this loop — it writes
+        // location_payment_devices.whitelist_origins + whitelist_synced_at,
+        // which the next save reads as `existingDomains` to merge.
+        await persistPaymentDeviceWhitelist(
+          refreshedPaymentDevice.id,
+          whitelistResult.allowedDomains
+        )
+      }
+      await LogAuditEvent({
+        merchantId,
+        action: whitelistResult.success
+          ? 'HQ Admin Rotated Storefront Whitelist'
+          : whitelistResult.skipped === 'missing_merchant_id'
+            ? 'HQ Admin Whitelist Skipped (Missing Merchant ID)'
+            : 'HQ Admin Whitelist Failed',
+        actionCategory: 'payments',
+        severity: whitelistResult.success ? 'info' : 'warning',
+        resourceType: 'location_payment_device',
+        resourceId: refreshedPaymentDevice?.id ?? locationId,
+        resourceName: refreshedPaymentDevice?.device_label ?? 'Online ordering device',
+        locationId,
+        changes: {
+          before: { whitelist_origins: previousOrigins },
+          after: { whitelist_origins: whitelistResult.allowedDomains ?? previousOrigins },
+        },
+        metadata: {
+          updated_by_admin: userId,
+          source: 'adminSaveOnlineOrderingSettings',
+          error: whitelistResult.error,
+        },
+      })
     }
 
     revalidateOnlineStorePaths(merchantId)
@@ -1391,6 +1542,20 @@ export async function adminToggleOnlineStore(
       }
     }
 
+    // Hard guard: cannot enable an online store whose payment-routing merchant
+    // id is not configured. Whitelisting (and therefore card-not-present
+    // payments) will hard-fail until the Dejavoo Merchant ID is set.
+    const externalMerchantIdForToggle = enabled
+      ? await getMerchantExternalMerchantId(merchantId)
+      : null
+    if (enabled && !externalMerchantIdForToggle) {
+      return {
+        success: false,
+        error:
+          'Set the Dejavoo Merchant ID in the Online Store tab before enabling this storefront.',
+      }
+    }
+
     const { error } = await supabase
       .from('online_store_config')
       .update({ is_active: enabled })
@@ -1425,7 +1590,12 @@ export async function adminToggleOnlineStore(
     let domainWhitelistError: string | undefined
     let domainWhitelistSkipped = false
     if (enabled && selectedDevice?.tpn && existingConfig.slug) {
-      const whitelistResult = await whitelistDejavooDomain(selectedDevice.tpn, existingConfig.slug)
+      const previousOrigins = selectedDevice.whitelist_origins ?? []
+      const whitelistResult = await whitelistDejavooDomain(
+        externalMerchantIdForToggle,
+        existingConfig.slug,
+        previousOrigins
+      )
       if (!whitelistResult.success && !whitelistResult.skipped) {
         domainWhitelistError = whitelistResult.error || 'Domain whitelist failed'
         console.error('[adminToggleOnlineStore] Domain whitelist failed:', domainWhitelistError)
@@ -1433,6 +1603,33 @@ export async function adminToggleOnlineStore(
       if (whitelistResult.skipped) {
         domainWhitelistSkipped = true
       }
+      if (whitelistResult.success && selectedDevice.id && whitelistResult.allowedDomains?.length) {
+        await persistPaymentDeviceWhitelist(selectedDevice.id, whitelistResult.allowedDomains)
+      }
+      await LogAuditEvent({
+        merchantId,
+        action: whitelistResult.success
+          ? 'HQ Admin Rotated Storefront Whitelist'
+          : whitelistResult.skipped === 'missing_merchant_id'
+            ? 'HQ Admin Whitelist Skipped (Missing Merchant ID)'
+            : 'HQ Admin Whitelist Failed',
+        actionCategory: 'payments',
+        severity: whitelistResult.success ? 'info' : 'warning',
+        resourceType: 'location_payment_device',
+        resourceId: selectedDevice.id ?? locationId,
+        resourceName: selectedDevice.device_label ?? 'Online ordering device',
+        locationId,
+        changes: {
+          before: { whitelist_origins: previousOrigins },
+          after: { whitelist_origins: whitelistResult.allowedDomains ?? previousOrigins },
+        },
+        metadata: {
+          toggled_by_admin: userId,
+          source: 'adminToggleOnlineStore',
+          new_status: enabled,
+          error: whitelistResult.error,
+        },
+      })
     }
 
     revalidateOnlineStorePaths(merchantId)
@@ -1449,9 +1646,13 @@ export async function adminToggleOnlineStore(
 export async function adminRetriggerDomainWhitelist(
   merchantId: string,
   locationId: string
-): Promise<{ success: boolean; error?: string; skipped?: boolean }> {
+): Promise<{
+  success: boolean
+  error?: string
+  skipped?: 'missing_merchant_id' | true
+}> {
   try {
-    await assertHQPermission('hq.merchant.update')
+    const { userId } = await assertHQPermission('hq.merchant.update')
 
     const supabase = createServerSupabaseClient()
     const selectedDevice = await getSelectedLocationPaymentDevice(locationId)
@@ -1472,9 +1673,44 @@ export async function adminRetriggerDomainWhitelist(
       return { success: false, error: 'No store slug configured for this location' }
     }
 
-    const result = await whitelistDejavooDomain(selectedDevice.tpn, config.slug)
+    const externalMerchantId = await getMerchantExternalMerchantId(merchantId)
+    const previousOrigins = selectedDevice.whitelist_origins ?? []
+
+    const result = await whitelistDejavooDomain(
+      externalMerchantId,
+      config.slug,
+      previousOrigins
+    )
+
+    await LogAuditEvent({
+      merchantId,
+      action: result.success
+        ? 'HQ Admin Rotated Storefront Whitelist'
+        : result.skipped === 'missing_merchant_id'
+          ? 'HQ Admin Whitelist Skipped (Missing Merchant ID)'
+          : 'HQ Admin Whitelist Failed',
+      actionCategory: 'payments',
+      severity: result.success ? 'info' : 'warning',
+      resourceType: 'location_payment_device',
+      resourceId: selectedDevice.id ?? locationId,
+      resourceName: selectedDevice.device_label ?? 'Online ordering device',
+      locationId,
+      changes: {
+        before: { whitelist_origins: previousOrigins },
+        after: { whitelist_origins: result.allowedDomains ?? previousOrigins },
+      },
+      metadata: {
+        triggered_by_admin: userId,
+        source: 'adminRetriggerDomainWhitelist',
+        error: result.error,
+      },
+    })
+
     if (!result.success) {
       return { success: false, skipped: result.skipped, error: result.error || 'Domain whitelist failed' }
+    }
+    if (selectedDevice.id && result.allowedDomains?.length) {
+      await persistPaymentDeviceWhitelist(selectedDevice.id, result.allowedDomains)
     }
     return { success: true, skipped: result.skipped }
   } catch (error) {
@@ -1585,6 +1821,110 @@ export async function adminCreateOnlineStore(
     return { success: true, data: newConfig, error: null }
   } catch (error) {
     console.error('[adminCreateOnlineStore] Exception:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }
+  }
+}
+
+// ============================================================================
+// MERCHANT-LEVEL: External (Dejavoo) Merchant ID
+// ============================================================================
+// Stored on public.merchants.external_merchant_id and consumed by the
+// dejavoo-whitelist-domain edge function as the `merchantId` body field.
+// Setting/rotating this will not retro-actively re-whitelist any storefronts —
+// HQ must run "Re-Whitelist Domain" on each affected location after changing.
+
+const EXTERNAL_MERCHANT_ID_PATTERN = /^[A-Za-z0-9]{12}$/
+
+export async function adminUpdateMerchantExternalMerchantId(
+  clerkOrgId: string,
+  externalMerchantId: string | null
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { userId } = await assertHQPermission('hq.merchant.update')
+
+    const trimmed =
+      typeof externalMerchantId === 'string' ? externalMerchantId.trim() : ''
+    const nextValue: string | null = trimmed.length === 0 ? null : trimmed
+
+    if (nextValue !== null && !EXTERNAL_MERCHANT_ID_PATTERN.test(nextValue)) {
+      return {
+        success: false,
+        error: 'Dejavoo Merchant ID must be exactly 12 alphanumeric characters.',
+      }
+    }
+
+    const supabase = createServerSupabaseClient()
+    const { data: merchant, error: lookupError } = await supabase
+      .from('merchants')
+      .select('id, name, external_merchant_id')
+      .eq('clerk_org_id', clerkOrgId)
+      .single()
+
+    if (lookupError || !merchant) {
+      return { success: false, error: 'Merchant not found' }
+    }
+
+    const merchantRow = merchant as {
+      id: string
+      name: string | null
+      external_merchant_id: string | null
+    }
+    const previousValue = merchantRow.external_merchant_id ?? null
+    if (previousValue === nextValue) {
+      return { success: true }
+    }
+
+    const { error: updateError } = await supabase
+      .from('merchants')
+      .update({
+        external_merchant_id: nextValue,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', merchantRow.id)
+
+    if (updateError) {
+      // CHECK constraint violations surface here if the regex above is
+      // bypassed somehow; surface a friendlier message.
+      const isFormatViolation =
+        updateError.code === '23514' ||
+        updateError.message?.toLowerCase().includes(
+          'merchants_external_merchant_id_format'
+        )
+      return {
+        success: false,
+        error: isFormatViolation
+          ? 'Dejavoo Merchant ID must be exactly 12 alphanumeric characters.'
+          : updateError.message,
+      }
+    }
+
+    await LogAuditEvent({
+      merchantId: merchantRow.id,
+      action: 'HQ Admin Updated Dejavoo Merchant ID',
+      actionCategory: 'payments',
+      severity: 'info',
+      resourceType: 'merchant',
+      resourceId: merchantRow.id,
+      resourceName: merchantRow.name ?? clerkOrgId,
+      changes: {
+        before: { external_merchant_id: previousValue },
+        after: { external_merchant_id: nextValue },
+      },
+      metadata: {
+        updated_by_admin: userId,
+        source: 'adminUpdateMerchantExternalMerchantId',
+      },
+    })
+
+    revalidatePath(`/manage/merchants/${clerkOrgId}`)
+    revalidatePath(`/manage/merchants/${merchantRow.id}`)
+
+    return { success: true }
+  } catch (error) {
+    console.error('[adminUpdateMerchantExternalMerchantId] Exception:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
