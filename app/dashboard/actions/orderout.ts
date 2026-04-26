@@ -6,6 +6,7 @@
 // ============================================================================
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { LogAuditEvent } from "./audit-logs";
 import {
   transformMenuToOrderOut,
@@ -443,8 +444,21 @@ export async function pushMenuToOrderOut(
 
     const isUpdate = !!existingLink?.oo_menu_id;
 
-    // 5. Insert pending sync record
-    const { data: syncData, error: syncInsertError } = await supabase
+    // 5. Insert pending sync record — use service role to avoid RLS blocking the
+    //    subsequent update. Also expire any stuck pending rows first so they
+    //    don't freeze the status display.
+    const serviceSupabase = createServiceRoleClient();
+    const PENDING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+    const staleThreshold = new Date(Date.now() - PENDING_TIMEOUT_MS).toISOString();
+    await serviceSupabase
+      .from("orderout_menu_syncs")
+      .update({ sync_status: "failed", error_details: "Timed out — previous push did not complete" })
+      .eq("orderout_restaurant_id", restaurant.id)
+      .eq("menu_id", menuId)
+      .eq("sync_status", "pending")
+      .lt("created_at", staleThreshold);
+
+    const { data: syncData, error: syncInsertError } = await serviceSupabase
       .from("orderout_menu_syncs")
       .insert({
         orderout_restaurant_id: restaurant.id,
@@ -546,10 +560,10 @@ export async function pushMenuToOrderOut(
       }
     }
 
-    // 7. Update sync record with result
+    // 7. Update sync record with result (service role — avoids RLS blocking the write)
     if (syncRecord?.id) {
       if (pushResponse.ok) {
-        const { data: updatedSync, error: updateError } = await supabase
+        const { error: updateError } = await serviceSupabase
           .from("orderout_menu_syncs")
           .update({
             sync_status: "success",
@@ -558,35 +572,27 @@ export async function pushMenuToOrderOut(
             synced_at: new Date().toISOString(),
             ...(ooMenuId ? { oo_menu_id: ooMenuId } : {}),
           })
-          .eq("id", syncRecord.id)
-          .select("id")
-          .single();
+          .eq("id", syncRecord.id);
 
         if (updateError) {
           console.error("[pushMenuToOrderOut] Failed to update sync record to success:", updateError);
-        } else if (!updatedSync) {
-          console.error("[pushMenuToOrderOut] Sync record update returned no rows — possible RLS issue for id:", syncRecord.id);
         }
       } else {
         const errorMsg =
           (pushResult.error as string) ||
           (pushResult.message as string) ||
           `OrderOut API returned ${pushResponse.status}`;
-        const { data: updatedSync, error: updateError } = await supabase
+        const { error: updateError } = await serviceSupabase
           .from("orderout_menu_syncs")
           .update({
             sync_status: "failed",
             error_details: errorMsg,
             synced_at: new Date().toISOString(),
           })
-          .eq("id", syncRecord.id)
-          .select("id")
-          .single();
+          .eq("id", syncRecord.id);
 
         if (updateError) {
           console.error("[pushMenuToOrderOut] Failed to update sync record to failed:", updateError);
-        } else if (!updatedSync) {
-          console.error("[pushMenuToOrderOut] Sync record update returned no rows — possible RLS issue for id:", syncRecord.id);
         }
       }
     } else {
@@ -595,7 +601,7 @@ export async function pushMenuToOrderOut(
 
     // 7b. Upsert orderout_menu_links after successful push
     if (pushResponse.ok && ooMenuId) {
-      const { error: linkError } = await supabase
+      const { error: linkError } = await serviceSupabase
         .from("orderout_menu_links")
         .upsert(
           {
@@ -667,8 +673,7 @@ export async function pushMenuToOrderOut(
     // If we have a sync record, mark it as failed so it doesn't stay "pending"
     if (syncRecord?.id) {
       try {
-        const supabase = createServerSupabaseClient();
-        await supabase
+        await createServiceRoleClient()
           .from("orderout_menu_syncs")
           .update({
             sync_status: "failed",
@@ -898,7 +903,14 @@ export async function getOrderOutMenuSyncStatus(
       });
     }
 
-    const latestSync = filteredSyncs[0] || null;
+    // Treat pending rows older than 5 minutes as stuck — skip them for lastSync
+    // so a crashed push doesn't freeze the status display.
+    const PENDING_TIMEOUT_MS = 5 * 60 * 1000;
+    const latestSync =
+      filteredSyncs.find((s) => {
+        if (s.sync_status !== "pending") return true;
+        return Date.now() - new Date(s.created_at).getTime() < PENDING_TIMEOUT_MS;
+      }) ?? null;
 
     // If no link found, fall back to scanning sync records (legacy)
     if (!ooMenuId) {

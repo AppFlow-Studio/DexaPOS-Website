@@ -29,12 +29,10 @@ export function WizardSidebar({ currentStep, completedSteps, onStepClick }: Wiza
     return (
         <div className="w-72 border-r bg-muted/30 p-6 flex flex-col">
             {/* Step Counter */}
-            <div className="mb-8">
-                <div className="text-4xl font-light text-muted-foreground/60 tracking-tight">
-                    <span className="text-foreground font-medium">{currentStep}</span>
-                    <span className="mx-1">/</span>
-                    <span>{steps.length}</span>
-                </div>
+            <div className="mb-6">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+                    Step {currentStep} of {steps.length}
+                </p>
             </div>
 
             {/* Steps List */}

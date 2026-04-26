@@ -176,8 +176,10 @@ export default function MenuDetailPage() {
     clerkOrgId,
     selectedLocationId || ""
   );
-  const canUploadToOrderOut =
-    !isAllLocations && !!orderOutStatus?.data?.hasRestaurant;
+  const hasOrderOutRestaurant = !!orderOutStatus?.data?.hasRestaurant;
+  // Show the tab whenever a specific location is selected so users get guidance
+  // even before they've connected OrderOut.
+  const showOrderOutTab = !isAllLocations;
 
   // Sync status for OrderOut tab indicator
   const { data: syncStatusResult } = useOrderOutMenuSync(
@@ -193,7 +195,7 @@ export default function MenuDetailPage() {
   const syncData = syncStatusResult?.data;
   const diffData = diffResult?.data ?? null;
   const orderOutTabDot = (() => {
-    if (!canUploadToOrderOut || !syncData?.lastSync) return null;
+    if (!hasOrderOutRestaurant || !syncData?.lastSync) return null;
     if (syncData.lastSync.status === "failed") return "red";
     if (diffData?.hasChanges) return "amber";
     if (syncData.lastSync.status === "success") return "green";
@@ -789,12 +791,23 @@ export default function MenuDetailPage() {
   const handleMoveCategoryUp = (index: number) => {
     if (index === 0) return;
 
-    const newOrder = [...reorderedCategories];
-    const temp = newOrder[index];
-    newOrder[index] = newOrder[index - 1];
-    newOrder[index - 1] = temp;
+    // index is relative to visible (active-only) categories — resolve to full list positions
+    const currentVisible = hasCategoryOrderChanges
+      ? reorderedCategories.filter((c) => c.is_active)
+      : sortedCategories.filter((c) => c.is_active);
 
-    // Update display_order values
+    if (index >= currentVisible.length) return;
+
+    const categoryToMove = currentVisible[index];
+    const categoryAbove = currentVisible[index - 1];
+
+    const idxInFull = reorderedCategories.findIndex((c) => c.category_id === categoryToMove.category_id);
+    const idxAboveInFull = reorderedCategories.findIndex((c) => c.category_id === categoryAbove.category_id);
+
+    if (idxInFull === -1 || idxAboveInFull === -1) return;
+
+    const newOrder = reorderedCategories.map((c) => ({ ...c }));
+    [newOrder[idxAboveInFull], newOrder[idxInFull]] = [newOrder[idxInFull], newOrder[idxAboveInFull]];
     newOrder.forEach((category, idx) => {
       category.display_order = idx + 1;
     });
@@ -804,14 +817,23 @@ export default function MenuDetailPage() {
   };
 
   const handleMoveCategoryDown = (index: number) => {
-    if (index === reorderedCategories.length - 1) return;
+    // index is relative to visible (active-only) categories — resolve to full list positions
+    const currentVisible = hasCategoryOrderChanges
+      ? reorderedCategories.filter((c) => c.is_active)
+      : sortedCategories.filter((c) => c.is_active);
 
-    const newOrder = [...reorderedCategories];
-    const temp = newOrder[index];
-    newOrder[index] = newOrder[index + 1];
-    newOrder[index + 1] = temp;
+    if (index >= currentVisible.length - 1) return;
 
-    // Update display_order values
+    const categoryToMove = currentVisible[index];
+    const categoryBelow = currentVisible[index + 1];
+
+    const idxInFull = reorderedCategories.findIndex((c) => c.category_id === categoryToMove.category_id);
+    const idxBelowInFull = reorderedCategories.findIndex((c) => c.category_id === categoryBelow.category_id);
+
+    if (idxInFull === -1 || idxBelowInFull === -1) return;
+
+    const newOrder = reorderedCategories.map((c) => ({ ...c }));
+    [newOrder[idxInFull], newOrder[idxBelowInFull]] = [newOrder[idxBelowInFull], newOrder[idxInFull]];
     newOrder.forEach((category, idx) => {
       category.display_order = idx + 1;
     });
@@ -1079,7 +1101,7 @@ export default function MenuDetailPage() {
             )}
           </TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
-          {canUploadToOrderOut && (
+          {showOrderOutTab && (
             <TabsTrigger value="orderout" className="flex items-center gap-1.5">
               OrderOut
               {orderOutTabDot && (
@@ -1198,13 +1220,14 @@ export default function MenuDetailPage() {
           />
         </TabsContent>
 
-        {canUploadToOrderOut && (
+        {showOrderOutTab && (
           <TabsContent value="orderout" className="space-y-4">
             <MenuOrderOutTab
               menuId={menuId}
               locationId={selectedLocationId || ""}
               clerkOrgId={clerkOrgId}
               menuName={menu.name}
+              isConfigured={hasOrderOutRestaurant}
             />
           </TabsContent>
         )}

@@ -544,40 +544,56 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
     return (
         <>
             <div className="h-[92vh] flex">
-                {/* Sidebar */}
-                <WizardSidebar
-                    currentStep={currentStep}
-                    completedSteps={completedSteps}
-                    onStepClick={handleStepClick}
-                />
+                {/* Sidebar — hidden on mobile, visible md+ */}
+                <div className="hidden md:flex">
+                    <WizardSidebar
+                        currentStep={currentStep}
+                        completedSteps={completedSteps}
+                        onStepClick={handleStepClick}
+                    />
+                </div>
 
                 {/* Main Content */}
-                <div className=" flex-1 h-full flex-col">
+                <div className="flex flex-1 h-full flex-col min-w-0">
                     {/* Header */}
-                    <div className="border-b px-8 py-4 flex items-center justify-between">
-                        <div>
-                            <h1 className="text-2xl font-semibold">{STEP_TITLES[currentStep - 1].title}</h1>
-                            <p className="text-muted-foreground">{STEP_TITLES[currentStep - 1].description}</p>
+                    <div className="border-b px-4 md:px-8 py-4 flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                            {/* Mobile step indicator */}
+                            <p className="text-xs font-medium text-muted-foreground mb-0.5 md:hidden">
+                                Step {currentStep} of {TOTAL_STEPS}
+                            </p>
+                            <h1 className="text-lg md:text-2xl font-semibold truncate">{STEP_TITLES[currentStep - 1].title}</h1>
+                            <p className="text-sm text-muted-foreground hidden sm:block">{STEP_TITLES[currentStep - 1].description}</p>
                         </div>
                         <Button
                             variant="ghost"
                             size="icon"
                             onClick={handleExit}
-                            className="text-muted-foreground hover:text-foreground"
+                            className="text-muted-foreground hover:text-foreground shrink-0"
                         >
                             <X className="h-5 w-5" />
                         </Button>
                     </div>
 
+                    {/* Mobile progress bar */}
+                    <div className="md:hidden px-4 pt-2 pb-1">
+                        <div className="h-1 bg-muted rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-primary rounded-full transition-all duration-500"
+                                style={{ width: `${(currentStep / TOTAL_STEPS) * 100}%` }}
+                            />
+                        </div>
+                    </div>
+
                     {/* Form Content */}
-                    <div className="flex-1 overflow-auto p-8">
+                    <div className="flex-1 overflow-auto p-4 md:p-8">
                         <div className="max-w-3xl">
                             {renderStep()}
                         </div>
                     </div>
 
                     {/* Footer */}
-                    <div className="border-t px-8 py-4 flex items-center justify-between">
+                    <div className="border-t px-4 md:px-8 py-4 flex items-center justify-between">
                         <Button
                             variant="ghost"
                             onClick={handleBack}
@@ -585,14 +601,14 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
                             className="gap-2"
                         >
                             <ArrowLeft className="h-4 w-4" />
-                            Back
+                            <span className="hidden sm:inline">Back</span>
                         </Button>
 
                         {currentStep === TOTAL_STEPS ? (
                             <Button
                                 onClick={handleSubmit}
                                 disabled={isSubmitting}
-                                className="gap-2 min-w-[160px]"
+                                className="gap-2 min-w-35 md:min-w-40"
                             >
                                 {isSubmitting ? (
                                     <>
