@@ -53,7 +53,7 @@ END $$;
 --    Safe to drop because the unique index below covers the same query shape.
 -- -----------------------------------------------------------------------------
 DROP INDEX IF EXISTS public.idx_online_orders_provider_order_id;
-
+DROP INDEX IF EXISTS public.idx_online_orders_provider_order_id_uniq;
 -- -----------------------------------------------------------------------------
 -- 3. Create a UNIQUE index that doubles as the lookup index for Step 1.5.
 --    Partial: only enforces uniqueness when both provider and provider_order_id
@@ -65,9 +65,5 @@ DROP INDEX IF EXISTS public.idx_online_orders_provider_order_id;
 CREATE UNIQUE INDEX idx_online_orders_provider_order_id_uniq
   ON public.online_orders (provider, provider_order_id)
   WHERE provider IS NOT NULL AND provider_order_id IS NOT NULL;
-
 COMMENT ON INDEX public.idx_online_orders_provider_order_id_uniq IS
-  'Enforces idempotency on online_orders. The create-online-order edge function ' ||
-  'reads client Idempotency-Key header and stores it as provider_order_id. ' ||
-  'Concurrent retries with the same key collide on this index — the second one ' ||
-  'is caught in the function and converted to a 200 OK with idempotent=true.';
+  'Enforces idempotency on online_orders. The create-online-order edge function reads client Idempotency-Key header and stores it as provider_order_id. Concurrent retries with the same key collide on this index — the second one is caught in the function and converted to a 200 OK with idempotent=true.';

@@ -35,7 +35,20 @@ import {
     Loader2,
     Plug,
     AlertTriangle,
+    Eye,
+    EyeOff,
+    KeyRound,
 } from 'lucide-react'
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { Location } from '@/types/merchant_locations'
@@ -49,6 +62,7 @@ import {
     useAdminRetriggerDomainWhitelist,
     useAdminOnlineStoreRequestRequirements,
     useAdminSaveOnlineStoreRequestRequirements,
+    useAdminUpdateMerchantExternalMerchantId,
     type OnlineOrderingSettings,
     type LocationOnlineStoreOverview,
 } from '@/lib/queries/use-admin-online-ordering'
@@ -147,12 +161,21 @@ function createDefaultWeeklySchedule() {
 
 interface OnlineStoreTabProps {
     merchantId: string
+    clerkOrgId: string
     merchantName: string
+    externalMerchantId: string | null
     locations: Location[]
     locationsLoading: boolean
 }
 
-export function OnlineStoreTab({ merchantId, merchantName, locations, locationsLoading }: OnlineStoreTabProps) {
+export function OnlineStoreTab({
+    merchantId,
+    clerkOrgId,
+    merchantName,
+    externalMerchantId,
+    locations,
+    locationsLoading,
+}: OnlineStoreTabProps) {
     const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
 
     // Fetch overview of all locations
@@ -184,6 +207,66 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
     const uploadW9Mutation = useAdminUploadMerchantW9Pdf()
     const whitelistMutation = useAdminRetriggerDomainWhitelist()
     const saveRequirementsMutation = useAdminSaveOnlineStoreRequestRequirements()
+    const updateExternalMerchantIdMutation = useAdminUpdateMerchantExternalMerchantId()
+
+    // Dejavoo Merchant ID — per-merchant 12-char id supplied by Dejavoo.
+    // Stored on public.merchants.external_merchant_id; required for the
+    // dejavoo-whitelist-domain edge function to identify the merchant.
+    const [externalMerchantIdInput, setExternalMerchantIdInput] = useState(
+        externalMerchantId ?? ''
+    )
+    const [externalMerchantIdRevealed, setExternalMerchantIdRevealed] =
+        useState(false)
+    const [externalMerchantIdConfirmOpen, setExternalMerchantIdConfirmOpen] =
+        useState(false)
+
+    useEffect(() => {
+        setExternalMerchantIdInput(externalMerchantId ?? '')
+    }, [externalMerchantId])
+
+    const externalMerchantIdTrimmed = externalMerchantIdInput.trim()
+    const externalMerchantIdIsValid =
+        externalMerchantIdTrimmed.length === 0 ||
+        /^[A-Za-z0-9]{12}$/.test(externalMerchantIdTrimmed)
+    const externalMerchantIdNext: string | null =
+        externalMerchantIdTrimmed.length === 0 ? null : externalMerchantIdTrimmed
+    const externalMerchantIdDirty =
+        externalMerchantIdNext !== (externalMerchantId ?? null)
+    const externalMerchantIdRotating =
+        externalMerchantIdDirty && (externalMerchantId ?? null) !== null
+
+    const submitExternalMerchantIdSave = async () => {
+        if (!externalMerchantIdIsValid) return
+        try {
+            const result = await updateExternalMerchantIdMutation.mutateAsync({
+                clerkOrgId,
+                externalMerchantId: externalMerchantIdNext,
+            })
+            if (result.success) {
+                toast.success('Dejavoo Merchant ID saved')
+            } else {
+                toast.error(result.error || 'Failed to save Dejavoo Merchant ID')
+            }
+        } catch (err) {
+            toast.error(
+                err instanceof Error ? err.message : 'Failed to save Dejavoo Merchant ID'
+            )
+        }
+    }
+
+    const handleExternalMerchantIdSaveClick = () => {
+        if (!externalMerchantIdIsValid || !externalMerchantIdDirty) return
+        if (externalMerchantIdRotating) {
+            setExternalMerchantIdConfirmOpen(true)
+            return
+        }
+        void submitExternalMerchantIdSave()
+    }
+
+    const handleExternalMerchantIdConfirmRotate = async () => {
+        setExternalMerchantIdConfirmOpen(false)
+        await submitExternalMerchantIdSave()
+    }
 
     // OrderOut
     const { data: orderOutData } = useAdminOrderOutStatus(merchantId)
@@ -832,6 +915,124 @@ export function OnlineStoreTab({ merchantId, merchantName, locations, locationsL
                             </div>
                         </CardContent>
                     </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <KeyRound className="h-4 w-4" />
+                                Dejavoo Merchant ID
+                            </CardTitle>
+                            <CardDescription>
+                                12-char alphanumeric ID supplied by Dejavoo for this merchant.
+                                Required for storefront domain whitelisting. One per merchant —
+                                shared across all locations and payment devices.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                                <div className="flex-1 space-y-2">
+                                    <Label htmlFor="external-merchant-id">Merchant ID</Label>
+                                    <div className="relative">
+                                        <Input
+                                            id="external-merchant-id"
+                                            value={
+                                                externalMerchantIdRevealed
+                                                    ? externalMerchantIdInput
+                                                    : externalMerchantIdInput
+                                                        ? maskSensitiveValue(externalMerchantIdInput, 4)
+                                                        : ''
+                                            }
+                                            onChange={(e) => {
+                                                if (!externalMerchantIdRevealed) {
+                                                    setExternalMerchantIdRevealed(true)
+                                                }
+                                                setExternalMerchantIdInput(e.target.value)
+                                            }}
+                                            onFocus={() => setExternalMerchantIdRevealed(true)}
+                                            placeholder="e.g. abc123xyz456"
+                                            maxLength={12}
+                                            className={cn(
+                                                'pr-10 font-mono',
+                                                !externalMerchantIdIsValid &&
+                                                    'border-destructive focus-visible:ring-destructive'
+                                            )}
+                                            autoComplete="off"
+                                            spellCheck={false}
+                                        />
+                                        {externalMerchantIdInput && (
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setExternalMerchantIdRevealed((prev) => !prev)
+                                                }
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                                aria-label={
+                                                    externalMerchantIdRevealed
+                                                        ? 'Hide merchant ID'
+                                                        : 'Reveal merchant ID'
+                                                }
+                                            >
+                                                {externalMerchantIdRevealed ? (
+                                                    <EyeOff className="h-4 w-4" />
+                                                ) : (
+                                                    <Eye className="h-4 w-4" />
+                                                )}
+                                            </button>
+                                        )}
+                                    </div>
+                                    {!externalMerchantIdIsValid && (
+                                        <p className="text-xs text-destructive">
+                                            Merchant ID must be exactly 12 alphanumeric characters.
+                                        </p>
+                                    )}
+                                </div>
+                                <Button
+                                    onClick={handleExternalMerchantIdSaveClick}
+                                    disabled={
+                                        !externalMerchantIdIsValid ||
+                                        !externalMerchantIdDirty ||
+                                        updateExternalMerchantIdMutation.isPending
+                                    }
+                                >
+                                    {updateExternalMerchantIdMutation.isPending && (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    )}
+                                    Save
+                                </Button>
+                            </div>
+                            {!externalMerchantId && (
+                                <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-900">
+                                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                                    <p className="text-xs">
+                                        No Merchant ID set. Domain whitelisting and online card
+                                        payments will be blocked until this is configured.
+                                    </p>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    <AlertDialog
+                        open={externalMerchantIdConfirmOpen}
+                        onOpenChange={setExternalMerchantIdConfirmOpen}
+                    >
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Rotate Dejavoo Merchant ID?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Changing this will break storefront whitelisting until you
+                                    re-trigger the domain whitelist on each affected location.
+                                    Continue?
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleExternalMerchantIdConfirmRotate}>
+                                    Rotate
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
 
                     <Card>
                         <CardHeader>

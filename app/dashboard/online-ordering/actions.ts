@@ -504,18 +504,31 @@ export async function saveOnlineStoreRequestRequirements(formData: FormData) {
 }
 
 /**
- * Registers/updates the allowed domain for an FTD-enabled TPN.
- * This must be called whenever a merchant saves a new/updated TPN so the
- * FreedomToDesign script is allowed to load on their storefront origin.
+ * Registers/updates the allowed domain for the merchant's Dejavoo account.
  *
- * Delegates to Supabase function: `dejavoo-whitelist-domain`
+ * The Dejavoo "Edit Merchant" Management API (POST /v2/merchant/add-on) keys
+ * whitelist-domain configuration off the 12-char `merchantId` issued by
+ * Dejavoo to this merchant — sourced from public.merchants.external_merchant_id.
+ *
+ * Delegates to Supabase function: `dejavoo-whitelist-domain`.
  */
 export async function whitelistDejavooDomain(
-  tpn: string,
+  externalMerchantId: string | null,
   storeSlug: string
-): Promise<{ success: boolean; error?: string; skipped?: boolean }> {
-  if (!tpn || !storeSlug) {
-    return { success: false, error: "TPN and store slug are required" };
+): Promise<{
+  success: boolean
+  error?: string
+  skipped?: 'missing_merchant_id' | true
+}> {
+  if (!externalMerchantId) {
+    return {
+      success: false,
+      skipped: 'missing_merchant_id',
+      error: 'Dejavoo Merchant ID is not configured for this merchant.',
+    }
+  }
+  if (!storeSlug) {
+    return { success: false, error: 'Store slug is required' }
   }
 
   const isDev = ROOT_DOMAIN.includes("localhost");
@@ -527,7 +540,7 @@ export async function whitelistDejavooDomain(
   const { data, error } = await supabase.functions.invoke(
     "dejavoo-whitelist-domain",
     {
-      body: { tpn, storeSlug, storeDomain },
+      body: { merchantId: externalMerchantId, storeSlug, storeDomain },
     }
   );
 
@@ -541,7 +554,7 @@ export async function whitelistDejavooDomain(
 
   const result = (data || {}) as {
     success?: boolean;
-    skipped?: boolean;
+    skipped?: 'missing_merchant_id' | true;
     error?: string;
   };
   return {
