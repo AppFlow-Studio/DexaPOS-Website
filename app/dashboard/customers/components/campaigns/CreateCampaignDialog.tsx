@@ -12,27 +12,42 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
-import { Loader2, Smartphone, Mail } from "lucide-react";
-import { useCreateCampaign, useSendCampaign } from "../../hooks/useCustomerMarketing";
+import {
+  Loader2,
+  Smartphone,
+  Mail,
+  Users,
+  Tag,
+  Send,
+  CalendarClock,
+  CheckCircle2,
+} from "lucide-react";
+import { useCreateAndSendCampaign } from "../../hooks/useCustomerMarketing";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface CreateCampaignDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+const TAGS = [
+  "VIP",
+  "REGULAR",
+  "NEW",
+  "CORPORATE",
+  "FRIEND_OF_OWNER",
+  "INFLUENCER",
+  "COMPLAINT_HISTORY",
+  "CATERING_CLIENT",
+];
+
+function formatTag(tag: string) {
+  return tag
+    .split("_")
+    .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
+    .join(" ");
 }
 
 export function CreateCampaignDialog({
@@ -48,14 +63,18 @@ export function CreateCampaignDialog({
   const [scheduleType, setScheduleType] = useState<"now" | "later">("now");
   const [scheduledFor, setScheduledFor] = useState("");
 
-  const createMutation = useCreateCampaign();
-  const sendMutation = useSendCampaign();
+  const campaignMutation = useCreateAndSendCampaign();
+  const isLoading = campaignMutation.isPending;
 
   const handleCreate = async () => {
     if (!campaignName.trim() || !body.trim()) return;
 
+    const toastId = toast.loading(
+      scheduleType === "now" ? "Creating and sending campaign…" : "Scheduling campaign…"
+    );
+
     try {
-      const newCampaign = await createMutation.mutateAsync({
+      const result = await campaignMutation.mutateAsync({
         name: campaignName,
         campaignType,
         subject: campaignType === "email" ? subject : undefined,
@@ -65,39 +84,23 @@ export function CreateCampaignDialog({
         scheduledFor: scheduleType === "later" && scheduledFor ? scheduledFor : undefined,
       });
 
-      // If "Send Now" was selected, dispatch the campaign
-      if (scheduleType === "now" && newCampaign?.id) {
-        toast.loading("Sending campaign...");
-        try {
-          const sendResult = await sendMutation.mutateAsync(newCampaign.id);
-
-          // Check if send was successful
-          if (sendResult?.error) {
-            toast.error(sendResult.error);
-            return;
-          }
-
-          // Success message with recipient count
-          const recipientCount = sendResult?.sent || 0;
-          if (recipientCount > 0) {
-            toast.success(`Campaign sent to ${recipientCount} recipient${recipientCount !== 1 ? 's' : ''}!`);
-          } else {
-            toast.error("No recipients to send to");
-            return;
-          }
-        } catch (sendError: any) {
-          console.error("Error sending campaign:", sendError);
-          const errorMsg = sendError?.message || "Failed to send campaign";
-          toast.error(errorMsg);
-          return;
-        }
-      } else if (scheduleType === "later") {
-        toast.success("Campaign scheduled successfully!");
-      } else {
-        toast.success("Campaign created successfully!");
+      if (result?.error) {
+        toast.error(result.error, { id: toastId });
+        return;
       }
 
-      // Reset form
+      if (result?.scheduled) {
+        toast.success("Campaign scheduled successfully!", { id: toastId });
+      } else {
+        const n = result?.sent ?? 0;
+        toast.success(
+          n > 0
+            ? `Campaign sent to ${n} recipient${n !== 1 ? "s" : ""}!`
+            : "Campaign created!",
+          { id: toastId }
+        );
+      }
+
       setCampaignName("");
       setCampaignType("sms");
       setSubject("");
@@ -107,219 +110,324 @@ export function CreateCampaignDialog({
       setScheduleType("now");
       setScheduledFor("");
       onOpenChange(false);
-    } catch (error) {
-      console.error("Error creating campaign:", error);
-      toast.error("Failed to create campaign");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to create campaign", { id: toastId });
     }
+  };
+
+  const toggleTag = (tag: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="space-y-2">
-          <DialogTitle className="text-2xl font-bold">Create Campaign</DialogTitle>
-          <DialogDescription className="text-base">
-            Create and send marketing campaigns to your customers via SMS or email
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+        {/* Header */}
+        <div className="px-7 pt-7 pb-5 border-b border-border/60">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="text-xl font-bold">Create Campaign</DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              Send a marketing blast to your customers via SMS or email.
+            </DialogDescription>
+          </DialogHeader>
+        </div>
 
-        <div className="space-y-7 py-4">
-          {/* Campaign Basics */}
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="campaign-name" className="font-semibold text-sm">Campaign Name</Label>
-              <Input
-                id="campaign-name"
-                placeholder="e.g., Holiday Sale 2024"
-                value={campaignName}
-                onChange={(e) => setCampaignName(e.target.value)}
-                className="h-10 bg-background border-input focus-visible:ring-2 focus-visible:ring-primary"
-              />
-            </div>
+        <div className="px-7 py-6 space-y-7">
 
-            <div className="space-y-2">
-              <Label htmlFor="campaign-type" className="font-semibold text-sm">Campaign Type</Label>
-              <Select value={campaignType} onValueChange={(v) => setCampaignType(v as "sms" | "email")}>
-                <SelectTrigger id="campaign-type" className="h-10 bg-background border-input focus-visible:ring-2 focus-visible:ring-primary">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="sms">
-                    <div className="flex items-center gap-2">
-                      <Smartphone className="h-4 w-4" />
-                      SMS
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="email">
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4" />
-                      Email
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+          {/* Campaign Name */}
+          <div className="space-y-1.5">
+            <Label htmlFor="campaign-name" className="text-sm font-semibold">Campaign Name</Label>
+            <Input
+              id="campaign-name"
+              placeholder="e.g., Holiday Sale 2024"
+              value={campaignName}
+              onChange={(e) => setCampaignName(e.target.value)}
+              className="h-10"
+            />
+          </div>
+
+          {/* Channel Picker */}
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">Channel</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setCampaignType("sms")}
+                className={cn(
+                  "flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left",
+                  campaignType === "sms"
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-border/80 hover:bg-muted/40"
+                )}
+              >
+                <div className={cn(
+                  "p-2 rounded-lg",
+                  campaignType === "sms" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                )}>
+                  <Smartphone className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className={cn("text-sm font-semibold", campaignType === "sms" ? "text-foreground" : "text-muted-foreground")}>SMS</p>
+                  <p className="text-xs text-muted-foreground">Text message</p>
+                </div>
+                {campaignType === "sms" && <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCampaignType("email")}
+                className={cn(
+                  "flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left",
+                  campaignType === "email"
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-border/80 hover:bg-muted/40"
+                )}
+              >
+                <div className={cn(
+                  "p-2 rounded-lg",
+                  campaignType === "email" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                )}>
+                  <Mail className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className={cn("text-sm font-semibold", campaignType === "email" ? "text-foreground" : "text-muted-foreground")}>Email</p>
+                  <p className="text-xs text-muted-foreground">Email message</p>
+                </div>
+                {campaignType === "email" && <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />}
+              </button>
             </div>
           </div>
 
-          {/* Content */}
-          <div className="space-y-4 border-t border-border/50 pt-6">
-            <h3 className="font-semibold text-sm text-foreground">Message Content</h3>
+          {/* Message Content */}
+          <div className="space-y-3 border-t border-border/50 pt-6">
+            <p className="text-sm font-semibold">Message Content</p>
 
             {campaignType === "email" && (
-              <div>
-                <Label htmlFor="email-subject">Email Subject</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="email-subject" className="text-sm">Subject Line</Label>
                 <Input
                   id="email-subject"
                   placeholder="Enter email subject"
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
+                  className="h-10"
                 />
               </div>
             )}
 
-            <div>
-              <Label htmlFor="message-body">Message Body</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="message-body" className="text-sm">
+                {campaignType === "sms" ? "Message" : "Body"}
+              </Label>
               <Textarea
                 id="message-body"
                 placeholder={
                   campaignType === "sms"
-                    ? "Type your SMS message (max 160 characters)"
-                    : "Type your email message"
+                    ? "Write your SMS message here…"
+                    : "Write your email body here…"
                 }
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
-                rows={5}
+                rows={4}
                 maxLength={campaignType === "sms" ? 160 : undefined}
+                className="resize-none"
               />
               {campaignType === "sms" && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  {body.length} / 160 characters
-                </p>
+                <div className="flex justify-end">
+                  <span className={cn(
+                    "text-xs tabular-nums",
+                    body.length >= 140 ? "text-destructive font-medium" : "text-muted-foreground"
+                  )}>
+                    {body.length} / 160
+                  </span>
+                </div>
               )}
             </div>
           </div>
 
           {/* Audience */}
-          <div className="space-y-4 border-t pt-4">
-            <h3 className="font-medium">Audience</h3>
+          <div className="space-y-3 border-t border-border/50 pt-6">
+            <p className="text-sm font-semibold">Audience</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setAudienceType("all")}
+                className={cn(
+                  "flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left",
+                  audienceType === "all"
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-border/80 hover:bg-muted/40"
+                )}
+              >
+                <div className={cn(
+                  "p-2 rounded-lg",
+                  audienceType === "all" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                )}>
+                  <Users className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className={cn("text-sm font-semibold", audienceType === "all" ? "text-foreground" : "text-muted-foreground")}>All Customers</p>
+                  <p className="text-xs text-muted-foreground">Everyone opted-in</p>
+                </div>
+                {audienceType === "all" && <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />}
+              </button>
 
-            <div>
-              <Label htmlFor="audience-type">Audience Type</Label>
-              <Select value={audienceType} onValueChange={(v) => setAudienceType(v as "all" | "tag")}>
-                <SelectTrigger id="audience-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Customers</SelectItem>
-                  <SelectItem value="tag">By Tags</SelectItem>
-                </SelectContent>
-              </Select>
+              <button
+                type="button"
+                onClick={() => setAudienceType("tag")}
+                className={cn(
+                  "flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left",
+                  audienceType === "tag"
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-border/80 hover:bg-muted/40"
+                )}
+              >
+                <div className={cn(
+                  "p-2 rounded-lg",
+                  audienceType === "tag" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                )}>
+                  <Tag className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className={cn("text-sm font-semibold", audienceType === "tag" ? "text-foreground" : "text-muted-foreground")}>By Tag</p>
+                  <p className="text-xs text-muted-foreground">Target specific groups</p>
+                </div>
+                {audienceType === "tag" && <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />}
+              </button>
             </div>
 
             {audienceType === "tag" && (
               <div className="space-y-3">
-                <Label>Select Tags to Target</Label>
-                <div className="border rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
-                  {["VIP", "REGULAR", "NEW", "CORPORATE", "FRIEND_OF_OWNER", "INFLUENCER", "COMPLAINT_HISTORY", "CATERING_CLIENT"].map((tag) => (
-                    <label key={tag} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-2 rounded">
-                      <input
-                        type="checkbox"
-                        checked={selectedTags.includes(tag)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedTags([...selectedTags, tag]);
-                          } else {
-                            setSelectedTags(selectedTags.filter((t) => t !== tag));
-                          }
-                        }}
-                        className="w-4 h-4 cursor-pointer"
-                      />
-                      <span className="text-sm">
-                        {tag
-                          .split("_")
-                          .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
-                          .join(" ")}
-                      </span>
-                    </label>
-                  ))}
+                <div className="flex flex-wrap gap-2">
+                  {TAGS.map((tag) => {
+                    const selected = selectedTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => toggleTag(tag)}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                          selected
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-muted/50 text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
+                        )}
+                      >
+                        {selected && <CheckCircle2 className="h-3 w-3" />}
+                        {formatTag(tag)}
+                      </button>
+                    );
+                  })}
                 </div>
-                {selectedTags.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {selectedTags.map((tag) => (
-                      <span key={tag} className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs">
-                        {tag
-                          .split("_")
-                          .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
-                          .join(" ")}
-                        <button
-                          onClick={() => setSelectedTags(selectedTags.filter((t) => t !== tag))}
-                          className="ml-1 hover:font-bold"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
+                {selectedTags.length === 0 && (
+                  <p className="text-xs text-muted-foreground">Select at least one tag to target.</p>
                 )}
               </div>
             )}
-
           </div>
 
           {/* Scheduling */}
-          <div className="space-y-4 border-t pt-4">
-            <h3 className="font-medium">Scheduling</h3>
+          <div className="space-y-3 border-t border-border/50 pt-6">
+            <p className="text-sm font-semibold">When to Send</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setScheduleType("now")}
+                className={cn(
+                  "flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left",
+                  scheduleType === "now"
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-border/80 hover:bg-muted/40"
+                )}
+              >
+                <div className={cn(
+                  "p-2 rounded-lg",
+                  scheduleType === "now" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                )}>
+                  <Send className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className={cn("text-sm font-semibold", scheduleType === "now" ? "text-foreground" : "text-muted-foreground")}>Send Now</p>
+                  <p className="text-xs text-muted-foreground">Blast immediately</p>
+                </div>
+                {scheduleType === "now" && <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />}
+              </button>
 
-            <div>
-              <Label>When to Send</Label>
-              <div className="flex gap-4 mt-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    value="now"
-                    checked={scheduleType === "now"}
-                    onChange={(e) => setScheduleType(e.target.value as "now" | "later")}
-                  />
-                  <span className="text-sm">Send Now</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    value="later"
-                    checked={scheduleType === "later"}
-                    onChange={(e) => setScheduleType(e.target.value as "now" | "later")}
-                  />
-                  <span className="text-sm">Schedule for Later</span>
-                </label>
-              </div>
+              <button
+                type="button"
+                onClick={() => setScheduleType("later")}
+                className={cn(
+                  "flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left",
+                  scheduleType === "later"
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-border/80 hover:bg-muted/40"
+                )}
+              >
+                <div className={cn(
+                  "p-2 rounded-lg",
+                  scheduleType === "later" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                )}>
+                  <CalendarClock className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className={cn("text-sm font-semibold", scheduleType === "later" ? "text-foreground" : "text-muted-foreground")}>Schedule</p>
+                  <p className="text-xs text-muted-foreground">Pick a date & time</p>
+                </div>
+                {scheduleType === "later" && <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />}
+              </button>
             </div>
 
             {scheduleType === "later" && (
-              <div>
-                <Label htmlFor="scheduled-for">Send At</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="scheduled-for" className="text-sm">Send At</Label>
                 <Input
                   id="scheduled-for"
                   type="datetime-local"
                   value={scheduledFor}
                   onChange={(e) => setScheduledFor(e.target.value)}
+                  className="h-10"
                 />
               </div>
             )}
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        {/* Footer */}
+        <div className="px-7 py-5 border-t border-border/60 flex items-center justify-between gap-3 bg-muted/20">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={isLoading}>
             Cancel
           </Button>
           <Button
             onClick={handleCreate}
-            disabled={!campaignName.trim() || !body.trim() || createMutation.isPending || sendMutation.isPending}
+            disabled={
+              !campaignName.trim() ||
+              !body.trim() ||
+              (audienceType === "tag" && selectedTags.length === 0) ||
+              (scheduleType === "later" && !scheduledFor) ||
+              isLoading
+            }
+            className="min-w-36"
           >
-            {(createMutation.isPending || sendMutation.isPending) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            {scheduleType === "now" ? "Create & Send" : "Create Campaign"}
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                {scheduleType === "now" ? "Sending…" : "Saving…"}
+              </>
+            ) : scheduleType === "now" ? (
+              <>
+                <Send className="h-4 w-4 mr-2" />
+                Create & Send
+              </>
+            ) : (
+              <>
+                <CalendarClock className="h-4 w-4 mr-2" />
+                Schedule Campaign
+              </>
+            )}
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

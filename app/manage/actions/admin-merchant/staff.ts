@@ -325,27 +325,28 @@ export async function adminCreateStaff(
     return { success: false, error: 'Failed to create staff profile' }
   }
 
-  // Create location membership
-  const { error: memberError } = await supabase.from('location_members').insert({
-    staff_profile_id: staffProfile.id,
-    location_id: data.locationId,
-    merchant_id: merchantId,
-    role_code: data.roleCode,
-    is_primary_location: true,
-    is_active: true,
-    pin_plain: pinCode,
-    pin_hashed: null,
-    pin_code: pinCode,
-    hourly_rate: data.hourlyRate || 0,
-    employment_type: data.employmentType,
-    assigned_at: new Date().toISOString(),
-  })
+  // Create location membership (skip if merchant has no locations yet)
+  if (data.locationId) {
+    const { error: memberError } = await supabase.from('location_members').insert({
+      staff_profile_id: staffProfile.id,
+      location_id: data.locationId,
+      merchant_id: merchantId,
+      role_code: data.roleCode,
+      is_primary_location: true,
+      is_active: true,
+      pin_plain: pinCode,
+      pin_hashed: null,
+      pin_code: pinCode,
+      hourly_rate: data.hourlyRate || 0,
+      employment_type: data.employmentType,
+      assigned_at: new Date().toISOString(),
+    })
 
-  if (memberError) {
-    console.error('[adminCreateStaff] Member error:', memberError)
-    // Rollback staff profile
-    await supabase.from('staff_profiles').delete().eq('id', staffProfile.id)
-    return { success: false, error: 'Failed to assign staff to location' }
+    if (memberError) {
+      console.error('[adminCreateStaff] Member error:', memberError)
+      await supabase.from('staff_profiles').delete().eq('id', staffProfile.id)
+      return { success: false, error: 'Failed to assign staff to location' }
+    }
   }
 
   // Get staff name for audit log
@@ -513,7 +514,7 @@ export async function adminCreateClerkStaff(
   // 1. Look up merchant to get clerk_org_id
   const { data: merchant, error: merchantError } = await srClient
     .from('merchants')
-    .select('id, clerk_org_id')
+    .select('id, clerk_org_id, name')
     .eq('id', merchantId)
     .single()
 
@@ -523,6 +524,12 @@ export async function adminCreateClerkStaff(
   }
 
   const clerkOrgId = merchant.clerk_org_id
+
+  // Ensure the organizations row exists — the Clerk webhook may not have fired for this org
+  await srClient.from('organizations').upsert(
+    { id: clerkOrgId, name: merchant.name, updated_at: new Date().toISOString() },
+    { onConflict: 'id', ignoreDuplicates: true }
+  )
 
   // 2. Generate temp password
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*'
@@ -582,7 +589,7 @@ export async function adminCreateClerkStaff(
   }
 
   // 6. Eagerly create users row (webhook may not have fired yet)
-  await srClient.from('users').upsert(
+  const { error: userUpsertError } = await srClient.from('users').upsert(
     {
       id: clerkUser.id,
       first_name: data.firstName,
@@ -592,6 +599,11 @@ export async function adminCreateClerkStaff(
     },
     { onConflict: 'id', ignoreDuplicates: true }
   )
+  if (userUpsertError) {
+    console.error('[adminCreateClerkStaff] Users upsert failed:', userUpsertError)
+    await clerk.users.deleteUser(clerkUser.id)
+    return { success: false, error: 'Failed to provision user record' }
+  }
 
   // 7. Create staff_profile
   const { data: staffProfile, error: profileError } = await srClient
@@ -635,29 +647,31 @@ export async function adminCreateClerkStaff(
     return { success: false, error: 'Failed to create member record' }
   }
 
-  // 9. Create location_members record
-  const { error: locationError } = await srClient.from('location_members').insert({
-    location_id: data.locationId,
-    merchant_id: merchantId,
-    user_id: clerkUser.id,
-    staff_profile_id: staffProfile.id,
-    role_code: data.roleCode,
-    is_primary_location: true,
-    is_active: true,
-    pin_plain: pinCode,
-    pin_hashed: null,
-    pin_code: pinCode,
-    hourly_rate: data.hourlyRate || 0,
-    employment_type: data.employmentType,
-    assigned_at: new Date().toISOString(),
-  })
+  // 9. Create location_members record (skip if merchant has no locations yet)
+  if (data.locationId) {
+    const { error: locationError } = await srClient.from('location_members').insert({
+      location_id: data.locationId,
+      merchant_id: merchantId,
+      user_id: clerkUser.id,
+      staff_profile_id: staffProfile.id,
+      role_code: data.roleCode,
+      is_primary_location: true,
+      is_active: true,
+      pin_plain: pinCode,
+      pin_hashed: null,
+      pin_code: pinCode,
+      hourly_rate: data.hourlyRate || 0,
+      employment_type: data.employmentType,
+      assigned_at: new Date().toISOString(),
+    })
 
-  if (locationError) {
-    console.error('[adminCreateClerkStaff] Location members creation failed:', locationError)
-    await srClient.from('members').delete().eq('id', member.id)
-    await srClient.from('staff_profiles').delete().eq('id', staffProfile.id)
-    await clerk.users.deleteUser(clerkUser.id)
-    return { success: false, error: 'Failed to create location assignment' }
+    if (locationError) {
+      console.error('[adminCreateClerkStaff] Location members creation failed:', locationError)
+      await srClient.from('members').delete().eq('id', member.id)
+      await srClient.from('staff_profiles').delete().eq('id', staffProfile.id)
+      await clerk.users.deleteUser(clerkUser.id)
+      return { success: false, error: 'Failed to create location assignment' }
+    }
   }
 
   // 10. Audit log

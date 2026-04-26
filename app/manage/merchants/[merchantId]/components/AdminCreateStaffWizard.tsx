@@ -147,7 +147,7 @@ export function AdminCreateStaffWizard({
       case 'role':
         return !!selectedRoleCode
       case 'locations':
-        return selectedLocationIds.size > 0
+        return true // location is optional when merchant has none yet
       case 'pos_config':
         // For Clerk users, PIN is optional — always can proceed
         if (staffType === 'clerk') return true
@@ -189,11 +189,6 @@ export function AdminCreateStaffWizard({
   }
 
   const handleSubmit = async () => {
-    if (!primaryLocationId) {
-      toast.error('Primary location is required')
-      return
-    }
-
     if (staffType === 'clerk') {
       if (!email) {
         toast.error('Email is required for Dashboard Users')
@@ -240,7 +235,7 @@ export function AdminCreateStaffWizard({
               lastName,
               email,
               phone: phone || undefined,
-              locationId: primaryLocationId,
+              locationId: primaryLocationId ?? undefined,
               roleCode: selectedRoleCode,
               hourlyRate: hourlyRate ? parseFloat(hourlyRate) : undefined,
               employmentType,
@@ -270,7 +265,7 @@ export function AdminCreateStaffWizard({
             lastName,
             email: email || undefined,
             phone: phone || undefined,
-            locationId: primaryLocationId,
+            locationId: primaryLocationId ?? undefined,
             roleCode: selectedRoleCode,
             hourlyRate: hourlyRate ? parseFloat(hourlyRate) : undefined,
             employmentType,
@@ -551,8 +546,13 @@ export function AdminCreateStaffWizard({
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <Label>Location Assignments</Label>
-                      <span className="text-sm text-muted-foreground">Select at least one</span>
+                      <span className="text-sm text-muted-foreground">Optional</span>
                     </div>
+                    {locations.length === 0 && (
+                      <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-4 text-center">
+                        This merchant has no locations yet. You can assign the staff member to a location later.
+                      </p>
+                    )}
                     <div className="grid gap-3">
                       {locations.map((loc) => {
                         const isSelected = selectedLocationIds.has(loc.id)
@@ -714,7 +714,11 @@ export function AdminCreateStaffWizard({
                         </div>
                         <div>
                           <span className="text-muted-foreground">Primary Location</span>
-                          <p className="font-medium">{locations.find((l) => l.id === primaryLocationId)?.name || '—'}</p>
+                          <p className="font-medium">
+                            {primaryLocationId
+                              ? locations.find((l) => l.id === primaryLocationId)?.name || '—'
+                              : 'None (assign later)'}
+                          </p>
                         </div>
                         <div>
                           <span className="text-muted-foreground">POS PIN</span>

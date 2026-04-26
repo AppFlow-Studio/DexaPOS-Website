@@ -3,10 +3,10 @@
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { BusinessHours, DayHours, DEFAULT_BUSINESS_HOURS } from '@/types/merchant_locations'
+import { cn } from '@/lib/utils'
 import { Copy, Moon, RotateCcw } from 'lucide-react'
 
 interface BusinessHoursStepProps {
@@ -16,16 +16,16 @@ interface BusinessHoursStepProps {
 }
 
 const DAYS = [
-    { key: 'monday', label: 'Monday' },
-    { key: 'tuesday', label: 'Tuesday' },
+    { key: 'monday',    label: 'Monday' },
+    { key: 'tuesday',   label: 'Tuesday' },
     { key: 'wednesday', label: 'Wednesday' },
-    { key: 'thursday', label: 'Thursday' },
-    { key: 'friday', label: 'Friday' },
-    { key: 'saturday', label: 'Saturday' },
-    { key: 'sunday', label: 'Sunday' },
+    { key: 'thursday',  label: 'Thursday' },
+    { key: 'friday',    label: 'Friday' },
+    { key: 'saturday',  label: 'Saturday' },
+    { key: 'sunday',    label: 'Sunday' },
 ] as const
 
-// Standard open/close times (same-day): 00:00 – 23:30
+// Same-day options: 00:00 – 23:30
 const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
     const hours = Math.floor(i / 2)
     const minutes = (i % 2) * 30
@@ -38,7 +38,7 @@ const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
     return { value: time, label }
 })
 
-// Overnight close times: 00:00 – 06:00 (next day), in 30-min steps
+// Overnight close options: 00:00 – 06:00 (next day)
 const OVERNIGHT_CLOSE_OPTIONS = Array.from({ length: 13 }, (_, i) => {
     const totalMinutes = i * 30
     const h = Math.floor(totalMinutes / 60)
@@ -67,75 +67,74 @@ function DayHoursRow({
 
     const handleOvernightToggle = (checked: boolean) => {
         if (checked) {
-            // Switching ON: default close to 02:00 unless already in overnight range
             const keepClose = hours.close <= '06:00' ? hours.close : '02:00'
             onChange({ ...hours, is_overnight: true, close: keepClose })
         } else {
-            // Switching OFF: reset close to a sensible same-day time
             onChange({ ...hours, is_overnight: false, close: '23:00' })
         }
     }
 
     return (
-        <div className="flex flex-col gap-2 py-3 border-b last:border-0">
-            <div className="flex items-center gap-4">
-                <div className="w-28 shrink-0 flex items-center gap-2">
-                    <span className="font-medium text-sm">{label}</span>
-                    {isOvernight && !hours.is_closed && (
-                        <Badge variant="outline" className="text-xs text-orange-600 border-orange-300 bg-orange-50 gap-1 px-1.5">
-                            <Moon className="h-2.5 w-2.5" />
-                            Overnight
-                        </Badge>
-                    )}
-                </div>
+        <div className={cn('rounded-xl border p-4', hours.is_closed && 'bg-muted/40')}>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 
-                <div className="flex items-center gap-2">
-                    <Checkbox
+                {/* Left: day name + open/closed toggle */}
+                <div className="flex items-center gap-3">
+                    <div className="flex flex-col gap-0.5 w-28 shrink-0">
+                        <span className="text-sm font-medium">{label}</span>
+                        {isOvernight && !hours.is_closed && (
+                            <Badge variant="outline" className="text-xs text-orange-600 border-orange-300 bg-orange-50 gap-1 px-1.5 w-fit">
+                                <Moon className="h-2.5 w-2.5" />
+                                Overnight
+                            </Badge>
+                        )}
+                    </div>
+                    <Switch
                         checked={!hours.is_closed}
                         onCheckedChange={(checked) => onChange({ ...hours, is_closed: !checked })}
                     />
-                    <span className="text-xs text-muted-foreground w-12">
+                    <span className="text-sm text-muted-foreground w-10">
                         {hours.is_closed ? 'Closed' : 'Open'}
                     </span>
                 </div>
 
-                {!hours.is_closed && (
-                    <div className="flex items-center gap-2 flex-1 flex-wrap">
+                {/* Right: time pickers + overnight toggle */}
+                {hours.is_closed ? (
+                    <span className="text-sm text-muted-foreground lg:text-right">Closed all day</span>
+                ) : (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                         <Select
                             value={hours.open}
                             onValueChange={(value) => onChange({ ...hours, open: value })}
                         >
-                            <SelectTrigger className="w-30 h-9">
+                            <SelectTrigger className="w-full sm:w-36">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                                 {TIME_OPTIONS.map((opt) => (
-                                    <SelectItem key={opt.value} value={opt.value}>
-                                        {opt.label}
-                                    </SelectItem>
+                                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
 
-                        <span className="text-muted-foreground text-sm">to</span>
+                        <span className="text-sm text-muted-foreground text-center hidden sm:block">to</span>
 
                         <Select
                             value={hours.close}
                             onValueChange={(value) => onChange({ ...hours, close: value })}
                         >
-                            <SelectTrigger className="w-37.5 h-9">
+                            {/* w-48 ensures "12:00 AM (next day)" fits without truncation */}
+                            <SelectTrigger className="w-full sm:w-48">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                                 {closeOptions.map((opt) => (
-                                    <SelectItem key={opt.value} value={opt.value}>
-                                        {opt.label}
-                                    </SelectItem>
+                                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
 
-                        <div className="flex items-center gap-1.5 ml-1">
+                        <div className="flex items-center gap-1.5">
                             <Switch
                                 id={`overnight-${day}`}
                                 checked={isOvernight}
@@ -150,16 +149,10 @@ function DayHoursRow({
                         </div>
                     </div>
                 )}
-
-                {hours.is_closed && (
-                    <div className="flex-1 text-sm text-muted-foreground italic">
-                        Location closed
-                    </div>
-                )}
             </div>
 
             {error && (
-                <span className="text-xs text-destructive pl-30">{error}</span>
+                <p className="text-xs text-destructive mt-2">{error}</p>
             )}
         </div>
     )
@@ -169,25 +162,20 @@ export function BusinessHoursStep({ data, onChange, errors }: BusinessHoursStepP
     const hours = data.business_hours
 
     const updateDay = (day: keyof BusinessHours, dayHours: DayHours) => {
-        onChange({
-            business_hours: {
-                ...hours,
-                [day]: dayHours,
-            },
-        })
+        onChange({ business_hours: { ...hours, [day]: dayHours } })
     }
 
     const copyToAllDays = () => {
         const mondayHours = hours.monday || DEFAULT_BUSINESS_HOURS.monday!
         onChange({
             business_hours: {
-                monday: mondayHours,
-                tuesday: { ...mondayHours },
+                monday:    mondayHours,
+                tuesday:   { ...mondayHours },
                 wednesday: { ...mondayHours },
-                thursday: { ...mondayHours },
-                friday: { ...mondayHours },
-                saturday: { ...mondayHours },
-                sunday: { ...mondayHours },
+                thursday:  { ...mondayHours },
+                friday:    { ...mondayHours },
+                saturday:  { ...mondayHours },
+                sunday:    { ...mondayHours },
             },
         })
     }
@@ -196,43 +184,30 @@ export function BusinessHoursStep({ data, onChange, errors }: BusinessHoursStepP
         onChange({ business_hours: DEFAULT_BUSINESS_HOURS })
     }
 
-    const getDefaultHours = (day: keyof BusinessHours): DayHours => {
-        return hours[day] || DEFAULT_BUSINESS_HOURS[day] || { open: '09:00', close: '21:00', is_closed: false, is_overnight: false }
-    }
+    const getDefaultHours = (day: keyof BusinessHours): DayHours =>
+        hours[day] || DEFAULT_BUSINESS_HOURS[day] || { open: '09:00', close: '21:00', is_closed: false, is_overnight: false }
 
     return (
         <div className="space-y-6">
+            {/* Toolbar */}
             <div className="flex items-center justify-between">
-                <div>
-                    <p className="text-sm text-muted-foreground">
-                        Set your regular business hours for this location
-                    </p>
-                </div>
+                <p className="text-sm text-muted-foreground">
+                    Set your regular business hours for this location
+                </p>
                 <div className="flex items-center gap-2">
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={copyToAllDays}
-                        className="gap-1.5"
-                    >
+                    <Button type="button" variant="outline" size="sm" onClick={copyToAllDays} className="gap-1.5">
                         <Copy className="h-3.5 w-3.5" />
                         Copy Monday to all
                     </Button>
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={resetToDefaults}
-                        className="gap-1.5"
-                    >
+                    <Button type="button" variant="ghost" size="sm" onClick={resetToDefaults} className="gap-1.5">
                         <RotateCcw className="h-3.5 w-3.5" />
                         Reset
                     </Button>
                 </div>
             </div>
 
-            <div className="border rounded-lg p-4">
+            {/* Day rows */}
+            <div className="space-y-3">
                 {DAYS.map(({ key, label }) => (
                     <DayHoursRow
                         key={key}
@@ -249,10 +224,11 @@ export function BusinessHoursStep({ data, onChange, errors }: BusinessHoursStepP
                 <p className="text-sm text-destructive">{errors.business_hours}</p>
             )}
 
+            {/* Tips */}
             <div className="bg-muted/50 rounded-lg p-4">
                 <h4 className="text-sm font-medium mb-2">Tips</h4>
                 <ul className="text-xs text-muted-foreground space-y-1">
-                    <li>• Toggle the checkbox to mark a day as closed</li>
+                    <li>• Toggle the switch to mark a day as open or closed</li>
                     <li>• Enable "Closes next day" for overnight hours (e.g. 12 PM – 2 AM)</li>
                     <li>• Use "Copy Monday to all" for consistent hours</li>
                     <li>• Times are in 30-minute intervals</li>
