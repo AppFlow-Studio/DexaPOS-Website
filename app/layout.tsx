@@ -26,6 +26,7 @@ export const metadata: Metadata = {
   title: "DexaPOS - Modern Point of Sale Solution",
   description:
     "Transform your business operations with DexaPOS - the modern point-of-sale solution with powerful analytics and seamless user experience.",
+  icons: { icon: "/favicon.ico" },
 };
 
 export default function RootLayout({

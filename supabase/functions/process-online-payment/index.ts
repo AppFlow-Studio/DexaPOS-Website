@@ -17,6 +17,12 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
+interface PaymentDeviceRow {
+  id: string
+  tpn: string
+  use_for_online_ordering: boolean
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -62,21 +68,37 @@ Deno.serve(async (req: Request): Promise<Response> => {
       )
     }
 
-    const { data: paymentDevice, error: paymentDeviceError } = await supabase
+    const { data: activePaymentDevices, error: paymentDeviceError } = await supabase
       .from('location_payment_devices')
-      .select('id, tpn, is_active, use_for_online_ordering')
+      .select('id, tpn, use_for_online_ordering')
       .eq('location_id', storeConfig.location_id)
       .eq('is_active', true)
-      .eq('use_for_online_ordering', true)
-      .maybeSingle()
+      .order('use_for_online_ordering', { ascending: false })
+      .order('updated_at', { ascending: false })
 
     if (paymentDeviceError) {
       console.error('[PROCESS_PAYMENT] Failed to resolve selected payment device:', paymentDeviceError)
     }
 
+    const branchPaymentDevices = (activePaymentDevices as PaymentDeviceRow[] | null) ?? []
+    const paymentDevice =
+      branchPaymentDevices.find((device) => device.use_for_online_ordering) ??
+      (branchPaymentDevices.length === 1 ? branchPaymentDevices[0] : null)
+
     let securityKey = ''
     let paymentDeviceId: string | null = null
     let resolvedTpn: string | null = null
+
+    if (!paymentDevice && branchPaymentDevices.length > 1) {
+      console.error('[PROCESS_PAYMENT] Multiple active payment devices found with no selected online-ordering device', {
+        locationId: storeConfig.location_id,
+        deviceIds: branchPaymentDevices.map((device) => device.id),
+      })
+      return jsonResponse(
+        { success: false, error: 'Online payment device selection is incomplete for this store.' },
+        503,
+      )
+    }
 
     if (paymentDevice?.id) {
       const { data: secretData, error: secretError } = await supabase.rpc(
@@ -113,9 +135,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
           metadata: {
             location_id: storeConfig.location_id,
             source: 'storefront_checkout',
+            origin: req.headers.get('origin'),
           },
         })
-    } else if (DEJAVOO_FTD_ECOM_KEY) {
+    } else if (branchPaymentDevices.length === 0 && DEJAVOO_FTD_ECOM_KEY) {
       securityKey = DEJAVOO_FTD_ECOM_KEY
       resolvedTpn = storeConfig.ipospays_tpn ?? null
     }

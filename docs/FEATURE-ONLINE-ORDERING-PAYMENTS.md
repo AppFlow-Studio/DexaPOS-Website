@@ -181,10 +181,13 @@ Legacy fallback still supported:
 
 - `DEJAVOO_FTD_ECOM_KEY`
 
-Whitelist automation only if available:
+Whitelist automation:
 
-- `DEJAVOO_MANAGEMENT_API_KEY`
-- `DEJAVOO_MANAGEMENT_API_URL`
+- uses `DEJAVOO_IPOS_API_KEY`
+- optional URL override:
+  - `DEJAVOO_EXTERNAL_API_URL`
+- optional allow-list extension:
+  - `DEJAVOO_DEFAULT_ALLOWED_DOMAINS`
 
 ## How To Test
 
@@ -234,6 +237,20 @@ If secure branch tokenization still fails with `FTD_013` after `process-online-p
 
 then the remaining issue is consistent with Dejavoo-side origin/device/key registration, not a missing Dexa DB migration or missing `create-online-order` update.
 
+### Whitelist synchronization note
+
+Automatic whitelist sync now needs to preserve the existing/default allowed origins instead of replacing them with only the current store origin.
+
+Current expected behavior:
+
+- normalize the storefront URL to its browser origin
+- merge that origin with:
+  - any previously-synced device whitelist origins
+  - default Dejavoo payment origins
+  - any optional `DEJAVOO_DEFAULT_ALLOWED_DOMAINS`
+- persist the merged list back into `location_payment_devices.whitelist_origins`
+- update `location_payment_devices.whitelist_synced_at`
+
 ### Cancellation test
 
 1. Place demo card order.
@@ -242,7 +259,6 @@ then the remaining issue is consistent with Dejavoo-side origin/device/key regis
 
 ## Known Limits
 
-- automatic whitelist still depends on the Dejavoo Management API key
 - live capture is still not the active path
 - real refund flow is still deferred
 

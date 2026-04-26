@@ -25,6 +25,11 @@ import {
 import { uploadMerchantDocument, uploadOrganizationDocument } from '@/lib/cdn/server'
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'dexaposai.com'
+const SUPABASE_FUNCTIONS_URL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1`
+const SUPABASE_FUNCTIONS_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ??
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+  ''
 
 type MissingRequestFieldKey =
   | 'legalBusinessName'
@@ -83,6 +88,8 @@ interface PaymentDeviceSummary {
   id: string
   device_label: string | null
   tpn: string
+  whitelist_origins?: string[] | null
+  whitelist_synced_at?: string | null
   use_for_online_ordering: boolean
   is_active: boolean
   ftd_key_configured: boolean
@@ -227,8 +234,15 @@ interface OnlineOrderingSettings {
 
 async function whitelistDejavooDomain(
   tpn: string,
-  storeSlug: string
-): Promise<{ success: boolean; error?: string; skipped?: boolean; domain?: string }> {
+  storeSlug: string,
+  existingDomains: string[] = []
+): Promise<{
+  success: boolean
+  error?: string
+  skipped?: boolean
+  domain?: string
+  allowedDomains?: string[]
+}> {
   if (!tpn || !storeSlug) {
     return { success: false, error: 'TPN and store slug are required' }
   }
@@ -238,28 +252,72 @@ async function whitelistDejavooDomain(
     ? `http://${storeSlug}.localhost:3000`
     : `https://${storeSlug}.${ROOT_DOMAIN}`
 
-  const supabase = createServerSupabaseClient()
-  const { data, error } = await supabase.functions.invoke(
-    'dejavoo-whitelist-domain',
-    {
-      body: { tpn, storeSlug, storeDomain },
-    }
-  )
-
-  if (error) {
-    console.error('[HQ_DEJAVOO_WHITELIST] Edge invoke error:', error)
+  if (!SUPABASE_FUNCTIONS_URL || !SUPABASE_FUNCTIONS_KEY) {
     return {
       success: false,
-      error: `Domain whitelist invoke error: ${error.message}`,
+      error: 'Supabase function URL/key is not configured for whitelist sync.',
     }
   }
 
-  const result = (data || {}) as { success?: boolean; skipped?: boolean; error?: string }
-  return {
-    success: Boolean(result.success),
-    skipped: result.skipped,
-    error: result.error,
-    domain: storeDomain,
+  try {
+    const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/dejavoo-whitelist-domain`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_FUNCTIONS_KEY,
+        Authorization: `Bearer ${SUPABASE_FUNCTIONS_KEY}`,
+      },
+      body: JSON.stringify({
+        tpn,
+        storeSlug,
+        storeDomain,
+        existingDomains,
+      }),
+      cache: 'no-store',
+    })
+
+    const responseText = await response.text()
+    let result: {
+      success?: boolean
+      skipped?: boolean
+      error?: string
+      allowedDomains?: string[]
+    } = {}
+
+    try {
+      result = responseText ? JSON.parse(responseText) : {}
+    } catch {
+      result = {}
+    }
+
+    if (!response.ok) {
+      console.error('[HQ_DEJAVOO_WHITELIST] Edge HTTP error:', response.status, responseText)
+      return {
+        success: false,
+        error:
+          result.error ||
+          `Domain whitelist failed (${response.status})${responseText ? `: ${responseText}` : ''}`,
+      }
+    }
+
+    return {
+      success: Boolean(result.success),
+      skipped: result.skipped,
+      error: result.error,
+      domain: storeDomain,
+      allowedDomains: Array.isArray(result.allowedDomains)
+        ? result.allowedDomains.filter(
+            (value): value is string =>
+              typeof value === 'string' && value.trim().length > 0
+          )
+        : undefined,
+    }
+  } catch (error) {
+    console.error('[HQ_DEJAVOO_WHITELIST] Edge fetch error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Domain whitelist invoke error',
+    }
   }
 }
 
@@ -284,6 +342,27 @@ async function getSelectedLocationPaymentDevice(locationId: string) {
     devices.find((device) => device.is_active) ??
     null
   )
+}
+
+async function persistPaymentDeviceWhitelist(
+  deviceId: string,
+  allowedDomains: string[]
+) {
+  if (!deviceId || allowedDomains.length === 0) return
+
+  const supabase = createServerSupabaseClient()
+  const { error } = await supabase
+    .from('location_payment_devices')
+    .update({
+      whitelist_origins: allowedDomains,
+      whitelist_synced_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', deviceId)
+
+  if (error) {
+    console.error('[HQ_ONLINE_ORDERING] Failed to persist whitelist metadata:', error)
+  }
 }
 
 async function buildRequestedStoreSlug(
@@ -1326,20 +1405,31 @@ export async function adminSaveOnlineOrderingSettings(
       },
     })
 
+    const refreshedPaymentDevice = await getSelectedLocationPaymentDevice(locationId)
     const finalSlug = (configData.slug as string | undefined) ?? existingConfig?.slug ?? ''
-    const finalTpn = nextTpn
+    const finalTpn = refreshedPaymentDevice?.tpn ?? nextTpn
     const shouldWhitelist = Boolean((tpnIsChanging || slugIsChanging) && finalTpn && finalSlug)
 
     let domainWhitelistError: string | undefined
     let domainWhitelistSkipped = false
     if (shouldWhitelist) {
-      const whitelistResult = await whitelistDejavooDomain(finalTpn as string, finalSlug)
+      const whitelistResult = await whitelistDejavooDomain(
+        finalTpn as string,
+        finalSlug,
+        refreshedPaymentDevice?.whitelist_origins ?? []
+      )
       if (!whitelistResult.success && !whitelistResult.skipped) {
         domainWhitelistError = whitelistResult.error || 'Domain whitelist failed'
         console.error('[adminSaveOnlineOrderingSettings] Domain whitelist failed:', domainWhitelistError)
       }
       if (whitelistResult.skipped) {
         domainWhitelistSkipped = true
+      }
+      if (whitelistResult.success && refreshedPaymentDevice?.id && whitelistResult.allowedDomains?.length) {
+        await persistPaymentDeviceWhitelist(
+          refreshedPaymentDevice.id,
+          whitelistResult.allowedDomains
+        )
       }
     }
 
@@ -1425,13 +1515,20 @@ export async function adminToggleOnlineStore(
     let domainWhitelistError: string | undefined
     let domainWhitelistSkipped = false
     if (enabled && selectedDevice?.tpn && existingConfig.slug) {
-      const whitelistResult = await whitelistDejavooDomain(selectedDevice.tpn, existingConfig.slug)
+      const whitelistResult = await whitelistDejavooDomain(
+        selectedDevice.tpn,
+        existingConfig.slug,
+        selectedDevice.whitelist_origins ?? []
+      )
       if (!whitelistResult.success && !whitelistResult.skipped) {
         domainWhitelistError = whitelistResult.error || 'Domain whitelist failed'
         console.error('[adminToggleOnlineStore] Domain whitelist failed:', domainWhitelistError)
       }
       if (whitelistResult.skipped) {
         domainWhitelistSkipped = true
+      }
+      if (whitelistResult.success && selectedDevice.id && whitelistResult.allowedDomains?.length) {
+        await persistPaymentDeviceWhitelist(selectedDevice.id, whitelistResult.allowedDomains)
       }
     }
 
@@ -1472,9 +1569,16 @@ export async function adminRetriggerDomainWhitelist(
       return { success: false, error: 'No store slug configured for this location' }
     }
 
-    const result = await whitelistDejavooDomain(selectedDevice.tpn, config.slug)
+    const result = await whitelistDejavooDomain(
+      selectedDevice.tpn,
+      config.slug,
+      selectedDevice.whitelist_origins ?? []
+    )
     if (!result.success) {
       return { success: false, skipped: result.skipped, error: result.error || 'Domain whitelist failed' }
+    }
+    if (selectedDevice.id && result.allowedDomains?.length) {
+      await persistPaymentDeviceWhitelist(selectedDevice.id, result.allowedDomains)
     }
     return { success: true, skipped: result.skipped }
   } catch (error) {
