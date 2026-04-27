@@ -22,12 +22,14 @@ import {
 } from "@/components/ui/dialog";
 import {
   AlertTriangle,
+  ArrowRight,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   Clock,
   Code,
   Loader2,
+  Plug,
   RefreshCw,
   Upload,
   XCircle,
@@ -40,12 +42,14 @@ import {
 } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 import { usePushMenuToOrderOut } from "@/app/dashboard/online-ordering/hooks/useOrderOutStatus";
 import { SyncStatusBadge, formatTimeAgo } from "./OrderOutMenuStatus";
+import Link from "next/link";
 
 interface MenuOrderOutTabProps {
   menuId: string;
   locationId: string;
   clerkOrgId: string;
   menuName: string;
+  isConfigured: boolean;
 }
 
 function formatDuration(start: string, end: string | null): string {
@@ -64,6 +68,7 @@ export function MenuOrderOutTab({
   locationId,
   clerkOrgId,
   menuName,
+  isConfigured,
 }: MenuOrderOutTabProps) {
   const {
     data: syncResult,
@@ -110,6 +115,67 @@ export function MenuOrderOutTab({
   const lastPayloadSnapshot = syncHistory.find(
     (s) => s.status === "success"
   );
+
+  if (!isConfigured) {
+    return (
+      <div className="space-y-4">
+        <Card>
+          <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+              <Plug className="h-7 w-7 text-muted-foreground" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-base font-semibold">OrderOut not connected for this location</p>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                To push menus to delivery platforms like UberEats and DoorDash, you first need to
+                connect OrderOut for this location.
+              </p>
+            </div>
+
+            <div className="w-full max-w-sm rounded-lg border bg-muted/40 p-4 text-left">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Setup steps
+              </p>
+              <ol className="space-y-2 text-sm text-foreground">
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
+                    1
+                  </span>
+                  Go to <span className="font-medium">Online Ordering</span> in the sidebar
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
+                    2
+                  </span>
+                  Open the <span className="font-medium">OrderOut</span> tab
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
+                    3
+                  </span>
+                  Fill in your restaurant details and click{" "}
+                  <span className="font-medium">Connect to OrderOut</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
+                    4
+                  </span>
+                  Come back here to push this menu
+                </li>
+              </ol>
+            </div>
+
+            <Button asChild>
+              <Link href="/dashboard/online-ordering">
+                Go to Online Ordering
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

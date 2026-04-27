@@ -1,0 +1,206 @@
+{
+  "metrics": {
+    "data_received": {
+      "type": "counter",
+      "contains": "data",
+      "values": {
+        "count": 10523789,
+        "rate": 101188.69378364382
+      }
+    },
+    "ws_errors": {
+      "thresholds": {
+        "count<25": {
+          "ok": true
+        }
+      },
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "count": 0
+      }
+    },
+    "join_failures": {
+      "values": {
+        "rate": 0,
+        "count": 0
+      },
+      "thresholds": {
+        "count<10": {
+          "ok": true
+        }
+      },
+      "type": "counter",
+      "contains": "default"
+    },
+    "ws_connecting": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 909.199988557214,
+        "min": 226.5769,
+        "med": 402.3035,
+        "max": 46090.3988,
+        "p(90)": 1631.0126,
+        "p(95)": 1981.6829
+      }
+    },
+    "vus": {
+      "type": "gauge",
+      "contains": "default",
+      "values": {
+        "min": 1,
+        "max": 200,
+        "value": 1
+      }
+    },
+    "checks": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0.9523809523809523,
+        "passes": 20,
+        "fails": 1
+      }
+    },
+    "iterations": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 21,
+        "rate": 0.20191991396411693
+      }
+    },
+    "iteration_duration": {
+      "contains": "time",
+      "values": {
+        "max": 100963.2351,
+        "p(90)": 100707.7561,
+        "p(95)": 100908.3765,
+        "avg": 97876.36167142859,
+        "min": 46091.7242,
+        "med": 100380.1044
+      },
+      "type": "trend"
+    },
+    "fanout_lag_ms": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(90)": 4931.000000000002,
+        "p(95)": 7904.599999999995,
+        "avg": 2578.6006389776358,
+        "min": 146,
+        "med": 1756,
+        "max": 17259
+      },
+      "thresholds": {
+        "p(95)<2000": {
+          "ok": false
+        }
+      }
+    },
+    "subscribed_total": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 200,
+        "rate": 1.9230467996582565
+      }
+    },
+    "ws_session_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 97876.18752380952,
+        "min": 46091.163,
+        "med": 100379.7243,
+        "max": 100963.2351,
+        "p(90)": 100707.7561,
+        "p(95)": 100908.3765
+      }
+    },
+    "ws_sessions": {
+      "values": {
+        "count": 201,
+        "rate": 1.9326620336565477
+      },
+      "type": "counter",
+      "contains": "default"
+    },
+    "data_sent": {
+      "type": "counter",
+      "contains": "data",
+      "values": {
+        "count": 558395,
+        "rate": 5369.09858847586
+      }
+    },
+    "vus_max": {
+      "type": "gauge",
+      "contains": "default",
+      "values": {
+        "value": 200,
+        "min": 200,
+        "max": 200
+      }
+    },
+    "events_received": {
+      "contains": "default",
+      "values": {
+        "count": 1565,
+        "rate": 15.047841207325856
+      },
+      "type": "counter"
+    },
+    "ws_msgs_sent": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 754,
+        "rate": 7.249886434711627
+      }
+    },
+    "ws_msgs_received": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 2511,
+        "rate": 24.14385256970941
+      }
+    }
+  },
+  "root_group": {
+    "name": "",
+    "path": "",
+    "id": "d41d8cd98f00b204e9800998ecf8427e",
+    "groups": [],
+    "checks": [
+        {
+          "name": "ws upgrade 101",
+          "path": "::ws upgrade 101",
+          "id": "ca25a24181c740332064d9419a10a09d",
+          "passes": 20,
+          "fails": 1
+        }
+      ]
+  },
+  "options": {
+    "summaryTimeUnit": "",
+    "noColor": false,
+    "summaryTrendStats": [
+      "avg",
+      "min",
+      "med",
+      "max",
+      "p(90)",
+      "p(95)"
+    ]
+  },
+  "state": {
+    "isStdOutTTY": true,
+    "isStdErrTTY": true,
+    "testRunDurationMs": 104001.6291
+  }
+}

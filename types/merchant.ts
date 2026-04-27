@@ -84,6 +84,12 @@ export interface MerchantDetails extends MerchantSummary {
   business_state?: string | null
   business_postal_code?: string | null
   business_country?: string | null
+  /**
+   * 12-char Dejavoo / iPOSpays merchantId. Per-merchant; required for the
+   * domain-whitelist Management API call. Distinct from `id` (UUID) and
+   * `clerk_org_id`.
+   */
+  external_merchant_id?: string | null
   onboarding_checklist?: MerchantOnboardingChecklist
   locations: LocationSummary[]
 }
