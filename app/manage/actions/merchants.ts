@@ -550,6 +550,162 @@ export async function updateMerchantOnboardingStatus(params: {
 }
 
 // ============================================================================
+// GRACEFUL SUSPENSION (A7)
+// ============================================================================
+
+export interface MerchantDrainStatus {
+  merchant_id: string
+  status: string
+  open_orders: number
+  open_drawer_sessions: number
+  fully_drained: boolean
+  suspension_initiated_at: string | null
+}
+
+export interface SuspensionResult {
+  success: boolean
+  error?: string
+  status?: string
+  open_orders?: number
+  open_drawer_sessions?: number
+  fully_drained?: boolean
+  forced?: boolean
+}
+
+export async function requestMerchantSuspension(params: {
+  merchantId: string
+  force?: boolean
+  reason?: string
+}): Promise<SuspensionResult> {
+  const { userId } = await assertHQPermission('hq.merchant.update')
+  const supabase = createServerSupabaseClient()
+
+  const { data: merchant } = await supabase
+    .from('merchants')
+    .select('id, name, clerk_org_id, onboarding_status')
+    .eq('id', params.merchantId)
+    .single()
+
+  if (!merchant) return { success: false, error: 'Merchant not found.' }
+
+  const { data, error } = await supabase.rpc('request_merchant_suspension', {
+    p_merchant_id: params.merchantId,
+    p_force: params.force ?? false,
+    p_reason: params.reason ?? null,
+    p_initiated_by: userId,
+  })
+
+  if (error) {
+    console.error('[requestMerchantSuspension] RPC error:', error)
+    return { success: false, error: error.message }
+  }
+
+  const result = data as Record<string, unknown> | null
+  const finalStatus = (result?.status as string) || 'unknown'
+  const openOrders = (result?.open_orders as number) ?? 0
+  const openDrawers = (result?.open_drawer_sessions as number) ?? 0
+
+  await logAdminAction(
+    params.force && (openOrders > 0 || openDrawers > 0)
+      ? 'MERCHANT_SUSPENSION_FORCED'
+      : 'MERCHANT_SUSPENSION_REQUESTED',
+    {
+      merchantId: params.merchantId,
+      clerkOrgId: merchant.clerk_org_id ?? undefined,
+      resourceType: 'merchant',
+      resourceId: params.merchantId,
+      resourceName: merchant.name || params.merchantId,
+      changes: {
+        before: { onboarding_status: merchant.onboarding_status },
+        after: { onboarding_status: finalStatus },
+        reason: params.reason,
+      },
+      metadata: {
+        source: 'requestMerchantSuspension',
+        initiated_by_user_id: userId,
+        forced: params.force ?? false,
+        open_orders: openOrders,
+        open_drawer_sessions: openDrawers,
+      },
+    }
+  )
+
+  revalidatePath('/manage/merchants')
+  revalidatePath(`/manage/merchants/${params.merchantId}`)
+
+  return {
+    success: true,
+    status: finalStatus,
+    open_orders: openOrders,
+    open_drawer_sessions: openDrawers,
+    fully_drained: Boolean(result?.fully_drained),
+    forced: params.force ?? false,
+  }
+}
+
+export async function cancelMerchantSuspension(merchantId: string): Promise<SuspensionResult> {
+  const { userId } = await assertHQPermission('hq.merchant.update')
+  const supabase = createServerSupabaseClient()
+
+  const { data: merchant } = await supabase
+    .from('merchants')
+    .select('id, name, clerk_org_id, onboarding_status')
+    .eq('id', merchantId)
+    .single()
+
+  if (!merchant) return { success: false, error: 'Merchant not found.' }
+
+  const { data, error } = await supabase.rpc('cancel_merchant_suspension', {
+    p_merchant_id: merchantId,
+    p_initiated_by: userId,
+  })
+
+  if (error) {
+    console.error('[cancelMerchantSuspension] RPC error:', error)
+    return { success: false, error: error.message }
+  }
+
+  const result = data as Record<string, unknown> | null
+  const finalStatus = (result?.status as string) || 'active'
+
+  await logAdminAction('MERCHANT_SUSPENSION_CANCELLED', {
+    merchantId,
+    clerkOrgId: merchant.clerk_org_id ?? undefined,
+    resourceType: 'merchant',
+    resourceId: merchantId,
+    resourceName: merchant.name || merchantId,
+    changes: {
+      before: { onboarding_status: merchant.onboarding_status },
+      after: { onboarding_status: finalStatus },
+    },
+    metadata: { source: 'cancelMerchantSuspension', initiated_by_user_id: userId },
+  })
+
+  revalidatePath('/manage/merchants')
+  revalidatePath(`/manage/merchants/${merchantId}`)
+
+  return { success: true, status: finalStatus }
+}
+
+export async function getMerchantDrainStatus(
+  merchantId: string
+): Promise<MerchantDrainStatus | null> {
+  await assertHQPermission('hq.merchant.view')
+  const supabase = createServerSupabaseClient()
+
+  const { data, error } = await supabase.rpc('get_merchant_drain_status', {
+    p_merchant_id: merchantId,
+  })
+
+  if (error) {
+    console.error('[getMerchantDrainStatus] RPC error:', error)
+    return null
+  }
+
+  return data as unknown as MerchantDrainStatus
+}
+
+// ============================================================================
 // TOGGLE LOCATION STATUS
 // ============================================================================
 

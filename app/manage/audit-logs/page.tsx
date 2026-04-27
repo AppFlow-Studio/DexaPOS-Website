@@ -34,6 +34,7 @@ import type { PlatformAuditLogFilters, PlatformAuditLogRow } from '@/app/manage/
 import { MerchantSearchSelect } from '@/components/admin/MerchantSearchSelect'
 import { buildAuditSentence, formatChangesForDisplay } from '@/lib/audit/sentence-templates'
 import type { AuditLogWithLocation } from '@/types/audit-log'
+import { PII_ACCESS_TYPES, PII_ACCESS_TYPE_LABELS } from '@/types/audit-log'
 
 const PAGE_SIZE = 50
 
@@ -371,6 +372,8 @@ export default function AuditLogsPage() {
   const [dateTo, setDateTo] = useState('')
   const [resourceType, setResourceType] = useState('')
   const [hasError, setHasError] = useState(false)
+  // 'any' = no PII filter; 'all' = pii_access_type IS NOT NULL; specific value = exact match
+  const [piiAccess, setPiiAccess] = useState<'any' | 'all' | (typeof PII_ACCESS_TYPES)[number]>('any')
 
   // Tabs
   const [activeTab, setActiveTab] = useState<'all' | 'flagged'>('all')
@@ -407,8 +410,10 @@ export default function AuditLogsPage() {
       dateTo: dateTo ? new Date(`${dateTo}T23:59:59.999`).toISOString() : undefined,
       resourceType: resourceType.trim() || undefined,
       hasError: hasError || undefined,
+      piiAccessOnly: piiAccess === 'all' ? true : undefined,
+      piiAccessType: piiAccess !== 'any' && piiAccess !== 'all' ? piiAccess : undefined,
     }),
-    [search, actor, actionCategory, severity, status, merchantId, dateFrom, dateTo, resourceType, hasError]
+    [search, actor, actionCategory, severity, status, merchantId, dateFrom, dateTo, resourceType, hasError, piiAccess]
   )
 
   useEffect(() => { setPage(1) }, [filters])
@@ -446,7 +451,7 @@ export default function AuditLogsPage() {
   function clearFilters() {
     setSearch(''); setActor(''); setActionCategory('all'); setSeverity('all')
     setStatus('all'); setMerchantId('all'); setDateFrom(''); setDateTo('')
-    setResourceType(''); setHasError(false); setPage(1)
+    setResourceType(''); setHasError(false); setPiiAccess('any'); setPage(1)
   }
 
   async function handleExport() {
@@ -590,7 +595,7 @@ export default function AuditLogsPage() {
             </div>
           </div>
 
-          {/* Row 3: Dates + Has Error toggle */}
+          {/* Row 3: Dates + PII Access + Has Error toggle */}
           <div className="grid gap-3 md:grid-cols-4 items-end">
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-muted-foreground">Date From</span>
@@ -599,6 +604,23 @@ export default function AuditLogsPage() {
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-muted-foreground">Date To</span>
               <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-muted-foreground">PII Access</span>
+              <select
+                className="h-9 rounded-md border bg-background px-2 text-sm"
+                value={piiAccess}
+                onChange={(e) => {
+                  setPiiAccess(e.target.value as typeof piiAccess)
+                  setPage(1)
+                }}
+              >
+                <option value="any">Any (no PII filter)</option>
+                <option value="all">PII access only</option>
+                {PII_ACCESS_TYPES.map((t) => (
+                  <option key={t} value={t}>{PII_ACCESS_TYPE_LABELS[t]}</option>
+                ))}
+              </select>
             </label>
             <label className="flex items-center gap-2 text-sm cursor-pointer select-none pt-5">
               <input
