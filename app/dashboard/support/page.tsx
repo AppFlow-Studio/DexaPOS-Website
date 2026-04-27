@@ -24,6 +24,7 @@ import {
   TICKET_STATUS_COLORS,
   TicketStatus,
 } from "@/types/support-ticket";
+import { getViewerStatusLabel } from "@/lib/support/ticket-display";
 import { formatDistanceToNow } from "date-fns";
 
 type TabKey = "open" | "resolved" | "all";
@@ -78,15 +79,7 @@ function TicketCard({ ticket }: { ticket: SupportTicket }) {
       </div>
 
       <div className="flex items-center justify-between text-xs text-muted-foreground pl-6">
-        <span>
-          {isWaiting
-            ? "Waiting on your reply"
-            : ticket.status === "in_progress"
-            ? "DEXA team is working on it"
-            : isResolved
-            ? "Resolved"
-            : "Waiting for DEXA team"}
-        </span>
+        <span>{getViewerStatusLabel(ticket.status, { role: "merchant" })}</span>
         <span>{formatDistanceToNow(new Date(ticket.last_message_at), { addSuffix: true })}</span>
       </div>
     </div>

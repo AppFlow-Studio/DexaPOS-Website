@@ -57,6 +57,7 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
     const { pricingStrategy: merchantStrategy, dualPricingPercentage: merchantPercentage } = useEffectivePricing()
 
     const [isTogglingOrders, setIsTogglingOrders] = useState(false)
+    const [isTogglingDefaults, setIsTogglingDefaults] = useState(false)
     const [isDeactivating, setIsDeactivating] = useState(false)
     const [showDeactivateDialog, setShowDeactivateDialog] = useState(false)
     const [confirmName, setConfirmName] = useState('')
@@ -109,6 +110,7 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
 
     const handleToggleMerchantDefaults = async (checked: boolean) => {
         setUseMerchantDefaults(checked)
+        setIsTogglingDefaults(true)
         try {
             const result = await UpdateLocation(location.id, {
                 use_merchant_pricing_defaults: checked,
@@ -119,12 +121,16 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
                 return
             }
             toast.success(checked ? 'Using Organization Defaults' : 'Using Custom Pricing')
-            queryClient.invalidateQueries({ queryKey: ['locations'] })
-            queryClient.invalidateQueries({ queryKey: ['merchant-pricing-defaults'] })
+            void Promise.all([
+                queryClient.invalidateQueries({ queryKey: ['locations'] }),
+                queryClient.invalidateQueries({ queryKey: ['merchant-pricing-defaults'] }),
+            ])
             onUpdate?.()
         } catch (error) {
             setUseMerchantDefaults(!checked)
             toast.error('Update Failed', { description: 'An unexpected error occurred' })
+        } finally {
+            setIsTogglingDefaults(false)
         }
     }
 
@@ -269,10 +275,14 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
                                     </p>
                                 </div>
                             </div>
-                            <Switch
-                                checked={useMerchantDefaults}
-                                onCheckedChange={handleToggleMerchantDefaults}
-                            />
+                            <div className="flex items-center gap-2">
+                                {isTogglingDefaults && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                                <Switch
+                                    checked={useMerchantDefaults}
+                                    onCheckedChange={handleToggleMerchantDefaults}
+                                    disabled={isTogglingDefaults}
+                                />
+                            </div>
                         </div>
 
                         {useMerchantDefaults ? (

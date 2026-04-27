@@ -31,7 +31,7 @@ import {
 import { cn } from '@/lib/utils'
 import { usePlatformAuditLogs } from '@/lib/queries/use-platform-analytics'
 import type { PlatformAuditLogFilters, PlatformAuditLogRow } from '@/app/manage/actions/hq-platform/analytics'
-import { getPlatformMerchants, type PlatformMerchant } from '@/app/manage/actions/hq-platform/transactions'
+import { MerchantSearchSelect } from '@/components/admin/MerchantSearchSelect'
 import { buildAuditSentence, formatChangesForDisplay } from '@/lib/audit/sentence-templates'
 import type { AuditLogWithLocation } from '@/types/audit-log'
 
@@ -383,10 +383,6 @@ export default function AuditLogsPage() {
   const [isExporting, setIsExporting] = useState(false)
   const [exportNote, setExportNote] = useState<string | null>(null)
 
-  // Data
-  const [merchants, setMerchants] = useState<PlatformMerchant[]>([])
-  const [loadingMerchants, setLoadingMerchants] = useState(true)
-
   // Flag state (localStorage persisted)
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(() => loadFlaggedIds())
 
@@ -414,16 +410,6 @@ export default function AuditLogsPage() {
     }),
     [search, actor, actionCategory, severity, status, merchantId, dateFrom, dateTo, resourceType, hasError]
   )
-
-  useEffect(() => {
-    let active = true
-    setLoadingMerchants(true)
-    getPlatformMerchants()
-      .then((data) => { if (active) setMerchants(data) })
-      .catch((e) => console.error('[AuditLogsPage] merchants:', e))
-      .finally(() => { if (active) setLoadingMerchants(false) })
-    return () => { active = false }
-  }, [])
 
   useEffect(() => { setPage(1) }, [filters])
 
@@ -593,11 +579,11 @@ export default function AuditLogsPage() {
             </label>
             <label className="flex flex-col gap-1 text-sm md:col-span-2">
               <span className="text-muted-foreground">Merchant</span>
-              <select className="h-9 rounded-md border bg-background px-2 text-sm"
-                value={merchantId} onChange={(e) => setMerchantId(e.target.value)} disabled={loadingMerchants}>
-                <option value="all">All merchants</option>
-                {merchants.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
+              <MerchantSearchSelect
+                value={merchantId}
+                onChange={setMerchantId}
+                placeholder="Search merchants..."
+              />
             </label>
             <div className="flex items-end">
               <Button variant="ghost" className="w-full" onClick={clearFilters}>Clear</Button>

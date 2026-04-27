@@ -4193,6 +4193,16 @@ const STATE_NAME_MAP: Record<string, string> = {
   VA:'Virginia',WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',DC:'D.C.',
 }
 
+// Canonical CSV column set for audit-log export. Keep this list in sync with
+// the headers array in app/manage/audit-logs/page.tsx::buildCsv. The screen
+// view shows a subset (timestamp, org, location, what-happened, who, category,
+// severity, status); the CSV adds resource/error/changes/metadata for offline
+// review. Export delegates to getPlatformAuditLogs so screen and file always
+// agree on filter semantics — only the row cap differs.
+//
+// CSV columns (canonical): Timestamp, Actor Name, Actor Email, Actor Role,
+// Action, Category, Resource Type, Resource Name, Resource ID, Merchant,
+// Location, Org Type, Severity, Status, Error Message, Changes, Metadata.
 export async function getPlatformAuditLogsExport(
   filters?: PlatformAuditLogFilters,
   cap: number = 5000

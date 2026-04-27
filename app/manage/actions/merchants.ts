@@ -94,44 +94,11 @@ export async function getMerchants(
     query = query.ilike('name', `%${filters.search.trim()}%`)
   }
 
-  // Apply status filter
+  // Apply status filter — always via derived_status on the view.
+  // onboarding_status is a separate lifecycle field with different semantics;
+  // using it here caused the wrong merchants to appear for 'active'/'onboarding'.
   if (filters.status !== 'all') {
-    if (filters.status === 'inactive') {
-      query = query.eq('derived_status', 'inactive')
-    } else {
-      let statusScopeQuery = supabase
-        .from('merchants')
-        .select('id')
-        .eq('onboarding_status', filters.status)
-
-      if (effectiveMerchantIds !== undefined) {
-        if (effectiveMerchantIds.length === 0) {
-          return { merchants: [], total: 0 }
-        }
-        statusScopeQuery = statusScopeQuery.in('id', effectiveMerchantIds)
-      }
-
-      const { data: statusScopedRows, error: statusScopedError } = await statusScopeQuery
-
-      if (statusScopedError) {
-        console.error('[getMerchants] Status scope error:', statusScopedError)
-        throw new Error('Failed to filter merchants by onboarding status')
-      }
-
-      const statusScopedMerchantIds = Array.from(
-        new Set(
-          (statusScopedRows || [])
-            .map((row) => row.id)
-            .filter((id): id is string => typeof id === 'string' && id.length > 0)
-        )
-      )
-
-      if (statusScopedMerchantIds.length === 0) {
-        return { merchants: [], total: 0 }
-      }
-
-      query = query.in('id', statusScopedMerchantIds)
-    }
+    query = query.eq('derived_status', filters.status)
   }
 
   // Apply sorting

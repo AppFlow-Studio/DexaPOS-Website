@@ -283,9 +283,9 @@ export async function UpdateLocation(
     }
   });
 
-  // Log audit event
+  // Log audit event — fire-and-forget so the caller isn't blocked by the insert
   if (changedFields.length > 0) {
-    await LogAuditEvent({
+    void LogAuditEvent({
       merchantId: location.merchant_id,
       action: `Updated Location: ${location.name}`,
       actionCategory: "settings",
