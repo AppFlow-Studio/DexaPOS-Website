@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { UserPlus2, BarChart3, Activity, Zap } from 'lucide-react'
 import { AdminInviteWizard } from './organizations/[organizationId]/components/AdminInviteWizard'
 import { PlatformPulseSection } from './components/PlatformPulseSection'
+import { MerchantSpotlightSection } from './components/MerchantSpotlightSection'
 import { LiveActivityFeed } from './components/LiveActivityFeed'
 import { DeviceFleetMap } from './components/DeviceFleetMap'
 import { OrdersHeatmap } from './components/OrdersHeatmap'
@@ -71,6 +72,9 @@ export default function Dashboard() {
         <TabsContent value="dashboard" className="space-y-6 mt-6">
           {/* Section 1A: Platform Pulse (KPIs) */}
           <PlatformPulseSection />
+
+          {/* Section 1A.5: Merchant Spotlight — top merchants by today's revenue */}
+          <MerchantSpotlightSection />
 
           {/* Section 1B & 1C: Live Feed + Device Fleet (2-column layout) */}
           <div className="grid gap-6 md:grid-cols-12">
