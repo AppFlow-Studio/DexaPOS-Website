@@ -17,17 +17,28 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { StaffPinField } from "@/components/dashboard/staff/StaffPinField";
 import { cn } from "@/lib/utils";
-import { useAdminResetStaffPin, useAdminToggleStaffStatus } from "@/lib/queries/use-admin-staff";
+import {
+  useAdminResetStaffPin,
+  useAdminToggleStaffStatus,
+  useAdminResetStaffPassword,
+} from "@/lib/queries/use-admin-staff";
 import type { AdminStaffMember } from "@/types/staff";
 import {
   Activity,
   CheckCircle2,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Lock,
   Mail,
   MapPin,
   Phone,
   Shield,
   Tablet,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { CredentialToast } from "@/components/ui/credential-toast";
 import { toast } from "sonner";
 
 interface AdminStaffDetailSheetProps {
@@ -56,10 +67,24 @@ export function AdminStaffDetailSheet({
 }: AdminStaffDetailSheetProps) {
   const resetPinMutation = useAdminResetStaffPin();
   const toggleStatusMutation = useAdminToggleStaffStatus();
+  const resetPasswordMutation = useAdminResetStaffPassword();
+
   const [generatedPin, setGeneratedPin] = React.useState<string | null>(null);
+  const [customPinInput, setCustomPinInput] = React.useState("");
+  const [showCustomPin, setShowCustomPin] = React.useState(false);
+
+  const [generatedPassword, setGeneratedPassword] = React.useState<string | null>(null);
+  const [customPasswordInput, setCustomPasswordInput] = React.useState("");
+  const [showCustomPassword, setShowCustomPassword] = React.useState(false);
+  const [showPasswordValue, setShowPasswordValue] = React.useState(false);
 
   React.useEffect(() => {
     setGeneratedPin(null);
+    setCustomPinInput("");
+    setShowCustomPin(false);
+    setGeneratedPassword(null);
+    setCustomPasswordInput("");
+    setShowCustomPassword(false);
   }, [staff?.member_id, staff?.last_updated_at]);
 
   if (!staff) return null;
@@ -127,6 +152,58 @@ export function AdminStaffDetailSheet({
           }
 
           toast.success(staff.overall_is_active ? "Staff deactivated" : "Staff reactivated");
+        },
+      }
+    );
+  };
+
+  const handleSetCustomPin = () => {
+    if (!canManage) return;
+    if (!/^\d{4,6}$/.test(customPinInput)) {
+      toast.error("PIN must be 4–6 digits");
+      return;
+    }
+    if (!primaryLocation || !staff.staff_profile_id) {
+      toast.error("Cannot reset PIN: missing required info");
+      return;
+    }
+    resetPinMutation.mutate(
+      { merchantId, staffProfileId: staff.staff_profile_id, locationId: primaryLocation.location_id, customPin: customPinInput },
+      {
+        onSuccess: (result) => {
+          if (!result.success || !result.pin) {
+            toast.error(result.error || "Failed to set PIN");
+            return;
+          }
+          setGeneratedPin(result.pin);
+          setShowCustomPin(false);
+          setCustomPinInput("");
+          toast.custom(
+            (t) => React.createElement(CredentialToast, { pin: result.pin, duration: 15, onDismiss: () => toast.dismiss(t) }),
+            { duration: 15000, position: "top-center" }
+          );
+        },
+      }
+    );
+  };
+
+  const handleResetPassword = (custom?: string) => {
+    if (!canManage || !staff.clerk_user_id) return;
+    resetPasswordMutation.mutate(
+      { merchantId, clerkUserId: staff.clerk_user_id, customPassword: custom || undefined },
+      {
+        onSuccess: (result) => {
+          if (!result.success || !result.password) {
+            toast.error(result.error || "Failed to reset password");
+            return;
+          }
+          setGeneratedPassword(result.password);
+          setShowCustomPassword(false);
+          setCustomPasswordInput("");
+          toast.custom(
+            (t) => React.createElement(CredentialToast, { password: result.password, duration: 15, onDismiss: () => toast.dismiss(t) }),
+            { duration: 15000, position: "top-center" }
+          );
         },
       }
     );
@@ -250,6 +327,41 @@ export function AdminStaffDetailSheet({
                     }
                   />
 
+                  {/* Custom PIN input */}
+                  {canManage && primaryLocation && staff.staff_profile_id && (
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => { setShowCustomPin((v) => !v); setCustomPinInput(""); }}
+                      >
+                        <KeyRound className="h-3 w-3" />
+                        {showCustomPin ? "Cancel custom PIN" : "Set custom PIN"}
+                      </button>
+                      {showCustomPin && (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="\d{4,6}"
+                            maxLength={6}
+                            placeholder="4–6 digit PIN"
+                            value={customPinInput}
+                            onChange={(e) => setCustomPinInput(e.target.value.replace(/\D/g, ""))}
+                            className="h-8 w-36 font-mono text-sm"
+                          />
+                          <Button
+                            size="sm"
+                            onClick={handleSetCustomPin}
+                            disabled={resetPinMutation.isPending || customPinInput.length < 4}
+                          >
+                            Set PIN
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <Separator />
 
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -269,6 +381,84 @@ export function AdminStaffDetailSheet({
                 </div>
               </section>
             </div>
+
+            {/* Dashboard Access — only for Clerk users */}
+            {staff.account_type === "clerk" && staff.clerk_user_id && (
+              <section className="rounded-2xl border bg-card p-5">
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Dashboard Access
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Reset the password this staff member uses to log in to the web dashboard.
+                  </p>
+                </div>
+                <div className="space-y-4">
+                  {/* Generated password display */}
+                  {generatedPassword && (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">New Password</Label>
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <Input
+                            readOnly
+                            value={showPasswordValue ? generatedPassword : "•".repeat(generatedPassword.length)}
+                            className="font-mono text-sm pr-10"
+                          />
+                          <button
+                            type="button"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            onClick={() => setShowPasswordValue((v) => !v)}
+                          >
+                            {showPasswordValue ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleResetPassword()}
+                      disabled={!canManage || resetPasswordMutation.isPending}
+                    >
+                      <Lock className="h-3.5 w-3.5 mr-1.5" />
+                      {resetPasswordMutation.isPending ? "Resetting…" : "Reset Password"}
+                    </Button>
+                    {canManage && (
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => { setShowCustomPassword((v) => !v); setCustomPasswordInput(""); }}
+                      >
+                        {showCustomPassword ? "Cancel" : "Set custom password"}
+                      </button>
+                    )}
+                  </div>
+
+                  {showCustomPassword && (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="text"
+                        placeholder="Min 8 characters"
+                        value={customPasswordInput}
+                        onChange={(e) => setCustomPasswordInput(e.target.value)}
+                        className="h-8 font-mono text-sm"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => handleResetPassword(customPasswordInput)}
+                        disabled={resetPasswordMutation.isPending || customPasswordInput.length < 8}
+                      >
+                        Set
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
 
             <section className="rounded-2xl border bg-card p-5">
               <div className="mb-4 flex items-center justify-between gap-3">

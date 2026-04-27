@@ -14,8 +14,9 @@ import type { TipDetailWithStaff } from "@/app/dashboard/actions/tips";
 interface TipDistributionTableProps {
   details: TipDetailWithStaff[];
   sessionStatus: string;
-  onAdjust: (detail: TipDetailWithStaff) => void;
+  onAdjust?: (detail: TipDetailWithStaff) => void;
   isLoading?: boolean;
+  readOnly?: boolean;
 }
 
 export function TipDistributionTable({
@@ -23,9 +24,10 @@ export function TipDistributionTable({
   sessionStatus,
   onAdjust,
   isLoading,
+  readOnly,
 }: TipDistributionTableProps) {
-  const formatMoney = (cents: number) => {
-    return `$${(cents / 100).toFixed(2)}`;
+  const formatMoney = (amount: number) => {
+    return `$${amount.toFixed(2)}`;
   };
 
   const getAdjustmentColor = (amount: number) => {
@@ -68,7 +70,7 @@ export function TipDistributionTable({
               <TableHead className="text-right">T-Out Out</TableHead>
               <TableHead className="text-right">Adj</TableHead>
               <TableHead className="text-right">Net Tips</TableHead>
-              <TableHead>Action</TableHead>
+              {!readOnly && <TableHead>Action</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -103,16 +105,18 @@ export function TipDistributionTable({
                 <TableCell className="text-right font-semibold">
                   {formatMoney(detail.net_tips)}
                 </TableCell>
-                <TableCell>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => onAdjust(detail)}
-                    disabled={sessionStatus === "approved"}
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </Button>
-                </TableCell>
+                {!readOnly && (
+                  <TableCell>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => onAdjust?.(detail)}
+                      disabled={sessionStatus === "approved"}
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </Button>
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>

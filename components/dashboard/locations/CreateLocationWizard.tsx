@@ -258,8 +258,8 @@ export function CreateLocationWizard({ clerkOrgId, actorUserId }: CreateLocation
                 days.forEach(day => {
                     const dayHours = formData.business_hours[day]
                     if (dayHours && !dayHours.is_closed) {
-                        if (dayHours.open >= dayHours.close && dayHours.close !== '00:00') {
-                            newErrors[day] = 'Close time must be after open time'
+                        if (dayHours.open >= dayHours.close && !dayHours.is_overnight) {
+                            newErrors[day] = 'Close time must be after open time (or enable overnight for next-day close)'
                         }
                     }
                 })

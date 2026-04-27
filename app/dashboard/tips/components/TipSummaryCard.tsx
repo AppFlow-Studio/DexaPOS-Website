@@ -7,7 +7,7 @@ interface TipSummaryCardProps {
   isLoading?: boolean;
 }
 
-const formatMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+const formatMoney = (amount: number) => `$${amount.toFixed(2)}`;
 
 export function TipSummaryCard({ session, isLoading }: TipSummaryCardProps) {
   if (isLoading) {
@@ -25,9 +25,9 @@ export function TipSummaryCard({ session, isLoading }: TipSummaryCardProps) {
 
   if (!session) return null;
 
-  const roundingCents = session.rounding_adjustment;
-  const roundingAbsGt1Dollar = Math.abs(roundingCents) > 100;
-  const roundingColor = roundingCents === 0
+  const roundingAdj = session.rounding_adjustment;
+  const roundingAbsGt1Dollar = Math.abs(roundingAdj) > 1;
+  const roundingColor = roundingAdj === 0
     ? "text-muted-foreground"
     : roundingAbsGt1Dollar
     ? "text-red-600"
@@ -52,7 +52,7 @@ export function TipSummaryCard({ session, isLoading }: TipSummaryCardProps) {
       <Card className="p-4">
         <p className="text-sm text-muted-foreground">Rounding Adjustment</p>
         <p className={`text-2xl font-bold mt-2 ${roundingColor}`}>
-          {formatMoney(roundingCents)}
+          {formatMoney(roundingAdj)}
         </p>
       </Card>
     </div>
