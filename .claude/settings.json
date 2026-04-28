@@ -34,7 +34,11 @@
       "Bash(grep -E \"\\\\.tsx$|\\\\.ts$\")",
       "Bash(curl -s \"http://ein-l-mirasi.localhost:3000\")",
       "Bash(node -e ' *)",
-      "Bash(curl -s \"http://localhost:3000/dashboard\")"
+      "Bash(curl -s \"http://localhost:3000/dashboard\")",
+      "Bash(grep -E \"\\\\.\\(tsx?|sql\\)$\")",
+      "Bash(awk -F'[. ]' '{print $3}')",
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
+      "Read(//c/c/Users/saleh/OneDrive - Lebanese American University/Apps/Dexa/**)"
     ],
     "additionalDirectories": [
       "c:\\Users\\saleh\\OneDrive - Lebanese American University\\Apps\\Dexa\\DexaPOS-Website\\app\\sites\\[slug]"
