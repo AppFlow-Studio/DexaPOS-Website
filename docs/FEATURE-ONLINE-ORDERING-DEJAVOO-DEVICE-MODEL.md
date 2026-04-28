@@ -154,10 +154,10 @@ Current code path:
 - dashboard/admin whitelist actions resolve the selected device
 - then call the Dejavoo whitelist function for that device TPN
 
-Important limitation:
+Current whitelist credential path:
 
-- automatic whitelist still requires the Dejavoo Management API key
-- if you do not have that key, whitelist must still be done manually in the Dejavoo portal
+- automatic whitelist uses the standard `DEJAVOO_IPOS_API_KEY`
+- no separate management API key is required for the intended flow
 
 ## Backward Compatibility
 

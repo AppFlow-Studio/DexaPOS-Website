@@ -297,7 +297,8 @@ export async function getMerchantDetails(
           business_city,
           business_state,
           business_postal_code,
-          business_country
+          business_country,
+          external_merchant_id
         `
       )
       .eq('id', merchant.id)
@@ -409,6 +410,8 @@ export async function getMerchantDetails(
     business_state: merchantLifecycle.business_state,
     business_postal_code: merchantLifecycle.business_postal_code,
     business_country: merchantLifecycle.business_country,
+    external_merchant_id: (merchantLifecycle as { external_merchant_id?: string | null })
+      .external_merchant_id ?? null,
     onboarding_checklist: onboardingChecklist,
     locations: locationsWithMetrics,
   }

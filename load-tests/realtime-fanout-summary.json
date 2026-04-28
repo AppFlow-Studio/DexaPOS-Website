@@ -1,0 +1,115 @@
+{
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {},
+        "checks": {
+                "ws upgrade 101": {
+                    "name": "ws upgrade 101",
+                    "path": "::ws upgrade 101",
+                    "id": "ca25a24181c740332064d9419a10a09d",
+                    "passes": 20,
+                    "fails": 1
+                }
+            }
+    },
+    "metrics": {
+        "data_sent": {
+            "count": 558395,
+            "rate": 5369.09858847586
+        },
+        "vus_max": {
+            "value": 200,
+            "min": 200,
+            "max": 200
+        },
+        "events_received": {
+            "count": 1565,
+            "rate": 15.047841207325856
+        },
+        "ws_msgs_sent": {
+            "count": 754,
+            "rate": 7.249886434711627
+        },
+        "ws_msgs_received": {
+            "count": 2511,
+            "rate": 24.14385256970941
+        },
+        "data_received": {
+            "count": 10523789,
+            "rate": 101188.69378364382
+        },
+        "ws_errors": {
+            "count": 0,
+            "rate": 0,
+            "thresholds": {
+                "count<25": false
+            }
+        },
+        "join_failures": {
+            "count": 0,
+            "rate": 0,
+            "thresholds": {
+                "count<10": false
+            }
+        },
+        "ws_connecting": {
+            "avg": 909.199988557214,
+            "min": 226.5769,
+            "med": 402.3035,
+            "max": 46090.3988,
+            "p(90)": 1631.0126,
+            "p(95)": 1981.6829
+        },
+        "vus": {
+            "value": 1,
+            "min": 1,
+            "max": 200
+        },
+        "checks": {
+            "passes": 20,
+            "fails": 1,
+            "value": 0.9523809523809523
+        },
+        "iterations": {
+            "count": 21,
+            "rate": 0.20191991396411693
+        },
+        "iteration_duration": {
+            "max": 100963.2351,
+            "p(90)": 100707.7561,
+            "p(95)": 100908.3765,
+            "avg": 97876.36167142859,
+            "min": 46091.7242,
+            "med": 100380.1044
+        },
+        "fanout_lag_ms": {
+            "p(90)": 4931.000000000002,
+            "p(95)": 7904.599999999995,
+            "avg": 2578.6006389776358,
+            "min": 146,
+            "med": 1756,
+            "max": 17259,
+            "thresholds": {
+                "p(95)<2000": true
+            }
+        },
+        "subscribed_total": {
+            "count": 200,
+            "rate": 1.9230467996582565
+        },
+        "ws_session_duration": {
+            "avg": 97876.18752380952,
+            "min": 46091.163,
+            "med": 100379.7243,
+            "max": 100963.2351,
+            "p(90)": 100707.7561,
+            "p(95)": 100908.3765
+        },
+        "ws_sessions": {
+            "rate": 1.9326620336565477,
+            "count": 201
+        }
+    }
+}

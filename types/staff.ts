@@ -260,7 +260,7 @@ export interface AdminCreateStaffData {
   lastName: string;
   email?: string;
   phone?: string;
-  locationId: string;
+  locationId?: string;
   roleCode: string;
   hourlyRate?: number;
   employmentType: EmploymentType;
@@ -303,7 +303,7 @@ export interface AdminCreateClerkStaffData {
   lastName: string;
   email: string;
   phone?: string;
-  locationId: string;
+  locationId?: string;
   roleCode: string;
   hourlyRate?: number;
   employmentType: EmploymentType;

@@ -392,7 +392,7 @@ This should be revisited later with the Dejavoo/iPOS sandbox team or internal ow
 - real processor-backed refunds
 - background job for auto-cancel/auto-void when no tracking page is open
 - SMS notifications
-- automated Dejavoo whitelist remains dependent on the separate Management API key
+- automated Dejavoo whitelist uses the standard `DEJAVOO_IPOS_API_KEY` path
 
 ### Kept intentionally
 

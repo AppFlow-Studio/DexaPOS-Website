@@ -13,6 +13,7 @@ import {
   adminUploadMerchantW9Pdf,
   getAdminOnlineStoreRequestRequirements,
   adminSaveOnlineStoreRequestRequirements,
+  adminUpdateMerchantExternalMerchantId,
 } from '@/app/manage/actions/admin-merchant/online-ordering'
 
 // ============================================================================
@@ -265,6 +266,26 @@ export function useAdminRetriggerDomainWhitelist() {
       merchantId: string
       locationId: string
     }) => adminRetriggerDomainWhitelist(merchantId, locationId),
+  })
+}
+
+export function useAdminUpdateMerchantExternalMerchantId() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      clerkOrgId,
+      externalMerchantId,
+    }: {
+      clerkOrgId: string
+      externalMerchantId: string | null
+    }) => adminUpdateMerchantExternalMerchantId(clerkOrgId, externalMerchantId),
+    onSuccess: (result, { clerkOrgId }) => {
+      if (result.success) {
+        queryClient.invalidateQueries({
+          queryKey: adminKeys.merchantDetail(clerkOrgId),
+        })
+      }
+    },
   })
 }
 

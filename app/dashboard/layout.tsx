@@ -186,6 +186,11 @@ const navMain = [
         icon: Monitor,
       },
       {
+        title: "Cash Drawers",
+        url: "/dashboard/cash-drawers",
+        icon: Banknote,
+      },
+      {
         title: "Audit Logs",
         url: "/dashboard/audit-logs",
         icon: GitCompare,
