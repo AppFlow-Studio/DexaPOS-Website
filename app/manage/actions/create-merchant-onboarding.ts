@@ -3,6 +3,7 @@
 import { createClerkClient } from '@clerk/backend'
 import { assertHQPermission } from '@/lib/admin/auth'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { revalidatePath } from 'next/cache'
 
 export async function updateMerchantLogo(
@@ -170,6 +171,50 @@ export async function createMerchantOnboarding(
     })
 
     organizationId = organization.id
+
+    // 2a. Pre-create the DB rows so the merchant detail page loads immediately
+    //     without waiting for the async Clerk webhook to fire.
+    const supabase = createServiceRoleClient()
+    const orgTs = new Date(organization.createdAt).toISOString()
+
+    await supabase.from('organizations').upsert(
+      [{
+        id: organization.id,
+        name: organization.name,
+        created_at: orgTs,
+        updated_at: orgTs,
+        public_metadata: (organization.publicMetadata as Record<string, unknown>) || {},
+      }],
+      { onConflict: 'id' }
+    )
+
+    await supabase.from('merchants').upsert(
+      [{
+        name: organization.name,
+        clerk_org_id: organization.id,
+        carrier_id: carrierId || null,
+        public_metadata: (organization.publicMetadata as Record<string, unknown>) || {},
+        type: params.businessType,
+        business_legal_name: businessLegalName,
+        dba_name: normalizeValue(params.dbaName),
+        business_type: params.businessType || null,
+        ein_last_four: einTaxId.slice(-4),
+        owner_first_name: ownerFirstName,
+        owner_last_name: ownerLastName,
+        owner_email: ownerEmail,
+        owner_phone: ownerPhone,
+        business_address_line1: normalizeValue(params.businessAddress?.line1),
+        business_address_line2: normalizeValue(params.businessAddress?.line2),
+        business_city: normalizeValue(params.businessAddress?.city),
+        business_state: normalizeValue(params.businessAddress?.state),
+        business_postal_code: normalizeValue(params.businessAddress?.postalCode),
+        business_country: normalizeValue(params.businessAddress?.country) || 'US',
+        onboarding_status: 'onboarding',
+        created_at: orgTs,
+        updated_at: orgTs,
+      }],
+      { onConflict: 'clerk_org_id' }
+    )
 
     // 2. Send owner invite — they'll land at /join-organization after accepting
     await clerkClient.organizations.createOrganizationInvitation({
